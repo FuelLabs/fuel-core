@@ -76,7 +76,7 @@ where
             Default::default(),
         );
         let prev = transaction.storage_as_mut::<M>().insert(key, value)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(prev)
     }
 
@@ -87,7 +87,7 @@ where
             Default::default(),
         );
         let prev = transaction.storage_as_mut::<M>().remove(key)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(prev)
     }
 }
@@ -145,7 +145,7 @@ where
             Default::default(),
         );
         let prev = <_ as StorageWrite<M>>::write(&mut transaction, key, buf)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(prev)
     }
 
@@ -160,7 +160,7 @@ where
             Default::default(),
         );
         let prev = <_ as StorageWrite<M>>::replace(&mut transaction, key, buf)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(prev)
     }
 
@@ -171,7 +171,7 @@ where
             Default::default(),
         );
         let prev = <_ as StorageWrite<M>>::take(&mut transaction, key)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(prev)
     }
 }
@@ -197,7 +197,7 @@ where
             Default::default(),
         );
         StorageBatchMutate::init_storage(&mut transaction, set)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(())
     }
 
@@ -213,7 +213,7 @@ where
             Default::default(),
         );
         StorageBatchMutate::insert_batch(&mut transaction, set)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(())
     }
 
@@ -228,7 +228,7 @@ where
             Default::default(),
         );
         StorageBatchMutate::remove_batch(&mut transaction, set)?;
-        self.commit_changes(transaction.into_changes())?;
+        self.commit_changes(transaction.into_changes(), Default::default())?;
         Ok(())
     }
 }

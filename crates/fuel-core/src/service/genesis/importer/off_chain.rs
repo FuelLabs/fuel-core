@@ -34,7 +34,10 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
-    transactional::StorageTransaction,
+    transactional::{
+        ModifyHeightPolicy,
+        StorageTransaction,
+    },
     StorageAsMut,
 };
 use fuel_core_types::services::executor::Event;
@@ -297,6 +300,8 @@ impl ImportTable for Handler<FuelBlockIdsToHeights, FuelBlocks> {
     type TableBeingWritten = FuelBlockIdsToHeights;
     type DbDesc = OffChain;
 
+    const MODIFY_HEIGHT_POLICY: ModifyHeightPolicy = ModifyHeightPolicy::Ignore;
+
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
@@ -314,6 +319,8 @@ impl ImportTable for Handler<FuelBlockIdsToHeights, OldFuelBlocks> {
     type TableInSnapshot = OldFuelBlocks;
     type TableBeingWritten = FuelBlockIdsToHeights;
     type DbDesc = OffChain;
+
+    const MODIFY_HEIGHT_POLICY: ModifyHeightPolicy = ModifyHeightPolicy::Ignore;
 
     fn process(
         &mut self,

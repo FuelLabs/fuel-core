@@ -41,6 +41,7 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         Modifiable,
+        ModifyHeightPolicy,
         StorageTransaction,
     },
     Error as StorageError,
@@ -299,54 +300,78 @@ impl AtomicView for Database<Relayer> {
 }
 
 impl Modifiable for Database<OnChain> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        let ignore_heights = false;
-        let new_height = if ignore_heights {
-            None
-        } else {
-            let mut new_heights: Vec<_> = ChangesIterator::<OnChain>::new(&changes)
-                .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
-                .map(|result| result.map(|(height, _)| height))
-                .try_collect()?;
-            new_heights.dedup();
+    fn commit_changes(
+        &mut self,
+        changes: Changes,
+        height_policy: ModifyHeightPolicy,
+    ) -> StorageResult<()> {
+        let new_height = match dbg!(height_policy) {
+            ModifyHeightPolicy::Ignore => UpdateHeight::Ignore,
+            ModifyHeightPolicy::Update => {
+                let mut new_heights: Vec<_> = ChangesIterator::<OnChain>::new(&changes)
+                    .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+                    .map(|result| result.map(|(height, _)| height))
+                    .try_collect()?;
+                new_heights.dedup();
 
-            // Changes for each block should be committed separately.
-            // If we have more than one height, it means we are mixing commits
-            // for several heights in one batch - return error in this case.
-            if new_heights.len() > 1 {
-                return Err(DatabaseError::MultipleHeightsInCommit {
-                    heights: new_heights.iter().map(|h| u32::from(*h).into()).collect(),
+                // Changes for each block should be committed separately.
+                // If we have more than one height, it means we are mixing commits
+                // for several heights in one batch - return error in this case.
+                if new_heights.len() > 1 {
+                    return Err(DatabaseError::MultipleHeightsInCommit {
+                        heights: new_heights
+                            .iter()
+                            .map(|h| u32::from(*h).into())
+                            .collect(),
+                    }
+                    .into());
                 }
-                .into());
+                new_heights
+                    .iter()
+                    .next()
+                    .copied()
+                    .map(UpdateHeight::SetIncremented)
+                    .unwrap_or(UpdateHeight::NoChange)
             }
-            new_heights.iter().next().copied()
         };
         commit_changes_with_height_update(self, changes, new_height)
     }
 }
 
 impl Modifiable for Database<OffChain> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        let ignore_heights = false;
-        let new_height = if ignore_heights {
-            None
-        } else {
-            let mut new_heights: Vec<_> = ChangesIterator::<OffChain>::new(&changes)
-                .iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
-                .map(|result| result.map(|(_, height)| height))
-                .try_collect()?;
-            new_heights.dedup();
+    fn commit_changes(
+        &mut self,
+        changes: Changes,
+        height_policy: ModifyHeightPolicy,
+    ) -> StorageResult<()> {
+        let new_height = match dbg!(height_policy) {
+            ModifyHeightPolicy::Ignore => UpdateHeight::Ignore,
+            ModifyHeightPolicy::Update => {
+                let mut new_heights: Vec<_> = ChangesIterator::<OffChain>::new(&changes)
+                    .iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
+                    .map(|result| result.map(|(_, height)| height))
+                    .try_collect()?;
+                new_heights.dedup();
 
-            // Changes for each block should be committed separately.
-            // If we have more than one height, it means we are mixing commits
-            // for several heights in one batch - return error in this case.
-            if new_heights.len() > 1 {
-                return Err(DatabaseError::MultipleHeightsInCommit {
-                    heights: new_heights.iter().map(|h| u32::from(*h).into()).collect(),
+                // Changes for each block should be committed separately.
+                // If we have more than one height, it means we are mixing commits
+                // for several heights in one batch - return error in this case.
+                if new_heights.len() > 1 {
+                    return Err(DatabaseError::MultipleHeightsInCommit {
+                        heights: new_heights
+                            .iter()
+                            .map(|h| u32::from(*h).into())
+                            .collect(),
+                    }
+                    .into());
                 }
-                .into());
+                new_heights
+                    .iter()
+                    .next()
+                    .copied()
+                    .map(UpdateHeight::SetIncremented)
+                    .unwrap_or(UpdateHeight::NoChange)
             }
-            new_heights.iter().next().copied()
         };
         commit_changes_with_height_update(self, changes, new_height)
     }
@@ -354,29 +379,38 @@ impl Modifiable for Database<OffChain> {
 
 #[cfg(feature = "relayer")]
 impl Modifiable for Database<Relayer> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        let ignore_heights = false;
-        let new_height = if ignore_heights {
-            None
-        } else {
-            let mut new_heights: Vec<_> = ChangesIterator::<Relayer>::new(&changes)
-                .iter_all::<fuel_core_relayer::storage::EventsHistory>(Some(
-                    IterDirection::Reverse,
-                ))
-                .map(|result| result.map(|(height, _)| height))
-                .try_collect()?;
-            new_heights.dedup();
+    fn commit_changes(
+        &mut self,
+        changes: Changes,
+        height_policy: ModifyHeightPolicy,
+    ) -> StorageResult<()> {
+        let new_height = match dbg!(height_policy) {
+            ModifyHeightPolicy::Ignore => UpdateHeight::Ignore,
+            ModifyHeightPolicy::Update => {
+                let mut new_heights: Vec<_> = ChangesIterator::<Relayer>::new(&changes)
+                    .iter_all::<fuel_core_relayer::storage::EventsHistory>(Some(
+                        IterDirection::Reverse,
+                    ))
+                    .map(|result| result.map(|(height, _)| height))
+                    .try_collect()?;
+                new_heights.dedup();
 
-            // Changes for each block should be committed separately.
-            // If we have more than one height, it means we are mixing commits
-            // for several heights in one batch - return error in this case.
-            if new_heights.len() > 1 {
-                return Err(DatabaseError::MultipleHeightsInCommit {
-                    heights: new_heights.iter().map(|h| u64::from(*h)).collect(),
+                // Changes for each block should be committed separately.
+                // If we have more than one height, it means we are mixing commits
+                // for several heights in one batch - return error in this case.
+                if new_heights.len() > 1 {
+                    return Err(DatabaseError::MultipleHeightsInCommit {
+                        heights: new_heights.iter().map(|h| u64::from(*h)).collect(),
+                    }
+                    .into());
                 }
-                .into());
+                new_heights
+                    .iter()
+                    .next()
+                    .copied()
+                    .map(UpdateHeight::SetIncremented)
+                    .unwrap_or(UpdateHeight::NoChange)
             }
-            new_heights.iter().next().copied()
         };
         commit_changes_with_height_update(self, changes, new_height)
     }
@@ -416,10 +450,20 @@ impl DatabaseHeight for DaBlockHeight {
     }
 }
 
+enum UpdateHeight<Height> {
+    /// Set new height, that must be one more than the previous one.
+    SetIncremented(Height),
+    /// This commit doesn't contain any height.
+    /// This causes an error if the previous height is set.
+    NoChange,
+    /// Do not perform any height update.
+    Ignore,
+}
+
 fn commit_changes_with_height_update<Description>(
     database: &mut Database<Description>,
     mut changes: Changes,
-    new_height: Option<Description::Height>,
+    update_height: UpdateHeight<Description::Height>,
 ) -> StorageResult<()>
 where
     Description: DatabaseDescription,
@@ -427,25 +471,42 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
-    if let Some(new_height) = dbg!(new_height) {
-        // If height is already set, check that the new height is valid
-        if let Some(prev_height) = dbg!(*database.height.lock()) {
-            // Each new commit should be linked to the previous commit to create a monotonically growing database.
-            let next_expected_height = prev_height
-                .advance_height()
-                .ok_or(DatabaseError::FailedToAdvanceHeight)?;
+    let prev_height = *database.height.lock();
+    let new_height = match update_height {
+        UpdateHeight::SetIncremented(new_height) => {
+            // If height is already set, check that the new height is valid
+            if let Some(prev_height) = prev_height {
+                // Each new commit should be linked to the previous commit to create a monotonically growing database.
+                let next_expected_height = prev_height
+                    .advance_height()
+                    .ok_or(DatabaseError::FailedToAdvanceHeight)?;
 
-            // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
-            //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
-            if next_expected_height > new_height {
-                return Err(DatabaseError::HeightsAreNotLinked {
+                // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
+                //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
+                if next_expected_height > new_height {
+                    return Err(DatabaseError::HeightsAreNotLinked {
+                        prev_height: prev_height.as_u64(),
+                        new_height: new_height.as_u64(),
+                    }
+                    .into());
+                }
+            }
+            Some(new_height)
+        }
+        UpdateHeight::NoChange => {
+            if let Some(prev_height) = prev_height {
+                return Err(DatabaseError::NewHeightIsNotSet {
                     prev_height: prev_height.as_u64(),
-                    new_height: new_height.as_u64(),
                 }
                 .into());
+            } else {
+                None
             }
         }
+        UpdateHeight::Ignore => None,
+    };
 
+    if let Some(new_height) = new_height {
         // We want to also update the metadata table to include a new height.
         let mut transaction = StorageTransaction::transaction(
             &database,

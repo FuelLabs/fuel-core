@@ -4,6 +4,7 @@ use crate::{
     transactional::{
         Changes,
         Modifiable,
+        ModifyHeightPolicy,
     },
     Error as StorageError,
     Mappable,
@@ -83,7 +84,7 @@ mockall::mock! {
     }
 
     impl Modifiable for Basic {
-        fn commit_changes(&mut self, changes: Changes) -> StorageResult<()>;
+        fn commit_changes(&mut self, changes: Changes, _ignored: ModifyHeightPolicy) -> StorageResult<()>;
     }
 }
 

@@ -480,7 +480,7 @@ mod tests {
                 .into();
             producer
                 .storage_view_provider
-                .commit_changes(changes)
+                .commit_changes(changes, Default::default())
                 .unwrap();
 
             assert_eq!(skipped_transactions.len(), 1);
@@ -563,7 +563,7 @@ mod tests {
                 .into();
             producer
                 .storage_view_provider
-                .commit_changes(changes)
+                .commit_changes(changes, Default::default())
                 .unwrap();
 
             assert_eq!(skipped_transactions.len(), 0);
@@ -786,7 +786,7 @@ mod tests {
                     .into();
                 producer
                     .storage_view_provider
-                    .commit_changes(changes)
+                    .commit_changes(changes, Default::default())
                     .unwrap();
                 let receipts = tx_status[0].result.receipts();
 

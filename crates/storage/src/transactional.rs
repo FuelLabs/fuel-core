@@ -58,6 +58,7 @@ pub type StorageTransaction<S> = StructuredStorage<InMemoryTransaction<S>>;
 pub struct InMemoryTransaction<S> {
     pub(crate) changes: Changes,
     pub(crate) policy: ConflictPolicy,
+    pub(crate) height_policy: ModifyHeightPolicy,
     pub(crate) storage: S,
 }
 
@@ -67,15 +68,27 @@ impl<S> StorageTransaction<S> {
         StructuredStorage::new(InMemoryTransaction {
             changes,
             policy,
+            height_policy: ModifyHeightPolicy::Update,
             storage,
         })
     }
 
-    /// Creates a new instance of the structured storage with a `ConflictPolicy`.
+    /// Returns a new version with updated `ConflictPolicy`.
     pub fn with_policy(self, policy: ConflictPolicy) -> Self {
         StructuredStorage::new(InMemoryTransaction {
             changes: self.inner.changes,
             policy,
+            height_policy: self.inner.height_policy,
+            storage: self.inner.storage,
+        })
+    }
+
+    /// Returns a new version with updated `ModifyHeightPolicy`.
+    pub fn with_modify_height_policy(self, height_policy: ModifyHeightPolicy) -> Self {
+        StructuredStorage::new(InMemoryTransaction {
+            changes: self.inner.changes,
+            policy: self.inner.policy,
+            height_policy,
             storage: self.inner.storage,
         })
     }
@@ -85,6 +98,7 @@ impl<S> StorageTransaction<S> {
         StructuredStorage::new(InMemoryTransaction {
             changes,
             policy: self.inner.policy,
+            height_policy: self.inner.height_policy,
             storage: self.inner.storage,
         })
     }
@@ -92,6 +106,11 @@ impl<S> StorageTransaction<S> {
     /// Returns the changes to the storage.
     pub fn into_changes(self) -> Changes {
         self.inner.changes
+    }
+
+    /// Returns the height update policy
+    pub fn height_policy(&self) -> ModifyHeightPolicy {
+        self.inner.height_policy
     }
 
     /// Resets the changes to the storage.
@@ -114,7 +133,26 @@ pub enum ConflictPolicy {
 #[impl_tools::autoimpl(for<T: trait> &mut T, Box<T>)]
 pub trait Modifiable {
     /// Commits the changes into the storage.
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()>;
+    fn commit_changes(
+        &mut self,
+        changes: Changes,
+        height_policy: ModifyHeightPolicy,
+    ) -> StorageResult<()>;
+}
+
+/// Whether to update the height information when committing.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModifyHeightPolicy {
+    /// Update height information when committing.
+    /// Errors if attempting to write to multiple heights in a single commit.
+    /// Errors if the commit doesn't update the height.
+    /// Note that targets which do not track height will ignore this policy,
+    /// unless they can pass it to the underlying storage which does so.
+    #[default]
+    Update,
+    /// Do not update height information when committing.
+    /// Allows multiple heights to be written in a single commit.
+    Ignore,
 }
 
 /// The type describing the list of changes to the storage.
@@ -189,15 +227,26 @@ where
     Storage: Modifiable,
 {
     /// Commits the changes into the storage.
-    pub fn commit(mut self, _x: bool) -> StorageResult<Storage> {
+    pub fn commit(mut self) -> StorageResult<Storage> {
         let changes = core::mem::take(&mut self.inner.changes);
-        self.inner.storage.commit_changes(changes)?;
+        self.inner
+            .storage
+            .commit_changes(changes, self.inner.height_policy)?;
         Ok(self.inner.storage)
     }
 }
 
 impl<Storage> Modifiable for InMemoryTransaction<Storage> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+    /// Panics height policy mismatches the height policy fo the transaction.
+    fn commit_changes(
+        &mut self,
+        changes: Changes,
+        height_policy: ModifyHeightPolicy,
+    ) -> StorageResult<()> {
+        assert!(
+            self.height_policy == height_policy,
+            "Height policy mismatch"
+        );
         for (column, value) in changes.into_iter() {
             let btree = self.changes.entry(column).or_default();
             for (k, v) in value {
@@ -392,7 +441,11 @@ mod test {
     };
 
     impl<Column> Modifiable for InMemoryStorage<Column> {
-        fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        fn commit_changes(
+            &mut self,
+            changes: Changes,
+            _: ModifyHeightPolicy,
+        ) -> StorageResult<()> {
             for (column, value) in changes.into_iter() {
                 for (key, value) in value {
                     match value {
@@ -446,8 +499,12 @@ mod test {
 
         let changes1 = sub_transaction1.into();
         let changes2 = sub_transaction2.into();
-        transactions.commit_changes(changes1).unwrap();
-        transactions.commit_changes(changes2).unwrap();
+        transactions
+            .commit_changes(changes1, Default::default())
+            .unwrap();
+        transactions
+            .commit_changes(changes2, Default::default())
+            .unwrap();
     }
 
     #[test]
@@ -470,9 +527,11 @@ mod test {
 
         let changes1 = sub_transaction1.into();
         let changes2 = sub_transaction2.into();
-        transactions.commit_changes(changes1).unwrap();
         transactions
-            .commit_changes(changes2)
+            .commit_changes(changes1, Default::default())
+            .unwrap();
+        transactions
+            .commit_changes(changes2, Default::default())
             .expect_err("Should fails because of the modification for the same key");
     }
 
