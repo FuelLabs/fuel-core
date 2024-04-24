@@ -41,7 +41,6 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         Modifiable,
-        ModifyHeightPolicy,
         StorageTransaction,
     },
     Error as StorageError,
@@ -300,126 +299,42 @@ impl AtomicView for Database<Relayer> {
 }
 
 impl Modifiable for Database<OnChain> {
-    fn commit_changes(
-        &mut self,
-        changes: Changes,
-        height_policy: ModifyHeightPolicy,
-    ) -> StorageResult<()> {
-        let new_height = match dbg!(height_policy) {
-            ModifyHeightPolicy::Ignore => UpdateHeight::Ignore,
-            ModifyHeightPolicy::Update => {
-                let mut new_heights: Vec<_> = ChangesIterator::<OnChain>::new(&changes)
-                    .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
-                    .map(|result| result.map(|(height, _)| height))
-                    .try_collect()?;
-                new_heights.dedup();
-
-                // Changes for each block should be committed separately.
-                // If we have more than one height, it means we are mixing commits
-                // for several heights in one batch - return error in this case.
-                if new_heights.len() > 1 {
-                    return Err(DatabaseError::MultipleHeightsInCommit {
-                        heights: new_heights
-                            .iter()
-                            .map(|h| u32::from(*h).into())
-                            .collect(),
-                    }
-                    .into());
-                }
-                new_heights
-                    .iter()
-                    .next()
-                    .copied()
-                    .map(UpdateHeight::SetIncremented)
-                    .unwrap_or(UpdateHeight::NoChange)
-            }
-        };
-        commit_changes_with_height_update(self, changes, new_height)
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+                .map(|result| result.map(|(height, _)| height))
+                .try_collect()
+        })
     }
 }
 
 impl Modifiable for Database<OffChain> {
-    fn commit_changes(
-        &mut self,
-        changes: Changes,
-        height_policy: ModifyHeightPolicy,
-    ) -> StorageResult<()> {
-        let new_height = match dbg!(height_policy) {
-            ModifyHeightPolicy::Ignore => UpdateHeight::Ignore,
-            ModifyHeightPolicy::Update => {
-                let mut new_heights: Vec<_> = ChangesIterator::<OffChain>::new(&changes)
-                    .iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
-                    .map(|result| result.map(|(_, height)| height))
-                    .try_collect()?;
-                new_heights.dedup();
-
-                // Changes for each block should be committed separately.
-                // If we have more than one height, it means we are mixing commits
-                // for several heights in one batch - return error in this case.
-                if new_heights.len() > 1 {
-                    return Err(DatabaseError::MultipleHeightsInCommit {
-                        heights: new_heights
-                            .iter()
-                            .map(|h| u32::from(*h).into())
-                            .collect(),
-                    }
-                    .into());
-                }
-                new_heights
-                    .iter()
-                    .next()
-                    .copied()
-                    .map(UpdateHeight::SetIncremented)
-                    .unwrap_or(UpdateHeight::NoChange)
-            }
-        };
-        commit_changes_with_height_update(self, changes, new_height)
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
+                .map(|result| result.map(|(_, height)| height))
+                .try_collect()
+        })
     }
 }
 
 #[cfg(feature = "relayer")]
 impl Modifiable for Database<Relayer> {
-    fn commit_changes(
-        &mut self,
-        changes: Changes,
-        height_policy: ModifyHeightPolicy,
-    ) -> StorageResult<()> {
-        let new_height = match dbg!(height_policy) {
-            ModifyHeightPolicy::Ignore => UpdateHeight::Ignore,
-            ModifyHeightPolicy::Update => {
-                let mut new_heights: Vec<_> = ChangesIterator::<Relayer>::new(&changes)
-                    .iter_all::<fuel_core_relayer::storage::EventsHistory>(Some(
-                        IterDirection::Reverse,
-                    ))
-                    .map(|result| result.map(|(height, _)| height))
-                    .try_collect()?;
-                new_heights.dedup();
-
-                // Changes for each block should be committed separately.
-                // If we have more than one height, it means we are mixing commits
-                // for several heights in one batch - return error in this case.
-                if new_heights.len() > 1 {
-                    return Err(DatabaseError::MultipleHeightsInCommit {
-                        heights: new_heights.iter().map(|h| u64::from(*h)).collect(),
-                    }
-                    .into());
-                }
-                new_heights
-                    .iter()
-                    .next()
-                    .copied()
-                    .map(UpdateHeight::SetIncremented)
-                    .unwrap_or(UpdateHeight::NoChange)
-            }
-        };
-        commit_changes_with_height_update(self, changes, new_height)
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all::<fuel_core_relayer::storage::EventsHistory>(Some(
+                IterDirection::Reverse,
+            ))
+            .map(|result| result.map(|(height, _)| height))
+            .try_collect()
+        })
     }
 }
 
 #[cfg(not(feature = "relayer"))]
 impl Modifiable for Database<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(self, changes, vec![])
+        commit_changes_with_height_update(self, changes, |_| Ok(vec![]))
     }
 }
 
@@ -450,20 +365,12 @@ impl DatabaseHeight for DaBlockHeight {
     }
 }
 
-enum UpdateHeight<Height> {
-    /// Set new height, that must be one more than the previous one.
-    SetIncremented(Height),
-    /// This commit doesn't contain any height.
-    /// This causes an error if the previous height is set.
-    NoChange,
-    /// Do not perform any height update.
-    Ignore,
-}
-
 fn commit_changes_with_height_update<Description>(
     database: &mut Database<Description>,
-    mut changes: Changes,
-    update_height: UpdateHeight<Description::Height>,
+    changes: Changes,
+    heights_lookup: impl Fn(
+        &ChangesIterator<Description>,
+    ) -> StorageResult<Vec<Description::Height>>,
 ) -> StorageResult<()>
 where
     Description: DatabaseDescription,
@@ -471,43 +378,64 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
-    let prev_height = *database.height.lock();
-    let new_height = match update_height {
-        UpdateHeight::SetIncremented(new_height) => {
-            // If height is already set, check that the new height is valid
-            if let Some(prev_height) = prev_height {
-                // Each new commit should be linked to the previous commit to create a monotonically growing database.
-                let next_expected_height = prev_height
-                    .advance_height()
-                    .ok_or(DatabaseError::FailedToAdvanceHeight)?;
+    // Gets the all new heights from the `changes`
+    let iterator = ChangesIterator::<Description>::new(&changes);
+    let new_heights = heights_lookup(&iterator)?;
 
-                // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
-                //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
-                if next_expected_height > new_height {
-                    return Err(DatabaseError::HeightsAreNotLinked {
-                        prev_height: prev_height.as_u64(),
-                        new_height: new_height.as_u64(),
-                    }
-                    .into());
-                }
-            }
-            Some(new_height)
+    // Changes for each block should be committed separately.
+    // If we have more than one height, it means we are mixing commits
+    // for several heights in one batch - return error in this case.
+    if new_heights.len() > 1 {
+        return Err(DatabaseError::MultipleHeightsInCommit {
+            heights: new_heights.iter().map(DatabaseHeight::as_u64).collect(),
         }
-        UpdateHeight::NoChange => {
-            if let Some(prev_height) = prev_height {
-                return Err(DatabaseError::NewHeightIsNotSet {
+        .into());
+    }
+
+    let new_height = new_heights.into_iter().last();
+    let prev_height = *database.height.lock();
+
+    match (prev_height, new_height) {
+        (None, None) => {
+            // We are inside the regenesis process if the old and new heights are not set.
+            // In this case, we continue to commit until we discover a new height.
+            // This height will be the start of the database.
+        }
+        (Some(prev_height), Some(new_height)) => {
+            // Each new commit should be linked to the previous commit to create a monotonically growing database.
+
+            let next_expected_height = prev_height
+                .advance_height()
+                .ok_or(DatabaseError::FailedToAdvanceHeight)?;
+
+            // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
+            //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
+            if next_expected_height > new_height {
+                return Err(DatabaseError::HeightsAreNotLinked {
                     prev_height: prev_height.as_u64(),
+                    new_height: new_height.as_u64(),
                 }
                 .into());
-            } else {
-                None
             }
         }
-        UpdateHeight::Ignore => None,
+        (None, Some(_)) => {
+            // The new height is finally found; starting at this point,
+            // all next commits should be linked(the height should increase each time by one).
+        }
+        (Some(prev_height), None) => {
+            // In production, we shouldn't have cases where we call `commit_chagnes` with intermediate changes.
+            // The commit always should contain all data for the corresponding height.
+            return Err(DatabaseError::NewHeightIsNotSet {
+                prev_height: prev_height.as_u64(),
+            }
+            .into());
+        }
     };
 
-    if let Some(new_height) = new_height {
-        // We want to also update the metadata table to include a new height.
+    let updated_changes = if let Some(new_height) = new_height {
+        // We want to update the metadata table to include a new height.
+        // For that, we are building a new storage transaction around `changes`.
+        // Modifying this transaction will include all required updates into the `changes`.
         let mut transaction = StorageTransaction::transaction(
             &database,
             ConflictPolicy::Overwrite,
@@ -522,16 +450,20 @@ where
                     height: new_height,
                 },
             )?;
-        changes = transaction.into_changes();
+
+        transaction.into_changes()
+    } else {
+        changes
     };
 
     let mut guard = database.height.lock();
-    database.data.as_ref().commit_changes(new_height, changes)?;
+    database
+        .data
+        .as_ref()
+        .commit_changes(new_height, updated_changes)?;
 
     // Update the block height
-    if new_height.is_some() {
-        *guard = new_height;
-    }
+    *guard = new_height;
 
     Ok(())
 }

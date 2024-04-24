@@ -201,8 +201,7 @@ where
     ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
         let (result, changes) = self.execute_without_commit(block)?.into();
 
-        self.storage_view_provider
-            .commit_changes(changes, Default::default())?;
+        self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
     }
 
@@ -214,8 +213,7 @@ where
     ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
         let (result, changes) = self.validate_without_commit(block)?.into();
 
-        self.storage_view_provider
-            .commit_changes(changes, Default::default())?;
+        self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
     }
 }
@@ -588,10 +586,7 @@ mod test {
         kv_store::Value,
         structured_storage::test::InMemoryStorage,
         tables::ConsensusParametersVersions,
-        transactional::{
-            ModifyHeightPolicy,
-            WriteTransaction,
-        },
+        transactional::WriteTransaction,
         Result as StorageResult,
         StorageAsMut,
     };
@@ -646,12 +641,8 @@ mod test {
     }
 
     impl Modifiable for Storage {
-        fn commit_changes(
-            &mut self,
-            changes: Changes,
-            height_policy: ModifyHeightPolicy,
-        ) -> StorageResult<()> {
-            self.0.commit_changes(changes, height_policy)
+        fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+            self.0.commit_changes(changes)
         }
     }
 

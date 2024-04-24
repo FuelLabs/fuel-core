@@ -650,12 +650,9 @@ where
         }
 
         let changes_from_thread = thread_block_transaction.into_changes();
-        block_with_relayer_data_transaction
-            .commit_changes(changes_from_thread, Default::default())?;
-        self.block_st_transaction.commit_changes(
-            block_with_relayer_data_transaction.into_changes(),
-            Default::default(),
-        )?;
+        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        self.block_st_transaction
+            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
         if execution_kind != ExecutionKind::DryRun && !data.found_mint {
             return Err(ExecutorError::MintMissing)
@@ -791,12 +788,9 @@ where
         }
 
         let changes_from_thread = thread_block_transaction.into_changes();
-        block_with_relayer_data_transaction
-            .commit_changes(changes_from_thread, Default::default())?;
-        self.block_st_transaction.commit_changes(
-            block_with_relayer_data_transaction.into_changes(),
-            Default::default(),
-        )?;
+        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        self.block_st_transaction
+            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
         if !data.found_mint {
             return Err(ExecutorError::MintMissing)
@@ -1334,9 +1328,8 @@ where
         // only commit state changes if execution was a success
         if !reverted {
             self.log_backtrace(&vm, &receipts);
-            let height_policy = sub_block_db_commit.height_policy();
             let changes = sub_block_db_commit.into_changes();
-            tx_st_transaction.commit_changes(changes, height_policy)?;
+            tx_st_transaction.commit_changes(changes)?;
         }
 
         // update block commitment

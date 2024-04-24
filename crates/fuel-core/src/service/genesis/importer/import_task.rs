@@ -4,7 +4,6 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     transactional::{
         Modifiable,
-        ModifyHeightPolicy,
         StorageTransaction,
         WriteTransaction,
     },
@@ -46,8 +45,6 @@ pub trait ImportTable {
     type TableInSnapshot: TableWithBlueprint;
     type TableBeingWritten: TableWithBlueprint;
     type DbDesc: DatabaseDescription;
-
-    const MODIFY_HEIGHT_POLICY: ModifyHeightPolicy = ModifyHeightPolicy::Update;
 
     fn process(
         &mut self,
@@ -122,10 +119,7 @@ where
             })
             .try_for_each(|(index, group)| {
                 let group = group?;
-                let mut tx = db
-                    .write_transaction()
-                    .with_modify_height_policy(Logic::MODIFY_HEIGHT_POLICY);
-
+                let mut tx = db.write_transaction();
                 self.handler.process(group, &mut tx)?;
 
                 let progress_name =

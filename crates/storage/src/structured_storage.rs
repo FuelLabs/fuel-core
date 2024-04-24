@@ -30,7 +30,6 @@ use crate::{
     transactional::{
         Changes,
         Modifiable,
-        ModifyHeightPolicy,
     },
     Error as StorageError,
     Mappable,
@@ -202,12 +201,8 @@ impl<S> Modifiable for StructuredStorage<S>
 where
     S: Modifiable,
 {
-    fn commit_changes(
-        &mut self,
-        changes: Changes,
-        height_policy: ModifyHeightPolicy,
-    ) -> StorageResult<()> {
-        self.inner.commit_changes(changes, height_policy)
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        self.inner.commit_changes(changes)
     }
 }
 
