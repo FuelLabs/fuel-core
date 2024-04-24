@@ -16,12 +16,12 @@ use crate::{
             U16,
             U32,
             U64,
-            U8,
         },
     },
 };
 use async_graphql::{
     Context,
+    Enum,
     Object,
     Union,
 };
@@ -44,41 +44,39 @@ pub struct FeeParameters(fuel_tx::FeeParameters);
 
 pub struct GasCosts(fuel_tx::GasCosts);
 
-pub struct Version(u8);
-
-#[derive(Union)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum GasCostsVersion {
-    V1(Version),
+    V1,
 }
 
-#[derive(Union)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum FeeParametersVersion {
-    V1(Version),
+    V1,
 }
 
-#[derive(Union)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum ContractParametersVersion {
-    V1(Version),
+    V1,
 }
 
-#[derive(Union)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum ScriptParametersVersion {
-    V1(Version),
+    V1,
 }
 
-#[derive(Union)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum PredicateParametersVersion {
-    V1(Version),
+    V1,
 }
 
-#[derive(Union)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum TxParametersVersion {
-    V1(Version),
+    V1,
 }
 
-#[derive(Union)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum ConsensusParametersVersion {
-    V1(Version),
+    V1,
 }
 
 #[derive(Union)]
@@ -115,19 +113,10 @@ impl From<fuel_tx::DependentCost> for DependentCost {
 }
 
 #[Object]
-impl Version {
-    async fn value(&self) -> U8 {
-        self.0.into()
-    }
-}
-
-#[Object]
 impl ConsensusParameters {
     async fn version(&self) -> ConsensusParametersVersion {
         match self.0.as_ref() {
-            fuel_tx::ConsensusParameters::V1(_) => {
-                ConsensusParametersVersion::V1(Version(1))
-            }
+            fuel_tx::ConsensusParameters::V1(_) => ConsensusParametersVersion::V1,
         }
     }
 
@@ -227,7 +216,7 @@ impl ConsensusParameters {
 impl TxParameters {
     async fn version(&self) -> TxParametersVersion {
         match self.0 {
-            fuel_tx::TxParameters::V1(_) => TxParametersVersion::V1(Version(1)),
+            fuel_tx::TxParameters::V1(_) => TxParametersVersion::V1,
         }
     }
 
@@ -260,9 +249,7 @@ impl TxParameters {
 impl PredicateParameters {
     async fn version(&self) -> PredicateParametersVersion {
         match self.0 {
-            fuel_tx::PredicateParameters::V1(_) => {
-                PredicateParametersVersion::V1(Version(1))
-            }
+            fuel_tx::PredicateParameters::V1(_) => PredicateParametersVersion::V1,
         }
     }
 
@@ -287,7 +274,7 @@ impl PredicateParameters {
 impl ScriptParameters {
     async fn version(&self) -> ScriptParametersVersion {
         match self.0 {
-            fuel_tx::ScriptParameters::V1(_) => ScriptParametersVersion::V1(Version(1)),
+            fuel_tx::ScriptParameters::V1(_) => ScriptParametersVersion::V1,
         }
     }
 
@@ -304,9 +291,7 @@ impl ScriptParameters {
 impl ContractParameters {
     async fn version(&self) -> ContractParametersVersion {
         match self.0 {
-            fuel_tx::ContractParameters::V1(_) => {
-                ContractParametersVersion::V1(Version(1))
-            }
+            fuel_tx::ContractParameters::V1(_) => ContractParametersVersion::V1,
         }
     }
 
@@ -323,7 +308,7 @@ impl ContractParameters {
 impl FeeParameters {
     async fn version(&self) -> FeeParametersVersion {
         match self.0 {
-            fuel_tx::FeeParameters::V1(_) => FeeParametersVersion::V1(Version(1)),
+            fuel_tx::FeeParameters::V1(_) => FeeParametersVersion::V1,
         }
     }
 
@@ -340,7 +325,7 @@ impl FeeParameters {
 impl GasCosts {
     async fn version(&self) -> GasCostsVersion {
         match self.0.deref() {
-            GasCostsValues::V1(_) => GasCostsVersion::V1(Version(1)),
+            GasCostsValues::V1(_) => GasCostsVersion::V1,
         }
     }
 
