@@ -52,6 +52,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
+use itertools::Itertools;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
@@ -94,6 +95,16 @@ impl SnapshotImporter {
         tracing::info!("Running imports");
         macro_rules! spawn_workers {
             ($($table:ty),*) => {
+                let names_unique = [
+                    $(
+                        fuel_core_storage::kv_store::StorageColumn::name(&<$table>::column()),
+                    )*
+                ].iter().all_unique();
+
+                if !names_unique {
+                    panic!("Tables must have unique column names because they are used as keys to track the genesis progress both in on-chain and off-chain tables.");
+                }
+
                 $(self.spawn_worker::<$table>()?;)*
             };
         }
