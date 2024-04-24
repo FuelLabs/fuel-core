@@ -17,7 +17,6 @@ use std::{
     },
     io::ErrorKind,
     num::TryFromIntError,
-    ops::Deref,
 };
 use thiserror::Error;
 
@@ -327,19 +326,5 @@ impl From<TryFromIntError> for ConversionError {
 impl From<TryFromSliceError> for ConversionError {
     fn from(_: TryFromSliceError) -> Self {
         ConversionError::BytesLength
-    }
-}
-
-#[derive(cynic::QueryFragment, Clone, Debug, Eq, PartialEq)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub struct Version {
-    pub value: U8,
-}
-
-impl Deref for Version {
-    type Target = u8;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value.0
     }
 }

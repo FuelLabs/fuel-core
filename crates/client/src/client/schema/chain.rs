@@ -4,7 +4,6 @@ use crate::client::schema::{
     Address,
     AssetId,
     ConversionError,
-    Version,
     U16,
     U32,
     U64,
