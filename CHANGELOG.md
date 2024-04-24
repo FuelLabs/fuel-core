@@ -10,8 +10,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [#1848](https://github.com/FuelLabs/fuel-core/pull/1848): Added `version` field to the `Block` and `BlockHeader` GraphQL entities. Added corresponding `version` field to the `Block` and `BlockHeader` client types in `fuel-core-client`.
 
+### Fixed
+
+- [#1856](https://github.com/FuelLabs/fuel-core/pull/1856): Replaced instances of `Union` with `Enum` for GraphQL definitions of `ConsensusParametersVersion` and related types. This is needed because `Union` does not support multiple `Version`s inside discriminants or empty variants. 
+
 ### Changed
 
+- [#1832](https://github.com/FuelLabs/fuel-core/pull/1832): Snapshot generation can be cancelled. Progress is also reported.
 - [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 
 ## [Version 0.25.2]

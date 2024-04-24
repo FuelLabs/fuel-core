@@ -26,10 +26,10 @@ use fuel_core_chain_config::{
     StateConfigBuilder,
     TableEntry,
 };
-use fuel_core_services::State;
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
+    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -46,9 +46,12 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
-use tokio::sync::watch;
 
-use super::task_manager::TaskManager;
+use super::{
+    progress::MultipleProgressReporter,
+    task_manager::TaskManager,
+    NotifyCancel,
+};
 
 pub struct Exporter<Fun> {
     db: CombinedDatabase,
@@ -56,6 +59,7 @@ pub struct Exporter<Fun> {
     writer: Fun,
     group_size: usize,
     task_manager: TaskManager<SnapshotFragment>,
+    multi_progress: MultipleProgressReporter,
 }
 
 impl<Fun> Exporter<Fun>
@@ -67,16 +71,17 @@ where
         prev_chain_config: ChainConfig,
         writer: Fun,
         group_size: usize,
+        cancel_token: impl NotifyCancel + Send + Sync + 'static,
     ) -> Self {
-        // TODO: Support graceful shutdown during the exporting of the snapshot.
-        //  https://github.com/FuelLabs/fuel-core/issues/1828
-        let (_, receiver) = watch::channel(State::Started);
         Self {
             db,
             prev_chain_config,
             writer,
             group_size,
-            task_manager: TaskManager::new(receiver.into()),
+            task_manager: TaskManager::new(cancel_token),
+            multi_progress: MultipleProgressReporter::new(tracing::info_span!(
+                "snapshot_exporter"
+            )),
         }
     }
 
@@ -174,15 +179,23 @@ where
 
         let db = db_picker(self).clone();
         let prefix = prefix.map(|p| p.to_vec());
-        self.task_manager.spawn(move |cancel| {
-            tokio_rayon::spawn(move || {
-                db.entries::<T>(prefix, IterDirection::Forward)
-                    .chunks(group_size)
-                    .into_iter()
-                    .take_while(|_| !cancel.is_cancelled())
-                    .try_for_each(|chunk| writer.write(chunk.try_collect()?))?;
-                writer.partial_close()
-            })
+        // TODO:
+        // [1857](https://github.com/FuelLabs/fuel-core/issues/1857)
+        // RocksDb can provide an estimate for the number of items.
+        let progress_tracker =
+            self.multi_progress.table_reporter(None, T::column().name());
+        self.task_manager.spawn_blocking(move |cancel| {
+            db.entries::<T>(prefix, IterDirection::Forward)
+                .chunks(group_size)
+                .into_iter()
+                .take_while(|_| !cancel.is_cancelled())
+                .enumerate()
+                .try_for_each(|(index, chunk)| {
+                    progress_tracker.set_index(index);
+
+                    writer.write(chunk.try_collect()?)
+                })?;
+            writer.partial_close()
         });
 
         Ok(())
