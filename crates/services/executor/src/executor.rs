@@ -650,7 +650,7 @@ where
         let transactions = block.transactions();
 
         let (gas_price, coinbase_contract_id) =
-            Self::get_coinbase_info_from_mint_tx(&transactions)?;
+            Self::get_coinbase_info_from_mint_tx(transactions)?;
 
         let block_header = partial_block.header;
         let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
@@ -681,7 +681,7 @@ where
         for transaction in transactions {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
-            let _new_transaction = self.execute_transaction_and_commit(
+            self.execute_transaction_and_commit(
                 &mut partial_block,
                 &mut thread_block_transaction,
                 &mut data,
@@ -1109,64 +1109,60 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_mint_with_vm<T>(
+    fn execute_chargeable_transaction<Tx, T>(
         &self,
+        mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
+        gas_price: Word,
         execution_data: &mut ExecutionData,
-        block_st_transaction: &mut StorageTransaction<T>,
-        coinbase_id: &TxId,
-        mint: &mut Mint,
-        input: &mut Input,
-    ) -> ExecutorResult<(input::contract::Contract, output::contract::Contract)>
+        tx_st_transaction: &mut StorageTransaction<T>,
+    ) -> ExecutorResult<Transaction>
     where
+        Tx: ExecutableTransaction + Cacheable + Send + Sync + 'static,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata,
         T: KeyValueInspect<Column = Column>,
     {
-        let mut sub_block_db_commit = block_st_transaction
-            .write_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+        let tx_id = checked_tx.id();
 
-        let mut vm_db = VmStorage::new(
-            &mut sub_block_db_commit,
-            &header.consensus,
-            &header.application,
+        if self.options.extra_tx_checks {
+            checked_tx = self.extra_tx_checks(checked_tx, header, tx_st_transaction)?;
+        }
+
+        let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
+            &checked_tx,
+            header,
             coinbase_contract_id,
-        );
+            gas_price,
+            tx_st_transaction,
+        )?;
 
-        fuel_vm::interpreter::contract::balance_increase(
-            &mut vm_db,
-            &mint.input_contract().contract_id,
-            mint.mint_asset_id(),
-            *mint.mint_amount(),
-        )
-        .map_err(|e| format!("{e}"))
-        .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
-        sub_block_db_commit.commit()?;
+        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
 
-        let block_height = *header.height();
-        let output = *mint.output_contract();
-        let mut outputs = [Output::Contract(output)];
         self.persist_output_utxos(
-            block_height,
+            *header.height(),
             execution_data,
-            coinbase_id,
-            block_st_transaction,
-            std::slice::from_ref(input),
-            outputs.as_slice(),
+            &tx_id,
+            tx_st_transaction,
+            tx.inputs(),
+            tx.outputs(),
         )?;
-        self.compute_state_of_not_utxo_outputs(
-            outputs.as_mut_slice(),
-            std::slice::from_ref(input),
-            *coinbase_id,
-            block_st_transaction,
+
+        tx_st_transaction
+            .storage::<ProcessedTransactions>()
+            .insert(&tx_id, &())?;
+
+        self.update_execution_data(
+            &tx,
+            execution_data,
+            receipts,
+            gas_price,
+            reverted,
+            state,
+            tx_id,
         )?;
-        let Input::Contract(input) = core::mem::take(input) else {
-            unreachable!()
-        };
-        let Output::Contract(output) = outputs[0] else {
-            unreachable!()
-        };
-        Ok((input, output))
+
+        Ok(tx.into())
     }
 
     fn check_mint_amount(mint: &Mint, expected_amount: u64) -> ExecutorResult<()> {
@@ -1248,67 +1244,69 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_chargeable_transaction<Tx, T>(
+    fn execute_mint_with_vm<T>(
         &self,
-        mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
-        gas_price: Word,
         execution_data: &mut ExecutionData,
-        tx_st_transaction: &mut StorageTransaction<T>,
-    ) -> ExecutorResult<Transaction>
+        block_st_transaction: &mut StorageTransaction<T>,
+        coinbase_id: &TxId,
+        mint: &mut Mint,
+        input: &mut Input,
+    ) -> ExecutorResult<(input::contract::Contract, output::contract::Contract)>
     where
-        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
         T: KeyValueInspect<Column = Column>,
     {
-        let tx_id = checked_tx.id();
+        let mut sub_block_db_commit = block_st_transaction
+            .write_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
 
-        if self.options.extra_tx_checks {
-            checked_tx = self.extra_tx_checks(checked_tx, header, tx_st_transaction)?;
-        }
-
-        let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
-            &checked_tx,
-            header,
+        let mut vm_db = VmStorage::new(
+            &mut sub_block_db_commit,
+            &header.consensus,
+            &header.application,
             coinbase_contract_id,
-            gas_price,
-            tx_st_transaction,
-        )?;
+        );
 
-        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
+        fuel_vm::interpreter::contract::balance_increase(
+            &mut vm_db,
+            &mint.input_contract().contract_id,
+            mint.mint_asset_id(),
+            *mint.mint_amount(),
+        )
+        .map_err(|e| format!("{e}"))
+        .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
+        sub_block_db_commit.commit()?;
 
+        let block_height = *header.height();
+        let output = *mint.output_contract();
+        let mut outputs = [Output::Contract(output)];
         self.persist_output_utxos(
-            *header.height(),
+            block_height,
             execution_data,
-            &tx_id,
-            tx_st_transaction,
-            tx.inputs(),
-            tx.outputs(),
+            coinbase_id,
+            block_st_transaction,
+            std::slice::from_ref(input),
+            outputs.as_slice(),
         )?;
-
-        self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
-
-        tx_st_transaction
-            .storage::<ProcessedTransactions>()
-            .insert(&tx_id, &())?;
-
-        self.update_execution_data(
-            &tx,
-            execution_data,
-            receipts,
-            gas_price,
-            reverted,
-            state,
-            tx_id,
+        self.compute_state_of_not_utxo_outputs(
+            outputs.as_mut_slice(),
+            std::slice::from_ref(input),
+            *coinbase_id,
+            block_st_transaction,
         )?;
-
-        Ok(tx.into())
+        let Input::Contract(input) = core::mem::take(input) else {
+            unreachable!()
+        };
+        let Output::Contract(output) = outputs[0] else {
+            unreachable!()
+        };
+        Ok((input, output))
     }
 
     fn update_tx_outputs<Tx, T>(
         &self,
-        tx_st_transaction: &mut StorageTransaction<T>,
+        tx_st_transaction: &StorageTransaction<T>,
         tx_id: TxId,
         tx: &mut Tx,
     ) -> ExecutorResult<()>
@@ -1517,6 +1515,8 @@ where
             let changes = sub_block_db_commit.into_changes();
             tx_st_transaction.commit_changes(changes)?;
         }
+
+        self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
         Ok((reverted, state, tx, receipts))
     }
 

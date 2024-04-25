@@ -314,7 +314,7 @@ impl From<&BlockHeader> for PartialBlockHeader {
             height,
             time,
             ..
-        } = header.consensus().clone();
+        } = *header.consensus();
         PartialBlockHeader {
             application: ApplicationHeader {
                 da_height: header.da_height,
