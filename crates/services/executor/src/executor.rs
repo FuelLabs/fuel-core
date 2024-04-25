@@ -94,6 +94,7 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
+        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -147,12 +148,11 @@ use fuel_core_types::{
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::borrow::Cow;
-#[cfg(debug_assertions)]
-use tracing::error;
 use tracing::{
     debug,
     warn,
 };
+
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
 pub struct OnceTransactionsSource {
@@ -610,7 +610,7 @@ where
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<&Transaction>
+    ) -> ExecutorResult<()>
     where
         W: KeyValueInspect<Column = Column> + Modifiable,
     {
@@ -638,11 +638,7 @@ where
             .checked_add(1)
             .ok_or(ExecutorError::TooManyTransactions)?;
 
-        let added_transaction = block
-            .transactions
-            .last()
-            .expect("We just added the transaction");
-        Ok(added_transaction)
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
@@ -693,13 +689,9 @@ where
                 gas_price,
                 coinbase_contract_id,
             )?;
-            #[cfg(debug_assertions)]
-            if _new_transaction != transaction {
-                error!("Provided transaction does not match the transaction built by the executor");
-            }
         }
 
-        Self::check_block_matches(partial_block, block, &data)?;
+        self.check_block_matches(partial_block, block, &data)?;
 
         let changes_from_thread = thread_block_transaction.into_changes();
         block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
@@ -776,6 +768,7 @@ where
     }
 
     fn check_block_matches(
+        &self,
         new_partial_block: PartialFuelBlock,
         old_block: &Block,
         data: &ExecutionData,
@@ -786,8 +779,22 @@ where
             ..
         } = &data;
 
+        new_partial_block
+            .transactions
+            .iter()
+            .zip(old_block.transactions())
+            .try_for_each(|(new_tx, old_tx)| {
+                if new_tx != old_tx {
+                    let chain_id = self.consensus_params.chain_id();
+                    let transaction_id = old_tx.id(&chain_id);
+                    Err(ExecutorError::InvalidTransactionOutcome { transaction_id })
+                } else {
+                    Ok(())
+                }
+            })?;
+
         let new_block = new_partial_block.generate(&message_ids[..], *event_inbox_root);
-        if new_block != *old_block {
+        if new_block.header() != old_block.header() {
             Err(ExecutorError::BlockMismatch)
         } else {
             Ok(())

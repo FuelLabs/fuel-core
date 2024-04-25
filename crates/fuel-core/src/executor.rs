@@ -1176,6 +1176,8 @@ mod tests {
             .transaction()
             .clone()
             .into();
+        let chain_id = ConsensusParameters::default().chain_id();
+        let transaction_id = tx.id(&chain_id);
 
         let mut producer = create_executor(Default::default(), Default::default());
 
@@ -1195,8 +1197,12 @@ mod tests {
             }
         }
 
+        // then
         let err = verifier.validate_and_commit(block).unwrap_err();
-        assert_eq!(err, ExecutorError::BlockMismatch);
+        assert_eq!(
+            err,
+            ExecutorError::InvalidTransactionOutcome { transaction_id }
+        );
     }
 
     // corrupt the merkle sum tree commitment from a produced block and verify that the
@@ -2174,7 +2180,12 @@ mod tests {
         let verifier = create_executor(db, Default::default());
         let err = verifier.validate_without_commit(second_block).unwrap_err();
 
-        assert_eq!(err, ExecutorError::BlockMismatch);
+        assert_eq!(
+            err,
+            ExecutorError::InvalidTransactionOutcome {
+                transaction_id: tx_id
+            }
+        );
     }
 
     #[test]
