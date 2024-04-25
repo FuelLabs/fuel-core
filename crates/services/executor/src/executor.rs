@@ -1245,7 +1245,7 @@ where
 
         let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
             &checked_tx,
-            &header,
+            header,
             coinbase_contract_id,
             gas_price,
             tx_st_transaction,
@@ -1288,8 +1288,7 @@ where
         tx: &mut Tx,
     ) -> ExecutorResult<()>
     where
-        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        Tx: ExecutableTransaction,
         T: KeyValueInspect<Column = Column>,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
@@ -1357,7 +1356,7 @@ where
         tx: &mut Tx,
     ) -> ExecutorResult<()>
     where
-        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        Tx: ExecutableTransaction,
     {
         for (original_input, produced_input) in checked_tx
             .transaction()
@@ -1432,13 +1431,13 @@ where
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         checked_tx: &Checked<Tx>,
-        header: &&PartialBlockHeader,
+        header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
         gas_price: Word,
         tx_st_transaction: &mut StorageTransaction<T>,
     ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
     where
-        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
         T: KeyValueInspect<Column = Column>,
     {
