@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use fuel_core_chain_config::TableEntry;
-use fuel_core_services::SharedMutex;
+use fuel_core_services::SharedRwLock;
 use fuel_core_storage::{
     self,
     blueprint::BlueprintInspect,
@@ -85,12 +85,19 @@ pub mod state;
 pub mod storage;
 pub mod transactions;
 
+/// Cached values from Metadata table, used to speed up commits.
+#[derive(Clone, Debug, Default)]
+struct CachedMetadata<Height> {
+    height: SharedRwLock<Option<Height>>,
+    genesis_active: SharedRwLock<bool>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Database<Description = OnChain>
 where
     Description: DatabaseDescription,
 {
-    height: SharedMutex<Option<Description::Height>>,
+    cached_metadata: CachedMetadata<Description::Height>,
     data: DataSource<Description>,
 }
 
@@ -128,15 +135,22 @@ where
     Self: StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
     pub fn new(data_source: DataSource<Description>) -> Self {
-        let mut database = Self {
-            height: SharedMutex::new(None),
+        let database = Self {
+            cached_metadata: CachedMetadata {
+                height: SharedRwLock::new(None),
+                genesis_active: SharedRwLock::new(false),
+            },
             data: data_source,
         };
         let height = database
             .latest_height()
             .expect("Failed to get latest height during creation of the database");
+        let genesis_active = database
+            .genesis_active()
+            .expect("Failed to get genesis active state during creation of the database");
 
-        database.height = SharedMutex::new(height);
+        *database.cached_metadata.height.write() = height;
+        *database.cached_metadata.genesis_active.write() = genesis_active;
 
         database
     }
@@ -157,8 +171,8 @@ where
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
         Self {
-            height: SharedMutex::new(None),
             data,
+            ..Default::default()
         }
     }
 
@@ -167,8 +181,8 @@ where
         let data =
             Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
         Self {
-            height: SharedMutex::new(None),
             data,
+            ..Default::default()
         }
     }
 }
@@ -247,7 +261,7 @@ impl AtomicView for Database<OnChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock()
+        *self.cached_metadata.height.read()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -267,7 +281,7 @@ impl AtomicView for Database<OffChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock()
+        *self.cached_metadata.height.read()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -286,7 +300,7 @@ impl AtomicView for Database<Relayer> {
     type Height = DaBlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock()
+        *self.cached_metadata.height.read()
     }
 
     fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
@@ -378,58 +392,64 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
-    // Gets the all new heights from the `changes`
-    let iterator = ChangesIterator::<Description>::new(&changes);
-    let new_heights = heights_lookup(&iterator)?;
+    // DB consistency checks are only enforced when genesis flag is not set.
+    let new_height = if *database.cached_metadata.genesis_active.read() {
+        None
+    } else {
+        // Gets the all new heights from the `changes`
+        let iterator = ChangesIterator::<Description>::new(&changes);
+        let new_heights = heights_lookup(&iterator)?;
 
-    // Changes for each block should be committed separately.
-    // If we have more than one height, it means we are mixing commits
-    // for several heights in one batch - return error in this case.
-    if new_heights.len() > 1 {
-        return Err(DatabaseError::MultipleHeightsInCommit {
-            heights: new_heights.iter().map(DatabaseHeight::as_u64).collect(),
-        }
-        .into());
-    }
-
-    let new_height = new_heights.into_iter().last();
-    let prev_height = *database.height.lock();
-
-    match (prev_height, new_height) {
-        (None, None) => {
-            // We are inside the regenesis process if the old and new heights are not set.
-            // In this case, we continue to commit until we discover a new height.
-            // This height will be the start of the database.
-        }
-        (Some(prev_height), Some(new_height)) => {
-            // Each new commit should be linked to the previous commit to create a monotonically growing database.
-
-            let next_expected_height = prev_height
-                .advance_height()
-                .ok_or(DatabaseError::FailedToAdvanceHeight)?;
-
-            // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
-            //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
-            if next_expected_height > new_height {
-                return Err(DatabaseError::HeightsAreNotLinked {
-                    prev_height: prev_height.as_u64(),
-                    new_height: new_height.as_u64(),
-                }
-                .into());
-            }
-        }
-        (None, Some(_)) => {
-            // The new height is finally found; starting at this point,
-            // all next commits should be linked(the height should increase each time by one).
-        }
-        (Some(prev_height), None) => {
-            // In production, we shouldn't have cases where we call `commit_chagnes` with intermediate changes.
-            // The commit always should contain all data for the corresponding height.
-            return Err(DatabaseError::NewHeightIsNotSet {
-                prev_height: prev_height.as_u64(),
+        // Changes for each block should be committed separately.
+        // If we have more than one height, it means we are mixing commits
+        // for several heights in one batch - return error in this case.
+        if new_heights.len() > 1 {
+            return Err(DatabaseError::MultipleHeightsInCommit {
+                heights: new_heights.iter().map(DatabaseHeight::as_u64).collect(),
             }
             .into());
         }
+
+        let new_height = new_heights.into_iter().last();
+        let prev_height = *database.cached_metadata.height.read();
+
+        match (prev_height, new_height) {
+            (None, None) => {
+                // We are inside the regenesis process if the old and new heights are not set.
+                // In this case, we continue to commit until we discover a new height.
+                // This height will be the start of the database.
+            }
+            (Some(prev_height), Some(new_height)) => {
+                // Each new commit should be linked to the previous commit to create a monotonically growing database.
+
+                let next_expected_height = prev_height
+                    .advance_height()
+                    .ok_or(DatabaseError::FailedToAdvanceHeight)?;
+
+                // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
+                //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
+                if next_expected_height > new_height {
+                    return Err(DatabaseError::HeightsAreNotLinked {
+                        prev_height: prev_height.as_u64(),
+                        new_height: new_height.as_u64(),
+                    }
+                    .into());
+                }
+            }
+            (None, Some(_)) => {
+                // The new height is finally found; starting at this point,
+                // all next commits should be linked(the height should increase each time by one).
+            }
+            (Some(prev_height), None) => {
+                // In production, we shouldn't have cases where we call `commit_chagnes` with intermediate changes.
+                // The commit always should contain all data for the corresponding height.
+                return Err(DatabaseError::NewHeightIsNotSet {
+                    prev_height: prev_height.as_u64(),
+                }
+                .into());
+            }
+        };
+        new_height
     };
 
     let updated_changes = if let Some(new_height) = new_height {
@@ -448,6 +468,7 @@ where
                 &DatabaseMetadata::V1 {
                     version: Description::version(),
                     height: new_height,
+                    genesis_active: false,
                 },
             )?;
 
@@ -456,14 +477,14 @@ where
         changes
     };
 
-    let mut guard = database.height.lock();
-    database
-        .data
-        .as_ref()
-        .commit_changes(new_height, updated_changes)?;
+    // Atomically commit the changes to the database, and to the mutex-protected field.
+    let mut guard = database.cached_metadata.height.write();
+    database.data.as_ref().commit_changes(updated_changes)?;
 
     // Update the block height
-    *guard = new_height;
+    if let Some(new_height) = new_height {
+        *guard = Some(new_height);
+    }
 
     Ok(())
 }

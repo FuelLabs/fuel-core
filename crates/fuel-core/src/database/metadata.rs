@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::database::{
     database_description::{
         DatabaseDescription,
@@ -47,29 +49,34 @@ where
     Description: DatabaseDescription,
     Self: StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
+    /// Reads the metadata from the database.
+    fn read_metadata(
+        &self,
+    ) -> StorageResult<Option<Cow<'_, DatabaseMetadata<Description::Height>>>> {
+        self.storage::<MetadataTable<Description>>().get(&())
+    }
+
     /// Ensures the version is correct.
     pub fn check_version(&self) -> StorageResult<()> {
-        let Some(metadata) = self.storage::<MetadataTable<Description>>().get(&())?
-        else {
-            return Ok(());
-        };
-
-        if metadata.version() != Description::version() {
-            return Err(DatabaseError::InvalidDatabaseVersion {
-                found: metadata.version(),
-                expected: Description::version(),
+        if let Some(metadata) = self.read_metadata()? {
+            if metadata.version() != Description::version() {
+                return Err(DatabaseError::InvalidDatabaseVersion {
+                    found: metadata.version(),
+                    expected: Description::version(),
+                }
+                .into());
             }
-            .into())
         }
-
         Ok(())
     }
 
+    /// Reads latest height from the underlying database, bypassing cache
     pub fn latest_height(&self) -> StorageResult<Option<Description::Height>> {
-        let metadata = self.storage::<MetadataTable<Description>>().get(&())?;
+        Ok(self.read_metadata()?.map(|m| *m.height()))
+    }
 
-        let metadata = metadata.map(|metadata| *metadata.height());
-
-        Ok(metadata)
+    /// Reads latest genesis active state from the underlying database, bypassing cache
+    pub fn genesis_active(&self) -> StorageResult<bool> {
+        Ok(self.read_metadata()?.map_or(false, |m| m.genesis_active()))
     }
 }
