@@ -1,4 +1,4 @@
-use std::future::Future;
+use std::sync::Arc;
 
 use fuel_core_services::StateWatcher;
 use futures::{
@@ -10,42 +10,83 @@ use tokio::task::JoinSet;
 
 pub struct TaskManager<T> {
     set: JoinSet<anyhow::Result<T>>,
-    cancel: CancellationToken,
+    cancel_token: CancellationToken,
 }
 
-#[cfg_attr(feature = "test-helpers", derive(Default))]
+#[async_trait::async_trait]
+pub trait NotifyCancel {
+    async fn wait_until_cancelled(&self) -> anyhow::Result<()>;
+    fn is_cancelled(&self) -> bool;
+}
+
+#[async_trait::async_trait]
+impl NotifyCancel for tokio_util::sync::CancellationToken {
+    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
+        self.cancelled().await;
+        Ok(())
+    }
+    fn is_cancelled(&self) -> bool {
+        self.is_cancelled()
+    }
+}
+
+#[async_trait::async_trait]
+impl NotifyCancel for StateWatcher {
+    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
+        let mut state = self.clone();
+        while !state.is_cancelled() {
+            state.changed().await?;
+        }
+
+        Ok(())
+    }
+
+    fn is_cancelled(&self) -> bool {
+        let state = self.borrow();
+        state.stopping() || state.stopped()
+    }
+}
+
+/// A token that implements [`NotifyCancel`]. Given to jobs inside of [`TaskManager`] so they can
+/// stop either when commanded by the [`TaskManager`] or by an outside source.
 #[derive(Clone)]
 pub struct CancellationToken {
-    task_cancellator: tokio_util::sync::CancellationToken,
-    state_watcher: StateWatcher,
+    outside_signal: Arc<dyn NotifyCancel + Send + Sync>,
+    inner_signal: tokio_util::sync::CancellationToken,
 }
 
-#[cfg(feature = "test-helpers")]
-impl From<tokio_util::sync::CancellationToken> for CancellationToken {
-    fn from(token: tokio_util::sync::CancellationToken) -> Self {
+impl CancellationToken {
+    pub fn new(outside_signal: impl NotifyCancel + Send + Sync + 'static) -> Self {
         Self {
-            task_cancellator: token,
-            ..Default::default()
+            outside_signal: Arc::new(outside_signal),
+            inner_signal: tokio_util::sync::CancellationToken::new(),
         }
+    }
+
+    pub fn cancel(&self) {
+        self.inner_signal.cancel()
     }
 }
 
 impl CancellationToken {
-    #[cfg(test)]
-    pub async fn cancelled(mut self) -> anyhow::Result<()> {
-        tokio::select! {
-            _ = self.task_cancellator.cancelled() => Ok(()),
-            result = self.state_watcher.wait_stopping_or_stopped() => result
+    pub fn is_cancelled(&self) -> bool {
+        self.inner_signal.is_cancelled() || self.outside_signal.is_cancelled()
+    }
+}
+
+impl<T> TaskManager<T> {
+    pub fn new(outside_cancel: impl NotifyCancel + Send + Sync + 'static) -> Self {
+        Self {
+            set: JoinSet::new(),
+            cancel_token: CancellationToken::new(outside_cancel),
         }
     }
 
-    fn cancel_tasks(&self) {
-        self.task_cancellator.cancel();
-    }
-
-    pub fn is_cancelled(&self) -> bool {
-        let state = self.state_watcher.borrow();
-        self.task_cancellator.is_cancelled() || state.stopped() || state.stopping()
+    pub fn run<F>(&mut self, arg: F) -> anyhow::Result<T>
+    where
+        F: FnOnce(CancellationToken) -> anyhow::Result<T>,
+    {
+        arg(self.cancel_token.clone())
     }
 }
 
@@ -53,22 +94,22 @@ impl<T> TaskManager<T>
 where
     T: Send + 'static,
 {
-    pub fn new(watcher: StateWatcher) -> Self {
-        Self {
-            set: JoinSet::new(),
-            cancel: CancellationToken {
-                task_cancellator: tokio_util::sync::CancellationToken::new(),
-                state_watcher: watcher,
-            },
-        }
-    }
-
+    #[cfg(test)]
     pub fn spawn<F, Fut>(&mut self, arg: F)
     where
         F: FnOnce(CancellationToken) -> Fut,
-        Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
+        Fut: futures::Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.spawn(arg(self.cancel.clone()));
+        let token = self.cancel_token.clone();
+        self.set.spawn(arg(token));
+    }
+
+    pub fn spawn_blocking<F>(&mut self, arg: F)
+    where
+        F: FnOnce(CancellationToken) -> anyhow::Result<T> + Send + 'static,
+    {
+        let token = self.cancel_token.clone();
+        self.set.spawn_blocking(move || arg(token));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
@@ -77,7 +118,7 @@ where
             Some((res, set))
         })
         .map(|result| result.map_err(Into::into).and_then(|r| r))
-        .inspect_err(|_| self.cancel.cancel_tasks())
+        .inspect_err(|_| self.cancel_token.cancel())
         .collect::<Vec<_>>()
         .await;
 
@@ -90,16 +131,18 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::bail;
-    use fuel_core_services::State;
-    use tokio::sync::watch;
+    use tokio_util::sync::CancellationToken as TokioCancelToken;
 
-    use super::*;
+    use crate::service::genesis::task_manager::{
+        NotifyCancel,
+        TaskManager,
+    };
 
     #[tokio::test]
     async fn task_added_and_completed() {
         // given
-        let mut workers = TaskManager::new(StateWatcher::default());
-        workers.spawn(|_| async { Ok(8u8) });
+        let mut workers = TaskManager::new(TokioCancelToken::new());
+        workers.spawn_blocking(|_| Ok(8u8));
 
         // when
         let results = workers.wait().await.unwrap();
@@ -111,9 +154,9 @@ mod tests {
     #[tokio::test]
     async fn returns_err_on_single_failure() {
         // given
-        let mut workers = TaskManager::new(StateWatcher::default());
-        workers.spawn(|_| async { Ok(10u8) });
-        workers.spawn(|_| async { Err(anyhow::anyhow!("I fail")) });
+        let mut workers = TaskManager::new(TokioCancelToken::new());
+        workers.spawn_blocking(|_| Ok(10u8));
+        workers.spawn_blocking(|_| Err(anyhow::anyhow!("I fail")));
 
         // when
         let results = workers.wait().await;
@@ -126,18 +169,16 @@ mod tests {
     #[tokio::test]
     async fn signals_cancel_to_non_finished_tasks_on_failure() {
         // given
-        let (_sender, recv) = watch::channel(State::Started);
-        let watcher = recv.into();
-        let mut workers = TaskManager::new(watcher);
+        let mut workers = TaskManager::new(TokioCancelToken::new());
         let (tx, rx) = tokio::sync::oneshot::channel();
         workers.spawn(move |token| async move {
-            token.cancelled().await.unwrap();
+            token.inner_signal.wait_until_cancelled().await.unwrap();
             tx.send(()).unwrap();
             Ok(())
         });
 
         // when
-        workers.spawn(|_| async { bail!("I fail") });
+        workers.spawn_blocking(|_| bail!("I fail"));
 
         // then
         let _ = workers.wait().await;
@@ -148,18 +189,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reacts_when_state_changes_to_stopping() {
+    async fn stops_on_cancellation() {
         // given
-        let (sender, receiver) = watch::channel(State::Started);
-        let mut workers = TaskManager::new(receiver.into());
+        let cancel = TokioCancelToken::new();
+        let mut workers = TaskManager::new(cancel.clone());
 
         workers.spawn(move |token| async move {
-            token.cancelled().await.unwrap();
+            token.outside_signal.wait_until_cancelled().await.unwrap();
             Ok(10u8)
         });
 
         // when
-        sender.send(State::Stopping).unwrap();
+        cancel.cancel();
 
         // then
         let result = tokio::time::timeout(Duration::from_secs(2), workers.wait())
