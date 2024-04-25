@@ -211,8 +211,9 @@ impl ExecutionData {
 /// Per-block execution options
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
+    // TODO: This is a bad name and the real motivation for this field should be specified
     /// UTXO Validation flag, when disabled the executor skips signature and UTXO existence checks
-    pub utxo_validation: bool,
+    pub extra_tx_checks: bool,
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,
 }
@@ -1056,7 +1057,7 @@ where
             let input = mint.input_contract().clone();
             let mut inputs = [Input::Contract(input)];
 
-            if self.options.utxo_validation {
+            if self.options.extra_tx_checks {
                 self.verify_inputs_exist_and_values_match(
                     block_st_transaction,
                     inputs.as_mut_slice(),
@@ -1239,8 +1240,8 @@ where
     {
         let tx_id = checked_tx.id();
 
-        if self.options.utxo_validation {
-            checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
+        if self.options.extra_tx_checks {
+            checked_tx = self.extra_tx_checks(checked_tx, header, tx_st_transaction)?;
         }
 
         let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
@@ -1394,7 +1395,7 @@ where
         Ok(())
     }
 
-    fn validate_utxos<Tx, T>(
+    fn extra_tx_checks<Tx, T>(
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
@@ -1414,13 +1415,11 @@ where
             })?;
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
 
-        // validate utxos exist and maturity is properly set
         self.verify_inputs_exist_and_values_match(
             tx_st_transaction,
             checked_tx.transaction().inputs(),
             header.da_height,
         )?;
-        // validate transaction signature
         checked_tx = checked_tx
             .check_signatures(&self.consensus_params.chain_id())
             .map_err(TransactionValidityError::from)?;
@@ -1720,7 +1719,7 @@ where
                     let contract =
                         ContractRef::new(StructuredStorage::new(db), *contract_id);
                     let utxo_info =
-                        contract.validated_utxo(self.options.utxo_validation)?;
+                        contract.validated_utxo(self.options.extra_tx_checks)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
                     *balance_root = contract.balance_root()?;
@@ -1782,7 +1781,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if self.options.utxo_validation {
+        if self.options.extra_tx_checks {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(
