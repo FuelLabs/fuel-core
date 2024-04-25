@@ -149,7 +149,10 @@ use parking_lot::Mutex as ParkingMutex;
 use std::borrow::Cow;
 #[cfg(debug_assertions)]
 use tracing::error;
-use tracing::warn;
+use tracing::{
+    debug,
+    warn,
+};
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
 pub struct OnceTransactionsSource {
@@ -390,6 +393,8 @@ where
     }
 
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
+        let pre_exec_block_id = block.id();
+
         let consensus_params_version = block.header().consensus_parameters_version;
         let block_executor = BlockExecutor::new(
             self.relayer,
@@ -401,12 +406,21 @@ where
         let execution_data = block_executor.validate_block(&block)?;
 
         let ExecutionData {
+            coinbase,
+            used_gas,
             tx_status,
             skipped_transactions,
             events,
             changes,
             ..
         } = execution_data;
+
+        let _finalized_block_id = block.id();
+
+        debug!(
+            "Block {:#x} fees: {} gas: {}",
+            pre_exec_block_id, coinbase, used_gas
+        );
 
         let result = ExecutionResult {
             block,
@@ -590,15 +604,15 @@ where
         Ok(data)
     }
 
-    fn execute_transaction_and_commit<W>(
-        &self,
-        block: &mut PartialFuelBlock,
+    fn execute_transaction_and_commit<'a, W>(
+        &'a self,
+        block: &'a mut PartialFuelBlock,
         thread_block_transaction: &mut W,
         execution_data: &mut ExecutionData,
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<Transaction>
+    ) -> ExecutorResult<&Transaction>
     where
         W: KeyValueInspect<Column = Column> + Modifiable,
     {
@@ -621,12 +635,16 @@ where
             tx
         };
 
-        block.transactions.push(tx.clone());
+        block.transactions.push(tx);
         execution_data.tx_count = tx_count
             .checked_add(1)
             .ok_or(ExecutorError::TooManyTransactions)?;
 
-        Ok(tx)
+        let added_transaction = block
+            .transactions
+            .last()
+            .expect("We just added the transaction");
+        Ok(added_transaction)
     }
 
     #[tracing::instrument(skip_all)]
@@ -677,7 +695,7 @@ where
                 coinbase_contract_id,
             )?;
             #[cfg(debug_assertions)]
-            if _new_transaction != transaction {
+            if _new_transaction != &transaction {
                 error!("Provided transaction does not match the transaction built by the executor");
             }
         }
