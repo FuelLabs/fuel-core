@@ -174,26 +174,23 @@ impl TransactionExecutionResult {
 /// depend on the type of execution.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ExecutionTypes<P, V> {
+pub enum ExecutionTypes<P> {
     /// DryRun mode where P is being produced.
     DryRun(P),
     /// Production mode where P is being produced.
     Production(P),
-    /// Validation mode where V is being checked.
-    Validation(V),
 }
 
 /// Starting point for executing a block. Production starts with a [`PartialFuelBlock`].
 /// Validation starts with a full `FuelBlock`.
-pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, Block>;
+pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock>;
 
-impl<P> ExecutionTypes<P, Block> {
+impl<P> ExecutionTypes<P> {
     /// Get the hash of the full `FuelBlock` if validating.
     pub fn id(&self) -> Option<BlockId> {
         match self {
             ExecutionTypes::DryRun(_) => None,
             ExecutionTypes::Production(_) => None,
-            ExecutionTypes::Validation(v) => Some(v.id()),
         }
     }
 }
@@ -201,48 +198,33 @@ impl<P> ExecutionTypes<P, Block> {
 // TODO: Move `ExecutionType` and `ExecutionKind` into `fuel-core-executor`
 
 /// Execution wrapper with only a single type.
-pub type ExecutionType<T> = ExecutionTypes<T, T>;
+pub type ExecutionType<T> = ExecutionTypes<T>;
 
-impl<P, V> ExecutionTypes<P, V> {
+impl<P> ExecutionTypes<P> {
     /// Map the production type if producing.
-    pub fn map_p<Q, F>(self, f: F) -> ExecutionTypes<Q, V>
+    pub fn map_p<Q, F>(self, f: F) -> ExecutionTypes<Q>
     where
         F: FnOnce(P) -> Q,
     {
         match self {
             ExecutionTypes::DryRun(p) => ExecutionTypes::DryRun(f(p)),
             ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
-            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(v),
-        }
-    }
-
-    /// Map the validation type if validating.
-    pub fn map_v<W, F>(self, f: F) -> ExecutionTypes<P, W>
-    where
-        F: FnOnce(V) -> W,
-    {
-        match self {
-            ExecutionTypes::DryRun(p) => ExecutionTypes::DryRun(p),
-            ExecutionTypes::Production(p) => ExecutionTypes::Production(p),
-            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(f(v)),
         }
     }
 
     /// Get a reference version of the inner type.
-    pub fn as_ref(&self) -> ExecutionTypes<&P, &V> {
+    pub fn as_ref(&self) -> ExecutionTypes<&P> {
         match *self {
             ExecutionTypes::DryRun(ref p) => ExecutionTypes::DryRun(p),
             ExecutionTypes::Production(ref p) => ExecutionTypes::Production(p),
-            ExecutionTypes::Validation(ref v) => ExecutionTypes::Validation(v),
         }
     }
 
     /// Get a mutable reference version of the inner type.
-    pub fn as_mut(&mut self) -> ExecutionTypes<&mut P, &mut V> {
+    pub fn as_mut(&mut self) -> ExecutionTypes<&mut P> {
         match *self {
             ExecutionTypes::DryRun(ref mut p) => ExecutionTypes::DryRun(p),
             ExecutionTypes::Production(ref mut p) => ExecutionTypes::Production(p),
-            ExecutionTypes::Validation(ref mut v) => ExecutionTypes::Validation(v),
         }
     }
 
@@ -251,7 +233,6 @@ impl<P, V> ExecutionTypes<P, V> {
         match self {
             ExecutionTypes::DryRun(_) => ExecutionKind::DryRun,
             ExecutionTypes::Production(_) => ExecutionKind::Production,
-            ExecutionTypes::Validation(_) => ExecutionKind::Validation,
         }
     }
 }
@@ -265,7 +246,6 @@ impl<T> ExecutionType<T> {
         match self {
             ExecutionTypes::DryRun(p) => ExecutionTypes::DryRun(f(p)),
             ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
-            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(f(v)),
         }
     }
 
@@ -277,16 +257,13 @@ impl<T> ExecutionType<T> {
         match self {
             ExecutionTypes::DryRun(p) => f(p).map(ExecutionTypes::DryRun),
             ExecutionTypes::Production(p) => f(p).map(ExecutionTypes::Production),
-            ExecutionTypes::Validation(v) => f(v).map(ExecutionTypes::Validation),
         }
     }
 
     /// Get the inner type.
     pub fn into_inner(self) -> T {
         match self {
-            ExecutionTypes::DryRun(t)
-            | ExecutionTypes::Production(t)
-            | ExecutionTypes::Validation(t) => t,
+            ExecutionTypes::DryRun(t) | ExecutionTypes::Production(t) => t,
         }
     }
 
@@ -304,7 +281,6 @@ impl<T> core::ops::Deref for ExecutionType<T> {
         match self {
             ExecutionTypes::DryRun(p) => p,
             ExecutionTypes::Production(p) => p,
-            ExecutionTypes::Validation(v) => v,
         }
     }
 }
@@ -314,7 +290,6 @@ impl<T> core::ops::DerefMut for ExecutionType<T> {
         match self {
             ExecutionTypes::DryRun(p) => p,
             ExecutionTypes::Production(p) => p,
-            ExecutionTypes::Validation(v) => v,
         }
     }
 }
@@ -328,17 +303,6 @@ pub enum ExecutionKind {
     Production,
     /// Validating a block.
     Validation,
-}
-
-impl ExecutionKind {
-    /// Wrap a type in this execution kind.
-    pub fn wrap<T>(self, t: T) -> ExecutionType<T> {
-        match self {
-            ExecutionKind::DryRun => ExecutionTypes::DryRun(t),
-            ExecutionKind::Production => ExecutionTypes::Production(t),
-            ExecutionKind::Validation => ExecutionTypes::Validation(t),
-        }
-    }
 }
 
 #[allow(missing_docs)]

@@ -631,6 +631,28 @@ mod tests {
     }
 
     #[test]
+    fn open_new_columns() {
+        let tmp_dir = TempDir::new().unwrap();
+
+        // Given
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let database_with_old_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None)
+                .expect("Failed to open database with old columns");
+        drop(database_with_old_columns);
+
+        // When
+        let mut new_columns = old_columns;
+        new_columns.push(Column::ContractsAssets);
+        let database_with_new_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None).map(|_| ());
+
+        // Then
+        assert_eq!(Ok(()), database_with_new_columns);
+    }
+
+    #[test]
     fn can_put_and_read() {
         let key = vec![0xA, 0xB, 0xC];
 
