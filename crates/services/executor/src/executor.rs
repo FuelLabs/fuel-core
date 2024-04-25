@@ -1130,7 +1130,7 @@ where
         }
 
         let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
-            &checked_tx,
+            checked_tx,
             header,
             coinbase_contract_id,
             gas_price,
@@ -1374,21 +1374,16 @@ where
     }
 
     fn update_input_used_gas<Tx>(
-        checked_tx: &Checked<Tx>,
+        predicate_gas_used: Vec<Option<Word>>,
         tx_id: TxId,
         tx: &mut Tx,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
-        for (original_input, produced_input) in checked_tx
-            .transaction()
-            .inputs()
-            .iter()
-            .zip(tx.inputs_mut())
+        for (predicate_gas_used, produced_input) in
+            predicate_gas_used.into_iter().zip(tx.inputs_mut())
         {
-            let predicate_gas_used = original_input.predicate_gas_used();
-
             if let Some(gas_used) = predicate_gas_used {
                 match produced_input {
                     Input::CoinPredicate(CoinPredicate {
@@ -1451,7 +1446,7 @@ where
 
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
-        checked_tx: &Checked<Tx>,
+        checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
         gas_price: Word,
@@ -1483,9 +1478,13 @@ where
         let gas_costs = self.consensus_params.gas_costs();
         let fee_params = self.consensus_params.fee_params();
 
-        let ready_tx = checked_tx
-            .clone()
-            .into_ready(gas_price, gas_costs, fee_params)?;
+        let predicate_gas_used = checked_tx
+            .transaction()
+            .inputs()
+            .iter()
+            .map(|input| input.predicate_gas_used())
+            .collect();
+        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
 
         let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
@@ -1503,7 +1502,7 @@ where
             debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
         }
 
-        Self::update_input_used_gas(checked_tx, tx_id, &mut tx)?;
+        Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
