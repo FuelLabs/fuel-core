@@ -124,6 +124,12 @@ impl CombinedDatabase {
         Ok(())
     }
 
+    pub fn set_genesis_active(&self, active: bool) {
+        self.on_chain.set_genesis_active(active);
+        self.off_chain.set_genesis_active(active);
+        self.relayer.set_genesis_active(active);
+    }
+
     pub fn on_chain(&self) -> &Database<OnChain> {
         &self.on_chain
     }

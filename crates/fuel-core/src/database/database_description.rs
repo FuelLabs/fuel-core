@@ -28,11 +28,7 @@ pub trait DatabaseDescription: 'static + Clone + Debug + Send + Sync {
 /// The metadata of the database contains information about the version and its height.
 #[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum DatabaseMetadata<Height> {
-    V1 {
-        version: u32,
-        height: Height,
-        genesis_active: bool,
-    },
+    V1 { version: u32, height: Height },
 }
 
 impl<Height> DatabaseMetadata<Height> {
@@ -47,13 +43,6 @@ impl<Height> DatabaseMetadata<Height> {
     pub fn height(&self) -> &Height {
         match self {
             Self::V1 { height, .. } => height,
-        }
-    }
-
-    /// Returns if the genesis is currently in progress.
-    pub fn genesis_active(&self) -> bool {
-        match self {
-            Self::V1 { genesis_active, .. } => *genesis_active,
         }
     }
 }

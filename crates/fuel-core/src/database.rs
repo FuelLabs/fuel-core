@@ -85,19 +85,15 @@ pub mod state;
 pub mod storage;
 pub mod transactions;
 
-/// Cached values from Metadata table, used to speed up commits.
-#[derive(Clone, Debug, Default)]
-struct CachedMetadata<Height> {
-    height: SharedRwLock<Option<Height>>,
-    genesis_active: SharedRwLock<bool>,
-}
-
 #[derive(Clone, Debug)]
 pub struct Database<Description = OnChain>
 where
     Description: DatabaseDescription,
 {
-    cached_metadata: CachedMetadata<Description::Height>,
+    /// Cached value from Metadata table, used to speed up lookups.
+    height: SharedRwLock<Option<Description::Height>>,
+    /// If set, some consistency checks are not performed.
+    genesis_active: SharedRwLock<bool>,
     data: DataSource<Description>,
 }
 
@@ -136,21 +132,14 @@ where
 {
     pub fn new(data_source: DataSource<Description>) -> Self {
         let database = Self {
-            cached_metadata: CachedMetadata {
-                height: SharedRwLock::new(None),
-                genesis_active: SharedRwLock::new(false),
-            },
+            height: SharedRwLock::new(None),
+            genesis_active: SharedRwLock::new(false),
             data: data_source,
         };
         let height = database
             .latest_height()
             .expect("Failed to get latest height during creation of the database");
-        let genesis_active = database
-            .genesis_active()
-            .expect("Failed to get genesis active state during creation of the database");
-
-        *database.cached_metadata.height.write() = height;
-        *database.cached_metadata.genesis_active.write() = genesis_active;
+        *database.height.write() = height;
 
         database
     }
@@ -162,6 +151,11 @@ where
 
         Ok(Database::new(Arc::new(db)))
     }
+
+    /// Set the genesis flag that controls some consistency checks.
+    pub fn set_genesis_active(&self, active: bool) {
+        *self.genesis_active.write() = active;
+    }
 }
 
 impl<Description> Database<Description>
@@ -172,7 +166,8 @@ where
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
         Self {
             data,
-            ..Default::default()
+            height: SharedRwLock::new(None),
+            genesis_active: SharedRwLock::new(false),
         }
     }
 
@@ -182,7 +177,8 @@ where
             Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
         Self {
             data,
-            ..Default::default()
+            height: SharedRwLock::new(None),
+            genesis_active: SharedRwLock::new(false),
         }
     }
 }
@@ -261,7 +257,7 @@ impl AtomicView for Database<OnChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.cached_metadata.height.read()
+        *self.height.read()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -281,7 +277,7 @@ impl AtomicView for Database<OffChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.cached_metadata.height.read()
+        *self.height.read()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -300,7 +296,7 @@ impl AtomicView for Database<Relayer> {
     type Height = DaBlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.cached_metadata.height.read()
+        *self.height.read()
     }
 
     fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
@@ -393,7 +389,7 @@ where
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
     // DB consistency checks are only enforced when genesis flag is not set.
-    let new_height = if *database.cached_metadata.genesis_active.read() {
+    let new_height = if *database.genesis_active.read() {
         None
     } else {
         // Gets the all new heights from the `changes`
@@ -411,7 +407,7 @@ where
         }
 
         let new_height = new_heights.into_iter().last();
-        let prev_height = *database.cached_metadata.height.read();
+        let prev_height = *database.height.read();
 
         match (prev_height, new_height) {
             (None, None) => {
@@ -468,7 +464,6 @@ where
                 &DatabaseMetadata::V1 {
                     version: Description::version(),
                     height: new_height,
-                    genesis_active: false,
                 },
             )?;
 
@@ -478,7 +473,7 @@ where
     };
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
-    let mut guard = database.cached_metadata.height.write();
+    let mut guard = database.height.write();
     database.data.as_ref().commit_changes(updated_changes)?;
 
     // Update the block height
