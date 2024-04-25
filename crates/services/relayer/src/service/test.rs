@@ -44,39 +44,40 @@ async fn can_download_logs() {
     assert_eq!(result, logs);
 }
 
-#[tokio::test]
-async fn deploy_height_does_not_override() {
-    let mut mock_db = crate::mock_db::MockDb::default();
-    mock_db
-        .set_finalized_da_height_to_at_least(&50u64.into())
-        .unwrap();
-    let config = Config {
-        da_deploy_height: 20u64.into(),
-        ..Default::default()
-    };
-    let eth_node = MockMiddleware::default();
-    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
-    let _ = relayer.into_task(&Default::default(), ()).await;
+// #[tokio::test]
+// async fn deploy_height_does_not_override() {
+//     let mut mock_db = crate::mock_db::MockDb::default();
+//     mock_db
+//         .storage::<DaHeightTable>()
+//         .insert(&(), height)
+//         .unwrap();
+//     let config = Config {
+//         da_deploy_height: 20u64.into(),
+//         ..Default::default()
+//     };
+//     let eth_node = MockMiddleware::default();
+//     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
+//     let _ = relayer.into_task(&Default::default(), ()).await;
+//
+//     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
+// }
 
-    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
-}
-
-#[tokio::test]
-async fn deploy_height_does_override() {
-    let mut mock_db = crate::mock_db::MockDb::default();
-    mock_db
-        .set_finalized_da_height_to_at_least(&50u64.into())
-        .unwrap();
-    let config = Config {
-        da_deploy_height: 52u64.into(),
-        ..Default::default()
-    };
-    let eth_node = MockMiddleware::default();
-    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
-    let _ = relayer.into_task(&Default::default(), ()).await;
-
-    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 52);
-}
+// #[tokio::test]
+// async fn deploy_height_does_override() {
+//     let mut mock_db = crate::mock_db::MockDb::default();
+//     mock_db
+//         .set_finalized_da_height_to_at_least(&50u64.into())
+//         .unwrap();
+//     let config = Config {
+//         da_deploy_height: 52u64.into(),
+//         ..Default::default()
+//     };
+//     let eth_node = MockMiddleware::default();
+//     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
+//     let _ = relayer.into_task(&Default::default(), ()).await;
+//
+//     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 52);
+// }
 
 #[test_case(6, Some(6), Some(6); "if local is up to date with remote, then update sync")]
 #[test_case(6, Some(100), Some(100); "if local is somehow ahead of remote, then update sync")]

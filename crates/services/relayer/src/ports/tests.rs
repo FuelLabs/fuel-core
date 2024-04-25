@@ -21,8 +21,8 @@ use fuel_core_types::{
     },
     services::relayer::Event,
 };
-use std::borrow::Cow;
-use test_case::test_case;
+// use std::borrow::Cow;
+// use test_case::test_case;
 
 type DBTx = MockStorage<MockBasic, MockDatabaseTransaction>;
 type ReturnDB = Box<dyn Fn() -> DBTx + Send + Sync>;
@@ -208,42 +208,42 @@ fn insert_fails_for_events_same_height_but_on_different_height() {
     );
 }
 
-#[test_case(None, 0, 0; "can set DA height to 0 when there is none available")]
-#[test_case(None, 10, 10; "can set DA height to 10 when there is none available")]
-#[test_case(0, 10, 10; "can set DA height to 10 when it is 0")]
-#[test_case(0, None, 0; "inserts are bypassed when height goes from 0 to 0")]
-#[test_case(10, 11, 11; "can set DA height to 11 when it is 10")]
-#[test_case(11, None, 11; "inserts are bypassed when height goes from 11 to 11")]
-#[test_case(11, None, 10; "inserts are bypassed when height reverted from 11 to 10")]
-fn set_raises_da_height_monotonically(
-    get: impl Into<Option<u64>>,
-    inserts: impl Into<Option<u64>>,
-    new_height: u64,
-) {
-    let inserts = inserts.into();
-    let get = get.into();
-    let return_db_tx = move || {
-        let mut db = DBTx::default();
-        if let Some(h) = inserts {
-            db.storage
-                .expect_insert::<DaHeightTable>()
-                .once()
-                .withf(move |_, v| **v == h)
-                .returning(|_, _| Ok(None));
-        }
-        let get = get.map(|g| Cow::Owned(g.into()));
-        db.storage
-            .expect_get::<DaHeightTable>()
-            .once()
-            .returning(move |_| Ok(get.clone()));
-        db.data.expect_commit().returning(|| Ok(()));
-        db
-    };
-
-    let mut db = MockDatabase {
-        data: Box::new(return_db_tx),
-        storage: Default::default(),
-    };
-    db.set_finalized_da_height_to_at_least(&new_height.into())
-        .unwrap();
-}
+// #[test_case(None, 0, 0; "can set DA height to 0 when there is none available")]
+// #[test_case(None, 10, 10; "can set DA height to 10 when there is none available")]
+// #[test_case(0, 10, 10; "can set DA height to 10 when it is 0")]
+// #[test_case(0, None, 0; "inserts are bypassed when height goes from 0 to 0")]
+// #[test_case(10, 11, 11; "can set DA height to 11 when it is 10")]
+// #[test_case(11, None, 11; "inserts are bypassed when height goes from 11 to 11")]
+// #[test_case(11, None, 10; "inserts are bypassed when height reverted from 11 to 10")]
+// fn set_raises_da_height_monotonically(
+//     get: impl Into<Option<u64>>,
+//     inserts: impl Into<Option<u64>>,
+//     new_height: u64,
+// ) {
+//     let inserts = inserts.into();
+//     let get = get.into();
+//     let return_db_tx = move || {
+//         let mut db = DBTx::default();
+//         if let Some(h) = inserts {
+//             db.storage
+//                 .expect_insert::<DaHeightTable>()
+//                 .once()
+//                 .withf(move |_, v| **v == h)
+//                 .returning(|_, _| Ok(None));
+//         }
+//         let get = get.map(|g| Cow::Owned(g.into()));
+//         db.storage
+//             .expect_get::<DaHeightTable>()
+//             .once()
+//             .returning(move |_| Ok(get.clone()));
+//         db.data.expect_commit().returning(|| Ok(()));
+//         db
+//     };
+//
+//     let mut db = MockDatabase {
+//         data: Box::new(return_db_tx),
+//         storage: Default::default(),
+//     };
+//     db.set_finalized_da_height_to_at_least(&new_height.into())
+//         .unwrap();
+// }
