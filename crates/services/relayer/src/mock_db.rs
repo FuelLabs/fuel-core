@@ -122,16 +122,6 @@ impl RelayerDb for MockDb {
         Ok(())
     }
 
-    fn set_finalized_da_height_to_at_least(
-        &mut self,
-        height: &DaBlockHeight,
-    ) -> StorageResult<()> {
-        let mut lock = self.data.lock().unwrap();
-        let max = lock.finalized_da_height.get_or_insert(0u64.into());
-        *max = (*max).max(*height);
-        Ok(())
-    }
-
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
         self.data
             .lock()

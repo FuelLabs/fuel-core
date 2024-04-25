@@ -134,6 +134,10 @@ where
         // set atomically with the insertion based on the current
         // height. Also so that the messages are inserted atomically
         // with the height.
+
+        // Get the current DA block height from the database.
+        let before = self.get_finalized_da_height()?;
+
         let mut db_tx = self.transaction();
 
         for event in events {
@@ -143,26 +147,26 @@ where
         }
 
         db_tx.storage::<EventsHistory>().insert(da_height, events)?;
-
-        grow_monotonically(&mut db_tx, da_height)?;
+        db_tx
+            .storage::<DaHeightTable>()
+            .insert(&METADATA_KEY, da_height)?;
         db_tx.commit()?;
+
+        // Compare the new DA block height with previous the block height. Block
+        // height must always be monotonically increasing. If the new block
+        // height is less than the previous block height, the service is in
+        // an error state and must be shut down.
+        let after = self.get_finalized_da_height()?;
+        if after < before {
+            StorageResult::Err(
+                anyhow::anyhow!("Block height must be monotonically increasing").into(),
+            )?
+        }
+
         // TODO: Think later about how to clean up the history of the relayer.
         //  Since we don't have too much information on the relayer and it can be useful
         //  at any time, maybe we want to consider keeping it all the time instead of creating snapshots.
         //  https://github.com/FuelLabs/fuel-core/issues/1627
-        Ok(())
-    }
-
-    fn set_finalized_da_height_to_at_least(
-        &mut self,
-        height: &DaBlockHeight,
-    ) -> StorageResult<()> {
-        // A transaction is required to ensure that the height is
-        // set atomically with the insertion based on the current
-        // height.
-        let mut db_tx = self.transaction();
-        grow_monotonically(&mut db_tx, height)?;
-        db_tx.commit()?;
         Ok(())
     }
 
@@ -183,30 +187,6 @@ where
         self.commit()?;
         Ok(())
     }
-}
-
-fn grow_monotonically<Storage>(
-    s: &mut Storage,
-    height: &DaBlockHeight,
-) -> StorageResult<()>
-where
-    Storage: StorageMutate<DaHeightTable, Error = StorageError>,
-{
-    let current = (&s)
-        .storage::<DaHeightTable>()
-        .get(&METADATA_KEY)?
-        .map(|cow| cow.as_u64());
-    match current {
-        Some(current) => {
-            if **height > current {
-                s.storage::<DaHeightTable>().insert(&METADATA_KEY, height)?;
-            }
-        }
-        None => {
-            s.storage::<DaHeightTable>().insert(&METADATA_KEY, height)?;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

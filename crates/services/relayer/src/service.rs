@@ -111,17 +111,6 @@ impl<P, D> NotInitializedTask<P, D> {
     }
 }
 
-impl<P, D> Task<P, D>
-where
-    D: RelayerDb + 'static,
-{
-    fn set_deploy_height(&mut self) {
-        self.database
-            .set_finalized_da_height_to_at_least(&self.config.da_deploy_height)
-            .expect("Should be able to set the finalized da height");
-    }
-}
-
 #[async_trait]
 impl<P, D> RelayerData for Task<P, D>
 where
@@ -206,7 +195,7 @@ where
             config,
             retry_on_error,
         } = self;
-        let mut task = Task {
+        let task = Task {
             synced,
             eth_node,
             database,
@@ -214,7 +203,6 @@ where
             shutdown,
             retry_on_error,
         };
-        task.set_deploy_height();
 
         Ok(task)
     }
