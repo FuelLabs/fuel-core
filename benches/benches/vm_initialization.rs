@@ -23,6 +23,8 @@ use fuel_core_types::{
             Checked,
             IntoChecked,
         },
+        constraints::reg_key::Reg,
+        consts::VM_MAX_RAM,
         interpreter::NotSupportedEcal,
         Interpreter,
     },
@@ -102,8 +104,35 @@ pub fn vm_initialization(c: &mut Criterion) {
                     Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
                 );
                 let ready_tx = tx.clone().test_into_ready();
-                black_box(vm.init_script(ready_tx))
-                    .expect("Should be able to execute transaction");
+
+                // Initialize the VM and require the allocation of the whole memory
+                // to charge for the worst possible case.
+                black_box({
+                    vm.init_script(ready_tx)
+                        .expect("Should be able to execute transaction");
+                    const VM_MEM_HALF: u64 = VM_MAX_RAM / 2;
+                    let mut i = 0;
+                    loop {
+                        let stack = 1 << i;
+
+                        if stack > VM_MEM_HALF {
+                            vm.memory_mut()
+                                .grow_heap(Reg::new(&0), 0)
+                                .expect("Should be able to grow heap");
+                            break
+                        }
+
+                        let heap = VM_MAX_RAM - stack;
+                        vm.memory_mut()
+                            .grow_stack(stack)
+                            .expect("Should be able to grow stack");
+                        vm.memory_mut()
+                            .grow_heap(Reg::new(&0), heap)
+                            .expect("Should be able to grow heap");
+
+                        i += 1;
+                    }
+                });
             })
         });
         i += 1;

@@ -31,9 +31,15 @@ use fuel_core_types::{
     },
 };
 
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::{
+    IntoTransaction,
+    StorageTransaction,
+};
 pub use rand::Rng;
-use std::iter;
+use std::{
+    iter,
+    mem,
+};
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
@@ -424,6 +430,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             db.deploy_contract_with_id(&[], &Contract::default(), &contract_id)?;
         }
+        let transaction = mem::take(db.database_mut());
+        let database = transaction.commit().expect("Failed to commit transaction");
+        *db.database_mut() = database.into_transaction();
 
         inputs.into_iter().for_each(|i| {
             tx.add_input(i);
