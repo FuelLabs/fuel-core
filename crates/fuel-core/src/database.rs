@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use fuel_core_chain_config::TableEntry;
-use fuel_core_services::SharedRwLock;
+use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
     blueprint::BlueprintInspect,
@@ -91,9 +91,9 @@ where
     Description: DatabaseDescription,
 {
     /// Cached value from Metadata table, used to speed up lookups.
-    height: SharedRwLock<Option<Description::Height>>,
+    height: SharedMutex<Option<Description::Height>>,
     /// If set, some consistency checks are not performed.
-    genesis_active: SharedRwLock<bool>,
+    genesis_active: SharedMutex<bool>,
     data: DataSource<Description>,
 }
 
@@ -132,14 +132,14 @@ where
 {
     pub fn new(data_source: DataSource<Description>) -> Self {
         let database = Self {
-            height: SharedRwLock::new(None),
-            genesis_active: SharedRwLock::new(false),
+            height: SharedMutex::new(None),
+            genesis_active: SharedMutex::new(false),
             data: data_source,
         };
         let height = database
             .latest_height()
             .expect("Failed to get latest height during creation of the database");
-        *database.height.write() = height;
+        *database.height.lock() = height;
 
         database
     }
@@ -154,7 +154,7 @@ where
 
     /// Set the genesis flag that controls some consistency checks.
     pub fn set_genesis_active(&self, active: bool) {
-        *self.genesis_active.write() = active;
+        *self.genesis_active.lock() = active;
     }
 }
 
@@ -166,8 +166,8 @@ where
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
         Self {
             data,
-            height: SharedRwLock::new(None),
-            genesis_active: SharedRwLock::new(false),
+            height: SharedMutex::new(None),
+            genesis_active: SharedMutex::new(false),
         }
     }
 
@@ -177,8 +177,8 @@ where
             Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
         Self {
             data,
-            height: SharedRwLock::new(None),
-            genesis_active: SharedRwLock::new(false),
+            height: SharedMutex::new(None),
+            genesis_active: SharedMutex::new(false),
         }
     }
 }
@@ -257,7 +257,7 @@ impl AtomicView for Database<OnChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.read()
+        *self.height.lock()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -277,7 +277,7 @@ impl AtomicView for Database<OffChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.read()
+        *self.height.lock()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -296,7 +296,7 @@ impl AtomicView for Database<Relayer> {
     type Height = DaBlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.read()
+        *self.height.lock()
     }
 
     fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
@@ -389,7 +389,7 @@ where
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
     // DB consistency checks are only enforced when genesis flag is not set.
-    let new_height = if *database.genesis_active.read() {
+    let new_height = if *database.genesis_active.lock() {
         None
     } else {
         // Gets the all new heights from the `changes`
@@ -407,7 +407,7 @@ where
         }
 
         let new_height = new_heights.into_iter().last();
-        let prev_height = *database.height.read();
+        let prev_height = *database.height.lock();
 
         match (prev_height, new_height) {
             (None, None) => {
@@ -473,7 +473,7 @@ where
     };
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
-    let mut guard = database.height.write();
+    let mut guard = database.height.lock();
     database.data.as_ref().commit_changes(updated_changes)?;
 
     // Update the block height

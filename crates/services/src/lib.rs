@@ -54,5 +54,4 @@ pub use state::{
 pub use sync::{
     Shared,
     SharedMutex,
-    SharedRwLock,
 };
