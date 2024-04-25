@@ -1,12 +1,9 @@
 //! Types related to block producer service.
 
 use crate::{
-    blockchain::{
-        block::Block,
-        header::{
-            PartialBlockHeader,
-            StateTransitionBytecodeVersion,
-        },
+    blockchain::header::{
+        PartialBlockHeader,
+        StateTransitionBytecodeVersion,
     },
     fuel_tx::ContractId,
     services::executor::ExecutionTypes,
@@ -28,7 +25,7 @@ pub struct Components<Source> {
     pub gas_price: u64,
 }
 
-impl<TxSource> ExecutionTypes<Components<TxSource>, Block> {
+impl<TxSource> ExecutionTypes<Components<TxSource>> {
     /// Returns the state transition bytecode version of the block.
     pub fn state_transition_version(&self) -> StateTransitionBytecodeVersion {
         match self {
@@ -41,9 +38,6 @@ impl<TxSource> ExecutionTypes<Components<TxSource>, Block> {
                 component
                     .header_to_produce
                     .state_transition_bytecode_version
-            }
-            ExecutionTypes::Validation(block) => {
-                block.header().state_transition_bytecode_version
             }
         }
     }
