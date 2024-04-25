@@ -1079,17 +1079,17 @@ where
             Self::check_gas_price(&mint, gas_price)?;
 
             let input = mint.input_contract().clone();
-            let mut inputs = [Input::Contract(input)];
+            let mut input = Input::Contract(input);
 
             if self.options.extra_tx_checks {
                 self.verify_inputs_exist_and_values_match(
                     block_st_transaction,
-                    inputs.as_mut_slice(),
+                    std::slice::from_ref(&input),
                     header.da_height,
                 )?;
             }
 
-            self.compute_inputs(inputs.as_mut_slice(), block_st_transaction)?;
+            self.compute_inputs(std::slice::from_mut(&mut input), block_st_transaction)?;
 
             let (input, output) = self.execute_mint_with_vm(
                 header,
@@ -1098,7 +1098,7 @@ where
                 block_st_transaction,
                 &coinbase_id,
                 &mut mint,
-                &mut inputs,
+                &mut input,
             )?;
 
             *mint.input_contract_mut() = input;
@@ -1117,7 +1117,7 @@ where
         block_st_transaction: &mut StorageTransaction<T>,
         coinbase_id: &TxId,
         mint: &mut Mint,
-        inputs: &mut [Input],
+        input: &mut Input,
     ) -> ExecutorResult<(input::contract::Contract, output::contract::Contract)>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1151,16 +1151,16 @@ where
             execution_data,
             coinbase_id,
             block_st_transaction,
-            inputs,
+            std::slice::from_ref(input),
             outputs.as_slice(),
         )?;
         self.compute_state_of_not_utxo_outputs(
             outputs.as_mut_slice(),
-            inputs,
+            std::slice::from_ref(input),
             *coinbase_id,
             block_st_transaction,
         )?;
-        let Input::Contract(input) = core::mem::take(&mut inputs[0]) else {
+        let Input::Contract(input) = core::mem::take(input) else {
             unreachable!()
         };
         let Output::Contract(output) = outputs[0] else {
