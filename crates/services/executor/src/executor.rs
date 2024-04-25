@@ -368,6 +368,8 @@ where
         };
 
         let ExecutionData {
+            coinbase,
+            used_gas,
             message_ids,
             tx_status,
             skipped_transactions,
@@ -380,6 +382,13 @@ where
         // Now that the transactions have been executed, generate the full header.
 
         let block = block.generate(&message_ids[..], event_inbox_root);
+
+        let finalized_block_id = block.id();
+
+        debug!(
+            "Block {:#x} fees: {} gas: {}",
+            finalized_block_id, coinbase, used_gas
+        );
 
         let result = ExecutionResult {
             block,
