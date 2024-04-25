@@ -22,12 +22,12 @@ use crate::{
         Database,
     },
     service::genesis::{
-        importer::migration_name,
+        progress::ProgressReporter,
         task_manager::CancellationToken,
     },
 };
 
-use super::progress::ProgressReporter;
+use super::migration_name;
 
 pub struct ImportTask<Handler, Groups, DbDesc>
 where
@@ -36,7 +36,6 @@ where
     handler: Handler,
     skip: usize,
     groups: Groups,
-    cancel_token: CancellationToken,
     db: Database<DbDesc>,
     reporter: ProgressReporter,
 }
@@ -60,7 +59,6 @@ where
     Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
-        cancel_token: CancellationToken,
         handler: Logic,
         groups: GroupGenerator,
         db: Database<DbDesc>,
@@ -68,10 +66,7 @@ where
     ) -> Self {
         let progress_name =
             migration_name::<Logic::TableInSnapshot, Logic::TableBeingWritten>();
-        let skip = match db
-            .storage::<GenesisMetadata<DbDesc>>()
-            .get(progress_name.as_str())
-        {
+        let skip = match db.storage::<GenesisMetadata<DbDesc>>().get(&progress_name) {
             Ok(Some(idx_last_handled)) => {
                 usize::saturating_add(idx_last_handled.into_owned(), 1)
             }
@@ -82,7 +77,6 @@ where
             handler,
             skip,
             groups,
-            cancel_token,
             db,
             reporter,
         }
@@ -106,15 +100,15 @@ where
     for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
-    pub fn run(mut self) -> anyhow::Result<()> {
+    pub fn run(mut self, cancel_token: CancellationToken) -> anyhow::Result<()> {
         let mut db = self.db;
-        let mut is_cancelled = self.cancel_token.is_cancelled();
+        let mut is_cancelled = cancel_token.is_cancelled();
         self.groups
             .into_iter()
             .enumerate()
             .skip(self.skip)
             .take_while(|_| {
-                is_cancelled = self.cancel_token.is_cancelled();
+                is_cancelled = cancel_token.is_cancelled();
                 !is_cancelled
             })
             .try_for_each(|(index, group)| {
@@ -122,17 +116,13 @@ where
                 let mut tx = db.write_transaction();
                 self.handler.process(group, &mut tx)?;
 
-                let progress_name =
-                    migration_name::<Logic::TableInSnapshot, Logic::TableBeingWritten>();
-
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
-                    progress_name.as_str(),
+                    &migration_name::<Logic::TableInSnapshot, Logic::TableBeingWritten>(),
                     index,
                 )?;
                 tx.commit()?;
-                self.reporter
-                    .set_progress(u64::try_from(index).unwrap_or(u64::MAX));
+                self.reporter.set_index(index);
                 anyhow::Result::<_>::Ok(())
             })?;
 
@@ -151,8 +141,9 @@ mod tests {
         service::genesis::{
             importer::{
                 import_task::ImportTask,
-                progress::ProgressReporter,
+                migration_name,
             },
+            progress::ProgressReporter,
             task_manager::CancellationToken,
         },
     };
@@ -211,7 +202,6 @@ mod tests {
             genesis_progress::GenesisProgressMutate,
             Database,
         },
-        service::genesis::importer::migration_name,
         state::{
             in_memory::memory_store::MemoryStore,
             TransactableStorage,
@@ -292,7 +282,6 @@ mod tests {
 
         let mut called_with = vec![];
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|group, _| {
                 called_with.push(group);
                 Ok(())
@@ -303,7 +292,7 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert_eq!(called_with, data.as_entries(0));
@@ -318,12 +307,11 @@ mod tests {
         let mut db = CombinedDatabase::default();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
             db.on_chain_mut(),
-            migration_name::<Coins, Coins>().as_str(),
+            &migration_name::<Coins, Coins>(),
             0,
         )
         .unwrap();
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|element, _| {
                 called_with.push(element);
                 Ok(())
@@ -334,7 +322,7 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert_eq!(called_with, data.as_entries(1));
@@ -348,7 +336,6 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
 
@@ -373,7 +360,7 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert!(outer_db
@@ -396,7 +383,6 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
@@ -407,7 +393,7 @@ mod tests {
         );
 
         // when
-        let _ = runner.run();
+        let _ = runner.run(never_cancel());
 
         // then
         assert!(!StorageInspect::<Coins>::contains_key(&db, &utxo_id).unwrap());
@@ -418,7 +404,6 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
             Database::default(),
@@ -426,7 +411,7 @@ mod tests {
         );
 
         // when
-        let result = runner.run();
+        let result = runner.run(never_cancel());
 
         // then
         assert!(result.is_err());
@@ -437,7 +422,6 @@ mod tests {
         // given
         let groups = [Err(anyhow!("Some error"))];
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
@@ -445,7 +429,7 @@ mod tests {
         );
 
         // when
-        let result = runner.run();
+        let result = runner.run(never_cancel());
 
         // then
         assert!(result.is_err());
@@ -457,7 +441,6 @@ mod tests {
         let data = TestData::new(2);
         let db = Database::default();
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
             db.clone(),
@@ -465,13 +448,13 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert_eq!(
             GenesisProgressInspect::<OnChain>::genesis_progress(
                 &db,
-                migration_name::<Coins, Coins>().as_str(),
+                &migration_name::<Coins, Coins>(),
             ),
             Some(1)
         );
@@ -487,7 +470,6 @@ mod tests {
         let runner = {
             let read_groups = Arc::clone(&read_groups);
             ImportTask::new(
-                cancel_token.clone().into(),
                 TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
@@ -498,7 +480,8 @@ mod tests {
             )
         };
 
-        let runner_handle = std::thread::spawn(move || runner.run());
+        let token = CancellationToken::new(cancel_token.clone());
+        let runner_handle = std::thread::spawn(move || runner.run(token));
 
         let data = TestData::new(4);
         let take = 3;
@@ -581,7 +564,6 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),
             Database::new(Arc::new(BrokenTransactions::new())),
@@ -589,9 +571,13 @@ mod tests {
         );
 
         // when
-        let result = runner.run();
+        let result = runner.run(never_cancel());
 
         // then
         assert!(result.is_err());
+    }
+
+    fn never_cancel() -> CancellationToken {
+        CancellationToken::new(tokio_util::sync::CancellationToken::new())
     }
 }

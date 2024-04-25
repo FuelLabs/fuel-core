@@ -7,6 +7,7 @@ use crate::{
             consensus::PoATriggerArgs,
             tx_pool::TxPoolArgs,
         },
+        ShutdownListener,
     },
     FuelService,
 };
@@ -21,6 +22,7 @@ use fuel_core::{
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
+        genesis::NotifyCancel,
         Config,
         DbType,
         RelayerConsensusConfig,
@@ -395,13 +397,14 @@ pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     let service = get_service(command)?;
 
+    let shutdown_listener = ShutdownListener::spawn();
     // Genesis could take a long time depending on the snapshot size. Start needs to be
     // interruptible by the shutdown_signal
     tokio::select! {
         result = service.start_and_await() => {
             result?;
         }
-        _ = shutdown_signal() => {
+        _ = shutdown_listener.wait_until_cancelled() => {
             service.stop();
         }
     }
@@ -411,7 +414,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         result = service.await_stop() => {
             result?;
         }
-        _ = shutdown_signal() => {}
+        _ = shutdown_listener.wait_until_cancelled() => {}
     }
 
     service.stop_and_await().await?;
@@ -462,29 +465,4 @@ fn start_pyroscope_agent(
             Ok(agent_running)
         })
         .transpose()
-}
-
-async fn shutdown_signal() -> anyhow::Result<()> {
-    #[cfg(unix)]
-    {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-
-        let mut sigint =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        tokio::select! {
-            _ = sigterm.recv() => {
-                tracing::info!("sigterm received");
-            }
-            _ = sigint.recv() => {
-                tracing::info!("sigint received");
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c().await?;
-        tracing::info!("CTRL+C received");
-    }
-    Ok(())
 }

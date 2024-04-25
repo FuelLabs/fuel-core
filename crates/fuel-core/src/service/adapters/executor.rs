@@ -3,28 +3,12 @@ use crate::{
         database_description::relayer::Relayer,
         Database,
     },
-    service::adapters::{
-        ExecutorAdapter,
-        TransactionsSource,
-    },
+    service::adapters::TransactionsSource,
 };
-use fuel_core_executor::{
-    executor::ExecutionBlockWithSource,
-    ports::MaybeCheckedTransaction,
-};
-use fuel_core_storage::transactional::Changes;
+use fuel_core_executor::ports::MaybeCheckedTransaction;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx,
-    services::{
-        block_producer::Components,
-        executor::{
-            Result as ExecutorResult,
-            TransactionExecutionStatus,
-            UncommittedResult,
-        },
-        relayer::Event,
-    },
+    services::relayer::Event,
 };
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
@@ -34,26 +18,6 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
             .into_iter()
             .map(|tx| MaybeCheckedTransaction::CheckedTransaction(tx.as_ref().into()))
             .collect()
-    }
-}
-
-impl ExecutorAdapter {
-    pub(crate) fn _execute_without_commit<TxSource>(
-        &self,
-        block: ExecutionBlockWithSource<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>>
-    where
-        TxSource: fuel_core_executor::ports::TransactionsSource + Send + Sync + 'static,
-    {
-        self.executor.execute_without_commit_with_source(block)
-    }
-
-    pub(crate) fn _dry_run(
-        &self,
-        block: Components<Vec<fuel_tx::Transaction>>,
-        utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self.executor.dry_run(block, utxo_validation)
     }
 }
 
