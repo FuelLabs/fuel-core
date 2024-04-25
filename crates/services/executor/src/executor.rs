@@ -415,8 +415,6 @@ where
             ..
         } = execution_data;
 
-        let _finalized_block_id = block.id();
-
         debug!(
             "Block {:#x} fees: {} gas: {}",
             pre_exec_block_id, coinbase, used_gas
@@ -651,8 +649,9 @@ where
     fn validate_block(mut self, block: &Block) -> ExecutorResult<ExecutionData> {
         let mut data = ExecutionData::new();
 
-        let mut partial_block = PartialFuelBlock::from(block.clone());
-        let transactions = core::mem::take(&mut partial_block.transactions);
+        let partial_header = PartialBlockHeader::from(block.header());
+        let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
+        let transactions = block.transactions();
 
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(&transactions)?;
@@ -695,7 +694,7 @@ where
                 coinbase_contract_id,
             )?;
             #[cfg(debug_assertions)]
-            if _new_transaction != &transaction {
+            if _new_transaction != transaction {
                 error!("Provided transaction does not match the transaction built by the executor");
             }
         }
