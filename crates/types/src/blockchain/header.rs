@@ -436,14 +436,18 @@ impl ApplicationHeader<GeneratedApplicationFields> {
     pub fn hash(&self) -> Bytes32 {
         // Order matters and is the same as the spec.
         let mut hasher = crate::fuel_crypto::Hasher::default();
-        hasher.input(self.da_height.to_bytes().as_slice());
+        hasher.input(self.da_height.to_be_bytes().as_slice());
         hasher.input(self.transactions_count.to_be_bytes());
         hasher.input(self.message_receipt_count.to_be_bytes());
         hasher.input(self.transactions_root.as_ref());
         hasher.input(self.message_outbox_root.as_ref());
         hasher.input(self.event_inbox_root.as_ref());
-        hasher.input(self.consensus_parameters_version.to_bytes().as_slice());
-        hasher.input(self.state_transition_bytecode_version.to_bytes().as_slice());
+        hasher.input(self.consensus_parameters_version.to_be_bytes().as_slice());
+        hasher.input(
+            self.state_transition_bytecode_version
+                .to_be_bytes()
+                .as_slice(),
+        );
         hasher.digest()
     }
 }
