@@ -132,6 +132,7 @@ pub fn vm_initialization(c: &mut Criterion) {
 
                         i += 1;
                     }
+                    i
                 });
             })
         });

@@ -79,7 +79,7 @@ impl BenchDb {
 
         let state_size = crate::utils::get_state_size();
 
-        let mut database = Database::new(db);
+        let mut database = Database::new(db).into_transaction();
         database.init_contract_state(
             contract_id,
             (0..state_size).map(|_| {
@@ -120,7 +120,7 @@ impl BenchDb {
 
         Ok(Self {
             _tmp_dir: tmp_dir,
-            db: database,
+            db: database.commit().expect("Should commit"),
         })
     }
 
