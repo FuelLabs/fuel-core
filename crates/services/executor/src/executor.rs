@@ -1081,11 +1081,11 @@ where
         let coinbase_id = checked_mint.id();
         let (mut mint, _) = checked_mint.into();
 
+        Self::check_gas_price(&mint, gas_price)?;
         if mint.input_contract().contract_id == ContractId::zeroed() {
             Self::verify_mint_for_empty_contract(&mint)?;
         } else {
             Self::check_mint_amount(&mint, execution_data.coinbase)?;
-            Self::check_gas_price(&mint, gas_price)?;
 
             let input = mint.input_contract().clone();
             let mut input = Input::Contract(input);
@@ -1093,12 +1093,12 @@ where
             if self.options.extra_tx_checks {
                 self.verify_inputs_exist_and_values_match(
                     block_st_transaction,
-                    std::slice::from_ref(&input),
+                    core::slice::from_ref(&input),
                     header.da_height,
                 )?;
             }
 
-            self.compute_inputs(std::slice::from_mut(&mut input), block_st_transaction)?;
+            self.compute_inputs(core::slice::from_mut(&mut input), block_st_transaction)?;
 
             let (input, output) = self.execute_mint_with_vm(
                 header,
@@ -1295,12 +1295,12 @@ where
             execution_data,
             coinbase_id,
             block_st_transaction,
-            std::slice::from_ref(input),
+            core::slice::from_ref(input),
             outputs.as_slice(),
         )?;
         self.compute_state_of_not_utxo_outputs(
             outputs.as_mut_slice(),
-            std::slice::from_ref(input),
+            core::slice::from_ref(input),
             *coinbase_id,
             block_st_transaction,
         )?;
