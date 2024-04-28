@@ -86,6 +86,7 @@ scalar BlockId
 
 enum BlockVersion {
 	V1
+	TEST
 }
 
 
