@@ -14,10 +14,7 @@ use fuel_core_relayer::{
     new_service_test,
     ports::RelayerDb,
     test_helpers::{
-        middleware::{
-            MockMiddleware,
-            TriggerType,
-        },
+        middleware::MockMiddleware,
         EvtToLog,
         LogTestHelper,
     },
