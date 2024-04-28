@@ -155,23 +155,6 @@ impl TryFrom<schema::block::Block> for Block {
                     block_producer,
                 })
             }
-            #[cfg(any(test, feature = "test-helpers"))]
-            BlockVersion::Test => {
-                let transactions = value
-                    .transactions
-                    .iter()
-                    .map(|tx| tx.id.clone())
-                    .map(Into::into)
-                    .collect::<Vec<TransactionId>>();
-                let block_producer = value.block_producer();
-                Ok(Self {
-                    id: BlockId::from([0xff; 32]),
-                    header: value.header.try_into()?,
-                    consensus: value.consensus.into(),
-                    transactions,
-                    block_producer,
-                })
-            }
         }
     }
 }

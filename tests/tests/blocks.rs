@@ -14,10 +14,7 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::{
-        primitives::BlockId,
-        TransactionStatus,
-    },
+    types::TransactionStatus,
     FuelClient,
 };
 use fuel_core_poa::Trigger;
@@ -25,7 +22,6 @@ use fuel_core_storage::{
     tables::{
         FuelBlocks,
         SealedBlockConsensus,
-        Transactions,
     },
     transactional::WriteTransaction,
     vm_storage::VmStorageRequirements,
@@ -35,7 +31,6 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        header::BlockHeader,
     },
     fuel_tx::*,
     secrecy::ExposeSecret,
@@ -112,42 +107,6 @@ async fn block_by_height_returns_genesis_block() {
         block.consensus,
         fuel_core_client::client::types::Consensus::Genesis(_)
     ));
-}
-
-#[tokio::test]
-async fn block_by_height_returns_block_with_expected_values() {
-    let mut block =
-        CompressedBlock::Test((BlockHeader::default(), vec![TxId::from([1u8; 32])]));
-    let height = 1.into();
-    block.header_mut().set_block_height(height);
-    let mut db = Database::default();
-    let srv = FuelService::from_database(db.clone(), Config::local_node())
-        .await
-        .unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    let mut transaction = db.write_transaction();
-    transaction
-        .storage::<FuelBlocks>()
-        .insert(&height, &block)
-        .unwrap();
-    transaction
-        .storage::<SealedBlockConsensus>()
-        .insert(&height, &Consensus::PoA(Default::default()))
-        .unwrap();
-    transaction
-        .storage::<Transactions>()
-        .insert(&TxId::from([1u8; 32]), &Transaction::default_test_tx())
-        .unwrap();
-    transaction.commit().unwrap();
-
-    let b = client
-        .block_by_height(height)
-        .await
-        .expect("Unable to get block")
-        .expect("Expected block");
-    assert_eq!(b.id, BlockId::from([0xff; 32]));
-    assert_eq!(b.transactions, vec![TxId::from([1u8; 32])]);
 }
 
 #[tokio::test]

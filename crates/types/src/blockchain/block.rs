@@ -33,9 +33,6 @@ use crate::{
 pub enum Block<TransactionRepresentation = Transaction> {
     /// V1 Block
     V1(BlockV1<TransactionRepresentation>),
-    /// Test Block
-    #[cfg(any(test, feature = "test-helpers"))]
-    Test((BlockHeader, Vec<TransactionRepresentation>)),
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
@@ -66,7 +63,6 @@ pub type CompressedBlock = Block<TxId>;
 /// it can be created with pre-executed transactions in
 /// order to validate they were constructed correctly.
 #[derive(Clone, Debug)]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct PartialFuelBlock {
     /// The partial header.
     pub header: PartialBlockHeader,
@@ -129,12 +125,6 @@ impl Block<Transaction> {
                 };
                 Block::V1(new_inner)
             }
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((header, transactions)) => {
-                let transactions =
-                    transactions.iter().map(|tx| tx.id(chain_id)).collect();
-                Block::Test((header.clone(), transactions))
-            }
         }
     }
 }
@@ -147,8 +137,6 @@ impl<T> Block<T> {
                 header,
                 transactions,
             }) => (header, transactions),
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((header, transactions)) => (header, transactions),
         }
     }
 }
@@ -163,8 +151,6 @@ impl CompressedBlock {
                 header: inner.header,
                 transactions,
             }),
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((header, _)) => Block::Test((header, transactions)),
         }
     }
 }
@@ -185,8 +171,6 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn transactions(&self) -> &[TransactionRepresentation] {
         match self {
             Block::V1(inner) => &inner.transactions,
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((_, transactions)) => transactions,
         }
     }
 
@@ -194,8 +178,6 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn header(&self) -> &BlockHeader {
         match self {
             Block::V1(inner) => &inner.header,
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((header, _)) => header,
         }
     }
 
@@ -209,8 +191,6 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn transactions_mut(&mut self) -> &mut Vec<TransactionRepresentation> {
         match self {
             Block::V1(inner) => &mut inner.transactions,
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((_, transactions)) => transactions,
         }
     }
 
@@ -219,8 +199,6 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn header_mut(&mut self) -> &mut BlockHeader {
         match self {
             Block::V1(inner) => &mut inner.header,
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((header, _)) => header,
         }
     }
 }
@@ -295,8 +273,6 @@ impl From<Block> for PartialFuelBlock {
                 },
                 transactions,
             },
-            #[cfg(any(test, feature = "test-helpers"))]
-            Block::Test((_, _)) => Self::default(),
         }
     }
 }

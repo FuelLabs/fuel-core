@@ -90,7 +90,6 @@ pub struct PoAConsensus {
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum BlockVersion {
     V1,
-    Test,
 }
 
 #[Object]
@@ -98,8 +97,6 @@ impl Block {
     async fn version(&self) -> BlockVersion {
         match self.0 {
             CompressedBlock::V1(_) => BlockVersion::V1,
-            #[cfg(any(test, feature = "test-helpers"))]
-            CompressedBlock::Test(_) => BlockVersion::Test,
         }
     }
 

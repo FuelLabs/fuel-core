@@ -79,8 +79,6 @@ pub struct BlockEdge {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum BlockVersion {
     V1,
-    #[cfg(any(test, feature = "test-helpers"))]
-    Test,
 }
 
 /// Block with transaction ids
