@@ -302,6 +302,14 @@ impl Modifiable for Database<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |iter| {
             iter.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+                .filter_map(|result| {
+                    if let Ok((height, _)) = &result {
+                        if height == &0.into() {
+                            return None;
+                        }
+                    }
+                    Some(result)
+                })
                 .map(|result| result.map(|(height, _)| height))
                 .try_collect()
         })
