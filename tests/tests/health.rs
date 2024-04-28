@@ -1,9 +1,6 @@
 use fuel_core::{
     combined_database::CombinedDatabase,
-    database::{
-        // database_description::relayer::Relayer,
-        Database,
-    },
+    database::Database,
     service::{
         Config,
         FuelService,
@@ -12,13 +9,6 @@ use fuel_core::{
     types::fuel_tx::Transaction,
 };
 use fuel_core_client::client::FuelClient;
-// use fuel_core_relayer::storage::EventsHistory;
-// use fuel_core_storage::StorageAsMut;
-// use fuel_core_types::{
-//     entities::Message,
-//     fuel_types::Nonce,
-//     services::relayer::Event,
-// };
 
 #[tokio::test]
 async fn health() {
