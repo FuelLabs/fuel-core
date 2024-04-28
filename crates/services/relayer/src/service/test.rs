@@ -51,10 +51,7 @@ async fn deploy_height_does_not_override() {
     mock_db
         .set_finalized_da_height_to_at_least(&50u64.into())
         .unwrap();
-    let config = Config {
-        da_deploy_height: 20u64.into(),
-        ..Default::default()
-    };
+    let config = Config::default();
     let eth_node = MockMiddleware::default();
     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let _ = relayer.into_task(&Default::default(), ()).await;
@@ -74,10 +71,7 @@ async fn update_sync__changes_latest_eth_state(
 ) {
     // given
     let mock_db = crate::mock_db::MockDb::default();
-    let config = Config {
-        da_deploy_height: 20u64.into(),
-        ..Default::default()
-    };
+    let config = Config::default();
     let eth_node = MockMiddleware::default();
     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let shared = relayer.shared_data();

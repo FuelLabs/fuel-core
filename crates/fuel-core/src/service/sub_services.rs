@@ -28,11 +28,7 @@ use fuel_core_poa::Trigger;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
 use crate::service::StaticGasPrice;
-#[cfg(feature = "relayer")]
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
@@ -92,11 +88,6 @@ pub fn init_sub_services(
     let relayer_adapter = MaybeRelayerAdapter {
         #[cfg(feature = "relayer")]
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
-        #[cfg(feature = "relayer")]
-        da_deploy_height: config.relayer.as_ref().map_or(
-            DaBlockHeight(RelayerConfig::DEFAULT_DA_DEPLOY_HEIGHT),
-            |config| config.da_deploy_height,
-        ),
     };
 
     #[cfg(feature = "p2p")]
