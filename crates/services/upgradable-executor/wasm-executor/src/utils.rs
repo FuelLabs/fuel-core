@@ -1,11 +1,15 @@
-use fuel_core_executor::executor::ExecutionBlockWithSource;
+use fuel_core_executor::executor::ExecutionOptions;
 use fuel_core_storage::transactional::Changes;
-use fuel_core_types::services::{
-    executor::{
-        ExecutionResult,
-        Result as ExecutorResult,
+use fuel_core_types::{
+    blockchain::block::Block,
+    services::{
+        block_producer::Components,
+        executor::{
+            ExecutionResult,
+            Result as ExecutorResult,
+        },
+        Uncommitted,
     },
-    Uncommitted,
 };
 
 /// Pack a pointer and length into an `u64`.
@@ -38,9 +42,32 @@ pub fn unpack_exists_size_result(val: u64) -> (bool, u32, u16) {
     (exists, size, result)
 }
 
-pub type InputType = ExecutionBlockWithSource<()>;
+/// The input type for the WASM executor. Enum allows handling different
+/// versions of the input without introducing new host functions.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum InputType {
+    V1 {
+        block: WasmExecutionBlockTypes<()>,
+        options: ExecutionOptions,
+    },
+}
 
-pub type ReturnType = ExecutorResult<Uncommitted<ExecutionResult, Changes>>;
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum WasmExecutionBlockTypes<TxSource> {
+    /// DryRun mode where P is being produced.
+    DryRun(Components<TxSource>),
+    /// Production mode where P is being produced.
+    Production(Components<TxSource>),
+    /// Validation of a produced block.
+    Validation(Block),
+}
+
+/// The return type for the WASM executor. Enum allows handling different
+/// versions of the return without introducing new host functions.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum ReturnType {
+    V1(ExecutorResult<Uncommitted<ExecutionResult, Changes>>),
+}
 
 #[cfg(test)]
 mod tests {

@@ -2,15 +2,12 @@ use crate::{
     config::table_entry::TableEntry,
     AddTable,
     ChainConfig,
+    LastBlockConfig,
     SnapshotMetadata,
     StateConfigBuilder,
     TableEncoding,
 };
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -24,8 +21,6 @@ enum EncoderType {
     Parquet {
         compression: ZstdCompressionLevel,
         table_encoders: TableEncoders,
-        block_height: PathBuf,
-        da_block_height: PathBuf,
     },
 }
 
@@ -154,6 +149,108 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
     }
 }
 
+#[derive(Debug, Clone)]
+enum FragmentData {
+    Json {
+        builder: StateConfigBuilder,
+    },
+    #[cfg(feature = "parquet")]
+    Parquet {
+        tables: std::collections::HashMap<String, PathBuf>,
+        compression: ZstdCompressionLevel,
+    },
+}
+impl FragmentData {
+    fn merge(mut self, data: FragmentData) -> anyhow::Result<Self> {
+        match (&mut self, data) {
+            (
+                FragmentData::Json { builder, .. },
+                FragmentData::Json {
+                    builder: other_builder,
+                    ..
+                },
+            ) => {
+                builder.merge(other_builder);
+            }
+            #[cfg(feature = "parquet")]
+            (
+                FragmentData::Parquet {
+                    tables,
+                    compression,
+                },
+                FragmentData::Parquet {
+                    tables: their_tables,
+                    compression: their_compression,
+                },
+            ) => {
+                tables.extend(their_tables);
+                anyhow::ensure!(*compression == their_compression, "Fragments use different compressions.")
+            }
+            #[cfg(feature="parquet")]
+            (a,b) => anyhow::bail!("Fragments don't have the same encoding and cannot be merged. Fragments: {a:?} and {b:?}"),
+        };
+
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SnapshotFragment {
+    dir: PathBuf,
+    data: FragmentData,
+}
+
+impl SnapshotFragment {
+    pub fn merge(mut self, fragment: Self) -> anyhow::Result<Self> {
+        self.data = self.data.merge(fragment.data)?;
+        Ok(self)
+    }
+
+    pub fn finalize(
+        self,
+        latest_block_config: Option<LastBlockConfig>,
+        chain_config: &ChainConfig,
+    ) -> anyhow::Result<SnapshotMetadata> {
+        let table_encoding = match self.data {
+            FragmentData::Json { builder } => {
+                let state_config = builder.build(latest_block_config)?;
+                std::fs::create_dir_all(&self.dir)?;
+                let state_file_path = self.dir.join("state_config.json");
+                let file = std::fs::File::create(&state_file_path)?;
+                serde_json::to_writer_pretty(file, &state_config)?;
+
+                TableEncoding::Json {
+                    filepath: state_file_path,
+                }
+            }
+            #[cfg(feature = "parquet")]
+            FragmentData::Parquet {
+                tables,
+                compression,
+            } => {
+                let latest_block_config_path =
+                    self.dir.join("latest_block_config.parquet");
+                SnapshotWriter::write_single_el_parquet(
+                    &latest_block_config_path,
+                    latest_block_config,
+                    compression,
+                )?;
+
+                TableEncoding::Parquet {
+                    tables,
+                    latest_block_config_path,
+                }
+            }
+        };
+
+        SnapshotWriter::write_chain_config_and_metadata(
+            &self.dir,
+            chain_config,
+            table_encoding,
+        )
+    }
+}
+
 impl SnapshotWriter {
     const CHAIN_CONFIG_FILENAME: &'static str = "chain_config.json";
     pub fn json(dir: impl Into<PathBuf>) -> Self {
@@ -171,12 +268,11 @@ impl SnapshotWriter {
         compression_level: ZstdCompressionLevel,
     ) -> anyhow::Result<Self> {
         let dir = dir.into();
+        std::fs::create_dir_all(&dir)?;
         Ok(Self {
             encoder: EncoderType::Parquet {
                 table_encoders: TableEncoders::new(dir.clone(), compression_level),
                 compression: compression_level,
-                block_height: dir.join("block_height.parquet"),
-                da_block_height: dir.join("da_block_height.parquet"),
             },
             dir,
         })
@@ -186,6 +282,7 @@ impl SnapshotWriter {
     pub fn write_state_config(
         mut self,
         state_config: crate::StateConfig,
+        chain_config: &ChainConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
         use fuel_core_storage::tables::{
             Coins,
@@ -204,15 +301,7 @@ impl SnapshotWriter {
         self.write::<ContractsLatestUtxo>(state_config.as_table())?;
         self.write::<ContractsState>(state_config.as_table())?;
         self.write::<ContractsAssets>(state_config.as_table())?;
-        self.write_block_data(state_config.block_height, state_config.da_block_height)?;
-        self.close()
-    }
-
-    pub fn write_chain_config(
-        &mut self,
-        chain_config: &ChainConfig,
-    ) -> anyhow::Result<()> {
-        chain_config.write(self.dir.join(Self::CHAIN_CONFIG_FILENAME))
+        self.close(state_config.last_block, chain_config)
     }
 
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
@@ -233,32 +322,6 @@ impl SnapshotWriter {
         }
     }
 
-    pub fn write_block_data(
-        &mut self,
-        height: BlockHeight,
-        da_height: DaBlockHeight,
-    ) -> anyhow::Result<()> {
-        match &mut self.encoder {
-            EncoderType::Json { builder, .. } => {
-                builder.set_block_height(height);
-                builder.set_da_block_height(da_height);
-                Ok(())
-            }
-            #[cfg(feature = "parquet")]
-            EncoderType::Parquet {
-                block_height,
-                da_block_height,
-                compression,
-                ..
-            } => {
-                Self::write_single_el_parquet(block_height, height, *compression)?;
-                Self::write_single_el_parquet(da_block_height, da_height, *compression)?;
-
-                Ok(())
-            }
-        }
-    }
-
     #[cfg(feature = "parquet")]
     fn write_single_el_parquet(
         path: &std::path::Path,
@@ -273,54 +336,52 @@ impl SnapshotWriter {
         encoder.close()
     }
 
-    pub fn close(self) -> anyhow::Result<SnapshotMetadata> {
-        match self.encoder {
-            EncoderType::Json { builder } => {
-                let state_config = builder.build()?;
-
-                let state_file_path = self.dir.join("state_config.json");
-                let file = std::fs::File::create(&state_file_path)?;
-                serde_json::to_writer_pretty(file, &state_config)?;
-
-                Self::write_metadata(
-                    &self.dir,
-                    TableEncoding::Json {
-                        filepath: state_file_path,
-                    },
-                )
-            }
-            #[cfg(feature = "parquet")]
-            EncoderType::Parquet {
-                table_encoders,
-                block_height,
-                da_block_height,
-                compression,
-            } => {
-                let tables = table_encoders.close()?;
-
-                Self::write_metadata(
-                    &self.dir,
-                    TableEncoding::Parquet {
-                        tables,
-                        block_height,
-                        da_block_height,
-                        compression,
-                    },
-                )
-            }
-        }
+    pub fn close(
+        self,
+        latest_block_config: Option<LastBlockConfig>,
+        chain_config: &ChainConfig,
+    ) -> anyhow::Result<SnapshotMetadata> {
+        self.partial_close()?
+            .finalize(latest_block_config, chain_config)
     }
 
-    fn write_metadata(
+    fn write_chain_config_and_metadata(
         dir: &std::path::Path,
+        chain_config: &ChainConfig,
         table_encoding: TableEncoding,
     ) -> anyhow::Result<SnapshotMetadata> {
+        let chain_config_path = dir.join(Self::CHAIN_CONFIG_FILENAME);
+        chain_config.write(&chain_config_path)?;
+
         let metadata = SnapshotMetadata {
-            chain_config: dir.join(Self::CHAIN_CONFIG_FILENAME),
+            chain_config: chain_config_path,
             table_encoding,
         };
         metadata.clone().write(dir)?;
         Ok(metadata)
+    }
+
+    pub fn partial_close(self) -> anyhow::Result<SnapshotFragment> {
+        let data = match self.encoder {
+            EncoderType::Json { builder } => FragmentData::Json { builder },
+            #[cfg(feature = "parquet")]
+            EncoderType::Parquet {
+                table_encoders,
+                compression,
+                ..
+            } => {
+                let tables = table_encoders.close()?;
+                FragmentData::Parquet {
+                    tables,
+                    compression,
+                }
+            }
+        };
+        let snapshot_fragment = SnapshotFragment {
+            dir: self.dir,
+            data,
+        };
+        Ok(snapshot_fragment)
     }
 }
 
@@ -403,6 +464,8 @@ impl TableEncoders {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use fuel_core_storage::{
         kv_store::StorageColumn,
         structured_storage::TableWithBlueprint,
@@ -448,15 +511,16 @@ mod tests {
             use pretty_assertions::assert_eq;
 
             let dir = tempfile::tempdir().unwrap();
-            let mut encoder =
+            let mut writer =
                 SnapshotWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed)
                     .unwrap();
 
             // when
-            encoder.write::<T>(vec![]).unwrap();
-            let snapshot = encoder.close().unwrap();
+            writer.write::<T>(vec![]).unwrap();
+            let snapshot = writer.close(None, &ChainConfig::local_testnet()).unwrap();
 
             // then
+            assert!(snapshot.chain_config.exists());
             let TableEncoding::Parquet { tables, .. } = snapshot.table_encoding else {
                 panic!("Expected parquet encoding")
             };
@@ -494,7 +558,9 @@ mod tests {
         let state = StateConfig::randomize(&mut rng);
 
         // when
-        let snapshot = writer.write_state_config(state).unwrap();
+        let snapshot = writer
+            .write_state_config(state, &ChainConfig::local_testnet())
+            .unwrap();
 
         // then
         let TableEncoding::Json { filepath } = snapshot.table_encoding else {
@@ -503,5 +569,72 @@ mod tests {
         let encoded_json = std::fs::read_to_string(filepath).unwrap();
 
         insta::assert_snapshot!(encoded_json);
+    }
+
+    fn given_parquet_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::parquet(path, ZstdCompressionLevel::Uncompressed).unwrap()
+    }
+
+    fn given_json_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::json(path)
+    }
+
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn can_partially_close_without_chain_and_block_height(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let writer = writer(dir.path());
+
+        // when
+        let result = writer.partial_close();
+
+        // then
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn merging_json_and_parquet_fragments_fails() {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let json_writer = super::SnapshotWriter::json(dir.path());
+        let parquet_writer = super::SnapshotWriter::parquet(
+            dir.path(),
+            super::ZstdCompressionLevel::Uncompressed,
+        );
+
+        let json_fragment = json_writer.partial_close().unwrap();
+        let parquet_fragment = parquet_writer.unwrap().partial_close().unwrap();
+
+        {
+            // when
+            let result = json_fragment.clone().merge(parquet_fragment.clone());
+
+            // when
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains(
+                "Fragments don't have the same encoding and cannot be merged."
+            ));
+        }
+        {
+            // when
+            let result = parquet_fragment.merge(json_fragment);
+
+            // when
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains(
+                "Fragments don't have the same encoding and cannot be merged."
+            ));
+        }
+    }
+
+    // It is enough just for the test to compile
+    #[test]
+    #[ignore]
+    fn fragment_must_be_send_sync() {
+        fn _assert_send<T: Send + Sync>() {}
+        _assert_send::<super::SnapshotFragment>();
     }
 }

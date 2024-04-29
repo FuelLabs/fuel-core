@@ -16,7 +16,10 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
         Transactions,
     },
     ContractsAssetKey,
@@ -46,6 +49,11 @@ use bech32::{
 };
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
+use fuel_core_types::blockchain::header::{
+    BlockHeader,
+    ConsensusParametersVersion,
+    StateTransitionBytecodeVersion,
+};
 #[cfg(feature = "test-helpers")]
 use fuel_core_types::{
     fuel_types::Address,
@@ -71,6 +79,39 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
 ];
 
+#[derive(Default, Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct LastBlockConfig {
+    /// The block height of the last block.
+    pub block_height: BlockHeight,
+    /// The da height used in the last block.
+    pub da_block_height: DaBlockHeight,
+    /// The version of consensus parameters used to produce last block.
+    pub consensus_parameters_version: ConsensusParametersVersion,
+    /// The version of state transition function used to produce last block.
+    pub state_transition_version: StateTransitionBytecodeVersion,
+}
+
+impl From<BlockHeader> for LastBlockConfig {
+    fn from(header: BlockHeader) -> Self {
+        Self::from(&header)
+    }
+}
+
+impl From<&BlockHeader> for LastBlockConfig {
+    fn from(header: &BlockHeader) -> Self {
+        Self {
+            block_height: *header.height(),
+            da_block_height: header.application().da_height,
+            consensus_parameters_version: header
+                .application()
+                .consensus_parameters_version,
+            state_transition_version: header
+                .application()
+                .state_transition_bytecode_version,
+        }
+    }
+}
+
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
@@ -79,10 +120,8 @@ pub struct StateConfig {
     pub messages: Vec<MessageConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
-    /// Block height
-    pub block_height: BlockHeight,
-    /// Da block height
-    pub da_block_height: DaBlockHeight,
+    /// Last block config.
+    pub last_block: Option<LastBlockConfig>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -93,21 +132,25 @@ pub struct StateConfigBuilder {
     contract_balance: Vec<TableEntry<ContractsAssets>>,
     contract_code: Vec<TableEntry<ContractsRawCode>>,
     contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
-    block_height: Option<BlockHeight>,
-    da_block_height: Option<DaBlockHeight>,
 }
 
 impl StateConfigBuilder {
-    pub fn set_block_height(&mut self, block_height: BlockHeight) {
-        self.block_height = Some(block_height);
-    }
+    pub fn merge(&mut self, builder: Self) -> &mut Self {
+        self.coins.extend(builder.coins);
+        self.messages.extend(builder.messages);
+        self.contract_state.extend(builder.contract_state);
+        self.contract_balance.extend(builder.contract_balance);
+        self.contract_code.extend(builder.contract_code);
+        self.contract_utxo.extend(builder.contract_utxo);
 
-    pub fn set_da_block_height(&mut self, da_block_height: DaBlockHeight) {
-        self.da_block_height = Some(da_block_height);
+        self
     }
 
     #[cfg(feature = "std")]
-    pub fn build(self) -> anyhow::Result<StateConfig> {
+    pub fn build(
+        self,
+        latest_block_config: Option<LastBlockConfig>,
+    ) -> anyhow::Result<StateConfig> {
         use std::collections::HashMap;
 
         let coins = self.coins.into_iter().map(|coin| coin.into()).collect();
@@ -191,20 +234,11 @@ impl StateConfigBuilder {
             })
             .try_collect()?;
 
-        let block_height = self
-            .block_height
-            .ok_or_else(|| anyhow::anyhow!("Block height missing"))?;
-
-        let da_block_height = self
-            .da_block_height
-            .ok_or_else(|| anyhow::anyhow!("Da block height missing"))?;
-
         Ok(StateConfig {
             coins,
             messages,
             contracts,
-            block_height,
-            da_block_height,
+            last_block: latest_block_config,
         })
     }
 }
@@ -249,8 +283,12 @@ impl crate::Randomize for StateConfig {
             coins: rand_collection(&mut rng, amount),
             messages: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
-            block_height: rng.gen(),
-            da_block_height: rng.gen(),
+            last_block: Some(LastBlockConfig {
+                block_height: rng.gen(),
+                da_block_height: rng.gen(),
+                consensus_parameters_version: rng.gen(),
+                state_transition_version: rng.gen(),
+            }),
         }
     }
 }
@@ -373,8 +411,36 @@ impl AsTable<Transactions> for StateConfig {
 }
 
 impl AddTable<Transactions> for StateConfigBuilder {
-    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {
-        // Do not include these for now
+    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {}
+}
+
+impl AsTable<FuelBlocks> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlocks>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlocks> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlocks>>) {}
+}
+
+impl AsTable<SealedBlockConsensus> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<SealedBlockConsensus>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<SealedBlockConsensus> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<SealedBlockConsensus>>) {}
+}
+
+impl AddTable<ProcessedTransactions> for StateConfigBuilder {
+    fn add(&mut self, _: Vec<TableEntry<ProcessedTransactions>>) {}
+}
+
+impl AsTable<ProcessedTransactions> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<ProcessedTransactions>> {
+        Vec::new() // Do not include these for now
     }
 }
 
@@ -421,7 +487,7 @@ impl StateConfig {
 
         let coins = reader
             .read::<Coins>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -429,7 +495,7 @@ impl StateConfig {
 
         let messages = reader
             .read::<Messages>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -437,7 +503,7 @@ impl StateConfig {
 
         let contract_state = reader
             .read::<ContractsState>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -445,7 +511,7 @@ impl StateConfig {
 
         let contract_balance = reader
             .read::<ContractsAssets>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -453,7 +519,7 @@ impl StateConfig {
 
         let contract_code = reader
             .read::<ContractsRawCode>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -461,19 +527,13 @@ impl StateConfig {
 
         let contract_utxo = reader
             .read::<ContractsLatestUtxo>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
         builder.add(contract_utxo);
 
-        let block_height = reader.block_height();
-        builder.set_block_height(block_height);
-
-        let da_block_height = reader.da_block_height();
-        builder.set_da_block_height(da_block_height);
-
-        builder.build()
+        builder.build(reader.last_block_config().cloned())
     }
 
     #[cfg(feature = "test-helpers")]
@@ -538,21 +598,18 @@ impl StateConfig {
 }
 
 pub use reader::{
-    IntoIter,
+    GroupIter,
+    Groups,
     SnapshotReader,
 };
-#[cfg(feature = "std")]
-pub use writer::SnapshotWriter;
 #[cfg(feature = "parquet")]
 pub use writer::ZstdCompressionLevel;
+#[cfg(feature = "std")]
+pub use writer::{
+    SnapshotFragment,
+    SnapshotWriter,
+};
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Group<T> {
-    pub index: usize,
-    pub data: Vec<T>,
-}
-pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 
 #[cfg(test)]
 mod tests {
@@ -560,11 +617,9 @@ mod tests {
 
     use crate::{
         ChainConfig,
-        Group,
         Randomize,
     };
 
-    use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         SeedableRng,
@@ -572,174 +627,173 @@ mod tests {
 
     use super::*;
 
-    mod parquet {
-        use std::path::Path;
+    #[test]
+    fn parquet_roundtrip() {
+        let writer = given_parquet_writer;
 
-        use fuel_core_storage::tables::{
-            Coins,
-            ContractsAssets,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            Messages,
+        let reader = |metadata: SnapshotMetadata, _: usize| {
+            SnapshotReader::open(metadata).unwrap()
         };
 
-        use crate::{
-            config::state::writer,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
-        };
-
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
-
-        #[test]
-        fn roundtrip() {
-            let writer = |temp_dir: &Path| {
-                SnapshotWriter::parquet(temp_dir, writer::ZstdCompressionLevel::Level1)
-                    .unwrap()
-            };
-
-            let reader = |metadata: SnapshotMetadata, _: usize| {
-                SnapshotReader::open(metadata).unwrap()
-            };
-
-            macro_rules! test_tables {
+        macro_rules! test_tables {
                 ($($table:ty),*) => {
                     $(assert_roundtrip::<$table>(writer, reader);)*
                 };
             }
 
-            test_tables!(
-                Coins,
-                ContractsAssets,
-                ContractsLatestUtxo,
-                ContractsRawCode,
-                ContractsState,
-                Messages
-            );
-        }
-
-        #[test]
-        fn roundtrip_block_heights() {
-            let writer = |temp_dir: &Path| {
-                SnapshotWriter::parquet(temp_dir, writer::ZstdCompressionLevel::Level1)
-                    .unwrap()
-            };
-            let reader =
-                |metadata: SnapshotMetadata| SnapshotReader::open(metadata).unwrap();
-            assert_roundtrip_block_heights(writer, reader)
-        }
+        test_tables!(
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages
+        );
     }
 
-    mod json {
-        use std::path::Path;
+    fn given_parquet_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1).unwrap()
+    }
 
-        use fuel_core_storage::tables::{
+    fn given_json_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::json(path)
+    }
+
+    #[test]
+    fn json_roundtrip_coins_and_messages() {
+        let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
+        let reader = |metadata: SnapshotMetadata, group_size: usize| {
+            SnapshotReader::open_w_config(metadata, group_size).unwrap()
+        };
+
+        assert_roundtrip::<Coins>(writer, reader);
+        assert_roundtrip::<Messages>(writer, reader);
+    }
+
+    #[test]
+    fn json_roundtrip_contract_related_tables() {
+        // given
+        let mut rng = StdRng::seed_from_u64(0);
+        let contracts = std::iter::repeat_with(|| ContractConfig::randomize(&mut rng))
+            .take(4)
+            .collect_vec();
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let writer = SnapshotWriter::json(tmp_dir.path());
+
+        let state = StateConfig {
+            contracts,
+            ..Default::default()
+        };
+
+        // when
+        let snapshot = writer
+            .write_state_config(state.clone(), &ChainConfig::local_testnet())
+            .unwrap();
+
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
+        let read_state = StateConfig::from_reader(&reader).unwrap();
+
+        pretty_assertions::assert_eq!(state, read_state);
+    }
+
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn writes_in_fragments_correctly(writer: impl Fn(&Path) -> SnapshotWriter + Copy) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let create_writer = || writer(temp_dir.path());
+
+        let mut rng = StdRng::seed_from_u64(0);
+        let state_config = StateConfig::randomize(&mut rng);
+
+        let chain_config = ChainConfig::local_testnet();
+
+        macro_rules! write_in_fragments {
+                ($($fragment_ty: ty,)*) => {
+                [
+                $({
+                    let mut writer = create_writer();
+                    writer
+                        .write(AsTable::<$fragment_ty>::as_table(&state_config))
+                        .unwrap();
+                    writer.partial_close().unwrap()
+
+                }),*
+                ]
+            }
+            }
+
+        let fragments = write_in_fragments!(
             Coins,
             Messages,
-        };
-        use itertools::Itertools;
-        use rand::{
-            rngs::StdRng,
-            SeedableRng,
-        };
+            ContractsState,
+            ContractsAssets,
+            ContractsRawCode,
+            ContractsLatestUtxo,
+        );
 
-        use crate::{
-            ChainConfig,
-            ContractConfig,
-            Randomize,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
-            StateConfig,
-        };
+        // when
+        let snapshot = fragments
+            .into_iter()
+            .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
+            .unwrap()
+            .finalize(state_config.last_block, &chain_config)
+            .unwrap();
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
 
-        #[test]
-        fn roundtrip() {
-            let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
-            let reader = |metadata: SnapshotMetadata, group_size: usize| {
-                SnapshotReader::open_w_config(metadata, group_size).unwrap()
-            };
-
-            assert_roundtrip::<Coins>(writer, reader);
-            assert_roundtrip::<Messages>(writer, reader);
-        }
-
-        #[test]
-        fn roundtrip_block_heights() {
-            let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
-            let reader =
-                |metadata: SnapshotMetadata| SnapshotReader::open(metadata).unwrap();
-            assert_roundtrip_block_heights(writer, reader);
-        }
-
-        #[test]
-        fn contract_related_tables_roundtrip() {
-            // given
-            let mut rng = StdRng::seed_from_u64(0);
-            let contracts =
-                std::iter::repeat_with(|| ContractConfig::randomize(&mut rng))
-                    .take(4)
-                    .collect_vec();
-
-            let tmp_dir = tempfile::tempdir().unwrap();
-            let mut writer = SnapshotWriter::json(tmp_dir.path());
-
-            let state = StateConfig {
-                contracts,
-                ..Default::default()
-            };
-            writer
-                .write_chain_config(&ChainConfig::local_testnet())
-                .unwrap();
-
-            // when
-            let snapshot = writer.write_state_config(state.clone()).unwrap();
-
-            // then
-            let reader = SnapshotReader::open(snapshot).unwrap();
-            let read_state = StateConfig::from_reader(&reader).unwrap();
-
-            pretty_assertions::assert_eq!(state, read_state);
-        }
+        let read_state_config = StateConfig::from_reader(&reader).unwrap();
+        assert_eq!(read_state_config, state_config);
+        assert_eq!(reader.chain_config(), &chain_config);
     }
 
-    fn assert_roundtrip_block_heights(
-        writer: impl FnOnce(&Path) -> SnapshotWriter,
-        reader: impl FnOnce(SnapshotMetadata) -> SnapshotReader,
-    ) {
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn roundtrip_block_heights(writer: impl FnOnce(&Path) -> SnapshotWriter) {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
-        let mut writer = writer(temp_dir.path());
-        writer
-            .write_chain_config(&ChainConfig::local_testnet())
-            .unwrap();
+        let consensus_parameters_version = 321u32;
+        let state_transition_version = 123u32;
+        let block_config = LastBlockConfig {
+            block_height,
+            da_block_height,
+            consensus_parameters_version,
+            state_transition_version,
+        };
+        let writer = writer(temp_dir.path());
 
         // when
-        writer
-            .write_block_data(block_height, da_block_height)
+        let snapshot = writer
+            .close(Some(block_config), &ChainConfig::local_testnet())
             .unwrap();
-        let snapshot = writer.close().unwrap();
 
         // then
-        let reader = reader(snapshot);
+        let reader = SnapshotReader::open(snapshot).unwrap();
 
-        let block_height_decoded = reader.block_height();
-        pretty_assertions::assert_eq!(block_height, block_height_decoded);
+        let block_config_decoded = reader.last_block_config().cloned();
+        pretty_assertions::assert_eq!(Some(block_config), block_config_decoded);
+    }
 
-        let da_block_height_decoded = reader.da_block_height();
-        pretty_assertions::assert_eq!(da_block_height, da_block_height_decoded);
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn missing_tables_tolerated(writer: impl FnOnce(&Path) -> SnapshotWriter) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let writer = writer(temp_dir.path());
+        let snapshot = writer.close(None, &ChainConfig::local_testnet()).unwrap();
+
+        let reader = SnapshotReader::open(snapshot).unwrap();
+
+        // when
+        let coins = reader.read::<Coins>().unwrap();
+
+        // then
+        assert_eq!(coins.into_iter().count(), 0);
     }
 
     fn assert_roundtrip<T>(
@@ -770,21 +824,21 @@ mod tests {
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, num_groups);
         let mut snapshot_writer = writer(temp_dir.path());
-        snapshot_writer
-            .write_chain_config(&ChainConfig::local_testnet())
-            .unwrap();
 
         // when
         let expected_groups = group_generator
             .write_groups::<T>(&mut snapshot_writer)
             .into_iter()
             .collect_vec();
-        snapshot_writer
-            .write_block_data(10.into(), DaBlockHeight(11))
+        let snapshot = snapshot_writer
+            .close(None, &ChainConfig::local_testnet())
             .unwrap();
-        let snapshot = snapshot_writer.close().unwrap();
 
-        let actual_groups = reader(snapshot, group_size).read().unwrap().collect_vec();
+        let actual_groups = reader(snapshot, group_size)
+            .read()
+            .unwrap()
+            .into_iter()
+            .collect_vec();
 
         // then
         assert_groups_identical(&expected_groups, actual_groups, skip_n_groups);
@@ -808,7 +862,7 @@ mod tests {
         fn write_groups<T>(
             &mut self,
             encoder: &mut SnapshotWriter,
-        ) -> Vec<Group<TableEntry<T>>>
+        ) -> Vec<Vec<TableEntry<T>>>
         where
             T: TableWithBlueprint,
             T::OwnedKey: serde::Serialize,
@@ -818,12 +872,12 @@ mod tests {
         {
             let groups = self.generate_groups();
             for group in &groups {
-                encoder.write(group.data.clone()).unwrap();
+                encoder.write(group.clone()).unwrap();
             }
             groups
         }
 
-        fn generate_groups<T>(&mut self) -> Vec<Group<T>>
+        fn generate_groups<T>(&mut self) -> Vec<Vec<T>>
         where
             T: Randomize,
         {
@@ -831,16 +885,14 @@ mod tests {
                 .chunks(self.group_size)
                 .into_iter()
                 .map(|chunk| chunk.collect_vec())
-                .enumerate()
-                .map(|(index, data)| Group { index, data })
                 .take(self.num_groups)
                 .collect()
         }
     }
 
     fn assert_groups_identical<T>(
-        original: &[Group<T>],
-        read: impl IntoIterator<Item = Result<Group<T>, anyhow::Error>>,
+        original: &[Vec<T>],
+        read: impl IntoIterator<Item = Result<Vec<T>, anyhow::Error>>,
         skip: usize,
     ) where
         Vec<T>: PartialEq,

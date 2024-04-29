@@ -10,6 +10,7 @@ use crate::client::{
         PageInfo,
         Tai64Timestamp,
         TransactionId,
+        U64,
     },
     types::TransactionResponse,
     PageDirection,
@@ -182,6 +183,8 @@ pub struct SuccessStatus {
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -193,6 +196,8 @@ pub struct FailureStatus {
     pub reason: String,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -225,6 +230,8 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                 TransactionExecutionResult::Success {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
                     receipts,
+                    total_gas: s.total_gas.0,
+                    total_fee: s.total_fee.0,
                 }
             }
             DryRunTransactionStatus::FailureStatus(s) => {
@@ -236,6 +243,8 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                 TransactionExecutionResult::Failed {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
                     receipts,
+                    total_gas: s.total_gas.0,
+                    total_fee: s.total_fee.0,
                 }
             }
             DryRunTransactionStatus::Unknown => {
@@ -250,6 +259,8 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
 pub struct DryRunSuccessStatus {
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -257,6 +268,8 @@ pub struct DryRunSuccessStatus {
 pub struct DryRunFailureStatus {
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

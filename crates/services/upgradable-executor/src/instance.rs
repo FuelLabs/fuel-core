@@ -17,7 +17,10 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_tx::Transaction,
     fuel_vm::checked_transaction::Checked,
     services::executor::{
@@ -28,7 +31,9 @@ use fuel_core_types::{
 use fuel_core_wasm_executor::utils::{
     pack_exists_size_result,
     unpack_ptr_and_len,
+    InputType,
     ReturnType,
+    WasmExecutionBlockTypes,
 };
 use std::{
     collections::HashMap,
@@ -145,6 +150,20 @@ impl Instance<Created> {
         })
     }
 
+    pub fn no_source(mut self) -> ExecutorResult<Instance<Source>> {
+        let peek_next_txs_size = self.no_source_peek_next_txs_size();
+        self.add_method("peek_next_txs_size", peek_next_txs_size)?;
+
+        let consume_next_txs = self.consume_next_txs();
+        self.add_method("consume_next_txs", consume_next_txs)?;
+
+        Ok(Instance {
+            store: self.store,
+            linker: self.linker,
+            stage: Source {},
+        })
+    }
+
     fn peek_next_txs_size<TxSource>(&mut self, source: Option<Arc<TxSource>>) -> Func
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -190,6 +209,13 @@ impl Instance<Created> {
                 .push(encoded_txs);
             Ok(encoded_size)
         };
+
+        Func::wrap(&mut self.store, closure)
+    }
+
+    fn no_source_peek_next_txs_size(&mut self) -> Func {
+        let closure =
+            move |_: Caller<'_, ExecutionState>, _: u64| -> anyhow::Result<u32> { Ok(0) };
 
         Func::wrap(&mut self.store, closure)
     }
@@ -424,95 +450,80 @@ impl Instance<Storage> {
 /// This stage adds host functions - getter for the input data like `Block` and `ExecutionOptions`.
 pub struct InputData {
     input_component_size: u32,
-    input_options_size: u32,
 }
 
 impl Instance<Relayer> {
     /// Adds getters for the `block` and `options`.
-    pub fn add_input_data(
-        mut self,
+    pub fn add_execution_input_data(
+        self,
         block: ExecutionBlockWithSource<()>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Instance<InputData>> {
-        let encoded_block = postcard::to_allocvec(&block).map_err(|e| {
+        let wasm_block = match block {
+            ExecutionBlockWithSource::DryRun(inner) => {
+                WasmExecutionBlockTypes::DryRun(inner)
+            }
+            ExecutionBlockWithSource::Production(inner) => {
+                WasmExecutionBlockTypes::Production(inner)
+            }
+        };
+        let input = InputType::V1 {
+            block: wasm_block,
+            options,
+        };
+        self.add_input_data(input)
+    }
+
+    pub fn add_validation_input_data(
+        self,
+        block: Block,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<Instance<InputData>> {
+        let input = InputType::V1 {
+            block: WasmExecutionBlockTypes::Validation(block),
+            options,
+        };
+        self.add_input_data(input)
+    }
+
+    fn add_input_data(mut self, input: InputType) -> ExecutorResult<Instance<InputData>> {
+        let encoded_input = postcard::to_allocvec(&input).map_err(|e| {
             ExecutorError::Other(format!(
-                "Failed encoding of the block for `input` function: {}",
+                "Failed encoding of the input for `input` function: {}",
                 e
             ))
         })?;
-        let encoded_block_size = u32::try_from(encoded_block.len()).map_err(|e| {
+        let encoded_input_size = u32::try_from(encoded_input.len()).map_err(|e| {
             ExecutorError::Other(format!(
-                "The encoded block is more than `u32::MAX`. We support only wasm32: {}",
+                "The encoded input is more than `u32::MAX`. We support only wasm32: {}",
                 e
             ))
         })?;
 
-        let input_component = self.input_component(encoded_block, encoded_block_size);
-        self.add_method("input_component", input_component)?;
-
-        let encoded_options = postcard::to_allocvec(&options).map_err(|e| {
-            ExecutorError::Other(format!(
-                "Failed encoding of the execution options for `input_options` function: {}",
-                e
-            ))
-        })?;
-        let encoded_options_size = u32::try_from(encoded_options.len()).map_err(|e| {
-            ExecutorError::Other(format!(
-                "The encoded option is more than `u32::MAX`. We support only wasm32: {}",
-                e
-            ))
-        })?;
-
-        let input = self.input_options(encoded_options, encoded_options_size);
-        self.add_method("input_options", input)?;
+        let input = self.input(encoded_input, encoded_input_size);
+        self.add_method("input", input)?;
 
         Ok(Instance {
             store: self.store,
             linker: self.linker,
             stage: InputData {
-                input_component_size: encoded_block_size,
-                input_options_size: encoded_options_size,
+                input_component_size: encoded_input_size,
             },
         })
     }
 
-    fn input_component(
-        &mut self,
-        encoded_block: Vec<u8>,
-        encoded_block_size: u32,
-    ) -> Func {
+    fn input(&mut self, encoded_input: Vec<u8>, encoded_input_size: u32) -> Func {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             out_ptr: u32,
                             out_len: u32|
               -> anyhow::Result<()> {
-            if out_len != encoded_block_size {
+            if out_len != encoded_input_size {
                 return Err(anyhow::anyhow!(
-                    "The provided buffer size is not equal to the encoded block size."
+                    "The provided buffer size is not equal to the encoded input size."
                 ));
             }
 
-            caller.write(out_ptr, &encoded_block)
-        };
-
-        Func::wrap(&mut self.store, closure)
-    }
-
-    fn input_options(
-        &mut self,
-        encoded_options: Vec<u8>,
-        encoded_options_size: u32,
-    ) -> Func {
-        let closure = move |mut caller: Caller<'_, ExecutionState>,
-                            out_ptr: u32,
-                            out_len: u32|
-              -> anyhow::Result<()> {
-            if out_len != encoded_options_size {
-                return Err(anyhow::anyhow!(
-                    "The provided buffer size is not equal to the encoded options size."
-                ));
-            }
-
-            caller.write(out_ptr, &encoded_options)
+            caller.write(out_ptr, &encoded_input)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -521,10 +532,10 @@ impl Instance<Relayer> {
 
 impl Instance<InputData> {
     /// Runs the WASM instance from the compiled `Module`.
-    pub fn run(self, module: &Module) -> ReturnType {
+    pub fn run(self, module: &Module) -> ExecutorResult<ReturnType> {
         self.internal_run(module).map_err(|e| {
             ExecutorError::Other(format!("Error with WASM initialization: {}", e))
-        })?
+        })
     }
 
     fn internal_run(mut self, module: &Module) -> anyhow::Result<ReturnType> {
@@ -548,17 +559,11 @@ impl Instance<InputData> {
         self.store.data_mut().memory = Some(memory);
 
         let run = instance
-            .get_typed_func::<(u32, u32), u64>(&mut self.store, "execute")
+            .get_typed_func::<u32, u64>(&mut self.store, "execute")
             .map_err(|e| {
                 anyhow::anyhow!("Failed to get the `execute` function: {}", e.to_string())
             })?;
-        let result = run.call(
-            &mut self.store,
-            (
-                self.stage.input_component_size,
-                self.stage.input_options_size,
-            ),
-        )?;
+        let result = run.call(&mut self.store, self.stage.input_component_size)?;
 
         let (ptr, len) = unpack_ptr_and_len(result);
         let (ptr, len) = (ptr as usize, len as usize);

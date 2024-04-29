@@ -1,7 +1,10 @@
 use super::*;
 use crate::{
     mock_db::MockDBProvider,
-    ports::BlockImporter,
+    ports::{
+        BlockImporter,
+        MockConsensusParametersProvider,
+    },
     MockDb,
 };
 use fuel_core_services::{
@@ -33,7 +36,12 @@ use std::cell::RefCell;
 type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
-    pub(crate) service: Service<MockP2P, MockDBProvider, MockTxPoolGasPrice>,
+    pub(crate) service: Service<
+        MockP2P,
+        MockDBProvider,
+        MockTxPoolGasPrice,
+        MockConsensusParametersProvider,
+    >,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
 }
@@ -66,7 +74,14 @@ impl TestContext {
         TestContextBuilder::new().build_and_start().await
     }
 
-    pub fn service(&self) -> &Service<MockP2P, MockDBProvider, MockTxPoolGasPrice> {
+    pub fn service(
+        &self,
+    ) -> &Service<
+        MockP2P,
+        MockDBProvider,
+        MockTxPoolGasPrice,
+        MockConsensusParametersProvider,
+    > {
         &self.service
     }
 
@@ -228,6 +243,11 @@ impl TestContextBuilder {
             .importer
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
         let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+        let mut consensus_parameters_provider =
+            MockConsensusParametersProvider::default();
+        consensus_parameters_provider
+            .expect_latest_consensus_parameters()
+            .returning(|| Arc::new(Default::default()));
 
         let service = new_service(
             config,
@@ -236,6 +256,7 @@ impl TestContextBuilder {
             p2p,
             Default::default(),
             gas_price_provider,
+            consensus_parameters_provider,
         );
 
         TestContext {

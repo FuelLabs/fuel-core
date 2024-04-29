@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+mockall = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }
@@ -26,4 +27,4 @@ fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 rand = { workspace = true }
 
 [features]
-test-helpers = ["fuel-core-types/test-helpers"]
+test-helpers = ["dep:mockall", "fuel-core-types/test-helpers"]

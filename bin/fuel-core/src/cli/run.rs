@@ -7,6 +7,7 @@ use crate::{
             consensus::PoATriggerArgs,
             tx_pool::TxPoolArgs,
         },
+        ShutdownListener,
     },
     FuelService,
 };
@@ -14,10 +15,14 @@ use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
     chain_config::default_consensus_dev_key,
-    combined_database::CombinedDatabaseConfig,
+    combined_database::{
+        CombinedDatabase,
+        CombinedDatabaseConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
+        genesis::NotifyCancel,
         Config,
         DbType,
         RelayerConsensusConfig,
@@ -39,6 +44,7 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
+use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -136,6 +142,10 @@ pub struct Command {
     #[arg(long = "utxo-validation", env)]
     pub utxo_validation: bool,
 
+    /// Overrides the version of the native executor.
+    #[arg(long = "native-executor-version", env)]
+    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
+
     /// The minimum allowed gas price
     #[arg(long = "min-gas-price", default_value = "0", env)]
     pub min_gas_price: u64,
@@ -214,6 +224,7 @@ impl Command {
             vm_backtrace,
             debug,
             utxo_validation,
+            native_executor_version,
             min_gas_price,
             consensus_key,
             poa_trigger,
@@ -244,7 +255,7 @@ impl Command {
                 SnapshotReader::open(metadata)?
             }
         };
-        let chain_config = snapshot_reader.chain_config().clone();
+        let chain_config = snapshot_reader.chain_config();
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -298,7 +309,7 @@ impl Command {
         };
 
         let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new(&chain_config);
+            fuel_core::service::config::fuel_core_importer::Config::new();
 
         let TxPoolArgs {
             tx_pool_ttl,
@@ -317,7 +328,6 @@ impl Command {
             tx_blacklist_messages,
             tx_blacklist_contracts,
         );
-        let block_gas_limit = chain_config.consensus_parameters.block_gas_limit();
 
         let config = Config {
             addr,
@@ -325,6 +335,7 @@ impl Command {
             combined_db_config,
             snapshot_reader,
             debug,
+            native_executor_version,
             utxo_validation,
             block_production: trigger,
             vm: VMConfig {
@@ -333,7 +344,6 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_config,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
@@ -341,10 +351,8 @@ impl Command {
                 blacklist,
             ),
             block_producer: ProducerConfig {
-                utxo_validation,
                 coinbase_recipient,
                 metrics,
-                block_gas_limit,
             },
             static_gas_price: min_gas_price,
             block_importer,
@@ -365,7 +373,7 @@ impl Command {
     }
 }
 
-pub async fn exec(command: Command) -> anyhow::Result<()> {
+pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
     #[cfg(any(feature = "rocks-db", feature = "rocksdb-production"))]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
@@ -381,16 +389,35 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");
     // initialize the server
-    let server = FuelService::new_node(config).await?;
-    // pause the main task while service is running
+    let combined_database = CombinedDatabase::from_config(&config.combined_db_config)?;
+
+    FuelService::new(combined_database, config)
+}
+
+pub async fn exec(command: Command) -> anyhow::Result<()> {
+    let service = get_service(command)?;
+
+    let shutdown_listener = ShutdownListener::spawn();
+    // Genesis could take a long time depending on the snapshot size. Start needs to be
+    // interruptible by the shutdown_signal
     tokio::select! {
-        result = server.await_stop() => {
+        result = service.start_and_await() => {
             result?;
         }
-        _ = shutdown_signal() => {}
+        _ = shutdown_listener.wait_until_cancelled() => {
+            service.stop();
+        }
     }
 
-    server.stop_and_await().await?;
+    // pause the main task while service is running
+    tokio::select! {
+        result = service.await_stop() => {
+            result?;
+        }
+        _ = shutdown_listener.wait_until_cancelled() => {}
+    }
+
+    service.stop_and_await().await?;
 
     Ok(())
 }
@@ -438,29 +465,4 @@ fn start_pyroscope_agent(
             Ok(agent_running)
         })
         .transpose()
-}
-
-async fn shutdown_signal() -> anyhow::Result<()> {
-    #[cfg(unix)]
-    {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-
-        let mut sigint =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        tokio::select! {
-            _ = sigterm.recv() => {
-                tracing::info!("sigterm received");
-            }
-            _ = sigint.recv() => {
-                tracing::info!("sigint received");
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c().await?;
-        tracing::info!("CTRL+C received");
-    }
-    Ok(())
 }

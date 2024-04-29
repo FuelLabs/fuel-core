@@ -4,6 +4,7 @@ use crate::{
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
+            ConsensusProvider as ConsensusProviderTrait,
             GasPriceEstimate,
             OffChainDatabase,
             OnChainDatabase,
@@ -91,6 +92,8 @@ pub type P2pService = Box<dyn P2pPort>;
 
 pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 
+pub type ConsensusProvider = Box<dyn ConsensusProviderTrait>;
+
 #[derive(Clone)]
 pub struct SharedState {
     pub bound_address: SocketAddr,
@@ -168,6 +171,7 @@ impl RunnableTask for Task {
 // Need a seperate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<OnChain, OffChain>(
+    genesis_block_height: BlockHeight,
     config: Config,
     schema: CoreSchemaBuilder,
     on_database: OnChain,
@@ -177,6 +181,7 @@ pub fn new_service<OnChain, OffChain>(
     consensus_module: ConsensusModule,
     p2p_service: P2pService,
     gas_price_provider: GasPriceProvider,
+    consensus_parameters_provider: ConsensusProvider,
     log_threshold_ms: Duration,
     request_timeout: Duration,
 ) -> anyhow::Result<Service>
@@ -187,7 +192,8 @@ where
     OffChain::View: OffChainDatabase,
 {
     let network_addr = config.addr;
-    let combined_read_database = ReadDatabase::new(on_database, off_database);
+    let combined_read_database =
+        ReadDatabase::new(genesis_block_height, on_database, off_database);
 
     let schema = schema
         .data(config)
@@ -197,6 +203,7 @@ where
         .data(consensus_module)
         .data(p2p_service)
         .data(gas_price_provider)
+        .data(consensus_parameters_provider)
         .extension(async_graphql::extensions::Tracing)
         .extension(MetricsExtension::new(log_threshold_ms))
         .extension(ViewExtension::new())
@@ -211,6 +218,7 @@ where
         )
         .route("/v1/metrics", get(metrics))
         .route("/v1/health", get(health))
+        .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))

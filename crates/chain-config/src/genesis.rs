@@ -18,6 +18,7 @@ impl GenesisCommitment for Genesis {
             .chain(self.coins_root)
             .chain(self.contracts_root)
             .chain(self.messages_root)
+            .chain(self.transactions_root)
             .finalize();
 
         Ok(genesis_hash)

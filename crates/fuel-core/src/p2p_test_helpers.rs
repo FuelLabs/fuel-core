@@ -380,12 +380,18 @@ pub fn make_config(name: String, mut node_config: Config) -> Config {
 
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
+    let time_limit = Duration::from_secs(4);
     let node = tokio::time::timeout(
-        Duration::from_secs(2),
+        time_limit,
         FuelService::from_database(db.clone(), node_config),
     )
     .await
-    .expect("All services should start in less than 2 seconds")
+    .unwrap_or_else(|_| {
+        panic!(
+            "All services should start in less than {} seconds",
+            time_limit.as_secs()
+        )
+    })
     .expect("The `FuelService should start without error");
 
     let config = node.shared.config.clone();
@@ -424,7 +430,12 @@ impl Node {
             .block_stream()
             .take(number_of_blocks);
         while let Some(block) = stream.next().await {
-            assert_eq!(block.is_locally_produced(), is_local);
+            if block.is_locally_produced() != is_local {
+                panic!(
+                    "Block produced by the wrong node while was \
+                    waiting for `{number_of_blocks}` and is_local=`{is_local}`"
+                );
+            }
         }
     }
 

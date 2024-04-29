@@ -9,10 +9,7 @@ use fuel_core_storage::{
         Coins,
         ContractsAssets,
         ContractsRawCode,
-        FuelBlocks,
         Messages,
-        SealedBlockConsensus,
-        Transactions,
     },
     Error as StorageError,
     Result as StorageResult,
@@ -22,16 +19,22 @@ use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::{
             BlockId,
             DaBlockHeight,
         },
     },
-    entities::relayer::message::{
-        MerkleProof,
-        Message,
+    entities::relayer::{
+        message::{
+            MerkleProof,
+            Message,
+        },
+        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
         Salt,
         Transaction,
         TxId,
@@ -85,6 +88,25 @@ pub trait OffChainDatabase: Send + Sync {
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
+
+    fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
+
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+
+    fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus>;
+
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -92,7 +114,6 @@ pub trait OnChainDatabase:
     Send
     + Sync
     + DatabaseBlocks
-    + StorageInspect<Transactions, Error = StorageError>
     + DatabaseMessages
     + StorageInspect<Coins, Error = StorageError>
     + DatabaseContracts
@@ -102,10 +123,13 @@ pub trait OnChainDatabase:
 }
 
 /// Trait that specifies all the getters required for blocks.
-pub trait DatabaseBlocks:
-    StorageInspect<FuelBlocks, Error = StorageError>
-    + StorageInspect<SealedBlockConsensus, Error = StorageError>
-{
+pub trait DatabaseBlocks {
+    /// Get a transaction by its id.
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
+
+    /// Get a block by its height.
+    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
+
     fn blocks(
         &self,
         height: Option<BlockHeight>,
@@ -113,6 +137,9 @@ pub trait DatabaseBlocks:
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
     fn latest_height(&self) -> StorageResult<BlockHeight>;
+
+    /// Get the consensus for a block.
+    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
 }
 
 /// Trait that specifies all the getters required for messages.
@@ -123,9 +150,14 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
 
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
-
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
+}
+
+pub trait DatabaseRelayedTransactions {
+    fn transaction_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
 }
 
 /// Trait that specifies all the getters required for contract.
@@ -207,10 +239,23 @@ pub trait GasPriceEstimate: Send + Sync {
 
 pub mod worker {
     use super::super::storage::blocks::FuelBlockIdsToHeights;
-    use crate::fuel_core_graphql_api::storage::{
-        coins::OwnedCoins,
-        contracts::ContractsInfo,
-        messages::OwnedMessageIds,
+    use crate::{
+        fuel_core_graphql_api::storage::{
+            coins::OwnedCoins,
+            contracts::ContractsInfo,
+            messages::{
+                OwnedMessageIds,
+                SpentMessages,
+            },
+        },
+        graphql_api::storage::{
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
+            relayed_transactions::RelayedTransactionStatuses,
+        },
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
@@ -244,6 +289,11 @@ pub mod worker {
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
+        + StorageMutate<OldFuelBlocks, Error = StorageError>
+        + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
+        + StorageMutate<OldTransactions, Error = StorageError>
+        + StorageMutate<SpentMessages, Error = StorageError>
+        + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,
@@ -284,4 +334,9 @@ pub mod worker {
             status: TransactionStatus,
         );
     }
+}
+
+pub trait ConsensusProvider: Send + Sync {
+    /// Returns latest consensus parameters.
+    fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
 }

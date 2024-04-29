@@ -40,9 +40,11 @@ pub mod blocks;
 pub mod coins;
 pub mod contracts;
 pub mod messages;
+pub mod old;
 pub mod statistic;
 pub mod transactions;
 
+pub mod relayed_transactions;
 /// Tracks the total number of transactions written to the chain
 /// It's useful for analyzing TPS or other metrics.
 const TX_COUNT: &str = "total_tx_count";
@@ -79,6 +81,18 @@ pub enum Column {
     FuelBlockIdsToHeights = 7,
     /// See [`ContractsInfo`](contracts::ContractsInfo)
     ContractsInfo = 8,
+    /// See [`OldFuelBlocks`](old::OldFuelBlocks)
+    OldFuelBlocks = 9,
+    /// See [`OldFuelBlockConsensus`](old::OldFuelBlockConsensus)
+    OldFuelBlockConsensus = 10,
+    /// See [`OldTransactions`](old::OldTransactions)
+    OldTransactions = 11,
+    /// Relayed Tx ID to Layer 1 Relayed Transaction status
+    RelayedTransactionStatus = 12,
+    /// Messages that have been spent.
+    /// Existence of a key in this column means that the message has been spent.
+    /// See [`SpentMessages`](messages::SpentMessages)
+    SpentMessages = 13,
 }
 
 impl Column {

@@ -1,5 +1,4 @@
 use crate::{
-    database,
     database::{
         database_description::{
             off_chain::OffChain,
@@ -7,6 +6,7 @@ use crate::{
             relayer::Relayer,
         },
         Database,
+        GenesisDatabase,
         Result as DatabaseResult,
     },
     service::DbType,
@@ -57,7 +57,7 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn prune(path: &std::path::Path) -> database::Result<()> {
+    pub fn prune(path: &std::path::Path) -> crate::database::Result<()> {
         crate::state::rocks_db::RocksDb::<OnChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
@@ -179,12 +179,41 @@ impl CombinedDatabase {
             ContractsLatestUtxo
         );
 
-        let block = self.on_chain().latest_block()?;
-        builder.set_block_height(*block.header().height());
-        builder.set_da_block_height(block.header().da_height);
-
-        let state_config = builder.build()?;
+        let latest_block = self.on_chain().latest_block()?;
+        let state_config = builder.build(Some(latest_block.header().into()))?;
 
         Ok(state_config)
+    }
+
+    /// Converts the combined database into a genesis combined database.
+    pub fn into_genesis(self) -> CombinedGenesisDatabase {
+        CombinedGenesisDatabase {
+            on_chain: self.on_chain.into_genesis(),
+            off_chain: self.off_chain.into_genesis(),
+            relayer: self.relayer.into_genesis(),
+        }
+    }
+}
+
+/// A genesis database that combines the on-chain, off-chain and relayer
+/// genesis databases into one entity.
+#[derive(Default, Clone)]
+pub struct CombinedGenesisDatabase {
+    on_chain: GenesisDatabase<OnChain>,
+    off_chain: GenesisDatabase<OffChain>,
+    relayer: GenesisDatabase<Relayer>,
+}
+
+impl CombinedGenesisDatabase {
+    pub fn on_chain(&self) -> &GenesisDatabase<OnChain> {
+        &self.on_chain
+    }
+
+    pub fn off_chain(&self) -> &GenesisDatabase<OffChain> {
+        &self.off_chain
+    }
+
+    pub fn relayer(&self) -> &GenesisDatabase<Relayer> {
+        &self.relayer
     }
 }

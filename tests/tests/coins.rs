@@ -3,7 +3,6 @@ use fuel_core::{
     chain_config::{
         CoinConfig,
         MessageConfig,
-        SnapshotReader,
         StateConfig,
     },
     coins_query::CoinsQueryError,
@@ -24,10 +23,7 @@ use rand::{
 
 mod coin {
     use super::*;
-    use fuel_core::chain_config::{
-        CoinConfigGenerator,
-        SnapshotReader,
-    };
+    use fuel_core::chain_config::CoinConfigGenerator;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::Rng;
@@ -60,10 +56,7 @@ mod coin {
             messages: vec![],
             ..Default::default()
         };
-        let config = Config {
-            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
-            ..Config::local_node()
-        };
+        let config = Config::local_node_with_state_config(state);
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
@@ -283,7 +276,6 @@ mod coin {
 }
 
 mod message_coin {
-    use fuel_core::chain_config::SnapshotReader;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -314,10 +306,7 @@ mod message_coin {
                 .collect(),
             ..Default::default()
         };
-        let config = Config {
-            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
-            ..Config::local_node()
-        };
+        let config = Config::local_node_with_state_config(state);
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
@@ -490,10 +479,7 @@ mod message_coin {
 
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
-    use fuel_core::chain_config::{
-        CoinConfigGenerator,
-        SnapshotReader,
-    };
+    use fuel_core::chain_config::CoinConfigGenerator;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -534,10 +520,7 @@ mod all_coins {
                 .collect(),
             ..Default::default()
         };
-        let config = Config {
-            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
-            ..Config::local_node()
-        };
+        let config = Config::local_node_with_state_config(state);
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
@@ -709,11 +692,7 @@ mod all_coins {
 
 async fn empty_setup() -> TestContext {
     // setup config
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet()
-            .with_state_config(StateConfig::default()),
-        ..Config::local_node()
-    };
+    let config = Config::local_node_with_state_config(StateConfig::default());
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

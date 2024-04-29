@@ -1,4 +1,3 @@
-use super::TransactionsSource;
 use crate::{
     database::Database,
     service::adapters::{
@@ -10,8 +9,8 @@ use crate::{
 use fuel_core_importer::{
     ports::{
         BlockVerifier,
-        Executor,
         ImporterDatabase,
+        Validator,
     },
     Config,
     Importer,
@@ -39,9 +38,11 @@ use fuel_core_types::{
         consensus::Consensus,
         SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::executor::{
-        ExecutionTypes,
         Result as ExecutorResult,
         UncommittedResult as UncommittedExecutionResult,
     },
@@ -50,12 +51,13 @@ use std::sync::Arc;
 
 impl BlockImporterAdapter {
     pub fn new(
+        chain_id: ChainId,
         config: Config,
         database: Database,
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
-        let importer = Importer::new(config, database, executor, verifier);
+        let importer = Importer::new(chain_id, config, database, executor, verifier);
         importer.init_metrics();
         Self {
             block_importer: Arc::new(importer),
@@ -98,13 +100,11 @@ impl ImporterDatabase for Database {
     }
 }
 
-impl Executor for ExecutorAdapter {
-    fn execute_without_commit(
+impl Validator for ExecutorAdapter {
+    fn validate(
         &self,
         block: Block,
     ) -> ExecutorResult<UncommittedExecutionResult<Changes>> {
-        self._execute_without_commit::<TransactionsSource>(ExecutionTypes::Validation(
-            block,
-        ))
+        self.executor.validate(block)
     }
 }

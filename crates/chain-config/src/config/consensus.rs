@@ -10,7 +10,7 @@ use serde::{
 use crate as fuel_core_chain_config;
 use fuel_core_chain_config::default_consensus_dev_key;
 
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub enum ConsensusConfig {
     PoA { signing_key: Address },
 }

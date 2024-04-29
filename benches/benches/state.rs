@@ -19,7 +19,13 @@ use fuel_core_storage::{
     vm_storage::VmStorage,
 };
 use fuel_core_types::{
-    blockchain::header::GeneratedConsensusFields,
+    blockchain::{
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+        },
+        primitives::Empty,
+    },
     fuel_tx::Bytes32,
     fuel_types::ContractId,
     fuel_vm::InterpreterStorage,
@@ -73,9 +79,10 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
                     let inner = outer.read_transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new(
                         inner,
-                        &Default::default(),
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();
@@ -134,9 +141,10 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
                     let inner = outer.read_transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new(
                         inner,
-                        &Default::default(),
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();
@@ -198,9 +206,10 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
                     let inner = outer.read_transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new(
                         inner,
-                        &Default::default(),
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();
@@ -262,9 +271,10 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
                     let inner = outer.read_transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new(
                         inner,
-                        &Default::default(),
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();

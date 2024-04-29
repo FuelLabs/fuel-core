@@ -112,6 +112,7 @@ fuel_type_scalar!(AssetId, AssetId);
 fuel_type_scalar!(ContractId, ContractId);
 fuel_type_scalar!(Salt, Salt);
 fuel_type_scalar!(TransactionId, Bytes32);
+fuel_type_scalar!(RelayedTransactionId, Bytes32);
 fuel_type_scalar!(Signature, Bytes64);
 fuel_type_scalar!(Nonce, Nonce);
 

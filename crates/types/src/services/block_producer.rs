@@ -1,8 +1,12 @@
 //! Types related to block producer service.
 
 use crate::{
-    blockchain::header::PartialBlockHeader,
+    blockchain::header::{
+        PartialBlockHeader,
+        StateTransitionBytecodeVersion,
+    },
     fuel_tx::ContractId,
+    services::executor::ExecutionTypes,
 };
 
 /// The components required to produce a block.
@@ -19,4 +23,22 @@ pub struct Components<Source> {
     pub coinbase_recipient: ContractId,
     /// The gas price for all transactions in the block.
     pub gas_price: u64,
+}
+
+impl<TxSource> ExecutionTypes<Components<TxSource>> {
+    /// Returns the state transition bytecode version of the block.
+    pub fn state_transition_version(&self) -> StateTransitionBytecodeVersion {
+        match self {
+            ExecutionTypes::DryRun(component) => {
+                component
+                    .header_to_produce
+                    .state_transition_bytecode_version
+            }
+            ExecutionTypes::Production(component) => {
+                component
+                    .header_to_produce
+                    .state_transition_bytecode_version
+            }
+        }
+    }
 }

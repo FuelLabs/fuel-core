@@ -40,6 +40,7 @@ pub struct TxParameters {
     pub max_witnesses: U32,
     pub max_gas_per_tx: U64,
     pub max_size: U64,
+    pub max_bytecode_subsections: U16,
 }
 
 #[derive(cynic::Enum, Clone, Debug)]
@@ -60,6 +61,7 @@ impl TryFrom<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
                     max_witnesses: params.max_witnesses.into(),
                     max_gas_per_tx: params.max_gas_per_tx.into(),
                     max_size: params.max_size.into(),
+                    max_bytecode_subsections: params.max_bytecode_subsections.into(),
                 }
                 .into(),
             ),

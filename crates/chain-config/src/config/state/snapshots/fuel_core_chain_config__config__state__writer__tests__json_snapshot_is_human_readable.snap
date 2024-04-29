@@ -83,6 +83,10 @@ expression: encoded_json
       ]
     }
   ],
-  "block_height": 2346951900,
-  "da_block_height": 14074420184374977699
+  "last_block": {
+    "block_height": 2346951900,
+    "da_block_height": 14074420184374977699,
+    "consensus_parameters_version": 2019076799,
+    "state_transition_version": 1670454246
+  }
 }

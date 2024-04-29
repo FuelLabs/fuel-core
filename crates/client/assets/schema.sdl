@@ -190,6 +190,11 @@ type ConsensusParameters {
 	privilegedAddress: Address!
 }
 
+type ConsensusParametersPurpose {
+	witnessIndex: U16!
+	checksum: Bytes32!
+}
+
 enum ConsensusParametersVersion {
 	V1
 }
@@ -271,11 +276,15 @@ type DryRunFailureStatus {
 	programState: ProgramState
 	reason: String!
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type DryRunSuccessStatus {
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type DryRunTransactionExecutionStatus {
@@ -308,6 +317,8 @@ type FailureStatus {
 	reason: String!
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type FeeParameters {
@@ -457,6 +468,10 @@ type Genesis {
 	The Binary Merkle Tree root of all genesis messages.
 	"""
 	messagesRoot: Bytes32!
+	"""
+	The Binary Merkle Tree root of all processed transaction ids.
+	"""
+	transactionsRoot: Bytes32!
 }
 
 type Header {
@@ -860,6 +875,7 @@ type Query {
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, nonce: Nonce!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
 	messageStatus(nonce: Nonce!): MessageStatus!
+	relayedTransactionStatus(id: RelayedTransactionId!): RelayedTransactionStatus
 }
 
 type Receipt {
@@ -912,6 +928,15 @@ enum ReceiptType {
 	BURN
 }
 
+type RelayedTransactionFailed {
+	blockHeight: U32!
+	failure: String!
+}
+
+scalar RelayedTransactionId
+
+union RelayedTransactionStatus = RelayedTransactionFailed
+
 enum ReturnType {
 	RETURN
 	RETURN_DATA
@@ -962,6 +987,10 @@ type SqueezedOutStatus {
 	reason: String!
 }
 
+type StateTransitionPurpose {
+	root: Bytes32!
+}
+
 
 type SubmittedStatus {
 	time: Tai64Timestamp!
@@ -995,6 +1024,8 @@ type SuccessStatus {
 	time: Tai64Timestamp!
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 scalar Tai64Timestamp
@@ -1014,6 +1045,8 @@ type Transaction {
 	isScript: Boolean!
 	isCreate: Boolean!
 	isMint: Boolean!
+	isUpgrade: Boolean!
+	isUpload: Boolean!
 	inputs: [Input!]
 	outputs: [Output!]!
 	outputContract: ContractOutput
@@ -1025,6 +1058,11 @@ type Transaction {
 	bytecodeWitnessIndex: U16
 	salt: Salt
 	storageSlots: [HexString!]
+	bytecodeRoot: Bytes32
+	subsectionIndex: U16
+	subsectionsNumber: U16
+	proofSet: [Bytes32!]
+	upgradePurpose: UpgradePurpose
 	"""
 	Return the transaction bytes using canonical encoding
 	"""
@@ -1071,6 +1109,7 @@ type TxParameters {
 	maxWitnesses: U32!
 	maxGasPerTx: U64!
 	maxSize: U64!
+	maxBytecodeSubsections: U16!
 }
 
 enum TxParametersVersion {
@@ -1084,6 +1123,8 @@ scalar U16
 scalar U32
 
 scalar U64
+
+union UpgradePurpose = ConsensusParametersPurpose | StateTransitionPurpose
 
 scalar UtxoId
 

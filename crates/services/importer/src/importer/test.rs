@@ -4,7 +4,7 @@ use crate::{
         ImporterDatabase,
         MockBlockVerifier,
         MockDatabaseTransaction,
-        MockExecutor,
+        MockValidator,
         Transactional,
     },
     Importer,
@@ -153,35 +153,33 @@ fn ex_result(height: u32, skipped_transactions: usize) -> MockExecutionResult {
 }
 
 fn execution_failure<T>() -> ExecutorResult<T> {
-    Err(ExecutorError::InvalidBlockId)
+    Err(ExecutorError::BlockMismatch)
 }
 
 fn execution_failure_error() -> Error {
-    Error::FailedExecution(ExecutorError::InvalidBlockId)
+    Error::FailedExecution(ExecutorError::BlockMismatch)
 }
 
-fn executor<R>(result: R) -> MockExecutor
+fn executor<R>(result: R) -> MockValidator
 where
     R: Fn() -> ExecutorResult<MockExecutionResult> + Send + 'static,
 {
-    let mut executor = MockExecutor::default();
-    executor
-        .expect_execute_without_commit()
-        .return_once(move |_| {
-            let mock_result = result()?;
-            let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
-                .map(|_| (TxId::zeroed(), ExecutorError::InvalidBlockId))
-                .collect();
-            Ok(Uncommitted::new(
-                ExecutionResult {
-                    block: mock_result.block.entity,
-                    skipped_transactions,
-                    tx_status: vec![],
-                    events: vec![],
-                },
-                Default::default(),
-            ))
-        });
+    let mut executor = MockValidator::default();
+    executor.expect_validate().return_once(move |_| {
+        let mock_result = result()?;
+        let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
+            .map(|_| (TxId::zeroed(), ExecutorError::BlockMismatch))
+            .collect();
+        Ok(Uncommitted::new(
+            ExecutionResult {
+                block: mock_result.block.entity,
+                skipped_transactions,
+                tx_status: vec![],
+                events: vec![],
+            },
+            Default::default(),
+        ))
+    });
 
     executor
 }
@@ -358,7 +356,7 @@ async fn commit_result_assert(
         .expect_storage_transaction()
         .return_once(|_| db_transaction);
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(Default::default(), underlying_db, (), ());
+    let importer = Importer::default_config(underlying_db, (), ());
     let uncommitted_result = UncommittedResult::new(
         ImportResult::new_from_local(sealed_block, vec![], vec![]),
         Default::default(),
@@ -383,11 +381,11 @@ async fn commit_result_assert(
 async fn execute_and_commit_assert(
     sealed_block: SealedBlock,
     underlying_db: MockDatabase,
-    executor: MockExecutor,
+    executor: MockValidator,
     verifier: MockBlockVerifier,
 ) -> Result<(), Error> {
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(Default::default(), underlying_db, executor, verifier);
+    let importer = Importer::default_config(underlying_db, executor, verifier);
 
     let mut imported_blocks = importer.subscribe();
     let result = importer.execute_and_commit(sealed_block).await;
@@ -408,7 +406,7 @@ async fn execute_and_commit_assert(
 
 #[tokio::test]
 async fn commit_result_fail_when_locked() {
-    let importer = Importer::new(Default::default(), MockDatabase::default(), (), ());
+    let importer = Importer::default_config(MockDatabase::default(), (), ());
     let uncommitted_result =
         UncommittedResult::new(ImportResult::default(), Default::default());
 
@@ -421,10 +419,9 @@ async fn commit_result_fail_when_locked() {
 
 #[tokio::test]
 async fn execute_and_commit_fail_when_locked() {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
-        MockExecutor::default(),
+        MockValidator::default(),
         MockBlockVerifier::default(),
     );
 
@@ -437,10 +434,9 @@ async fn execute_and_commit_fail_when_locked() {
 
 #[test]
 fn one_lock_at_the_same_time() {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
-        MockExecutor::default(),
+        MockValidator::default(),
         MockBlockVerifier::default(),
     );
 
@@ -534,8 +530,7 @@ where
     P: Fn() -> ExecutorResult<MockExecutionResult> + Send + 'static,
     V: Fn() -> anyhow::Result<()> + Send + 'static,
 {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
         executor(block_after_execution),
         verifier(verifier_result),
@@ -546,8 +541,7 @@ where
 
 #[test]
 fn verify_and_execute_allowed_when_locked() {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
         executor(ok(ex_result(13, 0))),
         verifier(ok(())),

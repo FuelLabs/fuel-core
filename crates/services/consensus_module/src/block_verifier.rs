@@ -81,7 +81,7 @@ where
         match consensus {
             Consensus::Genesis(_) => true,
             Consensus::PoA(consensus) => fuel_core_poa::verifier::verify_consensus(
-                &self.config.chain_config.consensus,
+                &self.config.consensus,
                 header,
                 consensus,
             ),

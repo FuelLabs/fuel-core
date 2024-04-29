@@ -78,6 +78,8 @@ pub struct Genesis {
     pub contracts_root: Bytes32,
     /// The Binary Merkle Tree root of all genesis messages.
     pub messages_root: Bytes32,
+    /// The Binary Merkle Tree root of all processed transaction ids.
+    pub transactions_root: Bytes32,
 }
 
 pub struct PoAConsensus {
@@ -103,10 +105,7 @@ impl Block {
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query: &ReadView = ctx.data_unchecked();
         let height = self.0.header().height();
-        let core_consensus = query.consensus(height)?;
-
-        let my_consensus = core_consensus.try_into()?;
-        Ok(my_consensus)
+        Ok(query.consensus(height)?.try_into()?)
     }
 
     async fn transactions(
@@ -361,6 +360,7 @@ impl From<CoreGenesis> for Genesis {
             coins_root: genesis.coins_root.into(),
             contracts_root: genesis.contracts_root.into(),
             messages_root: genesis.messages_root.into(),
+            transactions_root: genesis.transactions_root.into(),
         }
     }
 }

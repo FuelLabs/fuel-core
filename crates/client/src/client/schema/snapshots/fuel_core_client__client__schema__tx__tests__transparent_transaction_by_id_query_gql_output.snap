@@ -51,6 +51,8 @@ query($id: TransactionId!) {
     isScript
     isCreate
     isMint
+    isUpgrade
+    isUpload
     outputs {
       __typename
       ... on CoinOutput {
@@ -132,6 +134,8 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
       ... on SqueezedOutStatus {
         reason
@@ -177,6 +181,8 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
     }
     witnesses
@@ -191,5 +197,19 @@ query($id: TransactionId!) {
     salt
     storageSlots
     bytecodeWitnessIndex
+    bytecodeRoot
+    subsectionIndex
+    subsectionsNumber
+    proofSet
+    upgradePurpose {
+      __typename
+      ... on ConsensusParametersPurpose {
+        witnessIndex
+        checksum
+      }
+      ... on StateTransitionPurpose {
+        root
+      }
+    }
   }
 }

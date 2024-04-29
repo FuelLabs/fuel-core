@@ -4,6 +4,7 @@ use crate::{
     blockchain::primitives::DaBlockHeight,
     fuel_crypto,
     fuel_types::{
+        BlockHeight,
         Bytes32,
         Nonce,
     },
@@ -113,7 +114,6 @@ impl RelayedTransaction {
         }
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     /// Get the canonically serialized transaction
     pub fn serialized_transaction(&self) -> &[u8] {
         match self {
@@ -147,4 +147,17 @@ impl From<RelayedTransactionV1> for RelayedTransaction {
     fn from(relayed_transaction: RelayedTransactionV1) -> Self {
         RelayedTransaction::V1(relayed_transaction)
     }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// Potential states for the relayed transaction
+pub enum RelayedTransactionStatus {
+    /// Transaction was included in a block, but the execution was reverted
+    Failed {
+        /// The height of the block that processed this transaction
+        block_height: BlockHeight,
+        /// The actual failure reason for why the forced transaction was not included
+        failure: String,
+    },
 }

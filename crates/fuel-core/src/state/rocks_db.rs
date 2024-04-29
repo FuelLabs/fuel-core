@@ -470,10 +470,22 @@ where
                         prefix,
                         convert_to_rocksdb_direction(direction),
                     );
+
+                    // Setting prefix on the RocksDB level to optimize iteration.
                     let mut opts = ReadOptions::default();
                     opts.set_prefix_same_as_start(true);
 
-                    self._iter_all(column, opts, iter_mode).into_boxed()
+                    let prefix = prefix.to_vec();
+                    self._iter_all(column, opts, iter_mode)
+                        // Not all tables has a prefix set, so we need to filter out the keys.
+                        .take_while(move |item| {
+                            if let Ok((key, _)) = item {
+                                key.starts_with(prefix.as_slice())
+                            } else {
+                                true
+                            }
+                        })
+                        .into_boxed()
                 }
             }
             (None, Some(start)) => {
@@ -584,7 +596,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(Default::default(), changes)?;
+            self.commit_changes(None, changes)?;
 
             Ok(len)
         }
@@ -593,7 +605,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(Default::default(), changes)?;
+            self.commit_changes(None, changes)?;
             Ok(())
         }
     }
@@ -668,8 +680,7 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(Default::default(), HashMap::from_iter(ops))
-            .unwrap();
+        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -685,8 +696,7 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(Default::default(), HashMap::from_iter(ops))
-            .unwrap();
+        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }

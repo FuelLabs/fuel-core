@@ -11,6 +11,7 @@ use crate::{
         create_contract_output,
         create_message_predicate_from_message,
     },
+    types::GasPrice,
     Config,
     Error,
 };
@@ -24,11 +25,15 @@ use fuel_core_types::{
         input::coin::CoinPredicate,
         Address,
         AssetId,
+        ConsensusParameters,
         Contract,
+        Finalizable,
         Input,
         Output,
+        PredicateParameters,
         Transaction,
         TransactionBuilder,
+        TxParameters,
         UniqueIdentifier,
         UtxoId,
     },
@@ -37,15 +42,6 @@ use fuel_core_types::{
         CheckError,
         Checked,
     },
-};
-
-use crate::types::GasPrice;
-use fuel_core_chain_config::ChainConfig;
-use fuel_core_types::fuel_tx::{
-    ConsensusParameters,
-    Finalizable,
-    PredicateParameters,
-    TxParameters,
 };
 use std::{
     cmp::Reverse,
@@ -68,9 +64,15 @@ async fn check_unwrap_tx_with_gas_price(
     gas_price: GasPrice,
 ) -> Checked<Transaction> {
     let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-    check_single_tx(tx, Default::default(), config, &gas_price_provider)
-        .await
-        .expect("Transaction should be checked")
+    check_single_tx(
+        tx,
+        Default::default(),
+        config.utxo_validation,
+        &ConsensusParameters::default(),
+        &gas_price_provider,
+    )
+    .await
+    .expect("Transaction should be checked")
 }
 
 async fn check_tx(
@@ -87,7 +89,14 @@ async fn check_tx_with_gas_price(
     gas_price: GasPrice,
 ) -> Result<Checked<Transaction>, Error> {
     let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-    check_single_tx(tx, Default::default(), config, &gas_price_provider).await
+    check_single_tx(
+        tx,
+        Default::default(),
+        config.utxo_validation,
+        &ConsensusParameters::default(),
+        &gas_price_provider,
+    )
+    .await
 }
 
 #[tokio::test]
@@ -968,30 +977,6 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 }
 
 #[tokio::test]
-async fn tx_rejected_when_input_message_id_is_spent() {
-    let mut context = TextContext::default();
-    let (message, input) = create_message_predicate_from_message(5_000, 0);
-
-    let tx = TransactionBuilder::script(vec![], vec![])
-        .script_gas_limit(GAS_LIMIT)
-        .add_input(input)
-        .finalize_as_transaction();
-
-    context.database_mut().insert_message(message.clone());
-    context.database_mut().spend_message(*message.id());
-    let mut txpool = context.build();
-
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
-    let err = txpool.insert_single(tx).expect_err("should fail");
-
-    // check error
-    assert!(matches!(
-        err,
-        Error::NotInsertedInputMessageSpent(msg_id) if msg_id == *message.id()
-    ));
-}
-
-#[tokio::test]
 async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
     let context = TextContext::default();
     let (message, input) = create_message_predicate_from_message(5000, 0);
@@ -1195,13 +1180,6 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
     consensus_parameters.set_predicate_params(
         PredicateParameters::default().with_max_gas_per_predicate(gas_limit),
     );
-    let config = Config {
-        chain_config: ChainConfig {
-            consensus_parameters,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
 
     let coin = context
         .custom_predicate(
@@ -1211,7 +1189,7 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
             vec![op::jmp(RegId::ZERO)].into_iter().collect(),
             None,
         )
-        .into_estimated(&config.chain_config.consensus_parameters);
+        .into_estimated(&consensus_parameters);
 
     let tx = TransactionBuilder::script(vec![], vec![])
         .script_gas_limit(GAS_LIMIT)

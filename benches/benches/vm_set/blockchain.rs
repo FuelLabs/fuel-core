@@ -16,6 +16,7 @@ use fuel_core::{
         balances::BalancesInitializer,
         database_description::on_chain::OnChain,
         state::StateInitializer,
+        GenesisDatabase,
     },
     service::Config,
     state::rocks_db::{
@@ -37,7 +38,10 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusHeader,
+    blockchain::header::{
+        ApplicationHeader,
+        ConsensusHeader,
+    },
     fuel_asm::{
         op,
         GTFArgs,
@@ -60,7 +64,7 @@ use rand::{
 };
 
 pub struct BenchDb {
-    db: Database,
+    db: GenesisDatabase,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
     _tmp_dir: ShallowTempDir,
 }
@@ -76,7 +80,7 @@ impl BenchDb {
 
         let state_size = crate::utils::get_state_size();
 
-        let mut database = Database::new(db);
+        let mut database = GenesisDatabase::new(db);
         database.init_contract_state(
             contract_id,
             (0..state_size).map(|_| {
@@ -122,16 +126,23 @@ impl BenchDb {
     }
 
     /// Creates a `VmDatabase` instance.
-    fn to_vm_database(&self) -> VmStorage<StorageTransaction<Database>> {
-        let header = ConsensusHeader {
+    fn to_vm_database(&self) -> VmStorage<StorageTransaction<GenesisDatabase>> {
+        let consensus = ConsensusHeader {
             prev_root: Default::default(),
             height: 1.into(),
             time: Tai64::UNIX_EPOCH,
             generated: (),
         };
+        let application = ApplicationHeader {
+            da_height: Default::default(),
+            consensus_parameters_version: 0,
+            generated: (),
+            state_transition_bytecode_version: 0,
+        };
         VmStorage::new(
             self.db.clone().into_transaction(),
-            &header,
+            &consensus,
+            &application,
             ContractId::zeroed(),
         )
     }

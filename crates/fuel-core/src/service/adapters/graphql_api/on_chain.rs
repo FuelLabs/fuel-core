@@ -17,18 +17,30 @@ use fuel_core_storage::{
         IteratorOverTable,
     },
     not_found,
-    tables::FuelBlocks,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
     Error as StorageError,
     Result as StorageResult,
+    StorageAsRef,
 };
-use fuel_core_txpool::types::ContractId;
+use fuel_core_txpool::types::{
+    ContractId,
+    TxId,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::DaBlockHeight,
     },
     entities::relayer::message::Message,
-    fuel_tx::AssetId,
+    fuel_tx::{
+        AssetId,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         Nonce,
@@ -38,6 +50,24 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 impl DatabaseBlocks for Database {
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+        Ok(self
+            .storage::<Transactions>()
+            .get(tx_id)?
+            .ok_or(not_found!(Transactions))?
+            .into_owned())
+    }
+
+    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        let block = self
+            .storage_as_ref::<FuelBlocks>()
+            .get(height)?
+            .ok_or_else(|| not_found!(FuelBlocks))?
+            .into_owned();
+
+        Ok(block)
+    }
+
     fn blocks(
         &self,
         height: Option<BlockHeight>,
@@ -53,6 +83,13 @@ impl DatabaseBlocks for Database {
             .transpose()
             .ok_or(not_found!("BlockHeight"))?
     }
+
+    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
+        self.storage_as_ref::<SealedBlockConsensus>()
+            .get(id)
+            .map(|c| c.map(|c| c.into_owned()))?
+            .ok_or(not_found!(SealedBlockConsensus))
+    }
 }
 
 impl DatabaseMessages for Database {
@@ -64,10 +101,6 @@ impl DatabaseMessages for Database {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
-    }
-
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.message_is_spent(nonce)
     }
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
