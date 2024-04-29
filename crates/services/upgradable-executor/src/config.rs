@@ -18,7 +18,7 @@ pub struct Config {
 impl From<&Config> for ExecutionOptions {
     fn from(value: &Config) -> Self {
         Self {
-            utxo_validation: value.utxo_validation_default,
+            extra_tx_checks: value.utxo_validation_default,
             backtrace: value.backtrace,
         }
     }
