@@ -9,6 +9,7 @@ use crate::{
         DaHeightTable,
         EventsHistory,
     },
+    Config,
 };
 use fuel_core_storage::test_helpers::{
     MockBasic,
@@ -68,7 +69,7 @@ fn test_insert_events() {
     db.storage
         .expect_get::<DaHeightTable>()
         .times(1)
-        .returning(|_| Ok(Some(Cow::Owned(0u64.into()))));
+        .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
     db.storage
         .expect_get::<DaHeightTable>()
         .returning(|_| Ok(Some(Cow::Owned(9u64.into()))));
@@ -125,7 +126,7 @@ fn insert_always_raises_da_height_monotonically() {
     db.storage
         .expect_get::<DaHeightTable>()
         .times(1)
-        .returning(|_| Ok(Some(Cow::Owned(0u64.into()))));
+        .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
     db.storage
         .expect_get::<DaHeightTable>()
         .returning(|_| Ok(None));
@@ -151,7 +152,7 @@ fn insert_fails_for_events_with_different_height() {
         db.storage
             .expect_get::<DaHeightTable>()
             .times(1)
-            .returning(|_| Ok(Some(Cow::Owned(0u64.into()))));
+            .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
         db.storage
             .expect_get::<DaHeightTable>()
             .returning(|_| Ok(None));
@@ -198,7 +199,7 @@ fn insert_fails_for_events_same_height_but_on_different_height() {
         db.storage
             .expect_get::<DaHeightTable>()
             .times(1)
-            .returning(|_| Ok(Some(Cow::Owned(0u64.into()))));
+            .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
         db.storage
             .expect_get::<DaHeightTable>()
             .returning(|_| Ok(None));

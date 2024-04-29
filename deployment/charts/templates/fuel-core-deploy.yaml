@@ -10,8 +10,8 @@ spec:
     matchLabels:
       app: {{ .Values.app.selector_name }}
   endpoints:
-    - path: /v1/metrics
-      port: http
+  - path: /v1/metrics
+    port: http
 {{- end }}
 ---
 {{- if .Values.app.volume.pvc_clone_enabled }}
@@ -129,7 +129,7 @@ spec:
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
-          command: [ "./fuel-core" ]
+          command: ["./fuel-core"]
           args:
             - "run"
             - "--ip"
@@ -171,6 +171,10 @@ spec:
           {{- if .Values.app.relayer_da_finalization }}
             - "--relayer-da-finalization"
             - "{{ .Values.app.relayer_da_finalization }}"
+          {{- end }}
+          {{- if .Values.app.relayer_da_deploy_height }}
+            - "--relayer-da-deploy-height"
+            - "{{ .Values.app.relayer_da_deploy_height }}"
           {{- end }}
           {{- if .Values.app.relayer_log_page_size }}
             - "--relayer-log-page-size"

@@ -3,9 +3,12 @@ use clap::{
     Args,
 };
 use core::time::Duration;
-use fuel_core::relayer::{
-    Config,
-    H160,
+use fuel_core::{
+    relayer::{
+        Config,
+        H160,
+    },
+    types::blockchain::primitives::DaBlockHeight,
 };
 use std::str::FromStr;
 
@@ -27,6 +30,10 @@ pub struct RelayerArgs {
     /// Ethereum contract address. Create EthAddress into fuel_types
     #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, env)]
     pub eth_v2_listening_contracts: Vec<H160>,
+
+    /// Number of da block that the contract is deployed at.
+    #[clap(long = "relayer-da-deploy-height", default_value_t = Config::DEFAULT_DA_DEPLOY_HEIGHT, env)]
+    pub da_deploy_height: u64,
 
     /// Number of pages or blocks containing logs that
     /// should be downloaded in a single call to the da layer
@@ -58,6 +65,7 @@ impl RelayerArgs {
         }
 
         let config = Config {
+            da_deploy_height: DaBlockHeight(self.da_deploy_height),
             relayer: self.relayer,
             eth_v2_listening_contracts: self.eth_v2_listening_contracts,
             log_page_size: self.log_page_size,
