@@ -622,7 +622,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(AtomicView::latest_height(&database), None);
         }
 
         #[test]
@@ -782,7 +782,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(AtomicView::latest_height(&database), None);
         }
 
         #[test]
@@ -903,10 +903,7 @@ mod tests {
             database_description::relayer::Relayer,
             DatabaseHeight,
         };
-        use fuel_core_relayer::storage::{
-            DaHeightTable,
-            EventsHistory,
-        };
+        use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::transactional::WriteTransaction;
 
         #[test]
@@ -939,12 +936,18 @@ mod tests {
 
             // When
             database
-                .storage_as_mut::<DaHeightTable>()
-                .insert(&(), &DaBlockHeight::default())
+                .storage_as_mut::<MetadataTable<Relayer>>()
+                .insert(
+                    &(),
+                    &DatabaseMetadata::<DaBlockHeight>::V1 {
+                        version: Default::default(),
+                        height: Default::default(),
+                    },
+                )
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(AtomicView::latest_height(&database), None);
         }
 
         #[test]
@@ -1008,9 +1011,13 @@ mod tests {
                 .unwrap();
 
             // When
-            let result = database
-                .storage_as_mut::<DaHeightTable>()
-                .insert(&(), &DaBlockHeight::default());
+            let result = database.storage_as_mut::<MetadataTable<Relayer>>().insert(
+                &(),
+                &DatabaseMetadata::<DaBlockHeight>::V1 {
+                    version: Default::default(),
+                    height: Default::default(),
+                },
+            );
 
             // Then
             assert!(result.is_err());
