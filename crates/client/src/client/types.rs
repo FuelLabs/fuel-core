@@ -84,13 +84,13 @@ pub mod primitives {
     pub type TransactionId = Bytes32;
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct TransactionResponse {
     pub transaction: Transaction,
     pub status: TransactionStatus,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum TransactionStatus {
     Submitted {
         submitted_at: Tai64,
