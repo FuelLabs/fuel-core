@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
-- [#1868](https://github.com/FuelLabs/fuel-core/pull/1868): Include the `event_inbox_root` in header hash.
+#### Breaking
+
+- [#1868](https://github.com/FuelLabs/fuel-core/pull/1868): Include the `event_inbox_root` in the header hash. Changed types of the `transactions_count` to `u16` and `message_receipt_count` to `u32` instead of `u64`. Updated the application hash root calculation to not pad numbers.
 - [#1871](https://github.com/FuelLabs/fuel-core/pull/1871): Fixed `block` endpoint to return fetch the blocks from both databases after regenesis.
 - [#1856](https://github.com/FuelLabs/fuel-core/pull/1856): Replaced instances of `Union` with `Enum` for GraphQL definitions of `ConsensusParametersVersion` and related types. This is needed because `Union` does not support multiple `Version`s inside discriminants or empty variants. 
 
