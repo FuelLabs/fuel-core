@@ -11,6 +11,7 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
+            consensus_parameters_provider,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ConsensusParametersProvider,
@@ -32,7 +33,6 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::consensus_parameters_provider;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 

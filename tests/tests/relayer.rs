@@ -294,6 +294,81 @@ async fn can_find_failed_relayed_tx() {
     assert_eq!(expected, actual);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn can_restart_node_with_relayer_data() {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let mut config = Config::local_node();
+    config.relayer = Some(relayer::Config::default());
+    let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
+    let eth_node = MockMiddleware::default();
+    let contract_address = relayer_config.eth_v2_listening_contracts[0];
+
+    // setup a real spendable message
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
+    let pk = secret_key.public_key();
+    let recipient = Input::owner(&pk);
+    let sender = Address::zeroed();
+    let amount = 100;
+    let nonce = Nonce::from(2u64);
+    let logs = vec![make_message_event(
+        nonce,
+        5,
+        contract_address,
+        Some(sender.into()),
+        Some(recipient.into()),
+        Some(amount),
+        None,
+        0,
+    )];
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    // Setup the eth node with a block high enough that there
+    // will be some finalized blocks.
+    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    let eth_node = Arc::new(eth_node);
+    let eth_node_handle = spawn_eth_node(eth_node).await;
+
+    relayer_config.relayer = Some(
+        format!("http://{}", eth_node_handle.address)
+            .as_str()
+            .try_into()
+            .unwrap(),
+    );
+
+    let capacity = 1024 * 1024;
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+
+    {
+        // Given
+        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
+
+        let service = FuelService::from_combined_database(database, config.clone())
+            .await
+            .unwrap();
+        let client = FuelClient::from(service.bound_address);
+        client.health().await.unwrap();
+
+        for _ in 0..5 {
+            let tx = Transaction::default_test_tx();
+            client.submit_and_await_commit(&tx).await.unwrap();
+        }
+
+        service.stop_and_await().await.unwrap();
+    }
+
+    {
+        // When
+        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
+        let service = FuelService::from_combined_database(database, config)
+            .await
+            .unwrap();
+        let client = FuelClient::from(service.bound_address);
+
+        // Then
+        client.health().await.unwrap();
+        service.stop_and_await().await.unwrap();
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn make_message_event(
     nonce: Nonce,

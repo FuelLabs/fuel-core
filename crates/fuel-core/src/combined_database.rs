@@ -147,6 +147,11 @@ impl CombinedDatabase {
         &self.relayer
     }
 
+    #[cfg(any(feature = "test-helpers", test))]
+    pub fn relayer_mut(&mut self) -> &mut Database<Relayer> {
+        &mut self.relayer
+    }
+
     #[cfg(feature = "test-helpers")]
     pub fn read_state_config(&self) -> StorageResult<StateConfig> {
         use fuel_core_chain_config::AddTable;
