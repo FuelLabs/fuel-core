@@ -521,7 +521,7 @@ async fn can_get_message_proof() {
                 &generated_message_id,
                 message_proof_index,
                 &message_proof_set,
-                result.message_block_header.message_receipt_count,
+                result.message_block_header.message_receipt_count as u64,
             ));
 
             // Generate a proof to compare

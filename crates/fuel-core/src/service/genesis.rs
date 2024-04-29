@@ -238,6 +238,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
         message_ids,
         events,
     )
+    .expect("The block is valid; qed")
 }
 
 #[cfg(test)]

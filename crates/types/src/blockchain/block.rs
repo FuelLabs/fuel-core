@@ -14,7 +14,10 @@ use super::{
     },
 };
 use crate::{
-    blockchain::header::BlockHeaderV1,
+    blockchain::header::{
+        BlockHeaderError,
+        BlockHeaderV1,
+    },
     fuel_tx::{
         Transaction,
         TxId,
@@ -88,12 +91,16 @@ impl Block<Transaction> {
         transactions: Vec<Transaction>,
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
-    ) -> Self {
+    ) -> Result<Self, BlockHeaderError> {
         let inner = BlockV1 {
-            header: header.generate(&transactions, outbox_message_ids, event_inbox_root),
+            header: header.generate(
+                &transactions,
+                outbox_message_ids,
+                event_inbox_root,
+            )?,
             transactions,
         };
-        Block::V1(inner)
+        Ok(Block::V1(inner))
     }
 
     /// Try creating a new full fuel block from a [`BlockHeader`] and
@@ -224,7 +231,7 @@ impl PartialFuelBlock {
         self,
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
-    ) -> Block {
+    ) -> Result<Block, BlockHeaderError> {
         Block::new(
             self.header,
             self.transactions,

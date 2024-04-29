@@ -5,6 +5,7 @@ use crate::client::schema::{
     PageInfo,
     Signature,
     Tai64Timestamp,
+    U16,
     U32,
     U64,
 };
@@ -121,8 +122,8 @@ pub struct Header {
     pub da_height: U64,
     pub consensus_parameters_version: U32,
     pub state_transition_bytecode_version: U32,
-    pub transactions_count: U64,
-    pub message_receipt_count: U64,
+    pub transactions_count: U16,
+    pub message_receipt_count: U32,
     pub transactions_root: Bytes32,
     pub message_outbox_root: Bytes32,
     pub event_inbox_root: Bytes32,
