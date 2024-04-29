@@ -137,6 +137,7 @@ fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
         &[],
         Default::default(),
     )
+    .unwrap()
 }
 
 impl Executor<Vec<ArcPoolTx>> for MockExecutor {
