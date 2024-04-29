@@ -3,7 +3,10 @@
 use crate::{
     blockchain::{
         block::Block,
-        header::ConsensusParametersVersion,
+        header::{
+            BlockHeaderError,
+            ConsensusParametersVersion,
+        },
     },
     entities::{
         coins::coin::Coin,
