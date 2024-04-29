@@ -1,7 +1,8 @@
-pub mod default_gas_costs;
-pub mod import;
-
-pub use fuel_core_storage::vm_storage::VmStorage;
+use fuel_core::database::GenesisDatabase;
+use fuel_core_storage::transactional::{
+    IntoTransaction,
+    StorageTransaction,
+};
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -29,16 +30,16 @@ use fuel_core_types::{
         *,
     },
 };
-use fuel_core::database::GenesisDatabase;
-use fuel_core_storage::transactional::{
-    IntoTransaction,
-    StorageTransaction,
-};
-pub use rand::Rng;
 use std::{
     iter,
     mem,
 };
+
+pub mod default_gas_costs;
+pub mod import;
+
+pub use fuel_core_storage::vm_storage::VmStorage;
+pub use rand::Rng;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
