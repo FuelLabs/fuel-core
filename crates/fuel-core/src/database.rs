@@ -85,34 +85,38 @@ pub mod state;
 pub mod storage;
 pub mod transactions;
 
-#[derive(Clone, Debug)]
-pub struct UncheckedDatabase<Description = OnChain>
-where
-    Description: DatabaseDescription,
-{
-    data: DataSource<Description>,
-}
+#[derive(Default, Debug, Copy, Clone)]
+pub struct GenesisStage;
 
-impl<Description> UncheckedDatabase<Description>
-where
-    Description: DatabaseDescription,
-{
-    pub fn into_checked(self) -> Database<Description> {
-        Database::<Description> {
-            height: SharedMutex::new(None),
-            inner: self,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Database<Description = OnChain>
+#[derive(Debug, Clone)]
+pub struct RegularStage<Description>
 where
     Description: DatabaseDescription,
 {
     /// Cached value from Metadata table, used to speed up lookups.
     height: SharedMutex<Option<Description::Height>>,
-    inner: UncheckedDatabase<Description>,
+}
+
+impl<Description> Default for RegularStage<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn default() -> Self {
+        Self {
+            height: SharedMutex::new(None),
+        }
+    }
+}
+
+pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
+
+#[derive(Clone, Debug)]
+pub struct Database<Description = OnChain, Stage = RegularStage<Description>>
+where
+    Description: DatabaseDescription,
+{
+    data: DataSource<Description>,
+    stage: Stage,
 }
 
 impl Database<OnChain> {
@@ -143,21 +147,38 @@ where
     }
 }
 
+impl<Description> GenesisDatabase<Description>
+where
+    Description: DatabaseDescription,
+{
+    pub fn new(data_source: DataSource<Description>) -> Self {
+        Self {
+            stage: GenesisStage,
+            data: data_source,
+        }
+    }
+}
+
 impl<Description> Database<Description>
 where
     Description: DatabaseDescription,
-    UncheckedDatabase<Description>:
+    Database<Description>:
         StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
     pub fn new(data_source: DataSource<Description>) -> Self {
-        let inner = UncheckedDatabase { data: data_source };
-        let height = inner
+        let mut database = Self {
+            stage: RegularStage {
+                height: SharedMutex::new(None),
+            },
+            data: data_source,
+        };
+        let height = database
             .latest_height()
             .expect("Failed to get latest height during creation of the database");
-        Self {
-            height: SharedMutex::new(height),
-            inner,
-        }
+
+        database.stage.height = SharedMutex::new(height);
+
+        database
     }
 
     #[cfg(feature = "rocksdb")]
@@ -165,96 +186,46 @@ where
         use anyhow::Context;
         let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).with_context(|| format!("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db e.g. `rm -rf {path:?}`"))?;
 
-        Ok(Database::new(Arc::new(db)))
+        Ok(Self::new(Arc::new(db)))
     }
 
     /// Converts to an unchecked database.
     /// Panics if the height is already set.
-    pub fn into_unchecked(self) -> UncheckedDatabase<Description> {
-        assert!(!self.height.lock().is_some());
-        self.inner
+    pub fn into_genesis(self) -> GenesisDatabase<Description> {
+        assert!(
+            !self.stage.height.lock().is_some(),
+            "Height is already set for `{}`",
+            Description::name()
+        );
+        GenesisDatabase::new(self.data)
     }
 }
 
-impl<Description> UncheckedDatabase<Description>
+impl<Description, Stage> Database<Description, Stage>
 where
     Description: DatabaseDescription,
+    Stage: Default,
 {
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
-        Self { data }
+        Self {
+            data,
+            stage: Stage::default(),
+        }
     }
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp() -> Self {
         let data =
             Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
-        Self { data }
+        Self {
+            data,
+            stage: Stage::default(),
+        }
     }
 }
 
-impl<Description> Database<Description>
-where
-    Description: DatabaseDescription,
-{
-    pub fn in_memory() -> Self {
-        UncheckedDatabase::in_memory().into_checked()
-    }
-
-    #[cfg(feature = "rocksdb")]
-    pub fn rocksdb_temp() -> Self {
-        UncheckedDatabase::in_memory().into_checked()
-    }
-}
-
-impl<Description> KeyValueInspect for Database<Description>
-where
-    Description: DatabaseDescription,
-{
-    type Column = Description::Column;
-
-    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
-        KeyValueInspect::exists(&self.inner, key, column)
-    }
-
-    fn size_of_value(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-    ) -> StorageResult<Option<usize>> {
-        KeyValueInspect::size_of_value(&self.inner, key, column)
-    }
-
-    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        KeyValueInspect::get(&self.inner, key, column)
-    }
-
-    fn read(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
-        KeyValueInspect::read(&self.inner, key, column, buf)
-    }
-}
-
-impl<Description> IterableStore for Database<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn iter_store(
-        &self,
-        column: Self::Column,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
-        direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
-        IterableStore::iter_store(&self.inner, column, prefix, start, direction)
-    }
-}
-
-impl<Description> KeyValueInspect for UncheckedDatabase<Description>
+impl<Description, Stage> KeyValueInspect for Database<Description, Stage>
 where
     Description: DatabaseDescription,
 {
@@ -286,7 +257,7 @@ where
     }
 }
 
-impl<Description> IterableStore for UncheckedDatabase<Description>
+impl<Description, Stage> IterableStore for Database<Description, Stage>
 where
     Description: DatabaseDescription,
 {
@@ -306,28 +277,10 @@ where
 /// Construct an ephemeral database
 /// uses rocksdb when rocksdb features are enabled
 /// uses in-memory when rocksdb features are disabled
-impl<Description> Default for UncheckedDatabase<Description>
+impl<Description, Stage> Default for Database<Description, Stage>
 where
     Description: DatabaseDescription,
-{
-    fn default() -> Self {
-        #[cfg(not(feature = "rocksdb"))]
-        {
-            Self::in_memory()
-        }
-        #[cfg(feature = "rocksdb")]
-        {
-            Self::rocksdb_temp()
-        }
-    }
-}
-
-/// Construct an ephemeral database
-/// uses rocksdb when rocksdb features are enabled
-/// uses in-memory when rocksdb features are disabled
-impl<Description> Default for Database<Description>
-where
-    Description: DatabaseDescription,
+    Stage: Default,
 {
     fn default() -> Self {
         #[cfg(not(feature = "rocksdb"))]
@@ -347,7 +300,7 @@ impl AtomicView for Database<OnChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock()
+        *self.stage.height.lock()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -367,7 +320,7 @@ impl AtomicView for Database<OffChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock()
+        *self.stage.height.lock()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -386,7 +339,7 @@ impl AtomicView for Database<Relayer> {
     type Height = DaBlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock()
+        *self.stage.height.lock()
     }
 
     fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
@@ -438,27 +391,19 @@ impl Modifiable for Database<Relayer> {
     }
 }
 
-impl Modifiable for UncheckedDatabase<OnChain> {
+impl Modifiable for GenesisDatabase<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
     }
 }
 
-impl Modifiable for UncheckedDatabase<OffChain> {
+impl Modifiable for GenesisDatabase<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
     }
 }
 
-#[cfg(feature = "relayer")]
-impl Modifiable for UncheckedDatabase<Relayer> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
-    }
-}
-
-#[cfg(not(feature = "relayer"))]
-impl Modifiable for UncheckedDatabase<Relayer> {
+impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
     }
@@ -519,7 +464,7 @@ where
     }
 
     let new_height = new_heights.into_iter().last();
-    let prev_height = *database.height.lock();
+    let prev_height = *database.stage.height.lock();
 
     match (prev_height, new_height) {
         (None, None) => {
@@ -583,11 +528,8 @@ where
     };
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
-    let mut guard = database.height.lock();
-    database
-        .inner
-        .data
-        .commit_changes(new_height, updated_changes)?;
+    let mut guard = database.stage.height.lock();
+    database.data.commit_changes(new_height, updated_changes)?;
 
     // Update the block height
     if let Some(new_height) = new_height {

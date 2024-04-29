@@ -3,7 +3,7 @@ use super::{
     task_manager::TaskManager,
 };
 use crate::{
-    combined_database::CombinedDatabase,
+    combined_database::CombinedGenesisDatabase,
     database::database_description::{
         off_chain::OffChain,
         on_chain::OnChain,
@@ -68,7 +68,7 @@ mod on_chain;
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
 pub struct SnapshotImporter {
-    db: CombinedDatabase,
+    db: CombinedGenesisDatabase,
     task_manager: TaskManager<()>,
     genesis_block: Block,
     snapshot_reader: SnapshotReader,
@@ -77,7 +77,7 @@ pub struct SnapshotImporter {
 
 impl SnapshotImporter {
     fn new(
-        db: CombinedDatabase,
+        db: CombinedGenesisDatabase,
         genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
@@ -94,7 +94,7 @@ impl SnapshotImporter {
     }
 
     pub async fn import(
-        db: CombinedDatabase,
+        db: CombinedGenesisDatabase,
         genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
@@ -155,7 +155,7 @@ impl SnapshotImporter {
 
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
-        let db = self.db.on_chain().clone().into_unchecked();
+        let db = self.db.on_chain().clone();
 
         let migration_name = migration_name::<TableBeingWritten, TableBeingWritten>();
         let progress_reporter = self
@@ -203,7 +203,7 @@ impl SnapshotImporter {
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
 
-        let db = self.db.off_chain().clone().into_unchecked();
+        let db = self.db.off_chain().clone();
 
         let migration_name = migration_name::<TableInSnapshot, TableBeingWritten>();
         let progress_reporter = self

@@ -1,6 +1,6 @@
-//! Wrappers for synchronization constainers.
+//! Wrappers for synchronization containers.
 
-use std::ops::Deref;
+use core::ops::Deref;
 
 /// Alias for `Arc<T>`
 pub type Shared<T> = std::sync::Arc<T>;

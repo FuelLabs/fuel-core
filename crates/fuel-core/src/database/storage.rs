@@ -30,35 +30,7 @@ use fuel_core_storage::{
     StorageWrite,
 };
 
-use super::UncheckedDatabase;
-
-impl<Description, M> StorageInspect<M> for UncheckedDatabase<Description>
-where
-    Description: DatabaseDescription,
-    M: Mappable,
-    for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
-{
-    type Error = StorageError;
-
-    fn get(&self, key: &M::Key) -> StorageResult<Option<Cow<M::OwnedValue>>> {
-        let storage = StructuredStorage::new(self);
-        let value = storage.storage::<M>().get(key)?;
-
-        if let Some(cow) = value {
-            Ok(Some(Cow::Owned(cow.into_owned())))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {
-        StructuredStorage::new(self)
-            .storage::<M>()
-            .contains_key(key)
-    }
-}
-
-impl<Description, M> StorageInspect<M> for Database<Description>
+impl<Description, Stage, M> StorageInspect<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -85,7 +57,7 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-impl<Description, M> StorageMutate<M> for Database<Description>
+impl<Description, Stage, M> StorageMutate<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -120,7 +92,7 @@ where
     }
 }
 
-impl<M, Description> StorageSize<M> for Database<Description>
+impl<Description, Stage, M> StorageSize<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -131,7 +103,8 @@ where
     }
 }
 
-impl<Description, Key, M> MerkleRootStorage<Key, M> for Database<Description>
+impl<Description, Stage, Key, M> MerkleRootStorage<Key, M>
+    for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -142,7 +115,7 @@ where
     }
 }
 
-impl<Description, M> StorageRead<M> for Database<Description>
+impl<Description, Stage, M> StorageRead<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -158,7 +131,7 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-impl<M, Description> StorageWrite<M> for Database<Description>
+impl<Description, Stage, M> StorageWrite<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -205,7 +178,7 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-impl<Description, M> StorageBatchMutate<M> for Database<Description>
+impl<Description, Stage, M> StorageBatchMutate<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
