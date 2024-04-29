@@ -307,6 +307,31 @@ impl PartialBlockHeader {
         ConsensusType::PoA
     }
 }
+impl From<&BlockHeader> for PartialBlockHeader {
+    fn from(header: &BlockHeader) -> Self {
+        let ConsensusHeader {
+            prev_root,
+            height,
+            time,
+            ..
+        } = *header.consensus();
+        PartialBlockHeader {
+            application: ApplicationHeader {
+                da_height: header.da_height,
+                consensus_parameters_version: header.consensus_parameters_version,
+                state_transition_bytecode_version: header
+                    .state_transition_bytecode_version,
+                generated: Empty {},
+            },
+            consensus: ConsensusHeader {
+                prev_root,
+                height,
+                time,
+                generated: Empty {},
+            },
+        }
+    }
+}
 
 impl BlockHeader {
     /// Re-generate the header metadata.
