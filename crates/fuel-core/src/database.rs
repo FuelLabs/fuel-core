@@ -98,9 +98,9 @@ where
     Description: DatabaseDescription,
 {
     pub fn into_checked(self) -> Database<Description> {
-        Database {
+        Database::<Description> {
             height: SharedMutex::new(None),
-            data: self.data,
+            inner: self,
         }
     }
 }
@@ -112,7 +112,7 @@ where
 {
     /// Cached value from Metadata table, used to speed up lookups.
     height: SharedMutex<Option<Description::Height>>,
-    data: DataSource<Description>,
+    inner: UncheckedDatabase<Description>,
 }
 
 impl Database<OnChain> {
@@ -149,16 +149,7 @@ where
     Self: StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
     pub fn new(data_source: DataSource<Description>) -> Self {
-        let database = Self {
-            height: SharedMutex::new(None),
-            data: data_source,
-        };
-        let height = database
-            .latest_height()
-            .expect("Failed to get latest height during creation of the database");
-        *database.height.lock() = height;
-
-        database
+        (UncheckedDatabase { data: data_source }).into_checked()
     }
 
     #[cfg(feature = "rocksdb")]
@@ -173,7 +164,7 @@ where
     /// Panics if the height is already set.
     pub fn into_unchecked(self) -> UncheckedDatabase<Description> {
         assert!(!self.height.lock().is_some());
-        UncheckedDatabase { data: self.data }
+        self.inner
     }
 }
 
@@ -215,7 +206,7 @@ where
     type Column = Description::Column;
 
     fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
-        self.data.as_ref().exists(key, column)
+        KeyValueInspect::exists(&self.inner, key, column)
     }
 
     fn size_of_value(
@@ -223,11 +214,11 @@ where
         key: &[u8],
         column: Self::Column,
     ) -> StorageResult<Option<usize>> {
-        self.data.as_ref().size_of_value(key, column)
+        KeyValueInspect::size_of_value(&self.inner, key, column)
     }
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        self.data.as_ref().get(key, column)
+        KeyValueInspect::get(&self.inner, key, column)
     }
 
     fn read(
@@ -236,7 +227,7 @@ where
         column: Self::Column,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.data.as_ref().read(key, column, buf)
+        KeyValueInspect::read(&self.inner, key, column, buf)
     }
 }
 
@@ -251,9 +242,7 @@ where
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        self.data
-            .as_ref()
-            .iter_store(column, prefix, start, direction)
+        IterableStore::iter_store(&self.inner, column, prefix, start, direction)
     }
 }
 
@@ -588,8 +577,8 @@ where
     // Atomically commit the changes to the database, and to the mutex-protected field.
     let mut guard = database.height.lock();
     database
+        .inner
         .data
-        .as_ref()
         .commit_changes(new_height, updated_changes)?;
 
     // Update the block height
