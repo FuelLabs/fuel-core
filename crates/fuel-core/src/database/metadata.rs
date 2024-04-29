@@ -5,6 +5,7 @@ use crate::database::{
     },
     Database,
     Error as DatabaseError,
+    UncheckedDatabase,
 };
 use fuel_core_storage::{
     blueprint::plain::Plain,
@@ -42,7 +43,7 @@ where
     }
 }
 
-impl<Description> Database<Description>
+impl<Description> UncheckedDatabase<Description>
 where
     Description: DatabaseDescription,
     Self: StorageInspect<MetadataTable<Description>, Error = StorageError>,
@@ -71,5 +72,21 @@ where
         let metadata = metadata.map(|metadata| *metadata.height());
 
         Ok(metadata)
+    }
+}
+
+impl<Description> Database<Description>
+where
+    Description: DatabaseDescription,
+    UncheckedDatabase<Description>:
+        StorageInspect<MetadataTable<Description>, Error = StorageError>,
+{
+    /// Ensures the version is correct.
+    pub fn check_version(&self) -> StorageResult<()> {
+        self.inner.check_version()
+    }
+
+    pub fn latest_height(&self) -> StorageResult<Option<Description::Height>> {
+        self.inner.latest_height()
     }
 }

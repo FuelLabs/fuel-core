@@ -146,10 +146,18 @@ where
 impl<Description> Database<Description>
 where
     Description: DatabaseDescription,
-    Self: StorageInspect<MetadataTable<Description>, Error = StorageError>,
+    UncheckedDatabase<Description>:
+        StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
     pub fn new(data_source: DataSource<Description>) -> Self {
-        (UncheckedDatabase { data: data_source }).into_checked()
+        let inner = UncheckedDatabase { data: data_source };
+        let height = inner
+            .latest_height()
+            .expect("Failed to get latest height during creation of the database");
+        Self {
+            height: SharedMutex::new(height),
+            inner,
+        }
     }
 
     #[cfg(feature = "rocksdb")]
