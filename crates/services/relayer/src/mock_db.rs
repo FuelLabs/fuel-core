@@ -1,10 +1,7 @@
 #![allow(missing_docs)]
 
 use crate::ports::RelayerDb;
-use fuel_core_storage::{
-    not_found,
-    Result as StorageResult,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::{
@@ -133,11 +130,7 @@ impl RelayerDb for MockDb {
         Ok(())
     }
 
-    fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
-        self.data
-            .lock()
-            .unwrap()
-            .finalized_da_height
-            .ok_or(not_found!("FinalizedDaHeight for test"))
+    fn get_finalized_da_height(&self) -> Option<DaBlockHeight> {
+        self.data.lock().unwrap().finalized_da_height
     }
 }

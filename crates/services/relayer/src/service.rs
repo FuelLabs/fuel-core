@@ -63,6 +63,7 @@ type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 pub struct SharedState<D> {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
+    start_da_block_height: DaBlockHeight,
     database: D,
 }
 
@@ -178,6 +179,7 @@ where
 
         SharedState {
             synced,
+            start_da_block_height: self.config.da_deploy_height,
             database: self.database.clone(),
         }
     }
@@ -286,11 +288,13 @@ impl<D> SharedState<D> {
 
     /// Get finalized da height that represents last block from da layer that got finalized.
     /// Panics if height is not set as of initialization of the relayer.
-    pub fn get_finalized_da_height(&self) -> anyhow::Result<DaBlockHeight>
+    pub fn get_finalized_da_height(&self) -> DaBlockHeight
     where
         D: RelayerDb + 'static,
     {
-        self.database.get_finalized_da_height().map_err(Into::into)
+        self.database
+            .get_finalized_da_height()
+            .unwrap_or(self.start_da_block_height)
     }
 
     /// Getter for database field
@@ -330,7 +334,12 @@ where
     D: RelayerDb + 'static,
 {
     fn observed(&self) -> Option<u64> {
-        self.database.get_finalized_da_height().map(|h| *h).ok()
+        Some(
+            self.database
+                .get_finalized_da_height()
+                .map(|h| h.into())
+                .unwrap_or(self.config.da_deploy_height.0),
+        )
     }
 }
 

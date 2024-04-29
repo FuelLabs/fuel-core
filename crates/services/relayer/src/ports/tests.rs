@@ -5,10 +5,7 @@ use crate::{
         RelayerDb,
         Transactional,
     },
-    storage::{
-        DaHeightTable,
-        EventsHistory,
-    },
+    storage::EventsHistory,
     Config,
 };
 use fuel_core_storage::test_helpers::{
@@ -16,13 +13,13 @@ use fuel_core_storage::test_helpers::{
     MockStorage,
 };
 use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     entities::{
         Message,
         RelayedTransaction,
     },
     services::relayer::Event,
 };
-use std::borrow::Cow;
 
 type DBTx = MockStorage<MockBasic, MockDatabaseTransaction>;
 type ReturnDB = Box<dyn Fn() -> DBTx + Send + Sync>;
@@ -41,22 +38,21 @@ impl Transactional for MockDatabase {
     fn transaction(&mut self) -> Self::Transaction<'_> {
         (self.data)()
     }
+
+    fn latest_da_height(&self) -> Option<DaBlockHeight> {
+        Some(Config::DEFAULT_DA_DEPLOY_HEIGHT.into())
+    }
 }
 
 #[test]
 fn test_insert_events() {
     // Given
-    let same_height = 12;
+    let same_height = 12u64;
     let return_db_tx = move || {
         let mut db = DBTx::default();
         db.storage
             .expect_insert::<EventsHistory>()
             .times(1)
-            .returning(|_, _| Ok(None));
-        db.storage
-            .expect_insert::<DaHeightTable>()
-            .times(1)
-            .withf(move |_, v| **v == same_height)
             .returning(|_, _| Ok(None));
         db.data.expect_commit().returning(|| Ok(()));
         db
@@ -66,13 +62,6 @@ fn test_insert_events() {
         data: Box::new(return_db_tx),
         storage: Default::default(),
     };
-    db.storage
-        .expect_get::<DaHeightTable>()
-        .times(1)
-        .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
-    db.storage
-        .expect_get::<DaHeightTable>()
-        .returning(|_| Ok(Some(Cow::Owned(9u64.into()))));
 
     let mut m = Message::default();
     m.set_amount(10);
@@ -110,11 +99,6 @@ fn insert_always_raises_da_height_monotonically() {
         db.storage
             .expect_insert::<EventsHistory>()
             .returning(|_, _| Ok(None));
-        db.storage
-            .expect_insert::<DaHeightTable>()
-            .once()
-            .withf(move |_, v| *v == same_height)
-            .returning(|_, _| Ok(None));
         db.data.expect_commit().returning(|| Ok(()));
         db
     };
@@ -123,13 +107,6 @@ fn insert_always_raises_da_height_monotonically() {
         data: Box::new(return_db_tx),
         storage: Default::default(),
     };
-    db.storage
-        .expect_get::<DaHeightTable>()
-        .times(1)
-        .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
-    db.storage
-        .expect_get::<DaHeightTable>()
-        .returning(|_| Ok(None));
 
     // When
     let result = db.insert_events(&same_height, &events);
@@ -149,13 +126,6 @@ fn insert_fails_for_events_with_different_height() {
             data: Box::new(DBTx::default),
             storage: Default::default(),
         };
-        db.storage
-            .expect_get::<DaHeightTable>()
-            .times(1)
-            .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
-        db.storage
-            .expect_get::<DaHeightTable>()
-            .returning(|_| Ok(None));
 
         // When
         let result = db.insert_events(&last_height.into(), &events);
@@ -196,13 +166,6 @@ fn insert_fails_for_events_same_height_but_on_different_height() {
             data: Box::new(DBTx::default),
             storage: Default::default(),
         };
-        db.storage
-            .expect_get::<DaHeightTable>()
-            .times(1)
-            .returning(|_| Ok(Some(Cow::Owned(Config::DEFAULT_DA_DEPLOY_HEIGHT.into()))));
-        db.storage
-            .expect_get::<DaHeightTable>()
-            .returning(|_| Ok(None));
 
         let next_height = last_height + 1;
         let result = db.insert_events(&next_height.into(), &events);
