@@ -20,6 +20,7 @@ use fuel_core::{
     database::{
         balances::BalancesInitializer,
         state::StateInitializer,
+        Database,
     },
     service::{
         config::Trigger,

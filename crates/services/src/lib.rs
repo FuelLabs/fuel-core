@@ -7,6 +7,7 @@
 
 mod service;
 mod state;
+mod sync;
 
 /// Re-exports for streaming utilities
 pub mod stream {
@@ -45,10 +46,12 @@ pub use service::{
     RunnableTask,
     Service,
     ServiceRunner,
-    Shared,
-    SharedMutex,
 };
 pub use state::{
     State,
     StateWatcher,
+};
+pub use sync::{
+    Shared,
+    SharedMutex,
 };
