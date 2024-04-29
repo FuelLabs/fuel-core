@@ -238,6 +238,7 @@ pub fn init_sub_services(
     };
 
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
+        *genesis_block.header().height(),
         graphql_config,
         schema,
         database.on_chain().clone(),

@@ -121,6 +121,16 @@ impl OffChainDatabase for Database<OffChain> {
         Ok(salt)
     }
 
+    fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        let block = self
+            .storage_as_ref::<OldFuelBlocks>()
+            .get(height)?
+            .ok_or(not_found!(OldFuelBlocks))?
+            .into_owned();
+
+        Ok(block)
+    }
+
     fn old_blocks(
         &self,
         height: Option<BlockHeight>,
@@ -131,10 +141,10 @@ impl OffChainDatabase for Database<OffChain> {
             .into_boxed()
     }
 
-    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus> {
+    fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
         Ok(self
             .storage_as_ref::<OldFuelBlockConsensus>()
-            .get(&height)?
+            .get(height)?
             .ok_or(not_found!(OldFuelBlockConsensus))?
             .into_owned())
     }
