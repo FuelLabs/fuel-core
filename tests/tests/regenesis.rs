@@ -196,6 +196,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     .await?;
 
     produce_block_with_tx(&mut rng, &core.client).await;
+    // When
     let regenesis_blocks = core
         .client
         .blocks(PaginationRequest {
@@ -207,12 +208,23 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
         .expect("Failed to get blocks")
         .results;
 
+    // Then
     // We should have generated one new genesis block and one new generated block,
     // but the old ones should be the same.
     assert_eq!(original_blocks.len() + 4, regenesis_blocks.len());
     assert_eq!(original_blocks[0], regenesis_blocks[0]);
     assert_eq!(original_blocks[1], regenesis_blocks[1]);
     assert_eq!(original_blocks[2], regenesis_blocks[2]);
+
+    for block in &regenesis_blocks {
+        // When
+        let result = core.client.block(&block.id).await;
+
+        // Then
+        result
+            .expect("Requested block successfully")
+            .expect("The block and all related data should migrate");
+    }
 
     Ok(())
 }
