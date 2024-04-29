@@ -381,7 +381,9 @@ where
 
         // Now that the transactions have been executed, generate the full header.
 
-        let block = block.generate(&message_ids[..], event_inbox_root);
+        let block = block
+            .generate(&message_ids[..], event_inbox_root)
+            .map_err(ExecutorError::BlockHeaderError)?;
 
         let finalized_block_id = block.id();
 
@@ -802,7 +804,9 @@ where
                 }
             })?;
 
-        let new_block = new_partial_block.generate(&message_ids[..], *event_inbox_root);
+        let new_block = new_partial_block
+            .generate(&message_ids[..], *event_inbox_root)
+            .map_err(ExecutorError::BlockHeaderError)?;
         if new_block.header() != old_block.header() {
             Err(ExecutorError::BlockMismatch)
         } else {
