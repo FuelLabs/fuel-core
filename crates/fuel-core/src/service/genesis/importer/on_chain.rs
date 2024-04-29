@@ -6,7 +6,7 @@ use crate::database::{
     balances::BalancesInitializer,
     database_description::on_chain::OnChain,
     state::StateInitializer,
-    Database,
+    GenesisDatabase,
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::TableEntry;
@@ -41,7 +41,7 @@ impl ImportTable for Handler<Coins, Coins> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|coin| {
             init_coin(tx, &coin, self.block_height)?;
@@ -58,7 +58,7 @@ impl ImportTable for Handler<Messages, Messages> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group
             .into_iter()
@@ -74,7 +74,7 @@ impl ImportTable for Handler<ProcessedTransactions, ProcessedTransactions> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|transaction| {
             tx.storage_as_mut::<ProcessedTransactions>()
@@ -93,7 +93,7 @@ impl ImportTable for Handler<ContractsRawCode, ContractsRawCode> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
             init_contract_raw_code(tx, &contract)?;
@@ -110,7 +110,7 @@ impl ImportTable for Handler<ContractsLatestUtxo, ContractsLatestUtxo> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
             init_contract_latest_utxo(tx, &contract, self.block_height)?;
@@ -127,7 +127,7 @@ impl ImportTable for Handler<ContractsState, ContractsState> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group)?;
         Ok(())
@@ -142,7 +142,7 @@ impl ImportTable for Handler<ContractsAssets, ContractsAssets> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
         Ok(())
@@ -150,7 +150,7 @@ impl ImportTable for Handler<ContractsAssets, ContractsAssets> {
 }
 
 fn init_coin(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     coin: &TableEntry<Coins>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -185,7 +185,7 @@ fn init_coin(
 }
 
 fn init_contract_latest_utxo(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     entry: &TableEntry<ContractsLatestUtxo>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -209,7 +209,7 @@ fn init_contract_latest_utxo(
 }
 
 fn init_contract_raw_code(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     entry: &TableEntry<ContractsRawCode>,
 ) -> anyhow::Result<()> {
     let contract = entry.value.as_ref();
@@ -228,7 +228,7 @@ fn init_contract_raw_code(
 }
 
 fn init_da_message(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     msg: TableEntry<Messages>,
     da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {

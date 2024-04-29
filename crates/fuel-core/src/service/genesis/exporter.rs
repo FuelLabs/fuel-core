@@ -172,7 +172,7 @@ where
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
         DbDesc: DatabaseDescription<Column = T::Column>,
-        DbDesc::Height: Send,
+        DbDesc::Height: Send + Sync,
     {
         let mut writer = self.create_writer()?;
         let group_size = self.group_size;
