@@ -65,7 +65,7 @@ impl RelayerPort for MaybeRelayerAdapter {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
-                let current_height = sync.get_finalized_da_height()?;
+                let current_height = sync.get_finalized_da_height();
                 anyhow::ensure!(
                     da_height.saturating_sub(*current_height) <= **_max_da_lag,
                     "Relayer is too far out of sync"

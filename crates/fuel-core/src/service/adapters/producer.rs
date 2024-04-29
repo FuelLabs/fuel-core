@@ -136,7 +136,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_at_least_synced(height).await?;
-                let highest = sync.get_finalized_da_height()?;
+                let highest = sync.get_finalized_da_height();
                 Ok(highest)
             } else {
                 Ok(*height)
