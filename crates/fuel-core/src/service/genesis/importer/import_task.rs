@@ -556,7 +556,11 @@ mod tests {
     }
 
     impl TransactableStorage<BlockHeight> for BrokenTransactions {
-        fn commit_changes(&self, _: Changes) -> StorageResult<()> {
+        fn commit_changes(
+            &self,
+            _: Option<BlockHeight>,
+            _: Changes,
+        ) -> StorageResult<()> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }

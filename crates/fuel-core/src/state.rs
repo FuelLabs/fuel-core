@@ -33,7 +33,11 @@ where
 
 pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
     /// Commits the changes into the storage.
-    fn commit_changes(&self, changes: Changes) -> StorageResult<()>;
+    fn commit_changes(
+        &self,
+        height: Option<Height>,
+        changes: Changes,
+    ) -> StorageResult<()>;
 }
 
 // It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
@@ -43,7 +47,7 @@ impl<Height, S> TransactableStorage<Height>
 where
     S: IterableStore + Debug + Send + Sync,
 {
-    fn commit_changes(&self, _: Changes) -> StorageResult<()> {
+    fn commit_changes(&self, _: Option<Height>, _: Changes) -> StorageResult<()> {
         unimplemented!()
     }
 }

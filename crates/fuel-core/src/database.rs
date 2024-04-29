@@ -443,27 +443,27 @@ impl Modifiable for Database<Relayer> {
 
 impl Modifiable for UncheckedDatabase<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(changes)
+        self.data.as_ref().commit_changes(None, changes)
     }
 }
 
 impl Modifiable for UncheckedDatabase<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(changes)
+        self.data.as_ref().commit_changes(None, changes)
     }
 }
 
 #[cfg(feature = "relayer")]
 impl Modifiable for UncheckedDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(changes)
+        self.data.as_ref().commit_changes(None, changes)
     }
 }
 
 #[cfg(not(feature = "relayer"))]
 impl Modifiable for UncheckedDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(changes)
+        self.data.as_ref().commit_changes(None, changes)
     }
 }
 
@@ -587,7 +587,10 @@ where
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
     let mut guard = database.height.lock();
-    database.data.as_ref().commit_changes(updated_changes)?;
+    database
+        .data
+        .as_ref()
+        .commit_changes(new_height, updated_changes)?;
 
     // Update the block height
     if let Some(new_height) = new_height {
