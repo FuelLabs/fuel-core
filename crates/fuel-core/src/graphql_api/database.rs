@@ -17,8 +17,11 @@ use fuel_core_storage::{
         IntoBoxedIter,
         IterDirection,
     },
+    not_found,
+    tables::Transactions,
     transactional::AtomicView,
     Error as StorageError,
+    IsNotFound,
     Mappable,
     Result as StorageResult,
     StorageInspect,
@@ -48,6 +51,7 @@ use fuel_core_types::{
         AssetId,
         Bytes32,
         Salt,
+        Transaction,
         TxPointer,
         UtxoId,
     },
@@ -75,6 +79,8 @@ pub type OffChainView = Arc<dyn OffChainDatabase>;
 /// The container of the on-chain and off-chain database view provides.
 /// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
+    /// The height of the genesis block.
+    genesis_height: BlockHeight,
     /// The on-chain database view provider.
     on_chain: Box<dyn AtomicView<View = OnChainView, Height = BlockHeight>>,
     /// The off-chain database view provider.
@@ -83,7 +89,11 @@ pub struct ReadDatabase {
 
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
-    pub fn new<OnChain, OffChain>(on_chain: OnChain, off_chain: OffChain) -> Self
+    pub fn new<OnChain, OffChain>(
+        genesis_height: BlockHeight,
+        on_chain: OnChain,
+        off_chain: OffChain,
+    ) -> Self
     where
         OnChain: AtomicView<Height = BlockHeight> + 'static,
         OffChain: AtomicView<Height = BlockHeight> + 'static,
@@ -91,6 +101,7 @@ impl ReadDatabase {
         OffChain::View: OffChainDatabase,
     {
         Self {
+            genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
         }
@@ -102,6 +113,7 @@ impl ReadDatabase {
         //  It is not possible to implement until `view_at` is implemented for the `AtomicView`.
         //  https://github.com/FuelLabs/fuel-core/issues/1582
         ReadView {
+            genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view(),
             off_chain: self.off_chain.latest_view(),
         }
@@ -109,11 +121,33 @@ impl ReadDatabase {
 }
 
 pub struct ReadView {
+    genesis_height: BlockHeight,
     on_chain: OnChainView,
     off_chain: OffChainView,
 }
 
 impl DatabaseBlocks for ReadView {
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+        let result = self.on_chain.transaction(tx_id);
+        if result.is_not_found() {
+            if let Some(tx) = self.old_transaction(tx_id)? {
+                Ok(tx)
+            } else {
+                Err(not_found!(Transactions))
+            }
+        } else {
+            result
+        }
+    }
+
+    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        if *height >= self.genesis_height {
+            self.on_chain.block(height)
+        } else {
+            self.off_chain.old_block(height)
+        }
+    }
+
     fn blocks(
         &self,
         height: Option<BlockHeight>,
@@ -123,28 +157,23 @@ impl DatabaseBlocks for ReadView {
         // The blocks in off-chain db, if any, are from time before regenesis
 
         if let Some(height) = height {
-            match self.on_chain.latest_genesis_height() {
-                Ok(onchain_start_height) => {
-                    match (height >= onchain_start_height, direction) {
-                        (true, IterDirection::Forward) => {
-                            self.on_chain.blocks(Some(height), direction)
-                        }
-                        (true, IterDirection::Reverse) => self
-                            .on_chain
-                            .blocks(Some(height), direction)
-                            .chain(self.off_chain.old_blocks(None, direction))
-                            .into_boxed(),
-                        (false, IterDirection::Forward) => self
-                            .off_chain
-                            .old_blocks(Some(height), direction)
-                            .chain(self.on_chain.blocks(None, direction))
-                            .into_boxed(),
-                        (false, IterDirection::Reverse) => {
-                            self.off_chain.old_blocks(Some(height), direction)
-                        }
-                    }
+            match (height >= self.genesis_height, direction) {
+                (true, IterDirection::Forward) => {
+                    self.on_chain.blocks(Some(height), direction)
                 }
-                Err(err) => core::iter::once(Err(err)).into_boxed(),
+                (true, IterDirection::Reverse) => self
+                    .on_chain
+                    .blocks(Some(height), direction)
+                    .chain(self.off_chain.old_blocks(None, direction))
+                    .into_boxed(),
+                (false, IterDirection::Forward) => self
+                    .off_chain
+                    .old_blocks(Some(height), direction)
+                    .chain(self.on_chain.blocks(None, direction))
+                    .into_boxed(),
+                (false, IterDirection::Reverse) => {
+                    self.off_chain.old_blocks(Some(height), direction)
+                }
             }
         } else {
             match direction {
@@ -166,8 +195,12 @@ impl DatabaseBlocks for ReadView {
         self.on_chain.latest_height()
     }
 
-    fn latest_genesis_height(&self) -> StorageResult<BlockHeight> {
-        self.on_chain.latest_genesis_height()
+    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
+        if *id >= self.genesis_height {
+            self.on_chain.consensus(id)
+        } else {
+            self.off_chain.old_block_consensus(id)
+        }
     }
 }
 
@@ -284,6 +317,10 @@ impl OffChainDatabase for ReadView {
         self.off_chain.contract_salt(contract_id)
     }
 
+    fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        self.off_chain.old_block(height)
+    }
+
     fn old_blocks(
         &self,
         height: Option<BlockHeight>,
@@ -292,7 +329,7 @@ impl OffChainDatabase for ReadView {
         self.off_chain.old_blocks(height, direction)
     }
 
-    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus> {
+    fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
         self.off_chain.old_block_consensus(height)
     }
 
