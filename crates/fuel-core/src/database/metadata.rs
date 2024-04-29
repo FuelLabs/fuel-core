@@ -42,7 +42,7 @@ where
     }
 }
 
-impl<Description> Database<Description>
+impl<Description, Stage> Database<Description, Stage>
 where
     Description: DatabaseDescription,
     Self: StorageInspect<MetadataTable<Description>, Error = StorageError>,
