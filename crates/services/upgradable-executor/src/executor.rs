@@ -301,7 +301,7 @@ where
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
 
         let options = ExecutionOptions {
-            utxo_validation,
+            extra_tx_checks: utxo_validation,
             backtrace: self.config.backtrace,
         };
 
