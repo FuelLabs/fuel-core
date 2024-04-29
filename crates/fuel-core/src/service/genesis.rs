@@ -72,8 +72,6 @@ pub async fn execute_genesis_block(
     let genesis_block = create_genesis_block(config);
     tracing::info!("Genesis block created: {:?}", genesis_block.header());
 
-    db.set_genesis_active(true);
-
     SnapshotImporter::import(
         db.clone(),
         genesis_block.clone(),
@@ -81,8 +79,6 @@ pub async fn execute_genesis_block(
         watcher,
     )
     .await?;
-
-    db.set_genesis_active(false);
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()

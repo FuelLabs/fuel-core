@@ -155,7 +155,7 @@ impl SnapshotImporter {
 
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
-        let db = self.db.on_chain().clone();
+        let db = self.db.on_chain().clone().into_unchecked();
 
         let migration_name = migration_name::<TableBeingWritten, TableBeingWritten>();
         let progress_reporter = self
@@ -203,7 +203,7 @@ impl SnapshotImporter {
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
 
-        let db = self.db.off_chain().clone();
+        let db = self.db.off_chain().clone().into_unchecked();
 
         let migration_name = migration_name::<TableInSnapshot, TableBeingWritten>();
         let progress_reporter = self

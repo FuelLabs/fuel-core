@@ -86,14 +86,32 @@ pub mod storage;
 pub mod transactions;
 
 #[derive(Clone, Debug)]
+pub struct UncheckedDatabase<Description = OnChain>
+where
+    Description: DatabaseDescription,
+{
+    data: DataSource<Description>,
+}
+
+impl<Description> UncheckedDatabase<Description>
+where
+    Description: DatabaseDescription,
+{
+    pub fn into_checked(self) -> Database<Description> {
+        Database {
+            height: SharedMutex::new(None),
+            data: self.data,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Database<Description = OnChain>
 where
     Description: DatabaseDescription,
 {
     /// Cached value from Metadata table, used to speed up lookups.
     height: SharedMutex<Option<Description::Height>>,
-    /// If set, some consistency checks are not performed.
-    genesis_active: SharedMutex<bool>,
     data: DataSource<Description>,
 }
 
@@ -133,7 +151,6 @@ where
     pub fn new(data_source: DataSource<Description>) -> Self {
         let database = Self {
             height: SharedMutex::new(None),
-            genesis_active: SharedMutex::new(false),
             data: data_source,
         };
         let height = database
@@ -152,9 +169,28 @@ where
         Ok(Database::new(Arc::new(db)))
     }
 
-    /// Set the genesis flag that controls some consistency checks.
-    pub fn set_genesis_active(&self, active: bool) {
-        *self.genesis_active.lock() = active;
+    /// Converts to an unchecked database.
+    /// Panics if the height is already set.
+    pub fn into_unchecked(self) -> UncheckedDatabase<Description> {
+        assert!(!self.height.lock().is_some());
+        UncheckedDatabase { data: self.data }
+    }
+}
+
+impl<Description> UncheckedDatabase<Description>
+where
+    Description: DatabaseDescription,
+{
+    pub fn in_memory() -> Self {
+        let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
+        Self { data }
+    }
+
+    #[cfg(feature = "rocksdb")]
+    pub fn rocksdb_temp() -> Self {
+        let data =
+            Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
+        Self { data }
     }
 }
 
@@ -163,23 +199,12 @@ where
     Description: DatabaseDescription,
 {
     pub fn in_memory() -> Self {
-        let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
-        Self {
-            data,
-            height: SharedMutex::new(None),
-            genesis_active: SharedMutex::new(false),
-        }
+        UncheckedDatabase::in_memory().into_checked()
     }
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp() -> Self {
-        let data =
-            Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
-        Self {
-            data,
-            height: SharedMutex::new(None),
-            genesis_active: SharedMutex::new(false),
-        }
+        UncheckedDatabase::in_memory().into_checked()
     }
 }
 
@@ -229,6 +254,74 @@ where
         self.data
             .as_ref()
             .iter_store(column, prefix, start, direction)
+    }
+}
+
+impl<Description> KeyValueInspect for UncheckedDatabase<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
+
+    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
+        self.data.as_ref().exists(key, column)
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
+        self.data.as_ref().size_of_value(key, column)
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        self.data.as_ref().get(key, column)
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        self.data.as_ref().read(key, column, buf)
+    }
+}
+
+impl<Description> IterableStore for UncheckedDatabase<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn iter_store(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        self.data
+            .as_ref()
+            .iter_store(column, prefix, start, direction)
+    }
+}
+
+/// Construct an ephemeral database
+/// uses rocksdb when rocksdb features are enabled
+/// uses in-memory when rocksdb features are disabled
+impl<Description> Default for UncheckedDatabase<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn default() -> Self {
+        #[cfg(not(feature = "rocksdb"))]
+        {
+            Self::in_memory()
+        }
+        #[cfg(feature = "rocksdb")]
+        {
+            Self::rocksdb_temp()
+        }
     }
 }
 
@@ -348,6 +441,32 @@ impl Modifiable for Database<Relayer> {
     }
 }
 
+impl Modifiable for UncheckedDatabase<OnChain> {
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        self.data.as_ref().commit_changes(changes)
+    }
+}
+
+impl Modifiable for UncheckedDatabase<OffChain> {
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        self.data.as_ref().commit_changes(changes)
+    }
+}
+
+#[cfg(feature = "relayer")]
+impl Modifiable for UncheckedDatabase<Relayer> {
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        self.data.as_ref().commit_changes(changes)
+    }
+}
+
+#[cfg(not(feature = "relayer"))]
+impl Modifiable for UncheckedDatabase<Relayer> {
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        self.data.as_ref().commit_changes(changes)
+    }
+}
+
 trait DatabaseHeight: Sized {
     fn as_u64(&self) -> u64;
 
@@ -388,64 +507,58 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
-    // DB consistency checks are only enforced when genesis flag is not set.
-    let new_height = if *database.genesis_active.lock() {
-        None
-    } else {
-        // Gets the all new heights from the `changes`
-        let iterator = ChangesIterator::<Description>::new(&changes);
-        let new_heights = heights_lookup(&iterator)?;
+    // Gets the all new heights from the `changes`
+    let iterator = ChangesIterator::<Description>::new(&changes);
+    let new_heights = heights_lookup(&iterator)?;
 
-        // Changes for each block should be committed separately.
-        // If we have more than one height, it means we are mixing commits
-        // for several heights in one batch - return error in this case.
-        if new_heights.len() > 1 {
-            return Err(DatabaseError::MultipleHeightsInCommit {
-                heights: new_heights.iter().map(DatabaseHeight::as_u64).collect(),
-            }
-            .into());
+    // Changes for each block should be committed separately.
+    // If we have more than one height, it means we are mixing commits
+    // for several heights in one batch - return error in this case.
+    if new_heights.len() > 1 {
+        return Err(DatabaseError::MultipleHeightsInCommit {
+            heights: new_heights.iter().map(DatabaseHeight::as_u64).collect(),
         }
+        .into());
+    }
 
-        let new_height = new_heights.into_iter().last();
-        let prev_height = *database.height.lock();
+    let new_height = new_heights.into_iter().last();
+    let prev_height = *database.height.lock();
 
-        match (prev_height, new_height) {
-            (None, None) => {
-                // We are inside the regenesis process if the old and new heights are not set.
-                // In this case, we continue to commit until we discover a new height.
-                // This height will be the start of the database.
-            }
-            (Some(prev_height), Some(new_height)) => {
-                // Each new commit should be linked to the previous commit to create a monotonically growing database.
+    match (prev_height, new_height) {
+        (None, None) => {
+            // We are inside the regenesis process if the old and new heights are not set.
+            // In this case, we continue to commit until we discover a new height.
+            // This height will be the start of the database.
+        }
+        (Some(prev_height), Some(new_height)) => {
+            // Each new commit should be linked to the previous commit to create a monotonically growing database.
 
-                let next_expected_height = prev_height
-                    .advance_height()
-                    .ok_or(DatabaseError::FailedToAdvanceHeight)?;
+            let next_expected_height = prev_height
+                .advance_height()
+                .ok_or(DatabaseError::FailedToAdvanceHeight)?;
 
-                // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
-                //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
-                if next_expected_height > new_height {
-                    return Err(DatabaseError::HeightsAreNotLinked {
-                        prev_height: prev_height.as_u64(),
-                        new_height: new_height.as_u64(),
-                    }
-                    .into());
-                }
-            }
-            (None, Some(_)) => {
-                // The new height is finally found; starting at this point,
-                // all next commits should be linked(the height should increase each time by one).
-            }
-            (Some(prev_height), None) => {
-                // In production, we shouldn't have cases where we call `commit_chagnes` with intermediate changes.
-                // The commit always should contain all data for the corresponding height.
-                return Err(DatabaseError::NewHeightIsNotSet {
+            // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
+            //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
+            if next_expected_height > new_height {
+                return Err(DatabaseError::HeightsAreNotLinked {
                     prev_height: prev_height.as_u64(),
+                    new_height: new_height.as_u64(),
                 }
                 .into());
             }
-        };
-        new_height
+        }
+        (None, Some(_)) => {
+            // The new height is finally found; starting at this point,
+            // all next commits should be linked(the height should increase each time by one).
+        }
+        (Some(prev_height), None) => {
+            // In production, we shouldn't have cases where we call `commit_chagnes` with intermediate changes.
+            // The commit always should contain all data for the corresponding height.
+            return Err(DatabaseError::NewHeightIsNotSet {
+                prev_height: prev_height.as_u64(),
+            }
+            .into());
+        }
     };
 
     let updated_changes = if let Some(new_height) = new_height {

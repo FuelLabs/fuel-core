@@ -19,7 +19,7 @@ use crate::{
             GenesisMetadata,
             GenesisProgressMutate,
         },
-        Database,
+        UncheckedDatabase,
     },
     service::genesis::{
         progress::ProgressReporter,
@@ -36,7 +36,7 @@ where
     handler: Handler,
     skip: usize,
     groups: Groups,
-    db: Database<DbDesc>,
+    db: UncheckedDatabase<DbDesc>,
     reporter: ProgressReporter,
 }
 
@@ -48,7 +48,7 @@ pub trait ImportTable {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut UncheckedDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()>;
 }
 
@@ -56,12 +56,12 @@ impl<Logic, GroupGenerator, DbDesc> ImportTask<Logic, GroupGenerator, DbDesc>
 where
     DbDesc: DatabaseDescription,
     Logic: ImportTable<DbDesc = DbDesc>,
-    Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
+    UncheckedDatabase<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
         handler: Logic,
         groups: GroupGenerator,
-        db: Database<DbDesc>,
+        db: UncheckedDatabase<DbDesc>,
         reporter: ProgressReporter,
     ) -> Self {
         let progress_name =
@@ -95,9 +95,9 @@ where
         Value = usize,
         OwnedValue = usize,
     >,
-    Database<DbDesc>:
+    UncheckedDatabase<DbDesc>:
         StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
-    for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
+    for<'a> StorageTransaction<&'a mut UncheckedDatabase<DbDesc>>:
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
     pub fn run(mut self, cancel_token: CancellationToken) -> anyhow::Result<()> {
@@ -137,7 +137,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        database::genesis_progress::GenesisProgressInspect,
+        database::{
+            genesis_progress::GenesisProgressInspect,
+            UncheckedDatabase,
+        },
         service::genesis::{
             importer::{
                 import_task::ImportTask,
@@ -227,7 +230,7 @@ mod tests {
     where
         L: FnMut(
             TableEntry<Coins>,
-            &mut StorageTransaction<&mut Database>,
+            &mut StorageTransaction<&mut UncheckedDatabase>,
         ) -> anyhow::Result<()>,
     {
         type TableInSnapshot = Coins;
@@ -236,7 +239,7 @@ mod tests {
         fn process(
             &mut self,
             group: Vec<TableEntry<Self::TableInSnapshot>>,
-            tx: &mut StorageTransaction<&mut Database>,
+            tx: &mut StorageTransaction<&mut UncheckedDatabase>,
         ) -> anyhow::Result<()> {
             group
                 .into_iter()
@@ -287,7 +290,7 @@ mod tests {
                 Ok(())
             }),
             data.as_ok_groups(),
-            Database::default(),
+            UncheckedDatabase::default(),
             ProgressReporter::default(),
         );
 
@@ -317,7 +320,7 @@ mod tests {
                 Ok(())
             }),
             data.as_ok_groups(),
-            db.on_chain().clone(),
+            db.on_chain().clone().into_unchecked(),
             ProgressReporter::default(),
         );
 
@@ -332,7 +335,7 @@ mod tests {
     fn changes_to_db_by_handler_are_behind_a_transaction() {
         // given
         let groups = TestData::new(1);
-        let outer_db = Database::default();
+        let outer_db = UncheckedDatabase::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
@@ -369,7 +372,10 @@ mod tests {
             .unwrap());
     }
 
-    fn insert_a_coin(tx: &mut StorageTransaction<&mut Database>, utxo_id: &UtxoId) {
+    fn insert_a_coin(
+        tx: &mut StorageTransaction<&mut UncheckedDatabase>,
+        utxo_id: &UtxoId,
+    ) {
         let coin: CompressedCoin = CompressedCoinV1::default().into();
 
         tx.storage_as_mut::<Coins>().insert(utxo_id, &coin).unwrap();
@@ -379,7 +385,7 @@ mod tests {
     fn tx_reverted_if_handler_fails() {
         // given
         let groups = TestData::new(1);
-        let db = Database::default();
+        let db = UncheckedDatabase::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
@@ -406,7 +412,7 @@ mod tests {
         let runner = ImportTask::new(
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
-            Database::default(),
+            Default::default(),
             ProgressReporter::default(),
         );
 
@@ -424,7 +430,7 @@ mod tests {
         let runner = ImportTask::new(
             TestHandler::new(|_, _| Ok(())),
             groups,
-            Database::default(),
+            Default::default(),
             ProgressReporter::default(),
         );
 
@@ -439,7 +445,7 @@ mod tests {
     fn succesfully_processed_batch_updates_the_genesis_progress() {
         // given
         let data = TestData::new(2);
-        let db = Database::default();
+        let db = UncheckedDatabase::default();
         let runner = ImportTask::new(
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
@@ -475,7 +481,7 @@ mod tests {
                     Ok(())
                 }),
                 rx,
-                Database::default(),
+                Default::default(),
                 ProgressReporter::default(),
             )
         };
@@ -562,7 +568,7 @@ mod tests {
         let runner = ImportTask::new(
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),
-            Database::new(Arc::new(BrokenTransactions::new())),
+            Database::new(Arc::new(BrokenTransactions::new())).into_unchecked(),
             ProgressReporter::default(),
         );
 
