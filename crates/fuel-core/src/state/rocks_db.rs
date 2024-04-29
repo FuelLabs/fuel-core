@@ -220,38 +220,33 @@ where
             opts.set_row_cache(&cache);
         }
 
-        let existing_column_families = match DB::list_cf(&opts, &path) {
-            Ok(cfs) => cfs,
-            Err(err) => {
-                tracing::error!(
-                    "Couldn't get the list of cfs: {}. Returning an empty list",
-                    err
-                );
-                vec![]
-            }
-        };
+        let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_else(|err| {
+            tracing::error!(
+                "Couldn't get the list of cfs: {}. Returning an empty list",
+                err
+            );
+            vec![]
+        });
 
         let mut cf_descriptors_to_open = vec![];
         let mut cf_descriptors_to_create = vec![];
         for column in columns.clone() {
             let column_name = Self::col_name(column.id());
+            let opts = Self::cf_opts(column, &block_opts);
             if existing_column_families.contains(&column_name) {
-                cf_descriptors_to_open.push(ColumnFamilyDescriptor::new(
-                    column_name,
-                    Self::cf_opts(column, &block_opts),
-                ));
+                cf_descriptors_to_open.push((column_name, opts));
             } else {
-                let opts = Self::cf_opts(column, &block_opts);
                 cf_descriptors_to_create.push((column_name, opts));
             }
         }
-        let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors_to_open) {
+
+        let iterator = cf_descriptors_to_open
+            .clone()
+            .into_iter()
+            .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+
+        let db = match DB::open_cf_descriptors(&opts, &path, iterator) {
             Ok(db) => {
-                // Setup cfs
-                for (name, opt) in cf_descriptors_to_create {
-                    db.create_cf(name, &opt)
-                        .map_err(|e| DatabaseError::Other(e.into()))?;
-                }
                 Ok(db)
             },
             Err(err) => {
@@ -259,16 +254,22 @@ where
                 DB::repair(&opts, &path)
                     .map_err(|e| DatabaseError::Other(e.into()))?;
 
-                let cf_descriptors = columns.clone().into_iter().map(|i| {
-                    ColumnFamilyDescriptor::new(
-                        Self::col_name(i.id()),
-                        Self::cf_opts(i, &block_opts),
-                    )
-                });
-                DB::open_cf_descriptors(&opts, &path, cf_descriptors)
+                let iterator = cf_descriptors_to_open
+                    .clone()
+                    .into_iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+
+                DB::open_cf_descriptors(&opts, &path, iterator)
             },
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        // Setup cfs
+        for (name, opt) in cf_descriptors_to_create {
+            db.create_cf(name, &opt)
+                .map_err(|e| DatabaseError::Other(e.into()))?;
+        }
+
         let rocks_db = RocksDb {
             db,
             _drop: Default::default(),
@@ -645,6 +646,7 @@ mod tests {
         // When
         let mut new_columns = old_columns;
         new_columns.push(Column::ContractsAssets);
+        new_columns.push(Column::Metadata);
         let database_with_new_columns =
             RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None).map(|_| ());
 
