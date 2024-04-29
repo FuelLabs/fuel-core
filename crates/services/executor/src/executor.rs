@@ -132,10 +132,9 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             Event as ExecutorEvent,
-            ExecutionKind,
             ExecutionResult,
-            ExecutionType,
-            ExecutionTypes,
+            // ExecutionType,
+            // ExecutionTypes,
             ForcedTransactionFailure,
             Result as ExecutorResult,
             TransactionExecutionResult,
@@ -153,7 +152,7 @@ use tracing::{
     warn,
 };
 
-pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
+// pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
@@ -237,14 +236,24 @@ where
     R: RelayerPort,
     D: KeyValueInspect<Column = Column>,
 {
-    pub fn execute_without_commit<TxSource>(
+    pub fn produce_without_commit<TxSource>(
         self,
-        block: ExecutionBlockWithSource<TxSource>,
+        block: Components<TxSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
     {
-        self.execute_inner(block)
+        self.produce_inner(block)
+    }
+
+    pub fn dry_run_without_commit<TxSource>(
+        self,
+        block: Components<TxSource>,
+    ) -> ExecutorResult<UncommittedResult<Changes>>
+    where
+        TxSource: TransactionsSource,
+    {
+        self.dry_run_inner(block)
     }
 
     pub fn validate_without_commit(
@@ -313,15 +322,79 @@ where
     D: KeyValueInspect<Column = Column>,
 {
     #[tracing::instrument(skip_all)]
-    fn execute_inner<TxSource>(
+    fn produce_inner<TxSource>(
         self,
-        block: ExecutionBlockWithSource<TxSource>,
+        components: Components<TxSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
     {
-        let (block, execution_data) = match block {
-            ExecutionTypes::DryRun(component) => {
+        let (block, execution_data) = {
+            let mut block = PartialFuelBlock::new(components.header_to_produce, vec![]);
+            let consensus_params_version = block.header.consensus_parameters_version;
+            let block_executor = BlockExecutor::new(
+                self.relayer,
+                self.database,
+                self.options,
+                consensus_params_version,
+            )?;
+
+            let component = PartialBlockComponent::from_component(
+                &mut block,
+                components.transactions_source,
+                components.coinbase_recipient,
+                components.gas_price,
+            );
+
+            let execution_data = block_executor.produce_block(component)?;
+
+            (block, execution_data)
+        };
+
+        let ExecutionData {
+            coinbase,
+            used_gas,
+            message_ids,
+            tx_status,
+            skipped_transactions,
+            events,
+            changes,
+            event_inbox_root,
+            ..
+        } = execution_data;
+
+        // Now that the transactions have been executed, generate the full header.
+
+        let block = block.generate(&message_ids[..], event_inbox_root);
+
+        let finalized_block_id = block.id();
+
+        debug!(
+            "Block {:#x} fees: {} gas: {}",
+            finalized_block_id, coinbase, used_gas
+        );
+
+        let result = ExecutionResult {
+            block,
+            skipped_transactions,
+            tx_status,
+            events,
+        };
+
+        // Get the complete fuel block.
+        Ok(UncommittedResult::new(result, changes))
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn dry_run_inner<TxSource>(
+        self,
+        component: Components<TxSource>,
+    ) -> ExecutorResult<UncommittedResult<Changes>>
+    where
+        TxSource: TransactionsSource,
+    {
+        let (block, execution_data) = {
+            {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
                 let consensus_params_version = block.header.consensus_parameters_version;
@@ -337,31 +410,7 @@ where
                     component.coinbase_recipient,
                     component.gas_price,
                 );
-                let execution_data =
-                    block_executor.execute_block(ExecutionType::DryRun(component))?;
-
-                (block, execution_data)
-            }
-            ExecutionTypes::Production(component) => {
-                let mut block =
-                    PartialFuelBlock::new(component.header_to_produce, vec![]);
-                let consensus_params_version = block.header.consensus_parameters_version;
-                let block_executor = BlockExecutor::new(
-                    self.relayer,
-                    self.database,
-                    self.options,
-                    consensus_params_version,
-                )?;
-
-                let component = PartialBlockComponent::from_component(
-                    &mut block,
-                    component.transactions_source,
-                    component.coinbase_recipient,
-                    component.gas_price,
-                );
-
-                let execution_data =
-                    block_executor.execute_block(ExecutionType::Production(component))?;
+                let execution_data = block_executor.dry_run_block(component)?;
 
                 (block, execution_data)
             }
@@ -485,9 +534,9 @@ where
 {
     #[tracing::instrument(skip_all)]
     /// Execute the fuel block with all transactions.
-    fn execute_block<TxSource>(
+    fn produce_block<TxSource>(
         mut self,
-        block: ExecutionType<PartialBlockComponent<TxSource>>,
+        component: PartialBlockComponent<TxSource>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
@@ -496,7 +545,6 @@ where
         let mut data = ExecutionData::new();
 
         // Split out the execution kind and partial block.
-        let (execution_kind, component) = block.split();
         let block = component.empty_block;
         let source = component.transactions_source;
         let gas_price = component.gas_price;
@@ -545,14 +593,9 @@ where
                     coinbase_contract_id,
                 ) {
                     Ok(_) => {}
-                    Err(err) => match execution_kind {
-                        ExecutionKind::Production => {
-                            data.skipped_transactions.push((tx_id, err));
-                        }
-                        ExecutionKind::DryRun => {
-                            return Err(err);
-                        }
-                    },
+                    Err(err) => {
+                        data.skipped_transactions.push((tx_id, err));
+                    }
                 }
             }
 
@@ -562,50 +605,127 @@ where
         }
 
         // After the execution of all transactions in production mode, we can set the final fee.
-        if execution_kind == ExecutionKind::Production {
-            let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
-                data.coinbase
-            } else {
-                0
-            };
+        let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
+            data.coinbase
+        } else {
+            0
+        };
 
-            let coinbase_tx = Transaction::mint(
-                TxPointer::new(block_height, data.tx_count),
-                input::contract::Contract {
-                    utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
-                    balance_root: Bytes32::zeroed(),
-                    state_root: Bytes32::zeroed(),
-                    tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
-                    contract_id: coinbase_contract_id,
-                },
-                output::contract::Contract {
-                    input_index: 0,
-                    balance_root: Bytes32::zeroed(),
-                    state_root: Bytes32::zeroed(),
-                },
-                amount_to_mint,
-                *self.consensus_params.base_asset_id(),
-                gas_price,
-            );
+        let coinbase_tx = Transaction::mint(
+            TxPointer::new(block_height, data.tx_count),
+            input::contract::Contract {
+                utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+                tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
+                contract_id: coinbase_contract_id,
+            },
+            output::contract::Contract {
+                input_index: 0,
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+            },
+            amount_to_mint,
+            *self.consensus_params.base_asset_id(),
+            gas_price,
+        );
 
-            self.execute_transaction_and_commit(
-                block,
-                &mut thread_block_transaction,
-                &mut data,
-                MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
-                gas_price,
-                coinbase_contract_id,
-            )?;
-        }
+        self.execute_transaction_and_commit(
+            block,
+            &mut thread_block_transaction,
+            &mut data,
+            MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
+            gas_price,
+            coinbase_contract_id,
+        )?;
 
         let changes_from_thread = thread_block_transaction.into_changes();
         block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
         self.block_st_transaction
             .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
-        if execution_kind != ExecutionKind::DryRun && !data.found_mint {
+        if !data.found_mint {
             return Err(ExecutorError::MintMissing)
         }
+
+        data.changes = self.block_st_transaction.into_changes();
+        Ok(data)
+    }
+
+    #[tracing::instrument(skip_all)]
+    /// Execute the fuel block with all transactions.
+    fn dry_run_block<TxSource>(
+        mut self,
+        component: PartialBlockComponent<TxSource>,
+    ) -> ExecutorResult<ExecutionData>
+    where
+        TxSource: TransactionsSource,
+    {
+        let block_gas_limit = self.consensus_params.block_gas_limit();
+        let mut data = ExecutionData::new();
+
+        // Split out the execution kind and partial block.
+        let block = component.empty_block;
+        let source = component.transactions_source;
+        let gas_price = component.gas_price;
+        let coinbase_contract_id = component.coinbase_contract_id;
+        let block_header = block.header;
+        let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
+
+        // The block level storage transaction that also contains data from the relayer.
+        // Starting from this point, modifications from each thread should be independent
+        // and shouldn't touch the same data.
+        let mut block_with_relayer_data_transaction = self.block_st_transaction.read_transaction()
+            // Enforces independent changes from each thread.
+            .with_policy(ConflictPolicy::Fail);
+
+        // We execute transactions in a single thread right now, but later,
+        // we will execute them in parallel with a separate independent storage transaction per thread.
+        let mut thread_block_transaction = block_with_relayer_data_transaction
+            .read_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
+
+        debug_assert!(block.transactions.is_empty());
+
+        self.process_relayed_txs(
+            forced_transactions,
+            block,
+            &mut thread_block_transaction,
+            &mut data,
+            coinbase_contract_id,
+        )?;
+
+        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+
+        // L2 originated transactions should be in the `TxSource`. This will be triggered after
+        // all relayed transactions are processed.
+        let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
+        while regular_tx_iter.peek().is_some() {
+            for transaction in regular_tx_iter {
+                match self.execute_transaction_and_commit(
+                    block,
+                    &mut thread_block_transaction,
+                    &mut data,
+                    transaction,
+                    gas_price,
+                    coinbase_contract_id,
+                ) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        return Err(err);
+                    }
+                }
+            }
+
+            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+
+            regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
+        }
+
+        let changes_from_thread = thread_block_transaction.into_changes();
+        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        self.block_st_transaction
+            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
