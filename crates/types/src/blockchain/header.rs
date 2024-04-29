@@ -191,9 +191,9 @@ pub struct ApplicationHeader<Generated> {
 /// These are generated once the full block has been run.
 pub struct GeneratedApplicationFields {
     /// Number of transactions in this block.
-    pub transactions_count: u64,
+    pub transactions_count: u16,
     /// Number of message receipts in this block.
-    pub message_receipt_count: u64,
+    pub message_receipt_count: u32,
     /// Merkle root of transactions.
     pub transactions_root: Bytes32,
     /// Merkle root of message receipts in this block.
@@ -373,8 +373,19 @@ impl BlockHeader {
         let transactions_root = generate_txns_root(transactions);
 
         transactions_root == self.application().transactions_root
-            && transactions.len() as u64 == self.application().transactions_count
+            && transactions.len() == self.application().transactions_count as usize
     }
+}
+
+/// Error type for generating a full [`BlockHeader`] from a [`PartialBlockHeader`].
+#[derive(derive_more::Display, Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+pub enum BlockHeaderError {
+    #[display(fmt = "The block header has too many transactions to fit into the `u16`")]
+    TooManyTransactions,
+    #[display(fmt = "The block header has too many messages to fit into the `u32`")]
+    TooManyMessages,
 }
 
 impl PartialBlockHeader {
@@ -395,7 +406,7 @@ impl PartialBlockHeader {
         transactions: &[Transaction],
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
-    ) -> BlockHeader {
+    ) -> Result<BlockHeader, BlockHeaderError> {
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions);
 
@@ -416,8 +427,10 @@ impl PartialBlockHeader {
                 .application
                 .state_transition_bytecode_version,
             generated: GeneratedApplicationFields {
-                transactions_count: transactions.len() as u64,
-                message_receipt_count: outbox_message_ids.len() as u64,
+                transactions_count: u16::try_from(transactions.len())
+                    .map_err(|_| BlockHeaderError::TooManyTransactions)?,
+                message_receipt_count: u32::try_from(outbox_message_ids.len())
+                    .map_err(|_| BlockHeaderError::TooManyMessages)?,
                 transactions_root,
                 message_outbox_root,
                 event_inbox_root,
@@ -441,7 +454,7 @@ impl PartialBlockHeader {
 
         // Cache the hash.
         header.recalculate_metadata();
-        header
+        Ok(header)
     }
 }
 
@@ -461,13 +474,30 @@ impl ApplicationHeader<GeneratedApplicationFields> {
     pub fn hash(&self) -> Bytes32 {
         // Order matters and is the same as the spec.
         let mut hasher = crate::fuel_crypto::Hasher::default();
-        hasher.input(self.da_height.to_bytes().as_slice());
-        hasher.input(self.transactions_count.to_be_bytes());
-        hasher.input(self.message_receipt_count.to_be_bytes());
-        hasher.input(self.transactions_root.as_ref());
-        hasher.input(self.message_outbox_root.as_ref());
-        hasher.input(self.consensus_parameters_version.to_bytes().as_slice());
-        hasher.input(self.state_transition_bytecode_version.to_bytes().as_slice());
+        let Self {
+            da_height,
+            consensus_parameters_version,
+            state_transition_bytecode_version,
+            generated:
+                GeneratedApplicationFields {
+                    transactions_count,
+                    message_receipt_count,
+                    transactions_root,
+                    message_outbox_root,
+                    event_inbox_root,
+                },
+        } = self;
+
+        hasher.input(da_height.to_be_bytes());
+        hasher.input(consensus_parameters_version.to_be_bytes());
+        hasher.input(state_transition_bytecode_version.to_be_bytes());
+
+        hasher.input(transactions_count.to_be_bytes());
+        hasher.input(message_receipt_count.to_be_bytes());
+        hasher.input(transactions_root.as_ref());
+        hasher.input(message_outbox_root.as_ref());
+        hasher.input(event_inbox_root.as_ref());
+
         hasher.digest()
     }
 }
@@ -477,10 +507,19 @@ impl ConsensusHeader<GeneratedConsensusFields> {
     pub fn hash(&self) -> BlockId {
         // Order matters and is the same as the spec.
         let mut hasher = crate::fuel_crypto::Hasher::default();
-        hasher.input(self.prev_root.as_ref());
-        hasher.input(&self.height.to_bytes()[..]);
-        hasher.input(self.time.0.to_be_bytes());
-        hasher.input(self.application_hash.as_ref());
+        let Self {
+            prev_root,
+            height,
+            time,
+            generated: GeneratedConsensusFields { application_hash },
+        } = self;
+
+        hasher.input(prev_root.as_ref());
+        hasher.input(height.to_be_bytes());
+        hasher.input(time.0.to_be_bytes());
+
+        hasher.input(application_hash.as_ref());
+
         BlockId::from(hasher.digest())
     }
 }

@@ -733,6 +733,7 @@ mod test {
             .into()],
         )
         .generate(&[], Bytes32::zeroed())
+        .unwrap()
     }
 
     #[cfg(not(feature = "wasm-executor"))]

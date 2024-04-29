@@ -494,11 +494,11 @@ type Header {
 	"""
 	Number of transactions in this block.
 	"""
-	transactionsCount: U64!
+	transactionsCount: U16!
 	"""
 	Number of message receipts in this block.
 	"""
-	messageReceiptCount: U64!
+	messageReceiptCount: U32!
 	"""
 	Merkle root of transactions.
 	"""

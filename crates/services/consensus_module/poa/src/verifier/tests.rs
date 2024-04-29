@@ -37,7 +37,9 @@ fn correct() -> Input {
             ..Default::default()
         },
     };
-    let block_header = partial_header.generate(&txs, &[], Default::default());
+    let block_header = partial_header
+        .generate(&txs, &[], Default::default())
+        .unwrap();
 
     Input {
         block_header_merkle_root: [2u8; 32],
