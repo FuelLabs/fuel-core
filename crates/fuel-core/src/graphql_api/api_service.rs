@@ -171,6 +171,7 @@ impl RunnableTask for Task {
 // Need a seperate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<OnChain, OffChain>(
+    genesis_block_height: BlockHeight,
     config: Config,
     schema: CoreSchemaBuilder,
     on_database: OnChain,
@@ -191,7 +192,8 @@ where
     OffChain::View: OffChainDatabase,
 {
     let network_addr = config.addr;
-    let combined_read_database = ReadDatabase::new(on_database, off_database);
+    let combined_read_database =
+        ReadDatabase::new(genesis_block_height, on_database, off_database);
 
     let schema = schema
         .data(config)

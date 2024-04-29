@@ -1,4 +1,5 @@
 use crate::fuel_core_graphql_api::ports::{
+    DatabaseBlocks,
     OffChainDatabase,
     OnChainDatabase,
 };
@@ -11,7 +12,6 @@ use fuel_core_storage::{
     not_found,
     tables::Transactions,
     Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
@@ -34,16 +34,10 @@ pub trait SimpleTransactionData: Send + Sync {
 
 impl<D> SimpleTransactionData for D
 where
-    D: OnChainDatabase + OffChainDatabase + ?Sized,
+    D: OnChainDatabase + DatabaseBlocks + OffChainDatabase + ?Sized,
 {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
-        if let Some(tx) = self.storage::<Transactions>().get(tx_id)? {
-            Ok(tx.into_owned())
-        } else if let Some(tx) = self.old_transaction(tx_id)? {
-            Ok(tx)
-        } else {
-            Err(not_found!(Transactions))
-        }
+        self.transaction(tx_id)
     }
 
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
@@ -71,7 +65,7 @@ pub trait TransactionQueryData: Send + Sync + SimpleTransactionData {
 
 impl<D> TransactionQueryData for D
 where
-    D: OnChainDatabase + OffChainDatabase + ?Sized,
+    D: OnChainDatabase + DatabaseBlocks + OffChainDatabase + ?Sized,
 {
     fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.tx_status(tx_id)

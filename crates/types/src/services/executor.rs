@@ -301,8 +301,6 @@ pub enum ExecutionKind {
     DryRun,
     /// Producing a block.
     Production,
-    /// Validating a block.
-    Validation,
 }
 
 #[allow(missing_docs)]
@@ -356,8 +354,10 @@ pub enum Error {
     InvalidTransactionOutcome { transaction_id: Bytes32 },
     #[display(fmt = "The amount of charged fees is invalid")]
     InvalidFeeAmount,
-    #[display(fmt = "Block id is invalid")]
-    InvalidBlockId,
+    #[display(
+        fmt = "Block generated during validation does not match the provided block"
+    )]
+    BlockMismatch,
     #[display(fmt = "No matching utxo for contract id ${_0:#x}")]
     ContractUtxoMissing(ContractId),
     #[display(fmt = "message already spent {_0:#x}")]

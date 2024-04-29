@@ -859,7 +859,7 @@ mod tests {
             let tx = Transaction::default_test_tx();
 
             let mut block = Block::default();
-            *block.transactions_mut() = vec![mint.into(), tx];
+            *block.transactions_mut() = vec![mint.clone().into(), tx, mint.into()];
             block.header_mut().recalculate_metadata();
 
             let mut validator = create_executor(Default::default(), Default::default());
@@ -1176,8 +1176,8 @@ mod tests {
             .transaction()
             .clone()
             .into();
-
-        let tx_id = tx.id(&ChainId::default());
+        let chain_id = ConsensusParameters::default().chain_id();
+        let transaction_id = tx.id(&chain_id);
 
         let mut producer = create_executor(Default::default(), Default::default());
 
@@ -1197,11 +1197,12 @@ mod tests {
             }
         }
 
-        let verify_result = verifier.validate_and_commit(block);
-        assert!(matches!(
-            verify_result,
-            Err(ExecutorError::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
-        ));
+        // then
+        let err = verifier.validate_and_commit(block).unwrap_err();
+        assert_eq!(
+            err,
+            ExecutorError::InvalidTransactionOutcome { transaction_id }
+        );
     }
 
     // corrupt the merkle sum tree commitment from a produced block and verify that the
@@ -1233,9 +1234,9 @@ mod tests {
         block.header_mut().set_transaction_root(rng.gen());
         block.header_mut().recalculate_metadata();
 
-        let verify_result = verifier.validate_and_commit(block);
+        let err = verifier.validate_and_commit(block).unwrap_err();
 
-        assert!(matches!(verify_result, Err(ExecutorError::InvalidBlockId)))
+        assert_eq!(err, ExecutorError::BlockMismatch)
     }
 
     // invalidate a block if a tx is missing at least one coin input
@@ -2177,14 +2178,14 @@ mod tests {
         }
 
         let verifier = create_executor(db, Default::default());
-        let verify_result = verifier.validate_without_commit(second_block);
+        let err = verifier.validate_without_commit(second_block).unwrap_err();
 
-        assert!(matches!(
-            verify_result,
-            Err(ExecutorError::InvalidTransactionOutcome {
-                transaction_id
-            }) if transaction_id == tx_id
-        ));
+        assert_eq!(
+            err,
+            ExecutorError::InvalidTransactionOutcome {
+                transaction_id: tx_id
+            }
+        );
     }
 
     #[test]
