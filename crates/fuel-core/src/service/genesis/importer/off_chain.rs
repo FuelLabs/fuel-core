@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::{
     database::{
         database_description::off_chain::OffChain,
-        Database,
+        GenesisDatabase,
     },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::{
@@ -52,7 +52,7 @@ impl ImportTable for Handler<TransactionStatuses, TransactionStatuses> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for tx_status in group {
             tx.storage::<Self::TableInSnapshot>()
@@ -70,7 +70,7 @@ impl ImportTable for Handler<FuelBlockIdsToHeights, FuelBlockIdsToHeights> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for entry in group {
             tx.storage::<Self::TableInSnapshot>()
@@ -88,7 +88,7 @@ impl ImportTable for Handler<OwnedTransactions, OwnedTransactions> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for entry in group {
             tx.storage::<OwnedTransactions>()
@@ -106,7 +106,7 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let events = group
             .into_iter()
@@ -124,7 +124,7 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let events = group.into_iter().map(|TableEntry { value, key }| {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
@@ -142,7 +142,7 @@ impl ImportTable for Handler<ContractsInfo, Transactions> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);
         worker_service::process_transactions(transactions, tx)?;
@@ -158,7 +158,7 @@ impl ImportTable for Handler<ContractsInfo, OldTransactions> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);
         worker_service::process_transactions(transactions, tx)?;
@@ -174,7 +174,7 @@ impl ImportTable for Handler<OldFuelBlocks, FuelBlocks> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
@@ -192,7 +192,7 @@ impl ImportTable for Handler<OldFuelBlocks, OldFuelBlocks> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
@@ -210,7 +210,7 @@ impl ImportTable for Handler<OldFuelBlockConsensus, SealedBlockConsensus> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
@@ -228,7 +228,7 @@ impl ImportTable for Handler<OldFuelBlockConsensus, OldFuelBlockConsensus> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
@@ -246,7 +246,7 @@ impl ImportTable for Handler<OldTransactions, Transactions> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let transactions = group
             .iter()
@@ -264,7 +264,7 @@ impl ImportTable for Handler<OldTransactions, OldTransactions> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let transactions = group
             .iter()
@@ -282,11 +282,47 @@ impl ImportTable for Handler<SpentMessages, SpentMessages> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for entry in group {
             tx.storage_as_mut::<SpentMessages>()
                 .insert(&entry.key, &entry.value)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<FuelBlockIdsToHeights, FuelBlocks> {
+    type TableInSnapshot = FuelBlocks;
+    type TableBeingWritten = FuelBlockIdsToHeights;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage_as_mut::<FuelBlockIdsToHeights>()
+                .insert(&entry.value.id(), &entry.key)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<FuelBlockIdsToHeights, OldFuelBlocks> {
+    type TableInSnapshot = OldFuelBlocks;
+    type TableBeingWritten = FuelBlockIdsToHeights;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage_as_mut::<FuelBlockIdsToHeights>()
+                .insert(&entry.value.id(), &entry.key)?;
         }
         Ok(())
     }

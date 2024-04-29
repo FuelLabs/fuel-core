@@ -6,6 +6,7 @@ use crate::{
             relayer::Relayer,
         },
         Database,
+        GenesisDatabase,
         Result as DatabaseResult,
     },
     service::DbType,
@@ -177,5 +178,37 @@ impl CombinedDatabase {
         let state_config = builder.build(Some(latest_block.header().into()))?;
 
         Ok(state_config)
+    }
+
+    /// Converts the combined database into a genesis combined database.
+    pub fn into_genesis(self) -> CombinedGenesisDatabase {
+        CombinedGenesisDatabase {
+            on_chain: self.on_chain.into_genesis(),
+            off_chain: self.off_chain.into_genesis(),
+            relayer: self.relayer.into_genesis(),
+        }
+    }
+}
+
+/// A genesis database that combines the on-chain, off-chain and relayer
+/// genesis databases into one entity.
+#[derive(Default, Clone)]
+pub struct CombinedGenesisDatabase {
+    on_chain: GenesisDatabase<OnChain>,
+    off_chain: GenesisDatabase<OffChain>,
+    relayer: GenesisDatabase<Relayer>,
+}
+
+impl CombinedGenesisDatabase {
+    pub fn on_chain(&self) -> &GenesisDatabase<OnChain> {
+        &self.on_chain
+    }
+
+    pub fn off_chain(&self) -> &GenesisDatabase<OffChain> {
+        &self.off_chain
+    }
+
+    pub fn relayer(&self) -> &GenesisDatabase<Relayer> {
+        &self.relayer
     }
 }
