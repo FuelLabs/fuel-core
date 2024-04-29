@@ -133,8 +133,6 @@ use fuel_core_types::{
             Error as ExecutorError,
             Event as ExecutorEvent,
             ExecutionResult,
-            // ExecutionType,
-            // ExecutionTypes,
             ForcedTransactionFailure,
             Result as ExecutorResult,
             TransactionExecutionResult,
@@ -151,8 +149,6 @@ use tracing::{
     debug,
     warn,
 };
-
-// pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
@@ -537,7 +533,7 @@ where
     D: KeyValueInspect<Column = Column>,
 {
     #[tracing::instrument(skip_all)]
-    /// Execute the fuel block with all transactions.
+    /// Produce the fuel block with specified components
     fn produce_block<TxSource>(
         mut self,
         component: PartialBlockComponent<TxSource>,
@@ -608,7 +604,6 @@ where
             regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
         }
 
-        // After the execution of all transactions in production mode, we can set the final fee.
         let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
             data.coinbase
         } else {
@@ -657,7 +652,7 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    /// Execute the fuel block with all transactions.
+    /// Execute dry-run of block with specified components
     fn dry_run_block<TxSource>(
         mut self,
         component: PartialBlockComponent<TxSource>,
