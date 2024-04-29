@@ -71,6 +71,7 @@ pub async fn execute_genesis_block(
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let genesis_block = create_genesis_block(config);
     tracing::info!("Genesis block created: {:?}", genesis_block.header());
+    let db = db.clone().into_genesis();
 
     SnapshotImporter::import(
         db.clone(),
