@@ -245,7 +245,7 @@ where
     }
 
     #[cfg(any(test, feature = "test-helpers"))]
-    /// The analog of the [`Self::execute_without_commit`] method,
+    /// The analog of the [`Self::produce_without_commit`] method,
     /// but with the ability to specify the coinbase recipient and the gas price.
     pub fn produce_without_commit_with_coinbase(
         &self,
