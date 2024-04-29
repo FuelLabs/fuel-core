@@ -45,11 +45,10 @@ use fuel_core_storage::{
     },
     StorageAsRef,
 };
+#[cfg(any(test, feature = "test-helpers"))]
+use fuel_core_types::blockchain::block::PartialFuelBlock;
 use fuel_core_types::blockchain::{
-    block::{
-        Block,
-        PartialFuelBlock,
-    },
+    block::Block,
     header::StateTransitionBytecodeVersion,
 };
 #[cfg(any(test, feature = "test-helpers"))]
