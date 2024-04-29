@@ -2897,9 +2897,7 @@ mod tests {
             // When
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 0);
-            let (result, changes) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))?
-                .into();
+            let (result, changes) = producer.produce_without_commit(block.into())?.into();
 
             // Then
             let view = ChangesIterator::<OnChain>::new(&changes);
@@ -2958,7 +2956,7 @@ mod tests {
 
             // when
             let (result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -2984,7 +2982,7 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3023,8 +3021,8 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
-                .execute_without_commit_with_coinbase(
-                    ExecutionTypes::Production(block.into()),
+                .produce_without_commit_with_coinbase(
+                    block.into(),
                     Default::default(),
                     gas_price,
                 )
@@ -3060,7 +3058,7 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3113,7 +3111,7 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3166,7 +3164,7 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3228,7 +3226,7 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3331,7 +3329,7 @@ mod tests {
             let producer = create_relayer_executor(producer_db, producer_relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (produced_result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
             produced_result.block
@@ -3364,7 +3362,7 @@ mod tests {
             let block =
                 test_block(block_height.into(), da_height.into(), tx_count as usize);
             let (result, _) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3441,7 +3439,7 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
-                .execute_without_commit(ExecutionBlock::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3501,7 +3499,7 @@ mod tests {
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 10);
             let (result, changes) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 
@@ -3543,7 +3541,7 @@ mod tests {
             *block.transactions_mut() = vec![tx];
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let (result, changes) = producer
-                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .produce_without_commit(block.into())
                 .unwrap()
                 .into();
 

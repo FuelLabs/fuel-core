@@ -1,8 +1,5 @@
 use fuel_core_executor::{
-    executor::{
-        ExecutionBlockWithSource,
-        ExecutionOptions,
-    },
+    executor::ExecutionOptions,
     ports::{
         MaybeCheckedTransaction,
         RelayerPort,

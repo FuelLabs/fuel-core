@@ -355,13 +355,13 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let block_version = block.state_transition_version();
+        let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
-                ExecutionStrategy::Native => self.native_execute_inner(block, options),
+                ExecutionStrategy::Native => self.native_produce_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
-                    self.wasm_execute_inner(module, block, options)
+                    self.wasm_produce_inner(module, block, options)
                 }
             }
         } else {
@@ -370,7 +370,7 @@ where
                 "The block version({}) is different from the native executor version({}). \
                 The WASM executor will be used.", block_version, Self::VERSION
             );
-            self.wasm_execute_inner(&module, block, options)
+            self.wasm_produce_inner(&module, block, options)
         }
     }
 
@@ -404,13 +404,13 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let block_version = block.state_transition_version();
+        let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
-                ExecutionStrategy::Native => self.native_execute_inner(block, options),
+                ExecutionStrategy::Native => self.native_dry_run_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
-                    self.wasm_execute_inner(module, block, options)
+                    self.wasm_dry_run_inner(module, block, options)
                 }
             }
         } else {
@@ -491,30 +491,27 @@ where
     fn wasm_produce_inner<TxSource>(
         &self,
         module: &wasmtime::Module,
-        block: Components<TxSource>,
+        component: Components<TxSource>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let mut source = None;
-        let block = block.map_p(|component| {
-            let Components {
-                header_to_produce,
-                transactions_source,
-                coinbase_recipient,
-                gas_price,
-            } = component;
+        let Components {
+            header_to_produce,
+            transactions_source,
+            coinbase_recipient,
+            gas_price,
+        } = component;
 
-            source = Some(transactions_source);
+        let source = Some(transactions_source);
 
-            Components {
-                header_to_produce,
-                transactions_source: (),
-                coinbase_recipient,
-                gas_price,
-            }
-        });
+        let block = Components {
+            header_to_produce,
+            transactions_source: (),
+            coinbase_recipient,
+            gas_price,
+        };
 
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
@@ -536,30 +533,27 @@ where
     fn wasm_dry_run_inner<TxSource>(
         &self,
         module: &wasmtime::Module,
-        block: Components<TxSource>,
+        component: Components<TxSource>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let mut source = None;
-        let block = block.map_p(|component| {
-            let Components {
-                header_to_produce,
-                transactions_source,
-                coinbase_recipient,
-                gas_price,
-            } = component;
+        let Components {
+            header_to_produce,
+            transactions_source,
+            coinbase_recipient,
+            gas_price,
+        } = component;
 
-            source = Some(transactions_source);
+        let source = Some(transactions_source);
 
-            Components {
-                header_to_produce,
-                transactions_source: (),
-                coinbase_recipient,
-                gas_price,
-            }
-        });
+        let block = Components {
+            header_to_produce,
+            transactions_source: (),
+            coinbase_recipient,
+            gas_price,
+        };
 
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
