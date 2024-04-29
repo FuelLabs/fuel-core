@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use crate::vm_initialization::vm_initialization;
 use contract::*;
+use fuel_core::database::GenesisDatabase;
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::IntoTransaction;
 use fuel_core_types::fuel_asm::Instruction;
@@ -47,7 +48,7 @@ where
             let relayer_database_tx = block_database_tx.into_transaction();
             let thread_database_tx = relayer_database_tx.into_transaction();
             let tx_database_tx = thread_database_tx.into_transaction();
-            let database = Database::new(Arc::new(tx_database_tx));
+            let database = GenesisDatabase::new(Arc::new(tx_database_tx));
             *vm.as_mut().database_mut() = database.into_transaction();
 
             let mut total = core::time::Duration::ZERO;

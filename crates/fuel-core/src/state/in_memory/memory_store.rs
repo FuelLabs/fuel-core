@@ -162,7 +162,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(Default::default(), changes)?;
+            self.commit_changes(None, changes)?;
             Ok(len)
         }
 
@@ -170,7 +170,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(Default::default(), changes)?;
+            self.commit_changes(None, changes)?;
             Ok(())
         }
     }

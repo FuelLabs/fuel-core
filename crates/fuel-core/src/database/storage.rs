@@ -30,7 +30,7 @@ use fuel_core_storage::{
     StorageWrite,
 };
 
-impl<Description, M> StorageInspect<M> for Database<Description>
+impl<Description, Stage, M> StorageInspect<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -57,7 +57,7 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-impl<Description, M> StorageMutate<M> for Database<Description>
+impl<Description, Stage, M> StorageMutate<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -92,7 +92,7 @@ where
     }
 }
 
-impl<M, Description> StorageSize<M> for Database<Description>
+impl<Description, Stage, M> StorageSize<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -103,7 +103,8 @@ where
     }
 }
 
-impl<Description, Key, M> MerkleRootStorage<Key, M> for Database<Description>
+impl<Description, Stage, Key, M> MerkleRootStorage<Key, M>
+    for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -114,7 +115,7 @@ where
     }
 }
 
-impl<Description, M> StorageRead<M> for Database<Description>
+impl<Description, Stage, M> StorageRead<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -130,7 +131,7 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-impl<M, Description> StorageWrite<M> for Database<Description>
+impl<Description, Stage, M> StorageWrite<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,
@@ -177,7 +178,7 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-impl<Description, M> StorageBatchMutate<M> for Database<Description>
+impl<Description, Stage, M> StorageBatchMutate<M> for Database<Description, Stage>
 where
     Description: DatabaseDescription,
     M: Mappable,

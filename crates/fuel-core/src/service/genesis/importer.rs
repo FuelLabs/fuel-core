@@ -3,13 +3,14 @@ use super::{
     task_manager::TaskManager,
 };
 use crate::{
-    combined_database::CombinedDatabase,
+    combined_database::CombinedGenesisDatabase,
     database::database_description::{
         off_chain::OffChain,
         on_chain::OnChain,
     },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
+        blocks::FuelBlockIdsToHeights,
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
@@ -67,7 +68,7 @@ mod on_chain;
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
 pub struct SnapshotImporter {
-    db: CombinedDatabase,
+    db: CombinedGenesisDatabase,
     task_manager: TaskManager<()>,
     genesis_block: Block,
     snapshot_reader: SnapshotReader,
@@ -76,7 +77,7 @@ pub struct SnapshotImporter {
 
 impl SnapshotImporter {
     fn new(
-        db: CombinedDatabase,
+        db: CombinedGenesisDatabase,
         genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
@@ -93,7 +94,7 @@ impl SnapshotImporter {
     }
 
     pub async fn import(
-        db: CombinedDatabase,
+        db: CombinedGenesisDatabase,
         genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
@@ -126,6 +127,8 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<OldFuelBlocks, OldFuelBlocks>()?;
         self.spawn_worker_off_chain::<OldFuelBlockConsensus, OldFuelBlockConsensus>()?;
         self.spawn_worker_off_chain::<OldTransactions, OldTransactions>()?;
+        self.spawn_worker_off_chain::<FuelBlocks, FuelBlockIdsToHeights>()?;
+        self.spawn_worker_off_chain::<OldFuelBlocks, FuelBlockIdsToHeights>()?;
 
         self.task_manager.wait().await?;
 
