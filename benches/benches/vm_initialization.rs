@@ -101,13 +101,7 @@ pub fn vm_initialization(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
-                let vm = black_box(
-                    Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
-                );
-
-                // Initialize the VM and require the allocation of the whole memory
-                // to charge for the worst possible case.
-                black_box(initialize_vm(black_box(tx.clone()), vm));
+                unoptimized_vm_initialization_with_allocating_full_range_of_memory(&tx);
             })
         });
     }
@@ -115,7 +109,18 @@ pub fn vm_initialization(c: &mut Criterion) {
     group.finish();
 }
 
-fn initialize_vm<S>(
+fn unoptimized_vm_initialization_with_allocating_full_range_of_memory(
+    ready_tx: &Ready<Script>,
+) {
+    let vm = black_box(Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage());
+
+    black_box(initialize_vm_with_allocated_full_range_of_memory(
+        black_box(ready_tx.clone()),
+        vm,
+    ));
+}
+
+fn initialize_vm_with_allocated_full_range_of_memory<S>(
     ready_tx: Ready<Script>,
     mut vm: Interpreter<S, Script>,
 ) -> Interpreter<S, Script>
