@@ -227,6 +227,19 @@ impl<Storage> Modifiable for InMemoryTransaction<Storage> {
     }
 }
 
+impl<Column, S> InMemoryTransaction<S>
+where
+    Column: StorageColumn,
+    S: KeyValueInspect<Column = Column>,
+{
+    fn get_from_changes(&self, key: &[u8], column: Column) -> Option<&WriteOperation> {
+        let k = key.to_vec();
+        self.changes
+            .get(&column.id())
+            .and_then(|btree| btree.get(&k))
+    }
+}
+
 impl<Column, S> KeyValueInspect for InMemoryTransaction<S>
 where
     Column: StorageColumn,
@@ -234,19 +247,65 @@ where
 {
     type Column = Column;
 
+    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
+        if let Some(operation) = self.get_from_changes(key, column) {
+            match operation {
+                WriteOperation::Insert(_) => Ok(true),
+                WriteOperation::Remove => Ok(false),
+            }
+        } else {
+            self.storage.exists(key, column)
+        }
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
+        if let Some(operation) = self.get_from_changes(key, column) {
+            match operation {
+                WriteOperation::Insert(value) => Ok(Some(value.len())),
+                WriteOperation::Remove => Ok(None),
+            }
+        } else {
+            self.storage.size_of_value(key, column)
+        }
+    }
+
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        let k = key.to_vec();
-        if let Some(operation) = self
-            .changes
-            .get(&column.id())
-            .and_then(|btree| btree.get(&k))
-        {
+        if let Some(operation) = self.get_from_changes(key, column) {
             match operation {
                 WriteOperation::Insert(value) => Ok(Some(value.clone())),
                 WriteOperation::Remove => Ok(None),
             }
         } else {
             self.storage.get(key, column)
+        }
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        if let Some(operation) = self.get_from_changes(key, column) {
+            match operation {
+                WriteOperation::Insert(value) => {
+                    let read = value.len();
+                    if read != buf.len() {
+                        return Err(crate::Error::Other(anyhow::anyhow!(
+                            "Buffer size is not equal to the value size"
+                        )));
+                    }
+                    buf.copy_from_slice(value.as_ref());
+                    Ok(Some(read))
+                }
+                WriteOperation::Remove => Ok(None),
+            }
+        } else {
+            self.storage.read(key, column, buf)
         }
     }
 }

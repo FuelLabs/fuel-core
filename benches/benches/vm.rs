@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use crate::vm_initialization::vm_initialization;
 use contract::*;
+use fuel_core::database::GenesisDatabase;
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::IntoTransaction;
 use fuel_core_types::fuel_asm::Instruction;
@@ -47,7 +48,7 @@ where
             let relayer_database_tx = block_database_tx.into_transaction();
             let thread_database_tx = relayer_database_tx.into_transaction();
             let tx_database_tx = thread_database_tx.into_transaction();
-            let database = Database::new(Arc::new(tx_database_tx));
+            let database = GenesisDatabase::new(Arc::new(tx_database_tx));
             *vm.as_mut().database_mut() = database.into_transaction();
 
             let mut total = core::time::Duration::ZERO;
@@ -88,3 +89,14 @@ fn vm(c: &mut Criterion) {
 
 criterion_group!(benches, vm);
 criterion_main!(benches);
+
+// If you want to debug the benchmarks, you can run them with code below:
+// But first you need to comment `criterion_group` and `criterion_main` macros above.
+//
+// fn main() {
+//     let mut criterio = Criterion::default();
+//     blockchain::run(&mut criterio);
+// }
+//
+// #[test]
+// fn dummy() {}

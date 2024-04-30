@@ -22,7 +22,7 @@ use crate::{
             GenesisMetadata,
             GenesisProgressMutate,
         },
-        Database,
+        GenesisDatabase,
     },
     service::genesis::{
         progress::ProgressReporter,
@@ -37,7 +37,7 @@ where
     fn on_chain(
         &mut self,
         _group: Cow<Vec<TableEntry<T>>>,
-        _tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        _tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -45,7 +45,7 @@ where
     fn off_chain(
         &mut self,
         _group: Cow<Vec<TableEntry<T>>>,
-        _tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        _tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -55,8 +55,8 @@ pub fn import_entries<T>(
     cancel_token: CancellationToken,
     mut handler: impl ImportTable<T>,
     groups: impl IntoIterator<Item = anyhow::Result<Vec<TableEntry<T>>>>,
-    mut on_chain_db: Database<OnChain>,
-    mut off_chain_db: Database<OffChain>,
+    mut on_chain_db: GenesisDatabase<OnChain>,
+    mut off_chain_db: GenesisDatabase<OffChain>,
     reporter: ProgressReporter,
 ) -> anyhow::Result<()>
 where
@@ -128,6 +128,7 @@ mod tests {
                 GenesisMetadata,
                 GenesisProgressInspect,
             },
+            GenesisDatabase,
         },
         graphql_api::storage::coins::{
             OwnedCoinKey,
@@ -192,11 +193,9 @@ mod tests {
     };
 
     use crate::{
-        combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
             genesis_progress::GenesisProgressMutate,
-            Database,
         },
         state::{
             in_memory::memory_store::MemoryStore,
@@ -244,11 +243,11 @@ mod tests {
         where
             OnChainCallback: FnMut(
                 Vec<TableEntry<Coins>>,
-                &mut StorageTransaction<&mut Database<OnChain>>,
+                &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
             ) -> anyhow::Result<()>,
             OffChainCallback: FnMut(
                 Vec<TableEntry<Coins>>,
-                &mut StorageTransaction<&mut Database<OffChain>>,
+                &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
             ) -> anyhow::Result<()>,
         {
             TestTableImporter {
@@ -267,11 +266,11 @@ mod tests {
     type DefaultImporter = TestTableImporter<
         fn(
             Vec<TableEntry<Coins>>,
-            &mut StorageTransaction<&mut Database<OnChain>>,
+            &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
         ) -> anyhow::Result<()>,
         fn(
             Vec<TableEntry<Coins>>,
-            &mut StorageTransaction<&mut Database<OffChain>>,
+            &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
         ) -> anyhow::Result<()>,
     >;
 
@@ -280,17 +279,17 @@ mod tests {
     where
         OnChainCallback: FnMut(
             Vec<TableEntry<Coins>>,
-            &mut StorageTransaction<&mut Database<OnChain>>,
+            &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
         ) -> anyhow::Result<()>,
         OffChainCallback: FnMut(
             Vec<TableEntry<Coins>>,
-            &mut StorageTransaction<&mut Database<OffChain>>,
+            &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
         ) -> anyhow::Result<()>,
     {
         fn on_chain(
             &mut self,
             group: Cow<Vec<TableEntry<Coins>>>,
-            tx: &mut StorageTransaction<&mut Database<OnChain>>,
+            tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
         ) -> anyhow::Result<()> {
             let group = group.into_owned();
             self.handler
@@ -305,7 +304,7 @@ mod tests {
         fn off_chain(
             &mut self,
             group: Cow<Vec<TableEntry<Coins>>>,
-            tx: &mut StorageTransaction<&mut Database<OffChain>>,
+            tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
         ) -> anyhow::Result<()> {
             let group = group.into_owned();
             self.handler
@@ -362,8 +361,8 @@ mod tests {
             never_cancel(),
             spy.default_importer(),
             data.as_ok_groups(0),
-            Database::default(),
-            Database::default(),
+            GenesisDatabase::default(),
+            GenesisDatabase::default(),
             ProgressReporter::default(),
         )
         .unwrap();
@@ -378,16 +377,17 @@ mod tests {
         // given
         let data = TestData::new(2);
 
-        let mut db = CombinedDatabase::default();
+        let mut on_chain_db = GenesisDatabase::<OnChain>::default();
+        let mut off_chain_db = GenesisDatabase::<OffChain>::default();
         let spy = Spy::new();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
-            db.on_chain_mut(),
+            &mut on_chain_db,
             Coins::column().name(),
             0,
         )
         .unwrap();
         GenesisProgressMutate::<OffChain>::update_genesis_progress(
-            db.off_chain_mut(),
+            &mut off_chain_db,
             Coins::column().name(),
             0,
         )
@@ -398,8 +398,8 @@ mod tests {
             never_cancel(),
             spy.default_importer(),
             data.as_ok_groups(0),
-            db.on_chain().clone(),
-            db.off_chain().clone(),
+            on_chain_db.clone(),
+            off_chain_db.clone(),
             ProgressReporter::default(),
         )
         .unwrap();
@@ -409,14 +409,17 @@ mod tests {
         assert_eq!(spy.off_chain_called_with(), data.as_unwrapped_groups(1));
     }
 
-    fn insert_a_coin(tx: &mut StorageTransaction<&mut Database>, utxo_id: &UtxoId) {
+    fn insert_a_coin(
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
+        utxo_id: &UtxoId,
+    ) {
         let coin: CompressedCoin = CompressedCoinV1::default().into();
 
         tx.storage_as_mut::<Coins>().insert(utxo_id, &coin).unwrap();
     }
 
     fn insert_an_owned_coin(
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
         key: OwnedCoinKey,
     ) {
         tx.storage_as_mut::<OwnedCoins>().insert(&key, &()).unwrap();
@@ -426,7 +429,7 @@ mod tests {
     fn tx_reverted_if_on_chain_handler_fails() {
         // given
         let groups = TestData::new(1);
-        let on_chain_db = Database::default();
+        let on_chain_db = GenesisDatabase::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         // when
@@ -441,7 +444,7 @@ mod tests {
             ),
             groups.as_ok_groups(0),
             on_chain_db.clone(),
-            Database::default(),
+            GenesisDatabase::default(),
             ProgressReporter::default(),
         )
         .expect_err("should fail");
@@ -454,7 +457,7 @@ mod tests {
     fn tx_reverted_if_off_chain_handler_fails() {
         // given
         let groups = TestData::new(1);
-        let off_chain_db = Database::default();
+        let off_chain_db = GenesisDatabase::default();
         let key = [0; std::mem::size_of::<OwnedCoinKey>()];
 
         // when
@@ -468,7 +471,7 @@ mod tests {
                 },
             ),
             groups.as_ok_groups(0),
-            Database::default(),
+            GenesisDatabase::default(),
             off_chain_db.clone(),
             ProgressReporter::default(),
         )
@@ -490,8 +493,8 @@ mod tests {
             never_cancel(),
             Spy::default().default_importer(),
             groups,
-            Database::default(),
-            Database::default(),
+            GenesisDatabase::default(),
+            GenesisDatabase::default(),
             ProgressReporter::default(),
         );
 
@@ -503,8 +506,8 @@ mod tests {
     fn succesfully_processed_batch_updates_the_genesis_progress() {
         // given
         let data = TestData::new(2);
-        let on_chain_db = Database::default();
-        let off_chain_db = Database::default();
+        let on_chain_db = GenesisDatabase::default();
+        let off_chain_db = GenesisDatabase::default();
 
         // when
         import_entries(
@@ -549,8 +552,8 @@ mod tests {
                     cancel_token,
                     importer,
                     rx,
-                    Database::default(),
-                    Database::default(),
+                    GenesisDatabase::default(),
+                    GenesisDatabase::default(),
                     ProgressReporter::default(),
                 )
             })
@@ -643,16 +646,16 @@ mod tests {
     }
 
     #[test_case::test_case(
-        Database::new(Arc::new(BrokenTransactions::<OnChain>::default())),
-        Database::default()
+        GenesisDatabase::new(Arc::new(BrokenTransactions::<OnChain>::default())),
+        GenesisDatabase::default()
     ; "broken on chain db")]
     #[test_case::test_case(
-        Database::default(),
-        Database::new(Arc::new(BrokenTransactions::<OffChain>::default()))
+        GenesisDatabase::default(),
+        GenesisDatabase::new(Arc::new(BrokenTransactions::<OffChain>::default()))
     ; "broken off chain db")]
     fn on_chain_tx_commit_failure_is_propagated(
-        on_chain: Database<OnChain>,
-        off_chain: Database<OffChain>,
+        on_chain: GenesisDatabase<OnChain>,
+        off_chain: GenesisDatabase<OffChain>,
     ) {
         // given
         let groups = TestData::new(1);
@@ -685,7 +688,7 @@ mod tests {
         // given
         // Currently the difference is never going to be more than 1, but if we ever change that
         // `import_entries` should be able to handle it.
-        let mut on_chain = Database::<OnChain>::default();
+        let mut on_chain = GenesisDatabase::<OnChain>::default();
         if let Some(last_on_chain_group_processed) = last_on_chain {
             StorageMutate::<GenesisMetadata<OnChain>>::insert(
                 &mut on_chain,
@@ -695,7 +698,7 @@ mod tests {
             .unwrap();
         }
 
-        let mut off_chain = Database::<OffChain>::default();
+        let mut off_chain = GenesisDatabase::<OffChain>::default();
         if let Some(last_off_chain_group_processed) = last_off_chain {
             StorageMutate::<GenesisMetadata<OffChain>>::insert(
                 &mut off_chain,

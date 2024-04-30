@@ -6,13 +6,31 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- [#1838](https://github.com/FuelLabs/fuel-core/pull/1838): Snapshot parquet files are now read only once.
+
+## [Version 0.26.0]
+
 ### Fixed
 
+#### Breaking
+
+- [#1868](https://github.com/FuelLabs/fuel-core/pull/1868): Include the `event_inbox_root` in the header hash. Changed types of the `transactions_count` to `u16` and `message_receipt_count` to `u32` instead of `u64`. Updated the application hash root calculation to not pad numbers.
+- [#1866](https://github.com/FuelLabs/fuel-core/pull/1866): Fixed a runtime panic that occurred when restarting a node. The panic happens when the relayer database is already populated, and the relayer attempts an empty commit during start up. This invalid commit is removed in this PR.
+- [#1871](https://github.com/FuelLabs/fuel-core/pull/1871): Fixed `block` endpoint to return fetch the blocks from both databases after regenesis.
 - [#1856](https://github.com/FuelLabs/fuel-core/pull/1856): Replaced instances of `Union` with `Enum` for GraphQL definitions of `ConsensusParametersVersion` and related types. This is needed because `Union` does not support multiple `Version`s inside discriminants or empty variants. 
+- [#1870](https://github.com/FuelLabs/fuel-core/pull/1870): Fixed benchmarks for the `0.25.3`. 
+- [#1870](https://github.com/FuelLabs/fuel-core/pull/1870): Improves the performance of getting the size of the contract from the `InMemoryTransaction`.
+- [#1851](https://github.com/FuelLabs/fuel-core/pull/1851/): Provided migration capabilities (enabled addition of new column families) to RocksDB instance.
+
+### Added 
+
+- [#1853](https://github.com/FuelLabs/fuel-core/pull/1853): Added a test case to verify the database's behavior when new columns are added to the RocksDB database.
+- [#1860](https://github.com/FuelLabs/fuel-core/pull/1860): Regenesis now preserves `FuelBlockIdsToHeights` off-chain table.
 
 ### Changed
 
-- [#1838](https://github.com/FuelLabs/fuel-core/pull/1838): Snapshot parquet files are now read only once.
+- [#1847](https://github.com/FuelLabs/fuel-core/pull/1847): Simplify the validation interface to use `Block`. Remove `Validation` variant of `ExecutionKind`.
 - [#1832](https://github.com/FuelLabs/fuel-core/pull/1832): Snapshot generation can be cancelled. Progress is also reported.
 - [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 
@@ -22,10 +40,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [#1844](https://github.com/FuelLabs/fuel-core/pull/1844): Fixed the publishing of the `fuel-core 0.25.1` release.
 - [1842](https://github.com/FuelLabs/fuel-core/pull/1842): Ignore RUSTSEC-2024-0336: `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network
-
-### Changed
-
-- [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 
 ## [Version 0.25.1]
 
@@ -50,7 +64,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
-- [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 - [#1833](https://github.com/FuelLabs/fuel-core/pull/1833): Regenesis of `SpentMessages` and `ProcessedTransactions`.
 - [#1830](https://github.com/FuelLabs/fuel-core/pull/1830): Use versioning enum for WASM executor input and output.
 - [#1816](https://github.com/FuelLabs/fuel-core/pull/1816): Updated the upgradable executor to fetch the state transition bytecode from the database when the version doesn't match a native one. This change enables the WASM executor in the "production" build and requires a `wasm32-unknown-unknown` target.
@@ -205,6 +218,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- [#1872](https://github.com/FuelLabs/fuel-core/pull/1872): Added Eq and PartialEq derives to TransactionStatus and TransactionResponse to enable comparison in the e2e tests.
 - [#1723](https://github.com/FuelLabs/fuel-core/pull/1723): Notify about imported blocks from the off-chain worker.
 - [#1717](https://github.com/FuelLabs/fuel-core/pull/1717): The fix for the [#1657](https://github.com/FuelLabs/fuel-core/pull/1657) to include the contract into `ContractsInfo` table.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Upgrade to `fuel-vm` 0.46.0.

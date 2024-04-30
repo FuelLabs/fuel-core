@@ -153,11 +153,11 @@ fn ex_result(height: u32, skipped_transactions: usize) -> MockExecutionResult {
 }
 
 fn execution_failure<T>() -> ExecutorResult<T> {
-    Err(ExecutorError::InvalidBlockId)
+    Err(ExecutorError::BlockMismatch)
 }
 
 fn execution_failure_error() -> Error {
-    Error::FailedExecution(ExecutorError::InvalidBlockId)
+    Error::FailedExecution(ExecutorError::BlockMismatch)
 }
 
 fn executor<R>(result: R) -> MockValidator
@@ -168,7 +168,7 @@ where
     executor.expect_validate().return_once(move |_| {
         let mock_result = result()?;
         let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
-            .map(|_| (TxId::zeroed(), ExecutorError::InvalidBlockId))
+            .map(|_| (TxId::zeroed(), ExecutorError::BlockMismatch))
             .collect();
         Ok(Uncommitted::new(
             ExecutionResult {

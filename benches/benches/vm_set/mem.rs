@@ -93,6 +93,7 @@ pub fn run(c: &mut Criterion) {
             VmBench::new(op::mcp(0x10, RegId::ZERO, 0x11)).with_prepare_script(vec![
                 op::movi(0x11, *i),
                 op::aloc(0x11),
+                op::cfe(0x11),
                 op::move_(0x10, RegId::HP),
             ]),
         );
@@ -117,6 +118,7 @@ pub fn run(c: &mut Criterion) {
                 vec![
                     op::movi(0x11, *i),
                     op::aloc(0x11),
+                    op::cfe(0x11),
                     op::move_(0x10, RegId::HP),
                 ],
             ),
@@ -132,6 +134,7 @@ pub fn run(c: &mut Criterion) {
         let mut prepare_script =
             vec![op::move_(0x11, RegId::ZERO), op::move_(0x12, RegId::ZERO)];
         prepare_script.extend(set_full_word(0x13, i));
+        prepare_script.extend(vec![op::cfe(0x13)]);
 
         run_group_ref(
             &mut mem_meq,

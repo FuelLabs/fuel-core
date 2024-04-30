@@ -14,10 +14,7 @@ use fuel_core_relayer::{
     new_service_test,
     ports::RelayerDb,
     test_helpers::{
-        middleware::{
-            MockMiddleware,
-            TriggerType,
-        },
+        middleware::MockMiddleware,
         EvtToLog,
         LogTestHelper,
     },
@@ -47,7 +44,10 @@ async fn stop_service_at_the_begin() {
     // The test verifies that if the service is stopped at the beginning, it will sync nothing.
     // It is possible to test because we simulate delay from the Ethereum node by the
     // `tokio::task::yield_now().await` in each method of the `MockMiddleware`.
-    let mock_db = MockDb::default();
+    let mut mock_db = MockDb::default();
+    mock_db
+        .set_finalized_da_height_to_at_least(&0u64.into())
+        .unwrap();
     let eth_node = MockMiddleware::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
@@ -66,7 +66,10 @@ async fn stop_service_at_the_middle() {
     // it will stop immediately.
     // It is possible to test because we simulate delay from the Ethereum node by the
     // `tokio::task::yield_now().await` in each method of the `MockMiddleware`.
-    let mock_db = MockDb::default();
+    let mut mock_db = MockDb::default();
+    mock_db
+        .set_finalized_da_height_to_at_least(&0u64.into())
+        .unwrap();
     let eth_node = MockMiddleware::default();
     eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let config = Config {
@@ -263,44 +266,6 @@ fn transaction(max_gas: u64, block_number: u64, block_index: u64) -> Log {
     log.block_number = Some(block_number.into());
     log.log_index = Some(block_index.into());
     log
-}
-
-#[tokio::test(start_paused = true)]
-async fn deploy_height_is_set() {
-    let mock_db = MockDb::default();
-    let config = Config {
-        da_deploy_height: 50u64.into(),
-        ..Default::default()
-    };
-    let eth_node = MockMiddleware::default();
-    eth_node.update_data(|data| data.best_block.number = Some(54.into()));
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let mut tx = Some(tx);
-    eth_node.set_before_event(move |_, evt| {
-        if let TriggerType::GetLogs(evt) = evt {
-            assert!(
-                matches!(
-                    evt,
-                    ethers_core::types::Filter {
-                        block_option: ethers_core::types::FilterBlockOption::Range {
-                            from_block: Some(ethers_core::types::BlockNumber::Number(f)),
-                            to_block: Some(ethers_core::types::BlockNumber::Number(t))
-                        },
-                        ..
-                    } if f.as_u64() == 51 && t.as_u64() == 54
-                ),
-                "{evt:?}"
-            );
-            if let Some(tx) = tx.take() {
-                tx.send(()).unwrap();
-            }
-        }
-    });
-    let relayer = new_service_test(eth_node, mock_db.clone(), config);
-    relayer.start_and_await().await.unwrap();
-    relayer.shared.await_synced().await.unwrap();
-    rx.await.unwrap();
-    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 54);
 }
 
 struct TestContext {

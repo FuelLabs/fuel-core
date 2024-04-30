@@ -71,6 +71,7 @@ pub async fn execute_genesis_block(
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let genesis_block = create_genesis_block(config);
     tracing::info!("Genesis block created: {:?}", genesis_block.header());
+    let db = db.clone().into_genesis();
 
     SnapshotImporter::import(
         db.clone(),
@@ -237,6 +238,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
         message_ids,
         events,
     )
+    .expect("The block is valid; qed")
 }
 
 #[cfg(test)]

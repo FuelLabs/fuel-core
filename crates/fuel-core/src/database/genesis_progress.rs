@@ -6,7 +6,7 @@ use super::{
         on_chain::OnChain,
         DatabaseDescription,
     },
-    Database,
+    GenesisDatabase,
 };
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_executor::refs::ContractRef;
@@ -102,7 +102,7 @@ where
     }
 }
 
-impl Database {
+impl GenesisDatabase {
     pub fn genesis_coins_root(&self) -> Result<MerkleRoot> {
         let coins = self.iter_all::<Coins>(None);
 

@@ -12,7 +12,7 @@ use crate::{
             on_chain::OnChain,
         },
         state::StateInitializer,
-        Database,
+        GenesisDatabase,
     },
     graphql_api::{
         storage::{
@@ -61,7 +61,7 @@ impl ImportTable<Coins> for Handler {
     fn on_chain(
         &mut self,
         group: Cow<Vec<TableEntry<Coins>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         for coin in group.as_ref() {
             init_coin(tx, coin, self.block_height)?;
@@ -73,7 +73,7 @@ impl ImportTable<Coins> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<Coins>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let group = group.into_owned();
         let events = group.into_iter().map(|TableEntry { value, key }| {
@@ -89,7 +89,7 @@ impl ImportTable<ProcessedTransactions> for Handler {
     fn on_chain(
         &mut self,
         group: Cow<Vec<TableEntry<ProcessedTransactions>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         for transaction in group.as_ref() {
             tx.storage::<ProcessedTransactions>()
@@ -103,7 +103,7 @@ impl ImportTable<Messages> for Handler {
     fn on_chain(
         &mut self,
         group: Cow<Vec<TableEntry<Messages>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         for message in group.as_ref() {
             init_da_message(tx, message, self.da_block_height)?;
@@ -114,7 +114,7 @@ impl ImportTable<Messages> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<Messages>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let group = group.into_owned();
         let events = group
@@ -128,7 +128,7 @@ impl ImportTable<ContractsRawCode> for Handler {
     fn on_chain(
         &mut self,
         group: Cow<Vec<TableEntry<ContractsRawCode>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         for contract in group.as_ref() {
             init_contract_raw_code(tx, contract)?;
@@ -141,7 +141,7 @@ impl ImportTable<ContractsLatestUtxo> for Handler {
     fn on_chain(
         &mut self,
         group: Cow<Vec<TableEntry<ContractsLatestUtxo>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         for utxo in group.as_ref() {
             init_contract_latest_utxo(tx, utxo, self.block_height)?;
@@ -154,7 +154,7 @@ impl ImportTable<ContractsState> for Handler {
     fn on_chain(
         &mut self,
         group: Cow<Vec<TableEntry<ContractsState>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group.into_owned())?;
         Ok(())
@@ -165,7 +165,7 @@ impl ImportTable<ContractsAssets> for Handler {
     fn on_chain(
         &mut self,
         group: Cow<Vec<TableEntry<ContractsAssets>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group.into_owned())?;
         Ok(())
@@ -176,7 +176,7 @@ impl ImportTable<Transactions> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<Transactions>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);
         worker_service::process_transactions(transactions, tx)?;
@@ -193,7 +193,7 @@ impl ImportTable<SpentMessages> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<SpentMessages>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         for entry in group.as_ref() {
             tx.storage_as_mut::<SpentMessages>()
@@ -207,7 +207,7 @@ impl ImportTable<OldTransactions> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<OldTransactions>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);
         worker_service::process_transactions(transactions, tx)?;
@@ -224,12 +224,18 @@ impl ImportTable<FuelBlocks> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<FuelBlocks>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
             .map(|TableEntry { key, value, .. }| (key, value));
         worker_service::copy_to_old_blocks(blocks, tx)?;
+
+        for entry in group.as_ref() {
+            tx.storage_as_mut::<FuelBlockIdsToHeights>()
+                .insert(&entry.value.id(), &entry.key)?;
+        }
+
         Ok(())
     }
 }
@@ -238,12 +244,17 @@ impl ImportTable<OldFuelBlocks> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<OldFuelBlocks>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
             .map(|TableEntry { key, value, .. }| (key, value));
         worker_service::copy_to_old_blocks(blocks, tx)?;
+
+        for entry in group.as_ref() {
+            tx.storage_as_mut::<FuelBlockIdsToHeights>()
+                .insert(&entry.value.id(), &entry.key)?;
+        }
         Ok(())
     }
 }
@@ -252,7 +263,7 @@ impl ImportTable<SealedBlockConsensus> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<SealedBlockConsensus>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
@@ -266,7 +277,7 @@ impl ImportTable<OldFuelBlockConsensus> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<OldFuelBlockConsensus>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         let blocks = group
             .iter()
@@ -280,7 +291,7 @@ impl ImportTable<TransactionStatuses> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<TransactionStatuses>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         for tx_status in group.as_ref() {
             tx.storage::<TransactionStatuses>()
@@ -294,7 +305,7 @@ impl ImportTable<FuelBlockIdsToHeights> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<FuelBlockIdsToHeights>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         for entry in group.as_ref() {
             tx.storage::<FuelBlockIdsToHeights>()
@@ -308,7 +319,7 @@ impl ImportTable<OwnedTransactions> for Handler {
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<OwnedTransactions>>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
     ) -> anyhow::Result<()> {
         for entry in group.as_ref() {
             tx.storage::<OwnedTransactions>()
@@ -319,7 +330,7 @@ impl ImportTable<OwnedTransactions> for Handler {
 }
 
 fn init_coin(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     coin: &TableEntry<Coins>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -354,7 +365,7 @@ fn init_coin(
 }
 
 fn init_contract_latest_utxo(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     entry: &TableEntry<ContractsLatestUtxo>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -378,7 +389,7 @@ fn init_contract_latest_utxo(
 }
 
 fn init_contract_raw_code(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     entry: &TableEntry<ContractsRawCode>,
 ) -> anyhow::Result<()> {
     let contract = entry.value.as_ref();
@@ -397,7 +408,7 @@ fn init_contract_raw_code(
 }
 
 fn init_da_message(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase<OnChain>>,
     msg: &TableEntry<Messages>,
     da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {
@@ -411,7 +422,7 @@ fn init_da_message(
 
     if transaction
         .storage::<Messages>()
-        .insert(message.id(), message)?
+        .insert(message.id(), &message)?
         .is_some()
     {
         return Err(anyhow!("Message should not exist"));

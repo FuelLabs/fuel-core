@@ -5,7 +5,7 @@ use super::{
     task_manager::TaskManager,
 };
 use crate::{
-    combined_database::CombinedDatabase,
+    combined_database::CombinedGenesisDatabase,
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
         old::{
@@ -56,7 +56,7 @@ mod logic;
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
 pub struct SnapshotImporter {
-    db: CombinedDatabase,
+    db: CombinedGenesisDatabase,
     task_manager: TaskManager<()>,
     genesis_block: Block,
     snapshot_reader: SnapshotReader,
@@ -65,7 +65,7 @@ pub struct SnapshotImporter {
 
 impl SnapshotImporter {
     fn new(
-        db: CombinedDatabase,
+        db: CombinedGenesisDatabase,
         genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
@@ -82,7 +82,7 @@ impl SnapshotImporter {
     }
 
     pub async fn import(
-        db: CombinedDatabase,
+        db: CombinedGenesisDatabase,
         genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,

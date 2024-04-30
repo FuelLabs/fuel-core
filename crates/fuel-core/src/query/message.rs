@@ -1,6 +1,7 @@
 use crate::{
     fuel_core_graphql_api::{
         ports::{
+            DatabaseBlocks,
             DatabaseMessageProof,
             DatabaseMessages,
             OffChainDatabase,
@@ -129,7 +130,7 @@ pub trait MessageProofData:
 
 impl<D> MessageProofData for D
 where
-    D: OnChainDatabase + OffChainDatabase + ?Sized,
+    D: OnChainDatabase + DatabaseBlocks + OffChainDatabase + ?Sized,
 {
     fn transaction_status(
         &self,
