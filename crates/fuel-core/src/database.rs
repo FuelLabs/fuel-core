@@ -494,7 +494,7 @@ where
             // all next commits should be linked(the height should increase each time by one).
         }
         (Some(prev_height), None) => {
-            // In production, we shouldn't have cases where we call `commit_chagnes` with intermediate changes.
+            // In production, we shouldn't have cases where we call `commit_changes` with intermediate changes.
             // The commit always should contain all data for the corresponding height.
             return Err(DatabaseError::NewHeightIsNotSet {
                 prev_height: prev_height.as_u64(),

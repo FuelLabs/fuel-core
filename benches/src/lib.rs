@@ -1,7 +1,8 @@
-pub mod default_gas_costs;
-pub mod import;
-
-pub use fuel_core_storage::vm_storage::VmStorage;
+use fuel_core::database::GenesisDatabase;
+use fuel_core_storage::transactional::{
+    IntoTransaction,
+    StorageTransaction,
+};
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -29,11 +30,16 @@ use fuel_core_types::{
         *,
     },
 };
+use std::{
+    iter,
+    mem,
+};
 
-use fuel_core::database::GenesisDatabase;
-use fuel_core_storage::transactional::StorageTransaction;
+pub mod default_gas_costs;
+pub mod import;
+
+pub use fuel_core_storage::vm_storage::VmStorage;
 pub use rand::Rng;
-use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
@@ -424,6 +430,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             db.deploy_contract_with_id(&[], &Contract::default(), &contract_id)?;
         }
+        let transaction = mem::take(db.database_mut());
+        let database = transaction.commit().expect("Failed to commit transaction");
+        *db.database_mut() = database.into_transaction();
 
         inputs.into_iter().for_each(|i| {
             tx.add_input(i);

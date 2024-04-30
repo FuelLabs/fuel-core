@@ -33,6 +33,7 @@ pub mod fuel_vm {
     #[doc(no_inline)]
     pub use fuel_vm_private::{
         checked_transaction,
+        constraints,
         consts,
         crypto,
         double_key,

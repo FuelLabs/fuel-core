@@ -70,7 +70,7 @@ pub fn run(c: &mut Criterion) {
             format!("{i}"),
             VmBench::contract(rng, op::retd(RegId::ONE, 0x10))
                 .unwrap()
-                .with_post_call(vec![op::movi(0x10, *i)])
+                .with_post_call(vec![op::movi(0x10, *i), op::cfe(0x10)])
                 .with_call_receipts(receipts_ctx.clone()),
         );
     }
@@ -84,7 +84,7 @@ pub fn run(c: &mut Criterion) {
             format!("{i}"),
             VmBench::contract(rng, op::retd(RegId::ONE, 0x10))
                 .unwrap()
-                .with_post_call(vec![op::movi(0x10, *i)])
+                .with_post_call(vec![op::movi(0x10, *i), op::cfe(0x10)])
                 .with_call_receipts(receipts_ctx.clone()),
         );
     }
@@ -118,7 +118,7 @@ pub fn run(c: &mut Criterion) {
             &mut logd,
             format!("{i}"),
             VmBench::new(op::logd(0x10, 0x11, RegId::ZERO, 0x13))
-                .with_prepare_script(vec![op::movi(0x13, *i)])
+                .with_prepare_script(vec![op::movi(0x13, *i), op::cfe(0x13)])
                 .with_call_receipts(receipts_ctx.clone()),
         );
     }

@@ -89,3 +89,14 @@ fn vm(c: &mut Criterion) {
 
 criterion_group!(benches, vm);
 criterion_main!(benches);
+
+// If you want to debug the benchmarks, you can run them with code below:
+// But first you need to comment `criterion_group` and `criterion_main` macros above.
+//
+// fn main() {
+//     let mut criterio = Criterion::default();
+//     blockchain::run(&mut criterio);
+// }
+//
+// #[test]
+// fn dummy() {}
