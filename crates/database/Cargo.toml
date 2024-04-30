@@ -24,3 +24,6 @@ fuel-core-types = { workspace = true }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../trace" }
+
+[features]
+test-helpers = []

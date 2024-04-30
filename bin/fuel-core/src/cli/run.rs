@@ -374,7 +374,7 @@ impl Command {
 }
 
 pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
-    #[cfg(any(feature = "rocks-db", feature = "rocksdb-production"))]
+    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }

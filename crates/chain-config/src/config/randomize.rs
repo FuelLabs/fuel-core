@@ -199,7 +199,9 @@ impl Randomize for CompressedBlock {
         let tx_ids = vec![tx1.id(&ChainId::default()), tx2.id(&ChainId::default())];
 
         Self::test(
-            PartialBlockHeader::default().generate(&[tx1, tx2], &[], rng.gen()),
+            PartialBlockHeader::default()
+                .generate(&[tx1, tx2], &[], rng.gen())
+                .expect("The header is valid"),
             tx_ids,
         )
     }

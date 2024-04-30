@@ -6,7 +6,10 @@ use crate::{
             Block,
             PartialFuelBlock,
         },
-        header::ConsensusParametersVersion,
+        header::{
+            BlockHeaderError,
+            ConsensusParametersVersion,
+        },
         primitives::BlockId,
     },
     entities::{
@@ -342,6 +345,8 @@ pub enum Error {
     StorageError(String),
     #[display(fmt = "got error during work with relayer {_0}")]
     RelayerError(String),
+    #[display(fmt = "occurred an error during block header generation {_0}")]
+    BlockHeaderError(BlockHeaderError),
     #[display(fmt = "Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
         // TODO: Use `InterpreterError<StorageError>` when `InterpreterError` implements serde
