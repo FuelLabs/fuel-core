@@ -604,6 +604,36 @@ where
             regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
         }
 
+        self.produce_mint_tx(
+            block,
+            &mut thread_block_transaction,
+            &mut data,
+            coinbase_contract_id,
+            block_height,
+            gas_price,
+        )?;
+
+        let changes_from_thread = thread_block_transaction.into_changes();
+        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        self.block_st_transaction
+            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
+
+        data.changes = self.block_st_transaction.into_changes();
+        Ok(data)
+    }
+
+    fn produce_mint_tx<T>(
+        &self,
+        block: &mut PartialFuelBlock,
+        thread_block_transaction: &mut T,
+        data: &mut ExecutionData,
+        coinbase_contract_id: ContractId,
+        block_height: BlockHeight,
+        gas_price: Word,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column> + Modifiable,
+    {
         let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
             data.coinbase
         } else {
@@ -631,24 +661,14 @@ where
 
         self.execute_transaction_and_commit(
             block,
-            &mut thread_block_transaction,
-            &mut data,
+            thread_block_transaction,
+            data,
             MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
             gas_price,
             coinbase_contract_id,
         )?;
 
-        let changes_from_thread = thread_block_transaction.into_changes();
-        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
-        self.block_st_transaction
-            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
-
-        if !data.found_mint {
-            return Err(ExecutorError::MintMissing)
-        }
-
-        data.changes = self.block_st_transaction.into_changes();
-        Ok(data)
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
