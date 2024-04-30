@@ -325,15 +325,10 @@ where
     where
         TxSource: TransactionsSource,
     {
-        let (block, execution_data) = {
+        let (partial_block, execution_data) = {
             let mut block = PartialFuelBlock::new(components.header_to_produce, vec![]);
             let consensus_params_version = block.header.consensus_parameters_version;
-            let block_executor = BlockExecutor::new(
-                self.relayer,
-                self.database,
-                self.options,
-                consensus_params_version,
-            )?;
+            let block_executor = self.new_executor(consensus_params_version)?;
 
             let component = PartialBlockComponent::from_component(
                 &mut block,
@@ -348,39 +343,15 @@ where
         };
 
         let ExecutionData {
-            coinbase,
-            used_gas,
             message_ids,
-            tx_status,
-            skipped_transactions,
-            events,
-            changes,
             event_inbox_root,
             ..
-        } = execution_data;
+        } = &execution_data;
 
-        // Now that the transactions have been executed, generate the full header.
-
-        let block = block
-            .generate(&message_ids[..], event_inbox_root)
+        let block = partial_block
+            .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
-
-        let finalized_block_id = block.id();
-
-        debug!(
-            "Block {:#x} fees: {} gas: {}",
-            finalized_block_id, coinbase, used_gas
-        );
-
-        let result = ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        };
-
-        // Get the complete fuel block.
-        Ok(UncommittedResult::new(result, changes))
+        Self::report_block_results(block, execution_data)
     }
 
     #[tracing::instrument(skip_all)]
@@ -391,17 +362,12 @@ where
     where
         TxSource: TransactionsSource,
     {
-        let (block, execution_data) = {
+        let (partial_block, execution_data) = {
             {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
                 let consensus_params_version = block.header.consensus_parameters_version;
-                let block_executor = BlockExecutor::new(
-                    self.relayer,
-                    self.database,
-                    self.options,
-                    consensus_params_version,
-                )?;
+                let block_executor = self.new_executor(consensus_params_version)?;
                 let component = PartialBlockComponent::from_component(
                     &mut block,
                     component.transactions_source,
@@ -415,54 +381,42 @@ where
         };
 
         let ExecutionData {
-            coinbase,
-            used_gas,
             message_ids,
-            tx_status,
-            skipped_transactions,
-            events,
-            changes,
+
             event_inbox_root,
             ..
-        } = execution_data;
+        } = &execution_data;
 
-        // Now that the transactions have been executed, generate the full header.
-
-        let block = block
-            .generate(&message_ids[..], event_inbox_root)
+        let block = partial_block
+            .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
-
-        let finalized_block_id = block.id();
-
-        debug!(
-            "Block {:#x} fees: {} gas: {}",
-            finalized_block_id, coinbase, used_gas
-        );
-
-        let result = ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        };
-
-        // Get the complete fuel block.
-        Ok(UncommittedResult::new(result, changes))
+        Self::report_block_results(block, execution_data)
     }
 
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
-        let pre_exec_block_id = block.id();
-
         let consensus_params_version = block.header().consensus_parameters_version;
-        let block_executor = BlockExecutor::new(
+        let block_executor = self.new_executor(consensus_params_version)?;
+
+        let execution_data = block_executor.validate_block(&block)?;
+        Self::report_block_results(block, execution_data)
+    }
+
+    fn new_executor(
+        self,
+        consensus_params_version: ConsensusParametersVersion,
+    ) -> ExecutorResult<BlockExecutor<R, D>> {
+        BlockExecutor::new(
             self.relayer,
             self.database,
             self.options,
             consensus_params_version,
-        )?;
+        )
+    }
 
-        let execution_data = block_executor.validate_block(&block)?;
-
+    fn report_block_results(
+        block: Block,
+        data: ExecutionData,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         let ExecutionData {
             coinbase,
             used_gas,
@@ -471,11 +425,13 @@ where
             events,
             changes,
             ..
-        } = execution_data;
+        } = data;
+
+        let finalized_block_id = block.id();
 
         debug!(
             "Block {:#x} fees: {} gas: {}",
-            pre_exec_block_id, coinbase, used_gas
+            finalized_block_id, coinbase, used_gas
         );
 
         let result = ExecutionResult {
@@ -549,7 +505,6 @@ where
         };
         let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
-
 
         let mut block_state_tx = self
             .block_st_transaction
