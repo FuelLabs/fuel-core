@@ -546,12 +546,12 @@ where
 
         // Split out the execution kind and partial block.
         let block = component.empty_block;
-        let source = component.transactions_source;
+        let l2_tx_source = component.transactions_source;
         let gas_price = component.gas_price;
         let coinbase_contract_id = component.coinbase_contract_id;
         let block_height = *block.header.height();
         let block_header = block.header;
-        let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
+        let l1_transactions = self.get_relayed_txs(&block_header, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -566,43 +566,18 @@ where
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
-        debug_assert!(block.transactions.is_empty());
-
-        self.process_relayed_txs(
-            forced_transactions,
+        let skip_failed_txs = true;
+        self.process_l1_and_l2_txs(
+            l1_transactions,
+            l2_tx_source,
             block,
             &mut thread_block_transaction,
             &mut data,
             coinbase_contract_id,
+            block_gas_limit,
+            gas_price,
+            skip_failed_txs,
         )?;
-
-        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
-        // L2 originated transactions should be in the `TxSource`. This will be triggered after
-        // all relayed transactions are processed.
-        let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
-        while regular_tx_iter.peek().is_some() {
-            for transaction in regular_tx_iter {
-                let tx_id = transaction.id(&self.consensus_params.chain_id());
-                match self.execute_transaction_and_commit(
-                    block,
-                    &mut thread_block_transaction,
-                    &mut data,
-                    transaction,
-                    gas_price,
-                    coinbase_contract_id,
-                ) {
-                    Ok(_) => {}
-                    Err(err) => {
-                        data.skipped_transactions.push((tx_id, err));
-                    }
-                }
-            }
-
-            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
-            regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
-        }
 
         self.produce_mint_tx(
             block,
@@ -685,11 +660,11 @@ where
 
         // Split out the execution kind and partial block.
         let block = component.empty_block;
-        let source = component.transactions_source;
+        let l2_tx_source = component.transactions_source;
         let gas_price = component.gas_price;
         let coinbase_contract_id = component.coinbase_contract_id;
         let block_header = block.header;
-        let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
+        let l1_transactions = self.get_relayed_txs(&block_header, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -704,42 +679,18 @@ where
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
-        debug_assert!(block.transactions.is_empty());
-
-        self.process_relayed_txs(
-            forced_transactions,
+        let skip_failed_txs = false;
+        self.process_l1_and_l2_txs(
+            l1_transactions,
+            l2_tx_source,
             block,
             &mut thread_block_transaction,
             &mut data,
             coinbase_contract_id,
+            block_gas_limit,
+            gas_price,
+            skip_failed_txs,
         )?;
-
-        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
-        // L2 originated transactions should be in the `TxSource`. This will be triggered after
-        // all relayed transactions are processed.
-        let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
-        while regular_tx_iter.peek().is_some() {
-            for transaction in regular_tx_iter {
-                match self.execute_transaction_and_commit(
-                    block,
-                    &mut thread_block_transaction,
-                    &mut data,
-                    transaction,
-                    gas_price,
-                    coinbase_contract_id,
-                ) {
-                    Ok(_) => {}
-                    Err(err) => {
-                        return Err(err);
-                    }
-                }
-            }
-
-            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
-            regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
-        }
 
         let changes_from_thread = thread_block_transaction.into_changes();
         block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
@@ -748,6 +699,72 @@ where
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
+    }
+
+    fn process_l1_and_l2_txs<T, TxSource>(
+        &self,
+        l1_transactions: Vec<CheckedTransaction>,
+        l2_tx_source: TxSource,
+        block: &mut PartialFuelBlock,
+        thread_block_transaction: &mut T,
+        data: &mut ExecutionData,
+        coinbase_contract_id: ContractId,
+        block_gas_limit: Word,
+        gas_price: Word,
+        skip_failed_txs: bool,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column> + Modifiable,
+        TxSource: TransactionsSource,
+    {
+        debug_assert!(block.transactions.is_empty());
+
+        self.process_relayed_txs(
+            l1_transactions,
+            block,
+            thread_block_transaction,
+            data,
+            coinbase_contract_id,
+        )?;
+
+        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+
+        // L2 originated transactions should be in the `TxSource`. This will be triggered after
+        // all relayed transactions are processed.
+        let mut regular_tx_iter = l2_tx_source
+            .next(remaining_gas_limit)
+            .into_iter()
+            .peekable();
+        while regular_tx_iter.peek().is_some() {
+            for transaction in regular_tx_iter {
+                let tx_id = transaction.id(&self.consensus_params.chain_id());
+                match self.execute_transaction_and_commit(
+                    block,
+                    thread_block_transaction,
+                    data,
+                    transaction,
+                    gas_price,
+                    coinbase_contract_id,
+                ) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        if skip_failed_txs {
+                            data.skipped_transactions.push((tx_id, err));
+                        } else {
+                            return Err(err);
+                        }
+                    }
+                }
+            }
+
+            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+
+            regular_tx_iter = l2_tx_source
+                .next(new_remaining_gas_limit)
+                .into_iter()
+                .peekable();
+        }
+        Ok(())
     }
 
     fn execute_transaction_and_commit<'a, W>(
