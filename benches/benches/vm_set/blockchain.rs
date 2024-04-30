@@ -558,17 +558,38 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::cfsi(0)),
     );
 
-    {
-        let mut input = VmBench::contract(rng, op::croo(0x14, 0x16))
-            .expect("failed to prepare contract");
-        input.post_call.extend(vec![
+    let mut croo = c.benchmark_group("croo");
+
+    for i in linear.clone() {
+        let mut code = vec![0u8; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let mut code = ContractCode::from(code);
+        code.id = VmBench::CONTRACT;
+
+        let data = code.id.iter().copied().collect();
+
+        let prepare_script = vec![
             op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
             op::movi(0x15, 2000),
             op::aloc(0x15),
             op::move_(0x14, RegId::HP),
-        ]);
-        run_group_ref(&mut c.benchmark_group("croo"), "croo", input);
+        ];
+
+        croo.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut croo,
+            format!("{i}"),
+            VmBench::new(op::croo(0x14, 0x16))
+                .with_contract_code(code)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
     }
+
+    croo.finish();
 
     run_group_ref(
         &mut c.benchmark_group("flag"),
