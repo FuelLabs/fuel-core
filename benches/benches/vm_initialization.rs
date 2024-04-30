@@ -3,6 +3,7 @@ use criterion::{
     Criterion,
     Throughput,
 };
+use fuel_core_storage::InterpreterStorage;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -22,6 +23,7 @@ use fuel_core_types::{
         checked_transaction::{
             Checked,
             IntoChecked,
+            Ready,
         },
         constraints::reg_key::Reg,
         consts::VM_MAX_RAM,
@@ -77,67 +79,71 @@ fn transaction<R: Rng>(
 
 pub fn vm_initialization(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(8586);
-
+    let consensus_params = ConsensusParameters::default();
     let mut group = c.benchmark_group("vm_initialization");
 
-    let consensus_params = ConsensusParameters::default();
-    let mut i = 5usize;
-    loop {
+    // Increase the size of the script to measure the performance of the VM initialization
+    // with a large script. THe largest allowed script is 64 KB = 2^16 bytes.
+    const TX_SIZE_POWER_OF_TWO: usize = 16;
+
+    for i in 5..=TX_SIZE_POWER_OF_TWO {
         let size = 8 * (1 << i);
-        if size as u64 > consensus_params.script_params().max_script_data_length() {
-            break
-        }
-        if 2 * size as u64 > consensus_params.tx_params().max_size() {
-            break
-        }
+
         let script = vec![op::ret(1); size / Instruction::SIZE]
             .into_iter()
             .collect();
         let script_data = vec![255; size];
         let tx = transaction(&mut rng, script, script_data, &consensus_params);
         let tx_size = tx.transaction().size();
+        let tx = tx.test_into_ready();
+
         let name = format!("vm_initialization_with_tx_size_{}", tx_size);
         group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
-                let mut vm = black_box(
+                let vm = black_box(
                     Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
                 );
-                let ready_tx = tx.clone().test_into_ready();
 
                 // Initialize the VM and require the allocation of the whole memory
                 // to charge for the worst possible case.
-                black_box({
-                    vm.init_script(ready_tx)
-                        .expect("Should be able to execute transaction");
-                    const VM_MEM_HALF: u64 = VM_MAX_RAM / 2;
-                    let mut i = 0;
-                    loop {
-                        let stack = 1 << i;
-
-                        if stack > VM_MEM_HALF {
-                            vm.memory_mut()
-                                .grow_heap(Reg::new(&0), 0)
-                                .expect("Should be able to grow heap");
-                            break
-                        }
-
-                        let heap = VM_MAX_RAM - stack;
-                        vm.memory_mut()
-                            .grow_stack(stack)
-                            .expect("Should be able to grow stack");
-                        vm.memory_mut()
-                            .grow_heap(Reg::new(&0), heap)
-                            .expect("Should be able to grow heap");
-
-                        i += 1;
-                    }
-                    i
-                });
+                black_box(initialize_vm(black_box(tx.clone()), vm));
             })
         });
-        i += 1;
     }
 
     group.finish();
+}
+
+fn initialize_vm<S>(
+    ready_tx: Ready<Script>,
+    mut vm: Interpreter<S, Script>,
+) -> Interpreter<S, Script>
+where
+    S: InterpreterStorage,
+{
+    vm.init_script(ready_tx)
+        .expect("Should be able to execute transaction");
+
+    const POWER_OF_TWO_OF_HALF_VM: u64 = 25;
+    const VM_MEM_HALF: u64 = 1 << POWER_OF_TWO_OF_HALF_VM;
+    assert_eq!(VM_MEM_HALF, VM_MAX_RAM / 2);
+
+    for i in 0..=POWER_OF_TWO_OF_HALF_VM {
+        let stack = 1 << i;
+        let heap = VM_MAX_RAM - stack;
+
+        vm.memory_mut()
+            .grow_stack(stack)
+            .expect("Should be able to grow stack");
+        vm.memory_mut()
+            .grow_heap(Reg::new(&0), heap)
+            .expect("Should be able to grow heap");
+    }
+
+    vm.memory_mut()
+        .grow_heap(Reg::new(&0), 0)
+        .expect("Should be able to grow heap");
+
+    vm
 }
