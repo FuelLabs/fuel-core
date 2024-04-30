@@ -536,16 +536,15 @@ where
     /// Produce the fuel block with specified components
     fn produce_block<TxSource>(
         mut self,
-        component: PartialBlockComponent<TxSource>,
+        components: PartialBlockComponent<TxSource>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        let block_gas_limit = self.consensus_params.block_gas_limit();
         let mut data = ExecutionData::new();
 
         let (block_height, da_block_height) = {
-            let header = component.empty_block.header;
+            let header = components.empty_block.header;
             (*header.height(), header.da_height)
         };
         let l1_transactions =
@@ -566,11 +565,10 @@ where
 
         let skip_failed_txs = true;
         let component = self.process_l1_and_l2_txs(
-            component,
+            components,
             l1_transactions,
             &mut thread_block_transaction,
             &mut data,
-            block_gas_limit,
             skip_failed_txs,
         )?;
 
@@ -651,16 +649,15 @@ where
     /// Execute dry-run of block with specified components
     fn dry_run_block<TxSource>(
         mut self,
-        component: PartialBlockComponent<TxSource>,
+        components: PartialBlockComponent<TxSource>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        let block_gas_limit = self.consensus_params.block_gas_limit();
         let mut data = ExecutionData::new();
 
         let (block_height, da_block_height) = {
-            let header = component.empty_block.header;
+            let header = components.empty_block.header;
             (*header.height(), header.da_height)
         };
         let l1_transactions =
@@ -681,11 +678,10 @@ where
 
         let skip_failed_txs = false;
         let _component = self.process_l1_and_l2_txs(
-            component,
+            components,
             l1_transactions,
             &mut thread_block_transaction,
             &mut data,
-            block_gas_limit,
             skip_failed_txs,
         )?;
 
@@ -704,7 +700,6 @@ where
         l1_transactions: Vec<CheckedTransaction>,
         thread_block_transaction: &mut T,
         data: &mut ExecutionData,
-        block_gas_limit: Word,
         skip_failed_txs: bool,
     ) -> ExecutorResult<PartialBlockComponent<'a, TxSource>>
     where
@@ -719,6 +714,7 @@ where
             ..
         } = &mut components;
         debug_assert!(block.transactions.is_empty());
+        let block_gas_limit = self.consensus_params.block_gas_limit();
 
         self.process_relayed_txs(
             l1_transactions,
