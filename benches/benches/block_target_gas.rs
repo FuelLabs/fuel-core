@@ -38,7 +38,6 @@ use fuel_core_chain_config::{
     ContractConfig,
     StateConfig,
 };
-use fuel_core_services::Service;
 use fuel_core_storage::{
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,

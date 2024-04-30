@@ -408,7 +408,7 @@ fn init_da_message(
 
     if transaction
         .storage::<Messages>()
-        .insert(message.id(), &message)?
+        .insert(message.id(), message)?
         .is_some()
     {
         return Err(anyhow!("Message should not exist"));
