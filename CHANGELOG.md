@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1866](https://github.com/FuelLabs/fuel-core/pull/1866): Fixed a runtime panic that occurred when restarting a node. The panic happens when the relayer database is already populated, and the relayer attempts an empty commit during start up. This invalid commit is removed in this PR.
 - [#1871](https://github.com/FuelLabs/fuel-core/pull/1871): Fixed `block` endpoint to return fetch the blocks from both databases after regenesis.
 - [#1856](https://github.com/FuelLabs/fuel-core/pull/1856): Replaced instances of `Union` with `Enum` for GraphQL definitions of `ConsensusParametersVersion` and related types. This is needed because `Union` does not support multiple `Version`s inside discriminants or empty variants. 
+- [#1851](https://github.com/FuelLabs/fuel-core/pull/1851/): Provided migration capabilities (enabled addition of new column families) to RocksDB instance.
 
 ### Added 
 
+- [#1853](https://github.com/FuelLabs/fuel-core/pull/1853): Added a test case to verify the database's behavior when new columns are added to the RocksDB database.
 - [#1860](https://github.com/FuelLabs/fuel-core/pull/1860): Regenesis now preserves `FuelBlockIdsToHeights` off-chain table.
 
 ### Changed
