@@ -544,14 +544,12 @@ where
         let block_gas_limit = self.consensus_params.block_gas_limit();
         let mut data = ExecutionData::new();
 
-        // Split out the execution kind and partial block.
-        let block = component.empty_block;
-        let l2_tx_source = component.transactions_source;
-        let gas_price = component.gas_price;
-        let coinbase_contract_id = component.coinbase_contract_id;
-        let block_height = *block.header.height();
-        let block_header = block.header;
-        let l1_transactions = self.get_relayed_txs(&block_header, &mut data)?;
+        let (block_height, da_block_height) = {
+            let header = component.empty_block.header;
+            (*header.height(), header.da_height)
+        };
+        let l1_transactions =
+            self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -567,24 +565,27 @@ where
             .with_policy(ConflictPolicy::Overwrite);
 
         let skip_failed_txs = true;
-        self.process_l1_and_l2_txs(
+        let component = self.process_l1_and_l2_txs(
+            component,
             l1_transactions,
-            l2_tx_source,
-            block,
             &mut thread_block_transaction,
             &mut data,
-            coinbase_contract_id,
             block_gas_limit,
-            gas_price,
             skip_failed_txs,
         )?;
+
+        let PartialBlockComponent {
+            empty_block: block,
+            coinbase_contract_id,
+            gas_price,
+            ..
+        } = component;
 
         self.produce_mint_tx(
             block,
             &mut thread_block_transaction,
             &mut data,
             coinbase_contract_id,
-            block_height,
             gas_price,
         )?;
 
@@ -603,7 +604,6 @@ where
         thread_block_transaction: &mut T,
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
-        block_height: BlockHeight,
         gas_price: Word,
     ) -> ExecutorResult<()>
     where
@@ -614,6 +614,7 @@ where
         } else {
             0
         };
+        let block_height = *block.header.height();
 
         let coinbase_tx = Transaction::mint(
             TxPointer::new(block_height, data.tx_count),
@@ -658,13 +659,12 @@ where
         let block_gas_limit = self.consensus_params.block_gas_limit();
         let mut data = ExecutionData::new();
 
-        // Split out the execution kind and partial block.
-        let block = component.empty_block;
-        let l2_tx_source = component.transactions_source;
-        let gas_price = component.gas_price;
-        let coinbase_contract_id = component.coinbase_contract_id;
-        let block_header = block.header;
-        let l1_transactions = self.get_relayed_txs(&block_header, &mut data)?;
+        let (block_height, da_block_height) = {
+            let header = component.empty_block.header;
+            (*header.height(), header.da_height)
+        };
+        let l1_transactions =
+            self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -680,15 +680,12 @@ where
             .with_policy(ConflictPolicy::Overwrite);
 
         let skip_failed_txs = false;
-        self.process_l1_and_l2_txs(
+        let _component = self.process_l1_and_l2_txs(
+            component,
             l1_transactions,
-            l2_tx_source,
-            block,
             &mut thread_block_transaction,
             &mut data,
-            coinbase_contract_id,
             block_gas_limit,
-            gas_price,
             skip_failed_txs,
         )?;
 
@@ -701,22 +698,26 @@ where
         Ok(data)
     }
 
-    fn process_l1_and_l2_txs<T, TxSource>(
+    fn process_l1_and_l2_txs<'a, T, TxSource>(
         &self,
+        mut components: PartialBlockComponent<'a, TxSource>,
         l1_transactions: Vec<CheckedTransaction>,
-        l2_tx_source: TxSource,
-        block: &mut PartialFuelBlock,
         thread_block_transaction: &mut T,
         data: &mut ExecutionData,
-        coinbase_contract_id: ContractId,
         block_gas_limit: Word,
-        gas_price: Word,
         skip_failed_txs: bool,
-    ) -> ExecutorResult<()>
+    ) -> ExecutorResult<PartialBlockComponent<'a, TxSource>>
     where
         T: KeyValueInspect<Column = Column> + Modifiable,
         TxSource: TransactionsSource,
     {
+        let PartialBlockComponent {
+            empty_block: block,
+            transactions_source: l2_tx_source,
+            coinbase_contract_id,
+            gas_price,
+            ..
+        } = &mut components;
         debug_assert!(block.transactions.is_empty());
 
         self.process_relayed_txs(
@@ -724,7 +725,7 @@ where
             block,
             thread_block_transaction,
             data,
-            coinbase_contract_id,
+            *coinbase_contract_id,
         )?;
 
         let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
@@ -743,8 +744,8 @@ where
                     thread_block_transaction,
                     data,
                     transaction,
-                    gas_price,
-                    coinbase_contract_id,
+                    *gas_price,
+                    *coinbase_contract_id,
                 ) {
                     Ok(_) => {}
                     Err(err) => {
@@ -764,7 +765,8 @@ where
                 .into_iter()
                 .peekable();
         }
-        Ok(())
+
+        Ok(components)
     }
 
     fn execute_transaction_and_commit<'a, W>(
@@ -818,7 +820,11 @@ where
             Self::get_coinbase_info_from_mint_tx(transactions)?;
 
         let block_header = partial_block.header;
-        let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
+        let block_height = *block_header.height();
+        let da_block_height = block_header.da_height;
+
+        let forced_transactions =
+            self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -921,11 +927,12 @@ where
 
     fn get_relayed_txs(
         &mut self,
-        block_header: &PartialBlockHeader,
+        block_height: BlockHeight,
+        da_block_height: DaBlockHeight,
         data: &mut ExecutionData,
     ) -> ExecutorResult<Vec<CheckedTransaction>> {
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(block_header, data)?
+            self.process_da(block_height, da_block_height, data)?
         } else {
             Vec::with_capacity(0)
         };
@@ -970,10 +977,10 @@ where
 
     fn process_da(
         &mut self,
-        header: &PartialBlockHeader,
+        block_height: BlockHeight,
+        da_block_height: DaBlockHeight,
         execution_data: &mut ExecutionData,
     ) -> ExecutorResult<Vec<CheckedTransaction>> {
-        let block_height = *header.height();
         let prev_block_height = block_height
             .pred()
             .ok_or(ExecutorError::ExecutingGenesisBlock)?;
@@ -992,7 +999,7 @@ where
 
         let mut checked_forced_txs = vec![];
 
-        for da_height in next_unprocessed_da_height..=header.da_height.0 {
+        for da_height in next_unprocessed_da_height..=da_block_height.0 {
             let da_height = da_height.into();
             let events = self
                 .relayer
@@ -1017,7 +1024,7 @@ where
                         // perform basic checks
                         let checked_tx_res = Self::validate_forced_tx(
                             relayed_tx,
-                            header,
+                            block_height,
                             &self.consensus_params,
                         );
                         // handle the result
@@ -1048,7 +1055,7 @@ where
     /// Parse forced transaction payloads and perform basic checks
     fn validate_forced_tx(
         relayed_tx: RelayedTransaction,
-        header: &PartialBlockHeader,
+        block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
@@ -1058,8 +1065,7 @@ where
             &relayed_tx,
             consensus_params,
         )?;
-        let checked_tx =
-            Self::get_checked_tx(parsed_tx, *header.height(), consensus_params)?;
+        let checked_tx = Self::get_checked_tx(parsed_tx, block_height, consensus_params)?;
         Ok(CheckedTransaction::from(checked_tx))
     }
 
