@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::{
@@ -18,9 +20,7 @@ use fuel_core_storage::{
     },
     not_found,
     tables::{
-        FuelBlocks,
-        SealedBlockConsensus,
-        Transactions,
+        merkle::{DenseMerkleMetadata, DenseMetadataKey, FuelBlockMerkleMetadata}, FuelBlocks, SealedBlockConsensus, Transactions
     },
     Error as StorageError,
     Result as StorageResult,
@@ -56,6 +56,13 @@ impl DatabaseBlocks for Database {
             .get(tx_id)?
             .ok_or(not_found!(Transactions))?
             .into_owned())
+    }
+
+    fn block_merkle_metadata(&self, height: &BlockHeight) -> StorageResult<Option<Cow<DenseMerkleMetadata>>> {
+            let x = self.storage::<FuelBlockMerkleMetadata>()
+                .get(&DenseMetadataKey::Primary(*height))?;
+    
+            Ok(x)        
     }
 
     fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {

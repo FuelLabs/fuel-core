@@ -13,9 +13,7 @@ use fuel_core_storage::{
     not_found,
     tables::{
         merkle::{
-            DenseMetadataKey,
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
+            DenseMetadataKey, FuelBlockMerkleData, FuelBlockMerkleMetadata
         },
         FuelBlocks,
         Transactions,

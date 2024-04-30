@@ -18,7 +18,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    tables::Transactions,
+    tables::{merkle::DenseMerkleMetadata, Transactions},
     transactional::AtomicView,
     Error as StorageError,
     IsNotFound,
@@ -145,6 +145,14 @@ impl DatabaseBlocks for ReadView {
             self.on_chain.block(height)
         } else {
             self.off_chain.old_block(height)
+        }
+    }
+
+    fn block_merkle_metadata(&self, height: &BlockHeight) -> StorageResult<Option<Cow<DenseMerkleMetadata>>> {
+        if *height >= self.genesis_height {
+            self.on_chain.block_merkle_metadata(height)
+        } else {
+            self.off_chain.old_block_merkle_metadata(height)
         }
     }
 
@@ -315,6 +323,10 @@ impl OffChainDatabase for ReadView {
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
         self.off_chain.contract_salt(contract_id)
+    }
+
+    fn old_block_merkle_metadata(&self, height: &BlockHeight) -> StorageResult<Option<Cow<DenseMerkleMetadata>>> {
+        self.off_chain.old_block_merkle_metadata(height)
     }
 
     fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     database::{
         database_description::off_chain::OffChain,
@@ -26,15 +28,10 @@ use fuel_core_storage::{
         IntoBoxedIter,
         IterDirection,
         IteratorOverTable,
-    },
-    not_found,
-    transactional::{
+    }, not_found, tables::merkle::{DenseMerkleMetadata, DenseMetadataKey, FuelBlockMerkleMetadata}, transactional::{
         IntoTransaction,
         StorageTransaction,
-    },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
+    }, Error as StorageError, Result as StorageResult, StorageAsRef
 };
 use fuel_core_txpool::types::{
     ContractId,
@@ -119,6 +116,13 @@ impl OffChainDatabase for Database<OffChain> {
             .salt();
 
         Ok(salt)
+    }
+
+    fn old_block_merkle_metadata(&self, height: &BlockHeight) -> StorageResult<Option<Cow<DenseMerkleMetadata>>> {
+        let x = self.storage_as_ref::<FuelBlockMerkleMetadata>()
+            .get(&DenseMetadataKey::Primary(*height))?;
+
+        Ok(x)        
     }
 
     fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {

@@ -6,10 +6,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsRawCode,
-        Messages,
+        merkle::DenseMerkleMetadata, Coins, ContractsAssets, ContractsRawCode, Messages
     },
     Error as StorageError,
     Result as StorageResult,
@@ -59,7 +56,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
@@ -88,6 +85,8 @@ pub trait OffChainDatabase: Send + Sync {
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
+
+    fn old_block_merkle_metadata(&self, height: &BlockHeight) -> StorageResult<Option<Cow<DenseMerkleMetadata>>>;
 
     fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
 
@@ -129,6 +128,9 @@ pub trait DatabaseBlocks {
 
     /// Get a block by its height.
     fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
+
+    // Get block merkle metadata by block height.
+    fn block_merkle_metadata(&self, height: &BlockHeight) -> StorageResult<Option<Cow<DenseMerkleMetadata>>>;
 
     fn blocks(
         &self,
