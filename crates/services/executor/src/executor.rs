@@ -334,7 +334,7 @@ where
 #[derive(Clone, Debug)]
 pub struct BlockExecutor<R, D> {
     relayer: R,
-    block_st_transaction: StorageTransaction<D>,
+    block_storage_tx: StorageTransaction<D>,
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
 }
@@ -362,7 +362,7 @@ where
 
         Ok(Self {
             relayer,
-            block_st_transaction,
+            block_storage_tx: block_st_transaction,
             consensus_params,
             options,
         })
@@ -391,8 +391,8 @@ where
         let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
-        let mut block_state_tx = self
-            .block_st_transaction
+        let mut block_storage_tx = self
+            .block_storage_tx
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -401,7 +401,7 @@ where
             empty_block,
             &components,
             l1_transactions,
-            &mut block_state_tx,
+            &mut block_storage_tx,
             &mut data,
             skip_failed_txs,
         )?;
@@ -414,17 +414,17 @@ where
 
         self.produce_mint_tx(
             &mut partial_block,
-            &mut block_state_tx,
+            &mut block_storage_tx,
             &mut data,
             coinbase_contract_id,
             gas_price,
         )?;
 
-        let changes_from_execution = block_state_tx.into_changes();
-        self.block_st_transaction
+        let changes_from_execution = block_storage_tx.into_changes();
+        self.block_storage_tx
             .commit_changes(changes_from_execution)?;
 
-        data.changes = self.block_st_transaction.into_changes();
+        data.changes = self.block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
 
@@ -494,8 +494,8 @@ where
         let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
-        let mut block_state_tx = self
-            .block_st_transaction
+        let mut block_storage_tx = self
+            .block_storage_tx
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -504,16 +504,16 @@ where
             empty_block,
             &components,
             l1_transactions,
-            &mut block_state_tx,
+            &mut block_storage_tx,
             &mut data,
             skip_failed_txs,
         )?;
 
-        let changes_from_execution = block_state_tx.into_changes();
-        self.block_st_transaction
+        let changes_from_execution = block_storage_tx.into_changes();
+        self.block_storage_tx
             .commit_changes(changes_from_execution)?;
 
-        data.changes = self.block_st_transaction.into_changes();
+        data.changes = self.block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
 
@@ -642,15 +642,15 @@ where
         let forced_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
-        let mut block_state_tx = self
-            .block_st_transaction
+        let mut block_storage_tx = self
+            .block_storage_tx
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
         self.process_relayed_txs(
             forced_transactions,
             &mut partial_block,
-            &mut block_state_tx,
+            &mut block_storage_tx,
             &mut data,
             coinbase_contract_id,
         )?;
@@ -660,7 +660,7 @@ where
                 MaybeCheckedTransaction::Transaction(transaction.clone());
             self.execute_transaction_and_commit(
                 &mut partial_block,
-                &mut block_state_tx,
+                &mut block_storage_tx,
                 &mut data,
                 maybe_checked_tx,
                 gas_price,
@@ -670,11 +670,11 @@ where
 
         self.check_block_matches(partial_block, block, &data)?;
 
-        let changes_from_execution = block_state_tx.into_changes();
-        self.block_st_transaction
+        let changes_from_execution = block_storage_tx.into_changes();
+        self.block_storage_tx
             .commit_changes(changes_from_execution)?;
 
-        data.changes = self.block_st_transaction.into_changes();
+        data.changes = self.block_storage_tx.into_changes();
         Ok(data)
     }
 
@@ -791,7 +791,7 @@ where
             .ok_or(ExecutorError::ExecutingGenesisBlock)?;
 
         let prev_block_header = self
-            .block_st_transaction
+            .block_storage_tx
             .storage::<FuelBlocks>()
             .get(&prev_block_height)?
             .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
@@ -817,7 +817,7 @@ where
                         if message.da_height() != da_height {
                             return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
-                        self.block_st_transaction
+                        self.block_storage_tx
                             .storage_as_mut::<Messages>()
                             .insert(message.nonce(), &message)?;
                         execution_data
@@ -826,13 +826,11 @@ where
                     }
                     Event::Transaction(relayed_tx) => {
                         let id = relayed_tx.id();
-                        // perform basic checks
                         let checked_tx_res = Self::validate_forced_tx(
                             relayed_tx,
                             block_height,
                             &self.consensus_params,
                         );
-                        // handle the result
                         match checked_tx_res {
                             Ok(checked_tx) => {
                                 checked_forced_txs.push(checked_tx);
