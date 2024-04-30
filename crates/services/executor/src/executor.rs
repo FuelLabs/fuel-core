@@ -6,7 +6,6 @@ use crate::{
     },
     refs::ContractRef,
 };
-use block_component::*;
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -260,58 +259,6 @@ where
     }
 }
 
-// TODO: Make this module private after moving unit tests from `fuel-core` here.
-pub mod block_component {
-    use super::*;
-
-    pub struct PartialBlockComponent<'a, TxSource> {
-        pub empty_block: &'a mut PartialFuelBlock,
-        pub transactions_source: TxSource,
-        pub coinbase_contract_id: ContractId,
-        pub gas_price: u64,
-        /// The private marker to allow creation of the type only by constructor.
-        _marker: core::marker::PhantomData<()>,
-    }
-
-    impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
-        pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
-            let transactions = core::mem::take(&mut block.transactions);
-            let (gas_price, coinbase_contract_id) =
-                if let Some(Transaction::Mint(mint)) = transactions.last() {
-                    (*mint.gas_price(), mint.input_contract().contract_id)
-                } else {
-                    (0, Default::default())
-                };
-
-            Self {
-                empty_block: block,
-                transactions_source: OnceTransactionsSource::new(transactions),
-                coinbase_contract_id,
-                gas_price,
-                _marker: Default::default(),
-            }
-        }
-    }
-
-    impl<'a, TxSource> PartialBlockComponent<'a, TxSource> {
-        pub fn from_component(
-            block: &'a mut PartialFuelBlock,
-            transactions_source: TxSource,
-            coinbase_contract_id: ContractId,
-            gas_price: u64,
-        ) -> Self {
-            debug_assert!(block.transactions.is_empty());
-            PartialBlockComponent {
-                empty_block: block,
-                transactions_source,
-                gas_price,
-                coinbase_contract_id,
-                _marker: Default::default(),
-            }
-        }
-    }
-}
-
 impl<R, D> ExecutionInstance<R, D>
 where
     R: RelayerPort,
@@ -325,19 +272,19 @@ where
     where
         TxSource: TransactionsSource,
     {
-        let mut partial_block =
-            PartialFuelBlock::new(components.header_to_produce, vec![]);
-        let consensus_params_version = partial_block.header.consensus_parameters_version;
+        // let mut partial_block =
+        //     PartialFuelBlock::new(components.header_to_produce, vec![]);
+        let consensus_params_version = components.consensus_parameters_version();
         let block_executor = self.into_executor(consensus_params_version)?;
 
-        let component = PartialBlockComponent::from_component(
-            &mut partial_block,
-            components.transactions_source,
-            components.coinbase_recipient,
-            components.gas_price,
-        );
+        // let component = PartialBlockComponent::from_component(
+        //     &mut partial_block,
+        //     components.transactions_source,
+        //     components.coinbase_recipient,
+        //     components.gas_price,
+        // );
 
-        let execution_data = block_executor.produce_block(component)?;
+        let (partial_block, execution_data) = block_executor.produce_block(components)?;
 
         let ExecutionData {
             message_ids,
@@ -354,26 +301,25 @@ where
     #[tracing::instrument(skip_all)]
     fn dry_run_inner<TxSource>(
         self,
-        component: Components<TxSource>,
+        components: Components<TxSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
     {
-        let mut partial_block =
-            PartialFuelBlock::new(component.header_to_produce, vec![]);
-        let consensus_params_version = partial_block.header.consensus_parameters_version;
+        // let mut partial_block =
+        //     PartialFuelBlock::new(components.header_to_produce, vec![]);
+        let consensus_params_version = components.consensus_parameters_version();
         let block_executor = self.into_executor(consensus_params_version)?;
-        let component = PartialBlockComponent::from_component(
-            &mut partial_block,
-            component.transactions_source,
-            component.coinbase_recipient,
-            component.gas_price,
-        );
-        let execution_data = block_executor.dry_run_block(component)?;
+        // let components = PartialBlockComponent::from_component(
+        //     &mut partial_block,
+        //     components.transactions_source,
+        //     components.coinbase_recipient,
+        //     components.gas_price,
+        // );
+        let (partial_block, execution_data) = block_executor.dry_run_block(components)?;
 
         let ExecutionData {
             message_ids,
-
             event_inbox_root,
             ..
         } = &execution_data;
@@ -483,17 +429,16 @@ where
     /// Produce the fuel block with specified components
     fn produce_block<TxSource>(
         mut self,
-        components: PartialBlockComponent<TxSource>,
-    ) -> ExecutorResult<ExecutionData>
+        components: Components<TxSource>,
+    ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
     {
+        let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
-        let (block_height, da_block_height) = {
-            let header = components.empty_block.header;
-            (*header.height(), header.da_height)
-        };
+        let block_height = *empty_block.header.height();
+        let da_block_height = empty_block.header.da_height;
         let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
@@ -503,23 +448,23 @@ where
             .with_policy(ConflictPolicy::Overwrite);
 
         let skip_failed_txs = true;
-        let component = self.process_l1_and_l2_txs(
-            components,
+        let mut partial_block = self.process_l1_and_l2_txs(
+            empty_block,
+            &components,
             l1_transactions,
             &mut block_state_tx,
             &mut data,
             skip_failed_txs,
         )?;
 
-        let PartialBlockComponent {
-            empty_block: block,
-            coinbase_contract_id,
+        let Components {
+            coinbase_recipient: coinbase_contract_id,
             gas_price,
             ..
-        } = component;
+        } = components;
 
         self.produce_mint_tx(
-            block,
+            &mut partial_block,
             &mut block_state_tx,
             &mut data,
             coinbase_contract_id,
@@ -531,7 +476,7 @@ where
             .commit_changes(changes_from_execution)?;
 
         data.changes = self.block_st_transaction.into_changes();
-        Ok(data)
+        Ok((partial_block, data))
     }
 
     fn produce_mint_tx<T>(
@@ -587,17 +532,16 @@ where
     /// Execute dry-run of block with specified components
     fn dry_run_block<TxSource>(
         mut self,
-        components: PartialBlockComponent<TxSource>,
-    ) -> ExecutorResult<ExecutionData>
+        components: Components<TxSource>,
+    ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
     {
+        let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
-        let (block_height, da_block_height) = {
-            let header = components.empty_block.header;
-            (*header.height(), header.da_height)
-        };
+        let block_height = *empty_block.header.height();
+        let da_block_height = empty_block.header.da_height;
         let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
@@ -607,8 +551,9 @@ where
             .with_policy(ConflictPolicy::Overwrite);
 
         let skip_failed_txs = false;
-        let _component = self.process_l1_and_l2_txs(
-            components,
+        let partial_block = self.process_l1_and_l2_txs(
+            empty_block,
+            &components,
             l1_transactions,
             &mut block_state_tx,
             &mut data,
@@ -620,34 +565,34 @@ where
             .commit_changes(changes_from_execution)?;
 
         data.changes = self.block_st_transaction.into_changes();
-        Ok(data)
+        Ok((partial_block, data))
     }
 
     fn process_l1_and_l2_txs<'a, T, TxSource>(
         &self,
-        mut components: PartialBlockComponent<'a, TxSource>,
+        mut block: PartialFuelBlock,
+        components: &Components<TxSource>,
         l1_transactions: Vec<CheckedTransaction>,
         thread_block_transaction: &mut T,
         data: &mut ExecutionData,
         skip_failed_txs: bool,
-    ) -> ExecutorResult<PartialBlockComponent<'a, TxSource>>
+    ) -> ExecutorResult<PartialFuelBlock>
     where
         T: KeyValueInspect<Column = Column> + Modifiable,
         TxSource: TransactionsSource,
     {
-        let PartialBlockComponent {
-            empty_block: block,
+        let Components {
             transactions_source: l2_tx_source,
-            coinbase_contract_id,
+            coinbase_recipient: coinbase_contract_id,
             gas_price,
             ..
-        } = &mut components;
+        } = components;
         debug_assert!(block.transactions.is_empty());
         let block_gas_limit = self.consensus_params.block_gas_limit();
 
         self.process_relayed_txs(
             l1_transactions,
-            block,
+            &mut block,
             thread_block_transaction,
             data,
             *coinbase_contract_id,
@@ -665,7 +610,7 @@ where
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
                 match self.execute_transaction_and_commit(
-                    block,
+                    &mut block,
                     thread_block_transaction,
                     data,
                     transaction,
@@ -691,7 +636,7 @@ where
                 .peekable();
         }
 
-        Ok(components)
+        Ok(block)
     }
 
     fn execute_transaction_and_commit<'a, W>(
