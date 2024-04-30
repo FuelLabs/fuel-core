@@ -202,13 +202,6 @@ where
         }
         block_opts.set_bloom_filter(10.0, true);
 
-        let cf_descriptors = columns.clone().into_iter().map(|i| {
-            ColumnFamilyDescriptor::new(
-                Self::col_name(i.id()),
-                Self::cf_opts(i, &block_opts),
-            )
-        });
-
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
@@ -227,36 +220,56 @@ where
             opts.set_row_cache(&cache);
         }
 
-        let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
-            Err(_) => {
-                // setup cfs
-                match DB::open_cf(&opts, &path, &[] as &[&str]) {
-                    Ok(db) => {
-                        for i in columns {
-                            let opts = Self::cf_opts(i, &block_opts);
-                            db.create_cf(Self::col_name(i.id()), &opts)
-                                .map_err(|e| DatabaseError::Other(e.into()))?;
-                        }
-                        Ok(db)
-                    }
-                    Err(err) => {
-                        tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
-                        DB::repair(&opts, &path)
-                            .map_err(|e| DatabaseError::Other(e.into()))?;
+        let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_else(|err| {
+            tracing::error!(
+                "Couldn't get the list of cfs: {}. Returning an empty list",
+                err
+            );
+            vec![]
+        });
 
-                        let cf_descriptors = columns.clone().into_iter().map(|i| {
-                            ColumnFamilyDescriptor::new(
-                                Self::col_name(i.id()),
-                                Self::cf_opts(i, &block_opts),
-                            )
-                        });
-                        DB::open_cf_descriptors(&opts, &path, cf_descriptors)
-                    }
-                }
+        let mut cf_descriptors_to_open = vec![];
+        let mut cf_descriptors_to_create = vec![];
+        for column in columns.clone() {
+            let column_name = Self::col_name(column.id());
+            let opts = Self::cf_opts(column, &block_opts);
+            if existing_column_families.contains(&column_name) {
+                cf_descriptors_to_open.push((column_name, opts));
+            } else {
+                cf_descriptors_to_create.push((column_name, opts));
             }
-            ok => ok,
+        }
+
+        let iterator = cf_descriptors_to_open
+            .clone()
+            .into_iter()
+            .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+
+        let db = match DB::open_cf_descriptors(&opts, &path, iterator) {
+            Ok(db) => {
+                Ok(db)
+            },
+            Err(err) => {
+                tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
+                DB::repair(&opts, &path)
+                    .map_err(|e| DatabaseError::Other(e.into()))?;
+
+                let iterator = cf_descriptors_to_open
+                    .clone()
+                    .into_iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+
+                DB::open_cf_descriptors(&opts, &path, iterator)
+            },
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        // Setup cfs
+        for (name, opt) in cf_descriptors_to_create {
+            db.create_cf(name, &opt)
+                .map_err(|e| DatabaseError::Other(e.into()))?;
+        }
+
         let rocks_db = RocksDb {
             db,
             _drop: Default::default(),
@@ -616,6 +629,29 @@ mod tests {
             RocksDb::default_open(tmp_dir.path(), None).unwrap(),
             tmp_dir,
         )
+    }
+
+    #[test]
+    fn open_new_columns() {
+        let tmp_dir = TempDir::new().unwrap();
+
+        // Given
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let database_with_old_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None)
+                .expect("Failed to open database with old columns");
+        drop(database_with_old_columns);
+
+        // When
+        let mut new_columns = old_columns;
+        new_columns.push(Column::ContractsAssets);
+        new_columns.push(Column::Metadata);
+        let database_with_new_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None).map(|_| ());
+
+        // Then
+        assert_eq!(Ok(()), database_with_new_columns);
     }
 
     #[test]

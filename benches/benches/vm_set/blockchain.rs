@@ -265,6 +265,8 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
             op::movi(0x12, i as u32),
+            // Allocate space for storage values in the memory
+            op::cfei(i as u32 * Bytes32::LEN as u32),
         ];
         let mut bench = VmBench::contract_using_db(
             rng,
@@ -393,6 +395,7 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::movi(0x12, 100_000),
             op::movi(0x13, i.try_into().unwrap()),
+            op::cfe(0x13),
             op::movi(0x14, i.try_into().unwrap()),
             op::movi(0x15, i.try_into().unwrap()),
             op::add(0x15, 0x15, 0x15),
