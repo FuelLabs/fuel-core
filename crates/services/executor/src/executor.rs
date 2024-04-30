@@ -231,58 +231,16 @@ where
     R: RelayerPort,
     D: KeyValueInspect<Column = Column>,
 {
-    pub fn produce_without_commit<TxSource>(
-        self,
-        block: Components<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>>
-    where
-        TxSource: TransactionsSource,
-    {
-        self.produce_inner(block)
-    }
-
-    pub fn dry_run_without_commit<TxSource>(
-        self,
-        block: Components<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>>
-    where
-        TxSource: TransactionsSource,
-    {
-        self.dry_run_inner(block)
-    }
-
-    pub fn validate_without_commit(
-        self,
-        block: Block,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        self.validate_inner(block)
-    }
-}
-
-impl<R, D> ExecutionInstance<R, D>
-where
-    R: RelayerPort,
-    D: KeyValueInspect<Column = Column>,
-{
     #[tracing::instrument(skip_all)]
-    fn produce_inner<TxSource>(
+    pub fn produce_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
     {
-        // let mut partial_block =
-        //     PartialFuelBlock::new(components.header_to_produce, vec![]);
         let consensus_params_version = components.consensus_parameters_version();
         let block_executor = self.into_executor(consensus_params_version)?;
-
-        // let component = PartialBlockComponent::from_component(
-        //     &mut partial_block,
-        //     components.transactions_source,
-        //     components.coinbase_recipient,
-        //     components.gas_price,
-        // );
 
         let (partial_block, execution_data) = block_executor.produce_block(components)?;
 
@@ -295,27 +253,19 @@ where
         let block = partial_block
             .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
-        Self::report_block_results(block, execution_data)
+        Self::uncommitted_block_results(block, execution_data)
     }
 
     #[tracing::instrument(skip_all)]
-    fn dry_run_inner<TxSource>(
+    pub fn dry_run_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
     {
-        // let mut partial_block =
-        //     PartialFuelBlock::new(components.header_to_produce, vec![]);
         let consensus_params_version = components.consensus_parameters_version();
         let block_executor = self.into_executor(consensus_params_version)?;
-        // let components = PartialBlockComponent::from_component(
-        //     &mut partial_block,
-        //     components.transactions_source,
-        //     components.coinbase_recipient,
-        //     components.gas_price,
-        // );
         let (partial_block, execution_data) = block_executor.dry_run_block(components)?;
 
         let ExecutionData {
@@ -323,19 +273,20 @@ where
             event_inbox_root,
             ..
         } = &execution_data;
-
         let block = partial_block
             .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
-        Self::report_block_results(block, execution_data)
+        Self::uncommitted_block_results(block, execution_data)
     }
 
-    fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
+    pub fn validate_without_commit(
+        self,
+        block: Block,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version;
         let block_executor = self.into_executor(consensus_params_version)?;
-
         let execution_data = block_executor.validate_block(&block)?;
-        Self::report_block_results(block, execution_data)
+        Self::uncommitted_block_results(block, execution_data)
     }
 
     fn into_executor(
@@ -350,7 +301,7 @@ where
         )
     }
 
-    fn report_block_results(
+    fn uncommitted_block_results(
         block: Block,
         data: ExecutionData,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
@@ -587,7 +538,6 @@ where
             gas_price,
             ..
         } = components;
-        debug_assert!(block.transactions.is_empty());
         let block_gas_limit = self.consensus_params.block_gas_limit();
 
         self.process_relayed_txs(
@@ -600,8 +550,6 @@ where
 
         let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
-        // L2 originated transactions should be in the `TxSource`. This will be triggered after
-        // all relayed transactions are processed.
         let mut regular_tx_iter = l2_tx_source
             .next(remaining_gas_limit)
             .into_iter()
@@ -700,8 +648,6 @@ where
             .block_st_transaction
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
-
-        debug_assert!(partial_block.transactions.is_empty());
 
         self.process_relayed_txs(
             forced_transactions,
