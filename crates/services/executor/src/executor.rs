@@ -550,16 +550,9 @@ where
         let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
-        // The block level storage transaction that also contains data from the relayer.
-        // Starting from this point, modifications from each thread should be independent
-        // and shouldn't touch the same data.
-        let mut block_with_relayer_data_transaction = self.block_st_transaction.read_transaction()
-            // Enforces independent changes from each thread.
-            .with_policy(ConflictPolicy::Fail);
 
-        // We execute transactions in a single thread right now, but later,
-        // we will execute them in parallel with a separate independent storage transaction per thread.
-        let mut thread_block_transaction = block_with_relayer_data_transaction
+        let mut block_state_tx = self
+            .block_st_transaction
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -567,7 +560,7 @@ where
         let component = self.process_l1_and_l2_txs(
             components,
             l1_transactions,
-            &mut thread_block_transaction,
+            &mut block_state_tx,
             &mut data,
             skip_failed_txs,
         )?;
@@ -581,16 +574,15 @@ where
 
         self.produce_mint_tx(
             block,
-            &mut thread_block_transaction,
+            &mut block_state_tx,
             &mut data,
             coinbase_contract_id,
             gas_price,
         )?;
 
-        let changes_from_thread = thread_block_transaction.into_changes();
-        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        let changes_from_execution = block_state_tx.into_changes();
         self.block_st_transaction
-            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
+            .commit_changes(changes_from_execution)?;
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
@@ -663,16 +655,8 @@ where
         let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
-        // The block level storage transaction that also contains data from the relayer.
-        // Starting from this point, modifications from each thread should be independent
-        // and shouldn't touch the same data.
-        let mut block_with_relayer_data_transaction = self.block_st_transaction.read_transaction()
-            // Enforces independent changes from each thread.
-            .with_policy(ConflictPolicy::Fail);
-
-        // We execute transactions in a single thread right now, but later,
-        // we will execute them in parallel with a separate independent storage transaction per thread.
-        let mut thread_block_transaction = block_with_relayer_data_transaction
+        let mut block_state_tx = self
+            .block_st_transaction
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -680,15 +664,14 @@ where
         let _component = self.process_l1_and_l2_txs(
             components,
             l1_transactions,
-            &mut thread_block_transaction,
+            &mut block_state_tx,
             &mut data,
             skip_failed_txs,
         )?;
 
-        let changes_from_thread = thread_block_transaction.into_changes();
-        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        let changes_from_execution = block_state_tx.into_changes();
         self.block_st_transaction
-            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
+            .commit_changes(changes_from_execution)?;
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
@@ -822,16 +805,8 @@ where
         let forced_transactions =
             self.get_relayed_txs(block_height, da_block_height, &mut data)?;
 
-        // The block level storage transaction that also contains data from the relayer.
-        // Starting from this point, modifications from each thread should be independent
-        // and shouldn't touch the same data.
-        let mut block_with_relayer_data_transaction = self.block_st_transaction.read_transaction()
-            // Enforces independent changes from each thread.
-            .with_policy(ConflictPolicy::Fail);
-
-        // We execute transactions in a single thread right now, but later,
-        // we will execute them in parallel with a separate independent storage transaction per thread.
-        let mut thread_block_transaction = block_with_relayer_data_transaction
+        let mut block_state_tx = self
+            .block_st_transaction
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -840,7 +815,7 @@ where
         self.process_relayed_txs(
             forced_transactions,
             &mut partial_block,
-            &mut thread_block_transaction,
+            &mut block_state_tx,
             &mut data,
             coinbase_contract_id,
         )?;
@@ -850,7 +825,7 @@ where
                 MaybeCheckedTransaction::Transaction(transaction.clone());
             self.execute_transaction_and_commit(
                 &mut partial_block,
-                &mut thread_block_transaction,
+                &mut block_state_tx,
                 &mut data,
                 maybe_checked_tx,
                 gas_price,
@@ -860,10 +835,9 @@ where
 
         self.check_block_matches(partial_block, block, &data)?;
 
-        let changes_from_thread = thread_block_transaction.into_changes();
-        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        let changes_from_execution = block_state_tx.into_changes();
         self.block_st_transaction
-            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
+            .commit_changes(changes_from_execution)?;
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
