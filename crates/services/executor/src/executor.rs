@@ -325,22 +325,19 @@ where
     where
         TxSource: TransactionsSource,
     {
-        let (partial_block, execution_data) = {
-            let mut block = PartialFuelBlock::new(components.header_to_produce, vec![]);
-            let consensus_params_version = block.header.consensus_parameters_version;
-            let block_executor = self.new_executor(consensus_params_version)?;
+        let mut partial_block =
+            PartialFuelBlock::new(components.header_to_produce, vec![]);
+        let consensus_params_version = partial_block.header.consensus_parameters_version;
+        let block_executor = self.into_executor(consensus_params_version)?;
 
-            let component = PartialBlockComponent::from_component(
-                &mut block,
-                components.transactions_source,
-                components.coinbase_recipient,
-                components.gas_price,
-            );
+        let component = PartialBlockComponent::from_component(
+            &mut partial_block,
+            components.transactions_source,
+            components.coinbase_recipient,
+            components.gas_price,
+        );
 
-            let execution_data = block_executor.produce_block(component)?;
-
-            (block, execution_data)
-        };
+        let execution_data = block_executor.produce_block(component)?;
 
         let ExecutionData {
             message_ids,
@@ -362,23 +359,17 @@ where
     where
         TxSource: TransactionsSource,
     {
-        let (partial_block, execution_data) = {
-            {
-                let mut block =
-                    PartialFuelBlock::new(component.header_to_produce, vec![]);
-                let consensus_params_version = block.header.consensus_parameters_version;
-                let block_executor = self.new_executor(consensus_params_version)?;
-                let component = PartialBlockComponent::from_component(
-                    &mut block,
-                    component.transactions_source,
-                    component.coinbase_recipient,
-                    component.gas_price,
-                );
-                let execution_data = block_executor.dry_run_block(component)?;
-
-                (block, execution_data)
-            }
-        };
+        let mut partial_block =
+            PartialFuelBlock::new(component.header_to_produce, vec![]);
+        let consensus_params_version = partial_block.header.consensus_parameters_version;
+        let block_executor = self.into_executor(consensus_params_version)?;
+        let component = PartialBlockComponent::from_component(
+            &mut partial_block,
+            component.transactions_source,
+            component.coinbase_recipient,
+            component.gas_price,
+        );
+        let execution_data = block_executor.dry_run_block(component)?;
 
         let ExecutionData {
             message_ids,
@@ -395,13 +386,13 @@ where
 
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version;
-        let block_executor = self.new_executor(consensus_params_version)?;
+        let block_executor = self.into_executor(consensus_params_version)?;
 
         let execution_data = block_executor.validate_block(&block)?;
         Self::report_block_results(block, execution_data)
     }
 
-    fn new_executor(
+    fn into_executor(
         self,
         consensus_params_version: ConsensusParametersVersion,
     ) -> ExecutorResult<BlockExecutor<R, D>> {
