@@ -301,20 +301,6 @@ impl ImportTable<TransactionStatuses> for Handler {
     }
 }
 
-impl ImportTable<FuelBlockIdsToHeights> for Handler {
-    fn off_chain(
-        &mut self,
-        group: Cow<Vec<TableEntry<FuelBlockIdsToHeights>>>,
-        tx: &mut StorageTransaction<&mut GenesisDatabase<OffChain>>,
-    ) -> anyhow::Result<()> {
-        for entry in group.as_ref() {
-            tx.storage::<FuelBlockIdsToHeights>()
-                .insert(&entry.key, &entry.value)?;
-        }
-        Ok(())
-    }
-}
-
 impl ImportTable<OwnedTransactions> for Handler {
     fn off_chain(
         &mut self,
