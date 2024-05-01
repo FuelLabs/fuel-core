@@ -238,9 +238,11 @@ where
         TxSource: TransactionsSource,
     {
         let consensus_params_version = components.consensus_parameters_version();
-        let block_executor = self.into_executor(consensus_params_version)?;
+        let (block_executor, storage_tx) =
+            self.into_executor(consensus_params_version)?;
 
-        let (partial_block, execution_data) = block_executor.produce_block(components)?;
+        let (partial_block, execution_data) =
+            block_executor.produce_block(components, storage_tx)?;
 
         let ExecutionData {
             message_ids,
@@ -263,8 +265,10 @@ where
         TxSource: TransactionsSource,
     {
         let consensus_params_version = components.consensus_parameters_version();
-        let block_executor = self.into_executor(consensus_params_version)?;
-        let (partial_block, execution_data) = block_executor.dry_run_block(components)?;
+        let (block_executor, storage_tx) =
+            self.into_executor(consensus_params_version)?;
+        let (partial_block, execution_data) =
+            block_executor.dry_run_block(components, storage_tx)?;
 
         let ExecutionData {
             message_ids,
@@ -282,21 +286,29 @@ where
         block: Block,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version;
-        let block_executor = self.into_executor(consensus_params_version)?;
-        let execution_data = block_executor.validate_block(&block)?;
+        let (block_executor, storage_tx) =
+            self.into_executor(consensus_params_version)?;
+        let execution_data = block_executor.validate_block(&block, storage_tx)?;
         Self::uncommitted_block_results(block, execution_data)
     }
 
     fn into_executor(
         self,
         consensus_params_version: ConsensusParametersVersion,
-    ) -> ExecutorResult<BlockExecutor<R, D>> {
-        BlockExecutor::new(
-            self.relayer,
-            self.database,
-            self.options,
-            consensus_params_version,
-        )
+    ) -> ExecutorResult<(BlockExecutor<R>, StorageTransaction<D>)> {
+        let storage_tx = self
+            .database
+            .into_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
+        let consensus_params = storage_tx
+            .storage::<ConsensusParametersVersions>()
+            .get(&consensus_params_version)?
+            .ok_or(ExecutorError::ConsensusParametersNotFound(
+                consensus_params_version,
+            ))?
+            .into_owned();
+        let executor = BlockExecutor::new(self.relayer, self.options, consensus_params)?;
+        Ok((executor, storage_tx))
     }
 
     fn uncommitted_block_results(
@@ -332,69 +344,52 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub struct BlockExecutor<R, D> {
+pub struct BlockExecutor<R> {
     relayer: R,
-    block_storage_tx: StorageTransaction<D>,
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
 }
 
-impl<R, D> BlockExecutor<R, D>
-where
-    D: KeyValueInspect<Column = Column>,
-{
+impl<R> BlockExecutor<R> {
     pub fn new(
         relayer: R,
-        database: D,
         options: ExecutionOptions,
-        consensus_params_version: ConsensusParametersVersion,
+        consensus_params: ConsensusParameters,
     ) -> ExecutorResult<Self> {
-        let block_st_transaction = database
-            .into_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
-        let consensus_params = block_st_transaction
-            .storage::<ConsensusParametersVersions>()
-            .get(&consensus_params_version)?
-            .ok_or(ExecutorError::ConsensusParametersNotFound(
-                consensus_params_version,
-            ))?
-            .into_owned();
-
         Ok(Self {
             relayer,
-            block_storage_tx: block_st_transaction,
             consensus_params,
             options,
         })
     }
 }
 
-impl<R, D> BlockExecutor<R, D>
+impl<R> BlockExecutor<R>
 where
     R: RelayerPort,
-    D: KeyValueInspect<Column = Column>,
 {
     #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
-    fn produce_block<TxSource>(
+    fn produce_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
+        mut block_storage_tx: StorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
+        D: KeyValueInspect<Column = Column>,
     {
         let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
         let block_height = *empty_block.header.height();
         let da_block_height = empty_block.header.da_height;
-        let l1_transactions =
-            self.get_relayed_txs(block_height, da_block_height, &mut data)?;
-
-        let mut block_storage_tx = self
-            .block_storage_tx
-            .read_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+        let l1_transactions = self.get_relayed_txs(
+            block_height,
+            da_block_height,
+            &mut data,
+            &mut block_storage_tx,
+        )?;
 
         let skip_failed_txs = true;
         let mut partial_block = self.process_l1_and_l2_txs(
@@ -420,11 +415,7 @@ where
             gas_price,
         )?;
 
-        let changes_from_execution = block_storage_tx.into_changes();
-        self.block_storage_tx
-            .commit_changes(changes_from_execution)?;
-
-        data.changes = self.block_storage_tx.into_changes();
+        data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
 
@@ -479,25 +470,26 @@ where
 
     #[tracing::instrument(skip_all)]
     /// Execute dry-run of block with specified components
-    fn dry_run_block<TxSource>(
+    fn dry_run_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
+        mut block_storage_tx: StorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
+        D: KeyValueInspect<Column = Column>,
     {
         let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
         let block_height = *empty_block.header.height();
         let da_block_height = empty_block.header.da_height;
-        let l1_transactions =
-            self.get_relayed_txs(block_height, da_block_height, &mut data)?;
-
-        let mut block_storage_tx = self
-            .block_storage_tx
-            .read_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+        let l1_transactions = self.get_relayed_txs(
+            block_height,
+            da_block_height,
+            &mut data,
+            &mut block_storage_tx,
+        )?;
 
         let skip_failed_txs = false;
         let partial_block = self.process_l1_and_l2_txs(
@@ -509,11 +501,7 @@ where
             skip_failed_txs,
         )?;
 
-        let changes_from_execution = block_storage_tx.into_changes();
-        self.block_storage_tx
-            .commit_changes(changes_from_execution)?;
-
-        data.changes = self.block_storage_tx.into_changes();
+        data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
 
@@ -625,7 +613,14 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    fn validate_block(mut self, block: &Block) -> ExecutorResult<ExecutionData> {
+    fn validate_block<D>(
+        mut self,
+        block: &Block,
+        mut block_storage_tx: StorageTransaction<D>,
+    ) -> ExecutorResult<ExecutionData>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let mut data = ExecutionData::new();
 
         let partial_header = PartialBlockHeader::from(block.header());
@@ -639,13 +634,12 @@ where
         let block_height = *block_header.height();
         let da_block_height = block_header.da_height;
 
-        let forced_transactions =
-            self.get_relayed_txs(block_height, da_block_height, &mut data)?;
-
-        let mut block_storage_tx = self
-            .block_storage_tx
-            .read_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+        let forced_transactions = self.get_relayed_txs(
+            block_height,
+            da_block_height,
+            &mut data,
+            &mut block_storage_tx,
+        )?;
 
         self.process_relayed_txs(
             forced_transactions,
@@ -670,11 +664,7 @@ where
 
         self.check_block_matches(partial_block, block, &data)?;
 
-        let changes_from_execution = block_storage_tx.into_changes();
-        self.block_storage_tx
-            .commit_changes(changes_from_execution)?;
-
-        data.changes = self.block_storage_tx.into_changes();
+        data.changes = block_storage_tx.into_changes();
         Ok(data)
     }
 
@@ -730,14 +720,18 @@ where
         Ok(())
     }
 
-    fn get_relayed_txs(
+    fn get_relayed_txs<D>(
         &mut self,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
         data: &mut ExecutionData,
-    ) -> ExecutorResult<Vec<CheckedTransaction>> {
+        block_storage_tx: &mut StorageTransaction<D>,
+    ) -> ExecutorResult<Vec<CheckedTransaction>>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(block_height, da_block_height, data)?
+            self.process_da(block_height, da_block_height, data, block_storage_tx)?
         } else {
             Vec::with_capacity(0)
         };
@@ -780,18 +774,21 @@ where
         }
     }
 
-    fn process_da(
+    fn process_da<D>(
         &mut self,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
         execution_data: &mut ExecutionData,
-    ) -> ExecutorResult<Vec<CheckedTransaction>> {
+        block_storage_tx: &mut StorageTransaction<D>,
+    ) -> ExecutorResult<Vec<CheckedTransaction>>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let prev_block_height = block_height
             .pred()
             .ok_or(ExecutorError::ExecutingGenesisBlock)?;
 
-        let prev_block_header = self
-            .block_storage_tx
+        let prev_block_header = block_storage_tx
             .storage::<FuelBlocks>()
             .get(&prev_block_height)?
             .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
@@ -817,7 +814,7 @@ where
                         if message.da_height() != da_height {
                             return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
-                        self.block_storage_tx
+                        block_storage_tx
                             .storage_as_mut::<Messages>()
                             .insert(message.nonce(), &message)?;
                         execution_data
