@@ -343,6 +343,9 @@ where
     }
 }
 
+type BlockStorageTransaction<T> = StorageTransaction<T>;
+type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
+
 #[derive(Clone, Debug)]
 pub struct BlockExecutor<R> {
     relayer: R,
@@ -373,7 +376,7 @@ where
     fn produce_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
-        mut block_storage_tx: StorageTransaction<D>,
+        mut block_storage_tx: BlockStorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
@@ -418,13 +421,13 @@ where
     fn produce_mint_tx<T>(
         &self,
         block: &mut PartialFuelBlock,
-        storage_tx: &mut T,
+        storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
         gas_price: Word,
     ) -> ExecutorResult<()>
     where
-        T: KeyValueInspect<Column = Column> + Modifiable,
+        T: KeyValueInspect<Column = Column>,
     {
         let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
             data.coinbase
@@ -469,7 +472,7 @@ where
     fn dry_run_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
-        mut block_storage_tx: StorageTransaction<D>,
+        mut block_storage_tx: BlockStorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
@@ -501,7 +504,7 @@ where
         &mut self,
         mut block: PartialFuelBlock,
         components: &Components<TxSource>,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
     ) -> ExecutorResult<PartialFuelBlock>
     where
@@ -510,7 +513,7 @@ where
     {
         let block_height = *block.header.height();
         let da_block_height = block.header.da_height;
-        let relayed_txs =
+        let l1_transactions =
             self.get_relayed_txs(block_height, da_block_height, data, storage_tx)?;
         let Components {
             coinbase_recipient: coinbase_contract_id,
@@ -518,7 +521,7 @@ where
         } = components;
 
         self.process_relayed_txs(
-            relayed_txs,
+            l1_transactions,
             &mut block,
             storage_tx,
             data,
@@ -590,14 +593,14 @@ where
     fn execute_transaction_and_commit<'a, W>(
         &'a self,
         block: &'a mut PartialFuelBlock,
-        storage_tx: &mut W,
+        storage_tx: &mut BlockStorageTransaction<W>,
         execution_data: &mut ExecutionData,
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
     ) -> ExecutorResult<()>
     where
-        W: KeyValueInspect<Column = Column> + Modifiable,
+        W: KeyValueInspect<Column = Column>,
     {
         let tx_count = execution_data.tx_count;
         let tx = {
@@ -698,12 +701,12 @@ where
         &self,
         forced_transactions: Vec<CheckedTransaction>,
         partial_block: &mut PartialFuelBlock,
-        storage_tx: &mut T,
+        storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
     ) -> ExecutorResult<()>
     where
-        T: KeyValueInspect<Column = Column> + Modifiable,
+        T: KeyValueInspect<Column = Column>,
     {
         let block_header = partial_block.header;
         let block_height = block_header.height();
@@ -739,7 +742,7 @@ where
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
         data: &mut ExecutionData,
-        block_storage_tx: &mut StorageTransaction<D>,
+        block_storage_tx: &mut BlockStorageTransaction<D>,
     ) -> ExecutorResult<Vec<CheckedTransaction>>
     where
         D: KeyValueInspect<Column = Column>,
@@ -793,7 +796,7 @@ where
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
         execution_data: &mut ExecutionData,
-        block_storage_tx: &mut StorageTransaction<D>,
+        block_storage_tx: &mut BlockStorageTransaction<D>,
     ) -> ExecutorResult<Vec<CheckedTransaction>>
     where
         D: KeyValueInspect<Column = Column>,
@@ -948,7 +951,7 @@ where
         coinbase_contract_id: ContractId,
         gas_price: Word,
         execution_data: &mut ExecutionData,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<Transaction>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1010,7 +1013,7 @@ where
 
     fn check_tx_is_not_duplicate<T>(
         tx_id: &TxId,
-        storage_tx: &StorageTransaction<T>,
+        storage_tx: &TxStorageTransaction<T>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1047,7 +1050,7 @@ where
         coinbase_contract_id: ContractId,
         gas_price: Word,
         execution_data: &mut ExecutionData,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<Transaction>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1103,7 +1106,7 @@ where
         coinbase_contract_id: ContractId,
         gas_price: Word,
         execution_data: &mut ExecutionData,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + Cacheable + Send + Sync + 'static,
@@ -1203,7 +1206,7 @@ where
         mint: Mint,
         execution_data: &mut ExecutionData,
         coinbase_id: TxId,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<Transaction>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1236,7 +1239,7 @@ where
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
         execution_data: &mut ExecutionData,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut TxStorageTransaction<T>,
         coinbase_id: &TxId,
         mint: &mut Mint,
         input: &mut Input,
@@ -1293,7 +1296,7 @@ where
 
     fn update_tx_outputs<Tx, T>(
         &self,
-        storage_tx: &StorageTransaction<T>,
+        storage_tx: &TxStorageTransaction<T>,
         tx_id: TxId,
         tx: &mut Tx,
     ) -> ExecutorResult<()>
@@ -1403,7 +1406,7 @@ where
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<Checked<Tx>>
     where
         Tx: ExecutableTransaction + Send + Sync + 'static,
@@ -1437,7 +1440,7 @@ where
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
         gas_price: Word,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
     where
         Tx: ExecutableTransaction + Cacheable,
@@ -1581,7 +1584,7 @@ where
     fn spend_input_utxos<T>(
         &self,
         inputs: &[Input],
-        db: &mut StorageTransaction<T>,
+        db: &mut TxStorageTransaction<T>,
         reverted: bool,
         execution_data: &mut ExecutionData,
     ) -> ExecutorResult<()>
@@ -1691,7 +1694,7 @@ where
     fn compute_inputs<T>(
         &self,
         inputs: &mut [Input],
-        db: &StorageTransaction<T>,
+        db: &TxStorageTransaction<T>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1751,7 +1754,7 @@ where
         outputs: &mut [Output],
         inputs: &[Input],
         tx_id: TxId,
-        db: &StorageTransaction<T>,
+        db: &TxStorageTransaction<T>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1782,7 +1785,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn get_coin_or_default<T>(
         &self,
-        db: &StorageTransaction<T>,
+        db: &TxStorageTransaction<T>,
         utxo_id: UtxoId,
         owner: Address,
         amount: u64,
@@ -1846,7 +1849,7 @@ where
         block_height: BlockHeight,
         execution_data: &mut ExecutionData,
         tx_id: &Bytes32,
-        db: &mut StorageTransaction<T>,
+        db: &mut TxStorageTransaction<T>,
         inputs: &[Input],
         outputs: &[Output],
     ) -> ExecutorResult<()>
@@ -1934,7 +1937,7 @@ where
         amount: &Word,
         asset_id: &AssetId,
         to: &Address,
-        db: &mut StorageTransaction<T>,
+        db: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
