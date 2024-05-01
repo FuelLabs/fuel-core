@@ -253,13 +253,11 @@ where
         coinbase_recipient: fuel_core_types::fuel_types::ContractId,
         gas_price: u64,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        let component = {
-            Components {
-                header_to_produce: block.header,
-                transactions_source: OnceTransactionsSource::new(block.transactions),
-                coinbase_recipient,
-                gas_price,
-            }
+        let component = Components {
+            header_to_produce: block.header,
+            transactions_source: OnceTransactionsSource::new(block.transactions),
+            coinbase_recipient,
+            gas_price,
         };
 
         let options = self.config.as_ref().into();
@@ -365,10 +363,7 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            tracing::warn!(
-                "The block version({}) is different from the native executor version({}). \
-                The WASM executor will be used.", block_version, Self::VERSION
-            );
+            Self::trace_block_version_warning(block_version);
             self.wasm_produce_inner(&module, block, options)
         }
     }
@@ -414,10 +409,7 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            tracing::warn!(
-                "The block version({}) is different from the native executor version({}). \
-                The WASM executor will be used.", block_version, Self::VERSION
-            );
+            Self::trace_block_version_warning(block_version);
             self.wasm_dry_run_inner(&module, block, options)
         }
     }
@@ -460,12 +452,19 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            tracing::warn!(
-                "The block version({}) is different from the native executor version({}). \
-                The WASM executor will be used.", block_version, Self::VERSION
-            );
+            Self::trace_block_version_warning(block_version);
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
         }
+    }
+
+    #[cfg(feature = "wasm-executor")]
+    const fn trace_block_version_warning(block_version: StateTransitionBytecodeVersion) {
+        tracing::warn!(
+            "The block version({}) is different from the native executor version({}). \
+                The WASM executor will be used.",
+            block_version,
+            Self::VERSION
+        );
     }
 
     #[cfg(not(feature = "wasm-executor"))]
