@@ -400,35 +400,33 @@ where
             skip_failed_txs,
         )?;
 
-        let Components {
-            coinbase_recipient: coinbase_contract_id,
-            gas_price,
-            ..
-        } = components;
-
         self.produce_mint_tx(
             &mut partial_block,
+            &components,
             &mut block_storage_tx,
             &mut data,
-            coinbase_contract_id,
-            gas_price,
         )?;
 
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
 
-    fn produce_mint_tx<T>(
+    fn produce_mint_tx<TxSource, T>(
         &self,
         block: &mut PartialFuelBlock,
+        components: &Components<TxSource>,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
-        coinbase_contract_id: ContractId,
-        gas_price: Word,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
     {
+        let Components {
+            coinbase_recipient: coinbase_contract_id,
+            gas_price,
+            ..
+        } = *components;
+
         let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
             data.coinbase
         } else {
