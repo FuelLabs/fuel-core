@@ -458,7 +458,7 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
-    const fn trace_block_version_warning(block_version: StateTransitionBytecodeVersion) {
+    fn trace_block_version_warning(block_version: StateTransitionBytecodeVersion) {
         tracing::warn!(
             "The block version({}) is different from the native executor version({}). \
                 The WASM executor will be used.",
