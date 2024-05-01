@@ -382,20 +382,16 @@ where
         let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
-        let block_height = *empty_block.header.height();
-        let da_block_height = empty_block.header.da_height;
-        let l1_transactions = self.get_relayed_txs(
-            block_height,
-            da_block_height,
-            &mut data,
-            &mut block_storage_tx,
-        )?;
-
-        let skip_failed_txs = true;
-        let mut partial_block = self.process_l1_and_l2_txs(
+        let partial_block_with_l1_txs = self.process_l1_txs(
             empty_block,
             &components,
-            l1_transactions,
+            &mut block_storage_tx,
+            &mut data,
+        )?;
+        let skip_failed_txs = true;
+        let mut partial_block = self.process_l2_txs(
+            partial_block_with_l1_txs,
+            &components,
             &mut block_storage_tx,
             &mut data,
             skip_failed_txs,
@@ -482,20 +478,16 @@ where
         let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
-        let block_height = *empty_block.header.height();
-        let da_block_height = empty_block.header.da_height;
-        let l1_transactions = self.get_relayed_txs(
-            block_height,
-            da_block_height,
-            &mut data,
-            &mut block_storage_tx,
-        )?;
-
         let skip_failed_txs = false;
-        let partial_block = self.process_l1_and_l2_txs(
+        let partial_block_with_l1_txs = self.process_l1_txs(
             empty_block,
             &components,
-            l1_transactions,
+            &mut block_storage_tx,
+            &mut data,
+        )?;
+        let partial_block = self.process_l2_txs(
+            partial_block_with_l1_txs,
+            &components,
             &mut block_storage_tx,
             &mut data,
             skip_failed_txs,
@@ -505,17 +497,47 @@ where
         Ok((partial_block, data))
     }
 
-    fn process_l1_and_l2_txs<T, TxSource>(
-        &self,
+    fn process_l1_txs<T, TxSource>(
+        &mut self,
         mut block: PartialFuelBlock,
         components: &Components<TxSource>,
-        l1_transactions: Vec<CheckedTransaction>,
-        storage_tx: &mut T,
+        storage_tx: &mut StorageTransaction<T>,
+        data: &mut ExecutionData,
+    ) -> ExecutorResult<PartialFuelBlock>
+    where
+        T: KeyValueInspect<Column = Column>,
+        TxSource: TransactionsSource,
+    {
+        let block_height = *block.header.height();
+        let da_block_height = block.header.da_height;
+        let relayed_txs =
+            self.get_relayed_txs(block_height, da_block_height, data, storage_tx)?;
+        let Components {
+            coinbase_recipient: coinbase_contract_id,
+            ..
+        } = components;
+
+        self.process_relayed_txs(
+            relayed_txs,
+            &mut block,
+            storage_tx,
+            data,
+            *coinbase_contract_id,
+        )?;
+
+        Ok(block)
+    }
+
+    fn process_l2_txs<T, TxSource>(
+        &mut self,
+        mut block: PartialFuelBlock,
+        components: &Components<TxSource>,
+        storage_tx: &mut StorageTransaction<T>,
         data: &mut ExecutionData,
         skip_failed_txs: bool,
     ) -> ExecutorResult<PartialFuelBlock>
     where
-        T: KeyValueInspect<Column = Column> + Modifiable,
+        T: KeyValueInspect<Column = Column>,
         TxSource: TransactionsSource,
     {
         let Components {
@@ -525,14 +547,6 @@ where
             ..
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
-
-        self.process_relayed_txs(
-            l1_transactions,
-            &mut block,
-            storage_tx,
-            data,
-            *coinbase_contract_id,
-        )?;
 
         let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
