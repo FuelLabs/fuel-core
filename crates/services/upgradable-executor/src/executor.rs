@@ -1,6 +1,7 @@
 use crate::config::Config;
 use fuel_core_executor::{
     executor::{
+        ExecutionInstance,
         ExecutionOptions,
         OnceTransactionsSource,
     },
@@ -600,14 +601,7 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
-
-        let instance = fuel_core_executor::executor::ExecutionInstance {
-            relayer,
-            database: storage,
-            options,
-        };
+        let instance = self.new_native_executor_instance(options);
         instance.produce_without_commit(block)
     }
 
@@ -619,14 +613,7 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
-
-        let instance = fuel_core_executor::executor::ExecutionInstance {
-            relayer,
-            database: storage,
-            options,
-        };
+        let instance = self.new_native_executor_instance(options);
         instance.dry_run_without_commit(block)
     }
 
@@ -635,15 +622,22 @@ where
         block: Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
+        let instance = self.new_native_executor_instance(options);
+        instance.validate_without_commit(block)
+    }
 
-        let instance = fuel_core_executor::executor::ExecutionInstance {
+    fn new_native_executor_instance(
+        &self,
+        options: ExecutionOptions,
+    ) -> ExecutionInstance<<R as AtomicView>::View, <S as AtomicView>::View> {
+        let relayer = self.relayer_view_provider.latest_view();
+        let storage = self.storage_view_provider.latest_view();
+
+        ExecutionInstance {
             relayer,
             database: storage,
             options,
-        };
-        instance.validate_without_commit(block)
+        }
     }
 
     /// Returns the compiled WASM module of the state transition function.
