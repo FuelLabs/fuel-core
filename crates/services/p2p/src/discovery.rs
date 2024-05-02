@@ -246,16 +246,11 @@ mod tests {
     };
     use std::{
         collections::HashSet,
-        sync::atomic::{
-            AtomicUsize,
-            Ordering,
-        },
         task::Poll,
         time::Duration,
     };
 
     use libp2p_swarm_test::SwarmExt;
-    use std::sync::Arc;
 
     const MAX_PEERS: usize = 50;
 
@@ -297,10 +292,6 @@ mod tests {
     // initially, only connects first_swarm to the rest of the swarms
     // after that each swarm uses kademlia to discover other swarms
     // test completes after all swarms have connected to each other
-    // TODO: This used to fail with any connection closures, but that was causing a lot of failed tests.
-    //   Now it allows for many connection closures before failing. We don't know what caused the
-    //   connections to start failing, but had something to do with upgrading `libp2p`.
-    //   https://github.com/FuelLabs/fuel-core/issues/1562
     #[tokio::test]
     async fn discovery_works() {
         // Number of peers in the network
@@ -323,26 +314,23 @@ mod tests {
 
         // HashSet of swarms to discover for each swarm
         let mut left_to_discover = (0..discovery_swarms.len())
-            .map(|current_index| {
-                (0..discovery_swarms.len())
-                    .skip(1) // first_swarm is already connected
-                    .filter_map(|swarm_index| {
-                        // filter your self
-                        if swarm_index != current_index {
-                            // get the PeerId
-                            Some(*Swarm::local_peer_id(&discovery_swarms[swarm_index].0))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<HashSet<_>>()
-            })
-            .collect::<Vec<_>>();
+                .map(|current_index| {
+                    (0..discovery_swarms.len())
+                        .skip(1) // first_swarm is already connected
+                        .filter_map(|swarm_index| {
+                            // filter your self
+                            if swarm_index != current_index {
+                                // get the PeerId
+                                Some(*Swarm::local_peer_id(&discovery_swarms[swarm_index].0))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<HashSet<_>>()
+                })
+                .collect::<Vec<_>>();
 
-        let connection_closed_counter = Arc::new(AtomicUsize::new(0));
-        const MAX_CONNECTION_CLOSED: usize = 1000;
-
-        poll_fn(move |cx| {
+        let test_future = poll_fn(move |cx| {
             'polling: loop {
                 for swarm_index in 0..discovery_swarms.len() {
                     if let Poll::Ready(Some(event)) =
@@ -380,16 +368,7 @@ mod tests {
                                     .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
                             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                                tracing::warn!(
-                                    "Connection closed: {:?} with {:?} previous closures",
-                                    &peer_id,
-                                    &connection_closed_counter
-                                );
-                                let old = connection_closed_counter
-                                    .fetch_add(1, Ordering::SeqCst);
-                                if old > MAX_CONNECTION_CLOSED {
-                                    panic!("Connection closed for the {:?}th time", old);
-                                }
+                                panic!("PeerId {peer_id:?} disconnected");
                             }
                             _ => {}
                         }
@@ -407,7 +386,8 @@ mod tests {
                 // keep polling Discovery Behaviour
                 Poll::Pending
             }
-        })
-        .await;
+        });
+
+        test_future.await;
     }
 }
