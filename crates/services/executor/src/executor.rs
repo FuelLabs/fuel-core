@@ -382,22 +382,21 @@ where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
     {
-        let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
+        let mut partial_block =
+            PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
-        let partial_block_with_l1_txs = self.process_l1_txs(
-            empty_block,
+        self.process_l1_txs(
+            &mut partial_block,
             &components,
             &mut block_storage_tx,
             &mut data,
         )?;
-        let skip_failed_txs = true;
-        let mut partial_block = self.process_l2_txs(
-            partial_block_with_l1_txs,
+        self.process_l2_txs(
+            &mut partial_block,
             &components,
             &mut block_storage_tx,
             &mut data,
-            skip_failed_txs,
         )?;
 
         self.produce_mint_tx(
@@ -476,22 +475,21 @@ where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
     {
-        let empty_block = PartialFuelBlock::new(components.header_to_produce, vec![]);
+        let mut partial_block =
+            PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
-        let skip_failed_txs = false;
-        let partial_block_with_l1_txs = self.process_l1_txs(
-            empty_block,
+        self.process_l1_txs(
+            &mut partial_block,
             &components,
             &mut block_storage_tx,
             &mut data,
         )?;
-        let partial_block = self.process_l2_txs(
-            partial_block_with_l1_txs,
+        self.process_l2_txs(
+            &mut partial_block,
             &components,
             &mut block_storage_tx,
             &mut data,
-            skip_failed_txs,
         )?;
 
         data.changes = block_storage_tx.into_changes();
@@ -500,18 +498,18 @@ where
 
     fn process_l1_txs<T, TxSource>(
         &mut self,
-        mut block: PartialFuelBlock,
+        block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
-    ) -> ExecutorResult<PartialFuelBlock>
+    ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
         TxSource: TransactionsSource,
     {
         let block_height = *block.header.height();
         let da_block_height = block.header.da_height;
-        let l1_transactions =
+        let relayed_txs =
             self.get_relayed_txs(block_height, da_block_height, data, storage_tx)?;
         let Components {
             coinbase_recipient: coinbase_contract_id,
@@ -519,24 +517,23 @@ where
         } = components;
 
         self.process_relayed_txs(
-            l1_transactions,
-            &mut block,
+            relayed_txs,
+            block,
             storage_tx,
             data,
             *coinbase_contract_id,
         )?;
 
-        Ok(block)
+        Ok(())
     }
 
     fn process_l2_txs<T, TxSource>(
         &mut self,
-        mut block: PartialFuelBlock,
+        block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
         storage_tx: &mut StorageTransaction<T>,
         data: &mut ExecutionData,
-        skip_failed_txs: bool,
-    ) -> ExecutorResult<PartialFuelBlock>
+    ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
         TxSource: TransactionsSource,
@@ -559,7 +556,7 @@ where
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
                 match self.execute_transaction_and_commit(
-                    &mut block,
+                    block,
                     storage_tx,
                     data,
                     transaction,
@@ -568,11 +565,7 @@ where
                 ) {
                     Ok(_) => {}
                     Err(err) => {
-                        if skip_failed_txs {
-                            data.skipped_transactions.push((tx_id, err));
-                        } else {
-                            return Err(err);
-                        }
+                        data.skipped_transactions.push((tx_id, err));
                     }
                 }
             }
@@ -585,7 +578,7 @@ where
                 .peekable();
         }
 
-        Ok(block)
+        Ok(())
     }
 
     fn execute_transaction_and_commit<'a, W>(
