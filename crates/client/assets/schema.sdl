@@ -45,6 +45,7 @@ input BalanceFilterInput {
 }
 
 type Block {
+	version: BlockVersion!
 	id: BlockId!
 	height: U32!
 	header: Header!
@@ -82,6 +83,10 @@ type BlockEdge {
 }
 
 scalar BlockId
+
+enum BlockVersion {
+	V1
+}
 
 
 """
@@ -476,6 +481,10 @@ type Genesis {
 
 type Header {
 	"""
+	Version of the header
+	"""
+	version: HeaderVersion!
+	"""
 	Hash of the header
 	"""
 	id: BlockId!
@@ -527,6 +536,10 @@ type Header {
 	Hash of the application header.
 	"""
 	applicationHash: Bytes32!
+}
+
+enum HeaderVersion {
+	V1
 }
 
 type HeavyOperation {
