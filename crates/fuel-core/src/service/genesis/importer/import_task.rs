@@ -206,12 +206,12 @@ mod tests {
     use super::ImportTable;
 
     #[derive(Default, Clone)]
-    struct Spy {
+    struct ImporterSpy {
         on_chain_called_with: Arc<Mutex<Vec<Vec<TableEntry<Coins>>>>>,
         off_chain_called_with: Arc<Mutex<Vec<Vec<TableEntry<Coins>>>>>,
     }
 
-    impl Spy {
+    impl ImporterSpy {
         fn new() -> Self {
             Self {
                 on_chain_called_with: Default::default(),
@@ -261,7 +261,7 @@ mod tests {
     struct TestTableImporter<OnChainCallback, OffChainCallback> {
         on_chain: OnChainCallback,
         off_chain: OffChainCallback,
-        handler: Spy,
+        handler: ImporterSpy,
     }
     type DefaultImporter = TestTableImporter<
         fn(
@@ -354,7 +354,7 @@ mod tests {
         // given
         let data = TestData::new(3);
 
-        let spy = Spy::default();
+        let spy = ImporterSpy::default();
 
         // when
         import_entries(
@@ -379,7 +379,7 @@ mod tests {
 
         let mut on_chain_db = GenesisDatabase::<OnChain>::default();
         let mut off_chain_db = GenesisDatabase::<OffChain>::default();
-        let spy = Spy::new();
+        let spy = ImporterSpy::new();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
             &mut on_chain_db,
             Coins::column().name(),
@@ -435,7 +435,7 @@ mod tests {
         // when
         let _ = import_entries(
             never_cancel(),
-            Spy::default().custom_importer(
+            ImporterSpy::default().custom_importer(
                 move |_, tx| {
                     insert_a_coin(tx, &utxo_id);
                     bail!("Some error")
@@ -463,7 +463,7 @@ mod tests {
         // when
         let _ = import_entries(
             never_cancel(),
-            Spy::default().custom_importer(
+            ImporterSpy::default().custom_importer(
                 |_, _| Ok(()),
                 move |_, tx| {
                     insert_an_owned_coin(tx, key);
@@ -491,7 +491,7 @@ mod tests {
         // when
         let result = import_entries(
             never_cancel(),
-            Spy::default().default_importer(),
+            ImporterSpy::default().default_importer(),
             groups,
             GenesisDatabase::default(),
             GenesisDatabase::default(),
@@ -512,7 +512,7 @@ mod tests {
         // when
         import_entries(
             never_cancel(),
-            Spy::default().default_importer(),
+            ImporterSpy::default().default_importer(),
             data.as_ok_groups(0),
             on_chain_db.clone(),
             off_chain_db.clone(),
@@ -543,7 +543,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
 
         let cancel_token = tokio_util::sync::CancellationToken::new();
-        let spy = Spy::default();
+        let spy = ImporterSpy::default();
         let runner_handle = {
             let cancel_token = CancellationToken::new(cancel_token.clone());
             let importer = spy.default_importer();
@@ -664,7 +664,7 @@ mod tests {
         // when
         let result = import_entries(
             never_cancel(),
-            Spy::default().default_importer(),
+            ImporterSpy::default().default_importer(),
             groups.as_ok_groups(0),
             on_chain,
             off_chain,
@@ -708,7 +708,7 @@ mod tests {
             .unwrap();
         }
 
-        let spy = Spy::default();
+        let spy = ImporterSpy::default();
         let groups = TestData::new(5);
 
         // when
