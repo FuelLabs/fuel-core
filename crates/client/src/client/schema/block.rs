@@ -76,10 +76,17 @@ pub struct BlockEdge {
     pub node: Block,
 }
 
-/// Block with transactiuon ids
+#[derive(cynic::Enum, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum BlockVersion {
+    V1,
+}
+
+/// Block with transaction ids
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
+    pub version: BlockVersion,
     pub id: BlockId,
     pub header: Header,
     pub consensus: Consensus,
@@ -115,9 +122,16 @@ pub struct BlockMutation {
     pub produce_blocks: U32,
 }
 
+#[derive(cynic::Enum, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum HeaderVersion {
+    V1,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Header {
+    pub version: HeaderVersion,
     pub id: BlockId,
     pub da_height: U64,
     pub consensus_parameters_version: U32,

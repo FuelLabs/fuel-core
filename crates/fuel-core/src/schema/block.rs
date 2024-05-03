@@ -33,6 +33,7 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
+    Enum,
     Object,
     SimpleObject,
     Union,
@@ -87,8 +88,19 @@ pub struct PoAConsensus {
     signature: Signature,
 }
 
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
+pub enum BlockVersion {
+    V1,
+}
+
 #[Object]
 impl Block {
+    async fn version(&self) -> BlockVersion {
+        match self.0 {
+            CompressedBlock::V1(_) => BlockVersion::V1,
+        }
+    }
+
     async fn id(&self) -> BlockId {
         let bytes: fuel_types::Bytes32 = self.0.header().id().into();
         bytes.into()
@@ -125,8 +137,20 @@ impl Block {
     }
 }
 
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
+pub enum HeaderVersion {
+    V1,
+}
+
 #[Object]
 impl Header {
+    /// Version of the header
+    async fn version(&self) -> HeaderVersion {
+        match self.0 {
+            BlockHeader::V1(_) => HeaderVersion::V1,
+        }
+    }
+
     /// Hash of the header
     async fn id(&self) -> BlockId {
         let bytes: fuel_core_types::fuel_types::Bytes32 = self.0.id().into();
