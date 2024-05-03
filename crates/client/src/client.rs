@@ -746,7 +746,12 @@ impl FuelClient {
             id: Some((*id).into()),
         });
 
-        let block = self.query(query).await?.block.map(Into::into);
+        let block = self
+            .query(query)
+            .await?
+            .block
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(block)
     }
@@ -759,7 +764,12 @@ impl FuelClient {
             height: Some(U32(height.into())),
         });
 
-        let block = self.query(query).await?.block.map(Into::into);
+        let block = self
+            .query(query)
+            .await?
+            .block
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(block)
     }
@@ -771,7 +781,7 @@ impl FuelClient {
     ) -> io::Result<PaginatedResult<types::Block, String>> {
         let query = schema::block::BlocksQuery::build(request.into());
 
-        let blocks = self.query(query).await?.blocks.into();
+        let blocks = self.query(query).await?.blocks.try_into()?;
 
         Ok(blocks)
     }
@@ -967,7 +977,12 @@ impl FuelClient {
             commit_block_height,
         });
 
-        let proof = self.query(query).await?.message_proof.map(Into::into);
+        let proof = self
+            .query(query)
+            .await?
+            .message_proof
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(proof)
     }

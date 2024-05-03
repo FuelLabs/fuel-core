@@ -25,7 +25,7 @@ impl TryFrom<schema::chain::ChainInfo> for ChainInfo {
         Ok(Self {
             da_height: value.da_height.into(),
             name: value.name,
-            latest_block: value.latest_block.into(),
+            latest_block: value.latest_block.try_into()?,
             consensus_parameters: value.consensus_parameters.try_into()?,
         })
     }

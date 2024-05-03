@@ -1,5 +1,9 @@
 use clap::Parser;
-use fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV1;
+use fuel_core_types::fuel_tx::{
+    consensus_parameters::gas::GasCostsValuesV1,
+    ConsensusParameters,
+    GasCosts,
+};
 use serde::{
     Deserialize,
     Serialize,
@@ -59,6 +63,7 @@ enum OutputFormat {
     Yaml,
     Json,
     Rust,
+    ConsensusParameters,
 }
 
 #[derive(Debug)]
@@ -223,6 +228,7 @@ fn main() {
             OutputFormat::Yaml => output.push("gas-costs.yaml"),
             OutputFormat::Json => output.push("gas-costs.json"),
             OutputFormat::Rust => output.push("gas-costs.rs"),
+            OutputFormat::ConsensusParameters => output.push("consensus-parameters.rs"),
         }
     }
 
@@ -237,6 +243,13 @@ fn main() {
             serde_json::to_writer(writer, &state.to_json()).unwrap();
         }
         OutputFormat::Rust => write!(&mut writer, "{}", state.to_rust_code()).unwrap(),
+        OutputFormat::ConsensusParameters => {
+            let gas_costs = GasCosts::new(state.to_gas_costs().into());
+            let mut consensus_parameters = ConsensusParameters::default();
+            consensus_parameters.set_gas_costs(gas_costs);
+
+            serde_json::to_writer_pretty(writer, &consensus_parameters).unwrap();
+        }
     }
     println!("Successfully wrote output to {}", output.display());
 }

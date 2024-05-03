@@ -33,7 +33,6 @@ use crate::{
 /// Version-able block type
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 pub enum Block<TransactionRepresentation = Transaction> {
     /// V1 Block
     V1(BlockV1<TransactionRepresentation>),
