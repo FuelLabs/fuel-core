@@ -99,14 +99,14 @@ fn execute_dry_run(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    instance.dry_run_without_commit(block)
+    instance.produce_without_commit(block, true)
 }
 
 fn execute_production(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    instance.produce_without_commit(block)
+    instance.produce_without_commit(block, false)
 }
 
 fn execute_validation(

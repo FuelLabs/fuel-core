@@ -233,6 +233,7 @@ where
     pub fn produce_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
+        dry_run: bool,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
@@ -241,8 +242,11 @@ where
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
 
-        let (partial_block, execution_data) =
-            block_executor.produce_block(components, storage_tx)?;
+        let (partial_block, execution_data) = if dry_run {
+            block_executor.dry_run_block(components, storage_tx)?
+        } else {
+            block_executor.produce_block(components, storage_tx)?
+        };
 
         let ExecutionData {
             message_ids,
@@ -250,31 +254,6 @@ where
             ..
         } = &execution_data;
 
-        let block = partial_block
-            .generate(&message_ids[..], *event_inbox_root)
-            .map_err(ExecutorError::BlockHeaderError)?;
-        Self::uncommitted_block_results(block, execution_data)
-    }
-
-    #[tracing::instrument(skip_all)]
-    pub fn dry_run_without_commit<TxSource>(
-        self,
-        components: Components<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>>
-    where
-        TxSource: TransactionsSource,
-    {
-        let consensus_params_version = components.consensus_parameters_version();
-        let (block_executor, storage_tx) =
-            self.into_executor(consensus_params_version)?;
-        let (partial_block, execution_data) =
-            block_executor.dry_run_block(components, storage_tx)?;
-
-        let ExecutionData {
-            message_ids,
-            event_inbox_root,
-            ..
-        } = &execution_data;
         let block = partial_block
             .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
@@ -638,23 +617,11 @@ where
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
 
-        let block_header = partial_block.header;
-        let block_height = *block_header.height();
-        let da_block_height = block_header.da_height;
-
-        let forced_transactions = self.get_relayed_txs(
-            block_height,
-            da_block_height,
+        self.block_contains_expected_l1_txs(
+            transactions,
+            &partial_block.header,
             &mut data,
             &mut block_storage_tx,
-        )?;
-
-        self.process_relayed_txs(
-            forced_transactions,
-            &mut partial_block,
-            &mut block_storage_tx,
-            &mut data,
-            coinbase_contract_id,
         )?;
 
         for transaction in transactions {
@@ -674,6 +641,35 @@ where
 
         data.changes = block_storage_tx.into_changes();
         Ok(data)
+    }
+
+    fn block_contains_expected_l1_txs<D>(
+        &mut self,
+        block_transactions: &[Transaction],
+        block_header: &PartialBlockHeader,
+        data: &mut ExecutionData,
+        block_storage_tx: &mut BlockStorageTransaction<D>,
+    ) -> ExecutorResult<()>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
+        let block_height = *block_header.height();
+        let da_block_height = block_header.da_height;
+        let l1_transactions =
+            self.get_relayed_txs(block_height, da_block_height, data, block_storage_tx)?;
+
+        let block_tx_ids = block_transactions
+            .iter()
+            .map(|tx| tx.id(&self.consensus_params.chain_id()))
+            .collect::<Vec<_>>();
+        for l1_tx in l1_transactions {
+            let l1_tx_id = MaybeCheckedTransaction::CheckedTransaction(l1_tx)
+                .id(&self.consensus_params.chain_id());
+            if !block_tx_ids.contains(&l1_tx_id) {
+                return Err(ExecutorError::L1TransactionNotInBlock)
+            }
+        }
+        Ok(())
     }
 
     fn get_coinbase_info_from_mint_tx(

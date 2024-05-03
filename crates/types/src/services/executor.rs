@@ -242,6 +242,8 @@ pub enum Error {
     RelayerGivesIncorrectMessages,
     #[display(fmt = "Consensus parameters not found for version {_0}")]
     ConsensusParametersNotFound(ConsensusParametersVersion),
+    #[display(fmt = "The transaction is not in the block")]
+    L1TransactionNotInBlock,
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),
