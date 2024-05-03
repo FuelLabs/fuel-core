@@ -3436,7 +3436,8 @@ mod tests {
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let producer =
+                create_relayer_executor(on_chain_db.clone(), relayer_db.clone());
             let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
                 .produce_without_commit(block.into())
@@ -3446,6 +3447,13 @@ mod tests {
             // then
             let txs = result.block.transactions();
             assert_eq!(txs.len(), 2);
+
+            let validator = create_relayer_executor(on_chain_db, relayer_db);
+            // When
+            let result = validator.validate_without_commit(result.block).map(|_| ());
+
+            // Then
+            assert_eq!(Ok(()), result);
         }
 
         fn relayer_db_with_relayed_tx_spending_message_from_same_da_block(
