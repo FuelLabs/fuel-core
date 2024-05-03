@@ -25,7 +25,6 @@ use tai64::Tai64;
 #[derive(Clone, Debug, derivative::Derivative)]
 #[derivative(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 pub enum BlockHeader {
     /// V1 BlockHeader
     V1(BlockHeaderV1),
@@ -149,7 +148,7 @@ impl BlockHeader {
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
-/// A partially complete fuel block header that doesn't not
+/// A partially complete fuel block header that does not
 /// have any generated fields because it has not been executed yet.
 pub struct PartialBlockHeader {
     /// The application header.

@@ -83,8 +83,8 @@ pub fn vm_initialization(c: &mut Criterion) {
     let mut group = c.benchmark_group("vm_initialization");
 
     // Increase the size of the script to measure the performance of the VM initialization
-    // with a large script. THe largest allowed script is 64 KB = 2^16 bytes.
-    const TX_SIZE_POWER_OF_TWO: usize = 16;
+    // with a large script. THe largest allowed script is 64 KB = 8 * 2^13 bytes.
+    const TX_SIZE_POWER_OF_TWO: usize = 13;
 
     for i in 5..=TX_SIZE_POWER_OF_TWO {
         let size = 8 * (1 << i);
