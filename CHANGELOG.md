@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [#1876](https://github.com/FuelLabs/fuel-core/pull/1876): Updated benchmark to include the worst scenario for `CROO` opcode. Also include consensus parameters in bench output.
 
-### Added
+### Changed
 
+- [#1879](https://github.com/FuelLabs/fuel-core/pull/1879): Return the old behaviour for the `discovery_works` test.
 - [#1848](https://github.com/FuelLabs/fuel-core/pull/1848): Added `version` field to the `Block` and `BlockHeader` GraphQL entities. Added corresponding `version` field to the `Block` and `BlockHeader` client types in `fuel-core-client`.
 
 ## [Version 0.26.0]
