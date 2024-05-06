@@ -529,18 +529,6 @@ where
         instance.produce_without_commit(block, dry_run)
     }
 
-    // fn native_dry_run_inner<TxSource>(
-    //     &self,
-    //     block: Components<TxSource>,
-    //     options: ExecutionOptions,
-    // ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
-    // where
-    //     TxSource: TransactionsSource + Send + Sync + 'static,
-    // {
-    //     let instance = self.new_native_executor_instance(options);
-    //     instance.dry_run_without_commit(block)
-    // }
-
     fn native_validate_inner(
         &self,
         block: Block,
