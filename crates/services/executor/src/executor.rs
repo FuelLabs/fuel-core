@@ -617,14 +617,26 @@ where
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
 
-        self.block_contains_expected_l1_txs(
-            transactions,
-            &partial_block.header,
+        let block_header = partial_block.header;
+        let block_height = *block_header.height();
+        let da_block_height = block_header.da_height;
+        let relayed_txs = self.get_relayed_txs(
+            block_height,
+            da_block_height,
             &mut data,
             &mut block_storage_tx,
         )?;
+        let relayed_tx_count = relayed_txs.len();
 
-        for transaction in transactions {
+        self.process_relayed_txs(
+            relayed_txs,
+            &mut partial_block,
+            &mut block_storage_tx,
+            &mut data,
+            coinbase_contract_id,
+        )?;
+
+        for transaction in transactions.iter().skip(relayed_tx_count) {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
             self.execute_transaction_and_commit(
@@ -641,35 +653,6 @@ where
 
         data.changes = block_storage_tx.into_changes();
         Ok(data)
-    }
-
-    fn block_contains_expected_l1_txs<D>(
-        &mut self,
-        block_transactions: &[Transaction],
-        block_header: &PartialBlockHeader,
-        data: &mut ExecutionData,
-        block_storage_tx: &mut BlockStorageTransaction<D>,
-    ) -> ExecutorResult<()>
-    where
-        D: KeyValueInspect<Column = Column>,
-    {
-        let block_height = *block_header.height();
-        let da_block_height = block_header.da_height;
-        let l1_transactions =
-            self.get_relayed_txs(block_height, da_block_height, data, block_storage_tx)?;
-
-        let block_tx_ids = block_transactions
-            .iter()
-            .map(|tx| tx.id(&self.consensus_params.chain_id()))
-            .collect::<Vec<_>>();
-        for l1_tx in l1_transactions {
-            let l1_tx_id = MaybeCheckedTransaction::CheckedTransaction(l1_tx)
-                .id(&self.consensus_params.chain_id());
-            if !block_tx_ids.contains(&l1_tx_id) {
-                return Err(ExecutorError::L1TransactionNotInBlock)
-            }
-        }
-        Ok(())
     }
 
     fn get_coinbase_info_from_mint_tx(
