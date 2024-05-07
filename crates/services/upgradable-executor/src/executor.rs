@@ -819,7 +819,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(&block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -834,7 +834,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(&block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -850,7 +850,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(&block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
@@ -866,7 +866,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(&block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
@@ -905,7 +905,7 @@ mod test {
             let block = valid_block(next_version);
 
             // When
-            let result = executor.validate_without_commit(&block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -920,7 +920,7 @@ mod test {
             let block = valid_block(next_version);
 
             // When
-            let result = executor.validate_without_commit(&block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -939,7 +939,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor.validate_without_commit(&block).map(|_| ());
+                let result = executor.validate(&block).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);
@@ -959,7 +959,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor.validate_without_commit(&block).map(|_| ());
+                let result = executor.validate(&block).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);
