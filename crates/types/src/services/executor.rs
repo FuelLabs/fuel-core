@@ -2,15 +2,11 @@
 
 use crate::{
     blockchain::{
-        block::{
-            Block,
-            PartialFuelBlock,
-        },
+        block::Block,
         header::{
             BlockHeaderError,
             ConsensusParametersVersion,
         },
-        primitives::BlockId,
     },
     entities::{
         coins::coin::Coin,
@@ -171,139 +167,6 @@ impl TransactionExecutionResult {
             })
             .unwrap_or_else(|| format!("{:?}", &state))
     }
-}
-
-/// Execution wrapper where the types
-/// depend on the type of execution.
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ExecutionTypes<P> {
-    /// DryRun mode where P is being produced.
-    DryRun(P),
-    /// Production mode where P is being produced.
-    Production(P),
-}
-
-/// Starting point for executing a block. Production starts with a [`PartialFuelBlock`].
-/// Validation starts with a full `FuelBlock`.
-pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock>;
-
-impl<P> ExecutionTypes<P> {
-    /// Get the hash of the full `FuelBlock` if validating.
-    pub fn id(&self) -> Option<BlockId> {
-        match self {
-            ExecutionTypes::DryRun(_) => None,
-            ExecutionTypes::Production(_) => None,
-        }
-    }
-}
-
-// TODO: Move `ExecutionType` and `ExecutionKind` into `fuel-core-executor`
-
-/// Execution wrapper with only a single type.
-pub type ExecutionType<T> = ExecutionTypes<T>;
-
-impl<P> ExecutionTypes<P> {
-    /// Map the production type if producing.
-    pub fn map_p<Q, F>(self, f: F) -> ExecutionTypes<Q>
-    where
-        F: FnOnce(P) -> Q,
-    {
-        match self {
-            ExecutionTypes::DryRun(p) => ExecutionTypes::DryRun(f(p)),
-            ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
-        }
-    }
-
-    /// Get a reference version of the inner type.
-    pub fn as_ref(&self) -> ExecutionTypes<&P> {
-        match *self {
-            ExecutionTypes::DryRun(ref p) => ExecutionTypes::DryRun(p),
-            ExecutionTypes::Production(ref p) => ExecutionTypes::Production(p),
-        }
-    }
-
-    /// Get a mutable reference version of the inner type.
-    pub fn as_mut(&mut self) -> ExecutionTypes<&mut P> {
-        match *self {
-            ExecutionTypes::DryRun(ref mut p) => ExecutionTypes::DryRun(p),
-            ExecutionTypes::Production(ref mut p) => ExecutionTypes::Production(p),
-        }
-    }
-
-    /// Get the kind of execution.
-    pub fn to_kind(&self) -> ExecutionKind {
-        match self {
-            ExecutionTypes::DryRun(_) => ExecutionKind::DryRun,
-            ExecutionTypes::Production(_) => ExecutionKind::Production,
-        }
-    }
-}
-
-impl<T> ExecutionType<T> {
-    /// Map the wrapped type.
-    pub fn map<U, F>(self, f: F) -> ExecutionType<U>
-    where
-        F: FnOnce(T) -> U,
-    {
-        match self {
-            ExecutionTypes::DryRun(p) => ExecutionTypes::DryRun(f(p)),
-            ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
-        }
-    }
-
-    /// Filter and map the inner type.
-    pub fn filter_map<U, F>(self, f: F) -> Option<ExecutionType<U>>
-    where
-        F: FnOnce(T) -> Option<U>,
-    {
-        match self {
-            ExecutionTypes::DryRun(p) => f(p).map(ExecutionTypes::DryRun),
-            ExecutionTypes::Production(p) => f(p).map(ExecutionTypes::Production),
-        }
-    }
-
-    /// Get the inner type.
-    pub fn into_inner(self) -> T {
-        match self {
-            ExecutionTypes::DryRun(t) | ExecutionTypes::Production(t) => t,
-        }
-    }
-
-    /// Split into the execution kind and the inner type.
-    pub fn split(self) -> (ExecutionKind, T) {
-        let kind = self.to_kind();
-        (kind, self.into_inner())
-    }
-}
-
-impl<T> core::ops::Deref for ExecutionType<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            ExecutionTypes::DryRun(p) => p,
-            ExecutionTypes::Production(p) => p,
-        }
-    }
-}
-
-impl<T> core::ops::DerefMut for ExecutionType<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            ExecutionTypes::DryRun(p) => p,
-            ExecutionTypes::Production(p) => p,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// The kind of execution.
-pub enum ExecutionKind {
-    /// Dry run a block.
-    DryRun,
-    /// Producing a block.
-    Production,
 }
 
 #[allow(missing_docs)]

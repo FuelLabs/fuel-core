@@ -15,10 +15,7 @@
 
 use crate as fuel_core_wasm_executor;
 use crate::utils::WasmExecutionBlockTypes;
-use fuel_core_executor::executor::{
-    ExecutionBlockWithSource,
-    ExecutionInstance,
-};
+use fuel_core_executor::executor::ExecutionInstance;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -102,16 +99,14 @@ fn execute_dry_run(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    let block = ExecutionBlockWithSource::DryRun(block);
-    instance.execute_without_commit(block)
+    instance.produce_without_commit(block, true)
 }
 
 fn execute_production(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    let block = ExecutionBlockWithSource::Production(block);
-    instance.execute_without_commit(block)
+    instance.produce_without_commit(block, false)
 }
 
 fn execute_validation(

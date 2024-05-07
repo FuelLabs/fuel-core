@@ -1,8 +1,5 @@
 use fuel_core_executor::{
-    executor::{
-        ExecutionBlockWithSource,
-        ExecutionOptions,
-    },
+    executor::ExecutionOptions,
     ports::{
         MaybeCheckedTransaction,
         RelayerPort,
@@ -23,9 +20,12 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_vm::checked_transaction::Checked,
-    services::executor::{
-        Error as ExecutorError,
-        Result as ExecutorResult,
+    services::{
+        block_producer::Components,
+        executor::{
+            Error as ExecutorError,
+            Result as ExecutorResult,
+        },
     },
 };
 use fuel_core_wasm_executor::utils::{
@@ -454,21 +454,25 @@ pub struct InputData {
 
 impl Instance<Relayer> {
     /// Adds getters for the `block` and `options`.
-    pub fn add_execution_input_data(
+    pub fn add_production_input_data(
         self,
-        block: ExecutionBlockWithSource<()>,
+        components: Components<()>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Instance<InputData>> {
-        let wasm_block = match block {
-            ExecutionBlockWithSource::DryRun(inner) => {
-                WasmExecutionBlockTypes::DryRun(inner)
-            }
-            ExecutionBlockWithSource::Production(inner) => {
-                WasmExecutionBlockTypes::Production(inner)
-            }
-        };
         let input = InputType::V1 {
-            block: wasm_block,
+            block: WasmExecutionBlockTypes::Production(components),
+            options,
+        };
+        self.add_input_data(input)
+    }
+
+    pub fn add_dry_run_input_data(
+        self,
+        components: Components<()>,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<Instance<InputData>> {
+        let input = InputType::V1 {
+            block: WasmExecutionBlockTypes::DryRun(components),
             options,
         };
         self.add_input_data(input)

@@ -1,6 +1,6 @@
 use crate::ports::{
+    BlockProducer,
     BlockProducerDatabase,
-    Executor,
     Relayer,
     TxPool,
 };
@@ -140,8 +140,8 @@ fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
     .unwrap()
 }
 
-impl Executor<Vec<ArcPoolTx>> for MockExecutor {
-    fn execute_without_commit(
+impl BlockProducer<Vec<ArcPoolTx>> for MockExecutor {
+    fn produce_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
@@ -166,8 +166,8 @@ impl Executor<Vec<ArcPoolTx>> for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
-    fn execute_without_commit(
+impl BlockProducer<Vec<ArcPoolTx>> for FailingMockExecutor {
+    fn produce_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
@@ -195,8 +195,8 @@ pub struct MockExecutorWithCapture {
     pub captured: Arc<Mutex<Option<Components<Vec<ArcPoolTx>>>>>,
 }
 
-impl Executor<Vec<ArcPoolTx>> for MockExecutorWithCapture {
-    fn execute_without_commit(
+impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture {
+    fn produce_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
