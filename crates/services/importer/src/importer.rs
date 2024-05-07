@@ -34,7 +34,7 @@ use fuel_core_types::{
             UncommittedResult,
         },
         executor,
-        executor::ExecutionResult,
+        executor::ValidationResult,
         Uncommitted,
     },
 };
@@ -402,15 +402,14 @@ where
 
         // TODO: Pass `block` into `ExecutionBlock::Validation` by ref
         let (
-            ExecutionResult {
-                block,
+            ValidationResult {
                 skipped_transactions,
                 tx_status,
                 events,
             },
             changes,
         ) = executor
-            .validate(block)
+            .validate(&block)
             .map_err(Error::FailedExecution)?
             .into();
 

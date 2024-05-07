@@ -478,13 +478,16 @@ impl Instance<Relayer> {
         self.add_input_data(input)
     }
 
+    //
     pub fn add_validation_input_data(
         self,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Instance<InputData>> {
+        // TODO: Can we avoid cloning the block?
+        let block_owned = block.to_owned();
         let input = InputType::V1 {
-            block: WasmExecutionBlockTypes::Validation(block),
+            block: WasmExecutionBlockTypes::Validation(block_owned),
             options,
         };
         self.add_input_data(input)

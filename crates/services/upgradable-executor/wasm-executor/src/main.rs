@@ -25,6 +25,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            ValidationResult,
         },
         Uncommitted,
     },
@@ -114,15 +115,16 @@ fn execute_validation(
     block: Block,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
     let (
-        ExecutionResult {
-            block,
+        ValidationResult {
             skipped_transactions,
             tx_status,
             events,
         },
         changes,
-    ) = instance.validate_without_commit(block)?.into();
+    ) = instance.validate_without_commit(&block)?.into();
 
+    // We have to return the same type here because if the input parsing fails it won't know if this
+    // is a validation or production block.
     Ok(Uncommitted::new(
         ExecutionResult {
             block,

@@ -31,8 +31,8 @@ use fuel_core_types::{
         },
         executor::{
             Error as ExecutorError,
-            ExecutionResult,
             Result as ExecutorResult,
+            ValidationResult,
         },
         Uncommitted,
     },
@@ -69,7 +69,6 @@ fn u32_to_merkle_root(number: u32) -> MerkleRoot {
 
 #[derive(Clone, Debug)]
 struct MockExecutionResult {
-    block: SealedBlock,
     skipped_transactions: usize,
 }
 
@@ -145,9 +144,8 @@ fn storage_failure_error() -> Error {
     storage_failure::<()>().unwrap_err().into()
 }
 
-fn ex_result(height: u32, skipped_transactions: usize) -> MockExecutionResult {
+fn ex_result(skipped_transactions: usize) -> MockExecutionResult {
     MockExecutionResult {
-        block: poa_block(height),
         skipped_transactions,
     }
 }
@@ -171,8 +169,7 @@ where
             .map(|_| (TxId::zeroed(), ExecutorError::BlockMismatch))
             .collect();
         Ok(Uncommitted::new(
-            ExecutionResult {
-                block: mock_result.block.entity,
+            ValidationResult {
                 skipped_transactions,
                 tx_status: vec![],
                 events: vec![],
@@ -329,7 +326,6 @@ async fn commit_result_and_execute_and_commit_poa(
 ) -> Result<(), Error> {
     // `execute_and_commit` and `commit_result` should have the same
     // validation rules(-> test cases) during committing the result.
-    let height = *sealed_block.entity.header().height();
     let transaction = db_transaction();
     let commit_result =
         commit_result_assert(sealed_block.clone(), underlying_db(), transaction).await;
@@ -339,7 +335,7 @@ async fn commit_result_and_execute_and_commit_poa(
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,
-        executor(ok(ex_result(height.into(), 0))),
+        executor(ok(ex_result(0))),
         verifier(ok(())),
     )
     .await;
@@ -449,22 +445,22 @@ fn one_lock_at_the_same_time() {
 
 ///////// New block, Block After Execution, Verification result, commits /////////
 #[test_case(
-    genesis(113), ok(ex_result(113, 0)), ok(()), 0
+    genesis(113), ok(ex_result(0)), ok(()), 0
     => Err(Error::ExecuteGenesis);
     "cannot execute genesis block"
 )]
 #[test_case(
-    poa_block(1), ok(ex_result(1, 0)), ok(()), 1
+    poa_block(1), ok(ex_result(0)), ok(()), 1
     => Ok(());
     "commits block 1"
 )]
 #[test_case(
-    poa_block(113), ok(ex_result(113, 0)), ok(()), 1
+    poa_block(113), ok(ex_result(0)), ok(()), 1
     => Ok(());
     "commits block 113"
 )]
 #[test_case(
-    poa_block(113), ok(ex_result(114, 0)), ok(()), 0
+    poa_block(113), ok(ex_result(0)), ok(()), 0
     => Err(Error::BlockIdMismatch(poa_block(113).entity.id(), poa_block(114).entity.id()));
     "execution result should match block height"
 )]
@@ -474,12 +470,12 @@ fn one_lock_at_the_same_time() {
     "commit fails if execution fails"
 )]
 #[test_case(
-    poa_block(113), ok(ex_result(113, 1)), ok(()), 0
+    poa_block(113), ok(ex_result(1)), ok(()), 0
     => Err(Error::SkippedTransactionsNotEmpty);
     "commit fails if there are skipped transactions"
 )]
 #[test_case(
-    poa_block(113), ok(ex_result(113, 0)), verification_failure, 0
+    poa_block(113), ok(ex_result(0)), verification_failure, 0
     => Err(verification_failure_error());
     "commit fails if verification fails"
 )]
@@ -543,7 +539,7 @@ where
 fn verify_and_execute_allowed_when_locked() {
     let importer = Importer::default_config(
         MockDatabase::default(),
-        executor(ok(ex_result(13, 0))),
+        executor(ok(ex_result(0))),
         verifier(ok(())),
     );
 

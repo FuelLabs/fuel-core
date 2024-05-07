@@ -36,16 +36,33 @@ use crate::{
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
-/// The uncommitted result of the transaction execution.
+/// The uncommitted result of the block production execution.
 pub type UncommittedResult<DatabaseTransaction> =
     Uncommitted<ExecutionResult, DatabaseTransaction>;
 
-/// The result of transactions execution.
+/// The uncommitted result of the block validation.
+pub type UncommittedValidationResult<DatabaseTransaction> =
+    Uncommitted<ValidationResult, DatabaseTransaction>;
+
+/// The result of transactions execution for block production.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
 pub struct ExecutionResult {
     /// Created block during the execution of transactions. It contains only valid transactions.
     pub block: Block,
+    /// The list of skipped transactions with corresponding errors. Those transactions were
+    /// not included in the block and didn't affect the state of the blockchain.
+    pub skipped_transactions: Vec<(TxId, Error)>,
+    /// The status of the transactions execution included into the block.
+    pub tx_status: Vec<TransactionExecutionStatus>,
+    /// The list of all events generated during the execution of the block.
+    pub events: Vec<Event>,
+}
+
+/// The result of the validation of the block.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug)]
+pub struct ValidationResult {
     /// The list of skipped transactions with corresponding errors. Those transactions were
     /// not included in the block and didn't affect the state of the blockchain.
     pub skipped_transactions: Vec<(TxId, Error)>,
