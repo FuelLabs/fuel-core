@@ -20,7 +20,12 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::Block,
+        header::StateTransitionBytecodeVersion,
+        primitives::DaBlockHeight,
+    },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::{
         block_producer::Components,
@@ -28,6 +33,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            TransactionExecutionStatus,
         },
         Uncommitted,
     },
@@ -48,14 +54,6 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
-use fuel_core_types::{
-    blockchain::{
-        block::Block,
-        header::StateTransitionBytecodeVersion,
-    },
-    fuel_tx::Transaction,
-    services::executor::TransactionExecutionStatus,
-};
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -221,6 +219,7 @@ where
     }
 }
 
+#[cfg(any(test, feature = "test-helpers"))]
 impl<S, R> Executor<S, R>
 where
     S: AtomicView<Height = BlockHeight>,
@@ -228,7 +227,6 @@ where
     R: AtomicView<Height = DaBlockHeight>,
     R::View: RelayerPort + Send + Sync + 'static,
 {
-    #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and returns the result of the execution with storage changes.
     pub fn produce_without_commit(
         &self,
@@ -237,7 +235,6 @@ where
         self.produce_without_commit_with_coinbase(block, Default::default(), 0)
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and returns the result of the execution with storage changes.
     pub fn validate_without_commit(
         &self,
@@ -247,7 +244,6 @@ where
         self.validate_inner(block, options)
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     /// The analog of the [`Self::produce_without_commit`] method,
     /// but with the ability to specify the coinbase recipient and the gas price.
     pub fn produce_without_commit_with_coinbase(
@@ -265,6 +261,18 @@ where
 
         let options = self.config.as_ref().into();
         self.produce_inner(component, options, false)
+    }
+
+    /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
+    pub fn dry_run_without_commit_with_source<TxSource>(
+        &self,
+        block: Components<TxSource>,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let options = self.config.as_ref().into();
+        self.produce_inner(block, options, true)
     }
 }
 
@@ -285,18 +293,6 @@ where
     {
         let options = self.config.as_ref().into();
         self.produce_inner(components, options, false)
-    }
-
-    /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
-    pub fn dry_run_without_commit_with_source<TxSource>(
-        &self,
-        block: Components<TxSource>,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
-    where
-        TxSource: TransactionsSource + Send + Sync + 'static,
-    {
-        let options = self.config.as_ref().into();
-        self.produce_inner(block, options, true)
     }
 
     /// Executes the block and returns the result of the execution without committing

@@ -110,11 +110,7 @@ use fuel_core_types::{
             Checked,
             CheckedTransaction,
             Checks,
-            CreateCheckedMetadata,
             IntoChecked,
-            ScriptCheckedMetadata,
-            UpgradeCheckedMetadata,
-            UploadCheckedMetadata,
         },
         interpreter::{
             CheckedMetadata as CheckedMetadataTrait,
@@ -367,7 +363,7 @@ where
 
         self.process_l1_txs(
             &mut partial_block,
-            &components,
+            components.coinbase_recipient,
             &mut block_storage_tx,
             &mut data,
         )?;
@@ -384,6 +380,7 @@ where
             &mut block_storage_tx,
             &mut data,
         )?;
+        debug_assert!(data.found_mint, "Mint transaction is not found");
 
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
@@ -443,7 +440,6 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip_all)]
     /// Execute dry-run of block with specified components
     fn dry_run_block<TxSource, D>(
         mut self,
@@ -458,12 +454,6 @@ where
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
 
-        self.process_l1_txs(
-            &mut partial_block,
-            &components,
-            &mut block_storage_tx,
-            &mut data,
-        )?;
         self.process_l2_txs(
             &mut partial_block,
             &components,
@@ -475,32 +465,27 @@ where
         Ok((partial_block, data))
     }
 
-    fn process_l1_txs<T, TxSource>(
+    fn process_l1_txs<T>(
         &mut self,
         block: &mut PartialFuelBlock,
-        components: &Components<TxSource>,
+        coinbase_contract_id: ContractId,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
-        TxSource: TransactionsSource,
     {
         let block_height = *block.header.height();
         let da_block_height = block.header.da_height;
         let relayed_txs =
             self.get_relayed_txs(block_height, da_block_height, data, storage_tx)?;
-        let Components {
-            coinbase_recipient: coinbase_contract_id,
-            ..
-        } = components;
 
         self.process_relayed_txs(
             relayed_txs,
             block,
             storage_tx,
             data,
-            *coinbase_contract_id,
+            coinbase_contract_id,
         )?;
 
         Ok(())
@@ -617,26 +602,15 @@ where
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
 
-        let block_header = partial_block.header;
-        let block_height = *block_header.height();
-        let da_block_height = block_header.da_height;
-        let relayed_txs = self.get_relayed_txs(
-            block_height,
-            da_block_height,
-            &mut data,
-            &mut block_storage_tx,
-        )?;
-        let relayed_tx_count = relayed_txs.len();
-
-        self.process_relayed_txs(
-            relayed_txs,
+        self.process_l1_txs(
             &mut partial_block,
+            coinbase_contract_id,
             &mut block_storage_tx,
             &mut data,
-            coinbase_contract_id,
         )?;
+        let processed_l1_tx_count = partial_block.transactions.len();
 
-        for transaction in transactions.iter().skip(relayed_tx_count) {
+        for transaction in transactions.iter().skip(processed_l1_tx_count) {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
             self.execute_transaction_and_commit(
@@ -1080,7 +1054,7 @@ where
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
@@ -1380,7 +1354,7 @@ where
     ) -> ExecutorResult<Checked<Tx>>
     where
         Tx: ExecutableTransaction + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
         checked_tx = checked_tx
@@ -1414,7 +1388,7 @@ where
     ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
     where
         Tx: ExecutableTransaction + Cacheable,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
@@ -1933,33 +1907,5 @@ where
         }
 
         Ok(())
-    }
-}
-
-trait CheckedMetadata: CheckedMetadataTrait + Clone + Send + Sync {
-    fn min_gas(&self) -> u64;
-}
-
-impl CheckedMetadata for ScriptCheckedMetadata {
-    fn min_gas(&self) -> u64 {
-        self.min_gas
-    }
-}
-
-impl CheckedMetadata for CreateCheckedMetadata {
-    fn min_gas(&self) -> u64 {
-        self.min_gas
-    }
-}
-
-impl CheckedMetadata for UpgradeCheckedMetadata {
-    fn min_gas(&self) -> u64 {
-        self.min_gas
-    }
-}
-
-impl CheckedMetadata for UploadCheckedMetadata {
-    fn min_gas(&self) -> u64 {
-        self.min_gas
     }
 }
