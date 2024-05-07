@@ -1005,15 +1005,12 @@ mod tests {
         ));
 
         // Produced block is valid
-        let _ = verifier
-            .validate_without_commit(&block)
-            .unwrap()
-            .into_result();
+        let _ = verifier.validate(&block).unwrap().into_result();
 
         // Invalidate the block with Insufficient tx
         let len = block.transactions().len();
         block.transactions_mut().insert(len - 1, tx);
-        let verify_result = verifier.validate_without_commit(&block);
+        let verify_result = verifier.validate(&block);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::InvalidTransaction(
@@ -1053,17 +1050,14 @@ mod tests {
         ));
 
         // Produced block is valid
-        let _ = verifier
-            .validate_without_commit(&block)
-            .unwrap()
-            .into_result();
+        let _ = verifier.validate(&block).unwrap().into_result();
 
         // Make the block invalid by adding of the duplicating transaction
         let len = block.transactions().len();
         block
             .transactions_mut()
             .insert(len - 1, Transaction::default_test_tx());
-        let verify_result = verifier.validate_without_commit(&block);
+        let verify_result = verifier.validate(&block);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::TransactionIdCollision(_))
@@ -1125,15 +1119,12 @@ mod tests {
         ));
 
         // Produced block is valid
-        let _ = verifier
-            .validate_without_commit(&block)
-            .unwrap()
-            .into_result();
+        let _ = verifier.validate(&block).unwrap().into_result();
 
         // Invalidate block by adding transaction with not existing coin
         let len = block.transactions().len();
         block.transactions_mut().insert(len - 1, tx);
-        let verify_result = verifier.validate_without_commit(&block);
+        let verify_result = verifier.validate(&block);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::TransactionValidity(
@@ -2055,7 +2046,7 @@ mod tests {
         assert!(skipped_transactions.is_empty());
 
         let verifier = create_executor(db, Default::default());
-        let verify_result = verifier.validate_without_commit(&second_block);
+        let verify_result = verifier.validate(&second_block);
         assert!(verify_result.is_ok());
     }
 
@@ -2130,7 +2121,7 @@ mod tests {
         }
 
         let verifier = create_executor(db, Default::default());
-        let err = verifier.validate_without_commit(&second_block).unwrap_err();
+        let err = verifier.validate(&second_block).unwrap_err();
 
         assert_eq!(
             err,
@@ -2517,13 +2508,13 @@ mod tests {
 
         // Produced block is valid
         let exec = make_executor(&[&message]);
-        let _ = exec.validate_without_commit(&block).unwrap().into_result();
+        let _ = exec.validate(&block).unwrap().into_result();
 
         // Invalidate block by return back `tx2` transaction skipped during production.
         let len = block.transactions().len();
         block.transactions_mut().insert(len - 1, tx2);
         let exec = make_executor(&[&message]);
-        let res = exec.validate_without_commit(&block);
+        let res = exec.validate(&block);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(

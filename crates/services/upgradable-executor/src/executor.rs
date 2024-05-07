@@ -54,10 +54,7 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
-use fuel_core_types::services::executor::{
-    UncommittedValidationResult,
-    ValidationResult,
-};
+use fuel_core_types::services::executor::ValidationResult;
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -216,7 +213,7 @@ where
         &mut self,
         block: &Block,
     ) -> fuel_core_types::services::executor::Result<ValidationResult> {
-        let (result, changes) = self.validate_without_commit(block)?.into();
+        let (result, changes) = self.validate(block)?.into();
         self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
     }
@@ -236,17 +233,6 @@ where
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
         self.produce_without_commit_with_coinbase(block, Default::default(), 0)
-    }
-
-    // TODO: Can we remove this and just use `validate` everywhere?
-    /// Executes the block and returns the result of the execution with storage changes.
-    pub fn validate_without_commit(
-        &self,
-        block: &Block,
-    ) -> fuel_core_types::services::executor::Result<UncommittedValidationResult<Changes>>
-    {
-        let options = self.config.as_ref().into();
-        self.validate_inner(block, options)
     }
 
     /// The analog of the [`Self::produce_without_commit`] method,
