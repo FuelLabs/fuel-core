@@ -89,6 +89,8 @@ pub struct LastBlockConfig {
     pub consensus_parameters_version: ConsensusParametersVersion,
     /// The version of state transition function used to produce last block.
     pub state_transition_version: StateTransitionBytecodeVersion,
+    /// The block id of the last block
+    pub block_hash: Bytes32,
 }
 
 impl From<BlockHeader> for LastBlockConfig {
@@ -108,6 +110,7 @@ impl From<&BlockHeader> for LastBlockConfig {
             state_transition_version: header
                 .application()
                 .state_transition_bytecode_version,
+            block_hash: header.consensus().prev_root,
         }
     }
 }
