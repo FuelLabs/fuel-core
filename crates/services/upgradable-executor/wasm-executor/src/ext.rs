@@ -1,6 +1,6 @@
 use crate::utils::{
     unpack_exists_size_result,
-    InputType,
+    InputDeserializationType,
 };
 use core::marker::PhantomData;
 use fuel_core_executor::ports::MaybeCheckedTransaction;
@@ -131,7 +131,7 @@ mod host {
 pub struct ReturnResult(u16);
 
 /// Gets the `InputType` by using the host function. The `size` is the size of the encoded input.
-pub fn input(size: usize) -> anyhow::Result<InputType> {
+pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
     let mut encoded_block = vec![0u8; size];
     let size = encoded_block.len();
     unsafe {
@@ -141,7 +141,7 @@ pub fn input(size: usize) -> anyhow::Result<InputType> {
         )
     };
 
-    let input: InputType = postcard::from_bytes(&encoded_block)
+    let input: InputDeserializationType = postcard::from_bytes(&encoded_block)
         .map_err(|e| anyhow::anyhow!("Failed to decode the block: {:?}", e))?;
 
     Ok(input)

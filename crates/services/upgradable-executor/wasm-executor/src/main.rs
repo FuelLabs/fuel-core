@@ -14,7 +14,10 @@
 #![deny(warnings)]
 
 use crate as fuel_core_wasm_executor;
-use crate::utils::WasmExecutionBlockTypes;
+use crate::utils::{
+    InputDeserializationType,
+    WasmDeserializationBlockTypes,
+};
 use fuel_core_executor::executor::ExecutionInstance;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
@@ -36,7 +39,6 @@ use fuel_core_wasm_executor::{
     tx_source::WasmTxSource,
     utils::{
         pack_ptr_and_len,
-        InputType,
         ReturnType,
     },
 };
@@ -66,16 +68,16 @@ pub fn execute_without_commit(
         .map_err(|e| ExecutorError::Other(e.to_string()))?;
 
     let (block, options) = match input {
-        InputType::V1 { block, options } => {
+        InputDeserializationType::V1 { block, options } => {
             let block = match block {
-                WasmExecutionBlockTypes::DryRun(c) => {
-                    WasmExecutionBlockTypes::DryRun(use_wasm_tx_source(c))
+                WasmDeserializationBlockTypes::DryRun(c) => {
+                    WasmDeserializationBlockTypes::DryRun(use_wasm_tx_source(c))
                 }
-                WasmExecutionBlockTypes::Production(c) => {
-                    WasmExecutionBlockTypes::Production(use_wasm_tx_source(c))
+                WasmDeserializationBlockTypes::Production(c) => {
+                    WasmDeserializationBlockTypes::Production(use_wasm_tx_source(c))
                 }
-                WasmExecutionBlockTypes::Validation(c) => {
-                    WasmExecutionBlockTypes::Validation(c)
+                WasmDeserializationBlockTypes::Validation(c) => {
+                    WasmDeserializationBlockTypes::Validation(c)
                 }
             };
 
@@ -90,9 +92,9 @@ pub fn execute_without_commit(
     };
 
     match block {
-        WasmExecutionBlockTypes::DryRun(c) => execute_dry_run(instance, c),
-        WasmExecutionBlockTypes::Production(c) => execute_production(instance, c),
-        WasmExecutionBlockTypes::Validation(c) => execute_validation(instance, c),
+        WasmDeserializationBlockTypes::DryRun(c) => execute_dry_run(instance, c),
+        WasmDeserializationBlockTypes::Production(c) => execute_production(instance, c),
+        WasmDeserializationBlockTypes::Validation(c) => execute_validation(instance, c),
     }
 }
 
