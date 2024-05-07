@@ -265,7 +265,7 @@ where
         let consensus_params_version = block.header().consensus_parameters_version;
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
-        let execution_data = block_executor.validate_block(&block, storage_tx)?;
+        let execution_data = block_executor.validate_block(block, storage_tx)?;
         Self::uncommitted_validation_result(block, execution_data)
     }
 

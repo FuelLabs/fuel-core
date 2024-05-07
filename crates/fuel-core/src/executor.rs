@@ -3289,12 +3289,12 @@ mod tests {
             add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
             let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
             let (result, _) = verifier
-                .validate_without_commit(produced_block)
+                .validate_without_commit(&produced_block)
                 .unwrap()
                 .into();
 
             // then
-            let txs = result.block.transactions();
+            let txs = produced_block.transactions();
             assert_eq!(txs.len(), 1);
 
             // and
@@ -3446,7 +3446,7 @@ mod tests {
 
             let validator = create_relayer_executor(on_chain_db, relayer_db);
             // When
-            let result = validator.validate_without_commit(result.block).map(|_| ());
+            let result = validator.validate_without_commit(&result.block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
