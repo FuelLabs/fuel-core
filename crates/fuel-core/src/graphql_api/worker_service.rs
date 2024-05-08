@@ -14,6 +14,10 @@ use crate::{
                 OwnedMessageKey,
                 SpentMessages,
             },
+            old::{
+                OldFuelBlockMerkleData,
+                OldFuelBlockMerkleMetadata,
+            },
         },
     },
     graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
@@ -28,6 +32,10 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    tables::merkle::{
+        DenseMerkleMetadata,
+        DenseMetadataKey,
+    },
     Result as StorageResult,
     StorageAsMut,
 };
@@ -41,6 +49,7 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
+    fuel_merkle::binary,
     fuel_tx::{
         field::{
             Inputs,
@@ -371,6 +380,38 @@ where
     for (height, block) in blocks {
         db.storage::<OldFuelBlockConsensus>()
             .insert(height, block)?;
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_block_merkle_data<'a, I, T>(
+    block_merkle_data: I,
+    db: &mut T,
+) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a BlockHeight, &'a binary::Primitive)>,
+    T: OffChainDatabase,
+{
+    for (height, block) in block_merkle_data {
+        let version = **height as u64;
+        db.storage::<OldFuelBlockMerkleData>()
+            .insert(&version, block)?;
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_block_merkle_metadata<'a, I, T>(
+    block_merkle_data: I,
+    db: &mut T,
+) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a BlockHeight, &'a DenseMerkleMetadata)>,
+    T: OffChainDatabase,
+{
+    for (height, metadata) in block_merkle_data {
+        let key = DenseMetadataKey::Primary(*height);
+        db.storage::<OldFuelBlockMerkleMetadata>()
+            .insert(&key, metadata)?;
     }
     Ok(())
 }

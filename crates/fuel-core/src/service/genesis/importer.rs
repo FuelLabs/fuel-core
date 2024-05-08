@@ -8,7 +8,10 @@ use crate::{
         off_chain::OffChain,
         on_chain::OnChain,
     },
-    fuel_core_graphql_api::storage::messages::SpentMessages,
+    fuel_core_graphql_api::storage::{
+        messages::SpentMessages,
+        old::OldFuelBlockMerkleData,
+    },
     graphql_api::storage::{
         blocks::FuelBlockIdsToHeights,
         coins::OwnedCoins,
@@ -129,6 +132,7 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<OldTransactions, OldTransactions>()?;
         self.spawn_worker_off_chain::<FuelBlocks, FuelBlockIdsToHeights>()?;
         self.spawn_worker_off_chain::<OldFuelBlocks, FuelBlockIdsToHeights>()?;
+        self.spawn_worker_off_chain::<OldFuelBlockMerkleData, OldFuelBlockMerkleData>()?;
 
         self.task_manager.wait().await?;
 

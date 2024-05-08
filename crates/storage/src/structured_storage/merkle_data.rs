@@ -19,6 +19,8 @@ use crate::{
     },
 };
 
+#[allow(missing_docs)]
+#[macro_export]
 macro_rules! merkle_table {
     ($table:ident) => {
         merkle_table!($table, Raw);

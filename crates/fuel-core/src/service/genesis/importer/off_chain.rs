@@ -5,7 +5,10 @@ use crate::{
         database_description::off_chain::OffChain,
         GenesisDatabase,
     },
-    fuel_core_graphql_api::storage::messages::SpentMessages,
+    fuel_core_graphql_api::storage::{
+        messages::SpentMessages,
+        old::OldFuelBlockMerkleData,
+    },
     graphql_api::{
         storage::{
             blocks::FuelBlockIdsToHeights,
@@ -187,6 +190,24 @@ impl ImportTable for Handler<OldFuelBlocks, FuelBlocks> {
 impl ImportTable for Handler<OldFuelBlocks, OldFuelBlocks> {
     type TableInSnapshot = OldFuelBlocks;
     type TableBeingWritten = OldFuelBlocks;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_blocks(blocks, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<OldFuelBlockMerkleData, OldFuelBlockMerkleData> {
+    type TableInSnapshot = OldFuelBlockMerkleData;
+    type TableBeingWritten = OldFuelBlockMerkleData;
     type DbDesc = OffChain;
 
     fn process(

@@ -13,6 +13,8 @@ use crate::{
     },
     graphql_api::storage::old::{
         OldFuelBlockConsensus,
+        OldFuelBlockMerkleData,
+        OldFuelBlockMerkleMetadata,
         OldFuelBlocks,
         OldTransactions,
     },
@@ -113,6 +115,8 @@ where
             OldFuelBlocks,
             OldFuelBlockConsensus,
             OldTransactions,
+            OldFuelBlockMerkleData,
+            OldFuelBlockMerkleMetadata,
             SpentMessages
         );
 

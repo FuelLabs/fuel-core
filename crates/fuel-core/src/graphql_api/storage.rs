@@ -93,6 +93,10 @@ pub enum Column {
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](messages::SpentMessages)
     SpentMessages = 13,
+    /// See [`FuelBlockMerkleData`](todo)
+    OldFuelBlockMerkleData,
+    /// See [`FuelBlockMerkleMetadata`](todo)
+    OldFuelBlockMerkleMetadata,
 }
 
 impl Column {
