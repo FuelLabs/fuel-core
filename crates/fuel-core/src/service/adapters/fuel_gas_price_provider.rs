@@ -11,7 +11,7 @@ pub struct DARecordingCost;
 /// Gives the gas price for a given block height, and calculates the gas price if not yet committed.
 pub struct FuelGasPriceProvider<B, GP, BF, DA> {
     _block_history: B,
-    _gas_price_history: GP,
+    gas_price_history: GP,
     _block_fullness_history: BF,
     _da_recording_cost_history: DA,
 }
@@ -25,7 +25,7 @@ impl<B, GP, BF, DA> FuelGasPriceProvider<B, GP, BF, DA> {
     ) -> Self {
         Self {
             _block_history: block_history,
-            _gas_price_history: gas_price_history,
+            gas_price_history,
             _block_fullness_history: block_fullness_history,
             _da_recording_cost_history: da_recording_cost_history,
         }
@@ -39,9 +39,8 @@ where
     BF: BlockFullnessHistory,
     DA: DARecordingCostHistory,
 {
-    fn gas_price(&self, _height: BlockHeight) -> Option<GasPrice> {
-        let arbitrary_gas_price = 999;
-        Some(arbitrary_gas_price)
+    fn gas_price(&self, height: BlockHeight) -> Option<GasPrice> {
+        self.gas_price_history.gas_price(height)
     }
 }
 
