@@ -125,8 +125,8 @@ fn execute_validation(
         changes,
     ) = instance.validate_without_commit(&block)?.into();
 
-    // We have to return the same type here because if the input parsing fails it won't know if this
-    // is a validation or production block.
+    // TODO: Modify return type to differentiate between validation and production results
+    // https://github.com/FuelLabs/fuel-core/issues/1887
     Ok(Uncommitted::new(
         ExecutionResult {
             block,
