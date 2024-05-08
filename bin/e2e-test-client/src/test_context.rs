@@ -6,10 +6,6 @@ use anyhow::{
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
     types::{
         CoinType,
         TransactionStatus,
@@ -112,38 +108,9 @@ impl Wallet {
 
     /// Checks if wallet has a coin (regardless of spent status)
     pub async fn owns_coin(&self, utxo_id: UtxoId) -> anyhow::Result<bool> {
-        let mut first_page = true;
-        let mut results = vec![];
-        let mut cursor = None;
+        let coin = self.client.coin(&utxo_id).await?;
 
-        while first_page || !results.is_empty() {
-            first_page = false;
-            let response = self
-                .client
-                .coins(
-                    &self.address,
-                    None,
-                    PaginationRequest {
-                        cursor,
-                        results: 100,
-                        direction: PageDirection::Forward,
-                    },
-                )
-                .await?;
-            results = response.results;
-            // check if page has the utxos we're looking for
-            if results.iter().any(|coin| coin.utxo_id == utxo_id) {
-                return Ok(true);
-            }
-            // otherwise update the cursor to check the next page
-            if response.has_next_page {
-                cursor = response.cursor;
-            } else {
-                break;
-            }
-        }
-
-        Ok(false)
+        Ok(coin.is_some())
     }
 
     /// Creates the transfer transaction.
@@ -153,7 +120,7 @@ impl Wallet {
         transfer_amount: u64,
         asset_id: Option<AssetId>,
     ) -> anyhow::Result<Transaction> {
-        let asset_id = asset_id.unwrap_or_default();
+        let asset_id = asset_id.unwrap_or(*self.consensus_params.base_asset_id());
         let total_amount = transfer_amount + BASE_AMOUNT;
         // select coins
         let coins = &self
@@ -203,7 +170,7 @@ impl Wallet {
             .client
             .coins_to_spend(
                 &self.address,
-                vec![(AssetId::BASE, BASE_AMOUNT, None)],
+                vec![(*self.consensus_params.base_asset_id(), BASE_AMOUNT, None)],
                 None,
             )
             .await?[0];
@@ -236,7 +203,7 @@ impl Wallet {
                 .collect(),
         );
         tx.max_fee_limit(BASE_AMOUNT);
-        tx.script_gas_limit(BASE_AMOUNT);
+        tx.script_gas_limit(self.consensus_params.tx_params().max_gas_per_tx() / 10);
 
         tx.add_input(Input::contract(
             Default::default(),
@@ -303,7 +270,7 @@ impl Wallet {
         config: ContractConfig,
         salt: Salt,
     ) -> anyhow::Result<()> {
-        let asset_id = AssetId::BASE;
+        let asset_id = *self.consensus_params.base_asset_id();
         let total_amount = BASE_AMOUNT;
         // select coins
         let coins = &self

@@ -142,9 +142,9 @@ pub async fn run_cli() -> anyhow::Result<()> {
 /// Returns the chain configuration for the local testnet.
 pub fn local_testnet_chain_config() -> ChainConfig {
     const TESTNET_CHAIN_CONFIG: &[u8] =
-        include_bytes!("../chainspec/testnet/chain_config.json");
+        include_bytes!("../chainspec/local-testnet/chain_config.json");
     const TESTNET_CHAIN_CONFIG_STATE_BYTECODE: &[u8] =
-        include_bytes!("../chainspec/testnet/state_transition_bytecode.wasm");
+        include_bytes!("../chainspec/local-testnet/state_transition_bytecode.wasm");
 
     let mut config: ChainConfig = serde_json::from_slice(TESTNET_CHAIN_CONFIG).unwrap();
     config.state_transition_bytecode = TESTNET_CHAIN_CONFIG_STATE_BYTECODE.to_vec();
@@ -154,7 +154,7 @@ pub fn local_testnet_chain_config() -> ChainConfig {
 /// Returns the chain configuration for the local testnet.
 pub fn local_testnet_reader() -> SnapshotReader {
     const TESTNET_STATE_CONFIG: &[u8] =
-        include_bytes!("../chainspec/testnet/state_config.json");
+        include_bytes!("../chainspec/local-testnet/state_config.json");
 
     let state_config: StateConfig = serde_json::from_slice(TESTNET_STATE_CONFIG).unwrap();
 
