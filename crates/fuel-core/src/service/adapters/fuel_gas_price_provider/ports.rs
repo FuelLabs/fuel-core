@@ -1,4 +1,3 @@
-use fuel_core_txpool::types::GasPrice;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub struct BlockFullness;
@@ -18,7 +17,7 @@ pub trait BlockHistory {
 }
 
 pub trait GasPriceHistory {
-    fn gas_price(&self, height: BlockHeight) -> Option<GasPrice>;
+    fn gas_price(&self, height: BlockHeight) -> Option<u64>;
 }
 
 pub trait BlockFullnessHistory {

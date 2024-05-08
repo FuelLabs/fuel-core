@@ -1,27 +1,35 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::service::adapters::fuel_gas_price_provider::ports::{
-    BlockFullness,
-    BlockProductionReward,
-    DARecordingCost,
+use crate::service::adapters::{
+    fuel_gas_price_provider::ports::{
+        BlockFullness,
+        BlockProductionReward,
+        DARecordingCost,
+    },
+    BlockHeight,
 };
 use std::collections::HashMap;
 
-struct FakeBlockHistory;
+#[cfg(test)]
+mod producer_gas_price_tests;
+
+struct FakeBlockHistory {
+    latest_height: BlockHeight,
+}
 
 impl BlockHistory for FakeBlockHistory {
     fn latest_height(&self) -> BlockHeight {
-        todo!()
+        self.latest_height
     }
 }
 
 struct FakeGasPriceHistory {
-    history: HashMap<BlockHeight, GasPrice>,
+    history: HashMap<BlockHeight, u64>,
 }
 
 impl GasPriceHistory for FakeGasPriceHistory {
-    fn gas_price(&self, height: BlockHeight) -> Option<GasPrice> {
+    fn gas_price(&self, height: BlockHeight) -> Option<u64> {
         self.history.get(&height).copied()
     }
 }
@@ -51,20 +59,27 @@ impl DARecordingCostHistory for FakeDARecordingCostHistory {
 }
 
 struct ProviderBuilder {
-    historical_gas_price: HashMap<BlockHeight, GasPrice>,
+    latest_height: BlockHeight,
+    historical_gas_price: HashMap<BlockHeight, u64>,
 }
 
 impl ProviderBuilder {
     fn new() -> Self {
         Self {
+            latest_height: 0.into(),
             historical_gas_price: HashMap::new(),
         }
+    }
+
+    fn with_latest_height(mut self, latest_height: BlockHeight) -> Self {
+        self.latest_height = latest_height;
+        self
     }
 
     fn with_historical_gas_price(
         mut self,
         block_height: BlockHeight,
-        gas_price: GasPrice,
+        gas_price: u64,
     ) -> Self {
         self.historical_gas_price.insert(block_height, gas_price);
         self
@@ -79,11 +94,17 @@ impl ProviderBuilder {
         FakeBlockProductionRewardHistory,
         FakeDARecordingCostHistory,
     > {
+        let Self {
+            latest_height,
+            historical_gas_price,
+        } = self;
+
+        let fake_block_history = FakeBlockHistory { latest_height };
         let gas_price_history = FakeGasPriceHistory {
-            history: self.historical_gas_price,
+            history: historical_gas_price,
         };
         FuelGasPriceProvider::new(
-            FakeBlockHistory,
+            fake_block_history,
             gas_price_history,
             FakeBlockFullnessHistory,
             FakeBlockProductionRewardHistory,
@@ -92,18 +113,6 @@ impl ProviderBuilder {
     }
 }
 
+#[ignore]
 #[test]
-fn gas_price__can_get_a_historical_gas_price() {
-    // given
-    let block_height = 432.into();
-    let expected = 123;
-    let gas_price_provider = ProviderBuilder::new()
-        .with_historical_gas_price(block_height, expected)
-        .build();
-
-    // when
-    let actual = gas_price_provider.gas_price(block_height).unwrap();
-
-    // then
-    assert_eq!(actual, expected);
-}
+fn dummy() {}

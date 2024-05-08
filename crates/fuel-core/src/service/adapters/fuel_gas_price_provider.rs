@@ -1,6 +1,6 @@
-use fuel_core_txpool::{
-    ports::GasPriceProvider,
-    types::GasPrice,
+use fuel_core_producer::block_producer::gas_price::{
+    GasPriceParams,
+    GasPriceProvider,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use ports::{
@@ -43,6 +43,28 @@ impl<B, GP, BF, BP, DA> FuelGasPriceProvider<B, GP, BF, BP, DA> {
     }
 }
 
+impl<B, GP, BF, BP, DA> FuelGasPriceProvider<B, GP, BF, BP, DA>
+where
+    B: BlockHistory,
+    GP: GasPriceHistory,
+    BF: BlockFullnessHistory,
+    BP: FuelBlockProductionRewardHistory,
+    DA: DARecordingCostHistory,
+{
+    fn inner_gas_price(&self, block_height: BlockHeight) -> Option<u64> {
+        let latest_block = self._block_history.latest_height();
+        if latest_block > block_height {
+            self.gas_price_history.gas_price(block_height)
+        } else if *latest_block + 1 == *block_height {
+            let arbitrary_cost = 237894;
+            Some(arbitrary_cost)
+        } else {
+            // TODO: Should we return an error instead?
+            None
+        }
+    }
+}
+
 impl<B, GP, BF, BP, DA> GasPriceProvider for FuelGasPriceProvider<B, GP, BF, BP, DA>
 where
     B: BlockHistory,
@@ -51,7 +73,7 @@ where
     BP: FuelBlockProductionRewardHistory,
     DA: DARecordingCostHistory,
 {
-    fn gas_price(&self, height: BlockHeight) -> Option<GasPrice> {
-        self.gas_price_history.gas_price(height)
+    fn gas_price(&self, params: GasPriceParams) -> Option<u64> {
+        self.inner_gas_price(params.block_height())
     }
 }
