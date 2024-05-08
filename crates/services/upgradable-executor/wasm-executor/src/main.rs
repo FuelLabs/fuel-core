@@ -28,7 +28,6 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
-            ValidationResult,
         },
         Uncommitted,
     },
@@ -116,26 +115,13 @@ fn execute_validation(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Block,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    let (
-        ValidationResult {
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ) = instance.validate_without_commit(&block)?.into();
+    let result = instance
+        .validate_without_commit(&block)?
+        .into_execution_result(block, vec![]);
 
     // TODO: Modify return type to differentiate between validation and production results
     // https://github.com/FuelLabs/fuel-core/issues/1887
-    Ok(Uncommitted::new(
-        ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ))
+    Ok(result)
 }
 
 fn use_wasm_tx_source(component: Components<()>) -> Components<WasmTxSource> {

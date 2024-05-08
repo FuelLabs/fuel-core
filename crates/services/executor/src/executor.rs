@@ -127,6 +127,7 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             Event as ExecutorEvent,
+            ExecutionResult,
             ForcedTransactionFailure,
             Result as ExecutorResult,
             TransactionExecutionResult,
@@ -248,13 +249,34 @@ where
         let ExecutionData {
             message_ids,
             event_inbox_root,
+            changes,
+            events,
+            tx_status,
+            skipped_transactions,
+            coinbase,
+            used_gas,
             ..
-        } = &execution_data;
+        } = execution_data;
 
         let block = partial_block
-            .generate(&message_ids[..], *event_inbox_root)
+            .generate(&message_ids[..], event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
-        Ok(Self::uncommitted_block_result(block, execution_data))
+
+        let finalized_block_id = block.id();
+
+        debug!(
+            "Block {:#x} fees: {} gas: {}",
+            finalized_block_id, coinbase, used_gas
+        );
+
+        let result = ExecutionResult {
+            block,
+            skipped_transactions,
+            tx_status,
+            events,
+        };
+
+        Ok(UncommittedResult::new(result, changes))
     }
 
     pub fn validate_without_commit(
@@ -264,8 +286,26 @@ where
         let consensus_params_version = block.header().consensus_parameters_version;
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
-        let execution_data = block_executor.validate_block(block, storage_tx)?;
-        Ok(Self::uncommitted_validation_result(block, execution_data))
+
+        let ExecutionData {
+            coinbase,
+            used_gas,
+            tx_status,
+            events,
+            changes,
+            ..
+        } = block_executor.validate_block(block, storage_tx)?;
+
+        let finalized_block_id = block.id();
+
+        debug!(
+            "Block {:#x} fees: {} gas: {}",
+            finalized_block_id, coinbase, used_gas
+        );
+
+        let result = ValidationResult { tx_status, events };
+
+        Ok(UncommittedValidationResult::new(result, changes))
     }
 
     fn into_executor(
@@ -285,44 +325,6 @@ where
             .into_owned();
         let executor = BlockExecutor::new(self.relayer, self.options, consensus_params)?;
         Ok((executor, storage_tx))
-    }
-
-    fn uncommitted_validation_result(
-        block: &Block,
-        data: ExecutionData,
-    ) -> UncommittedValidationResult<Changes> {
-        let ExecutionData {
-            coinbase,
-            used_gas,
-            tx_status,
-            skipped_transactions,
-            events,
-            changes,
-            ..
-        } = data;
-
-        let finalized_block_id = block.id();
-
-        debug!(
-            "Block {:#x} fees: {} gas: {}",
-            finalized_block_id, coinbase, used_gas
-        );
-
-        let result = ValidationResult {
-            skipped_transactions,
-            tx_status,
-            events,
-        };
-
-        UncommittedValidationResult::new(result, changes)
-    }
-
-    fn uncommitted_block_result(
-        block: Block,
-        data: ExecutionData,
-    ) -> UncommittedResult<Changes> {
-        let result = Self::uncommitted_validation_result(&block, data);
-        result.into_execution_result(block)
     }
 }
 

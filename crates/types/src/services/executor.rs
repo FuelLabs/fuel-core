@@ -63,9 +63,6 @@ pub struct ExecutionResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
 pub struct ValidationResult {
-    /// The list of skipped transactions with corresponding errors. Those transactions were
-    /// not included in the block and didn't affect the state of the blockchain.
-    pub skipped_transactions: Vec<(TxId, Error)>,
     /// The status of the transactions execution included into the block.
     pub tx_status: Vec<TransactionExecutionStatus>,
     /// The list of all events generated during the execution of the block.
@@ -77,14 +74,10 @@ impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
     pub fn into_execution_result(
         self,
         block: Block,
+        skipped_transactions: Vec<(TxId, Error)>,
     ) -> UncommittedResult<DatabaseTransaction> {
         let Self {
-            result:
-                ValidationResult {
-                    skipped_transactions,
-                    tx_status,
-                    events,
-                },
+            result: ValidationResult { tx_status, events },
             changes,
         } = self;
         UncommittedResult::new(
@@ -105,23 +98,12 @@ impl<DatabaseTransaction> UncommittedResult<DatabaseTransaction> {
         self,
     ) -> UncommittedValidationResult<DatabaseTransaction> {
         let Self {
-            result:
-                ExecutionResult {
-                    skipped_transactions,
-                    tx_status,
-                    events,
-                    ..
-                },
-            changes,
-        } = self;
-        UncommittedValidationResult::new(
-            ValidationResult {
-                skipped_transactions,
-                tx_status,
-                events,
+            result: ExecutionResult {
+                tx_status, events, ..
             },
             changes,
-        )
+        } = self;
+        UncommittedValidationResult::new(ValidationResult { tx_status, events }, changes)
     }
 }
 

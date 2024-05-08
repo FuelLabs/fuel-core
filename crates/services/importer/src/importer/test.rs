@@ -22,7 +22,6 @@ use fuel_core_types::{
         consensus::Consensus,
         SealedBlock,
     },
-    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
         block_importer::{
@@ -32,6 +31,7 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             Result as ExecutorResult,
+            UncommittedValidationResult,
             ValidationResult,
         },
         Uncommitted,
@@ -65,11 +65,6 @@ fn u32_to_merkle_root(number: u32) -> MerkleRoot {
     let mut root = [0; 32];
     root[0..4].copy_from_slice(&number.to_be_bytes());
     MerkleRoot::from(root)
-}
-
-#[derive(Clone, Debug)]
-struct MockExecutionResult {
-    skipped_transactions: usize,
 }
 
 fn genesis(height: u32) -> SealedBlock {
@@ -144,10 +139,14 @@ fn storage_failure_error() -> Error {
     storage_failure::<()>().unwrap_err().into()
 }
 
-fn ex_result(skipped_transactions: usize) -> MockExecutionResult {
-    MockExecutionResult {
-        skipped_transactions,
-    }
+fn ex_result() -> ExecutorResult<UncommittedValidationResult<Changes>> {
+    Ok(Uncommitted::new(
+        ValidationResult {
+            tx_status: vec![],
+            events: vec![],
+        },
+        Default::default(),
+    ))
 }
 
 fn execution_failure<T>() -> ExecutorResult<T> {
@@ -160,23 +159,10 @@ fn execution_failure_error() -> Error {
 
 fn executor<R>(result: R) -> MockValidator
 where
-    R: Fn() -> ExecutorResult<MockExecutionResult> + Send + 'static,
+    R: Fn() -> ExecutorResult<UncommittedValidationResult<Changes>> + Send + 'static,
 {
     let mut executor = MockValidator::default();
-    executor.expect_validate().return_once(move |_| {
-        let mock_result = result()?;
-        let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
-            .map(|_| (TxId::zeroed(), ExecutorError::BlockMismatch))
-            .collect();
-        Ok(Uncommitted::new(
-            ValidationResult {
-                skipped_transactions,
-                tx_status: vec![],
-                events: vec![],
-            },
-            Default::default(),
-        ))
-    });
+    executor.expect_validate().return_once(move |_| result());
 
     executor
 }
@@ -335,7 +321,7 @@ async fn commit_result_and_execute_and_commit_poa(
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,
-        executor(ok(ex_result(0))),
+        executor(ex_result),
         verifier(ok(())),
     )
     .await;
@@ -445,17 +431,17 @@ fn one_lock_at_the_same_time() {
 
 ///////// New block, Block After Execution, Verification result, commits /////////
 #[test_case(
-    genesis(113), ok(ex_result(0)), ok(()), 0
+    genesis(113), ex_result, ok(()), 0
     => Err(Error::ExecuteGenesis);
     "cannot execute genesis block"
 )]
 #[test_case(
-    poa_block(1), ok(ex_result(0)), ok(()), 1
+    poa_block(1), ex_result, ok(()), 1
     => Ok(());
     "commits block 1"
 )]
 #[test_case(
-    poa_block(113), ok(ex_result(0)), ok(()), 1
+    poa_block(113), ex_result, ok(()), 1
     => Ok(());
     "commits block 113"
 )]
@@ -465,12 +451,7 @@ fn one_lock_at_the_same_time() {
     "commit fails if execution fails"
 )]
 #[test_case(
-    poa_block(113), ok(ex_result(1)), ok(()), 0
-    => Err(Error::SkippedTransactionsNotEmpty);
-    "commit fails if there are skipped transactions"
-)]
-#[test_case(
-    poa_block(113), ok(ex_result(0)), verification_failure, 0
+    poa_block(113), ex_result, verification_failure, 0
     => Err(verification_failure_error());
     "commit fails if verification fails"
 )]
@@ -482,7 +463,10 @@ async fn execute_and_commit_and_verify_and_execute_block_poa<V, P>(
     commits: usize,
 ) -> Result<(), Error>
 where
-    P: Fn() -> ExecutorResult<MockExecutionResult> + Send + Clone + 'static,
+    P: Fn() -> ExecutorResult<UncommittedValidationResult<Changes>>
+        + Send
+        + Clone
+        + 'static,
     V: Fn() -> anyhow::Result<()> + Send + Clone + 'static,
 {
     // `execute_and_commit` and `verify_and_execute_block` should have the same
@@ -518,7 +502,7 @@ fn verify_and_execute_assert<P, V>(
     verifier_result: V,
 ) -> Result<(), Error>
 where
-    P: Fn() -> ExecutorResult<MockExecutionResult> + Send + 'static,
+    P: Fn() -> ExecutorResult<UncommittedValidationResult<Changes>> + Send + 'static,
     V: Fn() -> anyhow::Result<()> + Send + 'static,
 {
     let importer = Importer::default_config(
@@ -534,7 +518,7 @@ where
 fn verify_and_execute_allowed_when_locked() {
     let importer = Importer::default_config(
         MockDatabase::default(),
-        executor(ok(ex_result(0))),
+        executor(ex_result),
         verifier(ok(())),
     );
 
