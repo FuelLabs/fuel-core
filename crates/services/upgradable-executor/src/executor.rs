@@ -500,24 +500,7 @@ where
 
         match output {
             fuel_core_wasm_executor::utils::ReturnType::V1(result) => {
-                let (
-                    ExecutionResult {
-                        skipped_transactions,
-                        tx_status,
-                        events,
-                        ..
-                    },
-                    changes,
-                ) = result?.into();
-
-                Ok(Uncommitted::new(
-                    ValidationResult {
-                        skipped_transactions,
-                        tx_status,
-                        events,
-                    },
-                    changes,
-                ))
+                Ok(result?.into_validation_result())
             }
         }
     }

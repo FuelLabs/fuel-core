@@ -72,6 +72,59 @@ pub struct ValidationResult {
     pub events: Vec<Event>,
 }
 
+impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
+    /// Convert the `UncommittedValidationResult` into the `UncommittedResult`.
+    pub fn into_execution_result(
+        self,
+        block: Block,
+    ) -> UncommittedResult<DatabaseTransaction> {
+        let Self {
+            result:
+                ValidationResult {
+                    skipped_transactions,
+                    tx_status,
+                    events,
+                },
+            changes,
+        } = self;
+        UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            },
+            changes,
+        )
+    }
+}
+
+impl<DatabaseTransaction> UncommittedResult<DatabaseTransaction> {
+    /// Convert the `UncommittedResult` into the `UncommittedValidationResult`.
+    pub fn into_validation_result(
+        self,
+    ) -> UncommittedValidationResult<DatabaseTransaction> {
+        let Self {
+            result:
+                ExecutionResult {
+                    skipped_transactions,
+                    tx_status,
+                    events,
+                    ..
+                },
+            changes,
+        } = self;
+        UncommittedValidationResult::new(
+            ValidationResult {
+                skipped_transactions,
+                tx_status,
+                events,
+            },
+            changes,
+        )
+    }
+}
+
 /// The event represents some internal state changes caused by the block execution.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

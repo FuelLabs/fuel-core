@@ -400,7 +400,6 @@ where
             return Err(Error::ExecuteGenesis)
         }
 
-        // TODO: Pass `block` into `ExecutionBlock::Validation` by ref
         let (
             ValidationResult {
                 skipped_transactions,
