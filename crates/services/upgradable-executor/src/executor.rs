@@ -54,6 +54,7 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
+use fuel_core_types::services::executor::ValidationResult;
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -210,10 +211,9 @@ where
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn validate_and_commit(
         &mut self,
-        block: Block,
-    ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
-        let (result, changes) = self.validate_without_commit(block)?.into();
-
+        block: &Block,
+    ) -> fuel_core_types::services::executor::Result<ValidationResult> {
+        let (result, changes) = self.validate(block)?.into();
         self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
     }
@@ -233,15 +233,6 @@ where
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
         self.produce_without_commit_with_coinbase(block, Default::default(), 0)
-    }
-
-    /// Executes the block and returns the result of the execution with storage changes.
-    pub fn validate_without_commit(
-        &self,
-        block: Block,
-    ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        let options = self.config.as_ref().into();
-        self.validate_inner(block, options)
     }
 
     /// The analog of the [`Self::produce_without_commit`] method,
@@ -336,8 +327,8 @@ where
 
     pub fn validate(
         &self,
-        block: Block,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+        block: &Block,
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let options = self.config.as_ref().into();
         self.validate_inner(block, options)
     }
@@ -395,9 +386,9 @@ where
     #[cfg(feature = "wasm-executor")]
     fn validate_inner(
         &self,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let block_version = block.header().state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
@@ -427,9 +418,9 @@ where
     #[cfg(not(feature = "wasm-executor"))]
     fn validate_inner(
         &self,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let block_version = block.header().state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
@@ -493,9 +484,9 @@ where
     fn wasm_validate_inner(
         &self,
         module: &wasmtime::Module,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
 
@@ -508,7 +499,9 @@ where
         let output = instance.run(module)?;
 
         match output {
-            fuel_core_wasm_executor::utils::ReturnType::V1(result) => result,
+            fuel_core_wasm_executor::utils::ReturnType::V1(result) => {
+                Ok(result?.into_validation_result())
+            }
         }
     }
 
@@ -527,9 +520,9 @@ where
 
     fn native_validate_inner(
         &self,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let instance = self.new_native_executor_instance(options);
         instance.validate_without_commit(block)
     }
@@ -809,7 +802,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -824,7 +817,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -840,7 +833,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
@@ -856,7 +849,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
@@ -895,7 +888,7 @@ mod test {
             let block = valid_block(next_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -910,7 +903,7 @@ mod test {
             let block = valid_block(next_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -929,7 +922,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor.validate_without_commit(block.clone()).map(|_| ());
+                let result = executor.validate(&block).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);
@@ -949,7 +942,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor.validate_without_commit(block.clone()).map(|_| ());
+                let result = executor.validate(&block).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);

@@ -34,7 +34,7 @@ use fuel_core_types::{
             UncommittedResult,
         },
         executor,
-        executor::ExecutionResult,
+        executor::ValidationResult,
         Uncommitted,
     },
 };
@@ -87,10 +87,6 @@ pub enum Error {
     FailedVerification(anyhow::Error),
     #[display(fmt = "The execution of the block failed: {_0}.")]
     FailedExecution(executor::Error),
-    #[display(
-        fmt = "It is not possible to skip transactions during importing of the block."
-    )]
-    SkippedTransactionsNotEmpty,
     #[display(fmt = "It is not possible to execute the genesis block.")]
     ExecuteGenesis,
     #[display(fmt = "The database already contains the data at the height {_0}.")]
@@ -400,24 +396,10 @@ where
             return Err(Error::ExecuteGenesis)
         }
 
-        // TODO: Pass `block` into `ExecutionBlock::Validation` by ref
-        let (
-            ExecutionResult {
-                block,
-                skipped_transactions,
-                tx_status,
-                events,
-            },
-            changes,
-        ) = executor
-            .validate(block)
+        let (ValidationResult { tx_status, events }, changes) = executor
+            .validate(&block)
             .map_err(Error::FailedExecution)?
             .into();
-
-        // If we skipped transaction, it means that the block is invalid.
-        if !skipped_transactions.is_empty() {
-            return Err(Error::SkippedTransactionsNotEmpty)
-        }
 
         let actual_block_id = block.id();
         if actual_block_id != sealed_block_id {
