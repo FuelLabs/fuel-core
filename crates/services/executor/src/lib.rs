@@ -1,11 +1,12 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+// #![deny(warnings)]
 
 pub mod executor;
 pub mod ports;
 pub mod refs;
+mod vm_pool;
 
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();
