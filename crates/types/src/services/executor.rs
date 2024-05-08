@@ -36,11 +36,15 @@ use crate::{
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
-/// The uncommitted result of the transaction execution.
+/// The uncommitted result of the block production execution.
 pub type UncommittedResult<DatabaseTransaction> =
     Uncommitted<ExecutionResult, DatabaseTransaction>;
 
-/// The result of transactions execution.
+/// The uncommitted result of the block validation.
+pub type UncommittedValidationResult<DatabaseTransaction> =
+    Uncommitted<ValidationResult, DatabaseTransaction>;
+
+/// The result of transactions execution for block production.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
 pub struct ExecutionResult {
@@ -53,6 +57,54 @@ pub struct ExecutionResult {
     pub tx_status: Vec<TransactionExecutionStatus>,
     /// The list of all events generated during the execution of the block.
     pub events: Vec<Event>,
+}
+
+/// The result of the validation of the block.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug)]
+pub struct ValidationResult {
+    /// The status of the transactions execution included into the block.
+    pub tx_status: Vec<TransactionExecutionStatus>,
+    /// The list of all events generated during the execution of the block.
+    pub events: Vec<Event>,
+}
+
+impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
+    /// Convert the `UncommittedValidationResult` into the `UncommittedResult`.
+    pub fn into_execution_result(
+        self,
+        block: Block,
+        skipped_transactions: Vec<(TxId, Error)>,
+    ) -> UncommittedResult<DatabaseTransaction> {
+        let Self {
+            result: ValidationResult { tx_status, events },
+            changes,
+        } = self;
+        UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            },
+            changes,
+        )
+    }
+}
+
+impl<DatabaseTransaction> UncommittedResult<DatabaseTransaction> {
+    /// Convert the `UncommittedResult` into the `UncommittedValidationResult`.
+    pub fn into_validation_result(
+        self,
+    ) -> UncommittedValidationResult<DatabaseTransaction> {
+        let Self {
+            result: ExecutionResult {
+                tx_status, events, ..
+            },
+            changes,
+        } = self;
+        UncommittedValidationResult::new(ValidationResult { tx_status, events }, changes)
+    }
 }
 
 /// The event represents some internal state changes caused by the block execution.
