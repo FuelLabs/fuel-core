@@ -8,15 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - [#1876](https://github.com/FuelLabs/fuel-core/pull/1876): Updated benchmark to include the worst scenario for `CROO` opcode. Also include consensus parameters in bench output.
-
-### Changed
-
 - [#1879](https://github.com/FuelLabs/fuel-core/pull/1879): Return the old behaviour for the `discovery_works` test.
 - [#1848](https://github.com/FuelLabs/fuel-core/pull/1848): Added `version` field to the `Block` and `BlockHeader` GraphQL entities. Added corresponding `version` field to the `Block` and `BlockHeader` client types in `fuel-core-client`.
-
-### Changed
-
 - [#1873](https://github.com/FuelLabs/fuel-core/pull/1873/): Separate dry runs from block production in executor code, remove `ExecutionKind` and `ExecutionType`, remove `thread_block_transaction` concept, remove `PartialBlockComponent` type, refactor away `inner` functions.
+- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): optimization: Reuse VM memory across executions.
 
 ## [Version 0.26.0]
 
