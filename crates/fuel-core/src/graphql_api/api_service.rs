@@ -168,7 +168,7 @@ impl RunnableTask for Task {
     }
 }
 
-// Need a seperate Data Object for each Query endpoint, cannot be avoided
+// Need a separate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<OnChain, OffChain>(
     genesis_block_height: BlockHeight,
