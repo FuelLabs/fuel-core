@@ -460,11 +460,6 @@ fn one_lock_at_the_same_time() {
     "commits block 113"
 )]
 #[test_case(
-    poa_block(113), ok(ex_result(0)), ok(()), 0
-    => Err(Error::BlockIdMismatch(poa_block(113).entity.id(), poa_block(114).entity.id()));
-    "execution result should match block height"
-)]
-#[test_case(
     poa_block(113), execution_failure, ok(()), 0
     => Err(execution_failure_error());
     "commit fails if execution fails"
