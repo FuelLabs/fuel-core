@@ -44,16 +44,34 @@ pub fn unpack_exists_size_result(val: u64) -> (bool, u32, u16) {
 
 /// The input type for the WASM executor. Enum allows handling different
 /// versions of the input without introducing new host functions.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum InputType {
+#[derive(Debug, serde::Serialize)]
+pub enum InputSerializationType<'a> {
     V1 {
-        block: WasmExecutionBlockTypes<()>,
+        block: WasmSerializationBlockTypes<'a, ()>,
         options: ExecutionOptions,
     },
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum WasmExecutionBlockTypes<TxSource> {
+#[derive(Debug, serde::Deserialize)]
+pub enum InputDeserializationType {
+    V1 {
+        block: WasmDeserializationBlockTypes<()>,
+        options: ExecutionOptions,
+    },
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum WasmSerializationBlockTypes<'a, TxSource> {
+    /// DryRun mode where P is being produced.
+    DryRun(Components<TxSource>),
+    /// Production mode where P is being produced.
+    Production(Components<TxSource>),
+    /// Validation of a produced block.
+    Validation(&'a Block),
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub enum WasmDeserializationBlockTypes<TxSource> {
     /// DryRun mode where P is being produced.
     DryRun(Components<TxSource>),
     /// Production mode where P is being produced.
