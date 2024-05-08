@@ -34,6 +34,10 @@ use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         Coins,
         ContractsAssets,
         ContractsLatestUtxo,
@@ -103,6 +107,8 @@ where
             ContractsState,
             ContractsAssets,
             FuelBlocks,
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
             Transactions,
             SealedBlockConsensus,
             ProcessedTransactions

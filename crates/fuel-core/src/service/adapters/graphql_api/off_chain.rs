@@ -47,6 +47,7 @@ use fuel_core_types::{
         primitives::BlockId,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
+    fuel_merkle::binary::Primitive,
     fuel_tx::{
         Address,
         Bytes32,
@@ -139,6 +140,17 @@ impl OffChainDatabase for Database<OffChain> {
         self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
             .map(|r| r.map(|(_, block)| block))
             .into_boxed()
+    }
+
+    fn old_block_merkle_data(&self, _version: &u64) -> StorageResult<Option<Primitive>> {
+        todo!()
+    }
+
+    fn old_block_merkle_metadata(
+        &self,
+        _version: &u64,
+    ) -> StorageResult<Option<Primitive>> {
+        todo!()
     }
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {

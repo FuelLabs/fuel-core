@@ -32,6 +32,7 @@ use fuel_core_types::{
         },
         transaction::RelayedTransactionStatus,
     },
+    fuel_merkle::binary,
     fuel_tx::{
         Bytes32,
         ConsensusParameters,
@@ -61,7 +62,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub trait OffChainDatabase: Send + Sync {
+pub trait OffChainDatabase: Send + Sync + DatabaseMessageProof {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
@@ -96,6 +97,16 @@ pub trait OffChainDatabase: Send + Sync {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+
+    fn old_block_merkle_data(
+        &self,
+        version: &u64,
+    ) -> StorageResult<Option<binary::Primitive>>;
+
+    fn old_block_merkle_metadata(
+        &self,
+        version: &u64,
+    ) -> StorageResult<Option<binary::Primitive>>;
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus>;
 
@@ -247,10 +258,12 @@ pub mod worker {
                 OwnedMessageIds,
                 SpentMessages,
             },
+            old::OldFuelBlockMerkleMetadata,
         },
         graphql_api::storage::{
             old::{
                 OldFuelBlockConsensus,
+                OldFuelBlockMerkleData,
                 OldFuelBlocks,
                 OldTransactions,
             },
@@ -291,6 +304,8 @@ pub mod worker {
         + StorageMutate<ContractsInfo, Error = StorageError>
         + StorageMutate<OldFuelBlocks, Error = StorageError>
         + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
+        + StorageMutate<OldFuelBlockMerkleData, Error = StorageError>
+        + StorageMutate<OldFuelBlockMerkleMetadata, Error = StorageError>
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>

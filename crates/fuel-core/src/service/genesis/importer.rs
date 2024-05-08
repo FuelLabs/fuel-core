@@ -10,7 +10,10 @@ use crate::{
     },
     fuel_core_graphql_api::storage::{
         messages::SpentMessages,
-        old::OldFuelBlockMerkleData,
+        old::{
+            OldFuelBlockMerkleData,
+            OldFuelBlockMerkleMetadata,
+        },
     },
     graphql_api::storage::{
         blocks::FuelBlockIdsToHeights,
@@ -40,6 +43,10 @@ use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         Coins,
         ContractsAssets,
         ContractsLatestUtxo,
@@ -132,7 +139,8 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<OldTransactions, OldTransactions>()?;
         self.spawn_worker_off_chain::<FuelBlocks, FuelBlockIdsToHeights>()?;
         self.spawn_worker_off_chain::<OldFuelBlocks, FuelBlockIdsToHeights>()?;
-        self.spawn_worker_off_chain::<OldFuelBlockMerkleData, OldFuelBlockMerkleData>()?;
+        self.spawn_worker_off_chain::<FuelBlockMerkleData, OldFuelBlockMerkleData>()?;
+        self.spawn_worker_off_chain::<FuelBlockMerkleMetadata, OldFuelBlockMerkleMetadata>()?;
 
         self.task_manager.wait().await?;
 

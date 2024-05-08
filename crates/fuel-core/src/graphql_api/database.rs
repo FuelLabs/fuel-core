@@ -46,6 +46,7 @@ use fuel_core_types::{
         },
         transaction::RelayedTransactionStatus,
     },
+    fuel_merkle::binary::Primitive,
     fuel_tx::{
         Address,
         AssetId,
@@ -268,8 +269,13 @@ impl DatabaseMessageProof for ReadView {
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
     ) -> StorageResult<MerkleProof> {
-        self.on_chain
-            .block_history_proof(message_block_height, commit_block_height)
+        if *message_block_height >= self.genesis_height {
+            self.on_chain
+                .block_history_proof(message_block_height, commit_block_height)
+        } else {
+            self.off_chain
+                .block_history_proof(message_block_height, commit_block_height)
+        }
     }
 }
 
@@ -327,6 +333,17 @@ impl OffChainDatabase for ReadView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         self.off_chain.old_blocks(height, direction)
+    }
+
+    fn old_block_merkle_data(&self, _version: &u64) -> StorageResult<Option<Primitive>> {
+        todo!()
+    }
+
+    fn old_block_merkle_metadata(
+        &self,
+        _version: &u64,
+    ) -> StorageResult<Option<Primitive>> {
+        todo!()
     }
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {

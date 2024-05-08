@@ -389,13 +389,12 @@ pub fn copy_to_old_block_merkle_data<'a, I, T>(
     db: &mut T,
 ) -> StorageResult<()>
 where
-    I: Iterator<Item = (&'a BlockHeight, &'a binary::Primitive)>,
+    I: Iterator<Item = (&'a u64, &'a binary::Primitive)>,
     T: OffChainDatabase,
 {
     for (height, block) in block_merkle_data {
-        let version = **height as u64;
         db.storage::<OldFuelBlockMerkleData>()
-            .insert(&version, block)?;
+            .insert(&height, block)?;
     }
     Ok(())
 }
@@ -405,13 +404,12 @@ pub fn copy_to_old_block_merkle_metadata<'a, I, T>(
     db: &mut T,
 ) -> StorageResult<()>
 where
-    I: Iterator<Item = (&'a BlockHeight, &'a DenseMerkleMetadata)>,
+    I: Iterator<Item = (&'a DenseMetadataKey<BlockHeight>, &'a DenseMerkleMetadata)>,
     T: OffChainDatabase,
 {
     for (height, metadata) in block_merkle_data {
-        let key = DenseMetadataKey::Primary(*height);
         db.storage::<OldFuelBlockMerkleMetadata>()
-            .insert(&key, metadata)?;
+            .insert(&height, metadata)?;
     }
     Ok(())
 }

@@ -49,6 +49,10 @@ use bech32::{
 };
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
+use fuel_core_storage::tables::merkle::{
+    FuelBlockMerkleData,
+    FuelBlockMerkleMetadata,
+};
 use fuel_core_types::blockchain::header::{
     BlockHeader,
     ConsensusParametersVersion,
@@ -436,6 +440,26 @@ impl AsTable<SealedBlockConsensus> for StateConfig {
 
 impl AddTable<SealedBlockConsensus> for StateConfigBuilder {
     fn add(&mut self, _entries: Vec<TableEntry<SealedBlockConsensus>>) {}
+}
+
+impl AsTable<FuelBlockMerkleData> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlockMerkleData>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlockMerkleData> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockMerkleData>>) {}
+}
+
+impl AsTable<FuelBlockMerkleMetadata> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlockMerkleMetadata>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlockMerkleMetadata> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockMerkleMetadata>>) {}
 }
 
 impl AddTable<ProcessedTransactions> for StateConfigBuilder {

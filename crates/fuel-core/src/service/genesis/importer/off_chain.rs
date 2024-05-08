@@ -7,7 +7,10 @@ use crate::{
     },
     fuel_core_graphql_api::storage::{
         messages::SpentMessages,
-        old::OldFuelBlockMerkleData,
+        old::{
+            OldFuelBlockMerkleData,
+            OldFuelBlockMerkleMetadata,
+        },
     },
     graphql_api::{
         storage::{
@@ -31,6 +34,10 @@ use crate::{
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         Coins,
         FuelBlocks,
         Messages,
@@ -205,8 +212,8 @@ impl ImportTable for Handler<OldFuelBlocks, OldFuelBlocks> {
     }
 }
 
-impl ImportTable for Handler<OldFuelBlockMerkleData, OldFuelBlockMerkleData> {
-    type TableInSnapshot = OldFuelBlockMerkleData;
+impl ImportTable for Handler<OldFuelBlockMerkleData, FuelBlockMerkleData> {
+    type TableInSnapshot = FuelBlockMerkleData;
     type TableBeingWritten = OldFuelBlockMerkleData;
     type DbDesc = OffChain;
 
@@ -218,7 +225,25 @@ impl ImportTable for Handler<OldFuelBlockMerkleData, OldFuelBlockMerkleData> {
         let blocks = group
             .iter()
             .map(|TableEntry { key, value, .. }| (key, value));
-        worker_service::copy_to_old_blocks(blocks, tx)?;
+        worker_service::copy_to_old_block_merkle_data(blocks, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<OldFuelBlockMerkleMetadata, FuelBlockMerkleMetadata> {
+    type TableInSnapshot = FuelBlockMerkleMetadata;
+    type TableBeingWritten = OldFuelBlockMerkleMetadata;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_block_merkle_metadata(blocks, tx)?;
         Ok(())
     }
 }
