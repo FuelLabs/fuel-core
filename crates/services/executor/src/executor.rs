@@ -338,6 +338,7 @@ pub struct BlockExecutor<R> {
     relayer: R,
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
+    vm_pool: vm_pool::VmPool,
 }
 
 impl<R> BlockExecutor<R> {
@@ -350,6 +351,7 @@ impl<R> BlockExecutor<R> {
             relayer,
             consensus_params,
             options,
+            vm_pool: Default::default(),
         })
     }
 }
@@ -1433,7 +1435,7 @@ where
         );
 
         // We get memory from the pool and are careful to return it there when done
-        *vm.memory_mut() = vm_pool::get_vm_memory();
+        *vm.memory_mut() = self.vm_pool.get_new();
 
         // This returns the VM memory to the pool to before returning
         macro_rules! recycling_try {
@@ -1441,7 +1443,7 @@ where
                 match $expr {
                     Ok(val) => val,
                     Err(e) => {
-                        vm_pool::recycle_vm_memory(mem::take(vm.memory_mut()));
+                        self.vm_pool.recycle(mem::take(vm.memory_mut()));
                         return Err(e.into())
                     }
                 }
@@ -1477,11 +1479,11 @@ where
         // only commit state changes if execution was a success
         if !reverted {
             self.log_backtrace(&vm, &receipts);
-            vm_pool::recycle_vm_memory(mem::take(vm.memory_mut()));
+            self.vm_pool.recycle(mem::take(vm.memory_mut()));
             let changes = sub_block_db_commit.into_changes();
             storage_tx.commit_changes(changes)?;
         } else {
-            vm_pool::recycle_vm_memory(mem::take(vm.memory_mut()));
+            self.vm_pool.recycle(mem::take(vm.memory_mut()));
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
