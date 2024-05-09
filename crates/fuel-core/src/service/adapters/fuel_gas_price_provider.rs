@@ -15,14 +15,14 @@ mod tests;
 
 /// Gives the gas price for a given block height, and calculates the gas price if not yet committed.
 pub struct FuelGasPriceProvider<FB, DA> {
-    _block_history: FB,
+    block_history: FB,
     _da_recording_cost_history: DA,
 }
 
 impl<FB, DA> FuelGasPriceProvider<FB, DA> {
     pub fn new(block_history: FB, da_recording_cost_history: DA) -> Self {
         Self {
-            _block_history: block_history,
+            block_history,
             _da_recording_cost_history: da_recording_cost_history,
         }
     }
@@ -34,9 +34,9 @@ where
     DA: DARecordingCostHistory,
 {
     fn inner_gas_price(&self, block_height: BlockHeight) -> Option<u64> {
-        let latest_block = self._block_history.latest_height();
+        let latest_block = self.block_history.latest_height();
         if latest_block > block_height {
-            self._block_history.gas_price(block_height)
+            self.block_history.gas_price(block_height)
         } else if *latest_block + 1 == *block_height {
             let arbitrary_cost = 237894;
             Some(arbitrary_cost)

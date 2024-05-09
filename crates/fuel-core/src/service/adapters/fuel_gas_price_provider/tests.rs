@@ -3,9 +3,8 @@
 use super::*;
 use crate::service::adapters::{
     fuel_gas_price_provider::ports::{
-        BlockFullness,
-        BlockProductionReward,
         DARecordingCost,
+        FuelBlockGasPriceInputs,
     },
     BlockHeight,
 };
@@ -23,21 +22,22 @@ impl FuelBlockHistory for FakeBlockHistory {
     fn latest_height(&self) -> BlockHeight {
         self.latest_height
     }
+
     fn gas_price(&self, height: BlockHeight) -> Option<u64> {
         self.history.get(&height).copied()
     }
-    fn block_fullness(&self, _height: BlockHeight) -> BlockFullness {
-        todo!();
-    }
-    fn block_production_reward(&self, _height: BlockHeight) -> BlockProductionReward {
-        todo!();
+
+    fn gas_price_inputs(&self, height: BlockHeight) -> Option<FuelBlockGasPriceInputs> {
+        self.history
+            .get(&height)
+            .map(|&gas_price| FuelBlockGasPriceInputs::new(gas_price))
     }
 }
 
 struct FakeDARecordingCostHistory;
 
 impl DARecordingCostHistory for FakeDARecordingCostHistory {
-    fn recording_cost(&self, _height: BlockHeight) -> DARecordingCost {
+    fn recording_cost(&self, _height: BlockHeight) -> Option<DARecordingCost> {
         todo!();
     }
 }
