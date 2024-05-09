@@ -12,19 +12,13 @@ impl PartialEq<DARecordingCost> for BlockProductionReward {
     }
 }
 
-pub trait BlockHistory {
+pub trait FuelBlockHistory {
     fn latest_height(&self) -> BlockHeight;
-}
 
-pub trait GasPriceHistory {
     fn gas_price(&self, height: BlockHeight) -> Option<u64>;
-}
 
-pub trait BlockFullnessHistory {
     fn block_fullness(&self, height: BlockHeight) -> BlockFullness;
-}
 
-pub trait FuelBlockProductionRewardHistory {
     fn block_production_reward(&self, height: BlockHeight) -> BlockProductionReward;
 }
 

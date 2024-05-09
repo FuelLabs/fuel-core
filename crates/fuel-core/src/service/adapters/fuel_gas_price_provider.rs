@@ -4,11 +4,8 @@ use fuel_core_producer::block_producer::gas_price::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use ports::{
-    BlockFullnessHistory,
-    BlockHistory,
     DARecordingCostHistory,
-    FuelBlockProductionRewardHistory,
-    GasPriceHistory,
+    FuelBlockHistory,
 };
 
 pub mod ports;
@@ -17,44 +14,29 @@ pub mod ports;
 mod tests;
 
 /// Gives the gas price for a given block height, and calculates the gas price if not yet committed.
-pub struct FuelGasPriceProvider<B, GP, BF, BP, DA> {
-    _block_history: B,
-    gas_price_history: GP,
-    _block_fullness_history: BF,
-    _block_production_reward: BP,
+pub struct FuelGasPriceProvider<FB, DA> {
+    _block_history: FB,
     _da_recording_cost_history: DA,
 }
 
-impl<B, GP, BF, BP, DA> FuelGasPriceProvider<B, GP, BF, BP, DA> {
-    pub fn new(
-        block_history: B,
-        gas_price_history: GP,
-        block_fullness_history: BF,
-        block_production_reward: BP,
-        da_recording_cost_history: DA,
-    ) -> Self {
+impl<FB, DA> FuelGasPriceProvider<FB, DA> {
+    pub fn new(block_history: FB, da_recording_cost_history: DA) -> Self {
         Self {
             _block_history: block_history,
-            gas_price_history,
-            _block_fullness_history: block_fullness_history,
-            _block_production_reward: block_production_reward,
             _da_recording_cost_history: da_recording_cost_history,
         }
     }
 }
 
-impl<B, GP, BF, BP, DA> FuelGasPriceProvider<B, GP, BF, BP, DA>
+impl<FB, DA> FuelGasPriceProvider<FB, DA>
 where
-    B: BlockHistory,
-    GP: GasPriceHistory,
-    BF: BlockFullnessHistory,
-    BP: FuelBlockProductionRewardHistory,
+    FB: FuelBlockHistory,
     DA: DARecordingCostHistory,
 {
     fn inner_gas_price(&self, block_height: BlockHeight) -> Option<u64> {
         let latest_block = self._block_history.latest_height();
         if latest_block > block_height {
-            self.gas_price_history.gas_price(block_height)
+            self._block_history.gas_price(block_height)
         } else if *latest_block + 1 == *block_height {
             let arbitrary_cost = 237894;
             Some(arbitrary_cost)
@@ -65,12 +47,9 @@ where
     }
 }
 
-impl<B, GP, BF, BP, DA> GasPriceProvider for FuelGasPriceProvider<B, GP, BF, BP, DA>
+impl<FB, DA> GasPriceProvider for FuelGasPriceProvider<FB, DA>
 where
-    B: BlockHistory,
-    GP: GasPriceHistory,
-    BF: BlockFullnessHistory,
-    BP: FuelBlockProductionRewardHistory,
+    FB: FuelBlockHistory,
     DA: DARecordingCostHistory,
 {
     fn gas_price(&self, params: GasPriceParams) -> Option<u64> {

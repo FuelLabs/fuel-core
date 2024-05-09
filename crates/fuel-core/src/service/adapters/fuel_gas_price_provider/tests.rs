@@ -16,35 +16,19 @@ mod producer_gas_price_tests;
 
 struct FakeBlockHistory {
     latest_height: BlockHeight,
-}
-
-impl BlockHistory for FakeBlockHistory {
-    fn latest_height(&self) -> BlockHeight {
-        self.latest_height
-    }
-}
-
-struct FakeGasPriceHistory {
     history: HashMap<BlockHeight, u64>,
 }
 
-impl GasPriceHistory for FakeGasPriceHistory {
+impl FuelBlockHistory for FakeBlockHistory {
+    fn latest_height(&self) -> BlockHeight {
+        self.latest_height
+    }
     fn gas_price(&self, height: BlockHeight) -> Option<u64> {
         self.history.get(&height).copied()
     }
-}
-
-struct FakeBlockFullnessHistory;
-
-impl BlockFullnessHistory for FakeBlockFullnessHistory {
     fn block_fullness(&self, _height: BlockHeight) -> BlockFullness {
         todo!();
     }
-}
-
-struct FakeBlockProductionRewardHistory;
-
-impl FuelBlockProductionRewardHistory for FakeBlockProductionRewardHistory {
     fn block_production_reward(&self, _height: BlockHeight) -> BlockProductionReward {
         todo!();
     }
@@ -85,31 +69,17 @@ impl ProviderBuilder {
         self
     }
 
-    fn build(
-        self,
-    ) -> FuelGasPriceProvider<
-        FakeBlockHistory,
-        FakeGasPriceHistory,
-        FakeBlockFullnessHistory,
-        FakeBlockProductionRewardHistory,
-        FakeDARecordingCostHistory,
-    > {
+    fn build(self) -> FuelGasPriceProvider<FakeBlockHistory, FakeDARecordingCostHistory> {
         let Self {
             latest_height,
             historical_gas_price,
         } = self;
 
-        let fake_block_history = FakeBlockHistory { latest_height };
-        let gas_price_history = FakeGasPriceHistory {
+        let fake_block_history = FakeBlockHistory {
+            latest_height,
             history: historical_gas_price,
         };
-        FuelGasPriceProvider::new(
-            fake_block_history,
-            gas_price_history,
-            FakeBlockFullnessHistory,
-            FakeBlockProductionRewardHistory,
-            FakeDARecordingCostHistory,
-        )
+        FuelGasPriceProvider::new(fake_block_history, FakeDARecordingCostHistory)
     }
 }
 
