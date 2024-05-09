@@ -292,7 +292,6 @@ impl crate::Randomize for StateConfig {
                 da_block_height: rng.gen(),
                 consensus_parameters_version: rng.gen(),
                 state_transition_version: rng.gen(),
-                block_hash: rng.gen(),
             }),
         }
     }
