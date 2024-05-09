@@ -98,7 +98,7 @@ impl TableWithBlueprint for OldFuelBlockMerkleMetadata {
     type Column = super::Column;
 
     fn column() -> Self::Column {
-        Self::Column::OldFuelBlockMerkleData
+        Self::Column::OldFuelBlockMerkleMetadata
     }
 }
 
