@@ -104,9 +104,9 @@ impl TableWithBlueprint for OldFuelBlockMerkleMetadata {
 
 #[cfg(test)]
 fuel_core_storage::basic_storage_tests!(
-    OldFuelBlockMerkleData,
-    <OldFuelBlockMerkleData as Mappable>::Key::default(),
-    <OldFuelBlockMerkleData as Mappable>::Value::default()
+    OldFuelBlockMerkleMetadata,
+    <OldFuelBlockMerkleMetadata as Mappable>::Key::default(),
+    <OldFuelBlockMerkleMetadata as Mappable>::Value::default()
 );
 
 /// Old blocks from before regenesis.
