@@ -178,7 +178,6 @@ pub fn create_genesis_block(config: &Config) -> Block {
     let da_height;
     let consensus_parameters_version;
     let state_transition_bytecode_version;
-    let prev_root;
 
     // If the rollup continues the old rollup, the height of the new block should
     // be higher than that of the old chain by one to make it continuous.
@@ -197,8 +196,8 @@ pub fn create_genesis_block(config: &Config) -> Block {
             .state_transition_version
             .checked_add(1)
             .expect("State transition bytecode version overflow");
+
         da_height = latest_block.da_block_height;
-        prev_root = latest_block.block_hash;
     } else {
         height = 0u32.into();
         #[cfg(feature = "relayer")]
@@ -215,7 +214,6 @@ pub fn create_genesis_block(config: &Config) -> Block {
         }
         consensus_parameters_version = ConsensusParametersVersion::MIN;
         state_transition_bytecode_version = StateTransitionBytecodeVersion::MIN;
-        prev_root = Bytes32::zeroed();
     }
 
     let transactions_ids = vec![];
@@ -230,7 +228,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {
-                prev_root,
+                prev_root: Bytes32::zeroed(),
                 height,
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
@@ -293,7 +291,7 @@ mod tests {
     use std::vec;
 
     #[tokio::test]
-    async fn config_initializes_block_height_of_genesis_block() {
+    async fn config_initializes_block_height_of_genesic_block() {
         let block_height = BlockHeight::from(99u32);
         let service_config = Config::local_node_with_state_config(StateConfig {
             last_block: Some(LastBlockConfig {
