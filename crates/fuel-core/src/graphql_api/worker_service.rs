@@ -394,22 +394,22 @@ where
 {
     for (height, block) in block_merkle_data {
         db.storage::<OldFuelBlockMerkleData>()
-            .insert(&height, block)?;
+            .insert(height, block)?;
     }
     Ok(())
 }
 
 pub fn copy_to_old_block_merkle_metadata<'a, I, T>(
-    block_merkle_data: I,
+    block_merkle_metadata: I,
     db: &mut T,
 ) -> StorageResult<()>
 where
     I: Iterator<Item = (&'a DenseMetadataKey<BlockHeight>, &'a DenseMerkleMetadata)>,
     T: OffChainDatabase,
 {
-    for (height, metadata) in block_merkle_data {
+    for (height, metadata) in block_merkle_metadata {
         db.storage::<OldFuelBlockMerkleMetadata>()
-            .insert(&height, metadata)?;
+            .insert(height, metadata)?;
     }
     Ok(())
 }
