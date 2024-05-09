@@ -3,8 +3,10 @@
 use super::*;
 use crate::service::adapters::{
     fuel_gas_price_provider::ports::{
+        BlockProductionReward,
         DARecordingCost,
         FuelBlockGasPriceInputs,
+        ProfitAsOfBlock,
     },
     BlockHeight,
 };
@@ -42,16 +44,41 @@ impl DARecordingCostHistory for FakeDARecordingCostHistory {
     }
 }
 
+struct FakeProducerProfitIndex {
+    profit: ProfitAsOfBlock,
+}
+
+impl ProducerProfitIndex for FakeProducerProfitIndex {
+    fn profit(&self) -> ProfitAsOfBlock {
+        self.profit
+    }
+
+    fn update_profit(
+        &mut self,
+        _block_height: BlockHeight,
+        _reward: BlockProductionReward,
+        _cost: DARecordingCost,
+    ) -> ports::Result<()> {
+        todo!()
+    }
+}
+
 struct ProviderBuilder {
     latest_height: BlockHeight,
     historical_gas_price: HashMap<BlockHeight, u64>,
+    profit: ProfitAsOfBlock,
 }
 
 impl ProviderBuilder {
     fn new() -> Self {
+        let profit = ProfitAsOfBlock {
+            profit: 0,
+            block_height: 0.into(),
+        };
         Self {
             latest_height: 0.into(),
             historical_gas_price: HashMap::new(),
+            profit,
         }
     }
 
@@ -69,17 +96,37 @@ impl ProviderBuilder {
         self
     }
 
-    fn build(self) -> FuelGasPriceProvider<FakeBlockHistory, FakeDARecordingCostHistory> {
+    fn with_profit(mut self, profit: i64, block_height: BlockHeight) -> Self {
+        self.profit = ProfitAsOfBlock {
+            profit,
+            block_height,
+        };
+        self
+    }
+
+    fn build(
+        self,
+    ) -> FuelGasPriceProvider<
+        FakeBlockHistory,
+        FakeDARecordingCostHistory,
+        FakeProducerProfitIndex,
+    > {
         let Self {
             latest_height,
             historical_gas_price,
+            profit,
         } = self;
 
         let fake_block_history = FakeBlockHistory {
             latest_height,
             history: historical_gas_price,
         };
-        FuelGasPriceProvider::new(fake_block_history, FakeDARecordingCostHistory)
+        let fake_producer_profit_index = FakeProducerProfitIndex { profit };
+        FuelGasPriceProvider::new(
+            fake_block_history,
+            FakeDARecordingCostHistory,
+            fake_producer_profit_index,
+        )
     }
 }
 

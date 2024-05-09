@@ -1,5 +1,8 @@
 use fuel_core_types::fuel_types::BlockHeight;
 
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub enum Error {}
+
 pub struct BlockFullness;
 
 pub struct BlockProductionReward;
@@ -46,16 +49,26 @@ pub trait FuelBlockHistory {
     fn latest_height(&self) -> BlockHeight;
 
     fn gas_price(&self, height: BlockHeight) -> Option<u64>;
-    // fn block_fullness(&self, height: BlockHeight) -> Option<BlockFullness>;
-    //
-    // fn block_production_reward(
-    //     &self,
-    //     height: BlockHeight,
-    // ) -> Option<Self::BlockProductionReward>;
 
     fn gas_price_inputs(&self, height: BlockHeight) -> Option<FuelBlockGasPriceInputs>;
 }
 
 pub trait DARecordingCostHistory {
     fn recording_cost(&self, height: BlockHeight) -> Option<DARecordingCost>;
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct ProfitAsOfBlock {
+    pub profit: i64,
+    pub block_height: BlockHeight,
+}
+
+pub trait ProducerProfitIndex {
+    fn profit(&self) -> ProfitAsOfBlock;
+    fn update_profit(
+        &mut self,
+        block_height: BlockHeight,
+        reward: BlockProductionReward,
+        cost: DARecordingCost,
+    ) -> Result<()>;
 }

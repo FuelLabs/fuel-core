@@ -37,12 +37,15 @@ fn gas_price__if_gas_price_too_new_return_none() {
 }
 
 #[test]
-fn gas_price__if_next_gas_price_return_some() {
+fn gas_price__if_asking_for_next_gas_price_return_some() {
     // given
     let latest_height = 432;
+    let arbitrary_gas_price = 555;
     let next_height = (latest_height + 1).into();
     let gas_price_provider = ProviderBuilder::new()
+        .with_historical_gas_price(latest_height.into(), arbitrary_gas_price)
         .with_latest_height(latest_height.into())
+        .with_profit(0, latest_height.into())
         .build();
 
     // when
@@ -51,4 +54,27 @@ fn gas_price__if_next_gas_price_return_some() {
 
     // then
     assert!(maybe_price.is_some());
+}
+
+#[test]
+fn gas_price__if_profit_is_negative_increase_price() {
+    // given
+    let latest_height = 432;
+    let latest_gas_price = 123;
+    let next_height = (latest_height + 1).into();
+    let negative_profit = -1;
+    let gas_price_provider = ProviderBuilder::new()
+        .with_historical_gas_price(latest_height.into(), latest_gas_price)
+        .with_latest_height(latest_height.into())
+        .with_profit(negative_profit, latest_height.into())
+        .build();
+
+    // when
+    let params = GasPriceParams::new(next_height);
+    let maybe_price = gas_price_provider.gas_price(params);
+
+    // then
+    let expected = increase_gas_price(latest_gas_price);
+    let actual = maybe_price.unwrap();
+    assert_eq!(actual, expected);
 }
