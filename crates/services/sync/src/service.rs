@@ -118,7 +118,6 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    #[allow(clippy::blocks_in_conditions)] // false positive
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         Ok(self.sync_heights.sync().await.is_some())
@@ -176,7 +175,6 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    #[allow(clippy::blocks_in_conditions)] // false positive
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         self.0.import(watcher).await
