@@ -22,9 +22,16 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
+    fuel_asm::{
+        op,
+        GTFArgs,
+        RegId,
+    },
+    fuel_crypto::PublicKey,
     fuel_tx::*,
     fuel_vm::*,
 };
+use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     Rng,
@@ -379,6 +386,96 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
         panic!("Expected transaction to be squeezed out")
     };
     assert!(reason.contains("Transaction id was already used"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
+
+    let secret = SecretKey::random(&mut rng);
+    let public_key: PublicKey = (&secret).into();
+    let address = Input::owner(&public_key);
+    let script_data = [address.to_vec(), 100u64.to_be_bytes().to_vec()]
+        .into_iter()
+        .flatten()
+        .collect_vec();
+    let script: Vec<u8> = vec![
+        op::gtf(0x10, 0x00, GTFArgs::ScriptData.into()),
+        op::addi(0x11, 0x10, Bytes32::LEN as u16),
+        op::lw(0x11, 0x11, 0),
+        op::smo(0x10, 0x00, 0x00, 0x11),
+        op::ret(RegId::ONE),
+    ]
+    .into_iter()
+    .collect();
+
+    // Given
+    let tx = TransactionBuilder::script(script, script_data)
+        .add_unsigned_coin_input(
+            secret,
+            rng.gen(),
+            100_000_000,
+            Default::default(),
+            Default::default(),
+        )
+        .add_output(Output::change(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ))
+        .max_fee_limit(1_000_000)
+        .script_gas_limit(1_000_000)
+        .finalize_as_transaction();
+
+    let tx_id = tx.id(&Default::default());
+
+    let status = core.client.submit_and_await_commit(&tx).await.unwrap();
+    let block_height = match status {
+        TransactionStatus::Success { block_height, .. } => block_height,
+        _ => panic!("Failed to submit transaction"),
+    };
+    let block_height = block_height
+        .succ()
+        .expect("Unable to increment block height");
+
+    // When
+    let db_dir = core.kill().await;
+
+    // ------------------------- The genesis node is stopped -------------------------
+
+    // Take a snapshot
+    let snapshot_dir = tempdir().expect("Failed to create temp dir");
+    take_snapshot(&db_dir, &snapshot_dir)
+        .await
+        .expect("Failed to take first snapshot");
+
+    // ------------------------- Start a node with the regenesis -------------------------
+
+    let core = FuelCoreDriver::spawn(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--snapshot",
+        snapshot_dir.path().to_str().unwrap(),
+    ])
+    .await?;
+    let receipts = core.client.receipts(&tx_id).await.unwrap().unwrap();
+    let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
+
+    // Then
+    assert_eq!(nonces.len(), 1);
+
+    for nonce in nonces {
+        let proof = core
+            .client
+            .message_proof(&tx_id, &nonce, None, Some(block_height))
+            .await
+            .unwrap();
+        assert!(proof.is_some());
+    }
 
     Ok(())
 }
