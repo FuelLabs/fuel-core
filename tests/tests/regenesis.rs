@@ -471,7 +471,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     for nonce in nonces {
         let proof = core
             .client
-            .message_proof(&tx_id, &nonce, None, Some(block_height))
+            .message_proof(&tx_id, nonce, None, Some(block_height))
             .await
             .unwrap();
         assert!(proof.is_some());
