@@ -6,12 +6,14 @@ use fuel_core_storage::{
         IterDirection,
     },
     tables::{
+        merkle::DenseMerkleMetadata,
         Coins,
         ContractsAssets,
         ContractsRawCode,
         Messages,
     },
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
     StorageInspect,
 };
@@ -98,15 +100,12 @@ pub trait OffChainDatabase: Send + Sync + DatabaseMessageProof {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
-    fn old_block_merkle_data(
-        &self,
-        version: &u64,
-    ) -> StorageResult<Option<binary::Primitive>>;
+    fn old_block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive>;
 
     fn old_block_merkle_metadata(
         &self,
-        version: &u64,
-    ) -> StorageResult<Option<binary::Primitive>>;
+        height: &BlockHeight,
+    ) -> StorageResult<DenseMerkleMetadata>;
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus>;
 
@@ -189,6 +188,25 @@ pub trait DatabaseChain {
     fn da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
+/// Trait that defines getters for Block Merkle data and metadata
+pub trait DatabaseMerkle {
+    type TableType: Mappable<
+        Key = u64,
+        Value = binary::Primitive,
+        OwnedValue = binary::Primitive,
+    >;
+
+    fn merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive>;
+
+    fn merkle_metadata(&self, height: &BlockHeight)
+        -> StorageResult<DenseMerkleMetadata>;
+
+    fn load_merkle_tree(
+        &self,
+        version: u64,
+    ) -> StorageResult<binary::MerkleTree<Self::TableType, &Self>>;
+}
+
 #[async_trait]
 pub trait TxPoolPort: Send + Sync {
     fn transaction(&self, id: TxId) -> Option<Transaction>;
@@ -234,6 +252,46 @@ pub trait DatabaseMessageProof: Send + Sync {
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
     ) -> StorageResult<MerkleProof>;
+}
+
+impl<T> DatabaseMessageProof for T
+where
+    T: Send
+        + Sync
+        + DatabaseMerkle
+        + StorageInspect<<T as DatabaseMerkle>::TableType, Error = StorageError>,
+{
+    fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        if message_block_height > commit_block_height {
+            Err(anyhow::anyhow!(
+                "The `message_block_height` is higher than `commit_block_height`"
+            ))?;
+        }
+
+        let message_merkle_metadata = self.merkle_metadata(message_block_height)?;
+        let commit_merkle_metadata = self.merkle_metadata(commit_block_height)?;
+        let version = commit_merkle_metadata.version();
+        let tree = self
+            .load_merkle_tree(version)
+            .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
+
+        let proof_index = message_merkle_metadata
+            .version()
+            .checked_sub(1)
+            .ok_or(anyhow::anyhow!("The count of leafs - messages is zero"))?;
+        let (_, proof_set) = tree
+            .prove(proof_index)
+            .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
+
+        Ok(MerkleProof {
+            proof_set,
+            proof_index,
+        })
+    }
 }
 
 #[async_trait::async_trait]

@@ -18,7 +18,10 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    tables::Transactions,
+    tables::{
+        merkle::DenseMerkleMetadata,
+        Transactions,
+    },
     transactional::AtomicView,
     Error as StorageError,
     IsNotFound,
@@ -335,15 +338,15 @@ impl OffChainDatabase for ReadView {
         self.off_chain.old_blocks(height, direction)
     }
 
-    fn old_block_merkle_data(&self, _version: &u64) -> StorageResult<Option<Primitive>> {
-        todo!()
+    fn old_block_merkle_data(&self, version: &u64) -> StorageResult<Primitive> {
+        self.off_chain.old_block_merkle_data(version)
     }
 
     fn old_block_merkle_metadata(
         &self,
-        _version: &u64,
-    ) -> StorageResult<Option<Primitive>> {
-        todo!()
+        height: &BlockHeight,
+    ) -> StorageResult<DenseMerkleMetadata> {
+        self.off_chain.old_block_merkle_metadata(height)
     }
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {

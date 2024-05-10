@@ -10,14 +10,22 @@ use crate::{
         },
         storage::{
             contracts::ContractsInfo,
+            old::OldFuelBlockMerkleMetadata,
             relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
+    graphql_api::{
+        ports::{
+            DatabaseBlocks,
+            DatabaseMerkle,
+        },
+        storage::old::{
+            OldFuelBlockConsensus,
+            OldFuelBlockMerkleData,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use fuel_core_storage::{
@@ -28,6 +36,10 @@ use fuel_core_storage::{
         IteratorOverTable,
     },
     not_found,
+    tables::merkle::{
+        DenseMerkleMetadata,
+        DenseMetadataKey,
+    },
     transactional::{
         IntoTransaction,
         StorageTransaction,
@@ -47,7 +59,7 @@ use fuel_core_types::{
         primitives::BlockId,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
-    fuel_merkle::binary::Primitive,
+    fuel_merkle::binary,
     fuel_tx::{
         Address,
         Bytes32,
@@ -62,6 +74,80 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
+
+use std::borrow::Cow;
+
+impl DatabaseBlocks for Database<OffChain> {
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+        self.storage_as_ref::<OldTransactions>()
+            .get(tx_id)?
+            .map(Cow::into_owned)
+            .ok_or(not_found!(OldTransactions))
+    }
+
+    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        self.storage_as_ref::<OldFuelBlocks>()
+            .get(height)?
+            .map(Cow::into_owned)
+            .ok_or(not_found!(OldFuelBlocks))
+    }
+
+    fn blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
+            .map(|r| r.map(|(_, block)| block))
+            .into_boxed()
+    }
+
+    fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.iter_all::<OldFuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?
+            .map(|(height, _)| height)
+            .ok_or(not_found!("BlockHeight"))
+    }
+
+    fn consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
+        self.storage_as_ref::<OldFuelBlockConsensus>()
+            .get(height)?
+            .map(Cow::into_owned)
+            .ok_or(not_found!(OldFuelBlockConsensus))
+    }
+}
+
+impl DatabaseMerkle for Database<OffChain> {
+    type TableType = OldFuelBlockMerkleData;
+
+    fn merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
+        self.storage_as_ref::<OldFuelBlockMerkleData>()
+            .get(version)?
+            .map(Cow::into_owned)
+            .ok_or(not_found!(OldFuelBlockMerkleData))
+    }
+
+    fn merkle_metadata(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<DenseMerkleMetadata> {
+        self.storage_as_ref::<OldFuelBlockMerkleMetadata>()
+            .get(&DenseMetadataKey::Primary(*height))?
+            .map(Cow::into_owned)
+            .ok_or(not_found!(OldFuelBlockMerkleMetadata))
+    }
+
+    fn load_merkle_tree(
+        &self,
+        version: u64,
+    ) -> StorageResult<binary::MerkleTree<OldFuelBlockMerkleData, &Self>> {
+        let tree: binary::MerkleTree<OldFuelBlockMerkleData, _> =
+            binary::MerkleTree::load(self, version)
+                .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
+        Ok(tree)
+    }
+}
 
 impl OffChainDatabase for Database<OffChain> {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -123,13 +209,7 @@ impl OffChainDatabase for Database<OffChain> {
     }
 
     fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
-        let block = self
-            .storage_as_ref::<OldFuelBlocks>()
-            .get(height)?
-            .ok_or(not_found!(OldFuelBlocks))?
-            .into_owned();
-
-        Ok(block)
+        <Self as DatabaseBlocks>::block(self, height)
     }
 
     fn old_blocks(
@@ -137,28 +217,22 @@ impl OffChainDatabase for Database<OffChain> {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
-        self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
-            .map(|r| r.map(|(_, block)| block))
-            .into_boxed()
+        <Self as DatabaseBlocks>::blocks(self, height, direction)
     }
 
-    fn old_block_merkle_data(&self, _version: &u64) -> StorageResult<Option<Primitive>> {
-        todo!()
+    fn old_block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
+        <Self as DatabaseMerkle>::merkle_data(self, version)
     }
 
     fn old_block_merkle_metadata(
         &self,
-        _version: &u64,
-    ) -> StorageResult<Option<Primitive>> {
-        todo!()
+        height: &BlockHeight,
+    ) -> StorageResult<DenseMerkleMetadata> {
+        <Self as DatabaseMerkle>::merkle_metadata(self, height)
     }
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
-        Ok(self
-            .storage_as_ref::<OldFuelBlockConsensus>()
-            .get(height)?
-            .ok_or(not_found!(OldFuelBlockConsensus))?
-            .into_owned())
+        <Self as DatabaseBlocks>::consensus(self, height)
     }
 
     fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>> {

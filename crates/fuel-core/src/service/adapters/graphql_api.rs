@@ -5,18 +5,10 @@ use super::{
     StaticGasPrice,
 };
 use crate::{
-    database::{
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-        },
-        Database,
-    },
     fuel_core_graphql_api::ports::{
         worker,
         BlockProducerPort,
         ConsensusProvider,
-        DatabaseMessageProof,
         GasPriceEstimate,
         P2pPort,
         TxPoolPort,
@@ -28,13 +20,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::{
     service::TxStatusMessage,
     types::TxId,
 };
 use fuel_core_types::{
-    entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
         ConsensusParameters,
@@ -91,34 +81,6 @@ impl TxPoolPort for TxPoolAdapter {
         id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
         self.service.tx_update_subscribe(id)
-    }
-}
-
-impl DatabaseMessageProof for Database<OffChain> {
-    fn block_history_proof(
-        &self,
-        message_block_height: &BlockHeight,
-        commit_block_height: &BlockHeight,
-    ) -> StorageResult<MerkleProof> {
-        Database::<OffChain>::block_history_proof(
-            self,
-            message_block_height,
-            commit_block_height,
-        )
-    }
-}
-
-impl DatabaseMessageProof for Database<OnChain> {
-    fn block_history_proof(
-        &self,
-        message_block_height: &BlockHeight,
-        commit_block_height: &BlockHeight,
-    ) -> StorageResult<MerkleProof> {
-        Database::<OnChain>::block_history_proof(
-            self,
-            message_block_height,
-            commit_block_height,
-        )
     }
 }
 
