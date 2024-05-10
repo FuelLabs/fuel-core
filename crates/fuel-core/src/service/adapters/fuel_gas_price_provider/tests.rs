@@ -2,12 +2,7 @@
 
 use super::*;
 use crate::service::adapters::{
-    fuel_gas_price_provider::ports::{
-        BlockProductionReward,
-        DARecordingCost,
-        FuelBlockGasPriceInputs,
-        ProfitAsOfBlock,
-    },
+    fuel_gas_price_provider::ports::BlockFullness,
     BlockHeight,
 };
 use std::collections::HashMap;
@@ -29,56 +24,73 @@ impl FuelBlockHistory for FakeBlockHistory {
         self.history.get(&height).copied()
     }
 
-    fn gas_price_inputs(&self, height: BlockHeight) -> Option<FuelBlockGasPriceInputs> {
-        self.history
-            .get(&height)
-            .map(|&gas_price| FuelBlockGasPriceInputs::new(gas_price))
+    fn block_fullness(&self, _height: BlockHeight) -> Option<BlockFullness> {
+        Some(BlockFullness)
     }
 }
 
 struct FakeDARecordingCostHistory;
 
 impl DARecordingCostHistory for FakeDARecordingCostHistory {
-    fn recording_cost(&self, _height: BlockHeight) -> Option<DARecordingCost> {
+    fn recording_cost(&self, _height: BlockHeight) -> Option<u64> {
         todo!();
     }
 }
 
 struct FakeProducerProfitIndex {
-    profit: ProfitAsOfBlock,
+    total_as_of_block: TotalAsOfBlock,
 }
 
 impl ProducerProfitIndex for FakeProducerProfitIndex {
-    fn profit(&self) -> ProfitAsOfBlock {
-        self.profit
+    fn total(&self) -> TotalAsOfBlock {
+        self.total_as_of_block
     }
 
     fn update_profit(
         &mut self,
         _block_height: BlockHeight,
-        _reward: BlockProductionReward,
-        _cost: DARecordingCost,
+        _reward: u64,
+        _cost: u64,
     ) -> ports::Result<()> {
         todo!()
+    }
+}
+
+pub struct SimpleGasPriceAlgorithm;
+
+impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
+    fn calculate_gas_price(
+        &self,
+        previous_gas_price: u64,
+        total_production_reward: u64,
+        total_da_recording_cost: u64,
+        _block_fullness: BlockFullness,
+    ) -> u64 {
+        if total_production_reward < total_da_recording_cost {
+            previous_gas_price + 1
+        } else {
+            previous_gas_price
+        }
     }
 }
 
 struct ProviderBuilder {
     latest_height: BlockHeight,
     historical_gas_price: HashMap<BlockHeight, u64>,
-    profit: ProfitAsOfBlock,
+    total_as_of_block: TotalAsOfBlock,
 }
 
 impl ProviderBuilder {
     fn new() -> Self {
-        let profit = ProfitAsOfBlock {
-            profit: 0,
+        let profit = TotalAsOfBlock {
             block_height: 0.into(),
+            reward: 0,
+            cost: 0,
         };
         Self {
             latest_height: 0.into(),
             historical_gas_price: HashMap::new(),
-            profit,
+            total_as_of_block: profit,
         }
     }
 
@@ -96,36 +108,44 @@ impl ProviderBuilder {
         self
     }
 
-    fn with_profit(mut self, profit: i64, block_height: BlockHeight) -> Self {
-        self.profit = ProfitAsOfBlock {
-            profit,
+    fn with_total_as_of_block(
+        mut self,
+        block_height: BlockHeight,
+        reward: u64,
+        cost: u64,
+    ) -> Self {
+        self.total_as_of_block = TotalAsOfBlock {
             block_height,
+            reward,
+            cost,
         };
         self
     }
 
-    fn build(
+    fn build_with_simple_algo(
         self,
     ) -> FuelGasPriceProvider<
         FakeBlockHistory,
         FakeDARecordingCostHistory,
         FakeProducerProfitIndex,
+        SimpleGasPriceAlgorithm,
     > {
         let Self {
             latest_height,
             historical_gas_price,
-            profit,
+            total_as_of_block,
         } = self;
 
         let fake_block_history = FakeBlockHistory {
             latest_height,
             history: historical_gas_price,
         };
-        let fake_producer_profit_index = FakeProducerProfitIndex { profit };
+        let fake_producer_profit_index = FakeProducerProfitIndex { total_as_of_block };
         FuelGasPriceProvider::new(
             fake_block_history,
             FakeDARecordingCostHistory,
             fake_producer_profit_index,
+            SimpleGasPriceAlgorithm,
         )
     }
 }

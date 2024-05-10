@@ -5,70 +5,42 @@ pub enum Error {}
 
 pub struct BlockFullness;
 
-pub struct BlockProductionReward;
-
-pub struct FuelBlockGasPriceInputs {
-    gas_price: u64,
-    // block_fullness: BlockFullness,
-    // block_production_reward: Reward,
-}
-
-impl FuelBlockGasPriceInputs {
-    pub fn new(
-        gas_price: u64,
-        // block_fullness: BlockFullness,
-        // block_production_reward: BlockProductionReward,
-    ) -> Self {
-        Self {
-            gas_price,
-            // block_fullness,
-            // block_production_reward,
-        }
-    }
-
-    /// Get the gas price for the block
-    pub fn gas_price(&self) -> u64 {
-        self.gas_price
-    }
-
-    // /// Get the block fullness
-    // pub fn block_fullness(&self) -> &BlockFullness {
-    //     &self.block_fullness
-    // }
-    //
-    // /// Get the block production reward
-    // pub fn block_production_reward(&self) -> &Reward {
-    //     &self.block_production_reward
-    // }
-}
-
-pub struct DARecordingCost;
-
 pub trait FuelBlockHistory {
     // type BlockProductionReward;
     fn latest_height(&self) -> BlockHeight;
 
     fn gas_price(&self, height: BlockHeight) -> Option<u64>;
 
-    fn gas_price_inputs(&self, height: BlockHeight) -> Option<FuelBlockGasPriceInputs>;
+    fn block_fullness(&self, height: BlockHeight) -> Option<BlockFullness>;
 }
 
 pub trait DARecordingCostHistory {
-    fn recording_cost(&self, height: BlockHeight) -> Option<DARecordingCost>;
+    fn recording_cost(&self, height: BlockHeight) -> Option<u64>;
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct ProfitAsOfBlock {
-    pub profit: i64,
+pub struct TotalAsOfBlock {
     pub block_height: BlockHeight,
+    pub reward: u64,
+    pub cost: u64,
 }
 
 pub trait ProducerProfitIndex {
-    fn profit(&self) -> ProfitAsOfBlock;
+    fn total(&self) -> TotalAsOfBlock;
     fn update_profit(
         &mut self,
         block_height: BlockHeight,
-        reward: BlockProductionReward,
-        cost: DARecordingCost,
+        reward: u64,
+        cost: u64,
     ) -> Result<()>;
+}
+
+pub trait GasPriceAlgorithm {
+    fn calculate_gas_price(
+        &self,
+        previous_gas_price: u64,
+        total_production_reward: u64,
+        total_da_recording_cost: u64,
+        block_fullness: BlockFullness,
+    ) -> u64;
 }
