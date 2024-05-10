@@ -107,7 +107,7 @@ impl DatabaseMerkle for Database {
 
     fn merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
         self.storage::<FuelBlockMerkleData>()
-            .get(&version)?
+            .get(version)?
             .map(Cow::into_owned)
             .ok_or(not_found!(FuelBlockMerkleData))
     }
