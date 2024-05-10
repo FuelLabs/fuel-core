@@ -182,19 +182,21 @@ pub trait DatabaseChain {
 }
 
 /// Trait that defines getters for Block Merkle data and metadata
-pub trait DatabaseMerkle {
+pub trait DatabaseMerklizedBlocks {
     type TableType: Mappable<
         Key = u64,
         Value = binary::Primitive,
         OwnedValue = binary::Primitive,
     >;
 
-    fn merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive>;
+    fn block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive>;
 
-    fn merkle_metadata(&self, height: &BlockHeight)
-        -> StorageResult<DenseMerkleMetadata>;
+    fn block_merkle_metadata(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<DenseMerkleMetadata>;
 
-    fn load_merkle_tree(
+    fn load_block_merkle_tree(
         &self,
         version: u64,
     ) -> StorageResult<binary::MerkleTree<Self::TableType, &Self>>;
@@ -251,8 +253,8 @@ impl<T> DatabaseMessageProof for T
 where
     T: Send
         + Sync
-        + DatabaseMerkle
-        + StorageInspect<<T as DatabaseMerkle>::TableType, Error = StorageError>,
+        + DatabaseMerklizedBlocks
+        + StorageInspect<<T as DatabaseMerklizedBlocks>::TableType, Error = StorageError>,
 {
     fn block_history_proof(
         &self,
@@ -265,11 +267,11 @@ where
             ))?;
         }
 
-        let message_merkle_metadata = self.merkle_metadata(message_block_height)?;
-        let commit_merkle_metadata = self.merkle_metadata(commit_block_height)?;
+        let message_merkle_metadata = self.block_merkle_metadata(message_block_height)?;
+        let commit_merkle_metadata = self.block_merkle_metadata(commit_block_height)?;
         let version = commit_merkle_metadata.version();
         let tree = self
-            .load_merkle_tree(version)
+            .load_block_merkle_tree(version)
             .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
 
         let proof_index = message_merkle_metadata

@@ -7,7 +7,7 @@ use crate::{
         DatabaseMessages,
         OnChainDatabase,
     },
-    graphql_api::ports::DatabaseMerkle,
+    graphql_api::ports::DatabaseMerklizedBlocks,
 };
 use fuel_core_importer::ports::ImporterDatabase;
 use fuel_core_storage::{
@@ -102,17 +102,17 @@ impl DatabaseBlocks for Database {
     }
 }
 
-impl DatabaseMerkle for Database {
+impl DatabaseMerklizedBlocks for Database {
     type TableType = FuelBlockMerkleData;
 
-    fn merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
+    fn block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
         self.storage::<FuelBlockMerkleData>()
             .get(version)?
             .map(Cow::into_owned)
             .ok_or(not_found!(FuelBlockMerkleData))
     }
 
-    fn merkle_metadata(
+    fn block_merkle_metadata(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<DenseMerkleMetadata> {
@@ -122,7 +122,7 @@ impl DatabaseMerkle for Database {
             .ok_or(not_found!(FuelBlockMerkleMetadata))
     }
 
-    fn load_merkle_tree(
+    fn load_block_merkle_tree(
         &self,
         version: u64,
     ) -> StorageResult<binary::MerkleTree<FuelBlockMerkleData, &Self>> {

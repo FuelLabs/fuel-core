@@ -18,7 +18,7 @@ use crate::{
     graphql_api::{
         ports::{
             DatabaseBlocks,
-            DatabaseMerkle,
+            DatabaseMerklizedBlocks,
         },
         storage::old::{
             OldFuelBlockConsensus,
@@ -118,17 +118,17 @@ impl DatabaseBlocks for Database<OffChain> {
     }
 }
 
-impl DatabaseMerkle for Database<OffChain> {
+impl DatabaseMerklizedBlocks for Database<OffChain> {
     type TableType = OldFuelBlockMerkleData;
 
-    fn merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
+    fn block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
         self.storage_as_ref::<OldFuelBlockMerkleData>()
             .get(version)?
             .map(Cow::into_owned)
             .ok_or(not_found!(OldFuelBlockMerkleData))
     }
 
-    fn merkle_metadata(
+    fn block_merkle_metadata(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<DenseMerkleMetadata> {
@@ -138,7 +138,7 @@ impl DatabaseMerkle for Database<OffChain> {
             .ok_or(not_found!(OldFuelBlockMerkleMetadata))
     }
 
-    fn load_merkle_tree(
+    fn load_block_merkle_tree(
         &self,
         version: u64,
     ) -> StorageResult<binary::MerkleTree<OldFuelBlockMerkleData, &Self>> {
