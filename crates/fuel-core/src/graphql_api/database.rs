@@ -18,10 +18,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    tables::{
-        merkle::DenseMerkleMetadata,
-        Transactions,
-    },
+    tables::Transactions,
     transactional::AtomicView,
     Error as StorageError,
     IsNotFound,
@@ -49,7 +46,6 @@ use fuel_core_types::{
         },
         transaction::RelayedTransactionStatus,
     },
-    fuel_merkle::binary::Primitive,
     fuel_tx::{
         Address,
         AssetId,
@@ -336,17 +332,6 @@ impl OffChainDatabase for ReadView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         self.off_chain.old_blocks(height, direction)
-    }
-
-    fn old_block_merkle_data(&self, version: &u64) -> StorageResult<Primitive> {
-        self.off_chain.old_block_merkle_data(version)
-    }
-
-    fn old_block_merkle_metadata(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<DenseMerkleMetadata> {
-        self.off_chain.old_block_merkle_metadata(height)
     }
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {

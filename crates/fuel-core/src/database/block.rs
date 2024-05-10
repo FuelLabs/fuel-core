@@ -3,7 +3,7 @@ use crate::{
         database_description::off_chain::OffChain,
         Database,
     },
-    fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
+    graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
     iter::{
@@ -84,6 +84,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphql_api::ports::DatabaseMessageProof;
     use fuel_core_storage::StorageMutate;
     use fuel_core_types::{
         blockchain::{

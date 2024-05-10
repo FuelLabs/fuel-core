@@ -100,13 +100,6 @@ pub trait OffChainDatabase: Send + Sync + DatabaseMessageProof {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
-    fn old_block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive>;
-
-    fn old_block_merkle_metadata(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<DenseMerkleMetadata>;
-
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus>;
 
     fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;

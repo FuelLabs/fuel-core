@@ -220,17 +220,6 @@ impl OffChainDatabase for Database<OffChain> {
         <Self as DatabaseBlocks>::blocks(self, height, direction)
     }
 
-    fn old_block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
-        <Self as DatabaseMerkle>::merkle_data(self, version)
-    }
-
-    fn old_block_merkle_metadata(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<DenseMerkleMetadata> {
-        <Self as DatabaseMerkle>::merkle_metadata(self, height)
-    }
-
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
         <Self as DatabaseBlocks>::consensus(self, height)
     }
