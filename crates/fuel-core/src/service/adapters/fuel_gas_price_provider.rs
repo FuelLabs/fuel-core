@@ -12,6 +12,11 @@ use std::cell::RefCell;
 
 pub mod ports;
 
+use ports::{
+    Error,
+    Result,
+};
+
 #[cfg(test)]
 mod tests;
 
@@ -80,12 +85,18 @@ where
     DA: DARecordingCostHistory,
     A: GasPriceAlgorithm,
 {
-    fn inner_gas_price(&self, requested_block_height: BlockHeight) -> Option<u64> {
-        let latest_block = self.block_history.latest_height();
+    fn inner_gas_price(
+        &self,
+        requested_block_height: BlockHeight,
+    ) -> Result<Option<u64>> {
+        let latest_block = self
+            .block_history
+            .latest_height()
+            .map_err(|e| Error::UnableToGetLatestBlockHeight(e))?;
         if latest_block > requested_block_height {
             self.block_history.gas_price(requested_block_height)
         } else if Self::asking_for_next_block(latest_block, requested_block_height) {
-            self.calculate_new_gas_price()
+            self.calculate_new_gas_price(latest_block)
         } else {
             // TODO: Should we return an error instead?
             None
@@ -99,8 +110,10 @@ where
         *latest_block + 1 == *block_height
     }
 
-    fn calculate_new_gas_price(&self) -> Option<u64> {
-        let latest_block_height = self.block_history.latest_height();
+    fn calculate_new_gas_price(
+        &self,
+        latest_block_height: BlockHeight,
+    ) -> Result<Option<u64>> {
         self.update_totals(latest_block_height)?;
         let previous_gas_price = self.block_history.gas_price(latest_block_height)?;
         let block_fullness = self.block_history.block_fullness(latest_block_height)?;
@@ -114,7 +127,7 @@ where
             new_gas_price_candidate,
             self.algorithm.maximum_next_gas_price(previous_gas_price),
         );
-        Some(new_gas_price)
+        Ok(Some(new_gas_price))
     }
 
     fn total_reward(&self) -> u64 {
@@ -150,6 +163,7 @@ where
     A: GasPriceAlgorithm,
 {
     fn gas_price(&self, params: GasPriceParams) -> Option<u64> {
-        self.inner_gas_price(params.block_height())
+        // TODO: handle error
+        self.inner_gas_price(params.block_height()).unwrap()
     }
 }
