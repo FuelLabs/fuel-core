@@ -26,4 +26,6 @@ pub trait GasPriceAlgorithm {
         total_da_recording_cost: u64,
         block_fullness: BlockFullness,
     ) -> u64;
+
+    fn maximum_next_gas_price(&self, previous_gas_price: u64) -> u64;
 }

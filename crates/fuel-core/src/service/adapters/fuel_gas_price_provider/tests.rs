@@ -37,7 +37,28 @@ impl DARecordingCostHistory for FakeDARecordingCostHistory {
     }
 }
 
-pub struct SimpleGasPriceAlgorithm;
+pub struct SimpleGasPriceAlgorithm {
+    flat_price_change: u64,
+    max_price_change: u64,
+}
+
+impl SimpleGasPriceAlgorithm {
+    pub fn new(flat_price_change: u64, max_price_change: u64) -> Self {
+        Self {
+            flat_price_change,
+            max_price_change,
+        }
+    }
+}
+
+impl Default for SimpleGasPriceAlgorithm {
+    fn default() -> Self {
+        Self {
+            flat_price_change: 1,
+            max_price_change: u64::MAX,
+        }
+    }
+}
 
 impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
     fn calculate_gas_price(
@@ -48,10 +69,14 @@ impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
         _block_fullness: BlockFullness,
     ) -> u64 {
         if total_production_reward < total_da_recording_cost {
-            previous_gas_price + 1
+            previous_gas_price.saturating_add(self.flat_price_change)
         } else {
             previous_gas_price
         }
+    }
+
+    fn maximum_next_gas_price(&self, previous_gas_price: u64) -> u64 {
+        previous_gas_price.saturating_add(self.max_price_change)
     }
 }
 
@@ -61,6 +86,7 @@ struct ProviderBuilder {
     totalled_block: BlockHeight,
     total_reward: u64,
     total_cost: u64,
+    algorithm: SimpleGasPriceAlgorithm,
 }
 
 impl ProviderBuilder {
@@ -71,6 +97,10 @@ impl ProviderBuilder {
             totalled_block: 0.into(),
             total_reward: 0,
             total_cost: 0,
+            algorithm: SimpleGasPriceAlgorithm {
+                flat_price_change: 1,
+                max_price_change: u64::MAX,
+            },
         }
     }
 
@@ -100,7 +130,15 @@ impl ProviderBuilder {
         self
     }
 
-    fn build_with_simple_algo(
+    fn with_alorithm_settings(mut self, flat_change: u64, max_change: u64) -> Self {
+        self.algorithm = SimpleGasPriceAlgorithm {
+            flat_price_change: flat_change,
+            max_price_change: max_change,
+        };
+        self
+    }
+
+    fn build(
         self,
     ) -> FuelGasPriceProvider<
         FakeBlockHistory,
@@ -113,6 +151,7 @@ impl ProviderBuilder {
             totalled_block,
             total_reward,
             total_cost,
+            algorithm,
         } = self;
 
         let fake_block_history = FakeBlockHistory {
@@ -125,7 +164,7 @@ impl ProviderBuilder {
             total_cost,
             block_history: fake_block_history,
             _da_recording_cost_history: FakeDARecordingCostHistory,
-            algorithm: SimpleGasPriceAlgorithm,
+            algorithm,
         }
     }
 }

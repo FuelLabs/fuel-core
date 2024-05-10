@@ -70,11 +70,15 @@ where
         if self.totaled_block_height == latest_gas_price {
             let previous_gas_price = self.block_history.gas_price(latest_gas_price)?;
             let block_fullness = self.block_history.block_fullness(latest_gas_price)?;
-            let new_gas_price = self.algorithm.calculate_gas_price(
+            let new_gas_price_candidate = self.algorithm.calculate_gas_price(
                 previous_gas_price,
                 self.total_reward,
                 self.total_cost,
                 block_fullness,
+            );
+            let new_gas_price = core::cmp::min(
+                new_gas_price_candidate,
+                self.algorithm.maximum_next_gas_price(previous_gas_price),
             );
             Some(new_gas_price)
         } else {
@@ -82,11 +86,6 @@ where
         }
     }
 }
-
-// fn increase_gas_price(gas_price: u64) -> u64 {
-//     // TODO: Choose meaningful increase based on inputs
-//     gas_price + 1
-// }
 
 impl<FB, DA, A> GasPriceProvider for FuelGasPriceProvider<FB, DA, A>
 where
