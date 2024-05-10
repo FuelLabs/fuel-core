@@ -8,6 +8,7 @@ use ports::{
     DARecordingCostHistory,
     FuelBlockHistory,
 };
+use std::cell::RefCell;
 
 pub mod ports;
 
@@ -16,26 +17,59 @@ mod tests;
 
 /// Gives the gas price for a given block height, and calculates the gas price if not yet committed.
 pub struct FuelGasPriceProvider<FB, DA, A> {
-    // totals
-    totaled_block_height: BlockHeight,
-    total_reward: u64,
-    total_cost: u64,
+    profitablility_totals: ProfitablilityTotals,
 
     // adapters
     block_history: FB,
-    _da_recording_cost_history: DA,
+    da_recording_cost_history: DA,
     algorithm: A,
 }
 
 impl<FB, DA, A> FuelGasPriceProvider<FB, DA, A> {
     pub fn new(block_history: FB, da_recording_cost_history: DA, algorithm: A) -> Self {
         Self {
-            totaled_block_height: 0.into(),
-            total_reward: 0,
-            total_cost: 0,
+            profitablility_totals: ProfitablilityTotals::default(),
             block_history,
-            _da_recording_cost_history: da_recording_cost_history,
+            da_recording_cost_history,
             algorithm,
+        }
+    }
+}
+
+struct ProfitablilityTotals {
+    totaled_block_height: RefCell<BlockHeight>,
+    total_reward: RefCell<u64>,
+    total_cost: RefCell<u64>,
+}
+
+impl Default for ProfitablilityTotals {
+    fn default() -> Self {
+        Self {
+            totaled_block_height: RefCell::new(0.into()),
+            total_reward: RefCell::new(0),
+            total_cost: RefCell::new(0),
+        }
+    }
+}
+
+impl ProfitablilityTotals {
+    #[allow(dead_code)]
+    pub fn new(block_height: BlockHeight, reward: u64, cost: u64) -> Self {
+        Self {
+            totaled_block_height: RefCell::new(block_height),
+            total_reward: RefCell::new(reward),
+            total_cost: RefCell::new(cost),
+        }
+    }
+
+    fn update(&self, block_height: BlockHeight, reward: u64, cost: u64) {
+        let mut totaled_block_height = self.totaled_block_height.borrow_mut();
+        let mut total_reward = self.total_reward.borrow_mut();
+        let mut total_cost = self.total_cost.borrow_mut();
+        while *totaled_block_height < block_height {
+            *totaled_block_height = block_height;
+            *total_reward += reward;
+            *total_cost += cost;
         }
     }
 }
@@ -66,24 +100,46 @@ where
     }
 
     fn calculate_new_gas_price(&self) -> Option<u64> {
-        let latest_gas_price = self.block_history.latest_height();
-        if self.totaled_block_height == latest_gas_price {
-            let previous_gas_price = self.block_history.gas_price(latest_gas_price)?;
-            let block_fullness = self.block_history.block_fullness(latest_gas_price)?;
-            let new_gas_price_candidate = self.algorithm.calculate_gas_price(
-                previous_gas_price,
-                self.total_reward,
-                self.total_cost,
-                block_fullness,
-            );
-            let new_gas_price = core::cmp::min(
-                new_gas_price_candidate,
-                self.algorithm.maximum_next_gas_price(previous_gas_price),
-            );
-            Some(new_gas_price)
-        } else {
-            todo!("We should update the profit value with latest values")
+        let latest_block_height = self.block_history.latest_height();
+        self.update_totals(latest_block_height)?;
+        let previous_gas_price = self.block_history.gas_price(latest_block_height)?;
+        let block_fullness = self.block_history.block_fullness(latest_block_height)?;
+        let new_gas_price_candidate = self.algorithm.calculate_gas_price(
+            previous_gas_price,
+            self.total_reward(),
+            self.total_cost(),
+            block_fullness,
+        );
+        let new_gas_price = core::cmp::min(
+            new_gas_price_candidate,
+            self.algorithm.maximum_next_gas_price(previous_gas_price),
+        );
+        Some(new_gas_price)
+    }
+
+    fn total_reward(&self) -> u64 {
+        *self.profitablility_totals.total_reward.borrow()
+    }
+
+    fn total_cost(&self) -> u64 {
+        *self.profitablility_totals.total_cost.borrow()
+    }
+
+    fn totaled_block_height(&self) -> BlockHeight {
+        *self.profitablility_totals.totaled_block_height.borrow()
+    }
+
+    fn update_totals(&self, latest_block_height: BlockHeight) -> Option<()> {
+        while self.totaled_block_height() < latest_block_height {
+            let block_height = (*self.totaled_block_height() + 1).into();
+            let reward = self.block_history.production_reward(block_height)?;
+            let cost = self
+                .da_recording_cost_history
+                .recording_cost(block_height)?;
+            self.profitablility_totals
+                .update(block_height, reward, cost);
         }
+        Some(())
     }
 }
 

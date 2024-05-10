@@ -12,7 +12,8 @@ mod producer_gas_price_tests;
 
 struct FakeBlockHistory {
     latest_height: BlockHeight,
-    history: HashMap<BlockHeight, u64>,
+    gas_prices: HashMap<BlockHeight, u64>,
+    production_rewards: HashMap<BlockHeight, u64>,
 }
 
 impl FuelBlockHistory for FakeBlockHistory {
@@ -21,19 +22,25 @@ impl FuelBlockHistory for FakeBlockHistory {
     }
 
     fn gas_price(&self, height: BlockHeight) -> Option<u64> {
-        self.history.get(&height).copied()
+        self.gas_prices.get(&height).copied()
     }
 
     fn block_fullness(&self, _height: BlockHeight) -> Option<BlockFullness> {
         Some(BlockFullness)
     }
+
+    fn production_reward(&self, height: BlockHeight) -> Option<u64> {
+        self.production_rewards.get(&height).copied()
+    }
 }
 
-struct FakeDARecordingCostHistory;
+struct FakeDARecordingCostHistory {
+    costs: HashMap<BlockHeight, u64>,
+}
 
 impl DARecordingCostHistory for FakeDARecordingCostHistory {
-    fn recording_cost(&self, _height: BlockHeight) -> Option<u64> {
-        todo!();
+    fn recording_cost(&self, height: BlockHeight) -> Option<u64> {
+        self.costs.get(&height).copied()
     }
 }
 
@@ -83,7 +90,9 @@ impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
 struct ProviderBuilder {
     latest_height: BlockHeight,
     historical_gas_price: HashMap<BlockHeight, u64>,
-    totalled_block: BlockHeight,
+    production_rewards: HashMap<BlockHeight, u64>,
+    da_recording_costs: HashMap<BlockHeight, u64>,
+    totaled_block_height: BlockHeight,
     total_reward: u64,
     total_cost: u64,
     algorithm: SimpleGasPriceAlgorithm,
@@ -94,7 +103,9 @@ impl ProviderBuilder {
         Self {
             latest_height: 0.into(),
             historical_gas_price: HashMap::new(),
-            totalled_block: 0.into(),
+            production_rewards: HashMap::new(),
+            da_recording_costs: HashMap::new(),
+            totaled_block_height: 0.into(),
             total_reward: 0,
             total_cost: 0,
             algorithm: SimpleGasPriceAlgorithm {
@@ -118,13 +129,31 @@ impl ProviderBuilder {
         self
     }
 
+    fn with_historical_production_reward(
+        mut self,
+        block_height: BlockHeight,
+        reward: u64,
+    ) -> Self {
+        self.production_rewards.insert(block_height, reward);
+        self
+    }
+
+    fn with_historicial_da_recording_cost(
+        mut self,
+        block_height: BlockHeight,
+        cost: u64,
+    ) -> Self {
+        self.da_recording_costs.insert(block_height, cost);
+        self
+    }
+
     fn with_total_as_of_block(
         mut self,
         block_height: BlockHeight,
         reward: u64,
         cost: u64,
     ) -> Self {
-        self.totalled_block = block_height;
+        self.totaled_block_height = block_height;
         self.total_reward = reward;
         self.total_cost = cost;
         self
@@ -148,22 +177,30 @@ impl ProviderBuilder {
         let Self {
             latest_height,
             historical_gas_price,
-            totalled_block,
+            production_rewards,
+            da_recording_costs,
+            totaled_block_height,
             total_reward,
             total_cost,
             algorithm,
         } = self;
 
-        let fake_block_history = FakeBlockHistory {
+        let block_history = FakeBlockHistory {
             latest_height,
-            history: historical_gas_price,
+            gas_prices: historical_gas_price,
+            production_rewards,
+        };
+        let da_recording_cost_history = FakeDARecordingCostHistory {
+            costs: da_recording_costs,
         };
         FuelGasPriceProvider {
-            totaled_block_height: totalled_block,
-            total_reward,
-            total_cost,
-            block_history: fake_block_history,
-            _da_recording_cost_history: FakeDARecordingCostHistory,
+            profitablility_totals: ProfitablilityTotals::new(
+                totaled_block_height,
+                total_reward,
+                total_cost,
+            ),
+            block_history,
+            da_recording_cost_history,
             algorithm,
         }
     }

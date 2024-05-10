@@ -73,13 +73,13 @@ fn gas_price__new_gas_price_never_exceeds_maximum_gas_price() {
     let next_height = (latest_height + 1).into();
     let cost = 100;
     let reward = cost - 1;
+    // 1000 > 1, so it will be capped at 1
     let flat_change = 1000;
     let max_change = 1;
     let gas_price_provider = ProviderBuilder::new()
         .with_historical_gas_price(latest_height.into(), latest_gas_price)
         .with_latest_height(latest_height.into())
         .with_total_as_of_block(latest_height.into(), reward, cost)
-        // 1000 > 1, so it will be capped at 1
         .with_alorithm_settings(1000, 1)
         .build();
 
@@ -90,6 +90,42 @@ fn gas_price__new_gas_price_never_exceeds_maximum_gas_price() {
     // then
     let expected = SimpleGasPriceAlgorithm::new(flat_change, max_change)
         .maximum_next_gas_price(latest_gas_price);
+    let actual = maybe_price.unwrap();
+    assert_eq!(actual, expected);
+}
+
+// TODO: Change to prop test, and generalize to simplify readability (use a loop or something)
+#[test]
+fn gas_price__if_total_is_for_old_block_update_to_latest_block() {
+    // given
+    let latest_height = 432;
+    let total_block_height = latest_height - 2;
+    let latest_gas_price = 123;
+    let next_height = (latest_height + 1).into();
+    let cost = 100;
+    let reward = cost - 1;
+    let gas_price_provider = ProviderBuilder::new()
+        .with_historical_gas_price((latest_height - 1).into(), latest_gas_price)
+        .with_historical_production_reward((latest_height - 1).into(), reward)
+        .with_historicial_da_recording_cost((latest_height - 1).into(), cost)
+        .with_historical_gas_price(latest_height.into(), latest_gas_price)
+        .with_historical_production_reward(latest_height.into(), reward)
+        .with_historicial_da_recording_cost(latest_height.into(), cost)
+        .with_latest_height(latest_height.into())
+        .with_total_as_of_block(total_block_height.into(), reward, cost)
+        .build();
+
+    // when
+    let params = GasPriceParams::new(next_height);
+    let maybe_price = gas_price_provider.gas_price(params);
+
+    // then
+    let expected = SimpleGasPriceAlgorithm::default().calculate_gas_price(
+        latest_gas_price,
+        reward,
+        cost,
+        BlockFullness,
+    );
     let actual = maybe_price.unwrap();
     assert_eq!(actual, expected);
 }

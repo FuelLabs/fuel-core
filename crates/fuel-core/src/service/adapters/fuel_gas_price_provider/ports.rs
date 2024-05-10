@@ -12,6 +12,8 @@ pub trait FuelBlockHistory {
     fn gas_price(&self, height: BlockHeight) -> Option<u64>;
 
     fn block_fullness(&self, height: BlockHeight) -> Option<BlockFullness>;
+
+    fn production_reward(&self, height: BlockHeight) -> Option<u64>;
 }
 
 pub trait DARecordingCostHistory {
