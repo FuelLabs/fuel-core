@@ -20,7 +20,7 @@ fn gas_price__can_get_a_historical_gas_price() {
 }
 
 #[test]
-fn gas_price__if_gas_price_too_new_return_none() {
+fn gas_price__if_gas_price_too_high_return_error() {
     // given
     let latest_height = 432;
     let too_new_height = (latest_height + 2).into();

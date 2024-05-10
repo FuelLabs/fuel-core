@@ -2,7 +2,10 @@
 
 use super::*;
 use crate::service::adapters::{
-    fuel_gas_price_provider::ports::BlockFullness,
+    fuel_gas_price_provider::ports::{
+        BlockFullness,
+        ForeignResult,
+    },
     BlockHeight,
 };
 use std::collections::HashMap;
@@ -17,20 +20,23 @@ struct FakeBlockHistory {
 }
 
 impl FuelBlockHistory for FakeBlockHistory {
-    fn latest_height(&self) -> BlockHeight {
-        self.latest_height
+    fn latest_height(&self) -> ForeignResult<BlockHeight> {
+        Ok(self.latest_height)
     }
 
-    fn gas_price(&self, height: BlockHeight) -> Option<u64> {
-        self.gas_prices.get(&height).copied()
+    fn gas_price(&self, height: BlockHeight) -> ForeignResult<Option<u64>> {
+        Ok(self.gas_prices.get(&height).copied())
     }
 
-    fn block_fullness(&self, _height: BlockHeight) -> Option<BlockFullness> {
-        Some(BlockFullness)
+    fn block_fullness(
+        &self,
+        _height: BlockHeight,
+    ) -> ForeignResult<Option<BlockFullness>> {
+        Ok(Some(BlockFullness))
     }
 
-    fn production_reward(&self, height: BlockHeight) -> Option<u64> {
-        self.production_rewards.get(&height).copied()
+    fn production_reward(&self, height: BlockHeight) -> ForeignResult<Option<u64>> {
+        Ok(self.production_rewards.get(&height).copied())
     }
 }
 
@@ -39,8 +45,8 @@ struct FakeDARecordingCostHistory {
 }
 
 impl DARecordingCostHistory for FakeDARecordingCostHistory {
-    fn recording_cost(&self, height: BlockHeight) -> Option<u64> {
-        self.costs.get(&height).copied()
+    fn recording_cost(&self, height: BlockHeight) -> ForeignResult<Option<u64>> {
+        Ok(self.costs.get(&height).copied())
     }
 }
 

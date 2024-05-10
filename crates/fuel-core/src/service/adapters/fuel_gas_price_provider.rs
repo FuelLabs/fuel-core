@@ -85,21 +85,25 @@ where
     DA: DARecordingCostHistory,
     A: GasPriceAlgorithm,
 {
-    fn inner_gas_price(
-        &self,
-        requested_block_height: BlockHeight,
-    ) -> Result<Option<u64>> {
+    fn inner_gas_price(&self, requested_block_height: BlockHeight) -> Result<u64> {
         let latest_block = self
             .block_history
             .latest_height()
-            .map_err(|e| Error::UnableToGetLatestBlockHeight(e))?;
+            .map_err(Error::UnableToGetLatestBlockHeight)?;
         if latest_block > requested_block_height {
-            self.block_history.gas_price(requested_block_height)
+            self.block_history
+                .gas_price(requested_block_height)
+                .map_err(Error::UnableToGetGasPrice)?
+                .ok_or(Error::GasPriceNotFoundForBlockHeight(
+                    requested_block_height,
+                ))
         } else if Self::asking_for_next_block(latest_block, requested_block_height) {
             self.calculate_new_gas_price(latest_block)
         } else {
-            // TODO: Should we return an error instead?
-            None
+            Err(Error::RequestedBlockHeightTooHigh {
+                requested: requested_block_height,
+                latest: latest_block,
+            })
         }
     }
 
@@ -110,13 +114,20 @@ where
         *latest_block + 1 == *block_height
     }
 
-    fn calculate_new_gas_price(
-        &self,
-        latest_block_height: BlockHeight,
-    ) -> Result<Option<u64>> {
+    fn calculate_new_gas_price(&self, latest_block_height: BlockHeight) -> Result<u64> {
         self.update_totals(latest_block_height)?;
-        let previous_gas_price = self.block_history.gas_price(latest_block_height)?;
-        let block_fullness = self.block_history.block_fullness(latest_block_height)?;
+        let previous_gas_price = self
+            .block_history
+            .gas_price(latest_block_height)
+            .map_err(Error::UnableToGetGasPrice)?
+            .ok_or(Error::GasPriceNotFoundForBlockHeight(latest_block_height))?;
+        let block_fullness = self
+            .block_history
+            .block_fullness(latest_block_height)
+            .map_err(Error::UnableToGetBlockFullness)?
+            .ok_or(Error::BlockFullnessNotFoundForBlockHeight(
+                latest_block_height,
+            ))?;
         let new_gas_price_candidate = self.algorithm.calculate_gas_price(
             previous_gas_price,
             self.total_reward(),
@@ -127,7 +138,7 @@ where
             new_gas_price_candidate,
             self.algorithm.maximum_next_gas_price(previous_gas_price),
         );
-        Ok(Some(new_gas_price))
+        Ok(new_gas_price)
     }
 
     fn total_reward(&self) -> u64 {
@@ -142,17 +153,23 @@ where
         *self.profitablility_totals.totaled_block_height.borrow()
     }
 
-    fn update_totals(&self, latest_block_height: BlockHeight) -> Option<()> {
+    fn update_totals(&self, latest_block_height: BlockHeight) -> Result<()> {
         while self.totaled_block_height() < latest_block_height {
             let block_height = (*self.totaled_block_height() + 1).into();
-            let reward = self.block_history.production_reward(block_height)?;
+            let reward = self
+                .block_history
+                .production_reward(block_height)
+                .map_err(Error::UnableToGetProductionReward)?
+                .ok_or(Error::ProductionRewardNotFoundForBlockHeight(block_height))?;
             let cost = self
                 .da_recording_cost_history
-                .recording_cost(block_height)?;
+                .recording_cost(block_height)
+                .map_err(Error::UnableToGetRecordingCost)?
+                .ok_or(Error::RecordingCostNotFoundForBlockHeight(block_height))?;
             self.profitablility_totals
                 .update(block_height, reward, cost);
         }
-        Some(())
+        Ok(())
     }
 }
 
@@ -164,6 +181,6 @@ where
 {
     fn gas_price(&self, params: GasPriceParams) -> Option<u64> {
         // TODO: handle error
-        self.inner_gas_price(params.block_height()).unwrap()
+        self.inner_gas_price(params.block_height()).ok()
     }
 }
