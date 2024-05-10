@@ -12,6 +12,8 @@ use std::cell::RefCell;
 
 pub mod ports;
 
+pub mod algorithm_adapter;
+
 use ports::{
     Error,
     Result,
