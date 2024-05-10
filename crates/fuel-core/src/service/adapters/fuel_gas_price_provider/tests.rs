@@ -37,25 +37,6 @@ impl DARecordingCostHistory for FakeDARecordingCostHistory {
     }
 }
 
-struct FakeProducerProfitIndex {
-    total_as_of_block: TotalAsOfBlock,
-}
-
-impl ProducerProfitIndex for FakeProducerProfitIndex {
-    fn total(&self) -> TotalAsOfBlock {
-        self.total_as_of_block
-    }
-
-    fn update_profit(
-        &mut self,
-        _block_height: BlockHeight,
-        _reward: u64,
-        _cost: u64,
-    ) -> ports::Result<()> {
-        todo!()
-    }
-}
-
 pub struct SimpleGasPriceAlgorithm;
 
 impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
@@ -77,20 +58,19 @@ impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
 struct ProviderBuilder {
     latest_height: BlockHeight,
     historical_gas_price: HashMap<BlockHeight, u64>,
-    total_as_of_block: TotalAsOfBlock,
+    totalled_block: BlockHeight,
+    total_reward: u64,
+    total_cost: u64,
 }
 
 impl ProviderBuilder {
     fn new() -> Self {
-        let profit = TotalAsOfBlock {
-            block_height: 0.into(),
-            reward: 0,
-            cost: 0,
-        };
         Self {
             latest_height: 0.into(),
             historical_gas_price: HashMap::new(),
-            total_as_of_block: profit,
+            totalled_block: 0.into(),
+            total_reward: 0,
+            total_cost: 0,
         }
     }
 
@@ -114,11 +94,9 @@ impl ProviderBuilder {
         reward: u64,
         cost: u64,
     ) -> Self {
-        self.total_as_of_block = TotalAsOfBlock {
-            block_height,
-            reward,
-            cost,
-        };
+        self.totalled_block = block_height;
+        self.total_reward = reward;
+        self.total_cost = cost;
         self
     }
 
@@ -127,26 +105,28 @@ impl ProviderBuilder {
     ) -> FuelGasPriceProvider<
         FakeBlockHistory,
         FakeDARecordingCostHistory,
-        FakeProducerProfitIndex,
         SimpleGasPriceAlgorithm,
     > {
         let Self {
             latest_height,
             historical_gas_price,
-            total_as_of_block,
+            totalled_block,
+            total_reward,
+            total_cost,
         } = self;
 
         let fake_block_history = FakeBlockHistory {
             latest_height,
             history: historical_gas_price,
         };
-        let fake_producer_profit_index = FakeProducerProfitIndex { total_as_of_block };
-        FuelGasPriceProvider::new(
-            fake_block_history,
-            FakeDARecordingCostHistory,
-            fake_producer_profit_index,
-            SimpleGasPriceAlgorithm,
-        )
+        FuelGasPriceProvider {
+            totaled_block_height: totalled_block,
+            total_reward,
+            total_cost,
+            block_history: fake_block_history,
+            _da_recording_cost_history: FakeDARecordingCostHistory,
+            algorithm: SimpleGasPriceAlgorithm,
+        }
     }
 }
 

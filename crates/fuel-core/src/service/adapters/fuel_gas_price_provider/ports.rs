@@ -18,23 +18,6 @@ pub trait DARecordingCostHistory {
     fn recording_cost(&self, height: BlockHeight) -> Option<u64>;
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct TotalAsOfBlock {
-    pub block_height: BlockHeight,
-    pub reward: u64,
-    pub cost: u64,
-}
-
-pub trait ProducerProfitIndex {
-    fn total(&self) -> TotalAsOfBlock;
-    fn update_profit(
-        &mut self,
-        block_height: BlockHeight,
-        reward: u64,
-        cost: u64,
-    ) -> Result<()>;
-}
-
 pub trait GasPriceAlgorithm {
     fn calculate_gas_price(
         &self,
