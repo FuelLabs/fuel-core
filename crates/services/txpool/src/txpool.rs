@@ -23,6 +23,7 @@ use fuel_core_types::{
             IntoChecked,
             ParallelExecutor,
         },
+        pool::VmPool,
         PredicateVerificationFailed,
     },
     services::txpool::{
@@ -465,6 +466,7 @@ pub async fn check_transactions<Provider>(
     utxp_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &Provider,
+    vm_pool: VmPool,
 ) -> Vec<Result<Checked<Transaction>, Error>>
 where
     Provider: GasPriceProvider,
@@ -479,6 +481,7 @@ where
                 utxp_validation,
                 consensus_params,
                 gas_price_provider,
+                vm_pool.clone(),
             )
             .await,
         );
@@ -493,6 +496,7 @@ pub async fn check_single_tx<GasPrice: GasPriceProvider>(
     utxo_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &GasPrice,
+    vm_pool: VmPool,
 ) -> Result<Checked<Transaction>, Error> {
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType)
@@ -504,9 +508,10 @@ pub async fn check_single_tx<GasPrice: GasPriceProvider>(
             .check_signatures(&consensus_params.chain_id())?;
 
         let tx = tx
-            .check_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
-                consensus_params,
-            ))
+            .check_predicates_async::<TokioWithRayon>(
+                &CheckPredicateParams::from(consensus_params),
+                vm_pool,
+            )
             .await?;
 
         debug_assert!(tx.checks().contains(Checks::all()));

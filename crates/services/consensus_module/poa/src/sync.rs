@@ -129,6 +129,7 @@ impl RunnableService for SyncTask {
     }
 }
 
+#[allow(clippy::blocks_in_conditions)]
 #[async_trait::async_trait]
 impl RunnableTask for SyncTask {
     #[tracing::instrument(level = "debug", skip_all, err, ret)]

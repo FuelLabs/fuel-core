@@ -52,9 +52,12 @@ use fuel_core_types::{
     },
     fuel_types,
     fuel_types::canonical::Deserialize,
-    fuel_vm::checked_transaction::{
-        CheckPredicateParams,
-        EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        pool::VmPool,
     },
     services::txpool,
 };
@@ -214,9 +217,12 @@ impl TxQuery {
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
 
-        tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
-            params.as_ref(),
-        ))
+        let vm_pool = ctx.data_unchecked::<VmPool>().clone();
+
+        tx.estimate_predicates_async::<TokioWithRayon>(
+            &CheckPredicateParams::from(params.as_ref()),
+            vm_pool,
+        )
         .await
         .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 

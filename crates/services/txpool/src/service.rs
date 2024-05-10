@@ -35,6 +35,7 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
+    fuel_vm::pool::VmPool,
     services::{
         block_importer::SharedImportResult,
         p2p::{
@@ -127,6 +128,7 @@ pub struct SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> {
     current_height: Arc<ParkingMutex<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
+    vm_pool: VmPool,
 }
 
 impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> Clone
@@ -141,6 +143,7 @@ impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> Clone
             current_height: self.current_height.clone(),
             consensus_parameters_provider: self.consensus_parameters_provider.clone(),
             gas_price_provider: self.gas_price_provider.clone(),
+            vm_pool: self.vm_pool.clone(),
         }
     }
 }
@@ -245,7 +248,8 @@ where
                         current_height,
                         self.tx_pool_shared_state.utxo_validation,
                         params.as_ref(),
-                        &self.tx_pool_shared_state.gas_price_provider
+                        &self.tx_pool_shared_state.gas_price_provider,
+                        self.tx_pool_shared_state.vm_pool.clone(),
                     ).await;
 
                     let acceptance = match checked_tx {
@@ -402,6 +406,7 @@ where
             self.utxo_validation,
             params.as_ref(),
             &self.gas_price_provider,
+            self.vm_pool.clone(),
         )
         .await;
 
@@ -479,6 +484,7 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn new_service<P2P, Importer, ViewProvider, GasPriceProvider, ConsensusProvider>(
     config: Config,
     provider: ViewProvider,
@@ -487,6 +493,7 @@ pub fn new_service<P2P, Importer, ViewProvider, GasPriceProvider, ConsensusProvi
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
+    vm_pool: VmPool,
 ) -> Service<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     Importer: BlockImporter,
@@ -521,6 +528,7 @@ where
             current_height: Arc::new(ParkingMutex::new(current_height)),
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
             gas_price_provider: Arc::new(gas_price_provider),
+            vm_pool,
         },
         ttl_timer,
     };

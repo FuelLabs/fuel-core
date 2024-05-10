@@ -106,6 +106,7 @@ mod tests {
                 EstimatePredicates,
             },
             interpreter::ExecutableTransaction,
+            pool::test_pool,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
             Call,
@@ -2686,7 +2687,7 @@ mod tests {
             asset_id: Default::default(),
         })
         .finalize();
-        tx.estimate_predicates(&consensus_parameters.clone().into())
+        tx.estimate_predicates(&consensus_parameters.clone().into(), test_pool())
             .unwrap();
         let db = &mut Database::default();
 

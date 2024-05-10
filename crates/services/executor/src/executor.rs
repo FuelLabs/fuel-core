@@ -5,7 +5,6 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
-    vm_pool,
 };
 use core::mem;
 use fuel_core_storage::{
@@ -104,8 +103,8 @@ use fuel_core_types::{
         ContractId,
         MessageId,
     },
-    fuel_vm,
     fuel_vm::{
+        self,
         checked_transaction::{
             CheckPredicateParams,
             CheckPredicates,
@@ -119,6 +118,7 @@ use fuel_core_types::{
             ExecutableTransaction,
             InterpreterParams,
         },
+        pool::VmPool,
         state::StateTransition,
         Backtrace as FuelBacktrace,
         Interpreter,
@@ -338,7 +338,7 @@ pub struct BlockExecutor<R> {
     relayer: R,
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
-    vm_pool: vm_pool::VmPool,
+    vm_pool: VmPool,
 }
 
 impl<R> BlockExecutor<R> {
@@ -802,6 +802,7 @@ where
                             relayed_tx,
                             block_height,
                             &self.consensus_params,
+                            self.vm_pool.clone(),
                         );
                         match checked_tx_res {
                             Ok(checked_tx) => {
@@ -832,6 +833,7 @@ where
         relayed_tx: RelayedTransaction,
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
+        vm_pool: VmPool,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
         Self::tx_is_valid_variant(&parsed_tx)?;
@@ -840,7 +842,8 @@ where
             &relayed_tx,
             consensus_params,
         )?;
-        let checked_tx = Self::get_checked_tx(parsed_tx, block_height, consensus_params)?;
+        let checked_tx =
+            Self::get_checked_tx(parsed_tx, block_height, consensus_params, vm_pool)?;
         Ok(CheckedTransaction::from(checked_tx))
     }
 
@@ -857,9 +860,10 @@ where
         tx: Transaction,
         height: BlockHeight,
         consensus_params: &ConsensusParameters,
+        vm_pool: VmPool,
     ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
         let checked_tx = tx
-            .into_checked(height, consensus_params)
+            .into_checked(height, consensus_params, vm_pool)
             .map_err(ForcedTransactionFailure::CheckError)?;
         Ok(checked_tx)
     }
@@ -1372,7 +1376,10 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         checked_tx = checked_tx
-            .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
+            .check_predicates(
+                &CheckPredicateParams::from(&self.consensus_params),
+                self.vm_pool.clone(),
+            )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
                     e,

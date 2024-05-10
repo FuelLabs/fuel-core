@@ -26,6 +26,7 @@ use fuel_core_types::{
         TransactionBuilder,
         Word,
     },
+    fuel_vm::pool::test_pool,
     services::{
         block_importer::ImportResult,
         p2p::GossipsubMessageAcceptance,
@@ -257,6 +258,7 @@ impl TestContextBuilder {
             Default::default(),
             gas_price_provider,
             consensus_parameters_provider,
+            test_pool(),
         );
 
         TestContext {

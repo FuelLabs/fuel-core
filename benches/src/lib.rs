@@ -27,6 +27,7 @@ use fuel_core_types::{
             InterpreterParams,
             ReceiptsCtx,
         },
+        pool::test_pool,
         *,
     },
 };
@@ -454,9 +455,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .maturity(maturity)
             .with_params(params.clone())
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::from(&params))
+        tx.estimate_predicates(&CheckPredicateParams::from(&params), test_pool())
             .unwrap();
-        let tx = tx.into_checked(height, &params).unwrap();
+        let tx = tx.into_checked(height, &params, test_pool()).unwrap();
         let interpreter_params = InterpreterParams::new(gas_price, &params);
 
         let mut txtor = Transactor::new(db, interpreter_params);

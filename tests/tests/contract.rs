@@ -27,6 +27,7 @@ use fuel_core_types::{
     fuel_types::canonical::Serialize,
     fuel_vm::{
         checked_transaction::IntoChecked,
+        pool::test_pool,
         *,
     },
 };
@@ -102,7 +103,7 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
             )
             .add_output(output)
             .finalize_as_transaction()
-            .into_checked(Default::default(), &Default::default())
+            .into_checked(Default::default(), &Default::default(), test_pool())
             .expect("Cannot check transaction");
 
         let contract_input = Input::contract(
