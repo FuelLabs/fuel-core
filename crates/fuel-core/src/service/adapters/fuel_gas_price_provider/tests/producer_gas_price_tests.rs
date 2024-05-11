@@ -44,9 +44,11 @@ fn gas_price__next_block_calls_algorithm_function() {
     let next_height = (latest_height + 1).into();
     let cost = 100;
     let reward = cost - 1;
+    let block_fullness = BlockFullness::new(0.5);
     let gas_price_provider = ProviderBuilder::new()
         .with_historical_gas_price(latest_height.into(), latest_gas_price)
         .with_latest_height(latest_height.into())
+        .with_historical_block_fullness(latest_height.into(), block_fullness)
         .with_total_as_of_block(latest_height.into(), reward, cost)
         .build();
 
@@ -59,7 +61,7 @@ fn gas_price__next_block_calls_algorithm_function() {
         latest_gas_price,
         reward,
         cost,
-        BlockFullness,
+        BlockFullness::new(0.5),
     );
     let actual = maybe_price.unwrap();
     assert_eq!(actual, expected);
@@ -76,10 +78,12 @@ fn gas_price__new_gas_price_never_exceeds_maximum_gas_price() {
     // 1000 > 1, so it will be capped at 1
     let flat_change = 1000;
     let max_change = 1;
+    let block_fullness = BlockFullness::new(0.5);
     let gas_price_provider = ProviderBuilder::new()
         .with_historical_gas_price(latest_height.into(), latest_gas_price)
         .with_latest_height(latest_height.into())
         .with_total_as_of_block(latest_height.into(), reward, cost)
+        .with_historical_block_fullness(latest_height.into(), block_fullness)
         .with_alorithm_settings(1000, 1)
         .build();
 
@@ -104,14 +108,16 @@ fn gas_price__if_total_is_for_old_block_update_to_latest_block() {
     let next_height = (latest_height + 1).into();
     let cost = 100;
     let reward = cost - 1;
+    let block_fullness = BlockFullness::new(0.5);
     let gas_price_provider = ProviderBuilder::new()
         .with_historical_gas_price((latest_height - 1).into(), latest_gas_price)
         .with_historical_production_reward((latest_height - 1).into(), reward)
-        .with_historicial_da_recording_cost((latest_height - 1).into(), cost)
+        .with_historical_da_recording_cost((latest_height - 1).into(), cost)
         .with_historical_gas_price(latest_height.into(), latest_gas_price)
         .with_historical_production_reward(latest_height.into(), reward)
-        .with_historicial_da_recording_cost(latest_height.into(), cost)
+        .with_historical_da_recording_cost(latest_height.into(), cost)
         .with_latest_height(latest_height.into())
+        .with_historical_block_fullness(latest_height.into(), block_fullness)
         .with_total_as_of_block(total_block_height.into(), reward, cost)
         .build();
 
@@ -124,7 +130,7 @@ fn gas_price__if_total_is_for_old_block_update_to_latest_block() {
         latest_gas_price,
         reward,
         cost,
-        BlockFullness,
+        block_fullness,
     );
     let actual = maybe_price.unwrap();
     assert_eq!(actual, expected);

@@ -17,6 +17,7 @@ struct FakeBlockHistory {
     latest_height: BlockHeight,
     gas_prices: HashMap<BlockHeight, u64>,
     production_rewards: HashMap<BlockHeight, u64>,
+    block_fullness: HashMap<BlockHeight, BlockFullness>,
 }
 
 impl FuelBlockHistory for FakeBlockHistory {
@@ -30,9 +31,9 @@ impl FuelBlockHistory for FakeBlockHistory {
 
     fn block_fullness(
         &self,
-        _height: BlockHeight,
+        height: BlockHeight,
     ) -> ForeignResult<Option<BlockFullness>> {
-        Ok(Some(BlockFullness))
+        Ok(self.block_fullness.get(&height).copied())
     }
 
     fn production_reward(&self, height: BlockHeight) -> ForeignResult<Option<u64>> {
@@ -96,7 +97,8 @@ impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
 struct ProviderBuilder {
     latest_height: BlockHeight,
     historical_gas_price: HashMap<BlockHeight, u64>,
-    production_rewards: HashMap<BlockHeight, u64>,
+    historical_production_rewards: HashMap<BlockHeight, u64>,
+    historical_block_fullness: HashMap<BlockHeight, BlockFullness>,
     da_recording_costs: HashMap<BlockHeight, u64>,
     totaled_block_height: BlockHeight,
     total_reward: u64,
@@ -109,7 +111,8 @@ impl ProviderBuilder {
         Self {
             latest_height: 0.into(),
             historical_gas_price: HashMap::new(),
-            production_rewards: HashMap::new(),
+            historical_production_rewards: HashMap::new(),
+            historical_block_fullness: HashMap::new(),
             da_recording_costs: HashMap::new(),
             totaled_block_height: 0.into(),
             total_reward: 0,
@@ -140,16 +143,27 @@ impl ProviderBuilder {
         block_height: BlockHeight,
         reward: u64,
     ) -> Self {
-        self.production_rewards.insert(block_height, reward);
+        self.historical_production_rewards
+            .insert(block_height, reward);
         self
     }
 
-    fn with_historicial_da_recording_cost(
+    fn with_historical_da_recording_cost(
         mut self,
         block_height: BlockHeight,
         cost: u64,
     ) -> Self {
         self.da_recording_costs.insert(block_height, cost);
+        self
+    }
+
+    fn with_historical_block_fullness(
+        mut self,
+        block_height: BlockHeight,
+        fullness: BlockFullness,
+    ) -> Self {
+        self.historical_block_fullness
+            .insert(block_height, fullness);
         self
     }
 
@@ -183,7 +197,8 @@ impl ProviderBuilder {
         let Self {
             latest_height,
             historical_gas_price,
-            production_rewards,
+            historical_production_rewards,
+            historical_block_fullness,
             da_recording_costs,
             totaled_block_height,
             total_reward,
@@ -194,7 +209,8 @@ impl ProviderBuilder {
         let block_history = FakeBlockHistory {
             latest_height,
             gas_prices: historical_gas_price,
-            production_rewards,
+            production_rewards: historical_production_rewards,
+            block_fullness: historical_block_fullness,
         };
         let da_recording_cost_history = FakeDARecordingCostHistory {
             costs: da_recording_costs,
