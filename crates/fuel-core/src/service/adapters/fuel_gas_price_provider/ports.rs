@@ -37,30 +37,21 @@ pub enum Error {
 
 #[derive(Debug, Clone, Copy)]
 pub struct BlockFullness {
-    percentage: f32,
+    used: u64,
+    capacity: u64,
 }
 
 impl BlockFullness {
-    pub fn new(percentage: f32) -> Self {
-        Self { percentage }
-    }
-    pub fn try_from_ratio<T>(used: T, capacity: T) -> Result<Self>
-    where
-        T: TryInto<f32>,
-        <T as TryInto<f32>>::Error: std::fmt::Debug,
-    {
-        let used = used.try_into().map_err(|e| {
-            Error::CouldNotConvertBlockUsageToPercentage(format!("used: {:?}", e))
-        })?;
-        let capacity = capacity.try_into().map_err(|e| {
-            Error::CouldNotConvertBlockUsageToPercentage(format!("capacity: {:?}", e))
-        })?;
-        let percentage = used / capacity;
-        Ok(Self { percentage })
+    pub fn new(used: u64, capacity: u64) -> Self {
+        Self { used, capacity }
     }
 
-    pub fn percentage(&self) -> f32 {
-        self.percentage
+    pub fn used(&self) -> u64 {
+        self.used
+    }
+
+    pub fn capacity(&self) -> u64 {
+        self.capacity
     }
 }
 
