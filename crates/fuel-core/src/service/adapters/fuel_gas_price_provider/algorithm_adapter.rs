@@ -3,6 +3,7 @@ use crate::service::adapters::fuel_gas_price_provider::ports::{
     GasPriceAlgorithm,
 };
 
+// TODO: Don't use floats 🤢
 pub struct FuelGasPriceAlgorithm {
     _target_profitability: f32,
     _max_price_change_percentage: f32,
@@ -11,12 +12,20 @@ pub struct FuelGasPriceAlgorithm {
 impl GasPriceAlgorithm for FuelGasPriceAlgorithm {
     fn calculate_gas_price(
         &self,
-        _previous_gas_price: u64,
-        _total_production_reward: u64,
-        _total_da_recording_cost: u64,
-        _block_fullness: BlockFullness,
+        previous_gas_price: u64,
+        total_production_reward: u64,
+        total_da_recording_cost: u64,
+        block_fullness: BlockFullness,
     ) -> u64 {
-        todo!()
+        if total_da_recording_cost > total_production_reward {
+            previous_gas_price + 1
+        } else {
+            if block_fullness.used() > block_fullness.capacity() / 2 {
+                previous_gas_price + 1
+            } else {
+                previous_gas_price - 1
+            }
+        }
     }
 
     fn maximum_next_gas_price(&self, _previous_gas_price: u64) -> u64 {
@@ -27,20 +36,79 @@ impl GasPriceAlgorithm for FuelGasPriceAlgorithm {
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]
-    // use super::*;
+    use super::*;
 
     #[test]
     fn calculate_gas_price__above_50_percent_increases_gas_price() {
-        todo!()
+        // given
+        let old_gas_price = 444;
+        let total_production_reward = 100;
+        let total_da_recording_cost = total_production_reward;
+        // 60% full
+        let block_fullness = BlockFullness::new(60, 100);
+        let algo = FuelGasPriceAlgorithm {
+            _target_profitability: 1.,
+            _max_price_change_percentage: f32::MAX,
+        };
+        // when
+        let new_gas_price = algo.calculate_gas_price(
+            old_gas_price,
+            total_production_reward,
+            total_da_recording_cost,
+            block_fullness,
+        );
+
+        // then
+        assert!(new_gas_price > old_gas_price);
     }
 
     #[test]
     fn calculate_gas_price__below_50_but_not_profitable_increase_gas_price() {
-        todo!()
+        // given
+        let old_gas_price = 444;
+        let total_production_reward = 100;
+        let total_da_recording_cost = total_production_reward + 1;
+        // 40% full
+        let block_fullness = BlockFullness::new(40, 100);
+        let algo = FuelGasPriceAlgorithm {
+            _target_profitability: 1.,
+            _max_price_change_percentage: f32::MAX,
+        };
+
+        // when
+        let new_gas_price = algo.calculate_gas_price(
+            old_gas_price,
+            total_production_reward,
+            total_da_recording_cost,
+            block_fullness,
+        );
+
+        // then
+        assert!(new_gas_price > old_gas_price);
     }
 
     #[test]
     fn calculate_gas_price__below_50_and_profitable_decrease_gas_price() {
-        todo!()
+        // given
+        let old_gas_price = 444;
+        let total_production_reward = 100;
+        let total_da_recording_cost = total_production_reward - 1;
+        // 40% full
+        let block_fullness = BlockFullness::new(40, 100);
+        let algo = FuelGasPriceAlgorithm {
+            _target_profitability: 1.,
+            _max_price_change_percentage: f32::MAX,
+        };
+
+        // when
+        let new_gas_price = algo.calculate_gas_price(
+            old_gas_price,
+            total_production_reward,
+            total_da_recording_cost,
+            block_fullness,
+        );
+
+        // then
+        assert!(new_gas_price < old_gas_price);
     }
 }
