@@ -789,11 +789,13 @@ mod tests {
         let da_block_height = 14u64.into();
         let consensus_parameters_version = 321u32;
         let state_transition_version = 123u32;
+        let block_hash = Bytes32::default();
         let block_config = LastBlockConfig {
             block_height,
             da_block_height,
             consensus_parameters_version,
             state_transition_version,
+            block_hash,
         };
         let writer = writer(temp_dir.path());
 
