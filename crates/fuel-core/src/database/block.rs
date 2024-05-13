@@ -118,7 +118,7 @@ impl Database {
         let proof_index = message_merkle_metadata
             .version()
             .checked_sub(1)
-            .ok_or(anyhow::anyhow!("The count of leafs - messages is zero"))?;
+            .ok_or(anyhow::anyhow!("The count of leaves - messages is zero"))?;
         let (_, proof_set) = tree
             .prove(proof_index)
             .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;

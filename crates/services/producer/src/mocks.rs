@@ -66,8 +66,8 @@ impl Relayer for MockRelayer {
         &self,
         _height: &DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
-        let heighest = self.latest_block_height;
-        Ok(heighest)
+        let highest = self.latest_block_height;
+        Ok(highest)
     }
 
     async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {

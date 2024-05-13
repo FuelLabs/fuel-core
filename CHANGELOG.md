@@ -188,11 +188,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
       - The `StatisticTable` table lives in the off-chain worker.
       - Removed duplication of the `Database` from the `dap::ConcreteStorage` since it is already available from the VM.
       - The executor return only produced `Changes` instead of the storage transaction, which simplifies the interaction between modules and port definition.
-      - The logic related to the iteration over the storage is moved to the `fuel-core-storage` crate and is now reusable. It provides an `interator` method that duplicates the logic from `MemoryStore` on iterating over the `BTreeMap` and methods like `iter_all`, `iter_all_by_prefix`, etc. It was done in a separate revivable [commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/5b9bd78320e6f36d0650ec05698f12f7d1b3c7c9).
+      - The logic related to the iteration over the storage is moved to the `fuel-core-storage` crate and is now reusable. It provides an `iterator` method that duplicates the logic from `MemoryStore` on iterating over the `BTreeMap` and methods like `iter_all`, `iter_all_by_prefix`, etc. It was done in a separate revivable [commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/5b9bd78320e6f36d0650ec05698f12f7d1b3c7c9).
       - The `MemoryTransactionView` is fully replaced by the `StorageTransactionInner`.
       - Removed `flush` method from the `Database` since it is not needed after https://github.com/FuelLabs/fuel-core/pull/1664.
 
-- [#1693](https://github.com/FuelLabs/fuel-core/pull/1693): The change separates the initial chain state from the chain config and stores them in separate files when generating a snapshot. The state snapshot can be generated in a new format where parquet is used for compression and indexing while postcard is used for encoding. This enables importing in a stream like fashion which reduces memory requirements. Json encoding is still supported to enable easy manual setup. However, parquet is prefered for large state files.
+- [#1693](https://github.com/FuelLabs/fuel-core/pull/1693): The change separates the initial chain state from the chain config and stores them in separate files when generating a snapshot. The state snapshot can be generated in a new format where parquet is used for compression and indexing while postcard is used for encoding. This enables importing in a stream like fashion which reduces memory requirements. Json encoding is still supported to enable easy manual setup. However, parquet is preferred for large state files.
 
   ### Snapshot command
 
@@ -208,7 +208,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
   Each item group in the genesis process is handled by a separate worker, allowing for parallel loading. Workers stream file contents in batches.
 
-  A database transaction is committed every time an item group is succesfully loaded. Resumability is achieved by recording the last loaded group index within the same db tx. If loading is aborted, the remaining workers are shutdown. Upon restart, workers resume from the last processed group.
+  A database transaction is committed every time an item group is successfully loaded. Resumability is achieved by recording the last loaded group index within the same db tx. If loading is aborted, the remaining workers are shutdown. Upon restart, workers resume from the last processed group.
 
   ### Contract States and Balances
 
