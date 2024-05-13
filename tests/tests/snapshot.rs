@@ -13,6 +13,7 @@ use fuel_core::{
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
+    Rng,
     SeedableRng,
 };
 
@@ -20,6 +21,7 @@ use rand::{
 async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
     let db = CombinedDatabase::default();
+    let block_hash = rng.gen();
 
     // setup config
     let starting_state = StateConfig {
@@ -28,6 +30,7 @@ async fn loads_snapshot() {
             da_block_height: DaBlockHeight(u64::MAX),
             consensus_parameters_version: u32::MAX - 1,
             state_transition_version: u32::MAX - 1,
+            block_hash,
         }),
         ..StateConfig::randomize(&mut rng)
     };
@@ -45,6 +48,7 @@ async fn loads_snapshot() {
         da_block_height: DaBlockHeight(u64::MAX),
         consensus_parameters_version: u32::MAX,
         state_transition_version: u32::MAX,
+        block_hash,
     });
 
     // initial state
