@@ -29,7 +29,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::contract::ContractUtxoInfo,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
 };
 use itertools::Itertools;
 use serde::{
@@ -61,7 +64,6 @@ use fuel_core_types::blockchain::header::{
 #[cfg(feature = "test-helpers")]
 use fuel_core_types::{
     fuel_types::Address,
-    fuel_types::Bytes32,
     fuel_vm::SecretKey,
 };
 
