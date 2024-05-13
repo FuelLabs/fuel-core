@@ -473,8 +473,6 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     // Then
     assert_eq!(nonces.len(), 1);
 
-    // Get the message id from the receipts.
-
     for nonce in nonces {
         let result = core
             .client
