@@ -37,28 +37,33 @@ fn main() {
     let algo = Algorithm { amount, min };
     let mut gas_price = 100;
     let mut gas_prices = vec![gas_price as i32];
-    let mut profit = vec![0i32];
+    let mut total_profits = vec![0i32];
+    let mut rewards = vec![];
     let mut total_cost = 0;
     let mut total_reward = 0;
     let gas_spent = 200;
     // 50% capacity
     let used = gas_spent;
     let capacity = gas_spent * 2;
-    for cost in da_recording_cost {
+    for cost in da_recording_cost.clone() {
         total_cost += cost;
         gas_price =
             algo.calculate_gas_price(gas_price, total_reward, total_cost, used, capacity);
         gas_prices.push(gas_price as i32);
 
-        let new_gas_reward = gas_price * gas_spent;
-        total_reward += new_gas_reward;
+        let new_reward = gas_price * gas_spent;
+        rewards.push(new_reward);
+        total_reward += new_reward;
         let total_profit = total_reward as i32 - total_cost as i32;
-        profit.push(total_profit as i32);
+        total_profits.push(total_profit);
     }
 
     // Plotting code starts here
     let root = BitMapBackend::new("gas_prices.png", (640, 480)).into_drawing_area();
     root.fill(&WHITE).unwrap();
+
+    let min = *total_profits.iter().min().unwrap();
+    let max = *total_profits.iter().max().unwrap();
 
     let mut chart = ChartBuilder::on(&root)
         .caption("Gas Prices Over Time", ("sans-serif", 50).into_font())
@@ -66,7 +71,7 @@ fn main() {
         .x_label_area_size(40)
         .y_label_area_size(60)
         .right_y_label_area_size(40)
-        .build_cartesian_2d(0..profit.len(), 0..*profit.iter().max().unwrap())
+        .build_cartesian_2d(0..total_profits.len(), min..max)
         .unwrap()
         .set_secondary_coord(0..gas_prices.len(), 0..*gas_prices.iter().max().unwrap());
 
@@ -83,18 +88,37 @@ fn main() {
         .draw()
         .unwrap();
 
-    const PRICE_COLOR: RGBColor = RED;
+    const PRICE_COLOR: RGBColor = BLACK;
     const PROFIT_COLOR: RGBColor = BLUE;
+    const REWARD_COLOR: RGBColor = GREEN;
+    const COST_COLOR: RGBColor = RED;
 
-    // Add chart for profits
     chart
         .draw_series(LineSeries::new(
-            profit.iter().enumerate().map(|(x, y)| (x, *y)),
+            total_profits.iter().enumerate().map(|(x, y)| (x, *y)),
             &PROFIT_COLOR,
         ))
         .unwrap()
         .label("Profit")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &PROFIT_COLOR));
+
+    chart
+        .draw_series(LineSeries::new(
+            da_recording_cost.enumerate().map(|(x, y)| (x, y as i32)),
+            &COST_COLOR,
+        ))
+        .unwrap()
+        .label("Cost")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &COST_COLOR));
+
+    chart
+        .draw_series(LineSeries::new(
+            rewards.iter().enumerate().map(|(x, y)| (x, *y as i32)),
+            &REWARD_COLOR,
+        ))
+        .unwrap()
+        .label("Reward")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &REWARD_COLOR));
 
     chart
         .draw_secondary_series(LineSeries::new(
