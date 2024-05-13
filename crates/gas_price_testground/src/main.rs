@@ -31,8 +31,9 @@ fn main() {
     let min = 10;
     let algo = Algorithm { amount, min };
 
+    let simulation_size = 1_000;
     // Run simulation
-    let da_recording_cost = (0u32..1000)
+    let da_recording_cost = (0u32..simulation_size)
         .map(|val| f64::try_from(val).unwrap() / 100.)
         .map(f64::sin)
         .map(|x| x * 10_000. + 20_000.)
