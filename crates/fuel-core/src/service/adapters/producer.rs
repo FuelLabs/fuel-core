@@ -58,7 +58,6 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            ExecutionTypes,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             UncommittedResult,
@@ -87,18 +86,17 @@ impl TxPool for TxPoolAdapter {
     }
 }
 
-impl fuel_core_producer::ports::Executor<TransactionsSource> for ExecutorAdapter {
-    fn execute_without_commit(
+impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAdapter {
+    fn produce_without_commit(
         &self,
         component: Components<TransactionsSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        self.executor
-            .execute_without_commit_with_source(ExecutionTypes::Production(component))
+        self.executor.produce_without_commit_with_source(component)
     }
 }
 
-impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
-    fn execute_without_commit(
+impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdapter {
+    fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
@@ -110,9 +108,9 @@ impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
             gas_price: component.gas_price,
             coinbase_recipient: component.coinbase_recipient,
         };
-        let block = ExecutionTypes::Production(new_components);
 
-        self.executor.execute_without_commit_with_source(block)
+        self.executor
+            .produce_without_commit_with_source(new_components)
     }
 }
 

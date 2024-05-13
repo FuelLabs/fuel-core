@@ -104,7 +104,7 @@ where
         tx_source: impl FnOnce(BlockHeight) -> TxSource,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
-        Executor: ports::Executor<TxSource> + 'static,
+        Executor: ports::BlockProducer<TxSource> + 'static,
     {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
@@ -138,7 +138,7 @@ where
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
             .executor
-            .execute_without_commit(component)
+            .produce_without_commit(component)
             .map_err(Into::<anyhow::Error>::into)
             .context(context_string)?;
 
@@ -153,7 +153,7 @@ where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
-    Executor: ports::Executor<TxSource> + 'static,
+    Executor: ports::BlockProducer<TxSource> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
 {
@@ -175,7 +175,7 @@ impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
-    Executor: ports::Executor<Vec<Transaction>> + 'static,
+    Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
 {

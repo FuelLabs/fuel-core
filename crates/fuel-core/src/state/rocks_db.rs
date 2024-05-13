@@ -83,7 +83,7 @@ impl ShallowTempDir {
         Self { path }
     }
 
-    /// Returns the path of teh directory.
+    /// Returns the path of the directory.
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
@@ -220,13 +220,7 @@ where
             opts.set_row_cache(&cache);
         }
 
-        let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_else(|err| {
-            tracing::error!(
-                "Couldn't get the list of cfs: {}. Returning an empty list",
-                err
-            );
-            vec![]
-        });
+        let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_default();
 
         let mut cf_descriptors_to_open = vec![];
         let mut cf_descriptors_to_create = vec![];

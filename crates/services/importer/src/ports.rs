@@ -35,7 +35,7 @@ use fuel_core_types::{
     },
     services::executor::{
         Result as ExecutorResult,
-        UncommittedResult,
+        UncommittedValidationResult,
     },
 };
 
@@ -44,7 +44,10 @@ use fuel_core_types::{
 pub trait Validator: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
-    fn validate(&self, block: Block) -> ExecutorResult<UncommittedResult<Changes>>;
+    fn validate(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<UncommittedValidationResult<Changes>>;
 }
 
 /// The trait indicates that the type supports storage transactions.

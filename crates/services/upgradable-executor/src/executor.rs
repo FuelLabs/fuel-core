@@ -1,7 +1,7 @@
 use crate::config::Config;
 use fuel_core_executor::{
     executor::{
-        ExecutionBlockWithSource,
+        ExecutionInstance,
         ExecutionOptions,
         OnceTransactionsSource,
     },
@@ -20,7 +20,11 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::Block,
+        header::StateTransitionBytecodeVersion,
+        primitives::DaBlockHeight,
+    },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::{
@@ -28,7 +32,6 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             ExecutionResult,
-            ExecutionTypes,
             Result as ExecutorResult,
             TransactionExecutionStatus,
         },
@@ -47,12 +50,11 @@ use fuel_core_storage::{
     },
     StorageAsRef,
 };
-use fuel_core_types::blockchain::{
-    block::Block,
-    header::StateTransitionBytecodeVersion,
-};
+#[cfg(any(test, feature = "test-helpers"))]
+use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
+use fuel_core_types::services::executor::ValidationResult;
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -195,11 +197,11 @@ where
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
-    pub fn execute_and_commit(
+    pub fn produce_and_commit(
         &mut self,
-        block: fuel_core_types::services::executor::ExecutionBlock,
+        block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
-        let (result, changes) = self.execute_without_commit(block)?.into();
+        let (result, changes) = self.produce_without_commit(block)?.into();
 
         self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
@@ -209,15 +211,15 @@ where
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn validate_and_commit(
         &mut self,
-        block: Block,
-    ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
-        let (result, changes) = self.validate_without_commit(block)?.into();
-
+        block: &Block,
+    ) -> fuel_core_types::services::executor::Result<ValidationResult> {
+        let (result, changes) = self.validate(block)?.into();
         self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
     }
 }
 
+#[cfg(any(test, feature = "test-helpers"))]
 impl<S, R> Executor<S, R>
 where
     S: AtomicView<Height = BlockHeight>,
@@ -225,48 +227,43 @@ where
     R: AtomicView<Height = DaBlockHeight>,
     R::View: RelayerPort + Send + Sync + 'static,
 {
-    #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and returns the result of the execution with storage changes.
-    pub fn execute_without_commit(
+    pub fn produce_without_commit(
         &self,
-        block: fuel_core_types::services::executor::ExecutionBlock,
+        block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        self.execute_without_commit_with_coinbase(block, Default::default(), 0)
+        self.produce_without_commit_with_coinbase(block, Default::default(), 0)
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
-    /// Executes the block and returns the result of the execution with storage changes.
-    pub fn validate_without_commit(
-        &self,
-        block: Block,
-    ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        let options = self.config.as_ref().into();
-        self.validate_inner(block, options)
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    /// The analog of the [`Self::execute_without_commit`] method,
+    /// The analog of the [`Self::produce_without_commit`] method,
     /// but with the ability to specify the coinbase recipient and the gas price.
-    pub fn execute_without_commit_with_coinbase(
+    pub fn produce_without_commit_with_coinbase(
         &self,
-        block: fuel_core_types::services::executor::ExecutionBlock,
+        block: PartialFuelBlock,
         coinbase_recipient: fuel_core_types::fuel_types::ContractId,
         gas_price: u64,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        let component = match block {
-            ExecutionTypes::DryRun(_) => {
-                panic!("It is not possible to commit the dry run result");
-            }
-            ExecutionTypes::Production(block) => ExecutionTypes::Production(Components {
-                header_to_produce: block.header,
-                transactions_source: OnceTransactionsSource::new(block.transactions),
-                coinbase_recipient,
-                gas_price,
-            }),
+        let component = Components {
+            header_to_produce: block.header,
+            transactions_source: OnceTransactionsSource::new(block.transactions),
+            coinbase_recipient,
+            gas_price,
         };
 
         let options = self.config.as_ref().into();
-        self.execute_inner(component, options)
+        self.produce_inner(component, options, false)
+    }
+
+    /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
+    pub fn dry_run_without_commit_with_source<TxSource>(
+        &self,
+        block: Components<TxSource>,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let options = self.config.as_ref().into();
+        self.produce_inner(block, options, true)
     }
 }
 
@@ -277,16 +274,16 @@ where
     R: AtomicView<Height = DaBlockHeight>,
     R::View: RelayerPort + Send + Sync + 'static,
 {
-    /// Executes the block and returns the result of the execution without committing the changes.
-    pub fn execute_without_commit_with_source<TxSource>(
+    /// Produces the block and returns the result of the execution without committing the changes.
+    pub fn produce_without_commit_with_source<TxSource>(
         &self,
-        block: ExecutionBlockWithSource<TxSource>,
+        components: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.execute_inner(block, options)
+        self.produce_inner(components, options, false)
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -318,9 +315,7 @@ where
             skipped_transactions,
             tx_status,
             ..
-        } = self
-            .execute_inner(ExecutionTypes::DryRun(component), options)?
-            .into_result();
+        } = self.produce_inner(component, options, true)?.into_result();
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
@@ -332,53 +327,54 @@ where
 
     pub fn validate(
         &self,
-        block: Block,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+        block: &Block,
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let options = self.config.as_ref().into();
         self.validate_inner(block, options)
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn execute_inner<TxSource>(
+    fn produce_inner<TxSource>(
         &self,
-        block: ExecutionBlockWithSource<TxSource>,
+        block: Components<TxSource>,
         options: ExecutionOptions,
+        dry_run: bool,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let block_version = block.state_transition_version();
+        let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
-                ExecutionStrategy::Native => self.native_execute_inner(block, options),
+                ExecutionStrategy::Native => {
+                    self.native_produce_inner(block, options, dry_run)
+                }
                 ExecutionStrategy::Wasm { module } => {
-                    self.wasm_execute_inner(module, block, options)
+                    self.wasm_produce_inner(module, block, options, dry_run)
                 }
             }
         } else {
             let module = self.get_module(block_version)?;
-            tracing::warn!(
-                "The block version({}) is different from the native executor version({}). \
-                The WASM executor will be used.", block_version, Self::VERSION
-            );
-            self.wasm_execute_inner(&module, block, options)
+            Self::trace_block_version_warning(block_version);
+            self.wasm_produce_inner(&module, block, options, dry_run)
         }
     }
 
     #[cfg(not(feature = "wasm-executor"))]
-    fn execute_inner<TxSource>(
+    fn produce_inner<TxSource>(
         &self,
-        block: ExecutionBlockWithSource<TxSource>,
+        block: Components<TxSource>,
         options: ExecutionOptions,
+        dry_run: bool,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let block_version = block.state_transition_version();
+        let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
-            self.native_execute_inner(block, options)
+            self.native_produce_inner(block, options, dry_run)
         } else {
             Err(ExecutorError::Other(format!(
                 "Not supported version `{block_version}`. Expected version is `{}`",
@@ -390,9 +386,9 @@ where
     #[cfg(feature = "wasm-executor")]
     fn validate_inner(
         &self,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let block_version = block.header().state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
@@ -404,20 +400,27 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            tracing::warn!(
-                "The block version({}) is different from the native executor version({}). \
-                The WASM executor will be used.", block_version, Self::VERSION
-            );
+            Self::trace_block_version_warning(block_version);
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
         }
+    }
+
+    #[cfg(feature = "wasm-executor")]
+    fn trace_block_version_warning(block_version: StateTransitionBytecodeVersion) {
+        tracing::warn!(
+            "The block version({}) is different from the native executor version({}). \
+                The WASM executor will be used.",
+            block_version,
+            Self::VERSION
+        );
     }
 
     #[cfg(not(feature = "wasm-executor"))]
     fn validate_inner(
         &self,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let block_version = block.header().state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
@@ -431,42 +434,44 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn wasm_execute_inner<TxSource>(
+    fn wasm_produce_inner<TxSource>(
         &self,
         module: &wasmtime::Module,
-        block: ExecutionBlockWithSource<TxSource>,
+        component: Components<TxSource>,
         options: ExecutionOptions,
+        dry_run: bool,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let mut source = None;
-        let block = block.map_p(|component| {
-            let Components {
-                header_to_produce,
-                transactions_source,
-                coinbase_recipient,
-                gas_price,
-            } = component;
+        let Components {
+            header_to_produce,
+            transactions_source,
+            coinbase_recipient,
+            gas_price,
+        } = component;
 
-            source = Some(transactions_source);
+        let source = Some(transactions_source);
 
-            Components {
-                header_to_produce,
-                transactions_source: (),
-                coinbase_recipient,
-                gas_price,
-            }
-        });
+        let block = Components {
+            header_to_produce,
+            transactions_source: (),
+            coinbase_recipient,
+            gas_price,
+        };
 
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
 
-        let instance = crate::instance::Instance::new(&self.engine)
+        let instance_without_input = crate::instance::Instance::new(&self.engine)
             .add_source(source)?
             .add_storage(storage)?
-            .add_relayer(relayer)?
-            .add_execution_input_data(block, options)?;
+            .add_relayer(relayer)?;
+        let instance = if dry_run {
+            instance_without_input.add_dry_run_input_data(block, options)?
+        } else {
+            instance_without_input.add_production_input_data(block, options)?
+        };
 
         let output = instance.run(module)?;
 
@@ -479,9 +484,9 @@ where
     fn wasm_validate_inner(
         &self,
         module: &wasmtime::Module,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
 
@@ -494,43 +499,46 @@ where
         let output = instance.run(module)?;
 
         match output {
-            fuel_core_wasm_executor::utils::ReturnType::V1(result) => result,
+            fuel_core_wasm_executor::utils::ReturnType::V1(result) => {
+                Ok(result?.into_validation_result())
+            }
         }
     }
 
-    fn native_execute_inner<TxSource>(
+    fn native_produce_inner<TxSource>(
         &self,
-        block: ExecutionBlockWithSource<TxSource>,
+        block: Components<TxSource>,
         options: ExecutionOptions,
+        dry_run: bool,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
-
-        let instance = fuel_core_executor::executor::ExecutionInstance {
-            relayer,
-            database: storage,
-            options,
-        };
-        instance.execute_without_commit(block)
+        let instance = self.new_native_executor_instance(options);
+        instance.produce_without_commit(block, dry_run)
     }
 
     fn native_validate_inner(
         &self,
-        block: Block,
+        block: &Block,
         options: ExecutionOptions,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
+        let instance = self.new_native_executor_instance(options);
+        instance.validate_without_commit(block)
+    }
 
-        let instance = fuel_core_executor::executor::ExecutionInstance {
+    fn new_native_executor_instance(
+        &self,
+        options: ExecutionOptions,
+    ) -> ExecutionInstance<<R as AtomicView>::View, <S as AtomicView>::View> {
+        let relayer = self.relayer_view_provider.latest_view();
+        let storage = self.storage_view_provider.latest_view();
+
+        ExecutionInstance {
             relayer,
             database: storage,
             options,
-        };
-        instance.validate_without_commit(block)
+        }
     }
 
     /// Returns the compiled WASM module of the state transition function.
@@ -607,6 +615,7 @@ mod test {
         fuel_tx::{
             AssetId,
             Bytes32,
+            Transaction,
         },
         services::relayer::Event,
         tai64::Tai64,
@@ -793,7 +802,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -808,7 +817,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -824,7 +833,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
@@ -840,7 +849,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
@@ -879,7 +888,7 @@ mod test {
             let block = valid_block(next_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -894,7 +903,7 @@ mod test {
             let block = valid_block(next_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -913,7 +922,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor.validate_without_commit(block.clone()).map(|_| ());
+                let result = executor.validate(&block).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);
@@ -933,7 +942,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor.validate_without_commit(block.clone()).map(|_| ());
+                let result = executor.validate(&block).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);

@@ -44,7 +44,7 @@ use fuel_core_types::{
     },
     services::executor::{
         Result as ExecutorResult,
-        UncommittedResult as UncommittedExecutionResult,
+        UncommittedValidationResult,
     },
 };
 use std::sync::Arc;
@@ -103,8 +103,8 @@ impl ImporterDatabase for Database {
 impl Validator for ExecutorAdapter {
     fn validate(
         &self,
-        block: Block,
-    ) -> ExecutorResult<UncommittedExecutionResult<Changes>> {
+        block: &Block,
+    ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         self.executor.validate(block)
     }
 }

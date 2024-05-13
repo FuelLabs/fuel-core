@@ -2,11 +2,10 @@
 
 use crate::{
     blockchain::header::{
+        ConsensusParametersVersion,
         PartialBlockHeader,
-        StateTransitionBytecodeVersion,
     },
     fuel_tx::ContractId,
-    services::executor::ExecutionTypes,
 };
 
 /// The components required to produce a block.
@@ -25,20 +24,11 @@ pub struct Components<Source> {
     pub gas_price: u64,
 }
 
-impl<TxSource> ExecutionTypes<Components<TxSource>> {
-    /// Returns the state transition bytecode version of the block.
-    pub fn state_transition_version(&self) -> StateTransitionBytecodeVersion {
-        match self {
-            ExecutionTypes::DryRun(component) => {
-                component
-                    .header_to_produce
-                    .state_transition_bytecode_version
-            }
-            ExecutionTypes::Production(component) => {
-                component
-                    .header_to_produce
-                    .state_transition_bytecode_version
-            }
-        }
+impl<T> Components<T> {
+    /// Getter for the `ConsensusParametersVersion` of the future block.
+    pub fn consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        self.header_to_produce
+            .application
+            .consensus_parameters_version
     }
 }
