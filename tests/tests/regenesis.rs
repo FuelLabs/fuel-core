@@ -31,7 +31,7 @@ use fuel_core_types::{
         Hasher,
         PublicKey,
     },
-    fuel_merkle,
+    fuel_merkle::binary,
     fuel_tx::{
         input::message::compute_message_id,
         *,
@@ -440,14 +440,9 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
 
     let tx_id = tx.id(&Default::default());
 
-    let status = core.client.submit_and_await_commit(&tx).await.unwrap();
-    let block_height = match status {
-        TransactionStatus::Success { block_height, .. } => block_height,
-        _ => panic!("Failed to submit transaction"),
-    };
-    let block_height = block_height
-        .succ()
-        .expect("Unable to increment block height");
+    core.client.submit_and_await_commit(&tx).await.unwrap();
+
+    let block_height = core.client.produce_blocks(1, None).await.unwrap();
 
     // When
     let db_dir = core.kill().await;
@@ -470,17 +465,15 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
         snapshot_dir.path().to_str().unwrap(),
     ])
     .await?;
+
     let receipts = core.client.receipts(&tx_id).await.unwrap().unwrap();
+    let message_ids: Vec<_> = receipts.iter().filter_map(|r| r.message_id()).collect();
     let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
 
     // Then
     assert_eq!(nonces.len(), 1);
 
-    // Get the receipts from the contract call.
-    let receipts = core.client.receipts(&tx_id).await.unwrap().unwrap();
-
     // Get the message id from the receipts.
-    let message_ids: Vec<_> = receipts.iter().filter_map(|r| r.message_id()).collect();
 
     for nonce in nonces {
         let result = core
@@ -516,24 +509,22 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             .message_proof
             .proof_set
             .iter()
-            .cloned()
-            .map(Bytes32::from)
+            .map(|bytes| *bytes.deref())
             .collect();
-        assert!(verify_merkle(
-            result.message_block_header.message_outbox_root,
+        assert!(binary::verify(
+            &*result.message_block_header.message_outbox_root,
             &generated_message_id,
-            message_proof_index,
             &message_proof_set,
+            message_proof_index,
             result.message_block_header.message_receipt_count as u64,
         ));
 
         // Generate a proof to compare
-        let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
+        let mut tree = binary::in_memory::MerkleTree::new();
         for id in &message_ids {
             tree.push(id.as_ref());
         }
         let (expected_root, expected_set) = tree.prove(message_proof_index).unwrap();
-        let expected_set: Vec<_> = expected_set.into_iter().map(Bytes32::from).collect();
 
         assert_eq!(message_proof_set, expected_set);
 
@@ -549,29 +540,17 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             .block_proof
             .proof_set
             .iter()
-            .cloned()
-            .map(Bytes32::from)
+            .map(|bytes| *bytes.deref())
             .collect();
         let blocks_count = result.commit_block_header.height;
-        assert!(verify_merkle(
-            result.commit_block_header.prev_root,
+        assert!(binary::verify(
+            &*result.commit_block_header.prev_root,
             &message_block_id,
-            block_proof_index,
             &block_proof_set,
+            block_proof_index,
             blocks_count as u64,
         ));
     }
 
     Ok(())
-}
-
-fn verify_merkle<D: AsRef<[u8]>>(
-    root: Bytes32,
-    data: &D,
-    index: u64,
-    set: &[Bytes32],
-    leaf_count: u64,
-) -> bool {
-    let set: Vec<_> = set.iter().map(|bytes| *bytes.deref()).collect();
-    fuel_merkle::binary::verify(root.deref(), data, &set, index, leaf_count)
 }
