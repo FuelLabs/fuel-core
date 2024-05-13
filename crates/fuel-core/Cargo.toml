@@ -10,6 +10,10 @@ name = "fuel-core"
 repository = { workspace = true }
 version = { workspace = true }
 
+[[bench]]
+name = "gas_price_algo"
+harness = false
+
 [dependencies]
 anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
@@ -62,6 +66,11 @@ uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
+criterion = { version = "0.5", features = [
+  "html_reports",
+  "async",
+  "async_tokio",
+]}
 fuel-core = { path = ".", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
@@ -72,6 +81,7 @@ fuel-core-upgradable-executor = { workspace = true, features = [
   "test-helpers",
 ] }
 mockall = { workspace = true }
+plotters = "0.3.5"
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }

@@ -5,8 +5,17 @@ use crate::service::adapters::fuel_gas_price_provider::ports::{
 
 // TODO: Don't use floats 🤢
 pub struct FuelGasPriceAlgorithm {
-    _target_profitability: f32,
-    _max_price_change_percentage: f32,
+    target_profitability: f32,
+    max_price_change_percentage: f32,
+}
+
+impl FuelGasPriceAlgorithm {
+    pub fn new(target_profitability: f32, max_price_change_percentage: f32) -> Self {
+        Self {
+            target_profitability,
+            max_price_change_percentage,
+        }
+    }
 }
 
 impl GasPriceAlgorithm for FuelGasPriceAlgorithm {
@@ -38,6 +47,8 @@ mod tests {
     #![allow(non_snake_case)]
     use super::*;
 
+    use criterion as _;
+
     #[test]
     fn calculate_gas_price__above_50_percent_increases_gas_price() {
         // given
@@ -47,8 +58,8 @@ mod tests {
         // 60% full
         let block_fullness = BlockFullness::new(60, 100);
         let algo = FuelGasPriceAlgorithm {
-            _target_profitability: 1.,
-            _max_price_change_percentage: f32::MAX,
+            target_profitability: 1.,
+            max_price_change_percentage: f32::MAX,
         };
         // when
         let new_gas_price = algo.calculate_gas_price(
@@ -71,8 +82,8 @@ mod tests {
         // 40% full
         let block_fullness = BlockFullness::new(40, 100);
         let algo = FuelGasPriceAlgorithm {
-            _target_profitability: 1.,
-            _max_price_change_percentage: f32::MAX,
+            target_profitability: 1.,
+            max_price_change_percentage: f32::MAX,
         };
 
         // when
@@ -96,8 +107,8 @@ mod tests {
         // 40% full
         let block_fullness = BlockFullness::new(40, 100);
         let algo = FuelGasPriceAlgorithm {
-            _target_profitability: 1.,
-            _max_price_change_percentage: f32::MAX,
+            target_profitability: 1.,
+            max_price_change_percentage: f32::MAX,
         };
 
         // when
