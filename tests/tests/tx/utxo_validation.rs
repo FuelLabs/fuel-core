@@ -171,7 +171,7 @@ async fn dry_run_override_utxo_validation() {
         .unwrap();
     let log = tx_statuses
         .last()
-        .expect("Nonempty reponse")
+        .expect("Nonempty response")
         .result
         .receipts();
     assert_eq!(2, log.len());

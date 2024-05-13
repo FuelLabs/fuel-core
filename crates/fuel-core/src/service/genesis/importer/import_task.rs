@@ -440,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn succesfully_processed_batch_updates_the_genesis_progress() {
+    fn successfully_processed_batch_updates_the_genesis_progress() {
         // given
         let data = TestData::new(2);
         let db = GenesisDatabase::default();

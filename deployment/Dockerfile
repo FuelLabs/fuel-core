@@ -35,7 +35,7 @@ ENV BUILD_FEATURES=$FEATURES
 COPY --from=planner /build/recipe.json recipe.json
 RUN echo $CARGO_PROFILE_RELEASE_DEBUG
 RUN echo $BUILD_FEATURES
-# Build our project dependecies, not our application!
+# Build our project dependencies, not our application!
 RUN xx-cargo chef cook --release --no-default-features --features "${BUILD_FEATURES}" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
