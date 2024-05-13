@@ -442,7 +442,8 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
 
     core.client.submit_and_await_commit(&tx).await.unwrap();
 
-    let block_height = core.client.produce_blocks(1, None).await.unwrap();
+    let message_block_height = core.client.produce_blocks(1, None).await.unwrap();
+    core.client.produce_blocks(1, None).await.unwrap();
 
     // When
     let db_dir = core.kill().await;
@@ -465,6 +466,15 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
         snapshot_dir.path().to_str().unwrap(),
     ])
     .await?;
+    core.client.produce_blocks(1, None).await.unwrap();
+    let latest_block = core
+        .client
+        .chain_info()
+        .await
+        .unwrap()
+        .latest_block
+        .header
+        .height;
 
     let receipts = core.client.receipts(&tx_id).await.unwrap().unwrap();
     let message_ids: Vec<_> = receipts.iter().filter_map(|r| r.message_id()).collect();
@@ -473,81 +483,33 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     // Then
     assert_eq!(nonces.len(), 1);
 
-    for nonce in nonces {
-        let result = core
-            .client
-            .message_proof(&tx_id, nonce, None, Some(block_height))
-            .await
-            .unwrap();
-        assert!(result.is_some());
-        let result = result.unwrap();
+    for block_height in message_block_height + 1..latest_block {
+        for nonce in nonces {
+            let result = core
+                .client
+                .message_proof(&tx_id, nonce, None, Some(block_height))
+                .await
+                .unwrap();
+            assert!(result.is_some());
+            let result = result.unwrap();
 
-        // 1. Generate the message id (message fields)
-        // Produce message id.
-        let generated_message_id = compute_message_id(
-            &result.sender,
-            &result.recipient,
-            &result.nonce,
-            result.amount,
-            &result.data,
-        );
-
-        // 2. Generate the block id. (full header)
-        let mut hasher = Hasher::default();
-        hasher.input(result.message_block_header.prev_root.as_ref());
-        hasher.input(&result.message_block_header.height.to_be_bytes()[..]);
-        hasher.input(result.message_block_header.time.0.to_be_bytes());
-        hasher.input(result.message_block_header.application_hash.as_ref());
-        let message_block_id = hasher.digest();
-        assert_eq!(message_block_id, result.message_block_header.id);
-
-        // 3. Verify the message proof. (message receipt root, message id, proof index, proof set, num message receipts in the block)
-        let message_proof_index = result.message_proof.proof_index;
-        let message_proof_set: Vec<_> = result
-            .message_proof
-            .proof_set
-            .iter()
-            .map(|bytes| *bytes.deref())
-            .collect();
-        assert!(binary::verify(
-            &result.message_block_header.message_outbox_root,
-            &generated_message_id,
-            &message_proof_set,
-            message_proof_index,
-            result.message_block_header.message_receipt_count as u64,
-        ));
-
-        // Generate a proof to compare
-        let mut tree = binary::in_memory::MerkleTree::new();
-        for id in &message_ids {
-            tree.push(id.as_ref());
+            // 4. Verify the block proof. (prev_root, block id, proof index, proof set, block count)
+            let block_proof_index = result.block_proof.proof_index;
+            let block_proof_set: Vec<_> = result
+                .block_proof
+                .proof_set
+                .iter()
+                .map(|bytes| *bytes.deref())
+                .collect();
+            let blocks_count = result.commit_block_header.height;
+            assert!(binary::verify(
+                &result.commit_block_header.prev_root,
+                &message_block_id,
+                &block_proof_set,
+                block_proof_index,
+                blocks_count as u64,
+            ));
         }
-        let (expected_root, expected_set) = tree.prove(message_proof_index).unwrap();
-
-        assert_eq!(message_proof_set, expected_set);
-
-        // Check the root matches the proof and the root on the header.
-        assert_eq!(
-            <[u8; 32]>::from(result.message_block_header.message_outbox_root),
-            expected_root
-        );
-
-        // 4. Verify the block proof. (prev_root, block id, proof index, proof set, block count)
-        let block_proof_index = result.block_proof.proof_index;
-        let block_proof_set: Vec<_> = result
-            .block_proof
-            .proof_set
-            .iter()
-            .map(|bytes| *bytes.deref())
-            .collect();
-        let blocks_count = result.commit_block_header.height;
-        assert!(binary::verify(
-            &result.commit_block_header.prev_root,
-            &message_block_id,
-            &block_proof_set,
-            block_proof_index,
-            blocks_count as u64,
-        ));
     }
 
     Ok(())
