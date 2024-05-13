@@ -71,7 +71,7 @@ async fn transaction_with_valid_predicate_is_executed() {
                     .chain_config()
                     .consensus_parameters,
             ),
-            test_pool(),
+            test_pool().get_new(),
         )
         .expect("Predicate check failed");
 

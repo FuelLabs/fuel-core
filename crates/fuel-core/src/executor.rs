@@ -2687,8 +2687,11 @@ mod tests {
             asset_id: Default::default(),
         })
         .finalize();
-        tx.estimate_predicates(&consensus_parameters.clone().into(), test_pool())
-            .unwrap();
+        tx.estimate_predicates(
+            &consensus_parameters.clone().into(),
+            test_pool().get_new(),
+        )
+        .unwrap();
         let db = &mut Database::default();
 
         // insert coin into state

@@ -49,6 +49,10 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::InterpreterParams,
+        pool::{
+            MemoryFromPool,
+            VmPool,
+        },
         state::DebugEval,
         Interpreter,
         InterpreterError,
@@ -74,9 +78,10 @@ pub struct Config {
 
 type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<FrozenDatabase, Script>>,
+    pool: VmPool,
+    vm: HashMap<ID, Interpreter<MemoryFromPool, FrozenDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
 }
 
@@ -133,7 +138,11 @@ impl ConcreteStorage {
             })?;
 
         let interpreter_params = InterpreterParams::new(GAS_PRICE, params.as_ref());
-        let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
+        let mut vm = Interpreter::with_storage(
+            self.pool.get_new(),
+            vm_database,
+            interpreter_params,
+        );
         vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm);
 
@@ -173,7 +182,11 @@ impl ConcreteStorage {
             })?;
 
         let interpreter_params = InterpreterParams::new(GAS_PRICE, params.as_ref());
-        let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
+        let mut vm = Interpreter::with_storage(
+            self.pool.get_new(),
+            vm_database,
+            interpreter_params,
+        );
         vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, "The VM instance was not found")

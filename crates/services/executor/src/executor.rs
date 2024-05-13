@@ -6,7 +6,6 @@ use crate::{
     },
     refs::ContractRef,
 };
-use core::mem;
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -67,8 +66,8 @@ use fuel_core_types::{
             OutputContract,
             TxPointer as TxPointerField,
         },
-        input,
         input::{
+            self,
             coin::{
                 CoinPredicate,
                 CoinSigned,
@@ -117,6 +116,7 @@ use fuel_core_types::{
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
+            Memory,
         },
         pool::VmPool,
         state::StateTransition,
@@ -863,7 +863,7 @@ where
         vm_pool: VmPool,
     ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
         let checked_tx = tx
-            .into_checked(height, consensus_params, vm_pool)
+            .into_checked(height, consensus_params, vm_pool.get_new())
             .map_err(ForcedTransactionFailure::CheckError)?;
         Ok(checked_tx)
     }
@@ -1378,7 +1378,7 @@ where
         checked_tx = checked_tx
             .check_predicates(
                 &CheckPredicateParams::from(&self.consensus_params),
-                self.vm_pool.clone(),
+                self.vm_pool.get_new(),
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
@@ -1437,60 +1437,38 @@ where
         let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
 
         let mut vm = Interpreter::with_storage(
+            self.vm_pool.get_new(),
             vm_db,
             InterpreterParams::new(gas_price, &self.consensus_params),
         );
 
-        // We get memory from the pool and are careful to return it there when done
-        *vm.memory_mut() = self.vm_pool.get_new();
-
-        // This returns the VM memory to the pool to before returning
-        macro_rules! recycling_try {
-            ($expr:expr) => {
-                match $expr {
-                    Ok(val) => val,
-                    Err(e) => {
-                        self.vm_pool.recycle(mem::take(vm.memory_mut()));
-                        return Err(e.into())
-                    }
-                }
-            };
-        }
-
-        let vm_result: StateTransition<_> = recycling_try!(vm
+        let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
             .map_err(|error| ExecutorError::VmExecution {
                 error: error.to_string(),
                 transaction_id: tx_id,
-            }))
-        .into();
+            })?
+            .into();
         let reverted = vm_result.should_revert();
 
         let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
-            recycling_try!(tx.precompute(&self.consensus_params.chain_id()));
+            tx.precompute(&self.consensus_params.chain_id())?;
             debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
         }
 
-        recycling_try!(Self::update_input_used_gas(
-            predicate_gas_used,
-            tx_id,
-            &mut tx
-        ));
+        Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
-        recycling_try!(self.compute_inputs(tx.inputs_mut(), storage_tx));
+        self.compute_inputs(tx.inputs_mut(), storage_tx)?;
 
         // only commit state changes if execution was a success
         if !reverted {
             self.log_backtrace(&vm, &receipts);
-            self.vm_pool.recycle(mem::take(vm.memory_mut()));
             let changes = sub_block_db_commit.into_changes();
             storage_tx.commit_changes(changes)?;
-        } else {
-            self.vm_pool.recycle(mem::take(vm.memory_mut()));
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
@@ -1803,11 +1781,13 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<T, Tx>(
+    fn log_backtrace<M, T, Tx>(
         &self,
-        vm: &Interpreter<VmStorage<T>, Tx>,
+        vm: &Interpreter<M, VmStorage<T>, Tx>,
         receipts: &[Receipt],
-    ) {
+    ) where
+        M: AsRef<Memory>,
+    {
         if self.options.backtrace {
             if let Some(backtrace) = receipts
                 .iter()

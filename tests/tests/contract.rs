@@ -103,7 +103,11 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
             )
             .add_output(output)
             .finalize_as_transaction()
-            .into_checked(Default::default(), &Default::default(), test_pool())
+            .into_checked(
+                Default::default(),
+                &Default::default(),
+                test_pool().get_new(),
+            )
             .expect("Cannot check transaction");
 
         let contract_input = Input::contract(
