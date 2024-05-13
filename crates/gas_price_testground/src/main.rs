@@ -27,14 +27,16 @@ impl Algorithm {
 }
 
 fn main() {
+    let amount = 1;
+    let min = 10;
+    let algo = Algorithm { amount, min };
+
+    // Run simulation
     let da_recording_cost = (0u32..1000)
         .map(|val| f64::try_from(val).unwrap() / 100.)
         .map(f64::sin)
         .map(|x| x * 10_000. + 20_000.)
         .map(|x| x as u64);
-    let amount = 1;
-    let min = 10;
-    let algo = Algorithm { amount, min };
     let mut gas_price = 100;
     let mut gas_prices = vec![gas_price as i32];
     let mut total_profits = vec![0i32];
@@ -47,6 +49,9 @@ fn main() {
     let capacity = gas_spent * 2;
     for cost in da_recording_cost.clone() {
         total_cost += cost;
+        let reward = gas_price * gas_spent;
+        rewards.push(reward);
+        total_reward += reward;
         gas_price =
             algo.calculate_gas_price(gas_price, total_reward, total_cost, used, capacity);
         gas_prices.push(gas_price as i32);
