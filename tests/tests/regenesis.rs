@@ -510,7 +510,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             .map(|bytes| *bytes.deref())
             .collect();
         assert!(binary::verify(
-            &*result.message_block_header.message_outbox_root,
+            &result.message_block_header.message_outbox_root,
             &generated_message_id,
             &message_proof_set,
             message_proof_index,
@@ -542,7 +542,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             .collect();
         let blocks_count = result.commit_block_header.height;
         assert!(binary::verify(
-            &*result.commit_block_header.prev_root,
+            &result.commit_block_header.prev_root,
             &message_block_id,
             &block_proof_set,
             block_proof_index,
