@@ -20,7 +20,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 pub trait BalancesInitializer {
-    /// Initialize the balances of the contract from the all leafs.
+    /// Initialize the balances of the contract from the all leaves.
     /// This method is more performant than inserting balances one by one.
     fn init_contract_balances<S>(
         &mut self,
