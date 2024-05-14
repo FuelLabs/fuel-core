@@ -1,0 +1,6 @@
+[default]
+extend-ignore-identifiers-re = [
+    "TRO",
+    "tro",
+    "Tro",
+]

@@ -20,8 +20,8 @@ pub fn pack_ptr_and_len(ptr: u32, len: u32) -> u64 {
 /// Unpacks an `u64` into the pointer and length.
 pub fn unpack_ptr_and_len(val: u64) -> (u32, u32) {
     let ptr = u32::try_from(val & (u32::MAX as u64))
-        .expect("It ony contains first 32 bytes; qed");
-    let len = u32::try_from(val >> 32).expect("It ony contains first 32 bytes; qed");
+        .expect("It only contains first 32 bytes; qed");
+    let len = u32::try_from(val >> 32).expect("It only contains first 32 bytes; qed");
 
     (ptr, len)
 }
