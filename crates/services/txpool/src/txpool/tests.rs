@@ -43,7 +43,7 @@ use fuel_core_types::{
             CheckError,
             Checked,
         },
-        pool::test_pool,
+        pool::DummyPool,
     },
 };
 use std::{
@@ -73,7 +73,7 @@ async fn check_unwrap_tx_with_gas_price(
         config.utxo_validation,
         &ConsensusParameters::default(),
         &gas_price_provider,
-        test_pool(),
+        DummyPool,
     )
     .await
     .expect("Transaction should be checked")
@@ -99,7 +99,7 @@ async fn check_tx_with_gas_price(
         config.utxo_validation,
         &ConsensusParameters::default(),
         &gas_price_provider,
-        test_pool(),
+        DummyPool,
     )
     .await
 }
@@ -1194,7 +1194,7 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
             vec![op::jmp(RegId::ZERO)].into_iter().collect(),
             None,
         )
-        .into_estimated(&consensus_parameters, test_pool());
+        .into_estimated(&consensus_parameters, DummyPool);
 
     let tx = TransactionBuilder::script(vec![], vec![])
         .script_gas_limit(GAS_LIMIT)

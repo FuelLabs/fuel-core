@@ -17,6 +17,7 @@ use crate::{
     TxPool,
 };
 use anyhow::anyhow;
+use fuel_core_executor::vm_pool::SharedVmMemoryPool;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -35,7 +36,6 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
-    fuel_vm::pool::VmPool,
     services::{
         block_importer::SharedImportResult,
         p2p::{
@@ -128,7 +128,7 @@ pub struct SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> {
     current_height: Arc<ParkingMutex<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
-    vm_pool: VmPool,
+    vm_pool: SharedVmMemoryPool,
 }
 
 impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> Clone
@@ -493,7 +493,7 @@ pub fn new_service<P2P, Importer, ViewProvider, GasPriceProvider, ConsensusProvi
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
-    vm_pool: VmPool,
+    vm_pool: SharedVmMemoryPool,
 ) -> Service<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     Importer: BlockImporter,

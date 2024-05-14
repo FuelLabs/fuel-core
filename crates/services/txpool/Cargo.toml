@@ -17,6 +17,7 @@ fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+fuel-core-executor = { workspace = true }
 futures = { workspace = true }
 mockall = { workspace = true, optional = true }
 parking_lot = { workspace = true }

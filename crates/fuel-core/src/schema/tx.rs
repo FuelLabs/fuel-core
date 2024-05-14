@@ -35,6 +35,7 @@ use async_graphql::{
     Object,
     Subscription,
 };
+use fuel_core_executor::vm_pool::SharedVmMemoryPool;
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
@@ -52,12 +53,9 @@ use fuel_core_types::{
     },
     fuel_types,
     fuel_types::canonical::Deserialize,
-    fuel_vm::{
-        checked_transaction::{
-            CheckPredicateParams,
-            EstimatePredicates,
-        },
-        pool::VmPool,
+    fuel_vm::checked_transaction::{
+        CheckPredicateParams,
+        EstimatePredicates,
     },
     services::txpool,
 };
@@ -217,7 +215,7 @@ impl TxQuery {
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
 
-        let vm_pool = ctx.data_unchecked::<VmPool>().clone();
+        let vm_pool = ctx.data_unchecked::<SharedVmMemoryPool>().clone();
 
         tx.estimate_predicates_async::<TokioWithRayon>(
             &CheckPredicateParams::from(params.as_ref()),

@@ -6,6 +6,7 @@
 pub mod executor;
 pub mod ports;
 pub mod refs;
+pub mod vm_pool;
 
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();

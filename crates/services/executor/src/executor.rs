@@ -5,6 +5,7 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
+    vm_pool::SharedVmMemoryPool,
 };
 use fuel_core_storage::{
     column::Column,
@@ -118,7 +119,7 @@ use fuel_core_types::{
             InterpreterParams,
             Memory,
         },
-        pool::VmPool,
+        pool::VmMemoryPool,
         state::StateTransition,
         Backtrace as FuelBacktrace,
         Interpreter,
@@ -338,7 +339,7 @@ pub struct BlockExecutor<R> {
     relayer: R,
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
-    vm_pool: VmPool,
+    vm_pool: SharedVmMemoryPool,
 }
 
 impl<R> BlockExecutor<R> {
@@ -833,7 +834,7 @@ where
         relayed_tx: RelayedTransaction,
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
-        vm_pool: VmPool,
+        vm_pool: impl VmMemoryPool,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
         Self::tx_is_valid_variant(&parsed_tx)?;
@@ -860,7 +861,7 @@ where
         tx: Transaction,
         height: BlockHeight,
         consensus_params: &ConsensusParameters,
-        vm_pool: VmPool,
+        vm_pool: impl VmMemoryPool,
     ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
         let checked_tx = tx
             .into_checked(height, consensus_params, vm_pool.get_new())

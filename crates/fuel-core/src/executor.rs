@@ -105,8 +105,10 @@ mod tests {
                 CheckError,
                 EstimatePredicates,
             },
-            interpreter::ExecutableTransaction,
-            pool::test_pool,
+            interpreter::{
+                ExecutableTransaction,
+                Memory,
+            },
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
             Call,
@@ -2687,11 +2689,8 @@ mod tests {
             asset_id: Default::default(),
         })
         .finalize();
-        tx.estimate_predicates(
-            &consensus_parameters.clone().into(),
-            test_pool().get_new(),
-        )
-        .unwrap();
+        tx.estimate_predicates(&consensus_parameters.clone().into(), Memory::new())
+            .unwrap();
         let db = &mut Database::default();
 
         // insert coin into state

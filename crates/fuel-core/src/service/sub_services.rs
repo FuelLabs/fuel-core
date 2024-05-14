@@ -27,8 +27,8 @@ use crate::{
         SubServices,
     },
 };
+use fuel_core_executor::vm_pool::SharedVmMemoryPool;
 use fuel_core_poa::Trigger;
-use fuel_core_types::fuel_vm::pool::VmPool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -170,7 +170,7 @@ pub fn init_sub_services(
         last_height,
         gas_price_provider.clone(),
         consensus_parameters_provider.clone(),
-        VmPool::default(),
+        SharedVmMemoryPool::default(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 

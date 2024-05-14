@@ -25,11 +25,8 @@ use fuel_core_types::{
         interpreter::{
             diff,
             InterpreterParams,
+            Memory,
             ReceiptsCtx,
-        },
-        pool::{
-            test_pool,
-            MemoryFromPool,
         },
         *,
     },
@@ -111,11 +108,7 @@ pub struct VmBench {
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<
-        MemoryFromPool,
-        VmStorage<StorageTransaction<GenesisDatabase>>,
-        Script,
-    >,
+    pub vm: Interpreter<Memory, VmStorage<StorageTransaction<GenesisDatabase>>, Script>,
     pub instruction: Instruction,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
@@ -462,17 +455,12 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .maturity(maturity)
             .with_params(params.clone())
             .finalize();
-        tx.estimate_predicates(
-            &CheckPredicateParams::from(&params),
-            test_pool().get_new(),
-        )
-        .unwrap();
-        let tx = tx
-            .into_checked(height, &params, test_pool().get_new())
+        tx.estimate_predicates(&CheckPredicateParams::from(&params), Memory::new())
             .unwrap();
+        let tx = tx.into_checked(height, &params, Memory::new()).unwrap();
         let interpreter_params = InterpreterParams::new(gas_price, &params);
 
-        let mut txtor = Transactor::new(test_pool().get_new(), db, interpreter_params);
+        let mut txtor = Transactor::new(Memory::new(), db, interpreter_params);
 
         txtor.transact(tx);
 

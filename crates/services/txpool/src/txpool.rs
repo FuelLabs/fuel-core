@@ -23,7 +23,7 @@ use fuel_core_types::{
             IntoChecked,
             ParallelExecutor,
         },
-        pool::VmPool,
+        pool::VmMemoryPool,
         PredicateVerificationFailed,
     },
     services::txpool::{
@@ -466,7 +466,7 @@ pub async fn check_transactions<Provider>(
     utxp_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &Provider,
-    vm_pool: VmPool,
+    vm_pool: impl VmMemoryPool + Clone + Sync + Send + 'static,
 ) -> Vec<Result<Checked<Transaction>, Error>>
 where
     Provider: GasPriceProvider,
@@ -496,7 +496,7 @@ pub async fn check_single_tx<GasPrice: GasPriceProvider>(
     utxo_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &GasPrice,
-    vm_pool: VmPool,
+    vm_pool: impl VmMemoryPool + Clone + Send + 'static,
 ) -> Result<Checked<Transaction>, Error> {
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType)
