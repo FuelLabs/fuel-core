@@ -1,4 +1,5 @@
 use clap::Parser;
+use ethers::utils::hex;
 use fuel_core::{
     chain_config::{
         ChainConfig,
@@ -438,7 +439,35 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     core.client.produce_blocks(1, None).await.unwrap();
 
     let message_block = core.client.chain_info().await.unwrap().latest_block;
-    let message_block_id = message_block.header.id;
+    let message_block_height = message_block.header.height;
+    // dbg!(message_block_height);
+    // let message_block_id = message_block.header.id;
+
+    let receipts = core.client.receipts(&tx_id).await.unwrap().unwrap();
+    let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
+    let nonce = nonces[0];
+
+    let proof = core
+        .client
+        .message_proof(&tx_id, nonce, None, Some(message_block_height.into()))
+        .await
+        .expect("Unable to get message proof")
+        .expect("Message proof not found");
+    let prev_root = proof.commit_block_header.prev_root;
+    let block_proof_index = proof.block_proof.proof_index;
+    let block_proof_set: Vec<_> = proof
+        .block_proof
+        .proof_set
+        .iter()
+        .map(|bytes| *bytes.deref())
+        .collect();
+    assert!(binary::verify(
+        &prev_root,
+        &proof.message_block_header.id,
+        &block_proof_set,
+        block_proof_index,
+        proof.commit_block_header.height as u64,
+    ));
 
     // When
     let db_dir = core.kill().await;
@@ -468,28 +497,39 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
     let nonce = nonces[0];
 
-    for block_height in message_block.header.height + 1..latest_block.header.height {
+    for block_height in message_block.header.height..latest_block.header.height {
+        // dbg!(block_height);
         let proof = core
             .client
-            .message_proof(&tx_id, nonce, None, Some(block_height.into()))
+            // .message_proof(&tx_id, nonce, None, Some(block_height.into()))
+            .message_proof(&tx_id, nonce, None, Some(2.into()))
             .await
             .expect("Unable to get message proof")
             .expect("Message proof not found");
         let prev_root = proof.commit_block_header.prev_root;
-        let block_proof_index = proof.block_proof.proof_index;
         let block_proof_set: Vec<_> = proof
             .block_proof
             .proof_set
             .iter()
             .map(|bytes| *bytes.deref())
             .collect();
-        let blocks_count = proof.commit_block_header.height as u64;
+        let block_proof_index = proof.block_proof.proof_index;
+        let message_block_id = proof.message_block_header.id;
+        // let count = proof.commit_block_header.height as u64;
+        let count = 2;
+        // dbg!(
+        //     hex::encode(prev_root),
+        //     message_block_id,
+        //     &block_proof_set,
+        //     block_proof_index,
+        //     count
+        // );
         assert!(binary::verify(
             &prev_root,
             &message_block_id,
             &block_proof_set,
             block_proof_index,
-            blocks_count,
+            count,
         ));
     }
 

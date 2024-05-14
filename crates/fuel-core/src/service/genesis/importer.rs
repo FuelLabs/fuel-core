@@ -123,6 +123,8 @@ impl SnapshotImporter {
         self.spawn_worker_on_chain::<ContractsState>()?;
         self.spawn_worker_on_chain::<ContractsAssets>()?;
         self.spawn_worker_on_chain::<ProcessedTransactions>()?;
+        self.spawn_worker_on_chain::<FuelBlockMerkleData>()?;
+        self.spawn_worker_on_chain::<FuelBlockMerkleMetadata>()?;
 
         self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?;
         self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?;
@@ -139,8 +141,9 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<OldTransactions, OldTransactions>()?;
         self.spawn_worker_off_chain::<FuelBlocks, FuelBlockIdsToHeights>()?;
         self.spawn_worker_off_chain::<OldFuelBlocks, FuelBlockIdsToHeights>()?;
-        self.spawn_worker_off_chain::<FuelBlockMerkleData, OldFuelBlockMerkleData>()?;
-        self.spawn_worker_off_chain::<FuelBlockMerkleMetadata, OldFuelBlockMerkleMetadata>()?;
+        // self.spawn_worker_off_chain::<FuelBlockMerkleData, FuelBlockMerkleData>()?;
+        // self.spawn_worker_off_chain::<FuelBlockMerkleMetadata, FuelBlockMerkleMetadata>(
+        // )?;
 
         self.task_manager.wait().await?;
 

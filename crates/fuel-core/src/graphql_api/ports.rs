@@ -325,6 +325,10 @@ pub mod worker {
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
+        tables::merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         Error as StorageError,
         Result as StorageResult,
         StorageMutate,
@@ -357,8 +361,10 @@ pub mod worker {
         + StorageMutate<ContractsInfo, Error = StorageError>
         + StorageMutate<OldFuelBlocks, Error = StorageError>
         + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
-        + StorageMutate<OldFuelBlockMerkleData, Error = StorageError>
-        + StorageMutate<OldFuelBlockMerkleMetadata, Error = StorageError>
+        // + StorageMutate<OldFuelBlockMerkleData, Error = StorageError>
+        // + StorageMutate<OldFuelBlockMerkleMetadata, Error = StorageError>
+        // + StorageMutate<FuelBlockMerkleData, Error = StorageError>
+        // + StorageMutate<FuelBlockMerkleMetadata, Error = StorageError>
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>

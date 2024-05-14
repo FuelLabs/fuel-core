@@ -212,41 +212,41 @@ impl ImportTable for Handler<OldFuelBlocks, OldFuelBlocks> {
     }
 }
 
-impl ImportTable for Handler<OldFuelBlockMerkleData, FuelBlockMerkleData> {
-    type TableInSnapshot = FuelBlockMerkleData;
-    type TableBeingWritten = OldFuelBlockMerkleData;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        let blocks = group
-            .iter()
-            .map(|TableEntry { key, value, .. }| (key, value));
-        worker_service::copy_to_old_block_merkle_data(blocks, tx)?;
-        Ok(())
-    }
-}
-
-impl ImportTable for Handler<OldFuelBlockMerkleMetadata, FuelBlockMerkleMetadata> {
-    type TableInSnapshot = FuelBlockMerkleMetadata;
-    type TableBeingWritten = OldFuelBlockMerkleMetadata;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        let blocks = group
-            .iter()
-            .map(|TableEntry { key, value, .. }| (key, value));
-        worker_service::copy_to_old_block_merkle_metadata(blocks, tx)?;
-        Ok(())
-    }
-}
+// impl ImportTable for Handler<FuelBlockMerkleData, FuelBlockMerkleData> {
+//     type TableInSnapshot = FuelBlockMerkleData;
+//     type TableBeingWritten = FuelBlockMerkleData;
+//     type DbDesc = OffChain;
+//
+//     fn process(
+//         &mut self,
+//         group: Vec<TableEntry<Self::TableInSnapshot>>,
+//         tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+//     ) -> anyhow::Result<()> {
+//         let blocks = group
+//             .iter()
+//             .map(|TableEntry { key, value, .. }| (key, value));
+//         worker_service::copy_to_old_block_merkle_data(blocks, tx)?;
+//         Ok(())
+//     }
+// }
+//
+// impl ImportTable for Handler<FuelBlockMerkleMetadata, FuelBlockMerkleMetadata> {
+//     type TableInSnapshot = FuelBlockMerkleMetadata;
+//     type TableBeingWritten = FuelBlockMerkleMetadata;
+//     type DbDesc = OffChain;
+//
+//     fn process(
+//         &mut self,
+//         group: Vec<TableEntry<Self::TableInSnapshot>>,
+//         tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+//     ) -> anyhow::Result<()> {
+//         let blocks = group
+//             .iter()
+//             .map(|TableEntry { key, value, .. }| (key, value));
+//         worker_service::copy_to_old_block_merkle_metadata(blocks, tx)?;
+//         Ok(())
+//     }
+// }
 
 impl ImportTable for Handler<OldFuelBlockConsensus, SealedBlockConsensus> {
     type TableInSnapshot = SealedBlockConsensus;

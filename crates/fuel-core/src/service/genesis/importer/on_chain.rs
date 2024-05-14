@@ -12,6 +12,10 @@ use anyhow::anyhow;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         Coins,
         ContractsAssets,
         ContractsLatestUtxo,
@@ -145,6 +149,47 @@ impl ImportTable for Handler<ContractsAssets, ContractsAssets> {
         tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<FuelBlockMerkleData, FuelBlockMerkleData> {
+    type TableInSnapshot = FuelBlockMerkleData;
+    type TableBeingWritten = FuelBlockMerkleData;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        for (height, block) in blocks {
+            tx.storage::<FuelBlockMerkleData>().insert(height, block)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<FuelBlockMerkleMetadata, FuelBlockMerkleMetadata> {
+    type TableInSnapshot = FuelBlockMerkleMetadata;
+    type TableBeingWritten = FuelBlockMerkleMetadata;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        for (height, metadata) in blocks {
+            tx.storage::<FuelBlockMerkleMetadata>()
+                .insert(height, metadata)?;
+        }
         Ok(())
     }
 }
