@@ -33,28 +33,13 @@ impl Algorithm {
         self.calculate_profit_slope(new_profit);
         let avg_profit = *self.moving_average_profit.borrow();
         let slope = *self.profit_slope.borrow();
-        // let maybe_new_gas_price = if avg_profit.is_negative() {
-        //     let p_comp = avg_profit.abs() / self.p_value_factor;
-        //     let d_comp = *self.profit_slope.borrow() / self.d_value_factor;
-        //     let add = p_comp - d_comp;
-        //     old_gas_price + add as u64
-        // } else {
-        //     if used > capacity / 2 {
-        //         todo!();
-        //     } else if avg_profit.is_positive() {
-        //         let p_comp = avg_profit / self.p_value_factor;
-        //         let d_comp = *self.profit_slope.borrow() / self.d_value_factor;
-        //         let sub = p_comp - d_comp;
-        //         max(old_gas_price.saturating_sub(sub as u64), self.min)
-        //     } else {
-        //         old_gas_price
-        //     }
-        // };
-        // max(maybe_new_gas_price, self.min)
+
+        // if p > 0 and dp/db > 0, decrease
+        // if p < 0 and dp/db < 0, increase
         let p_comp = avg_profit / self.p_value_factor;
         let d_comp = slope / self.d_value_factor;
-        let add = p_comp + d_comp;
-        let new_gas_price = old_gas_price as i32 - add;
+        let sub = p_comp + d_comp;
+        let new_gas_price = old_gas_price as i32 - sub;
         max(new_gas_price as u64, self.min)
     }
 
@@ -100,9 +85,9 @@ fn arb_cost_signal(size: u32) -> Vec<u64> {
 fn main() {
     let amount = 1;
     let min = 10;
-    let p_value_factor = 1_000;
-    let d_value_factor = 500;
-    let moving_average_window = 1;
+    let p_value_factor = 5_000;
+    let d_value_factor = 200;
+    let moving_average_window = 10;
     let algo = Algorithm {
         amount,
         min,
@@ -115,7 +100,7 @@ fn main() {
     };
 
     let gas_spent = 200;
-    let simulation_size = 1000;
+    let simulation_size = 200;
 
     // Run simulation
     let da_recording_cost = arb_cost_signal(simulation_size);
