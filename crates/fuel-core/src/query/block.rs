@@ -1,46 +1,32 @@
-use crate::fuel_core_graphql_api::ports::OnChainDatabase;
+use crate::fuel_core_graphql_api::ports::{
+    DatabaseBlocks,
+    OnChainDatabase,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
         IterDirection,
     },
-    not_found,
-    tables::{
-        FuelBlocks,
-        SealedBlockConsensus,
-    },
     Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::BlockId,
     },
     fuel_types::BlockHeight,
 };
 
 pub trait SimpleBlockData: Send + Sync {
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock>;
-
-    fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
 }
 
-impl<D: OnChainDatabase + ?Sized> SimpleBlockData for D {
+impl<D> SimpleBlockData for D
+where
+    D: OnChainDatabase + DatabaseBlocks + ?Sized,
+{
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock> {
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(id)?
-            .ok_or_else(|| not_found!(FuelBlocks))?
-            .into_owned();
-
-        Ok(block)
-    }
-
-    fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
-        let height = self.block_height(id)?;
-        self.block(&height)
+        self.block(id)
     }
 }
 
@@ -58,7 +44,10 @@ pub trait BlockQueryData: Send + Sync + SimpleBlockData {
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
 }
 
-impl<D: OnChainDatabase + ?Sized> BlockQueryData for D {
+impl<D> BlockQueryData for D
+where
+    D: OnChainDatabase + DatabaseBlocks + ?Sized,
+{
     fn latest_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
     }
@@ -76,9 +65,6 @@ impl<D: OnChainDatabase + ?Sized> BlockQueryData for D {
     }
 
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
-        self.storage::<SealedBlockConsensus>()
-            .get(id)
-            .map(|c| c.map(|c| c.into_owned()))?
-            .ok_or(not_found!(SealedBlockConsensus))
+        self.consensus(id)
     }
 }

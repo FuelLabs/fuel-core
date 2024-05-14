@@ -2,7 +2,9 @@ use crate::{
     database::Database,
     service::adapters::{
         BlockImporterAdapter,
+        ConsensusParametersProvider,
         P2PAdapter,
+        StaticGasPrice,
     },
 };
 use fuel_core_services::stream::BoxStream;
@@ -11,22 +13,27 @@ use fuel_core_storage::{
         Coins,
         ContractsRawCode,
         Messages,
-        SpentMessages,
     },
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::ports::BlockImporter;
+use fuel_core_txpool::ports::{
+    BlockImporter,
+    ConsensusParametersProvider as ConsensusParametersProviderTrait,
+    GasPriceProvider,
+};
 use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::{
+        ConsensusParameters,
         Transaction,
         UtxoId,
     },
     fuel_types::{
+        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -127,8 +134,16 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
             .get(id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
+}
 
-    fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
-        self.storage::<SpentMessages>().contains_key(id)
+impl GasPriceProvider for StaticGasPrice {
+    fn gas_price(&self, _block_height: BlockHeight) -> Option<u64> {
+        Some(self.gas_price)
+    }
+}
+
+impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+    fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
+        self.shared_state.latest_consensus_parameters()
     }
 }

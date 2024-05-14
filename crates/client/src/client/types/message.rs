@@ -1,5 +1,6 @@
 use crate::client::{
     schema,
+    schema::ConversionError,
     types::{
         block::Header,
         primitives::{
@@ -12,7 +13,7 @@ use crate::client::{
     PaginatedResult,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Message {
     pub amount: u64,
     pub sender: Address,
@@ -22,7 +23,7 @@ pub struct Message {
     pub da_height: u64,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MessageProof {
     /// Proof that message is contained within the provided block header.
     pub message_proof: MerkleProof,
@@ -89,18 +90,20 @@ impl From<schema::message::MessageConnection> for PaginatedResult<Message, Strin
     }
 }
 
-impl From<schema::message::MessageProof> for MessageProof {
-    fn from(value: schema::message::MessageProof) -> Self {
-        Self {
+impl TryFrom<schema::message::MessageProof> for MessageProof {
+    type Error = ConversionError;
+
+    fn try_from(value: schema::message::MessageProof) -> Result<Self, Self::Error> {
+        Ok(Self {
             message_proof: value.message_proof.into(),
             block_proof: value.block_proof.into(),
-            message_block_header: value.message_block_header.into(),
-            commit_block_header: value.commit_block_header.into(),
+            message_block_header: value.message_block_header.try_into()?,
+            commit_block_header: value.commit_block_header.try_into()?,
             sender: value.sender.into(),
             recipient: value.recipient.into(),
             nonce: value.nonce.into(),
             amount: value.amount.into(),
             data: value.data.into(),
-        }
+        })
     }
 }

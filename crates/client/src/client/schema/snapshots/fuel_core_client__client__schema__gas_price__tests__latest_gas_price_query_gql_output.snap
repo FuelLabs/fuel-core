@@ -1,0 +1,12 @@
+---
+source: crates/client/src/client/schema/gas_price.rs
+expression: operation.query
+---
+query {
+  latestGasPrice {
+    gasPrice
+    blockHeight
+  }
+}
+
+

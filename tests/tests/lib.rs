@@ -11,12 +11,15 @@ mod dap;
 mod debugger;
 mod deployment;
 mod fee_collection_contract;
+
+mod gas_price;
 mod health;
 mod helpers;
 mod messages;
 mod metrics;
 mod node_info;
 mod poa;
+mod regenesis;
 #[cfg(feature = "relayer")]
 mod relayer;
 mod snapshot;

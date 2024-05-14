@@ -6,6 +6,7 @@ use crate::client::{
         Nonce,
         PageInfo,
         UtxoId,
+        U16,
         U32,
         U64,
     },
@@ -18,14 +19,14 @@ pub struct CoinByIdArgs {
     pub utxo_id: UtxoId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     variables = "CoinByIdArgs"
 )]
 pub struct CoinByIdQuery {
-    #[arguments(utxoId: $utxo_id)]
+    #[arguments(utxoId: $ utxo_id)]
     pub coin: Option<Coin>,
 }
 
@@ -80,25 +81,25 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     variables = "CoinsConnectionArgs"
 )]
 pub struct CoinsQuery {
-    #[arguments(filter: $filter, after: $after, before: $before, first: $first, last: $last)]
+    #[arguments(filter: $ filter, after: $ after, before: $ before, first: $ first, last: $ last)]
     pub coins: CoinConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinConnection {
     pub edges: Vec<CoinEdge>,
     pub page_info: PageInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
     pub cursor: String,
@@ -110,13 +111,13 @@ pub struct CoinEdge {
 pub struct Coin {
     pub amount: U64,
     pub block_created: U32,
+    pub tx_created_idx: U16,
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
-    pub maturity: U32,
     pub owner: Address,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Coin")]
 pub struct CoinIdFragment {
     pub utxo_id: UtxoId,
@@ -201,14 +202,14 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     variables = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
-    #[arguments(owner: $owner, queryPerAsset: $query_per_asset, excludedIds: $excluded_ids)]
+    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
     pub coins_to_spend: Vec<Vec<CoinType>>,
 }
 

@@ -8,10 +8,7 @@ use crate::{
     },
     column::Column,
     structured_storage::TableWithBlueprint,
-    tables::{
-        Messages,
-        SpentMessages,
-    },
+    tables::Messages,
 };
 
 impl TableWithBlueprint for Messages {
@@ -23,15 +20,6 @@ impl TableWithBlueprint for Messages {
     }
 }
 
-impl TableWithBlueprint for SpentMessages {
-    type Blueprint = Plain<Raw, Postcard>;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::SpentMessages
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -40,11 +28,5 @@ mod test {
         Messages,
         <Messages as crate::Mappable>::Key::default(),
         <Messages as crate::Mappable>::Value::default()
-    );
-
-    crate::basic_storage_tests!(
-        SpentMessages,
-        <SpentMessages as crate::Mappable>::Key::default(),
-        <SpentMessages as crate::Mappable>::Value::default()
     );
 }

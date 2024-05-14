@@ -11,11 +11,11 @@ description = "Fuel Block Executor"
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-chain-config = { workspace = true, default-features = false }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false }
 hex = { version = "0.4", features = ["serde"] }
 parking_lot = { workspace = true }
+serde = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
@@ -25,8 +25,8 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 
 [features]
 default = ["std"]
-std = ["fuel-core-chain-config/default", "fuel-core-types/default"]
+std = ["fuel-core-types/default"]
 test-helpers = [
-    "fuel-core-types/test-helpers",
-    "fuel-core-storage/test-helpers"
+  "fuel-core-types/test-helpers",
+  "fuel-core-storage/test-helpers",
 ]

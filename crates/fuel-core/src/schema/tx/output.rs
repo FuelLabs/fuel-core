@@ -1,11 +1,10 @@
-use crate::schema::{
-    contract::Contract,
-    scalars::{
-        Address,
-        AssetId,
-        Bytes32,
-        U64,
-    },
+use crate::schema::scalars::{
+    Address,
+    AssetId,
+    Bytes32,
+    ContractId,
+    U16,
+    U64,
 };
 use async_graphql::{
     Object,
@@ -83,15 +82,15 @@ impl VariableOutput {
 }
 
 pub struct ContractOutput {
-    input_index: u8,
+    input_index: u16,
     balance_root: fuel_types::Bytes32,
     state_root: fuel_types::Bytes32,
 }
 
 #[Object]
 impl ContractOutput {
-    async fn input_index(&self) -> u8 {
-        self.input_index
+    async fn input_index(&self) -> U16 {
+        self.input_index.into()
     }
 
     async fn balance_root(&self) -> Bytes32 {
@@ -110,7 +109,7 @@ pub struct ContractCreated {
 
 #[Object]
 impl ContractCreated {
-    async fn contract(&self) -> Contract {
+    async fn contract(&self) -> ContractId {
         self.contract_id.into()
     }
 

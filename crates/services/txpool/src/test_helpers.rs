@@ -117,7 +117,6 @@ impl TextContext {
             asset_id,
             Default::default(),
             Default::default(),
-            Default::default(),
             code,
             vec![],
         )
@@ -162,7 +161,6 @@ pub(crate) fn random_predicate(
         owner,
         amount,
         asset_id,
-        Default::default(),
         Default::default(),
         Default::default(),
         predicate_code,

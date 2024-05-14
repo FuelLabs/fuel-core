@@ -17,11 +17,15 @@ use ed25519_dalek::Signer;
 use ethnum::U256;
 use fuel_core::{
     combined_database::CombinedDatabase,
+    database::{
+        balances::BalancesInitializer,
+        state::StateInitializer,
+        Database,
+    },
     service::{
         config::Trigger,
         Config,
         FuelService,
-        ServiceTrait,
     },
     txpool::types::Word,
 };
@@ -29,7 +33,12 @@ use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
     *,
 };
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ChainConfig,
+    ContractConfig,
+    StateConfig,
+};
+use fuel_core_services::Service;
 use fuel_core_storage::{
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,
@@ -56,9 +65,12 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ContractIdExt,
+        FeeParameters,
         GasCosts,
         Input,
         Output,
+        PredicateParameters,
+        TxParameters,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
@@ -72,6 +84,7 @@ use fuel_core_types::{
         checked_transaction::EstimatePredicates,
         consts::WORD_SIZE,
     },
+    services::executor::TransactionExecutionResult,
 };
 use rand::SeedableRng;
 use utils::{
@@ -251,42 +264,39 @@ fn service_with_many_contracts(
         .build()
         .unwrap();
     let _drop = rt.enter();
-    let mut database = Database::rocksdb();
-    let mut config = Config::local_node();
-    config
-        .chain_conf
+    let mut database = Database::rocksdb_temp();
+
+    let mut chain_config = ChainConfig::local_testnet();
+
+    chain_config.consensus_parameters.set_tx_params(
+        TxParameters::default().with_max_gas_per_tx(TARGET_BLOCK_GAS_LIMIT),
+    );
+    chain_config.consensus_parameters.set_predicate_params(
+        PredicateParameters::default().with_max_gas_per_predicate(TARGET_BLOCK_GAS_LIMIT),
+    );
+    chain_config
         .consensus_parameters
-        .tx_params
-        .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+        .set_fee_params(FeeParameters::default().with_gas_per_byte(0));
+    chain_config
+        .consensus_parameters
+        .set_block_gas_limit(TARGET_BLOCK_GAS_LIMIT);
+    chain_config
+        .consensus_parameters
+        .set_gas_costs(GasCosts::new(default_gas_costs()));
 
     let contract_configs = contract_ids
         .iter()
         .map(|contract_id| ContractConfig {
             contract_id: *contract_id,
-            code: vec![],
-            salt: Default::default(),
-            state: None,
-            balances: None,
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
+            ..Default::default()
         })
         .collect::<Vec<_>>();
-    config.chain_conf.initial_state.as_mut().unwrap().contracts = Some(contract_configs);
 
-    config
-        .chain_conf
-        .consensus_parameters
-        .predicate_params
-        .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
-    config
-        .chain_conf
-        .consensus_parameters
-        .fee_params
-        .gas_per_byte = 0;
+    let state_config = StateConfig {
+        contracts: contract_configs,
+        ..Default::default()
+    };
+    let mut config = Config::local_node_with_configs(chain_config, state_config);
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
@@ -300,7 +310,7 @@ fn service_with_many_contracts(
                 (0..state_size).map(|_| {
                     storage_key.to_big_endian(key_bytes.as_mut());
                     storage_key.increase().unwrap();
-                    (key_bytes, key_bytes)
+                    (key_bytes, key_bytes.to_vec())
                 }),
             )
             .unwrap();
@@ -352,10 +362,8 @@ fn run_with_service_with_extra_inputs(
     extra_outputs: Vec<Output>,
 ) {
     group.bench_function(id, |b| {
-
         b.to_async(rt).iter(|| {
             let shared = service.shared.clone();
-
 
             let mut tx_builder = fuel_core_types::fuel_tx::TransactionBuilder::script(
                 script.clone().into_iter().collect(),
@@ -363,13 +371,11 @@ fn run_with_service_with_extra_inputs(
             );
             tx_builder
                 .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
-                .gas_price(1)
                 .add_unsigned_coin_input(
                     SecretKey::random(rng),
                     rng.gen(),
                     u32::MAX as u64,
                     AssetId::BASE,
-                    Default::default(),
                     Default::default(),
                 );
             for contract_id in &contract_ids {
@@ -382,7 +388,11 @@ fn run_with_service_with_extra_inputs(
                     TxPointer::default(),
                     *contract_id,
                 );
-                let contract_output = Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+                let contract_output = Output::contract(
+                    input_count as u16,
+                    Bytes32::zeroed(),
+                    Bytes32::zeroed(),
+                );
 
                 tx_builder
                     .add_input(contract_input)
@@ -397,13 +407,15 @@ fn run_with_service_with_extra_inputs(
                 tx_builder.add_output(*output);
             }
             let mut tx = tx_builder.finalize_as_transaction();
-            tx.estimate_predicates(&shared.config.chain_conf.consensus_parameters.clone().into()).unwrap();
+            let chain_config = shared.config.snapshot_reader.chain_config().clone();
+            tx.estimate_predicates(&chain_config.consensus_parameters.clone().into())
+                .unwrap();
             async move {
-                let tx_id = tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
+                let tx_id = tx.id(&chain_config.consensus_parameters.chain_id());
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared
-                    .txpool
+                    .txpool_shared_state
                     .insert(vec![std::sync::Arc::new(tx)])
                     .await
                     .into_iter()
@@ -415,13 +427,13 @@ fn run_with_service_with_extra_inputs(
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
 
-                let fuel_core_types::services::executor::TransactionExecutionResult::Failed {
-                    reason,
-                    ..
+                let TransactionExecutionResult::Failed {
+                    result, receipts, ..
                 } = &res.tx_status[0].result
-                    else {
-                        panic!("The execution should fails with out of gas")
-                    };
+                else {
+                    panic!("The execution should fails with out of gas")
+                };
+                let reason = TransactionExecutionResult::reason(receipts, result);
                 if !reason.contains("OutOfGas") {
                     panic!("The test failed because of {}", reason);
                 }

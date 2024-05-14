@@ -30,7 +30,7 @@ use std::collections::BTreeSet;
 async fn submit_utxo_verified_tx_with_min_gas_price() {
     let mut rng = StdRng::seed_from_u64(2322);
     let mut test_builder = TestSetupBuilder::new(2322);
-    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], vec![], None);
     // initialize 10 random transactions that transfer coins and call a contract
     let transactions = (1..=10)
         .map(|i| {
@@ -39,12 +39,10 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 vec![],
             )
             .script_gas_limit(10000)
-            .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),
                 1000 + i,
-                Default::default(),
                 Default::default(),
                 Default::default(),
             )
@@ -89,9 +87,10 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
             .ok()
             .unwrap();
 
-        if let TransactionStatus::Success { block_id, .. } = transaction_result.clone() {
-            let block_id = block_id.parse().unwrap();
-            let block_exists = client.block(&block_id).await.unwrap();
+        if let TransactionStatus::Success { block_height, .. } =
+            transaction_result.clone()
+        {
+            let block_exists = client.block_by_height(block_height).await.unwrap();
 
             assert!(block_exists.is_some());
         }
@@ -111,8 +110,8 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
+    .add_random_fee_input()
     .script_gas_limit(100)
-    .gas_price(1)
     .finalize_as_transaction();
 
     // initialize node with higher minimum gas price
@@ -127,11 +126,8 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     let result = client.submit(&tx).await;
 
     assert!(result.is_err());
-    assert!(result
-        .err()
-        .unwrap()
-        .to_string()
-        .contains("The gas price is too low"));
+    let error = result.err().unwrap().to_string();
+    assert!(error.contains("InsufficientMaxFee"));
 }
 
 // verify that dry run can disable utxo_validation by simulating a transaction with unsigned
@@ -153,7 +149,6 @@ async fn dry_run_override_utxo_validation() {
         AssetId::default(),
         Default::default(),
         0,
-        Default::default(),
     ))
     .add_input(Input::coin_signed(
         rng.gen(),
@@ -162,7 +157,6 @@ async fn dry_run_override_utxo_validation() {
         asset_id,
         Default::default(),
         0,
-        Default::default(),
     ))
     .add_output(Output::change(rng.gen(), 0, asset_id))
     .add_witness(Default::default())
@@ -175,7 +169,11 @@ async fn dry_run_override_utxo_validation() {
         .dry_run_opt(&[tx], Some(false))
         .await
         .unwrap();
-    let log = &tx_statuses.last().expect("Nonempty reponse").receipts;
+    let log = tx_statuses
+        .last()
+        .expect("Nonempty response")
+        .result
+        .receipts();
     assert_eq!(2, log.len());
 
     assert!(matches!(log[0],
@@ -203,7 +201,6 @@ async fn dry_run_no_utxo_validation_override() {
         AssetId::default(),
         Default::default(),
         0,
-        Default::default(),
     ))
     .add_input(Input::coin_signed(
         rng.gen(),
@@ -212,7 +209,6 @@ async fn dry_run_no_utxo_validation_override() {
         asset_id,
         Default::default(),
         0,
-        Default::default(),
     ))
     .add_output(Output::change(rng.gen(), 0, asset_id))
     .add_witness(Default::default())
@@ -245,7 +241,6 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
                 secret,
                 rng.gen(),
                 rng.gen_range((100000 + i as u64)..(200000 + i as u64)),
-                Default::default(),
                 Default::default(),
                 Default::default(),
             )

@@ -5,10 +5,7 @@ use crate::{
         PrimaryKey,
         Sparse,
     },
-    codec::{
-        manual::Manual,
-        raw::Raw,
-    },
+    codec::raw::Raw,
     column::Column,
     structured_storage::TableWithBlueprint,
     tables::{
@@ -20,7 +17,6 @@ use crate::{
     },
     Mappable,
 };
-use fuel_core_types::fuel_vm::ContractsStateKey;
 
 /// The key convertor used to convert the key from the `ContractsState` table
 /// to the key of the `ContractsStateMerkleMetadata` table.
@@ -37,7 +33,7 @@ impl PrimaryKey for KeyConverter {
 
 impl TableWithBlueprint for ContractsState {
     type Blueprint = Sparse<
-        Manual<ContractsStateKey>,
+        Raw,
         Raw,
         ContractsStateMerkleMetadata,
         ContractsStateMerkleData,
@@ -72,15 +68,15 @@ mod test {
     crate::basic_storage_tests!(
         ContractsState,
         <ContractsState as Mappable>::Key::default(),
-        <ContractsState as Mappable>::Value::zeroed(),
-        <ContractsState as Mappable>::Value::zeroed(),
+        vec![0u8; 32],
+        vec![0u8; 32].into(),
         generate_key_for_same_contract
     );
 
-    fn generate_value(rng: &mut impl rand::Rng) -> <ContractsState as Mappable>::Value {
+    fn generate_value(rng: &mut impl rand::Rng) -> Vec<u8> {
         let mut bytes = [0u8; 32];
         rng.fill(bytes.as_mut());
-        bytes.into()
+        bytes.to_vec()
     }
 
     crate::root_storage_tests!(
@@ -91,4 +87,214 @@ mod test {
         generate_key,
         generate_value
     );
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod structured_storage_tests {
+    use crate::{
+        column::Column,
+        structured_storage::test::InMemoryStorage,
+        transactional::ReadTransaction,
+        StorageAsMut,
+        StorageMutate,
+        StorageWrite,
+    };
+    use fuel_vm_private::{
+        prelude::{
+            Bytes32,
+            ContractId,
+        },
+        storage::{
+            ContractsState,
+            ContractsStateKey,
+        },
+    };
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        SeedableRng,
+    };
+
+    #[test]
+    fn storage_write__write__generates_the_same_merkle_root_as_storage_insert() {
+        type Storage = InMemoryStorage<Column>;
+
+        let mut rng = StdRng::seed_from_u64(1234);
+
+        // Given
+        let contract_id = ContractId::default();
+        let keys = std::iter::from_fn(|| Some(rng.gen::<Bytes32>()))
+            .take(10)
+            .map(|state_key| ContractsStateKey::from((&contract_id, &state_key)))
+            .collect::<Vec<_>>();
+        let value = vec![0u8; 32];
+
+        // When
+        let merkle_root_write = {
+            let storage = Storage::default();
+            let mut structure = storage.read_transaction();
+            let mut merkle_root = structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root");
+            for key in keys.iter() {
+                <_ as StorageWrite<ContractsState>>::write(&mut structure, key, &value)
+                    .expect("Unable to write storage");
+                let new_merkle_root = structure
+                    .storage::<ContractsState>()
+                    .root(&contract_id)
+                    .expect("Unable to retrieve Merkle root");
+                assert_ne!(merkle_root, new_merkle_root);
+                merkle_root = new_merkle_root;
+            }
+
+            structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root")
+        };
+
+        // Then
+        let merkle_root_insert = {
+            let storage = Storage::default();
+            let mut structure = storage.read_transaction();
+            for key in keys.iter() {
+                <_ as StorageMutate<ContractsState>>::insert(&mut structure, key, &value)
+                    .expect("Unable to write storage");
+            }
+
+            structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root")
+        };
+
+        assert_eq!(merkle_root_write, merkle_root_insert);
+    }
+
+    #[test]
+    fn storage_write__replace__generates_the_same_merkle_root_as_storage_insert() {
+        type Storage = InMemoryStorage<Column>;
+
+        let mut rng = StdRng::seed_from_u64(1234);
+
+        // Given
+        let contract_id = ContractId::default();
+        let keys = std::iter::from_fn(|| Some(rng.gen::<Bytes32>()))
+            .take(10)
+            .map(|state_key| ContractsStateKey::from((&contract_id, &state_key)))
+            .collect::<Vec<_>>();
+        let value = vec![0u8; 32];
+
+        // When
+        let merkle_root_replace = {
+            let storage = Storage::default();
+            let mut structure = storage.read_transaction();
+            let mut merkle_root = structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root");
+            for key in keys.iter() {
+                <_ as StorageWrite<ContractsState>>::replace(&mut structure, key, &value)
+                    .expect("Unable to write storage");
+                let new_merkle_root = structure
+                    .storage::<ContractsState>()
+                    .root(&contract_id)
+                    .expect("Unable to retrieve Merkle root");
+                assert_ne!(merkle_root, new_merkle_root);
+                merkle_root = new_merkle_root;
+            }
+
+            structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root")
+        };
+
+        // Then
+        let merkle_root_insert = {
+            let storage = Storage::default();
+            let mut structure = storage.read_transaction();
+            for key in keys.iter() {
+                <_ as StorageMutate<ContractsState>>::insert(&mut structure, key, &value)
+                    .expect("Unable to write storage");
+            }
+
+            structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root")
+        };
+
+        assert_eq!(merkle_root_replace, merkle_root_insert);
+    }
+
+    #[test]
+    fn storage_write__take__generates_the_same_merkle_root_as_storage_remove() {
+        type Storage = InMemoryStorage<Column>;
+
+        let mut rng = StdRng::seed_from_u64(1234);
+
+        // Given
+        let contract_id = ContractId::default();
+        let keys = std::iter::from_fn(|| Some(rng.gen::<Bytes32>()))
+            .take(10)
+            .map(|state_key| ContractsStateKey::from((&contract_id, &state_key)))
+            .collect::<Vec<_>>();
+        let value = vec![0u8; 32];
+
+        let storage = Storage::default();
+        let mut structure = storage.read_transaction();
+        let mut merkle_root = structure
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .expect("Unable to retrieve Merkle root");
+        for key in keys.iter() {
+            <_ as StorageWrite<ContractsState>>::replace(&mut structure, key, &value)
+                .expect("Unable to write storage");
+
+            let new_merkle_root = structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root");
+            assert_ne!(merkle_root, new_merkle_root);
+            merkle_root = new_merkle_root;
+        }
+
+        // When
+        let state_key = rng.gen::<Bytes32>();
+        let key = ContractsStateKey::from((&contract_id, &state_key));
+
+        let merkle_root_replace = {
+            <_ as StorageWrite<ContractsState>>::write(&mut structure, &key, &value)
+                .expect("Unable to write storage");
+
+            <_ as StorageWrite<ContractsState>>::take(&mut structure, &key)
+                .expect("Unable to take value from storage");
+
+            structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root")
+        };
+
+        // Then
+        let merkle_root_remove = {
+            <_ as StorageWrite<ContractsState>>::write(&mut structure, &key, &value)
+                .expect("Unable to write storage");
+
+            structure
+                .storage::<ContractsState>()
+                .remove(&key)
+                .expect("Unable to take value from storage");
+
+            structure
+                .storage::<ContractsState>()
+                .root(&contract_id)
+                .expect("Unable to retrieve Merkle root")
+        };
+
+        assert_eq!(merkle_root_replace, merkle_root_remove);
+    }
 }

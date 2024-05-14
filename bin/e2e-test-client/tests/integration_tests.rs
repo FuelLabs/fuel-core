@@ -5,7 +5,10 @@ use fuel_core::service::{
 
 // Add methods on commands
 use fuel_core::txpool::types::ContractId;
-use fuel_core_chain_config::ChainConfig;
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    SnapshotReader,
+};
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{
     fs,
@@ -92,22 +95,23 @@ async fn execute_suite(config_path: String) {
 }
 
 fn dev_config() -> Config {
-    let mut config = Config::local_node();
-    let dev_config_bytes =
-        include_str!("../../../deployment/scripts/chainspec/dev_chainspec.json");
-    let chain_config: ChainConfig = serde_json::from_str(dev_config_bytes)
-        .expect("Should be able to decode chain config");
+    let snapshot = SnapshotMetadata::read("../../bin/fuel-core/chainspec/dev-testnet")
+        .expect("Should be able to open snapshot metadata");
+    let reader =
+        SnapshotReader::open(snapshot).expect("Should be able to open snapshot reader");
 
     // The `run_contract_large_state` test creates a contract with a huge state
     assert!(
-        chain_config
+        reader
+            .chain_config()
             .consensus_parameters
-            .contract_params
-            .max_storage_slots
+            .contract_params()
+            .max_storage_slots()
             >= 1 << 17 // 131072
     );
 
-    config.chain_conf = chain_config;
+    let mut config = Config::local_node_with_reader(reader);
+    config.static_gas_price = 1;
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
             "0x7777777777777777777777777777777777777777777777777777777777777777",

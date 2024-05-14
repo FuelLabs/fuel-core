@@ -33,6 +33,7 @@ mod predicates;
 mod tx_pointer;
 mod txn_status_subscription;
 mod txpool;
+mod upgrade;
 mod utxo_validation;
 
 #[test]
@@ -57,7 +58,6 @@ async fn dry_run_script() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = Default::default();
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 
@@ -74,13 +74,16 @@ async fn dry_run_script() {
 
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
-        .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()
         .finalize_as_transaction();
 
     let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
-    let log = &tx_statuses.last().expect("Nonempty repsonse").receipts;
+    let log = tx_statuses
+        .last()
+        .expect("Nonempty response")
+        .result
+        .receipts();
     assert_eq!(3, log.len());
 
     assert!(matches!(log[0],
@@ -125,7 +128,8 @@ async fn dry_run_create() {
         tx_statuses
             .last()
             .expect("Nonempty response")
-            .receipts
+            .result
+            .receipts()
             .len()
     );
 
@@ -142,7 +146,6 @@ async fn submit() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = Default::default();
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 
@@ -159,7 +162,6 @@ async fn submit() {
 
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
-        .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()
         .finalize_as_transaction();
@@ -654,7 +656,6 @@ fn create_mock_tx(val: u64) -> Transaction {
             SecretKey::random(&mut rng),
             rng.gen(),
             1_000_000,
-            Default::default(),
             Default::default(),
             Default::default(),
         )

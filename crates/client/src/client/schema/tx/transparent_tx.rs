@@ -1,8 +1,6 @@
 use crate::client::schema::{
-    contract::ContractIdFragment,
     schema,
     tx::{
-        transparent_receipt::Receipt,
         TransactionStatus,
         TxIdArgs,
     },
@@ -10,6 +8,7 @@ use crate::client::schema::{
     AssetId,
     Bytes32,
     ConnectionArgs,
+    ContractId,
     ConversionError,
     HexString,
     Nonce,
@@ -18,6 +17,7 @@ use crate::client::schema::{
     TransactionId,
     TxPointer,
     UtxoId,
+    U16,
     U32,
     U64,
 };
@@ -33,42 +33,43 @@ use fuel_core_types::{
         output,
         policies::PolicyType,
         StorageSlot,
+        UploadBody,
     },
     fuel_types,
 };
 use itertools::Itertools;
 
 /// Retrieves the transaction in opaque form
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     variables = "TxIdArgs"
 )]
 pub struct TransactionQuery {
-    #[arguments(id: $id)]
+    #[arguments(id: $ id)]
     pub transaction: Option<Transaction>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     variables = "ConnectionArgs"
 )]
 pub struct TransactionsQuery {
-    #[arguments(after: $after, before: $before, first: $first, last: $last)]
+    #[arguments(after: $ after, before: $ before, first: $ first, last: $ last)]
     pub transactions: TransactionConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
     pub edges: Vec<TransactionEdge>,
     pub page_info: PageInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionEdge {
     pub cursor: String,
@@ -78,7 +79,7 @@ pub struct TransactionEdge {
 /// The `Transaction` schema is a combination of all fields available in
 /// the `fuel_tx::Transaction` from each variant plus some additional
 /// data from helper functions that are often fetched by the user.
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
     /// The field of the `Transaction::Script` type.
@@ -96,7 +97,7 @@ pub struct Transaction {
     ///
     /// The result of a `input_contracts()` helper function is stored here.
     /// It is not an original field of the `Transaction`.
-    pub input_contracts: Option<Vec<ContractIdFragment>>,
+    pub input_contracts: Option<Vec<ContractId>>,
     /// The field of the `Transaction::Mint` transaction.
     pub input_contract: Option<InputContract>,
     /// The field of the `Transaction` type.
@@ -116,6 +117,16 @@ pub struct Transaction {
     /// The result of a `is_mint()` helper function is stored here.
     /// It is not an original field of the `Transaction`.
     pub is_mint: bool,
+    /// It is `true` for `Transaction::Upgrade`.
+    ///
+    /// The result of a `is_upgrade()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
+    pub is_upgrade: bool,
+    /// It is `true` for `Transaction::Upload`.
+    ///
+    /// The result of a `is_upload()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
+    pub is_upload: bool,
     /// The field of the `Transaction` type.
     pub outputs: Vec<Output>,
     /// The field of the `Transaction::Mint`.
@@ -124,14 +135,14 @@ pub struct Transaction {
     pub mint_amount: Option<U64>,
     /// The field of the `Transaction::Mint`.
     pub mint_asset_id: Option<AssetId>,
+    /// The field of the `Transaction::Mint`.
+    pub mint_gas_price: Option<U64>,
     /// The field of the `Transaction::Script`.
     pub receipts_root: Option<Bytes32>,
     /// The status of the transaction fetched from the database.
     pub status: Option<TransactionStatus>,
     /// The field of the `Transaction::Script` and `Transaction::Create`.
     pub witnesses: Option<Vec<HexString>>,
-    /// The receipts produced during transaction execution. It is fetched from the database..
-    pub receipts: Option<Vec<Receipt>>,
     /// The field of the `Transaction::Script`.
     pub script: Option<HexString>,
     /// The field of the `Transaction::Script`.
@@ -142,13 +153,18 @@ pub struct Transaction {
     pub salt: Option<Salt>,
     /// The field of the `Transaction::Create`.
     pub storage_slots: Option<Vec<HexString>>,
-    /// The field of the `Transaction::Create`.
-    pub bytecode_witness_index: Option<i32>,
-    /// The size of the bytecode of the `Transaction::Create`.
-    ///
-    /// The result of a `bytecode_length()` helper function is stored here.
-    /// It is not an original field of the `Transaction`.
-    pub bytecode_length: Option<U64>,
+    /// The field of the `Transaction::Create` or `Transaction::Upload`.
+    pub bytecode_witness_index: Option<U16>,
+    /// The field of the `Transaction::Upload`.
+    pub bytecode_root: Option<Bytes32>,
+    /// The field of the `Transaction::Upload`.
+    pub subsection_index: Option<U16>,
+    /// The field of the `Transaction::Upload`.
+    pub subsections_number: Option<U16>,
+    /// The field of the `Transaction::Upload`.
+    pub proof_set: Option<Vec<Bytes32>>,
+    /// The field of the `Transaction::Upgrade`.
+    pub upgrade_purpose: Option<UpgradePurpose>,
 }
 
 impl TryFrom<Transaction> for fuel_tx::Transaction {
@@ -205,7 +221,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                             "bytecode_witness_index".to_string(),
                         )
                     })?
-                    .try_into()?,
+                    .into(),
                 tx.policies
                     .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
                     .into(),
@@ -219,7 +235,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .into_iter()
                     .map(|slot| {
                         if slot.0 .0.len() != 64 {
-                            return Err(ConversionError::BytesLength)
+                            return Err(ConversionError::BytesLength);
                         }
                         let key = &slot.0 .0[0..32];
                         let value = &slot.0 .0[32..];
@@ -250,7 +266,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .collect(),
             );
             create.into()
-        } else {
+        } else if tx.is_mint {
             let tx_pointer: fuel_tx::TxPointer = tx
                 .tx_pointer
                 .ok_or_else(|| ConversionError::MissingField("tx_pointer".to_string()))?
@@ -277,8 +293,102 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                         ConversionError::MissingField("mint_asset_id".to_string())
                     })?
                     .into(),
+                tx.mint_gas_price
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("mint_gas_price".to_string())
+                    })?
+                    .into(),
             );
             mint.into()
+        } else if tx.is_upgrade {
+            let tx = fuel_tx::Transaction::upgrade(
+                tx.upgrade_purpose
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("upgrade_purpose".to_string())
+                    })?
+                    .try_into()?,
+                tx.policies
+                    .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
+                    .into(),
+                tx.inputs
+                    .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                tx.outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                tx.witnesses
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("witnesses".to_string())
+                    })?
+                    .into_iter()
+                    .map(|w| w.0 .0.into())
+                    .collect(),
+            );
+            tx.into()
+        } else if tx.is_upload {
+            let tx = fuel_tx::Transaction::upload(
+                UploadBody {
+                    root: tx
+                        .bytecode_root
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("bytecode_root".to_string())
+                        })?
+                        .into(),
+                    witness_index: tx
+                        .bytecode_witness_index
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("witness_index".to_string())
+                        })?
+                        .into(),
+                    subsection_index: tx
+                        .subsection_index
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("subsection_index".to_string())
+                        })?
+                        .into(),
+                    subsections_number: tx
+                        .subsections_number
+                        .ok_or_else(|| {
+                            ConversionError::MissingField(
+                                "subsections_number".to_string(),
+                            )
+                        })?
+                        .into(),
+                    proof_set: tx
+                        .proof_set
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("proof_set".to_string())
+                        })?
+                        .into_iter()
+                        .map(|w| w.0 .0)
+                        .collect(),
+                },
+                tx.policies
+                    .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
+                    .into(),
+                tx.inputs
+                    .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                tx.outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                tx.witnesses
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("witnesses".to_string())
+                    })?
+                    .into_iter()
+                    .map(|w| w.0 .0.into())
+                    .collect(),
+            );
+            tx.into()
+        } else {
+            return Err(ConversionError::UnknownVariant("Transaction"));
         };
 
         // This `match` block is added here to enforce compilation error if a new variant
@@ -289,13 +399,15 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
             fuel_tx::Transaction::Script(_) => {}
             fuel_tx::Transaction::Create(_) => {}
             fuel_tx::Transaction::Mint(_) => {}
+            fuel_tx::Transaction::Upgrade(_) => {}
+            fuel_tx::Transaction::Upload(_) => {}
         };
 
         Ok(tx)
     }
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Input {
     InputCoin(InputCoin),
@@ -305,7 +417,7 @@ pub enum Input {
     Unknown,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputCoin {
     pub utxo_id: UtxoId,
@@ -314,30 +426,29 @@ pub struct InputCoin {
     pub asset_id: AssetId,
     pub tx_pointer: TxPointer,
     pub witness_index: i32,
-    pub maturity: U32,
     pub predicate_gas_used: U64,
     pub predicate: HexString,
     pub predicate_data: HexString,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputContract {
     pub utxo_id: UtxoId,
     pub balance_root: Bytes32,
     pub state_root: Bytes32,
     pub tx_pointer: TxPointer,
-    pub contract: ContractIdFragment,
+    pub contract_id: ContractId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputMessage {
     sender: Address,
     recipient: Address,
     amount: U64,
     nonce: Nonce,
-    witness_index: i32,
+    witness_index: U16,
     predicate_gas_used: U64,
     data: HexString,
     predicate: HexString,
@@ -358,7 +469,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
                         coin.witness_index.try_into()?,
-                        coin.maturity.into(),
                     )
                 } else {
                     fuel_tx::Input::coin_predicate(
@@ -367,7 +477,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.amount.into(),
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
-                        coin.maturity.into(),
                         coin.predicate_gas_used.into(),
                         coin.predicate.into(),
                         coin.predicate_data.into(),
@@ -385,7 +494,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.recipient.into(),
                         message.amount.into(),
                         message.nonce.into(),
-                        message.witness_index.try_into()?,
+                        message.witness_index.into(),
                     ),
                     (true, false) => Self::message_coin_predicate(
                         message.sender.into(),
@@ -401,7 +510,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.recipient.into(),
                         message.amount.into(),
                         message.nonce.into(),
-                        message.witness_index.try_into()?,
+                        message.witness_index.into(),
                         message.data.into(),
                     ),
                     (false, false) => Self::message_data_predicate(
@@ -421,7 +530,7 @@ impl TryFrom<Input> for fuel_tx::Input {
     }
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Output {
     CoinOutput(CoinOutput),
@@ -433,7 +542,7 @@ pub enum Output {
     Unknown,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinOutput {
     pub to: Address,
@@ -441,7 +550,7 @@ pub struct CoinOutput {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChangeOutput {
     pub to: Address,
@@ -449,7 +558,7 @@ pub struct ChangeOutput {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct VariableOutput {
     pub to: Address,
@@ -457,18 +566,18 @@ pub struct VariableOutput {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractOutput {
-    pub input_index: i32,
+    pub input_index: U16,
     pub balance_root: Bytes32,
     pub state_root: Bytes32,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractCreated {
-    contract: ContractIdFragment,
+    contract: ContractId,
     state_root: Bytes32,
 }
 
@@ -494,7 +603,7 @@ impl TryFrom<Output> for fuel_tx::Output {
                 asset_id: variable.asset_id.into(),
             },
             Output::ContractCreated(contract) => Self::ContractCreated {
-                contract_id: contract.contract.id.into(),
+                contract_id: contract.contract.into(),
                 state_root: contract.state_root.into(),
             },
             Output::Unknown => return Err(Self::Error::UnknownVariant("Output")),
@@ -509,7 +618,7 @@ impl From<InputContract> for input::contract::Contract {
             balance_root: contract.balance_root.into(),
             state_root: contract.state_root.into(),
             tx_pointer: contract.tx_pointer.into(),
-            contract_id: contract.contract.id.into(),
+            contract_id: contract.contract_id.into(),
         }
     }
 }
@@ -519,17 +628,17 @@ impl TryFrom<ContractOutput> for output::contract::Contract {
 
     fn try_from(contract: ContractOutput) -> Result<Self, Self::Error> {
         Ok(output::contract::Contract {
-            input_index: contract.input_index.try_into()?,
+            input_index: contract.input_index.into(),
             balance_root: contract.balance_root.into(),
             state_root: contract.state_root.into(),
         })
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Policies {
-    pub gas_price: Option<U64>,
+    pub tip: Option<U64>,
     pub maturity: Option<U32>,
     pub witness_limit: Option<U64>,
     pub max_fee: Option<U64>,
@@ -538,7 +647,7 @@ pub struct Policies {
 impl From<Policies> for fuel_tx::policies::Policies {
     fn from(value: Policies) -> Self {
         let mut policies = fuel_tx::policies::Policies::new();
-        policies.set(PolicyType::GasPrice, value.gas_price.map(Into::into));
+        policies.set(PolicyType::Tip, value.tip.map(Into::into));
         policies.set(
             PolicyType::Maturity,
             value.maturity.map(|maturity| maturity.0 as u64),
@@ -549,5 +658,48 @@ impl From<Policies> for fuel_tx::policies::Policies {
         );
         policies.set(PolicyType::MaxFee, value.max_fee.map(Into::into));
         policies
+    }
+}
+
+#[derive(cynic::InlineFragments, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum UpgradePurpose {
+    ConsensusParameters(ConsensusParametersPurpose),
+    StateTransition(StateTransitionPurpose),
+    #[cynic(fallback)]
+    Unknown,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct ConsensusParametersPurpose {
+    witness_index: U16,
+    checksum: Bytes32,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct StateTransitionPurpose {
+    root: Bytes32,
+}
+
+impl TryFrom<UpgradePurpose> for fuel_tx::UpgradePurpose {
+    type Error = ConversionError;
+
+    fn try_from(value: UpgradePurpose) -> Result<Self, Self::Error> {
+        match value {
+            UpgradePurpose::ConsensusParameters(v) => {
+                Ok(fuel_tx::UpgradePurpose::ConsensusParameters {
+                    witness_index: v.witness_index.into(),
+                    checksum: v.checksum.into(),
+                })
+            }
+            UpgradePurpose::StateTransition(v) => {
+                Ok(fuel_tx::UpgradePurpose::StateTransition {
+                    root: v.root.into(),
+                })
+            }
+            UpgradePurpose::Unknown => Err(Self::Error::UnknownVariant("UpgradePurpose")),
+        }
     }
 }

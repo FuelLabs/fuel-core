@@ -1,5 +1,8 @@
+#![allow(non_snake_case)]
 use crate::test_helpers::middleware::MockMiddleware;
+
 use futures::TryStreamExt;
+use test_case::test_case;
 
 use super::*;
 
@@ -53,25 +56,43 @@ async fn deploy_height_does_not_override() {
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config);
+    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let _ = relayer.into_task(&Default::default(), ()).await;
 
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
 }
 
+#[test_case(6, Some(6), Some(6); "if local is up to date with remote, then update sync")]
+#[test_case(6, Some(100), Some(100); "if local is somehow ahead of remote, then update sync")]
+#[test_case(6, Some(5), None; "if local is behind remote, then nothing sent to sync")]
+#[test_case(6, None, None; "if local is not set, then nothing sent to sync")]
 #[tokio::test]
-async fn deploy_height_does_override() {
-    let mut mock_db = crate::mock_db::MockDb::default();
-    mock_db
-        .set_finalized_da_height_to_at_least(&50u64.into())
-        .unwrap();
+async fn update_sync__changes_latest_eth_state(
+    remote: u64,
+    local: Option<u64>,
+    expected: Option<u64>,
+) {
+    // given
+    let mock_db = crate::mock_db::MockDb::default();
     let config = Config {
-        da_deploy_height: 52u64.into(),
+        da_deploy_height: 20u64.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config);
-    let _ = relayer.into_task(&Default::default(), ()).await;
+    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
+    let shared = relayer.shared_data();
+    let task = relayer.into_task(&Default::default(), ()).await.unwrap();
 
-    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 52);
+    // when
+    let eth_state = state::test_builder::TestDataSource {
+        eth_remote_finalized: remote,
+        eth_local_finalized: local,
+    };
+    let eth_state = state::build_eth(&eth_state).await.unwrap();
+    task.update_synced(&eth_state);
+
+    // then
+    let expected = expected.map(DaBlockHeight);
+    let actual = *shared.synced.borrow().deref();
+    assert_eq!(expected, actual);
 }

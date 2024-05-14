@@ -39,6 +39,11 @@ impl State {
     pub fn stopped(&self) -> bool {
         matches!(self, State::Stopped | State::StoppedWithError(_))
     }
+
+    /// is stopping
+    pub fn stopping(&self) -> bool {
+        self == &State::Stopping
+    }
 }
 
 /// The wrapper around the `watch::Receiver<State>`. It repeats the `Receiver` functionality +
@@ -50,6 +55,17 @@ pub struct StateWatcher(watch::Receiver<State>);
 impl Default for StateWatcher {
     fn default() -> Self {
         let (_, receiver) = watch::channel(State::NotStarted);
+        Self(receiver)
+    }
+}
+
+#[cfg(feature = "test-helpers")]
+impl StateWatcher {
+    /// Create a new `StateWatcher` with the `State::Started` state.
+    pub fn started() -> Self {
+        let (sender, receiver) = watch::channel(State::Started);
+        // This function is used only in tests, so for simplicity of the tests, we want to leak sender.
+        core::mem::forget(sender);
         Self(receiver)
     }
 }
@@ -88,11 +104,20 @@ impl StateWatcher {
         loop {
             let state = self.borrow().clone();
             if !state.started() {
-                return Ok(state)
+                return Ok(state);
             }
 
             self.changed().await?;
         }
+    }
+
+    /// Future that resolves once the state is `State::Stopped`.
+    pub async fn wait_stopping_or_stopped(&mut self) -> anyhow::Result<()> {
+        let state = self.borrow().clone();
+        while !(state.stopped() || state.stopping()) {
+            self.changed().await?;
+        }
+        Ok(())
     }
 }
 

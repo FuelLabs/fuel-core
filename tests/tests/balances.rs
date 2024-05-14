@@ -1,6 +1,7 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        CoinConfigGenerator,
         MessageConfig,
         StateConfig,
     },
@@ -38,44 +39,37 @@ async fn balance() {
     let asset_id = AssetId::BASE;
 
     // setup config
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        height: None,
-        contracts: None,
-        coins: Some(
-            vec![
-                (owner, 50, asset_id),
-                (owner, 100, asset_id),
-                (owner, 150, asset_id),
-            ]
+    let mut coin_generator = CoinConfigGenerator::new();
+    let state_config = StateConfig {
+        contracts: vec![],
+        coins: vec![
+            (owner, 50, asset_id),
+            (owner, 100, asset_id),
+            (owner, 150, asset_id),
+        ]
+        .into_iter()
+        .map(|(owner, amount, asset_id)| CoinConfig {
+            owner,
+            amount,
+            asset_id,
+            ..coin_generator.generate()
+        })
+        .collect(),
+        messages: vec![(owner, 60), (owner, 90)]
             .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: None,
-                tx_pointer_tx_idx: None,
-                maturity: None,
-                owner,
+            .enumerate()
+            .map(|(nonce, (owner, amount))| MessageConfig {
+                sender: owner,
+                recipient: owner,
+                nonce: (nonce as u64).into(),
                 amount,
-                asset_id,
+                data: vec![],
+                da_height: DaBlockHeight::from(0usize),
             })
             .collect(),
-        ),
-        messages: Some(
-            vec![(owner, 60), (owner, 90)]
-                .into_iter()
-                .enumerate()
-                .map(|(nonce, (owner, amount))| MessageConfig {
-                    sender: owner,
-                    recipient: owner,
-                    nonce: (nonce as u64).into(),
-                    amount,
-                    data: vec![],
-                    da_height: DaBlockHeight::from(1usize),
-                })
-                .collect(),
-        ),
-    });
+        ..Default::default()
+    };
+    let config = Config::local_node_with_state_config(state_config);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -104,7 +98,6 @@ async fn balance() {
                     coin.asset_id,
                     Default::default(),
                     0,
-                    coin.maturity.into(),
                 )),
                 CoinType::MessageCoin(message) => {
                     tx.add_input(Input::message_coin_signed(
@@ -149,6 +142,7 @@ async fn first_5_balances() {
     let all_owners = [Address::default(), owner, Address::from([20u8; 32])];
     let coins = {
         // setup all coins for all owners
+        let mut coin_generator = CoinConfigGenerator::new();
         let mut coins = vec![];
         for owner in all_owners.iter() {
             coins.extend(
@@ -163,14 +157,10 @@ async fn first_5_balances() {
                         ]
                     })
                     .map(|(owner, amount, asset_id)| CoinConfig {
-                        tx_id: None,
-                        output_index: None,
-                        tx_pointer_block_height: None,
-                        tx_pointer_tx_idx: None,
-                        maturity: None,
                         owner: *owner,
                         amount,
                         asset_id,
+                        ..coin_generator.generate()
                     }),
             );
         }
@@ -190,7 +180,7 @@ async fn first_5_balances() {
                         nonce: (nonce as u64).into(),
                         amount,
                         data: vec![],
-                        da_height: DaBlockHeight::from(1usize),
+                        da_height: DaBlockHeight::from(0usize),
                     };
                     nonce += 1;
                     message
@@ -201,13 +191,13 @@ async fn first_5_balances() {
     };
 
     // setup config
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        height: None,
-        contracts: None,
-        coins: Some(coins),
-        messages: Some(messages),
-    });
+    let state_config = StateConfig {
+        contracts: vec![],
+        coins,
+        messages,
+        ..Default::default()
+    };
+    let config = Config::local_node_with_state_config(state_config);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

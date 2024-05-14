@@ -21,12 +21,6 @@ pub enum Error {
     /// Error occurred during serialization or deserialization of the entity.
     #[display(fmt = "error performing serialization or deserialization")]
     Codec,
-    /// Chain can be initialized once.
-    #[display(fmt = "Failed to initialize chain")]
-    ChainAlreadyInitialized,
-    /// Chain should be initialized before usage.
-    #[display(fmt = "Chain is not yet initialized")]
-    ChainUninitialized,
     /// The version of database or data is invalid (possibly not migrated).
     #[display(
         fmt = "Invalid database version, expected {expected:#x}, found {found:#x}"
@@ -37,10 +31,44 @@ pub enum Error {
         /// the database version expected by this build of fuel-core
         expected: u32,
     },
+    /// Multiple heights found in the commit to the database.
+    #[display(fmt = "Multiple heights found in the commit {heights:?}")]
+    MultipleHeightsInCommit {
+        /// List of heights found in the commit.
+        heights: Vec<u64>,
+    },
+    /// Failed to advance the height.
+    #[display(fmt = "Failed to advance the height")]
+    FailedToAdvanceHeight,
+    /// The new and old heights are not linked.
+    #[display(
+        fmt = "New and old heights are not linked: prev_height: {prev_height:#x}, new_height: {new_height:#x}"
+    )]
+    HeightsAreNotLinked {
+        /// The old height.
+        prev_height: u64,
+        /// The new height.
+        new_height: u64,
+    },
+    /// The new height is not found, but the old height is set.
+    #[display(
+        fmt = "The new height is not found, but the old height is set: prev_height: {prev_height:#x}"
+    )]
+    NewHeightIsNotSet {
+        /// The old height known by the database.
+        prev_height: u64,
+    },
 
     /// Not related to database error.
     #[from]
     Other(anyhow::Error),
+}
+
+#[cfg(feature = "test-helpers")]
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string().eq(&other.to_string())
+    }
 }
 
 impl From<Error> for anyhow::Error {
@@ -57,7 +85,7 @@ impl From<Error> for StorageError {
 
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(anyhow::anyhow!(StorageError::from(e)))
+        ExecutorError::StorageError(format!("{}", StorageError::from(e)))
     }
 }
 

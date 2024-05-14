@@ -3,11 +3,12 @@
 use crate::{
     not_found,
     tables::{
+        ConsensusParametersVersions,
         ContractsAssets,
-        ContractsInfo,
         ContractsRawCode,
         ContractsState,
         FuelBlocks,
+        StateTransitionBytecodeVersions,
     },
     ContractsAssetsStorage,
     ContractsStateKey,
@@ -25,10 +26,16 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_types::{
     blockchain::{
-        header::ConsensusHeader,
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::BlockId,
     },
     fuel_tx::{
+        ConsensusParameters,
         Contract,
         StorageSlot,
     },
@@ -36,11 +43,17 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
         ContractId,
-        Salt,
         Word,
     },
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
+};
+use fuel_vm_private::{
+    fuel_storage::StorageWrite,
+    storage::{
+        ContractsStateData,
+        UploadedBytecodes,
+    },
 };
 use itertools::Itertools;
 use primitive_types::U256;
@@ -49,6 +62,8 @@ use std::borrow::Cow;
 /// Used to store metadata relevant during the execution of a transaction.
 #[derive(Clone, Debug)]
 pub struct VmStorage<D> {
+    consensus_parameters_version: ConsensusParametersVersion,
+    state_transition_version: StateTransitionBytecodeVersion,
     current_block_height: BlockHeight,
     current_timestamp: Tai64,
     coinbase: ContractId,
@@ -75,6 +90,8 @@ impl IncreaseStorageKey for U256 {
 impl<D: Default> Default for VmStorage<D> {
     fn default() -> Self {
         Self {
+            consensus_parameters_version: Default::default(),
+            state_transition_version: Default::default(),
             current_block_height: Default::default(),
             current_timestamp: Tai64::now(),
             coinbase: Default::default(),
@@ -85,14 +102,17 @@ impl<D: Default> Default for VmStorage<D> {
 
 impl<D> VmStorage<D> {
     /// Create and instance of the VM storage around the `header` and `coinbase` contract id.
-    pub fn new<T>(
+    pub fn new<C, A>(
         database: D,
-        header: &ConsensusHeader<T>,
+        consensus: &ConsensusHeader<C>,
+        application: &ApplicationHeader<A>,
         coinbase: ContractId,
     ) -> Self {
         Self {
-            current_block_height: header.height,
-            current_timestamp: header.time,
+            consensus_parameters_version: application.consensus_parameters_version,
+            state_transition_version: application.state_transition_bytecode_version,
+            current_block_height: consensus.height,
+            current_timestamp: consensus.time,
             coinbase,
             database,
         }
@@ -162,6 +182,27 @@ where
     }
 }
 
+impl<D, M: Mappable> StorageWrite<M> for VmStorage<D>
+where
+    D: StorageWrite<M, Error = StorageError>,
+{
+    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+        StorageWrite::<M>::write(&mut self.database, key, buf)
+    }
+
+    fn replace(
+        &mut self,
+        key: &M::Key,
+        buf: &[u8],
+    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+        StorageWrite::<M>::replace(&mut self.database, key, buf)
+    }
+
+    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+        StorageWrite::<M>::take(&mut self.database, key)
+    }
+}
+
 impl<D, K, M: Mappable> MerkleRootStorage<K, M> for VmStorage<D>
 where
     D: MerkleRootStorage<K, M, Error = StorageError>,
@@ -172,23 +213,36 @@ where
 }
 
 impl<D> ContractsAssetsStorage for VmStorage<D> where
-    D: MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+    D: StorageMutate<ContractsAssets, Error = StorageError>
 {
 }
 
 impl<D> InterpreterStorage for VmStorage<D>
 where
-    D: StorageMutate<ContractsInfo, Error = StorageError>
-        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
-        + StorageMutate<ContractsRawCode, Error = StorageError>
+    D: StorageWrite<ContractsRawCode, Error = StorageError>
+        + StorageSize<ContractsRawCode, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
-        + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+        + StorageMutate<ContractsAssets, Error = StorageError>
+        + StorageWrite<ContractsState, Error = StorageError>
+        + StorageSize<ContractsState, Error = StorageError>
+        + StorageRead<ContractsState, Error = StorageError>
+        + StorageMutate<ConsensusParametersVersions, Error = StorageError>
+        + StorageMutate<StateTransitionBytecodeVersions, Error = StorageError>
+        + StorageMutate<UploadedBytecodes, Error = StorageError>
         + VmStorageRequirements<Error = StorageError>,
 {
     type DataError = StorageError;
 
     fn block_height(&self) -> Result<BlockHeight, Self::DataError> {
         Ok(self.current_block_height)
+    }
+
+    fn consensus_parameters_version(&self) -> Result<u32, Self::DataError> {
+        Ok(self.consensus_parameters_version)
+    }
+
+    fn state_transition_version(&self) -> Result<u32, Self::DataError> {
+        Ok(self.state_transition_version)
     }
 
     fn timestamp(&self, height: BlockHeight) -> Result<Word, Self::DataError> {
@@ -222,29 +276,45 @@ where
         Ok(self.coinbase)
     }
 
+    fn set_consensus_parameters(
+        &mut self,
+        version: u32,
+        consensus_parameters: &ConsensusParameters,
+    ) -> Result<Option<ConsensusParameters>, Self::DataError> {
+        self.database
+            .storage_as_mut::<ConsensusParametersVersions>()
+            .insert(&version, consensus_parameters)
+    }
+
+    fn set_state_transition_bytecode(
+        &mut self,
+        version: u32,
+        hash: &Bytes32,
+    ) -> Result<Option<Bytes32>, Self::DataError> {
+        self.database
+            .storage_as_mut::<StateTransitionBytecodeVersions>()
+            .insert(&version, hash)
+    }
+
     fn deploy_contract_with_id(
         &mut self,
-        salt: &Salt,
         slots: &[StorageSlot],
         contract: &Contract,
-        root: &Bytes32,
         id: &ContractId,
     ) -> Result<(), Self::DataError> {
         self.storage_contract_insert(id, contract)?;
-        self.storage_contract_root_insert(id, salt, root)?;
-
         self.database.init_contract_state(
             id,
             slots.iter().map(|slot| (*slot.key(), *slot.value())),
         )
     }
 
-    fn merkle_contract_state_range(
+    fn contract_state_range(
         &self,
         contract_id: &ContractId,
         start_key: &Bytes32,
         range: usize,
-    ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
+    ) -> Result<Vec<Option<Cow<ContractsStateData>>>, Self::DataError> {
         use crate::StorageAsRef;
 
         let mut key = U256::from_big_endian(start_key.as_ref());
@@ -260,13 +330,18 @@ where
         Ok(results)
     }
 
-    fn merkle_contract_state_insert_range(
+    fn contract_state_insert_range<'a, I>(
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
-        values: &[Bytes32],
-    ) -> Result<usize, Self::DataError> {
+        values: I,
+    ) -> Result<usize, Self::DataError>
+    where
+        I: Iterator<Item = &'a [u8]>,
+    {
+        let values: Vec<_> = values.collect();
         let mut current_key = U256::from_big_endian(start_key.as_ref());
+
         // verify key is in range
         current_key
             .checked_add(U256::from(values.len()))
@@ -294,7 +369,7 @@ where
         Ok(found_unset as usize)
     }
 
-    fn merkle_contract_state_remove_range(
+    fn contract_state_remove_range(
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
@@ -378,6 +453,6 @@ where
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
-        self.init_storage(slots.iter().map(|kv| (&kv.0, &kv.1)))
+        self.init_storage(slots.iter().map(|kv| (&kv.0, kv.1.as_ref())))
     }
 }

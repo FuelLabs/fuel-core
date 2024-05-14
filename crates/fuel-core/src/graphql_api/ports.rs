@@ -1,4 +1,3 @@
-use crate::fuel_core_graphql_api::storage::receipts::Receipts;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -9,12 +8,8 @@ use fuel_core_storage::{
     tables::{
         Coins,
         ContractsAssets,
-        ContractsInfo,
         ContractsRawCode,
-        FuelBlocks,
         Messages,
-        SealedBlockConsensus,
-        Transactions,
     },
     Error as StorageError,
     Result as StorageResult,
@@ -24,16 +19,23 @@ use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::{
             BlockId,
             DaBlockHeight,
         },
     },
-    entities::message::{
-        MerkleProof,
-        Message,
+    entities::relayer::{
+        message::{
+            MerkleProof,
+            Message,
+        },
+        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
+        Salt,
         Transaction,
         TxId,
         TxPointer,
@@ -59,39 +61,10 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub trait OffChainDatabase:
-    Send + Sync + StorageInspect<Receipts, Error = StorageError>
-{
+pub trait OffChainDatabase: Send + Sync {
+    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
+
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
-
-    fn owned_transactions_ids(
-        &self,
-        owner: Address,
-        start: Option<TxPointer>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
-}
-
-/// The on chain database port expected by GraphQL API service.
-// TODO: Move `owned_message_ids` and `owned_coins_ids`` to `OffChainDatabase`
-//  https://github.com/FuelLabs/fuel-core/issues/1583
-pub trait OnChainDatabase:
-    Send
-    + Sync
-    + DatabaseBlocks
-    + StorageInspect<Transactions, Error = StorageError>
-    + DatabaseMessages
-    + StorageInspect<Coins, Error = StorageError>
-    + DatabaseContracts
-    + DatabaseChain
-    + DatabaseMessageProof
-{
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>>;
 
     fn owned_coins_ids(
         &self,
@@ -99,14 +72,63 @@ pub trait OnChainDatabase:
         start_coin: Option<UtxoId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>>;
+
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>>;
+
+    fn owned_transactions_ids(
+        &self,
+        owner: Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+
+    fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
+
+    fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
+
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+
+    fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus>;
+
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
+}
+
+/// The on chain database port expected by GraphQL API service.
+pub trait OnChainDatabase:
+    Send
+    + Sync
+    + DatabaseBlocks
+    + DatabaseMessages
+    + StorageInspect<Coins, Error = StorageError>
+    + DatabaseContracts
+    + DatabaseChain
+    + DatabaseMessageProof
+{
 }
 
 /// Trait that specifies all the getters required for blocks.
-pub trait DatabaseBlocks:
-    StorageInspect<FuelBlocks, Error = StorageError>
-    + StorageInspect<SealedBlockConsensus, Error = StorageError>
-{
-    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
+pub trait DatabaseBlocks {
+    /// Get a transaction by its id.
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
+
+    /// Get a block by its height.
+    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
 
     fn blocks(
         &self,
@@ -115,6 +137,9 @@ pub trait DatabaseBlocks:
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
     fn latest_height(&self) -> StorageResult<BlockHeight>;
+
+    /// Get the consensus for a block.
+    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
 }
 
 /// Trait that specifies all the getters required for messages.
@@ -125,15 +150,19 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
 
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
-
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
+}
+
+pub trait DatabaseRelayedTransactions {
+    fn transaction_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
 }
 
 /// Trait that specifies all the getters required for contract.
 pub trait DatabaseContracts:
     StorageInspect<ContractsRawCode, Error = StorageError>
-    + StorageInspect<ContractsInfo, Error = StorageError>
     + StorageInspect<ContractsAssets, Error = StorageError>
 {
     fn contract_balances(
@@ -201,17 +230,35 @@ pub trait P2pPort: Send + Sync {
     async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>>;
 }
 
+/// Trait for defining how to estimate gas price for future blocks
+#[async_trait::async_trait]
+pub trait GasPriceEstimate: Send + Sync {
+    /// The worst case scenario for gas price at a given horizon
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> u64;
+}
+
 pub mod worker {
+    use super::super::storage::blocks::FuelBlockIdsToHeights;
     use crate::{
-        database::{
-            database_description::off_chain::OffChain,
-            metadata::MetadataTable,
+        fuel_core_graphql_api::storage::{
+            coins::OwnedCoins,
+            contracts::ContractsInfo,
+            messages::{
+                OwnedMessageIds,
+                SpentMessages,
+            },
         },
-        fuel_core_graphql_api::storage::receipts::Receipts,
+        graphql_api::storage::{
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
+            relayed_transactions::RelayedTransactionStatuses,
+        },
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        transactional::Transactional,
         Error as StorageError,
         Result as StorageResult,
         StorageMutate,
@@ -228,12 +275,25 @@ pub mod worker {
         },
     };
 
+    pub trait Transactional: Send + Sync {
+        type Transaction<'a>: OffChainDatabase
+        where
+            Self: 'a;
+
+        /// Creates a write database transaction.
+        fn transaction(&mut self) -> Self::Transaction<'_>;
+    }
+
     pub trait OffChainDatabase:
-        Send
-        + Sync
-        + StorageMutate<Receipts, Error = StorageError>
-        + StorageMutate<MetadataTable<OffChain>, Error = StorageError>
-        + Transactional<Storage = Self>
+        StorageMutate<OwnedMessageIds, Error = StorageError>
+        + StorageMutate<OwnedCoins, Error = StorageError>
+        + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
+        + StorageMutate<ContractsInfo, Error = StorageError>
+        + StorageMutate<OldFuelBlocks, Error = StorageError>
+        + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
+        + StorageMutate<OldTransactions, Error = StorageError>
+        + StorageMutate<SpentMessages, Error = StorageError>
+        + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,
@@ -252,10 +312,31 @@ pub mod worker {
         /// Update metadata about the total number of transactions on the chain.
         /// Returns the total count after the update.
         fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64>;
+
+        /// Gets the total number of transactions on the chain from metadata.
+        fn get_tx_count(&self) -> StorageResult<u64>;
+
+        /// Commits the underlying changes into the database.
+        fn commit(self) -> StorageResult<()>;
     }
 
     pub trait BlockImporter {
         /// Returns a stream of imported block.
         fn block_events(&self) -> BoxStream<SharedImportResult>;
     }
+
+    pub trait TxPool: Send + Sync {
+        /// Sends the complete status of the transaction.
+        fn send_complete(
+            &self,
+            id: Bytes32,
+            block_height: &BlockHeight,
+            status: TransactionStatus,
+        );
+    }
+}
+
+pub trait ConsensusProvider: Send + Sync {
+    /// Returns latest consensus parameters.
+    fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
 }

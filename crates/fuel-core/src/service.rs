@@ -2,13 +2,7 @@ use self::adapters::BlockImporterAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
-    service::{
-        adapters::{
-            P2PAdapter,
-            PoAAdapter,
-        },
-        genesis::execute_genesis_block,
-    },
+    service::adapters::PoAAdapter,
 };
 use fuel_core_poa::ports::BlockImporter;
 use fuel_core_services::{
@@ -18,13 +12,10 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use fuel_core_storage::{
-    transactional::AtomicView,
-    IsNotFound,
-};
+use fuel_core_storage::IsNotFound;
 use std::net::SocketAddr;
-use tracing::warn;
 
+use crate::service::sub_services::TxPoolSharedState;
 pub use config::{
     Config,
     DbType,
@@ -45,7 +36,7 @@ pub struct SharedState {
     /// The PoA adaptor around the shared state of the consensus module.
     pub poa_adapter: PoAAdapter,
     /// The transaction pool shared state.
-    pub txpool: fuel_core_txpool::service::SharedState<P2PAdapter, Database>,
+    pub txpool_shared_state: TxPoolSharedState,
     /// The P2P network shared state.
     #[cfg(feature = "p2p")]
     pub network: Option<fuel_core_p2p::service::SharedState>,
@@ -88,6 +79,7 @@ impl FuelService {
         let runner = ServiceRunner::new(task);
         let shared = runner.shared.clone();
         let bound_address = runner.shared.graph_ql.bound_address;
+
         Ok(FuelService {
             bound_address,
             shared,
@@ -98,31 +90,8 @@ impl FuelService {
     /// Creates and starts fuel node instance from service config
     pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
-        let combined_database = match config.database_type {
-            #[cfg(feature = "rocksdb")]
-            DbType::RocksDb => {
-                // use a default tmp rocksdb if no path is provided
-                if config.database_path.as_os_str().is_empty() {
-                    warn!(
-                        "No RocksDB path configured, initializing database with a tmp directory"
-                    );
-                    CombinedDatabase::default()
-                } else {
-                    tracing::info!(
-                        "Opening database {:?} with cache size \"{}\"",
-                        config.database_path,
-                        config.max_database_cache_size
-                    );
-                    CombinedDatabase::open(
-                        &config.database_path,
-                        config.max_database_cache_size,
-                    )?
-                }
-            }
-            DbType::InMemory => CombinedDatabase::in_memory(),
-            #[cfg(not(feature = "rocksdb"))]
-            _ => CombinedDatabase::in_memory(),
-        };
+        let combined_database =
+            CombinedDatabase::from_config(&config.combined_db_config)?;
 
         Self::from_combined_database(combined_database, config).await
     }
@@ -143,7 +112,13 @@ impl FuelService {
         config: Config,
     ) -> anyhow::Result<Self> {
         let service = Self::new(combined_database, config)?;
-        service.runner.start_and_await().await?;
+        let state = service.runner.start_and_await().await?;
+
+        if !state.started() {
+            return Err(anyhow::anyhow!(
+                "The state of the service is not started: {state:?}"
+            ));
+        }
         Ok(service)
     }
 
@@ -213,17 +188,10 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(mut database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
+    pub fn new(database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
-        let block_height = config
-            .chain_conf
-            .initial_state
-            .as_ref()
-            .and_then(|state| state.height)
-            .unwrap_or_default();
-        let da_block_height = 0u64.into();
-        database.init(&block_height, &da_block_height)?;
+        database.check_version()?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");
@@ -250,14 +218,18 @@ impl RunnableService for Task {
 
     async fn into_task(
         self,
-        _: &StateWatcher,
+        watcher: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let view = self.shared.database.on_chain().latest_view();
         // check if chain is initialized
-        if let Err(err) = view.get_genesis() {
+        if let Err(err) = self.shared.database.on_chain().get_genesis() {
             if err.is_not_found() {
-                let result = execute_genesis_block(&self.shared.config, &view)?;
+                let result = genesis::execute_genesis_block(
+                    watcher.clone(),
+                    &self.shared.config,
+                    &self.shared.database,
+                )
+                .await?;
 
                 self.shared.block_importer.commit_result(result).await?;
             }
@@ -303,7 +275,6 @@ impl RunnableTask for Task {
                 );
             }
         }
-        self.shared.database.flush()?;
         Ok(())
     }
 }
@@ -342,14 +313,14 @@ mod tests {
                 task.sub_services()[i].stop_and_await().await.unwrap();
                 assert!(!task.run(&mut watcher).await.unwrap());
             } else {
-                break
+                break;
             }
             i += 1;
         }
 
         // current services: graphql, graphql worker, txpool, PoA
         #[allow(unused_mut)]
-        let mut expected_services = 4;
+        let mut expected_services = 5;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

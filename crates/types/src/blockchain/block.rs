@@ -14,13 +14,17 @@ use super::{
     },
 };
 use crate::{
-    blockchain::header::BlockHeaderV1,
+    blockchain::header::{
+        BlockHeaderError,
+        BlockHeaderV1,
+    },
     fuel_tx::{
         Transaction,
         TxId,
         UniqueIdentifier,
     },
     fuel_types::{
+        Bytes32,
         ChainId,
         MessageId,
     },
@@ -29,7 +33,6 @@ use crate::{
 /// Version-able block type
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 pub enum Block<TransactionRepresentation = Transaction> {
     /// V1 Block
     V1(BlockV1<TransactionRepresentation>),
@@ -85,13 +88,18 @@ impl Block<Transaction> {
     pub fn new(
         header: PartialBlockHeader,
         transactions: Vec<Transaction>,
-        message_ids: &[MessageId],
-    ) -> Self {
+        outbox_message_ids: &[MessageId],
+        event_inbox_root: Bytes32,
+    ) -> Result<Self, BlockHeaderError> {
         let inner = BlockV1 {
-            header: header.generate(&transactions, message_ids),
+            header: header.generate(
+                &transactions,
+                outbox_message_ids,
+                event_inbox_root,
+            )?,
             transactions,
         };
-        Block::V1(inner)
+        Ok(Block::V1(inner))
     }
 
     /// Try creating a new full fuel block from a [`BlockHeader`] and
@@ -218,8 +226,17 @@ impl PartialFuelBlock {
     ///
     /// Message ids are produced by executed the transactions and collecting
     /// the ids from the receipts of messages outputs.
-    pub fn generate(self, message_ids: &[MessageId]) -> Block {
-        Block::new(self.header, self.transactions, message_ids)
+    pub fn generate(
+        self,
+        outbox_message_ids: &[MessageId],
+        event_inbox_root: Bytes32,
+    ) -> Result<Block, BlockHeaderError> {
+        Block::new(
+            self.header,
+            self.transactions,
+            outbox_message_ids,
+            event_inbox_root,
+        )
     }
 }
 
@@ -229,7 +246,13 @@ impl From<Block> for PartialFuelBlock {
             Block::V1(BlockV1 {
                 header:
                     BlockHeader::V1(BlockHeaderV1 {
-                        application: ApplicationHeader { da_height, .. },
+                        application:
+                            ApplicationHeader {
+                                da_height,
+                                consensus_parameters_version,
+                                state_transition_bytecode_version,
+                                ..
+                            },
                         consensus:
                             ConsensusHeader {
                                 prev_root,
@@ -244,6 +267,8 @@ impl From<Block> for PartialFuelBlock {
                 header: PartialBlockHeader {
                     application: ApplicationHeader {
                         da_height,
+                        consensus_parameters_version,
+                        state_transition_bytecode_version,
                         generated: Empty {},
                     },
                     consensus: ConsensusHeader {

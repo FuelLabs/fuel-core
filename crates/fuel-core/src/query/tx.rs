@@ -1,9 +1,7 @@
-use crate::fuel_core_graphql_api::{
-    ports::{
-        OffChainDatabase,
-        OnChainDatabase,
-    },
-    storage::receipts::Receipts,
+use crate::fuel_core_graphql_api::ports::{
+    DatabaseBlocks,
+    OffChainDatabase,
+    OnChainDatabase,
 };
 use fuel_core_storage::{
     iter::{
@@ -14,7 +12,6 @@ use fuel_core_storage::{
     not_found,
     tables::Transactions,
     Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
@@ -37,18 +34,21 @@ pub trait SimpleTransactionData: Send + Sync {
 
 impl<D> SimpleTransactionData for D
 where
-    D: OnChainDatabase + OffChainDatabase + ?Sized,
+    D: OnChainDatabase + DatabaseBlocks + OffChainDatabase + ?Sized,
 {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
-        self.storage::<Transactions>()
-            .get(tx_id)
-            .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
+        self.transaction(tx_id)
     }
 
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        self.storage::<Receipts>()
-            .get(tx_id)
-            .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
+        let status = self.status(tx_id)?;
+
+        let receipts = match status {
+            TransactionStatus::Success { receipts, .. }
+            | TransactionStatus::Failed { receipts, .. } => Some(receipts),
+            _ => None,
+        };
+        receipts.ok_or(not_found!(Transactions))
     }
 }
 
@@ -65,7 +65,7 @@ pub trait TransactionQueryData: Send + Sync + SimpleTransactionData {
 
 impl<D> TransactionQueryData for D
 where
-    D: OnChainDatabase + OffChainDatabase + ?Sized,
+    D: OnChainDatabase + DatabaseBlocks + OffChainDatabase + ?Sized,
 {
     fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.tx_status(tx_id)

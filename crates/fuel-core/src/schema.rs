@@ -28,8 +28,12 @@ pub mod dap;
 pub mod health;
 pub mod message;
 pub mod node_info;
+
+pub mod gas_price;
 pub mod scalars;
 pub mod tx;
+
+pub mod relayed_tx;
 
 #[derive(MergedObject, Default)]
 pub struct Query(
@@ -43,7 +47,10 @@ pub struct Query(
     contract::ContractQuery,
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
+    gas_price::LatestGasPriceQuery,
+    gas_price::EstimateGasPriceQuery,
     message::MessageQuery,
+    relayed_tx::RelayedTransactionQuery,
 );
 
 #[derive(MergedObject, Default)]

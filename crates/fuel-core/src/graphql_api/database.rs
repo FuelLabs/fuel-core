@@ -6,18 +6,22 @@ use crate::fuel_core_graphql_api::{
         DatabaseContracts,
         DatabaseMessageProof,
         DatabaseMessages,
+        DatabaseRelayedTransactions,
         OffChainDatabase,
         OnChainDatabase,
     },
-    storage::receipts::Receipts,
 };
 use fuel_core_storage::{
     iter::{
         BoxedIter,
+        IntoBoxedIter,
         IterDirection,
     },
+    not_found,
+    tables::Transactions,
     transactional::AtomicView,
     Error as StorageError,
+    IsNotFound,
     Mappable,
     Result as StorageResult,
     StorageInspect,
@@ -29,18 +33,25 @@ use fuel_core_txpool::types::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::{
             BlockId,
             DaBlockHeight,
         },
     },
-    entities::message::{
-        MerkleProof,
-        Message,
+    entities::relayer::{
+        message::{
+            MerkleProof,
+            Message,
+        },
+        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
         Address,
         AssetId,
+        Bytes32,
+        Salt,
+        Transaction,
         TxPointer,
         UtxoId,
     },
@@ -68,6 +79,8 @@ pub type OffChainView = Arc<dyn OffChainDatabase>;
 /// The container of the on-chain and off-chain database view provides.
 /// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
+    /// The height of the genesis block.
+    genesis_height: BlockHeight,
     /// The on-chain database view provider.
     on_chain: Box<dyn AtomicView<View = OnChainView, Height = BlockHeight>>,
     /// The off-chain database view provider.
@@ -76,7 +89,11 @@ pub struct ReadDatabase {
 
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
-    pub fn new<OnChain, OffChain>(on_chain: OnChain, off_chain: OffChain) -> Self
+    pub fn new<OnChain, OffChain>(
+        genesis_height: BlockHeight,
+        on_chain: OnChain,
+        off_chain: OffChain,
+    ) -> Self
     where
         OnChain: AtomicView<Height = BlockHeight> + 'static,
         OffChain: AtomicView<Height = BlockHeight> + 'static,
@@ -84,6 +101,7 @@ impl ReadDatabase {
         OffChain::View: OffChainDatabase,
     {
         Self {
+            genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
         }
@@ -95,6 +113,7 @@ impl ReadDatabase {
         //  It is not possible to implement until `view_at` is implemented for the `AtomicView`.
         //  https://github.com/FuelLabs/fuel-core/issues/1582
         ReadView {
+            genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view(),
             off_chain: self.off_chain.latest_view(),
         }
@@ -102,13 +121,31 @@ impl ReadDatabase {
 }
 
 pub struct ReadView {
+    genesis_height: BlockHeight,
     on_chain: OnChainView,
     off_chain: OffChainView,
 }
 
 impl DatabaseBlocks for ReadView {
-    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
-        self.on_chain.block_height(block_id)
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+        let result = self.on_chain.transaction(tx_id);
+        if result.is_not_found() {
+            if let Some(tx) = self.old_transaction(tx_id)? {
+                Ok(tx)
+            } else {
+                Err(not_found!(Transactions))
+            }
+        } else {
+            result
+        }
+    }
+
+    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        if *height >= self.genesis_height {
+            self.on_chain.block(height)
+        } else {
+            self.off_chain.old_block(height)
+        }
     }
 
     fn blocks(
@@ -116,11 +153,54 @@ impl DatabaseBlocks for ReadView {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
-        self.on_chain.blocks(height, direction)
+        // Chain together blocks from the off-chain db and the on-chain db
+        // The blocks in off-chain db, if any, are from time before regenesis
+
+        if let Some(height) = height {
+            match (height >= self.genesis_height, direction) {
+                (true, IterDirection::Forward) => {
+                    self.on_chain.blocks(Some(height), direction)
+                }
+                (true, IterDirection::Reverse) => self
+                    .on_chain
+                    .blocks(Some(height), direction)
+                    .chain(self.off_chain.old_blocks(None, direction))
+                    .into_boxed(),
+                (false, IterDirection::Forward) => self
+                    .off_chain
+                    .old_blocks(Some(height), direction)
+                    .chain(self.on_chain.blocks(None, direction))
+                    .into_boxed(),
+                (false, IterDirection::Reverse) => {
+                    self.off_chain.old_blocks(Some(height), direction)
+                }
+            }
+        } else {
+            match direction {
+                IterDirection::Forward => self
+                    .off_chain
+                    .old_blocks(None, direction)
+                    .chain(self.on_chain.blocks(None, direction))
+                    .into_boxed(),
+                IterDirection::Reverse => self
+                    .on_chain
+                    .blocks(None, direction)
+                    .chain(self.off_chain.old_blocks(None, direction))
+                    .into_boxed(),
+            }
+        }
     }
 
     fn latest_height(&self) -> StorageResult<BlockHeight> {
         self.on_chain.latest_height()
+    }
+
+    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
+        if *id >= self.genesis_height {
+            self.on_chain.consensus(id)
+        } else {
+            self.off_chain.old_block_consensus(id)
+        }
     }
 }
 
@@ -149,12 +229,18 @@ impl DatabaseMessages for ReadView {
         self.on_chain.all_messages(start_message_id, direction)
     }
 
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.on_chain.message_is_spent(nonce)
-    }
-
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.on_chain.message_exists(nonce)
+    }
+}
+
+impl DatabaseRelayedTransactions for ReadView {
+    fn transaction_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>> {
+        let maybe_status = self.off_chain.relayed_tx_status(id)?;
+        Ok(maybe_status)
     }
 }
 
@@ -187,15 +273,15 @@ impl DatabaseMessageProof for ReadView {
     }
 }
 
-impl OnChainDatabase for ReadView {
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
-        self.on_chain
-            .owned_message_ids(owner, start_message_id, direction)
+impl OnChainDatabase for ReadView {}
+
+impl OffChainDatabase for ReadView {
+    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
+        self.off_chain.block_height(block_id)
+    }
+
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+        self.off_chain.tx_status(tx_id)
     }
 
     fn owned_coins_ids(
@@ -204,28 +290,17 @@ impl OnChainDatabase for ReadView {
         start_coin: Option<UtxoId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>> {
-        self.on_chain.owned_coins_ids(owner, start_coin, direction)
+        self.off_chain.owned_coins_ids(owner, start_coin, direction)
     }
-}
 
-impl StorageInspect<Receipts> for ReadView {
-    type Error = StorageError;
-
-    fn get(
+    fn owned_message_ids(
         &self,
-        key: &<Receipts as Mappable>::Key,
-    ) -> StorageResult<Option<Cow<<Receipts as Mappable>::OwnedValue>>> {
-        self.off_chain.get(key)
-    }
-
-    fn contains_key(&self, key: &<Receipts as Mappable>::Key) -> StorageResult<bool> {
-        self.off_chain.contains_key(key)
-    }
-}
-
-impl OffChainDatabase for ReadView {
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
-        self.off_chain.tx_status(tx_id)
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+        self.off_chain
+            .owned_message_ids(owner, start_message_id, direction)
     }
 
     fn owned_transactions_ids(
@@ -236,5 +311,43 @@ impl OffChainDatabase for ReadView {
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
         self.off_chain
             .owned_transactions_ids(owner, start, direction)
+    }
+
+    fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
+        self.off_chain.contract_salt(contract_id)
+    }
+
+    fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        self.off_chain.old_block(height)
+    }
+
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        self.off_chain.old_blocks(height, direction)
+    }
+
+    fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
+        self.off_chain.old_block_consensus(height)
+    }
+
+    fn old_transaction(
+        &self,
+        id: &TxId,
+    ) -> StorageResult<Option<fuel_core_types::fuel_tx::Transaction>> {
+        self.off_chain.old_transaction(id)
+    }
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>> {
+        self.off_chain.relayed_tx_status(id)
+    }
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.off_chain.message_is_spent(nonce)
     }
 }

@@ -4,14 +4,19 @@ expression: operation.query
 ---
 query($height: U32) {
   block(height: $height) {
+    version
     id
     header {
+      version
       id
       daHeight
+      consensusParametersVersion
+      stateTransitionBytecodeVersion
       transactionsCount
       messageReceiptCount
       transactionsRoot
-      messageReceiptRoot
+      messageOutboxRoot
+      eventInboxRoot
       height
       prevRoot
       time
@@ -24,6 +29,7 @@ query($height: U32) {
         coinsRoot
         contractsRoot
         messagesRoot
+        transactionsRoot
       }
       ... on PoAConsensus {
         signature
@@ -34,5 +40,3 @@ query($height: U32) {
     }
   }
 }
-
-

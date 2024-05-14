@@ -16,6 +16,7 @@ pub struct PaginationRequest<T> {
     pub direction: PageDirection,
 }
 
+#[derive(Clone, Debug)]
 pub struct PaginatedResult<T, C> {
     pub cursor: Option<C>,
     pub results: Vec<T>,

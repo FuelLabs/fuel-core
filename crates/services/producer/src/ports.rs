@@ -1,11 +1,15 @@
 use async_trait::async_trait;
 use fuel_core_storage::{
-    transactional::StorageTransaction,
+    transactional::Changes,
     Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::DaBlockHeight,
     },
     fuel_tx::{
@@ -30,6 +34,16 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
+
+    /// Returns the latest consensus parameters version.
+    fn latest_consensus_parameters_version(
+        &self,
+    ) -> StorageResult<ConsensusParametersVersion>;
+
+    /// Returns the latest state transition bytecode version.
+    fn latest_state_transition_bytecode_version(
+        &self,
+    ) -> StorageResult<StateTransitionBytecodeVersion>;
 }
 
 #[async_trait]
@@ -47,24 +61,23 @@ pub trait TxPool: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait Relayer: Send + Sync {
-    /// Wait for the relayer to reach at least this height and return the
-    /// latest height (which is guaranteed to be >= height).
-    async fn wait_for_at_least(
+    /// Wait for the relayer to reach at least this height and return the latest height.
+    async fn wait_for_at_least_height(
         &self,
         height: &DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight>;
+
+    /// Get the total Forced Transaction gas cost for the block at the given height.
+    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64>;
 }
 
-pub trait Executor<TxSource>: Send + Sync {
-    /// The database used by the executor.
-    type Database;
-
+pub trait BlockProducer<TxSource>: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
-    fn execute_without_commit(
+    fn produce_without_commit(
         &self,
         component: Components<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;
+    ) -> ExecutorResult<UncommittedResult<Changes>>;
 }
 
 pub trait DryRunner: Send + Sync {

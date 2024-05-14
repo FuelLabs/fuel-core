@@ -4,7 +4,6 @@ use crate::{
     Error,
     TxInfo,
 };
-use anyhow::anyhow;
 use fuel_core_types::{
     fuel_tx::{
         input::{
@@ -73,7 +72,7 @@ pub struct ContractState {
     /// origin is needed for child to parent rel, in case when contract is in dependency this is how we make a chain.
     origin: Option<UtxoId>,
     /// gas_price. We can probably derive this from Tx
-    gas_price: GasPrice,
+    tip: Word,
 }
 
 impl ContractState {
@@ -88,7 +87,7 @@ impl ContractState {
 #[derive(Debug, Clone)]
 pub struct MessageState {
     spent_by: TxId,
-    gas_price: GasPrice,
+    tip: Word,
 }
 
 impl Dependency {
@@ -166,7 +165,7 @@ impl Dependency {
         output: &Output,
         input: &Input,
         is_output_filled: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         if let Input::CoinSigned(CoinSigned {
             owner,
             amount,
@@ -190,31 +189,29 @@ impl Dependency {
                     asset_id,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner.into())
+                        return Err(Error::NotInsertedIoWrongOwner)
                     }
                     if amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount.into())
+                        return Err(Error::NotInsertedIoWrongAmount)
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId.into())
+                        return Err(Error::NotInsertedIoWrongAssetId)
                     }
                 }
-                Output::Contract(_) => {
-                    return Err(Error::NotInsertedIoContractOutput.into())
-                }
+                Output::Contract(_) => return Err(Error::NotInsertedIoContractOutput),
                 Output::Change {
                     to,
                     asset_id,
                     amount,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner.into())
+                        return Err(Error::NotInsertedIoWrongOwner)
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId.into())
+                        return Err(Error::NotInsertedIoWrongAssetId)
                     }
                     if is_output_filled && amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount.into())
+                        return Err(Error::NotInsertedIoWrongAmount)
                     }
                 }
                 Output::Variable {
@@ -224,23 +221,25 @@ impl Dependency {
                 } => {
                     if is_output_filled {
                         if to != i_owner {
-                            return Err(Error::NotInsertedIoWrongOwner.into())
+                            return Err(Error::NotInsertedIoWrongOwner)
                         }
                         if amount != i_amount {
-                            return Err(Error::NotInsertedIoWrongAmount.into())
+                            return Err(Error::NotInsertedIoWrongAmount)
                         }
                         if asset_id != i_asset_id {
-                            return Err(Error::NotInsertedIoWrongAssetId.into())
+                            return Err(Error::NotInsertedIoWrongAssetId)
                         }
                     }
                     // else do nothing, everything is variable and can be only check on execution
                 }
                 Output::ContractCreated { .. } => {
-                    return Err(Error::NotInsertedIoContractOutput.into())
+                    return Err(Error::NotInsertedIoContractOutput)
                 }
             };
         } else {
-            return Err(anyhow!("Use it only for coin output check"))
+            return Err(Error::Other(
+                "Use it only for coin output check".to_string(),
+            ))
         }
         Ok(())
     }
@@ -254,13 +253,16 @@ impl Dependency {
         txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
         tx: &'a ArcPoolTx,
-    ) -> anyhow::Result<(
-        usize,
-        HashMap<UtxoId, CoinState>,
-        HashMap<ContractId, ContractState>,
-        HashMap<Nonce, MessageState>,
-        Vec<TxId>,
-    )> {
+    ) -> Result<
+        (
+            usize,
+            HashMap<UtxoId, CoinState>,
+            HashMap<ContractId, ContractState>,
+            HashMap<Nonce, MessageState>,
+            Vec<TxId>,
+        ),
+        Error,
+    > {
         let mut collided: Vec<TxId> = Vec::new();
         // iterate over all inputs and check for collision
         let mut max_depth = 0;
@@ -278,7 +280,7 @@ impl Dependency {
                         max_depth =
                             core::cmp::max(state.depth.saturating_add(1), max_depth);
                         if max_depth > self.max_depth {
-                            return Err(Error::NotInsertedMaxDepth.into())
+                            return Err(Error::NotInsertedMaxDepth)
                         }
                         // output is present but is it spend by other tx?
                         if let Some(ref spend_by) = state.is_spend_by {
@@ -287,55 +289,56 @@ impl Dependency {
                                 .get(spend_by)
                                 .expect("Tx should be always present in txpool");
                             // compare if tx has better price
-                            if txpool_tx.price() > tx.price() {
+                            if txpool_tx.tip() > tx.tip() {
                                 return Err(Error::NotInsertedCollision(
                                     *spend_by, *utxo_id,
-                                )
-                                .into())
-                            } else {
-                                if state.is_in_database() {
-                                    // this means it is loaded from db. Get tx to compare output.
-                                    if self.utxo_validation {
-                                        let coin = db.utxo(utxo_id)?.ok_or(
-                                            Error::NotInsertedInputUtxoIdNotExisting(
+                                ))
+                            } else if state.is_in_database() {
+                                // this means it is loaded from db. Get tx to compare output.
+                                if self.utxo_validation {
+                                    let coin = db
+                                        .utxo(utxo_id)
+                                        .map_err(|e| Error::Database(format!("{:?}", e)))?
+                                        .ok_or(
+                                            Error::NotInsertedInputUtxoIdNotDoesNotExist(
                                                 *utxo_id,
                                             ),
                                         )?;
-                                        if !coin
-                                            .matches_input(input)
-                                            .expect("The input is coin above")
-                                        {
-                                            return Err(
-                                                Error::NotInsertedIoCoinMismatch.into()
-                                            )
-                                        }
+                                    if !coin
+                                        .matches_input(input)
+                                        .expect("The input is coin above")
+                                    {
+                                        return Err(Error::NotInsertedIoCoinMismatch)
                                     }
-                                } else {
-                                    // tx output is in pool
-                                    let output_tx = txs.get(utxo_id.tx_id()).unwrap();
-                                    let output = &output_tx.outputs()
-                                        [utxo_id.output_index() as usize];
-                                    Self::check_if_coin_input_can_spend_output(
-                                        output, input, false,
-                                    )?;
-                                };
-
-                                collided.push(*spend_by);
+                                }
+                            } else {
+                                // tx output is in pool
+                                let output_tx = txs.get(utxo_id.tx_id()).unwrap();
+                                let output =
+                                    &output_tx.outputs()[utxo_id.output_index() as usize];
+                                Self::check_if_coin_input_can_spend_output(
+                                    output, input, false,
+                                )?;
                             }
+
+                            collided.push(*spend_by);
                         }
                         // if coin is not spend, it will be spend later down the line
                     } else {
                         if self.utxo_validation {
                             // fetch from db and check if tx exist.
-                            let coin = db.utxo(utxo_id)?.ok_or(
-                                Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
-                            )?;
+                            let coin = db
+                                .utxo(utxo_id)
+                                .map_err(|e| Error::Database(format!("{:?}", e)))?
+                                .ok_or(Error::NotInsertedInputUtxoIdNotDoesNotExist(
+                                    *utxo_id,
+                                ))?;
 
                             if !coin
                                 .matches_input(input)
                                 .expect("The input is coin above")
                             {
-                                return Err(Error::NotInsertedIoCoinMismatch.into())
+                                return Err(Error::NotInsertedIoCoinMismatch)
                             }
                         }
                         max_depth = core::cmp::max(1, max_depth);
@@ -358,35 +361,28 @@ impl Dependency {
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // since message id is derived, we don't need to double check all the fields
                     if self.utxo_validation {
-                        if let Some(db_message) = db.message(nonce)? {
+                        if let Some(db_message) = db
+                            .message(nonce)
+                            .map_err(|e| Error::Database(format!("{:?}", e)))?
+                        {
                             // verify message id integrity
                             if !db_message
                                 .matches_input(input)
                                 .expect("Input is a message above")
                             {
-                                return Err(Error::NotInsertedIoMessageMismatch.into())
-                            }
-                            // return an error if spent block is set
-                            if db.is_message_spent(nonce)? {
-                                return Err(
-                                    Error::NotInsertedInputMessageSpent(*nonce).into()
-                                )
+                                return Err(Error::NotInsertedIoMessageMismatch)
                             }
                         } else {
-                            return Err(
-                                Error::NotInsertedInputMessageUnknown(*nonce).into()
-                            )
+                            return Err(Error::NotInsertedInputMessageUnknown(*nonce))
                         }
                     }
 
                     if let Some(state) = self.messages.get(nonce) {
-                        // some other is already attempting to spend this message, compare gas price
-                        if state.gas_price >= tx.price() {
+                        if state.tip >= tx.tip() {
                             return Err(Error::NotInsertedCollisionMessageId(
                                 state.spent_by,
                                 *nonce,
-                            )
-                            .into())
+                            ))
                         } else {
                             collided.push(state.spent_by);
                         }
@@ -395,7 +391,7 @@ impl Dependency {
                         *nonce,
                         MessageState {
                             spent_by: tx.id(),
-                            gas_price: tx.price(),
+                            tip: tx.tip(),
                         },
                     );
                 }
@@ -403,23 +399,24 @@ impl Dependency {
                     // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
-                        if tx.price() > state.gas_price {
+                        if tx.tip() > state.tip {
                             return Err(Error::NotInsertedContractPricedLower(
                                 *contract_id,
-                            )
-                            .into())
+                            ))
                         }
                         // check depth.
                         max_depth = core::cmp::max(state.depth, max_depth);
                         if max_depth > self.max_depth {
-                            return Err(Error::NotInsertedMaxDepth.into())
+                            return Err(Error::NotInsertedMaxDepth)
                         }
                     } else {
-                        if !db.contract_exist(contract_id)? {
-                            return Err(Error::NotInsertedInputContractNotExisting(
+                        if !db
+                            .contract_exist(contract_id)
+                            .map_err(|e| Error::Database(format!("{:?}", e)))?
+                        {
+                            return Err(Error::NotInsertedInputContractDoesNotExist(
                                 *contract_id,
-                            )
-                            .into())
+                            ))
                         }
                         // add depth
                         max_depth = core::cmp::max(1, max_depth);
@@ -430,7 +427,7 @@ impl Dependency {
                                 used_by: HashSet::new(),
                                 depth: 0,
                                 origin: None, // there is no owner if contract is in db
-                                gas_price: GasPrice::MAX,
+                                tip: Word::MAX,
                             })
                             .used_by
                             .insert(tx.id());
@@ -447,16 +444,12 @@ impl Dependency {
                 if let Some(contract) = self.contracts.get(contract_id) {
                     // we have a collision :(
                     if contract.is_in_database() {
-                        return Err(
-                            Error::NotInsertedContractIdAlreadyTaken(*contract_id).into()
-                        )
+                        return Err(Error::NotInsertedContractIdAlreadyTaken(*contract_id))
                     }
                     // check who is priced more
-                    if contract.gas_price > tx.price() {
+                    if contract.tip > tx.tip() {
                         // new tx is priced less then current tx
-                        return Err(
-                            Error::NotInsertedCollisionContractId(*contract_id).into()
-                        )
+                        return Err(Error::NotInsertedCollisionContractId(*contract_id))
                     }
                     // if we are prices more, mark current contract origin for removal.
                     let origin = contract.origin.expect(
@@ -478,7 +471,7 @@ impl Dependency {
         txs: &'a HashMap<TxId, TxInfo>,
         db: &DB,
         tx: &'a ArcPoolTx,
-    ) -> anyhow::Result<Vec<ArcPoolTx>>
+    ) -> Result<Vec<ArcPoolTx>, Error>
     where
         DB: TxPoolDb,
     {
@@ -531,11 +524,11 @@ impl Dependency {
 
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
-            let index = u8::try_from(index).map_err(|_| {
-                anyhow::anyhow!(
+            let index = u16::try_from(index).map_err(|_| {
+                Error::Other(format!(
                     "The number of outputs in `{}` is more than `u8::max`",
                     tx.id()
-                )
+                ))
             })?;
             let utxo_id = UtxoId::new(tx.id(), index);
             match output {
@@ -557,7 +550,7 @@ impl Dependency {
                             depth: max_depth,
                             used_by: HashSet::new(),
                             origin: Some(utxo_id),
-                            gas_price: tx.price(),
+                            tip: tx.tip(),
                         },
                     );
                 }
@@ -586,7 +579,7 @@ impl Dependency {
                     // no other transactions can depend on these types of outputs
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
-                    let index = u8::try_from(index)
+                    let index = u16::try_from(index)
                         .expect("The number of outputs is more than `u8::max`. \
                         But it should be impossible because we don't include transactions with so many outputs.");
                     // remove transactions that depend on this coin output
@@ -703,7 +696,6 @@ mod tests {
             UtxoId::default(),
             Address::default(),
             10,
-            AssetId::default(),
             Default::default(),
             Default::default(),
             Default::default(),
@@ -721,9 +713,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test2 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongAmount),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongAmount),
             "test2"
         );
 
@@ -739,9 +730,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test3 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongOwner),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongOwner),
             "test3"
         );
 
@@ -757,9 +747,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test4 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongAssetId),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongAssetId),
             "test4"
         );
 
@@ -775,9 +764,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test5 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongAssetId),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongAssetId),
             "test5"
         );
 
@@ -786,9 +774,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test6 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoContractOutput),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoContractOutput),
             "test6"
         );
 
@@ -800,9 +787,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test8 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoContractOutput),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoContractOutput),
             "test7"
         );
     }

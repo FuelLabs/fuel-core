@@ -1,6 +1,8 @@
 use crate::{
     ports::{
         BlockImporter,
+        ConsensusParametersProvider,
+        GasPriceProvider as GasPriceProviderConstraint,
         PeerToPeer,
         TxPoolDb,
     },
@@ -14,7 +16,7 @@ use crate::{
     TxInfo,
     TxPool,
 };
-
+use anyhow::anyhow;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -22,9 +24,9 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::{
-        ConsensusParameters,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -34,6 +36,7 @@ use fuel_core_types::{
         Bytes32,
     },
     services::{
+        block_importer::SharedImportResult,
         p2p::{
             GossipData,
             GossipsubMessageAcceptance,
@@ -49,10 +52,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-
-use anyhow::anyhow;
-use fuel_core_storage::transactional::AtomicView;
-use fuel_core_types::services::block_importer::SharedImportResult;
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     sync::Arc,
@@ -72,7 +71,7 @@ use self::update_sender::{
 
 mod update_sender;
 
-pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
+pub type Service<P2P, DB, GP, CP> = ServiceRunner<Task<P2P, DB, GP, CP>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
@@ -94,10 +93,10 @@ impl TxStatusChange {
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
-        message: impl Into<TxStatusMessage>,
+        message: TxStatusMessage,
     ) {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
-        self.update_sender.send(TxUpdate::new(id, message.into()));
+        self.update_sender.send(TxUpdate::new(id, message));
     }
 
     pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
@@ -120,50 +119,58 @@ impl TxStatusChange {
     }
 }
 
-pub struct SharedState<P2P, ViewProvider> {
+pub struct SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> {
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool<ViewProvider>>>,
     p2p: Arc<P2P>,
-    consensus_params: ConsensusParameters,
+    utxo_validation: bool,
     current_height: Arc<ParkingMutex<BlockHeight>>,
-    config: Config,
+    consensus_parameters_provider: Arc<ConsensusProvider>,
+    gas_price_provider: Arc<GasPriceProvider>,
 }
 
-impl<P2P, ViewProvider> Clone for SharedState<P2P, ViewProvider> {
+impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> Clone
+    for SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
+{
     fn clone(&self) -> Self {
         Self {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
-            consensus_params: self.consensus_params.clone(),
+            utxo_validation: self.utxo_validation,
             current_height: self.current_height.clone(),
-            config: self.config.clone(),
+            consensus_parameters_provider: self.consensus_parameters_provider.clone(),
+            gas_price_provider: self.gas_price_provider.clone(),
         }
     }
 }
 
-pub struct Task<P2P, ViewProvider> {
+pub struct Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<SharedImportResult>,
-    shared: SharedState<P2P, ViewProvider>,
+    tx_pool_shared_state:
+        SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>,
     ttl_timer: tokio::time::Interval,
 }
 
 #[async_trait::async_trait]
-impl<P2P, ViewProvider, View> RunnableService for Task<P2P, ViewProvider>
+impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider> RunnableService
+    for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
 {
     const NAME: &'static str = "TxPool";
 
-    type SharedData = SharedState<P2P, ViewProvider>;
-    type Task = Task<P2P, ViewProvider>;
+    type SharedData = SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>;
+    type Task = Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.shared.clone()
+        self.tx_pool_shared_state.clone()
     }
 
     async fn into_task(
@@ -177,11 +184,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P2P, ViewProvider, View> RunnableTask for Task<P2P, ViewProvider>
+impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider> RunnableTask
+    for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -194,9 +204,9 @@ where
             }
 
             _ = self.ttl_timer.tick() => {
-                let removed = self.shared.txpool.lock().prune_old_txs();
+                let removed = self.tx_pool_shared_state.txpool.lock().prune_old_txs();
                 for tx in removed {
-                    self.shared.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
+                    self.tx_pool_shared_state.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
                 }
 
                 should_continue = true
@@ -208,17 +218,12 @@ where
                         .sealed_block
                         .entity.header().height();
 
-                    let block = &result
-                        .sealed_block
-                        .entity;
                     {
-                        let mut lock = self.shared.txpool.lock();
+                        let mut lock = self.tx_pool_shared_state.txpool.lock();
                         lock.block_update(
-                            &self.shared.tx_status_sender,
-                            block,
                             &result.tx_status,
                         );
-                        *self.shared.current_height.lock() = new_height;
+                        *self.tx_pool_shared_state.current_height.lock() = new_height;
                     }
                     should_continue = true;
                 } else {
@@ -228,21 +233,31 @@ where
 
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
-                    let id = tx.id(&self.shared.consensus_params.chain_id);
-                    let current_height = *self.shared.current_height.lock();
+                    let current_height = *self.tx_pool_shared_state.current_height.lock();
+                    let params = self
+                        .tx_pool_shared_state
+                        .consensus_parameters_provider
+                        .latest_consensus_parameters();
 
                     // verify tx
-                    let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await;
+                    let checked_tx = check_single_tx(
+                        tx,
+                        current_height,
+                        self.tx_pool_shared_state.utxo_validation,
+                        params.as_ref(),
+                        &self.tx_pool_shared_state.gas_price_provider
+                    ).await;
 
                     let acceptance = match checked_tx {
                         Ok(tx) => {
+                            let id = tx.transaction().cached_id().expect("`Checked` tx should have cached id");
                             let txs = vec![tx];
 
                             // insert tx
                             let mut result = tracing::info_span!("Received tx via gossip", %id)
                                 .in_scope(|| {
-                                    self.shared.txpool.lock().insert(
-                                        &self.shared.tx_status_sender,
+                                    self.tx_pool_shared_state.txpool.lock().insert(
+                                        &self.tx_pool_shared_state.tx_status_sender,
                                         txs
                                     )
                                 });
@@ -251,9 +266,11 @@ where
                                 Some(Ok(_)) => {
                                     GossipsubMessageAcceptance::Accept
                                 },
-                                Some(Err(_)) => {
+                                // Use similar p2p punishment rules as bitcoin
+                                // https://github.com/bitcoin/bitcoin/blob/6ff0aa089c01ff3e610ecb47814ed739d685a14c/src/net_processing.cpp#L1856
+                                Some(Err(Error::ConsensusValidity(_))) | Some(Err(Error::MintIsDisallowed)) => {
                                     GossipsubMessageAcceptance::Reject
-                                }
+                                },
                                 _ => GossipsubMessageAcceptance::Ignore
                             }
                         }
@@ -262,14 +279,13 @@ where
                         }
                     };
 
-                    if acceptance != GossipsubMessageAcceptance::Ignore {
-                        let message_info = GossipsubMessageInfo {
-                            message_id,
-                            peer_id,
-                        };
+                    // notify p2p layer about whether this tx was accepted
+                    let message_info = GossipsubMessageInfo {
+                        message_id,
+                        peer_id,
+                    };
 
-                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
-                    }
+                    let _ = self.tx_pool_shared_state.p2p.notify_gossip_transaction_validity(message_info, acceptance);
 
                     should_continue = true;
                 } else {
@@ -293,7 +309,9 @@ where
 //  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
 //  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
 //  `StorageInspect` trait.
-impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
+impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
+    SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
+{
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()
     }
@@ -302,8 +320,8 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
         self.txpool.lock().consumable_gas()
     }
 
-    pub fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.txpool.lock().remove(&self.tx_status_sender, &ids)
+    pub fn remove_txs(&self, ids: Vec<(TxId, String)>) -> Vec<ArcPoolTx> {
+        self.txpool.lock().remove(&self.tx_status_sender, ids)
     }
 
     pub fn find(&self, ids: Vec<TxId>) -> Vec<Option<TxInfo>> {
@@ -329,8 +347,8 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
         sorted_txs
     }
 
-    pub fn remove(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.txpool.lock().remove(&self.tx_status_sender, &ids)
+    pub fn remove(&self, ids: Vec<(TxId, String)>) -> Vec<ArcPoolTx> {
+        self.txpool.lock().remove(&self.tx_status_sender, ids)
     }
 
     pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
@@ -343,23 +361,49 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
             .try_subscribe::<MpscChannel>(tx_id)
             .ok_or(anyhow!("Maximum number of subscriptions reached"))
     }
+
+    pub fn send_complete(
+        &self,
+        id: Bytes32,
+        block_height: &BlockHeight,
+        status: TransactionStatus,
+    ) {
+        self.tx_status_sender.send_complete(
+            id,
+            block_height,
+            TxStatusMessage::Status(status),
+        )
+    }
 }
 
-impl<P2P, ViewProvider, View> SharedState<P2P, ViewProvider>
+impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, View>
+    SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
+    GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub async fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>> {
+    ) -> Vec<Result<InsertionResult, Error>> {
         // verify txs
         let current_height = *self.current_height.lock();
+        let params = self
+            .consensus_parameters_provider
+            .latest_consensus_parameters();
 
-        let checked_txs = check_transactions(&txs, current_height, &self.config).await;
+        let checked_txs = check_transactions(
+            &txs,
+            current_height,
+            self.utxo_validation,
+            params.as_ref(),
+            &self.gas_price_provider,
+        )
+        .await;
 
         let mut valid_txs = vec![];
 
@@ -435,31 +479,34 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
-pub fn new_service<P2P, Importer, ViewProvider>(
+pub fn new_service<P2P, Importer, ViewProvider, GasPriceProvider, ConsensusProvider>(
     config: Config,
     provider: ViewProvider,
     importer: Importer,
     p2p: P2P,
     current_height: BlockHeight,
-) -> Service<P2P, ViewProvider>
+    gas_price_provider: GasPriceProvider,
+    consensus_parameters_provider: ConsensusProvider,
+) -> Service<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
     ViewProvider: AtomicView,
     ViewProvider::View: TxPoolDb,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let consensus_params = config.chain_config.consensus_parameters.clone();
     let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), provider)));
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
-        shared: SharedState {
+        tx_pool_shared_state: SharedState {
             tx_status_sender: TxStatusChange::new(
                 number_of_active_subscription,
                 // The connection should be closed automatically after the `SqueezedOut` event.
@@ -470,9 +517,10 @@ where
             ),
             txpool,
             p2p,
-            consensus_params,
+            utxo_validation: config.utxo_validation,
             current_height: Arc::new(ParkingMutex::new(current_height)),
-            config,
+            consensus_parameters_provider: Arc::new(consensus_parameters_provider),
+            gas_price_provider: Arc::new(gas_price_provider),
         },
         ttl_timer,
     };

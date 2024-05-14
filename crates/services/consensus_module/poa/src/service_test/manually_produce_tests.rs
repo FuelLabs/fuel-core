@@ -50,13 +50,10 @@ async fn can_manually_produce_block(
 ) {
     let mut rng = StdRng::seed_from_u64(1234u64);
     let mut ctx_builder = TestContextBuilder::new();
-    let consensus_params = ConsensusParameters::default();
     ctx_builder.with_config(Config {
         trigger,
-        block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: consensus_params.clone(),
         ..Default::default()
     });
 
@@ -83,7 +80,7 @@ async fn can_manually_produce_block(
     let mut producer = MockBlockProducer::default();
     producer
         .expect_produce_and_execute_block()
-        .returning(|_, time, _, _| {
+        .returning(|_, time, _| {
             let mut block = Block::default();
             block.header_mut().set_time(time);
             block.header_mut().recalculate_metadata();
@@ -92,8 +89,9 @@ async fn can_manually_produce_block(
                     block,
                     skipped_transactions: Default::default(),
                     tx_status: Default::default(),
+                    events: Default::default(),
                 },
-                StorageTransaction::new(EmptyStorage),
+                Default::default(),
             ))
         });
     ctx_builder.with_importer(importer);
@@ -106,7 +104,7 @@ async fn can_manually_produce_block(
         .await
         .unwrap();
     for tx in txs {
-        status_sender.send_replace(Some(tx.id(&consensus_params.chain_id)));
+        status_sender.send_replace(Some(tx.id(&ChainId::default())));
     }
 
     for t in times.into_iter() {

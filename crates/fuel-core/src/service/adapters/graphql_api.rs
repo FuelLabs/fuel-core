@@ -1,13 +1,17 @@
 use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
+    ConsensusParametersProvider,
+    StaticGasPrice,
 };
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::{
         worker,
         BlockProducerPort,
+        ConsensusProvider,
         DatabaseMessageProof,
+        GasPriceEstimate,
         P2pPort,
         TxPoolPort,
     },
@@ -24,14 +28,21 @@ use fuel_core_txpool::{
     types::TxId,
 };
 use fuel_core_types::{
-    entities::message::MerkleProof,
-    fuel_tx::Transaction,
+    entities::relayer::message::MerkleProof,
+    fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
         executor::TransactionExecutionStatus,
         p2p::PeerInfo,
-        txpool::InsertionResult,
+        txpool::{
+            InsertionResult,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -61,7 +72,12 @@ impl TxPoolPort for TxPoolAdapter {
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        self.service.insert(txs).await
+        self.service
+            .insert(txs)
+            .await
+            .into_iter()
+            .map(|res| res.map_err(anyhow::Error::from))
+            .collect()
     }
 
     fn tx_update_subscribe(
@@ -137,5 +153,29 @@ impl P2pPort for P2PAdapter {
 impl worker::BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
         self.events()
+    }
+}
+
+impl worker::TxPool for TxPoolAdapter {
+    fn send_complete(
+        &self,
+        id: Bytes32,
+        block_height: &BlockHeight,
+        status: TransactionStatus,
+    ) {
+        self.service.send_complete(id, block_height, status)
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceEstimate for StaticGasPrice {
+    async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
+        self.gas_price
+    }
+}
+
+impl ConsensusProvider for ConsensusParametersProvider {
+    fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
+        self.shared_state.latest_consensus_parameters()
     }
 }

@@ -14,26 +14,32 @@ use fuel_core_storage::{
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
+        IteratorOverTable,
     },
     not_found,
-    tables::FuelBlocks,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
     Error as StorageError,
     Result as StorageResult,
+    StorageAsRef,
 };
-use fuel_core_txpool::types::ContractId;
+use fuel_core_txpool::types::{
+    ContractId,
+    TxId,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        consensus::Consensus,
+        primitives::DaBlockHeight,
     },
-    entities::message::Message,
+    entities::relayer::message::Message,
     fuel_tx::{
-        Address,
         AssetId,
-        UtxoId,
+        Transaction,
     },
     fuel_types::{
         BlockHeight,
@@ -41,11 +47,25 @@ use fuel_core_types::{
     },
     services::graphql_api::ContractBalance,
 };
+use itertools::Itertools;
 
 impl DatabaseBlocks for Database {
-    fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
-        self.get_block_height(id)
-            .and_then(|height| height.ok_or(not_found!("BlockHeight")))
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+        Ok(self
+            .storage::<Transactions>()
+            .get(tx_id)?
+            .ok_or(not_found!(Transactions))?
+            .into_owned())
+    }
+
+    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        let block = self
+            .storage_as_ref::<FuelBlocks>()
+            .get(height)?
+            .ok_or_else(|| not_found!(FuelBlocks))?
+            .into_owned();
+
+        Ok(block)
     }
 
     fn blocks(
@@ -63,6 +83,13 @@ impl DatabaseBlocks for Database {
             .transpose()
             .ok_or(not_found!("BlockHeight"))?
     }
+
+    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
+        self.storage_as_ref::<SealedBlockConsensus>()
+            .get(id)
+            .map(|c| c.map(|c| c.into_owned()))?
+            .ok_or(not_found!(SealedBlockConsensus))
+    }
 }
 
 impl DatabaseMessages for Database {
@@ -74,10 +101,6 @@ impl DatabaseMessages for Database {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
-    }
-
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.message_is_spent(nonce)
     }
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
@@ -92,16 +115,13 @@ impl DatabaseContracts for Database {
         start_asset: Option<AssetId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>> {
-        self.contract_balances(contract, start_asset, Some(direction))
-            .map(move |result| {
-                result
-                    .map_err(StorageError::from)
-                    .map(|(asset_id, amount)| ContractBalance {
-                        owner: contract,
-                        amount,
-                        asset_id,
-                    })
+        self.filter_contract_balances(contract, start_asset, Some(direction))
+            .map_ok(|entry| ContractBalance {
+                owner: *entry.key.contract_id(),
+                amount: entry.value,
+                asset_id: *entry.key.asset_id(),
             })
+            .map(|res| res.map_err(StorageError::from))
             .into_boxed()
     }
 }
@@ -114,26 +134,4 @@ impl DatabaseChain for Database {
     }
 }
 
-impl OnChainDatabase for Database {
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
-        self.owned_message_ids(owner, start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
-    }
-
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
-        self.owned_coins_ids(owner, start_coin, Some(direction))
-            .map(|res| res.map_err(StorageError::from))
-            .into_boxed()
-    }
-}
+impl OnChainDatabase for Database {}

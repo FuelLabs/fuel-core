@@ -3,11 +3,10 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    database::Database,
     fuel_core_graphql_api::{
         api_service::ConsensusModule,
         database::ReadView,
-        ports::DatabaseBlocks,
+        ports::OffChainDatabase,
         Config as GraphQLConfig,
         IntoApiResult,
     },
@@ -20,6 +19,7 @@ use crate::{
         scalars::{
             BlockId,
             Signature,
+            U16,
             U32,
             U64,
         },
@@ -33,6 +33,7 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
+    Enum,
     Object,
     SimpleObject,
     Union,
@@ -79,17 +80,35 @@ pub struct Genesis {
     pub contracts_root: Bytes32,
     /// The Binary Merkle Tree root of all genesis messages.
     pub messages_root: Bytes32,
+    /// The Binary Merkle Tree root of all processed transaction ids.
+    pub transactions_root: Bytes32,
 }
 
 pub struct PoAConsensus {
     signature: Signature,
 }
 
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
+pub enum BlockVersion {
+    V1,
+}
+
 #[Object]
 impl Block {
+    async fn version(&self) -> BlockVersion {
+        match self.0 {
+            CompressedBlock::V1(_) => BlockVersion::V1,
+        }
+    }
+
     async fn id(&self) -> BlockId {
         let bytes: fuel_types::Bytes32 = self.0.header().id().into();
         bytes.into()
+    }
+
+    async fn height(&self) -> U32 {
+        let height: u32 = (*self.0.header().height()).into();
+        height.into()
     }
 
     async fn header(&self) -> Header {
@@ -97,12 +116,9 @@ impl Block {
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let height = self.0.header().height();
-        let core_consensus = query.consensus(height)?;
-
-        let my_consensus = core_consensus.try_into()?;
-        Ok(my_consensus)
+        Ok(query.consensus(height)?.try_into()?)
     }
 
     async fn transactions(
@@ -121,8 +137,20 @@ impl Block {
     }
 }
 
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
+pub enum HeaderVersion {
+    V1,
+}
+
 #[Object]
 impl Header {
+    /// Version of the header
+    async fn version(&self) -> HeaderVersion {
+        match self.0 {
+            BlockHeader::V1(_) => HeaderVersion::V1,
+        }
+    }
+
     /// Hash of the header
     async fn id(&self) -> BlockId {
         let bytes: fuel_core_types::fuel_types::Bytes32 = self.0.id().into();
@@ -134,13 +162,23 @@ impl Header {
         self.0.da_height.0.into()
     }
 
+    /// The version of the consensus parameters used to create this block.
+    async fn consensus_parameters_version(&self) -> U32 {
+        self.0.consensus_parameters_version.into()
+    }
+
+    /// The version of the state transition bytecode used to create this block.
+    async fn state_transition_bytecode_version(&self) -> U32 {
+        self.0.state_transition_bytecode_version.into()
+    }
+
     /// Number of transactions in this block.
-    async fn transactions_count(&self) -> U64 {
+    async fn transactions_count(&self) -> U16 {
         self.0.transactions_count.into()
     }
 
     /// Number of message receipts in this block.
-    async fn message_receipt_count(&self) -> U64 {
+    async fn message_receipt_count(&self) -> U32 {
         self.0.message_receipt_count.into()
     }
 
@@ -150,8 +188,13 @@ impl Header {
     }
 
     /// Merkle root of message receipts in this block.
-    async fn message_receipt_root(&self) -> Bytes32 {
-        self.0.message_receipt_root.into()
+    async fn message_outbox_root(&self) -> Bytes32 {
+        self.0.message_outbox_root.into()
+    }
+
+    /// Merkle root of inbox events in this block.
+    async fn event_inbox_root(&self) -> Bytes32 {
+        self.0.event_inbox_root.into()
     }
 
     /// Fuel block height.
@@ -342,6 +385,7 @@ impl From<CoreGenesis> for Genesis {
             coins_root: genesis.coins_root.into(),
             contracts_root: genesis.contracts_root.into(),
             messages_root: genesis.messages_root.into(),
+            transactions_root: genesis.transactions_root.into(),
         }
     }
 }

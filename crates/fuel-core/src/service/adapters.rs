@@ -3,33 +3,60 @@ use crate::{
         database_description::relayer::Relayer,
         Database,
     },
-    service::sub_services::BlockProducerService,
+    service::sub_services::{
+        BlockProducerService,
+        TxPoolSharedState,
+    },
 };
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
-use fuel_core_executor::executor::Executor;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
+use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;
+pub mod consensus_parameters_provider;
 pub mod executor;
 pub mod graphql_api;
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
+#[cfg(feature = "relayer")]
+pub mod relayer;
 #[cfg(feature = "p2p")]
 pub mod sync;
 pub mod txpool;
+
+#[derive(Debug, Clone)]
+pub struct ConsensusParametersProvider {
+    shared_state: consensus_parameters_provider::SharedState,
+}
+
+impl ConsensusParametersProvider {
+    pub fn new(shared_state: consensus_parameters_provider::SharedState) -> Self {
+        Self { shared_state }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StaticGasPrice {
+    pub gas_price: u64,
+}
+
+impl StaticGasPrice {
+    pub fn new(gas_price: u64) -> Self {
+        Self { gas_price }
+    }
+}
 
 #[derive(Clone)]
 pub struct PoAAdapter {
@@ -38,26 +65,23 @@ pub struct PoAAdapter {
 
 #[derive(Clone)]
 pub struct TxPoolAdapter {
-    service: TxPoolSharedState<P2PAdapter, Database>,
+    service: TxPoolSharedState,
 }
 
 impl TxPoolAdapter {
-    pub fn new(service: TxPoolSharedState<P2PAdapter, Database>) -> Self {
+    pub fn new(service: TxPoolSharedState) -> Self {
         Self { service }
     }
 }
 
 #[derive(Clone)]
 pub struct TransactionsSource {
-    txpool: TxPoolSharedState<P2PAdapter, Database>,
+    txpool: TxPoolSharedState,
     _block_height: BlockHeight,
 }
 
 impl TransactionsSource {
-    pub fn new(
-        txpool: TxPoolSharedState<P2PAdapter, Database>,
-        block_height: BlockHeight,
-    ) -> Self {
+    pub fn new(txpool: TxPoolSharedState, block_height: BlockHeight) -> Self {
         Self {
             txpool,
             _block_height: block_height,
@@ -74,13 +98,9 @@ impl ExecutorAdapter {
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
-        config: fuel_core_executor::Config,
+        config: fuel_core_upgradable_executor::config::Config,
     ) -> Self {
-        let executor = Executor {
-            database_view_provider: database,
-            relayer_view_provider: relayer_database,
-            config: Arc::new(config),
-        };
+        let executor = Executor::new(database, relayer_database, config);
         Self {
             executor: Arc::new(executor),
         }

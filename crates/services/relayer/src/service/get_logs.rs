@@ -1,5 +1,8 @@
 use super::*;
-use fuel_core_types::services::relayer::Event;
+use fuel_core_types::{
+    entities::RelayedTransaction,
+    services::relayer::Event,
+};
 use futures::TryStreamExt;
 use std::collections::BTreeMap;
 
@@ -65,21 +68,24 @@ where
     while let Some((last_height, events)) = logs.try_next().await? {
         let last_height = last_height.into();
         let mut ordered_events = BTreeMap::<DaBlockHeight, Vec<Event>>::new();
-        let fuel_events =
-            events
-                .into_iter()
-                .filter_map(|event| match EthEventLog::try_from(&event) {
-                    Ok(event) => {
-                        match event {
-                            EthEventLog::Message(m) => {
-                                Some(Ok(Event::Message(Message::from(&m))))
-                            }
-                            // TODO: Log out ignored messages.
-                            EthEventLog::Ignored => None,
+        let sorted_events = sort_events_by_log_index(events)?;
+        let fuel_events = sorted_events.into_iter().filter_map(|event| {
+            match EthEventLog::try_from(&event) {
+                Ok(event) => {
+                    match event {
+                        EthEventLog::Message(m) => {
+                            Some(Ok(Event::Message(Message::from(&m))))
                         }
+                        EthEventLog::Transaction(tx) => {
+                            Some(Ok(Event::Transaction(RelayedTransaction::from(tx))))
+                        }
+                        // TODO: Log out ignored messages.
+                        EthEventLog::Ignored => None,
                     }
-                    Err(e) => Some(Err(e)),
-                });
+                }
+                Err(e) => Some(Err(e)),
+            }
+        });
 
         for event in fuel_events {
             let event = event?;
@@ -95,9 +101,26 @@ where
             }
         }
 
+        // TODO: For https://github.com/FuelLabs/fuel-core/issues/451 we need to write each height
+        //  (not only the last height), even if it's empty.
         if !inserted_last_height {
             database.insert_events(&last_height, &[])?;
         }
     }
     Ok(())
+}
+
+fn sort_events_by_log_index(events: Vec<Log>) -> anyhow::Result<Vec<Log>> {
+    let mut with_indexes = events
+        .into_iter()
+        .map(|e| {
+            let log_index = e
+                .log_index
+                .ok_or(anyhow::anyhow!("Log missing `log_index`: {e:?}"))?;
+            Ok((log_index, e))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    with_indexes.sort_by(|(index_a, _a), (index_b, _b)| index_a.cmp(index_b));
+    let new_events = with_indexes.into_iter().map(|(_, e)| e).collect();
+    Ok(new_events)
 }

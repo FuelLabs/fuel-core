@@ -6,12 +6,15 @@ use crate::client::{
             SpendQueryElementInput,
         },
         contract::ContractBalanceQueryArgs,
+        gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
+        relayed_tx::RelayedTransactionStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
     },
     types::{
+        gas_price::LatestGasPrice,
         message::MessageStatus,
         primitives::{
             Address,
@@ -20,6 +23,7 @@ use crate::client::{
             ContractId,
             UtxoId,
         },
+        RelayedTransactionStatus,
     },
 };
 use anyhow::Context;
@@ -39,6 +43,7 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        Bytes32,
         Receipt,
         Transaction,
         TxId,
@@ -144,7 +149,7 @@ impl FromStr for FuelClient {
         let mut url = reqwest::Url::parse(&raw_url)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
-        url.set_path("/graphql");
+        url.set_path("/v1/graphql");
 
         #[cfg(feature = "subscriptions")]
         {
@@ -243,7 +248,7 @@ impl FuelClient {
         use hyper_rustls as _;
         use reqwest::cookie::CookieStore;
         let mut url = self.url.clone();
-        url.set_path("/graphql-sub");
+        url.set_path("/v1/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
         let mut client_builder = es::ClientBuilder::for_url(url.as_str())
             .map_err(|e| {
@@ -348,6 +353,19 @@ impl FuelClient {
         self.query(query).await.map(|r| r.node_info.into())
     }
 
+    pub async fn latest_gas_price(&self) -> io::Result<LatestGasPrice> {
+        let query = schema::gas_price::QueryLatestGasPrice::build(());
+        self.query(query).await.map(|r| r.latest_gas_price.into())
+    }
+
+    pub async fn estimate_gas_price(
+        &self,
+        block_horizon: u32,
+    ) -> io::Result<EstimateGasPrice> {
+        let query = schema::gas_price::QueryEstimateGasPrice::build(block_horizon.into());
+        self.query(query).await.map(|r| r.estimate_gas_price)
+    }
+
     pub async fn connected_peers_info(&self) -> io::Result<Vec<PeerInfo>> {
         let query = schema::node_info::QueryPeersInfo::build(());
         self.query(query)
@@ -357,7 +375,10 @@ impl FuelClient {
 
     pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
         let query = schema::chain::ChainQuery::build(());
-        self.query(query).await.map(|r| r.chain.into())
+        self.query(query).await.and_then(|r| {
+            let result = r.chain.try_into()?;
+            Ok(result)
+        })
     }
 
     /// Default dry run, matching the exact configuration as the node
@@ -725,17 +746,30 @@ impl FuelClient {
             id: Some((*id).into()),
         });
 
-        let block = self.query(query).await?.block.map(Into::into);
+        let block = self
+            .query(query)
+            .await?
+            .block
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(block)
     }
 
-    pub async fn block_by_height(&self, height: u32) -> io::Result<Option<types::Block>> {
+    pub async fn block_by_height(
+        &self,
+        height: BlockHeight,
+    ) -> io::Result<Option<types::Block>> {
         let query = schema::block::BlockByHeightQuery::build(BlockByHeightArgs {
-            height: Some(U32(height)),
+            height: Some(U32(height.into())),
         });
 
-        let block = self.query(query).await?.block.map(Into::into);
+        let block = self
+            .query(query)
+            .await?
+            .block
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(block)
     }
@@ -747,7 +781,7 @@ impl FuelClient {
     ) -> io::Result<PaginatedResult<types::Block, String>> {
         let query = schema::block::BlocksQuery::build(request.into());
 
-        let blocks = self.query(query).await?.blocks.into();
+        let blocks = self.query(query).await?.blocks.try_into()?;
 
         Ok(blocks)
     }
@@ -943,9 +977,32 @@ impl FuelClient {
             commit_block_height,
         });
 
-        let proof = self.query(query).await?.message_proof.map(Into::into);
+        let proof = self
+            .query(query)
+            .await?
+            .message_proof
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(proof)
+    }
+
+    pub async fn relayed_transaction_status(
+        &self,
+        id: &Bytes32,
+    ) -> io::Result<Option<RelayedTransactionStatus>> {
+        let query = schema::relayed_tx::RelayedTransactionStatusQuery::build(
+            RelayedTransactionStatusArgs {
+                id: id.to_owned().into(),
+            },
+        );
+        let status = self
+            .query(query)
+            .await?
+            .relayed_transaction_status
+            .map(|status| status.try_into())
+            .transpose()?;
+        Ok(status)
     }
 }
 

@@ -1,10 +1,13 @@
 use crate::database::Database;
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
+    not_found,
     tables::{
         ContractsAssets,
-        ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
@@ -13,86 +16,73 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::{
-    entities::contract::ContractUtxoInfo,
-    fuel_types::{
-        AssetId,
-        Bytes32,
-        ContractId,
-        Word,
-    },
+use fuel_core_types::fuel_types::{
+    AssetId,
+    ContractId,
 };
+use itertools::Itertools;
 
 impl Database {
-    pub fn get_contract_config_by_id(
+    pub fn iter_contract_state(
         &self,
-        contract_id: ContractId,
-    ) -> StorageResult<ContractConfig> {
-        let code: Vec<u8> = self
-            .storage::<ContractsRawCode>()
-            .get(&contract_id)?
-            .unwrap()
-            .into_owned()
-            .into();
-
-        let (salt, _) = self
-            .storage::<ContractsInfo>()
-            .get(&contract_id)
-            .unwrap()
-            .expect("Contract does not exist")
-            .into_owned();
-
-        let ContractUtxoInfo {
-            utxo_id,
-            tx_pointer,
-        } = self
-            .storage::<ContractsLatestUtxo>()
-            .get(&contract_id)
-            .unwrap()
-            .expect("contract does not exist")
-            .into_owned();
-
-        let state = Some(
-            self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id.as_ref()))
-                .map(|res| -> StorageResult<(Bytes32, Bytes32)> {
-                    let (key, value) = res?;
-
-                    Ok((*key.state_key(), value))
-                })
-                .filter(|val| val.is_ok())
-                .collect::<StorageResult<Vec<_>>>()?,
-        );
-
-        let balances = Some(
-            self.iter_all_by_prefix::<ContractsAssets, _>(Some(contract_id.as_ref()))
-                .map(|res| {
-                    let (key, value) = res?;
-
-                    Ok((*key.asset_id(), value))
-                })
-                .filter(|val| val.is_ok())
-                .collect::<StorageResult<Vec<_>>>()?,
-        );
-
-        Ok(ContractConfig {
-            contract_id,
-            code,
-            salt,
-            state,
-            balances,
-            tx_id: Some(*utxo_id.tx_id()),
-            output_index: Some(utxo_id.output_index()),
-            tx_pointer_block_height: Some(tx_pointer.block_height()),
-            tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
-        })
+    ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsState>>> + '_ {
+        self.iter_all::<ContractsState>(None)
+            .map_ok(|(key, value)| TableEntry { key, value })
     }
 
-    pub fn contract_balances(
+    pub fn iter_contract_balance(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsAssets>>> + '_ {
+        self.iter_all::<ContractsAssets>(None)
+            .map_ok(|(key, value)| TableEntry { key, value })
+    }
+
+    pub fn iter_contracts_code(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsRawCode>>> + '_ {
+        self.iter_all::<ContractsRawCode>(None)
+            .map_ok(|(key, value)| TableEntry { key, value })
+    }
+
+    pub fn iter_contracts_latest_utxo(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsLatestUtxo>>> + '_ {
+        self.iter_all::<ContractsLatestUtxo>(None)
+            .map_ok(|(key, value)| TableEntry { key, value })
+    }
+
+    pub fn contract_code(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<TableEntry<ContractsRawCode>> {
+        self.storage::<ContractsRawCode>()
+            .get(&contract_id)?
+            .map(|value| TableEntry {
+                key: contract_id,
+                value: value.into_owned(),
+            })
+            .ok_or_else(|| not_found!("ContractsRawCode"))
+    }
+
+    pub fn contract_latest_utxo(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<TableEntry<ContractsLatestUtxo>> {
+        self.storage::<ContractsLatestUtxo>()
+            .get(&contract_id)?
+            .map(|value| TableEntry {
+                key: contract_id,
+                value: value.into_owned(),
+            })
+            .ok_or_else(|| not_found!("ContractsLatestUtxo"))
+    }
+
+    pub fn filter_contract_balances(
         &self,
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(AssetId, Word)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsAssets>>> + '_ {
         let start_asset =
             start_asset.map(|asset| ContractsAssetKey::new(&contract, &asset));
         self.iter_all_filtered::<ContractsAssets, _>(
@@ -100,19 +90,7 @@ impl Database {
             start_asset.as_ref(),
             direction,
         )
-        .map(|res| res.map(|(key, balance)| (*key.asset_id(), balance)))
-    }
-
-    pub fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
-        let configs = self
-            .iter_all::<ContractsRawCode>(None)
-            .map(|raw_contract_id| -> StorageResult<ContractConfig> {
-                let contract_id = raw_contract_id?.0;
-                self.get_contract_config_by_id(contract_id)
-            })
-            .collect::<StorageResult<Vec<ContractConfig>>>()?;
-
-        Ok(Some(configs))
+        .map_ok(|(key, value)| TableEntry { key, value })
     }
 }
 

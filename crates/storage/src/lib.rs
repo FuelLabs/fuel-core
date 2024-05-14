@@ -35,6 +35,7 @@ pub mod vm_storage;
 
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,
+    ContractsStateData,
     ContractsStateKey,
 };
 #[doc(hidden)]
@@ -71,9 +72,15 @@ impl From<Error> for anyhow::Error {
     }
 }
 
+impl From<TryFromSliceError> for Error {
+    fn from(e: TryFromSliceError) -> Self {
+        Self::Other(anyhow::anyhow!(e))
+    }
+}
+
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(anyhow::anyhow!(e))
+        ExecutorError::StorageError(e.to_string())
     }
 }
 
@@ -86,12 +93,6 @@ impl From<Error> for fuel_vm_private::prelude::InterpreterError<Error> {
 impl From<Error> for fuel_vm_private::prelude::RuntimeError<Error> {
     fn from(e: Error) -> Self {
         fuel_vm_private::prelude::RuntimeError::Storage(e)
-    }
-}
-
-impl From<TryFromSliceError> for Error {
-    fn from(e: TryFromSliceError) -> Self {
-        Self::Other(anyhow::anyhow!(e))
     }
 }
 
@@ -118,6 +119,7 @@ impl<T> IsNotFound for Result<T> {
 
 /// The traits allow work with the storage in batches.
 /// Some implementations can perform batch operations faster than one by one.
+#[impl_tools::autoimpl(for<T: trait> &mut T)]
 pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
     /// Initialize the storage with batch insertion. This method is more performant than
     /// [`Self::insert_batch`] in some cases.

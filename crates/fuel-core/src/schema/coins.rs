@@ -5,9 +5,9 @@ use crate::{
     },
     fuel_core_graphql_api::{
         database::ReadView,
-        Config as GraphQLConfig,
         IntoApiResult,
     },
+    graphql_api::api_service::ConsensusProvider,
     query::{
         asset_query::AssetSpendTarget,
         CoinQueryData,
@@ -17,6 +17,7 @@ use crate::{
         AssetId,
         Nonce,
         UtxoId,
+        U16,
         U32,
         U64,
     },
@@ -60,18 +61,14 @@ impl Coin {
         self.0.asset_id.into()
     }
 
-    async fn maturity(&self) -> U32 {
-        self.0.maturity.into()
-    }
-
     /// TxPointer - the height of the block this coin was created in
     async fn block_created(&self) -> U32 {
         u32::from(self.0.tx_pointer.block_height()).into()
     }
 
     /// TxPointer - the index of the transaction that created this coin
-    async fn tx_created_idx(&self) -> U64 {
-        u64::from(self.0.tx_pointer.tx_index()).into()
+    async fn tx_created_idx(&self) -> U16 {
+        self.0.tx_pointer.tx_index().into()
     }
 }
 
@@ -96,8 +93,11 @@ impl MessageCoin {
     }
 
     async fn asset_id(&self, ctx: &Context<'_>) -> AssetId {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
-        let base_asset_id = *config.consensus_parameters.base_asset_id();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
+
+        let base_asset_id = *params.base_asset_id();
         base_asset_id.into()
     }
 
@@ -211,7 +211,9 @@ impl CoinQuery {
             ExcludeInput,
         >,
     ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
         let owner: fuel_tx::Address = owner.0;
         let query_per_asset = query_per_asset
@@ -236,7 +238,7 @@ impl CoinQuery {
             utxos.chain(messages).collect()
         });
 
-        let base_asset_id = config.consensus_parameters.base_asset_id();
+        let base_asset_id = params.base_asset_id();
         let spend_query =
             SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
 

@@ -6,9 +6,9 @@ on:
     branches:
       - master
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
   release:
-    types: [published]
+    types: [ published ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -16,11 +16,12 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.73.0
+  RUST_VERSION: 1.75.0
   NIGHTLY_RUST_VERSION: nightly-2023-10-29
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
+  FUEL_ALWAYS_USE_WASM: true
 
 jobs:
   check-changelog:
@@ -40,7 +41,7 @@ jobs:
         with:
           toolchain: ${{ env.NIGHTLY_RUST_VERSION }}
           components: rustfmt
-          
+
       - name: Rustfmt check
         run: cargo +${{ env.NIGHTLY_RUST_VERSION }} fmt --all -- --check
 
@@ -57,6 +58,19 @@ jobs:
         run: cargo binstall --no-confirm cargo-sort
       - name: Run Cargo.toml sort check
         run: cargo sort -w --check
+      - name: Install Prettier and TOML Plugin
+        run: |
+          # prettier has issues with global installation and plugin discovery. The temporary `package.json` created by `npm init -y` is a workaround.
+          npm init -y > /dev/null 2>&1
+          npm install prettier prettier-plugin-toml
+      - name: Check format of Cargo.toml files
+        run: |
+          if ! npx prettier --check "**/Cargo.toml"; then
+            npx prettier --write "**/Cargo.toml" > /dev/null 2>&1
+            echo "Changes required:"
+            git --no-pager diff
+            exit 1
+          fi
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && github.ref == 'refs/heads/master'
         with:
@@ -102,6 +116,8 @@ jobs:
       matrix:
         include:
           - command: clippy
+            args: -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features
+          - command: clippy
             args: --all-targets --all-features
           - command: check
             args: --all-targets
@@ -109,6 +125,8 @@ jobs:
             args: --all-features --workspace --no-deps
           - command: make
             args: check --locked
+          - command: test
+            args: --workspace
           - command: test
             args: --all-features --workspace
           - command: test
@@ -148,10 +166,6 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.4"
-      - name: Install Protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -180,6 +194,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: "wasm32-unknown-unknown"
       - name: Publish crate check
         uses: xgreenx/publish-crates@v1
         with:
@@ -232,11 +247,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Install Protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler
+          targets: "wasm32-unknown-unknown"
 
       - name: Publish crate
         uses: xgreenx/publish-crates@v1
@@ -314,7 +325,7 @@ jobs:
   publish-docker-image-profiling:
     needs:
       - verifications-complete
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: buildjet-16vcpu-ubuntu-2204
     permissions:
       contents: read
       packages: write
@@ -504,7 +515,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          target: ${{ matrix.job.target }}
+          target: ${{ matrix.job.target }},"wasm32-unknown-unknown"
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1
@@ -561,6 +572,7 @@ jobs:
           mkdir -pv "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core-keygen" "$ARTIFACT"
+          cp "target/${{ matrix.job.target }}/release/fuel-core-upgradable-executor-cache/wasm32-unknown-unknown/release/fuel-core-wasm-executor.wasm" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
 
       - name: Upload Binary Artifact
@@ -581,7 +593,7 @@ jobs:
 
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
-    if:  startsWith(github.head_ref, 'preview/')
+    if: startsWith(github.head_ref, 'preview/')
     needs:
       - publish-docker-image
     runs-on: buildjet-4vcpu-ubuntu-2204
@@ -601,34 +613,6 @@ jobs:
           ref: refs/heads/master
           token: ${{ secrets.REPO_TOKEN }}
           inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "namespace": "${{ env.NAMESPACE }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
-        env:
-          K8S: 'eks'
-          CONFIG: 'fuel-dev1'
-          ENV: 'fueldevsway.env'
-          DELETE_INFRA: true
-
-  # Deploy Latest Fuel-Core Release
-  # TODO: remove deploy steps after the old cluster is decommissioned
-  deploy:
-    if: github.ref == 'refs/heads/master'
-    needs:
-      - publish-docker-image
-    runs-on: buildjet-4vcpu-ubuntu-2204
-    steps:
-      - name: Set Environment Variables
-        run: |
-          tag=(`echo $GITHUB_SHA | cut -c1-7`)
-          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
-          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-
-      - name: Deploy Fuel-Core Developer Environment
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: Deploy Fuel-Core on k8s
-          repo: FuelLabs/fuel-deployment
-          ref: refs/heads/master
-          token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
         env:
           K8S: 'eks'
           CONFIG: 'fuel-dev1'

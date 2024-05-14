@@ -9,7 +9,7 @@ use fuel_core_types::{
             Coin,
             CompressedCoin,
         },
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::{
         Contract,
@@ -69,13 +69,7 @@ impl MockDb {
 
 impl TxPoolDb for MockDb {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .coins
-            .get(utxo_id)
-            .map(Clone::clone))
+        Ok(self.data.lock().unwrap().coins.get(utxo_id).cloned())
     }
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
@@ -88,11 +82,7 @@ impl TxPoolDb for MockDb {
     }
 
     fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {
-        Ok(self.data.lock().unwrap().messages.get(id).map(Clone::clone))
-    }
-
-    fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
-        Ok(self.data.lock().unwrap().spent_messages.contains(id))
+        Ok(self.data.lock().unwrap().messages.get(id).cloned())
     }
 }
 
@@ -103,8 +93,8 @@ impl AtomicView for MockDBProvider {
 
     type Height = BlockHeight;
 
-    fn latest_height(&self) -> Self::Height {
-        BlockHeight::default()
+    fn latest_height(&self) -> Option<Self::Height> {
+        Some(BlockHeight::default())
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {

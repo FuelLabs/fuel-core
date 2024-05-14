@@ -16,17 +16,14 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 
 #[tokio::test]
 async fn txs_max_script_gas_limit() {
     const MAX_GAS_LIMIT: u64 = 50_000_000;
     let mut rng = StdRng::seed_from_u64(2322);
     let mut test_builder = TestSetupBuilder::new(2322);
-    test_builder.gas_limit = MAX_GAS_LIMIT;
+    test_builder.gas_limit = Some(MAX_GAS_LIMIT);
     // initialize 10 random transactions that transfer coins
     let transactions = (1..=10)
         .map(|i| {
@@ -35,12 +32,10 @@ async fn txs_max_script_gas_limit() {
                 vec![],
             )
             .script_gas_limit(MAX_GAS_LIMIT / 2)
-            .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),
                 1000 + i,
-                Default::default(),
                 Default::default(),
                 Default::default(),
             )
@@ -65,11 +60,9 @@ async fn txs_max_script_gas_limit() {
         .into_iter()
         .map(|script| Arc::new(fuel_tx::Transaction::from(script)))
         .collect::<Vec<_>>();
-    srv.shared.txpool.insert(txs).await;
+    srv.shared.txpool_shared_state.insert(txs).await;
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    let block = client.block_by_height(1).await.unwrap().unwrap();
+    let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(
         block.transactions.len(),
         transactions.len() + 1 // coinbase

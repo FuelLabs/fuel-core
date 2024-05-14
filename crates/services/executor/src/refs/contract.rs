@@ -1,5 +1,4 @@
 use core::fmt;
-use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -7,6 +6,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsState,
     },
+    Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
@@ -92,7 +92,7 @@ where
     Database: MerkleRootStorage<ContractId, ContractsAssets>,
 {
     pub fn balance_root(
-        &mut self,
+        &self,
     ) -> Result<Bytes32, <Database as StorageInspect<ContractsAssets>>::Error> {
         self.database.root(&self.contract_id).map(Into::into)
     }
@@ -103,7 +103,7 @@ where
     Database: MerkleRootStorage<ContractId, ContractsState>,
 {
     pub fn state_root(
-        &mut self,
+        &self,
     ) -> Result<Bytes32, <Database as StorageInspect<ContractsState>>::Error> {
         self.database.root(&self.contract_id).map(Into::into)
     }
@@ -117,28 +117,38 @@ pub trait ContractStorageTrait:
     type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
 }
 
-impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
+impl<D> ContractStorageTrait for D
+where
+    D: StorageInspect<ContractsLatestUtxo, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>,
+{
+    type InnerError = StorageError;
+}
+
+impl<'a, Database> ContractRef<&'a Database>
 where
     Database: ContractStorageTrait,
     anyhow::Error: From<Database::InnerError>,
 {
-    fn root(&self) -> anyhow::Result<MerkleRoot> {
+    /// Returns the state root of the whole contract.
+    pub fn root(&self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();
-        let utxo = self
+        let utxo = *self
             .database()
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)?
             .ok_or(not_found!(ContractsLatestUtxo))?
             .into_owned()
-            .utxo_id;
+            .utxo_id();
 
         let state_root = self
-            .database()
+            .database
             .storage::<ContractsState>()
             .root(&contract_id)?;
 
         let balance_root = self
-            .database()
+            .database
             .storage::<ContractsAssets>()
             .root(&contract_id)?;
 
@@ -146,7 +156,7 @@ where
             // `ContractId` already is based on contract's code and salt so we don't need it.
             .chain(contract_id.as_ref())
             .chain(utxo.tx_id().as_ref())
-            .chain([utxo.output_index()])
+            .chain(utxo.output_index().to_be_bytes())
             .chain(state_root.as_slice())
             .chain(balance_root.as_slice())
             .finalize();

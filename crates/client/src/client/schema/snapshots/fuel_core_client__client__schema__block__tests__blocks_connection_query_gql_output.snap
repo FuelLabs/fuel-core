@@ -7,14 +7,19 @@ query($after: String, $before: String, $first: Int, $last: Int) {
     edges {
       cursor
       node {
+        version
         id
         header {
+          version
           id
           daHeight
+          consensusParametersVersion
+          stateTransitionBytecodeVersion
           transactionsCount
           messageReceiptCount
           transactionsRoot
-          messageReceiptRoot
+          messageOutboxRoot
+          eventInboxRoot
           height
           prevRoot
           time
@@ -27,6 +32,7 @@ query($after: String, $before: String, $first: Int, $last: Int) {
             coinsRoot
             contractsRoot
             messagesRoot
+            transactionsRoot
           }
           ... on PoAConsensus {
             signature
@@ -45,5 +51,3 @@ query($after: String, $before: String, $first: Int, $last: Int) {
     }
   }
 }
-
-

@@ -1,17 +1,14 @@
-use crate::schema::{
-    contract::Contract,
-    scalars::{
-        Address,
-        AssetId,
-        Bytes32,
-        ContractId,
-        HexString,
-        Nonce,
-        TxPointer,
-        UtxoId,
-        U32,
-        U64,
-    },
+use crate::schema::scalars::{
+    Address,
+    AssetId,
+    Bytes32,
+    ContractId,
+    HexString,
+    Nonce,
+    TxPointer,
+    UtxoId,
+    U16,
+    U64,
 };
 use async_graphql::{
     Object,
@@ -32,8 +29,7 @@ pub struct InputCoin {
     amount: U64,
     asset_id: AssetId,
     tx_pointer: TxPointer,
-    witness_index: u8,
-    maturity: U32,
+    witness_index: u16,
     predicate_gas_used: U64,
     predicate: HexString,
     predicate_data: HexString,
@@ -61,12 +57,8 @@ impl InputCoin {
         self.tx_pointer
     }
 
-    async fn witness_index(&self) -> u8 {
+    async fn witness_index(&self) -> u16 {
         self.witness_index
-    }
-
-    async fn maturity(&self) -> U32 {
-        self.maturity
     }
 
     async fn predicate_gas_used(&self) -> U64 {
@@ -108,8 +100,8 @@ impl InputContract {
         self.tx_pointer
     }
 
-    async fn contract(&self) -> Contract {
-        self.contract_id.0.into()
+    async fn contract_id(&self) -> ContractId {
+        self.contract_id
     }
 }
 
@@ -118,7 +110,7 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: Nonce,
-    witness_index: u8,
+    witness_index: u16,
     predicate_gas_used: U64,
     data: HexString,
     predicate: HexString,
@@ -143,8 +135,8 @@ impl InputMessage {
         self.nonce
     }
 
-    async fn witness_index(&self) -> u8 {
-        self.witness_index
+    async fn witness_index(&self) -> U16 {
+        self.witness_index.into()
     }
 
     async fn predicate_gas_used(&self) -> U64 {
@@ -174,7 +166,6 @@ impl From<&fuel_tx::Input> for Input {
                 asset_id,
                 tx_pointer,
                 witness_index,
-                maturity,
                 ..
             }) => Input::Coin(InputCoin {
                 utxo_id: UtxoId(*utxo_id),
@@ -183,7 +174,6 @@ impl From<&fuel_tx::Input> for Input {
                 asset_id: AssetId(*asset_id),
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: *witness_index,
-                maturity: (*maturity).into(),
                 predicate_gas_used: 0.into(),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
@@ -194,7 +184,6 @@ impl From<&fuel_tx::Input> for Input {
                 amount,
                 asset_id,
                 tx_pointer,
-                maturity,
                 predicate,
                 predicate_data,
                 predicate_gas_used,
@@ -206,7 +195,6 @@ impl From<&fuel_tx::Input> for Input {
                 asset_id: AssetId(*asset_id),
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: Default::default(),
-                maturity: (*maturity).into(),
                 predicate_gas_used: (*predicate_gas_used).into(),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),

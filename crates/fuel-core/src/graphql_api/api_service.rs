@@ -4,6 +4,8 @@ use crate::{
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
+            ConsensusProvider as ConsensusProviderTrait,
+            GasPriceEstimate,
             OffChainDatabase,
             OnChainDatabase,
             P2pPort,
@@ -88,6 +90,10 @@ pub type TxPool = Box<dyn TxPoolPort>;
 pub type ConsensusModule = Box<dyn ConsensusModulePort>;
 pub type P2pService = Box<dyn P2pPort>;
 
+pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
+
+pub type ConsensusProvider = Box<dyn ConsensusProviderTrait>;
+
 #[derive(Clone)]
 pub struct SharedState {
     pub bound_address: SocketAddr,
@@ -162,9 +168,10 @@ impl RunnableTask for Task {
     }
 }
 
-// Need a seperate Data Object for each Query endpoint, cannot be avoided
+// Need a separate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<OnChain, OffChain>(
+    genesis_block_height: BlockHeight,
     config: Config,
     schema: CoreSchemaBuilder,
     on_database: OnChain,
@@ -173,6 +180,8 @@ pub fn new_service<OnChain, OffChain>(
     producer: BlockProducer,
     consensus_module: ConsensusModule,
     p2p_service: P2pService,
+    gas_price_provider: GasPriceProvider,
+    consensus_parameters_provider: ConsensusProvider,
     log_threshold_ms: Duration,
     request_timeout: Duration,
 ) -> anyhow::Result<Service>
@@ -183,7 +192,8 @@ where
     OffChain::View: OffChainDatabase,
 {
     let network_addr = config.addr;
-    let combined_read_database = ReadDatabase::new(on_database, off_database);
+    let combined_read_database =
+        ReadDatabase::new(genesis_block_height, on_database, off_database);
 
     let schema = schema
         .data(config)
@@ -192,19 +202,22 @@ where
         .data(producer)
         .data(consensus_module)
         .data(p2p_service)
+        .data(gas_price_provider)
+        .data(consensus_parameters_provider)
         .extension(async_graphql::extensions::Tracing)
         .extension(MetricsExtension::new(log_threshold_ms))
         .extension(ViewExtension::new())
         .finish();
 
     let router = Router::new()
-        .route("/playground", get(graphql_playground))
-        .route("/graphql", post(graphql_handler).options(ok))
+        .route("/v1/playground", get(graphql_playground))
+        .route("/v1/graphql", post(graphql_handler).options(ok))
         .route(
-            "/graphql-sub",
+            "/v1/graphql-sub",
             post(graphql_subscription_handler).options(ok),
         )
-        .route("/metrics", get(metrics))
+        .route("/v1/metrics", get(metrics))
+        .route("/v1/health", get(health))
         .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
@@ -235,7 +248,9 @@ where
 }
 
 async fn graphql_playground() -> impl IntoResponse {
-    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+    Html(playground_source(GraphQLPlaygroundConfig::new(
+        "/v1/graphql",
+    )))
 }
 
 async fn health() -> Json<serde_json::Value> {

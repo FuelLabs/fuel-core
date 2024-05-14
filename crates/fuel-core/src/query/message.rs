@@ -1,6 +1,7 @@
 use crate::{
     fuel_core_graphql_api::{
         ports::{
+            DatabaseBlocks,
             DatabaseMessageProof,
             DatabaseMessages,
             OffChainDatabase,
@@ -28,7 +29,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    entities::message::{
+    entities::relayer::message::{
         MerkleProof,
         Message,
         MessageProof,
@@ -129,7 +130,7 @@ pub trait MessageProofData:
 
 impl<D> MessageProofData for D
 where
-    D: OnChainDatabase + OffChainDatabase + ?Sized,
+    D: OnChainDatabase + DatabaseBlocks + OffChainDatabase + ?Sized,
 {
     fn transaction_status(
         &self,
@@ -173,17 +174,17 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         data.ok_or(anyhow::anyhow!("Output message doesn't contain any `data`"))?;
 
     // Get the block id from the transaction status if it's ready.
-    let message_block_id = match database
+    let message_block_height = match database
         .transaction_status(&transaction_id)
-        .into_api_result::<TransactionStatus, StorageError>()?
-    {
-        Some(TransactionStatus::Success { block_id, .. }) => block_id,
+        .into_api_result::<TransactionStatus, StorageError>(
+    )? {
+        Some(TransactionStatus::Success { block_height, .. }) => block_height,
         _ => return Ok(None),
     };
 
     // Get the message fuel block header.
     let (message_block_header, message_block_txs) = match database
-        .block_by_id(&message_block_id)
+        .block(&message_block_height)
         .into_api_result::<CompressedBlock, StorageError>()?
     {
         Some(t) => t.into_inner(),
@@ -281,10 +282,13 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     }
 }
 
-pub fn message_status<T: DatabaseMessages + ?Sized>(
+pub fn message_status<T>(
     database: &T,
     message_nonce: Nonce,
-) -> StorageResult<MessageStatus> {
+) -> StorageResult<MessageStatus>
+where
+    T: OffChainDatabase + DatabaseMessages + ?Sized,
+{
     if database.message_is_spent(&message_nonce)? {
         Ok(MessageStatus::spent())
     } else if database.message_exists(&message_nonce)? {

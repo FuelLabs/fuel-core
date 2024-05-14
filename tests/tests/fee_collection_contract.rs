@@ -24,6 +24,7 @@ use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::{
         Cacheable,
+        Contract,
         Finalizable,
         Input,
         Output,
@@ -48,19 +49,27 @@ struct TestContext {
     client: FuelClient,
 }
 
+const AMOUNT: u64 = 1000;
+const TIP: u64 = AMOUNT / 2;
+
 async fn setup(rng: &mut StdRng) -> TestContext {
     // Make contract that coinbase fees are collected into
     let address: Address = rng.gen();
     let salt: Salt = rng.gen();
     let contract = fuel_core::chain_config::fee_collection_contract::generate(address);
-    let witness: Witness = contract.into();
+    let witness: Witness = contract.clone().into();
+    let contract = Contract::from(contract);
+    let root = contract.root();
+    let state_root = Contract::default_state_root();
+    let contract_id = contract.id(&salt, &root, &state_root);
     let mut create_tx = TransactionBuilder::create(witness.clone(), salt, vec![])
         .add_random_fee_input()
+        .add_output(Output::contract_created(contract_id, state_root))
         .finalize();
     create_tx
         .precompute(&ChainId::default())
         .expect("tx should be valid");
-    let contract_id = create_tx.metadata().as_ref().unwrap().contract_id;
+    let contract_id = create_tx.metadata().as_ref().unwrap().body.contract_id;
 
     // Start up a node
     let mut config = Config::local_node();
@@ -102,15 +111,15 @@ async fn make_block_with_fee(rng: &mut StdRng, ctx: &TestContext) {
     // Run a script that does nothing, but will cause fee collection
     let tx =
         TransactionBuilder::script([op::ret(RegId::ONE)].into_iter().collect(), vec![])
+            .max_fee_limit(AMOUNT)
+            .tip(TIP)
             .add_unsigned_coin_input(
                 SecretKey::random(rng),
                 rng.gen(),
-                1000,
-                Default::default(),
+                AMOUNT,
                 Default::default(),
                 Default::default(),
             )
-            .gas_price(1)
             .script_gas_limit(1_000_000)
             .finalize_as_transaction();
     let tx_status = ctx.client.submit_and_await_commit(&tx).await.unwrap();
@@ -158,7 +167,6 @@ async fn collect_fees(ctx: &TestContext) {
                 .collect(),
         )
             .add_random_fee_input() // No coinbase fee for this block
-            .gas_price(0)
             .script_gas_limit(1_000_000)
             .add_input(Input::contract(
                 Default::default(),
@@ -291,7 +299,6 @@ async fn missing_variable_output() {
                 .collect(),
         )
             .add_random_fee_input() // No coinbase fee for this block
-            .gas_price(0)
             .script_gas_limit(1_000_000)
             .add_input(Input::contract(
                 Default::default(),
@@ -315,7 +322,7 @@ async fn missing_variable_output() {
         .contract_balance(&ctx.contract_id, None)
         .await
         .unwrap();
-    assert_eq!(contract_balance, 1);
+    assert_eq!(contract_balance, TIP);
     let asset_balance = ctx.client.balance(&ctx.address, None).await.unwrap();
     assert_eq!(asset_balance, 0);
 }

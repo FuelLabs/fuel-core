@@ -10,7 +10,6 @@ expression: json
       {
         "contract_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "code": "0x24400000",
-        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "tx_pointer_block_height": "0xd3301861",
         "tx_pointer_tx_idx": "0x1a64"
       }
@@ -22,7 +21,8 @@ expression: json
       "max_outputs": 255,
       "max_witnesses": 255,
       "max_gas_per_tx": 100000000,
-      "max_size": 17825792
+      "max_size": 17825792,
+      "max_bytecode_subsections": 256
     },
     "predicate_params": {
       "max_predicate_length": 1048576,
@@ -56,7 +56,6 @@ expression: json
       "cb": 1,
       "cfei": 1,
       "cfsi": 1,
-      "croo": 16,
       "div": 1,
       "divi": 1,
       "eck1": 951,
@@ -143,6 +142,12 @@ expression: json
         "LightOperation": {
           "base": 15,
           "units_per_gas": 103
+        }
+      },
+      "croo": {
+        "LightOperation": {
+          "base": 1,
+          "units_per_gas": 1
         }
       },
       "csiz": {

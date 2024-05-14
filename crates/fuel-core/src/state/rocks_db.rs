@@ -6,7 +6,6 @@ use crate::{
         Result as DatabaseResult,
     },
     state::{
-        BatchOperations,
         IterDirection,
         TransactableStorage,
     },
@@ -16,15 +15,16 @@ use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
-        IteratorableStore,
+        IterableStore,
     },
     kv_store::{
         KVItem,
-        KeyValueStore,
+        KeyValueInspect,
         StorageColumn,
         Value,
         WriteOperation,
     },
+    transactional::Changes,
     Result as StorageResult,
 };
 use rand::RngCore;
@@ -43,8 +43,13 @@ use rocksdb::{
     WriteBatch,
 };
 use std::{
+    cmp,
     env,
-    fmt::Debug,
+    fmt,
+    fmt::{
+        Debug,
+        Formatter,
+    },
     iter,
     path::{
         Path,
@@ -52,6 +57,7 @@ use std::{
     },
     sync::Arc,
 };
+use tempfile::TempDir;
 
 type DB = DBWithThreadMode<MultiThreaded>;
 
@@ -77,7 +83,7 @@ impl ShallowTempDir {
         Self { path }
     }
 
-    /// Returns the path of teh directory.
+    /// Returns the path of the directory.
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
@@ -90,9 +96,40 @@ impl Drop for ShallowTempDir {
     }
 }
 
+type DropFn = Box<dyn FnOnce() + Send + Sync>;
+#[derive(Default)]
+struct DropResources {
+    // move resources into this closure to have them dropped when db drops
+    drop: Option<DropFn>,
+}
+
+impl fmt::Debug for DropResources {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DropResources")
+    }
+}
+
+impl<F: 'static + FnOnce() + Send + Sync> From<F> for DropResources {
+    fn from(closure: F) -> Self {
+        Self {
+            drop: Option::Some(Box::new(closure)),
+        }
+    }
+}
+
+impl Drop for DropResources {
+    fn drop(&mut self) {
+        if let Some(drop) = self.drop.take() {
+            (drop)()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RocksDb<Description> {
     db: DB,
+    // used for RAII
+    _drop: DropResources,
     _marker: core::marker::PhantomData<Description>,
 }
 
@@ -100,6 +137,27 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
+    pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
+        let tmp_dir = TempDir::new().unwrap();
+        let path = tmp_dir.path();
+        let result = Self::open(
+            path,
+            enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
+            capacity,
+        );
+        let mut db = result?;
+
+        db._drop = {
+            move || {
+                // cleanup temp dir
+                drop(tmp_dir);
+            }
+        }
+        .into();
+
+        Ok(db)
+    }
+
     pub fn default_open<P: AsRef<Path>>(
         path: P,
         capacity: Option<usize>,
@@ -109,6 +167,13 @@ where
             enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
         )
+    }
+
+    pub fn prune(path: &Path) -> DatabaseResult<()> {
+        let path = path.join(Description::name());
+        DB::destroy(&Options::default(), path)
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+        Ok(())
     }
 
     pub fn open<P: AsRef<Path>>(
@@ -137,13 +202,14 @@ where
         }
         block_opts.set_bloom_filter(10.0, true);
 
-        let cf_descriptors = columns.clone().into_iter().map(|i| {
-            ColumnFamilyDescriptor::new(Self::col_name(i), Self::cf_opts(i, &block_opts))
-        });
-
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
+        // TODO: Make it customizable https://github.com/FuelLabs/fuel-core/issues/1666
+        opts.set_max_total_wal_size(64 * 1024 * 1024);
+        let cpu_number =
+            i32::try_from(num_cpus::get()).expect("The number of CPU can't exceed `i32`");
+        opts.increase_parallelism(cmp::max(1, cpu_number / 2));
         if let Some(capacity) = capacity {
             // Set cache size 1/3 of the capacity. Another 1/3 is
             // used by block cache and the last 1 / 3 remains for other purposes:
@@ -154,51 +220,70 @@ where
             opts.set_row_cache(&cache);
         }
 
-        let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
-            Err(_) => {
-                // setup cfs
-                match DB::open_cf(&opts, &path, &[] as &[&str]) {
-                    Ok(db) => {
-                        for i in columns {
-                            let opts = Self::cf_opts(i, &block_opts);
-                            db.create_cf(Self::col_name(i), &opts)
-                                .map_err(|e| DatabaseError::Other(e.into()))?;
-                        }
-                        Ok(db)
-                    }
-                    Err(err) => {
-                        tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
-                        DB::repair(&opts, &path)
-                            .map_err(|e| DatabaseError::Other(e.into()))?;
+        let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_default();
 
-                        let cf_descriptors = columns.clone().into_iter().map(|i| {
-                            ColumnFamilyDescriptor::new(
-                                Self::col_name(i),
-                                Self::cf_opts(i, &block_opts),
-                            )
-                        });
-                        DB::open_cf_descriptors(&opts, &path, cf_descriptors)
-                    }
-                }
+        let mut cf_descriptors_to_open = vec![];
+        let mut cf_descriptors_to_create = vec![];
+        for column in columns.clone() {
+            let column_name = Self::col_name(column.id());
+            let opts = Self::cf_opts(column, &block_opts);
+            if existing_column_families.contains(&column_name) {
+                cf_descriptors_to_open.push((column_name, opts));
+            } else {
+                cf_descriptors_to_create.push((column_name, opts));
             }
-            ok => ok,
+        }
+
+        let iterator = cf_descriptors_to_open
+            .clone()
+            .into_iter()
+            .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+
+        let db = match DB::open_cf_descriptors(&opts, &path, iterator) {
+            Ok(db) => {
+                Ok(db)
+            },
+            Err(err) => {
+                tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
+                DB::repair(&opts, &path)
+                    .map_err(|e| DatabaseError::Other(e.into()))?;
+
+                let iterator = cf_descriptors_to_open
+                    .clone()
+                    .into_iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+
+                DB::open_cf_descriptors(&opts, &path, iterator)
+            },
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        // Setup cfs
+        for (name, opt) in cf_descriptors_to_create {
+            db.create_cf(name, &opt)
+                .map_err(|e| DatabaseError::Other(e.into()))?;
+        }
+
         let rocks_db = RocksDb {
             db,
+            _drop: Default::default(),
             _marker: Default::default(),
         };
         Ok(rocks_db)
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
+        self.cf_u32(column.id())
+    }
+
+    fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily> {
         self.db
             .cf_handle(&Self::col_name(column))
             .expect("invalid column state")
     }
 
-    fn col_name(column: Description::Column) -> String {
-        format!("col-{}", column.as_usize())
+    fn col_name(column: u32) -> String {
+        format!("col-{}", column)
     }
 
     fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
@@ -229,7 +314,7 @@ where
     ) -> impl Iterator<Item = KVItem> + '_ {
         let maybe_next_item = next_prefix(prefix.to_vec())
             .and_then(|next_prefix| {
-                self.iter_all(
+                self.iter_store(
                     column,
                     Some(next_prefix.as_slice()),
                     None,
@@ -297,34 +382,11 @@ where
     }
 }
 
-impl<Description> KeyValueStore for RocksDb<Description>
+impl<Description> KeyValueInspect for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
     type Column = Description::Column;
-
-    fn write(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        buf: &[u8],
-    ) -> StorageResult<usize> {
-        let r = buf.len();
-        self.db
-            .put_cf(&self.cf(column), key, buf)
-            .map_err(|e| DatabaseError::Other(e.into()))?;
-
-        database_metrics().write_meter.inc();
-        database_metrics().bytes_written.observe(r as f64);
-
-        Ok(r)
-    }
-
-    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-        self.db
-            .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()).into())
-    }
 
     fn size_of_value(
         &self,
@@ -383,11 +445,11 @@ where
     }
 }
 
-impl<Description> IteratorableStore for RocksDb<Description>
+impl<Description> IterableStore for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn iter_all(
+    fn iter_store(
         &self,
         column: Self::Column,
         prefix: Option<&[u8]>,
@@ -415,10 +477,22 @@ where
                         prefix,
                         convert_to_rocksdb_direction(direction),
                     );
+
+                    // Setting prefix on the RocksDB level to optimize iteration.
                     let mut opts = ReadOptions::default();
                     opts.set_prefix_same_as_start(true);
 
-                    self._iter_all(column, opts, iter_mode).into_boxed()
+                    let prefix = prefix.to_vec();
+                    self._iter_all(column, opts, iter_mode)
+                        // Not all tables has a prefix set, so we need to filter out the keys.
+                        .take_while(move |item| {
+                            if let Ok((key, _)) = item {
+                                key.starts_with(prefix.as_slice())
+                            } else {
+                                true
+                            }
+                        })
+                        .into_boxed()
                 }
             }
             (None, Some(start)) => {
@@ -432,7 +506,7 @@ where
                 // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
                 // If the `start` doesn't have the same `prefix`, return nothing.
                 if !start.starts_with(prefix) {
-                    return iter::empty().into_boxed()
+                    return iter::empty().into_boxed();
                 }
 
                 // start iterating in a certain direction from the start key
@@ -454,23 +528,27 @@ where
     }
 }
 
-impl<Description> BatchOperations for RocksDb<Description>
+impl<Description> TransactableStorage<Description::Height> for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn batch_write(
+    fn commit_changes(
         &self,
-        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
+        _: Option<Description::Height>,
+        changes: Changes,
     ) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
-        for (key, column, op) in entries {
-            match op {
-                WriteOperation::Insert(value) => {
-                    batch.put_cf(&self.cf(column), key, value.as_ref());
-                }
-                WriteOperation::Remove => {
-                    batch.delete_cf(&self.cf(column), key);
+        for (column, ops) in changes {
+            let cf = self.cf_u32(column);
+            for (key, op) in ops {
+                match op {
+                    WriteOperation::Insert(value) => {
+                        batch.put_cf(&cf, key, value.as_ref());
+                    }
+                    WriteOperation::Remove => {
+                        batch.delete_cf(&cf, key);
+                    }
                 }
             }
         }
@@ -486,27 +564,12 @@ where
     }
 }
 
-impl<Description> TransactableStorage for RocksDb<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn flush(&self) -> DatabaseResult<()> {
-        self.db
-            .flush_wal(true)
-            .map_err(|e| anyhow::anyhow!("Unable to flush WAL file: {}", e))?;
-        self.db
-            .flush()
-            .map_err(|e| anyhow::anyhow!("Unable to flush SST files: {}", e))?;
-        Ok(())
-    }
-}
-
 /// The `None` means overflow, so there is not following prefix.
 fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     for byte in prefix.iter_mut().rev() {
         if let Some(new_byte) = byte.checked_add(1) {
             *byte = new_byte;
-            return Some(prefix)
+            return Some(prefix);
         }
     }
     None
@@ -516,8 +579,43 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
     use crate::database::database_description::on_chain::OnChain;
-    use fuel_core_storage::column::Column;
+    use fuel_core_storage::{
+        column::Column,
+        kv_store::KeyValueMutate,
+        transactional::ReadTransaction,
+    };
+    use std::collections::{
+        BTreeMap,
+        HashMap,
+    };
     use tempfile::TempDir;
+
+    impl<Description> KeyValueMutate for RocksDb<Description>
+    where
+        Description: DatabaseDescription,
+    {
+        fn write(
+            &mut self,
+            key: &[u8],
+            column: Self::Column,
+            buf: &[u8],
+        ) -> StorageResult<usize> {
+            let mut transaction = self.read_transaction();
+            let len = transaction.write(key, column, buf)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(None, changes)?;
+
+            Ok(len)
+        }
+
+        fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+            let mut transaction = self.read_transaction();
+            transaction.delete(key, column)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(None, changes)?;
+            Ok(())
+        }
+    }
 
     fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
@@ -528,10 +626,33 @@ mod tests {
     }
 
     #[test]
+    fn open_new_columns() {
+        let tmp_dir = TempDir::new().unwrap();
+
+        // Given
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let database_with_old_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None)
+                .expect("Failed to open database with old columns");
+        drop(database_with_old_columns);
+
+        // When
+        let mut new_columns = old_columns;
+        new_columns.push(Column::ContractsAssets);
+        new_columns.push(Column::Metadata);
+        let database_with_new_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None).map(|_| ());
+
+        // Then
+        assert_eq!(Ok(()), database_with_new_columns);
+    }
+
+    #[test]
     fn can_put_and_read() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -542,7 +663,7 @@ mod tests {
     fn put_returns_previous_value() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         let prev = db
@@ -556,7 +677,7 @@ mod tests {
     fn delete_and_get() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -569,38 +690,43 @@ mod tests {
     fn key_exists() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected).unwrap();
         assert!(db.exists(&key, Column::Metadata).unwrap());
     }
 
     #[test]
-    fn batch_write_inserts() {
+    fn commit_changes_inserts() {
         let key = vec![0xA, 0xB, 0xC];
         let value = Arc::new(vec![1, 2, 3]);
 
         let (db, _tmp) = create_db();
         let ops = vec![(
-            key.clone(),
-            Column::Metadata,
-            WriteOperation::Insert(value.clone()),
+            Column::Metadata.id(),
+            BTreeMap::from_iter(vec![(
+                key.clone(),
+                WriteOperation::Insert(value.clone()),
+            )]),
         )];
 
-        db.batch_write(&mut ops.into_iter()).unwrap();
+        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
     #[test]
-    fn batch_write_removes() {
+    fn commit_changes_removes() {
         let key = vec![0xA, 0xB, 0xC];
         let value = Arc::new(vec![1, 2, 3]);
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
 
-        let ops = vec![(key.clone(), Column::Metadata, WriteOperation::Remove)];
-        db.batch_write(&mut ops.into_iter()).unwrap();
+        let ops = vec![(
+            Column::Metadata.id(),
+            BTreeMap::from_iter(vec![(key.clone(), WriteOperation::Remove)]),
+        )];
+        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
@@ -609,7 +735,7 @@ mod tests {
     fn can_use_unit_value() {
         let key = vec![0x00];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -618,7 +744,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())
@@ -633,7 +759,7 @@ mod tests {
     fn can_use_unit_key() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -642,7 +768,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())
@@ -657,7 +783,7 @@ mod tests {
     fn can_use_unit_key_and_value() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -666,7 +792,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())
