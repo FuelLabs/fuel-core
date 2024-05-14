@@ -3,6 +3,7 @@ use std::cmp::max;
 struct Algorithm {
     amount: u64,
     min: u64,
+    p_value_factor: u64,
 }
 
 impl Algorithm {
@@ -15,12 +16,18 @@ impl Algorithm {
         capacity: u64,
     ) -> u64 {
         if total_da_recording_cost > total_production_reward {
-            old_gas_price + self.amount
+            let add =
+                (total_da_recording_cost - total_production_reward) / self.p_value_factor;
+            old_gas_price + add
         } else {
             if used > capacity / 2 {
-                old_gas_price + self.amount
+                todo!();
+            } else if total_production_reward > total_da_recording_cost {
+                let sub = (total_production_reward - total_da_recording_cost)
+                    / self.p_value_factor;
+                max(old_gas_price.saturating_sub(sub), self.min)
             } else {
-                max(old_gas_price.saturating_sub(self.amount), self.min)
+                old_gas_price
             }
         }
     }
@@ -29,9 +36,16 @@ impl Algorithm {
 fn main() {
     let amount = 1;
     let min = 10;
-    let algo = Algorithm { amount, min };
+    let p_value_factor = 300;
+    let algo = Algorithm {
+        amount,
+        min,
+        p_value_factor,
+    };
 
+    let gas_spent = 200;
     let simulation_size = 1_000;
+
     // Run simulation
     let da_recording_cost = (0u32..simulation_size)
         .map(|val| f64::try_from(val).unwrap() / 100.)
@@ -44,7 +58,6 @@ fn main() {
     let mut rewards = vec![];
     let mut total_cost = 0;
     let mut total_reward = 0;
-    let gas_spent = 200;
     // 50% capacity
     let used = gas_spent;
     let capacity = gas_spent * 2;
@@ -53,23 +66,21 @@ fn main() {
         let reward = gas_price * gas_spent;
         rewards.push(reward);
         total_reward += reward;
+        let total_profit = total_reward as i32 - total_cost as i32;
+        total_profits.push(total_profit);
         gas_price =
             algo.calculate_gas_price(gas_price, total_reward, total_cost, used, capacity);
         gas_prices.push(gas_price as i32);
-
-        let new_reward = gas_price * gas_spent;
-        rewards.push(new_reward);
-        total_reward += new_reward;
-        let total_profit = total_reward as i32 - total_cost as i32;
-        total_profits.push(total_profit);
     }
 
     // Plotting code starts here
     let root = BitMapBackend::new("gas_prices.png", (640, 480)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
-    let min = *total_profits.iter().min().unwrap();
-    let max = *total_profits.iter().max().unwrap();
+    // let min = *total_profits.iter().min().unwrap();
+    // let max = *total_profits.iter().max().unwrap();
+    let min = -10_000;
+    let max = 40_000;
 
     let mut chart = ChartBuilder::on(&root)
         .caption("Gas Prices Over Time", ("sans-serif", 50).into_font())
