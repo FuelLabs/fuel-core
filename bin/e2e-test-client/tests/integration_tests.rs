@@ -101,9 +101,9 @@ fn dev_config() -> Config {
         SnapshotReader::open(snapshot).expect("Should be able to open snapshot reader");
 
     let mut chain_config = reader.chain_config().clone();
-    let contract_parameters = chain_config.consensus_parameters.contract_params().clone();
-    let tx_parameters = chain_config.consensus_parameters.tx_params().clone();
-    let fee_params = chain_config.consensus_parameters.fee_params().clone();
+    let contract_parameters = *chain_config.consensus_parameters.contract_params();
+    let tx_parameters = *chain_config.consensus_parameters.tx_params();
+    let fee_params = *chain_config.consensus_parameters.fee_params();
 
     // The `run_contract_large_state` test creates a big contract with a huge state.
     let max_storage_slots = 1 << 17 /* 131072 */;
