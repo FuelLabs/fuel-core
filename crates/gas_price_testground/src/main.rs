@@ -6,10 +6,14 @@ use rand::{
 };
 use std::cell::RefCell;
 
-use std::cmp::max;
+use std::cmp::{
+    max,
+    min,
+};
 
 struct Algorithm {
     amount: u64,
+    max_change_percent: u8,
     min: u64,
     p_value_factor: i32,
     d_value_factor: i32,
@@ -34,12 +38,19 @@ impl Algorithm {
         let avg_profit = *self.moving_average_profit.borrow();
         let slope = *self.profit_slope.borrow();
 
+        let max_change = (old_gas_price * self.max_change_percent as u64 / 100) as i32;
+
         // if p > 0 and dp/db > 0, decrease
+        // if p > 0 and dp/db < 0, hold/moderate
         // if p < 0 and dp/db < 0, increase
+        // if p < 0 and dp/db > 0, hold/moderate
         let p_comp = avg_profit / self.p_value_factor;
         let d_comp = slope / self.d_value_factor;
-        let sub = p_comp + d_comp;
-        let new_gas_price = old_gas_price as i32 - sub;
+        let pd_change = p_comp + d_comp;
+        let change = min(max_change, pd_change.abs());
+        let sign = pd_change.signum();
+        let change = change * sign;
+        let new_gas_price = old_gas_price as i32 - change;
         max(new_gas_price as u64, self.min)
     }
 
@@ -88,8 +99,10 @@ fn main() {
     let p_value_factor = 5_000;
     let d_value_factor = 200;
     let moving_average_window = 10;
+    let max_change_percent = 15;
     let algo = Algorithm {
         amount,
+        max_change_percent,
         min,
         p_value_factor,
         d_value_factor,
@@ -100,7 +113,7 @@ fn main() {
     };
 
     let gas_spent = 200;
-    let simulation_size = 200;
+    let simulation_size = 1000;
 
     // Run simulation
     let da_recording_cost = arb_cost_signal(simulation_size);
@@ -146,7 +159,7 @@ fn main() {
 
     chart
         .configure_mesh()
-        .y_desc("Profit")
+        .y_desc("Profit/Cost/Reward")
         .x_desc("Block")
         .draw()
         .unwrap();
