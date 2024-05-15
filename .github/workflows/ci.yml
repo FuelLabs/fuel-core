@@ -106,8 +106,6 @@ jobs:
             args: -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features
           - command: clippy
             args: --all-targets --all-features
-          - command: clippy
-            args: --manifest-path version-compatibility/Cargo.toml --workspace
           - command: check
             args: --all-targets
           - command: doc
@@ -124,8 +122,8 @@ jobs:
             args: -p fuel-core-client --no-default-features
           - command: test
             args: -p fuel-core-chain-config --no-default-features
-          - command: test
-            args: --manifest-path version-compatibility/Cargo.toml --workspace
+          - command: check
+            args: --manifest-path version-compatibility/Cargo.toml --workspace && cargo test --manifest-path version-compatibility/Cargo.toml --workspace
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
 

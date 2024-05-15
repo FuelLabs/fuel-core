@@ -10,6 +10,7 @@ build = "build.rs"
 anyhow = "1.0"
 clap = "4.4"
 libp2p = "0.53.2"
+hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
@@ -37,4 +38,3 @@ genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", feature
 ] }
 genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
-hex = "0.4.3"
