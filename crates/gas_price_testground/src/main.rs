@@ -34,7 +34,7 @@ impl Algorithm {
     ) -> u64 {
         let new_profit = total_production_reward as i32 - total_da_recording_cost as i32;
         self.calculate_new_moving_average(new_profit);
-        self.calculate_profit_slope(new_profit);
+        self.calculate_profit_slope(*self.moving_average_profit.borrow());
         let avg_profit = *self.moving_average_profit.borrow();
         let slope = *self.profit_slope.borrow();
 
@@ -96,8 +96,8 @@ fn arb_cost_signal(size: u32) -> Vec<u64> {
 fn main() {
     let amount = 1;
     let min = 10;
-    let p_value_factor = 5_000;
-    let d_value_factor = 200;
+    let p_value_factor = 4_000;
+    let d_value_factor = 100;
     let moving_average_window = 10;
     let max_change_percent = 15;
     let algo = Algorithm {
@@ -113,7 +113,7 @@ fn main() {
     };
 
     let gas_spent = 200;
-    let simulation_size = 1000;
+    let simulation_size = 200;
 
     // Run simulation
     let da_recording_cost = arb_cost_signal(simulation_size);
