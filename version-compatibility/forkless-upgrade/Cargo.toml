@@ -8,10 +8,11 @@ version = "0.0.0"
 [dependencies]
 anyhow = "1.0"
 clap = "4.4"
+libp2p = "0.53.2"
+proptest = "1.1"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
-libp2p = "0.53.2"
 
 # Neutral deps
 fuel-core-trace = { path = "../../crates/trace" }
