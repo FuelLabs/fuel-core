@@ -268,13 +268,6 @@ impl DatabaseMessageProof for ReadView {
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
     ) -> StorageResult<MerkleProof> {
-        // if *message_block_height >= self.genesis_height {
-        //     self.on_chain
-        //         .block_history_proof(message_block_height, commit_block_height)
-        // } else {
-        //     self.off_chain
-        //         .block_history_proof(message_block_height, commit_block_height)
-        // }
         self.on_chain
             .block_history_proof(message_block_height, commit_block_height)
     }

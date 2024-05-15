@@ -1,5 +1,4 @@
 use clap::Parser;
-use ethers::utils::hex;
 use fuel_core::{
     chain_config::{
         ChainConfig,
@@ -498,11 +497,9 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let nonce = nonces[0];
 
     for block_height in message_block.header.height..latest_block.header.height {
-        // dbg!(block_height);
         let proof = core
             .client
-            // .message_proof(&tx_id, nonce, None, Some(block_height.into()))
-            .message_proof(&tx_id, nonce, None, Some(2.into()))
+            .message_proof(&tx_id, nonce, None, Some(block_height.into()))
             .await
             .expect("Unable to get message proof")
             .expect("Message proof not found");
@@ -515,15 +512,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             .collect();
         let block_proof_index = proof.block_proof.proof_index;
         let message_block_id = proof.message_block_header.id;
-        // let count = proof.commit_block_header.height as u64;
-        let count = 2;
-        // dbg!(
-        //     hex::encode(prev_root),
-        //     message_block_id,
-        //     &block_proof_set,
-        //     block_proof_index,
-        //     count
-        // );
+        let count = proof.commit_block_header.height as u64;
         assert!(binary::verify(
             &prev_root,
             &message_block_id,

@@ -10,19 +10,14 @@ use crate::{
         },
         storage::{
             contracts::ContractsInfo,
-            old::OldFuelBlockMerkleMetadata,
             relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
     },
     graphql_api::{
-        ports::{
-            DatabaseBlocks,
-            DatabaseMerklizedBlocks,
-        },
+        ports::DatabaseBlocks,
         storage::old::{
             OldFuelBlockConsensus,
-            OldFuelBlockMerkleData,
             OldFuelBlocks,
             OldTransactions,
         },
@@ -36,10 +31,6 @@ use fuel_core_storage::{
         IteratorOverTable,
     },
     not_found,
-    tables::merkle::{
-        DenseMerkleMetadata,
-        DenseMetadataKey,
-    },
     transactional::{
         IntoTransaction,
         StorageTransaction,
@@ -59,7 +50,6 @@ use fuel_core_types::{
         primitives::BlockId,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
-    fuel_merkle::binary,
     fuel_tx::{
         Address,
         Bytes32,
@@ -115,37 +105,6 @@ impl DatabaseBlocks for Database<OffChain> {
             .get(height)?
             .map(Cow::into_owned)
             .ok_or(not_found!(OldFuelBlockConsensus))
-    }
-}
-
-impl DatabaseMerklizedBlocks for Database<OffChain> {
-    type TableType = OldFuelBlockMerkleData;
-
-    fn block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
-        self.storage_as_ref::<OldFuelBlockMerkleData>()
-            .get(version)?
-            .map(Cow::into_owned)
-            .ok_or(not_found!(OldFuelBlockMerkleData))
-    }
-
-    fn block_merkle_metadata(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<DenseMerkleMetadata> {
-        self.storage_as_ref::<OldFuelBlockMerkleMetadata>()
-            .get(&DenseMetadataKey::Primary(*height))?
-            .map(Cow::into_owned)
-            .ok_or(not_found!(OldFuelBlockMerkleMetadata))
-    }
-
-    fn load_block_merkle_tree(
-        &self,
-        version: u64,
-    ) -> StorageResult<binary::MerkleTree<OldFuelBlockMerkleData, &Self>> {
-        let tree: binary::MerkleTree<OldFuelBlockMerkleData, _> =
-            binary::MerkleTree::load(self, version)
-                .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
-        Ok(tree)
     }
 }
 

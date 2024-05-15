@@ -95,18 +95,12 @@ pub struct LastBlockConfig {
     pub consensus_parameters_version: ConsensusParametersVersion,
     /// The version of state transition function used to produce last block.
     pub state_transition_version: StateTransitionBytecodeVersion,
-    /// The block id of the last block
-    pub block_hash: Bytes32,
+    /// The Merkle root of all blocks before regenesis.
+    pub blocks_root: Bytes32,
 }
 
-impl From<BlockHeader> for LastBlockConfig {
-    fn from(header: BlockHeader) -> Self {
-        Self::from(&header)
-    }
-}
-
-impl From<&BlockHeader> for LastBlockConfig {
-    fn from(header: &BlockHeader) -> Self {
+impl LastBlockConfig {
+    pub fn from_header(header: &BlockHeader, blocks_root: Bytes32) -> Self {
         Self {
             block_height: *header.height(),
             da_block_height: header.application().da_height,
@@ -116,7 +110,7 @@ impl From<&BlockHeader> for LastBlockConfig {
             state_transition_version: header
                 .application()
                 .state_transition_bytecode_version,
-            block_hash: header.consensus().prev_root,
+            blocks_root,
         }
     }
 }
@@ -297,7 +291,7 @@ impl crate::Randomize for StateConfig {
                 da_block_height: rng.gen(),
                 consensus_parameters_version: rng.gen(),
                 state_transition_version: rng.gen(),
-                block_hash: rng.gen(),
+                blocks_root: rng.gen(),
             }),
         }
     }

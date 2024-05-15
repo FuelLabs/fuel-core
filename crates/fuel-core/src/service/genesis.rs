@@ -198,7 +198,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
             .checked_add(1)
             .expect("State transition bytecode version overflow");
         da_height = latest_block.da_block_height;
-        prev_root = latest_block.block_hash;
+        prev_root = latest_block.blocks_root;
     } else {
         height = 0u32.into();
         #[cfg(feature = "relayer")]

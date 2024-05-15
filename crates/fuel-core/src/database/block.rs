@@ -3,7 +3,7 @@ use crate::{
         database_description::off_chain::OffChain,
         Database,
     },
-    graphql_api::storage::blocks::FuelBlockIdsToHeights,
+    fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
     iter::{
@@ -12,9 +12,15 @@ use fuel_core_storage::{
     },
     not_found,
     tables::{
+        merkle::{
+            DenseMetadataKey,
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         FuelBlocks,
         Transactions,
     },
+    Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -26,6 +32,8 @@ use fuel_core_types::{
         },
         primitives::BlockId,
     },
+    entities::relayer::message::MerkleProof,
+    fuel_merkle::binary::MerkleTree,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
@@ -80,11 +88,52 @@ impl Database {
     }
 }
 
+impl Database {
+    pub fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        if message_block_height > commit_block_height {
+            Err(anyhow::anyhow!(
+                "The `message_block_height` is higher than `commit_block_height`"
+            ))?;
+        }
+
+        let message_merkle_metadata = self
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(&DenseMetadataKey::Primary(*message_block_height))?
+            .ok_or(not_found!(FuelBlockMerkleMetadata))?;
+
+        let commit_merkle_metadata = self
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(&DenseMetadataKey::Primary(*commit_block_height))?
+            .ok_or(not_found!(FuelBlockMerkleMetadata))?;
+
+        let storage = self;
+        let tree: MerkleTree<FuelBlockMerkleData, _> =
+            MerkleTree::load(storage, commit_merkle_metadata.version())
+                .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
+
+        let proof_index = message_merkle_metadata
+            .version()
+            .checked_sub(1)
+            .ok_or(anyhow::anyhow!("The count of leaves - messages is zero"))?;
+        let (_, proof_set) = tree
+            .prove(proof_index)
+            .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
+
+        Ok(MerkleProof {
+            proof_set,
+            proof_index,
+        })
+    }
+}
+
 #[allow(clippy::arithmetic_side_effects)]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql_api::ports::DatabaseMessageProof;
     use fuel_core_storage::StorageMutate;
     use fuel_core_types::{
         blockchain::{

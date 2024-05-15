@@ -9,22 +9,28 @@ use crate::{
         worker,
         BlockProducerPort,
         ConsensusProvider,
+        DatabaseMessageProof,
         GasPriceEstimate,
         P2pPort,
         TxPoolPort,
     },
-    service::adapters::{
-        P2PAdapter,
-        TxPoolAdapter,
+    service::{
+        adapters::{
+            P2PAdapter,
+            TxPoolAdapter,
+        },
+        Database,
     },
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::{
     service::TxStatusMessage,
     types::TxId,
 };
 use fuel_core_types::{
+    entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
         ConsensusParameters,
@@ -163,5 +169,15 @@ impl GasPriceEstimate for StaticGasPrice {
 impl ConsensusProvider for ConsensusParametersProvider {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
+    }
+}
+
+impl DatabaseMessageProof for Database {
+    fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        Database::block_history_proof(self, message_block_height, commit_block_height)
     }
 }

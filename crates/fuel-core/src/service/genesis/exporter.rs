@@ -13,8 +13,6 @@ use crate::{
     },
     graphql_api::storage::old::{
         OldFuelBlockConsensus,
-        OldFuelBlockMerkleData,
-        OldFuelBlockMerkleMetadata,
         OldFuelBlocks,
         OldTransactions,
     },
@@ -22,12 +20,14 @@ use crate::{
 use fuel_core_chain_config::{
     AddTable,
     ChainConfig,
+    LastBlockConfig,
     SnapshotFragment,
     SnapshotMetadata,
     SnapshotWriter,
     StateConfigBuilder,
     TableEntry,
 };
+use fuel_core_poa::ports::Database as DatabaseTrait;
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
@@ -121,8 +121,6 @@ where
             OldFuelBlocks,
             OldFuelBlockConsensus,
             OldTransactions,
-            OldFuelBlockMerkleData,
-            OldFuelBlockMerkleMetadata,
             SpentMessages
         );
 
@@ -155,6 +153,12 @@ where
     async fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
         let writer = self.create_writer()?;
         let latest_block = self.db.on_chain().latest_block()?;
+        let blocks_root = self
+            .db
+            .on_chain()
+            .block_header_merkle_root(latest_block.header().height())?;
+        let latest_block =
+            LastBlockConfig::from_header(latest_block.header(), blocks_root.into());
 
         let writer_fragment = writer.partial_close()?;
         self.task_manager
@@ -164,7 +168,7 @@ where
             .try_fold(writer_fragment, |fragment, next_fragment| {
                 fragment.merge(next_fragment)
             })?
-            .finalize(Some(latest_block.header().into()), &self.prev_chain_config)
+            .finalize(Some(latest_block), &self.prev_chain_config)
     }
 
     fn create_writer(&self) -> anyhow::Result<SnapshotWriter> {

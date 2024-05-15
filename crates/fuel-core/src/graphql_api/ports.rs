@@ -6,14 +6,12 @@ use fuel_core_storage::{
         IterDirection,
     },
     tables::{
-        merkle::DenseMerkleMetadata,
         Coins,
         ContractsAssets,
         ContractsRawCode,
         Messages,
     },
     Error as StorageError,
-    Mappable,
     Result as StorageResult,
     StorageInspect,
 };
@@ -34,7 +32,6 @@ use fuel_core_types::{
         },
         transaction::RelayedTransactionStatus,
     },
-    fuel_merkle::binary,
     fuel_tx::{
         Bytes32,
         ConsensusParameters,
@@ -64,7 +61,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub trait OffChainDatabase: Send + Sync + DatabaseMessageProof {
+pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
@@ -181,27 +178,6 @@ pub trait DatabaseChain {
     fn da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
-/// Trait that defines getters for Block Merkle data and metadata
-pub trait DatabaseMerklizedBlocks {
-    type TableType: Mappable<
-        Key = u64,
-        Value = binary::Primitive,
-        OwnedValue = binary::Primitive,
-    >;
-
-    fn block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive>;
-
-    fn block_merkle_metadata(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<DenseMerkleMetadata>;
-
-    fn load_block_merkle_tree(
-        &self,
-        version: u64,
-    ) -> StorageResult<binary::MerkleTree<Self::TableType, &Self>>;
-}
-
 #[async_trait]
 pub trait TxPoolPort: Send + Sync {
     fn transaction(&self, id: TxId) -> Option<Transaction>;
@@ -249,46 +225,6 @@ pub trait DatabaseMessageProof: Send + Sync {
     ) -> StorageResult<MerkleProof>;
 }
 
-impl<T> DatabaseMessageProof for T
-where
-    T: Send
-        + Sync
-        + DatabaseMerklizedBlocks
-        + StorageInspect<<T as DatabaseMerklizedBlocks>::TableType, Error = StorageError>,
-{
-    fn block_history_proof(
-        &self,
-        message_block_height: &BlockHeight,
-        commit_block_height: &BlockHeight,
-    ) -> StorageResult<MerkleProof> {
-        if message_block_height > commit_block_height {
-            Err(anyhow::anyhow!(
-                "The `message_block_height` is higher than `commit_block_height`"
-            ))?;
-        }
-
-        let message_merkle_metadata = self.block_merkle_metadata(message_block_height)?;
-        let commit_merkle_metadata = self.block_merkle_metadata(commit_block_height)?;
-        let version = commit_merkle_metadata.version();
-        let tree = self
-            .load_block_merkle_tree(version)
-            .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
-
-        let proof_index = message_merkle_metadata
-            .version()
-            .checked_sub(1)
-            .ok_or(anyhow::anyhow!("The count of leaves - messages is zero"))?;
-        let (_, proof_set) = tree
-            .prove(proof_index)
-            .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
-
-        Ok(MerkleProof {
-            proof_set,
-            proof_index,
-        })
-    }
-}
-
 #[async_trait::async_trait]
 pub trait P2pPort: Send + Sync {
     async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>>;
@@ -311,12 +247,10 @@ pub mod worker {
                 OwnedMessageIds,
                 SpentMessages,
             },
-            old::OldFuelBlockMerkleMetadata,
         },
         graphql_api::storage::{
             old::{
                 OldFuelBlockConsensus,
-                OldFuelBlockMerkleData,
                 OldFuelBlocks,
                 OldTransactions,
             },
@@ -325,10 +259,6 @@ pub mod worker {
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        tables::merkle::{
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-        },
         Error as StorageError,
         Result as StorageResult,
         StorageMutate,
@@ -361,10 +291,6 @@ pub mod worker {
         + StorageMutate<ContractsInfo, Error = StorageError>
         + StorageMutate<OldFuelBlocks, Error = StorageError>
         + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
-        // + StorageMutate<OldFuelBlockMerkleData, Error = StorageError>
-        // + StorageMutate<OldFuelBlockMerkleMetadata, Error = StorageError>
-        // + StorageMutate<FuelBlockMerkleData, Error = StorageError>
-        // + StorageMutate<FuelBlockMerkleMetadata, Error = StorageError>
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>

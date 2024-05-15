@@ -7,7 +7,6 @@ use crate::{
         DatabaseMessages,
         OnChainDatabase,
     },
-    graphql_api::ports::DatabaseMerklizedBlocks,
 };
 use fuel_core_importer::ports::ImporterDatabase;
 use fuel_core_storage::{
@@ -19,12 +18,6 @@ use fuel_core_storage::{
     },
     not_found,
     tables::{
-        merkle::{
-            DenseMerkleMetadata,
-            DenseMetadataKey,
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-        },
         FuelBlocks,
         SealedBlockConsensus,
         Transactions,
@@ -44,7 +37,6 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     entities::relayer::message::Message,
-    fuel_merkle::binary,
     fuel_tx::{
         AssetId,
         Transaction,
@@ -57,7 +49,6 @@ use fuel_core_types::{
 };
 
 use itertools::Itertools;
-use std::borrow::Cow;
 
 impl DatabaseBlocks for Database {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
@@ -99,37 +90,6 @@ impl DatabaseBlocks for Database {
             .get(id)
             .map(|c| c.map(|c| c.into_owned()))?
             .ok_or(not_found!(SealedBlockConsensus))
-    }
-}
-
-impl DatabaseMerklizedBlocks for Database {
-    type TableType = FuelBlockMerkleData;
-
-    fn block_merkle_data(&self, version: &u64) -> StorageResult<binary::Primitive> {
-        self.storage::<FuelBlockMerkleData>()
-            .get(version)?
-            .map(Cow::into_owned)
-            .ok_or(not_found!(FuelBlockMerkleData))
-    }
-
-    fn block_merkle_metadata(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<DenseMerkleMetadata> {
-        self.storage::<FuelBlockMerkleMetadata>()
-            .get(&DenseMetadataKey::Primary(*height))?
-            .map(Cow::into_owned)
-            .ok_or(not_found!(FuelBlockMerkleMetadata))
-    }
-
-    fn load_block_merkle_tree(
-        &self,
-        version: u64,
-    ) -> StorageResult<binary::MerkleTree<FuelBlockMerkleData, &Self>> {
-        let tree: binary::MerkleTree<FuelBlockMerkleData, _> =
-            binary::MerkleTree::load(self, version)
-                .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
-        Ok(tree)
     }
 }
 
