@@ -264,6 +264,7 @@ mod tests {
         Randomize,
         StateConfig,
     };
+    use fuel_core_producer::ports::BlockProducerDatabase;
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
         tables::{
@@ -643,7 +644,13 @@ mod tests {
 
         let actual_state = db.read_state_config().unwrap();
         let mut expected_state = initial_state;
-        expected_state.last_block = Some(Default::default());
+        let mut last_block = LastBlockConfig::default();
+        last_block.block_height = db.on_chain().latest_height().unwrap().unwrap();
+        last_block.blocks_root = db
+            .on_chain()
+            .block_header_merkle_root(&last_block.block_height)
+            .unwrap();
+        expected_state.last_block = Some(last_block);
         assert_eq!(expected_state, actual_state);
     }
 }
