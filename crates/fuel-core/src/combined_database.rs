@@ -11,13 +11,11 @@ use crate::{
     },
     service::DbType,
 };
-use fuel_core_chain_config::LastBlockConfig;
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     StateConfig,
     StateConfigBuilder,
 };
-use fuel_core_producer::ports::BlockProducerDatabase;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -157,6 +155,7 @@ impl CombinedDatabase {
     #[cfg(feature = "test-helpers")]
     pub fn read_state_config(&self) -> StorageResult<StateConfig> {
         use fuel_core_chain_config::AddTable;
+        use fuel_core_producer::ports::BlockProducerDatabase;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
 
@@ -185,10 +184,11 @@ impl CombinedDatabase {
         let blocks_root = self
             .on_chain()
             .block_header_merkle_root(latest_block.header().height())?;
-        let state_config = builder.build(Some(LastBlockConfig::from_header(
-            latest_block.header(),
-            blocks_root,
-        )))?;
+        let state_config =
+            builder.build(Some(fuel_core_chain_config::LastBlockConfig::from_header(
+                latest_block.header(),
+                blocks_root,
+            )))?;
 
         Ok(state_config)
     }
