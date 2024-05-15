@@ -6,7 +6,7 @@ publish = false
 version = "0.0.0"
 
 [dependencies]
-anyhow = "1.0.83"
+anyhow = "1.0"
 clap = "4.4"
 rand = "0.8"
 tempfile = "3.4"
