@@ -10,9 +10,11 @@ use fuel_core::{
         FuelService,
     },
 };
+use fuel_core_poa::ports::Database;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
+    Rng,
     SeedableRng,
 };
 
@@ -20,6 +22,7 @@ use rand::{
 async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
     let db = CombinedDatabase::default();
+    let blocks_root = rng.gen();
 
     // setup config
     let starting_state = StateConfig {
@@ -28,6 +31,7 @@ async fn loads_snapshot() {
             da_block_height: DaBlockHeight(u64::MAX),
             consensus_parameters_version: u32::MAX - 1,
             state_transition_version: u32::MAX - 1,
+            blocks_root,
         }),
         ..StateConfig::randomize(&mut rng)
     };
@@ -45,6 +49,10 @@ async fn loads_snapshot() {
         da_block_height: DaBlockHeight(u64::MAX),
         consensus_parameters_version: u32::MAX,
         state_transition_version: u32::MAX,
+        blocks_root: db
+            .on_chain()
+            .block_header_merkle_root(&u32::MAX.into())
+            .unwrap(),
     });
 
     // initial state
