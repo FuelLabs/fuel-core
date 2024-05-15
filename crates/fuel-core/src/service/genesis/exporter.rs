@@ -158,7 +158,7 @@ where
             .on_chain()
             .block_header_merkle_root(latest_block.header().height())?;
         let latest_block =
-            LastBlockConfig::from_header(latest_block.header(), blocks_root.into());
+            LastBlockConfig::from_header(latest_block.header(), blocks_root);
 
         let writer_fragment = writer.partial_close()?;
         self.task_manager

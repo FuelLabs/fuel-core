@@ -14,13 +14,10 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::{
-        ports::DatabaseBlocks,
-        storage::old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
-        },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use fuel_core_storage::{
@@ -64,49 +61,6 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-
-use std::borrow::Cow;
-
-impl DatabaseBlocks for Database<OffChain> {
-    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
-        self.storage_as_ref::<OldTransactions>()
-            .get(tx_id)?
-            .map(Cow::into_owned)
-            .ok_or(not_found!(OldTransactions))
-    }
-
-    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
-        self.storage_as_ref::<OldFuelBlocks>()
-            .get(height)?
-            .map(Cow::into_owned)
-            .ok_or(not_found!(OldFuelBlocks))
-    }
-
-    fn blocks(
-        &self,
-        height: Option<BlockHeight>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
-        self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
-            .map(|r| r.map(|(_, block)| block))
-            .into_boxed()
-    }
-
-    fn latest_height(&self) -> StorageResult<BlockHeight> {
-        self.iter_all::<OldFuelBlocks>(Some(IterDirection::Reverse))
-            .next()
-            .transpose()?
-            .map(|(height, _)| height)
-            .ok_or(not_found!("BlockHeight"))
-    }
-
-    fn consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
-        self.storage_as_ref::<OldFuelBlockConsensus>()
-            .get(height)?
-            .map(Cow::into_owned)
-            .ok_or(not_found!(OldFuelBlockConsensus))
-    }
-}
 
 impl OffChainDatabase for Database<OffChain> {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -168,7 +122,13 @@ impl OffChainDatabase for Database<OffChain> {
     }
 
     fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
-        <Self as DatabaseBlocks>::block(self, height)
+        let block = self
+            .storage_as_ref::<OldFuelBlocks>()
+            .get(height)?
+            .ok_or(not_found!(OldFuelBlocks))?
+            .into_owned();
+
+        Ok(block)
     }
 
     fn old_blocks(
@@ -176,11 +136,17 @@ impl OffChainDatabase for Database<OffChain> {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
-        <Self as DatabaseBlocks>::blocks(self, height, direction)
+        self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
+            .map(|r| r.map(|(_, block)| block))
+            .into_boxed()
     }
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
-        <Self as DatabaseBlocks>::consensus(self, height)
+        Ok(self
+            .storage_as_ref::<OldFuelBlockConsensus>()
+            .get(height)?
+            .ok_or(not_found!(OldFuelBlockConsensus))?
+            .into_owned())
     }
 
     fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>> {

@@ -90,6 +90,16 @@ impl TxPoolPort for TxPoolAdapter {
     }
 }
 
+impl DatabaseMessageProof for Database {
+    fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        Database::block_history_proof(self, message_block_height, commit_block_height)
+    }
+}
+
 #[async_trait]
 impl BlockProducerPort for BlockProducerAdapter {
     async fn dry_run_txs(
@@ -169,15 +179,5 @@ impl GasPriceEstimate for StaticGasPrice {
 impl ConsensusProvider for ConsensusParametersProvider {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
-    }
-}
-
-impl DatabaseMessageProof for Database {
-    fn block_history_proof(
-        &self,
-        message_block_height: &BlockHeight,
-        commit_block_height: &BlockHeight,
-    ) -> StorageResult<MerkleProof> {
-        Database::block_history_proof(self, message_block_height, commit_block_height)
     }
 }

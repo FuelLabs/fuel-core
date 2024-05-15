@@ -88,6 +88,6 @@ expression: encoded_json
     "da_block_height": 14074420184374977699,
     "consensus_parameters_version": 2019076799,
     "state_transition_version": 1670454246,
-    "block_hash": "dfa3ac8a57ea08860870fd515cf7ca6afb887dd1e09be8e451cd3c364076623c"
+    "blocks_root": "dfa3ac8a57ea08860870fd515cf7ca6afb887dd1e09be8e451cd3c364076623c"
   }
 }

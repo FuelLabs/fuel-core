@@ -199,6 +199,7 @@ mod tests {
     use fuel_core_chain_config::{
         AddTable,
         AsTable,
+        LastBlockConfig,
         SnapshotMetadata,
         SnapshotReader,
         StateConfig,
@@ -316,7 +317,10 @@ mod tests {
             builder.add(self.common.contract_balance);
 
             builder
-                .build(Some(self.common.block.value.header().into()))
+                .build(Some(LastBlockConfig::from_header(
+                    self.common.block.value.header(),
+                    Default::default(),
+                )))
                 .unwrap()
         }
 

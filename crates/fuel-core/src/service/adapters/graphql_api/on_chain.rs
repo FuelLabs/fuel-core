@@ -47,7 +47,6 @@ use fuel_core_types::{
     },
     services::graphql_api::ContractBalance,
 };
-
 use itertools::Itertools;
 
 impl DatabaseBlocks for Database {
