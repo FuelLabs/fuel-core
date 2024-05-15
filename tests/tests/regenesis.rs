@@ -435,12 +435,10 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let tx_id = tx.id(&Default::default());
 
     core.client.submit_and_await_commit(&tx).await.unwrap();
-    core.client.produce_blocks(1, None).await.unwrap();
-
     let message_block = core.client.chain_info().await.unwrap().latest_block;
     let message_block_height = message_block.header.height;
-    // dbg!(message_block_height);
-    // let message_block_id = message_block.header.id;
+
+    core.client.produce_blocks(10, None).await.unwrap();
 
     let receipts = core.client.receipts(&tx_id).await.unwrap().unwrap();
     let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
@@ -448,7 +446,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
 
     let proof = core
         .client
-        .message_proof(&tx_id, nonce, None, Some(message_block_height.into()))
+        .message_proof(&tx_id, nonce, None, Some((message_block_height + 1).into()))
         .await
         .expect("Unable to get message proof")
         .expect("Message proof not found");
@@ -490,13 +488,13 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     ])
     .await?;
 
-    core.client.produce_blocks(1, None).await.unwrap();
+    core.client.produce_blocks(10, None).await.unwrap();
     let latest_block = core.client.chain_info().await.unwrap().latest_block;
     let receipts = core.client.receipts(&tx_id).await.unwrap().unwrap();
     let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
     let nonce = nonces[0];
 
-    for block_height in message_block.header.height..latest_block.header.height {
+    for block_height in message_block_height + 1..latest_block.header.height {
         let proof = core
             .client
             .message_proof(&tx_id, nonce, None, Some(block_height.into()))
