@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- [#1895](https://github.com/FuelLabs/fuel-core/pull/1895): Added backward and forward compatibility integration tests for forkless upgrades.
+
 ### Changed
 
 - [#1886](https://github.com/FuelLabs/fuel-core/pull/1886): Use ref to `Block` in validation code
