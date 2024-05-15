@@ -17,6 +17,7 @@ cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&
 cargo clippy -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features &&
 cargo clippy --all-targets --all-features &&
+cargo clippy --manifest-path version-compatibility/Cargo.toml --workspace &&
 cargo doc --all-features --workspace --no-deps &&
 cargo make check --locked &&
 FUEL_ALWAYS_USE_WASM=true cargo make check --all-features --locked &&

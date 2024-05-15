@@ -106,6 +106,8 @@ jobs:
             args: -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features
           - command: clippy
             args: --all-targets --all-features
+          - command: clippy
+            args: --manifest-path version-compatibility/Cargo.toml --workspace
           - command: check
             args: --all-targets
           - command: doc
