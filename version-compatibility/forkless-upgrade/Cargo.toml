@@ -6,7 +6,7 @@ publish = false
 version = "0.0.0"
 
 [dependencies]
-anyhow = "1.0"
+anyhow = "=1.0.82"
 clap = "4.4"
 libp2p = "0.53.2"
 proptest = "1.1"
