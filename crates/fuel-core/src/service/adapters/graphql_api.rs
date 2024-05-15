@@ -5,7 +5,6 @@ use super::{
     StaticGasPrice,
 };
 use crate::{
-    database::Database,
     fuel_core_graphql_api::ports::{
         worker,
         BlockProducerPort,
@@ -15,9 +14,12 @@ use crate::{
         P2pPort,
         TxPoolPort,
     },
-    service::adapters::{
-        P2PAdapter,
-        TxPoolAdapter,
+    service::{
+        adapters::{
+            P2PAdapter,
+            TxPoolAdapter,
+        },
+        Database,
     },
 };
 use async_trait::async_trait;
