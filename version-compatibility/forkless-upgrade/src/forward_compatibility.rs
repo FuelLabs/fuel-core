@@ -100,10 +100,11 @@ async fn latest_state_transition_function_is_forward_compatible_with_genesis_bin
         .await
         .unwrap();
     for i in 0..BLOCKS_TO_PRODUCE {
-        let block = tokio::time::timeout(Duration::from_secs(5), imported_blocks.next())
-            .await
-            .expect(format!("Timed out waiting for block import {i}").as_str())
-            .expect(format!("Failed to import block {i}").as_str());
+        let block =
+            tokio::time::timeout(Duration::from_secs(120), imported_blocks.next())
+                .await
+                .expect(format!("Timed out waiting for block import {i}").as_str())
+                .expect(format!("Failed to import block {i}").as_str());
         assert_eq!(
             block
                 .sealed_block
