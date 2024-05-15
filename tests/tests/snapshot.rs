@@ -10,6 +10,7 @@ use fuel_core::{
         FuelService,
     },
 };
+use fuel_core_poa::ports::Database;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
@@ -48,7 +49,10 @@ async fn loads_snapshot() {
         da_block_height: DaBlockHeight(u64::MAX),
         consensus_parameters_version: u32::MAX,
         state_transition_version: u32::MAX,
-        blocks_root,
+        blocks_root: db
+            .on_chain()
+            .block_header_merkle_root(&u32::MAX.into())
+            .unwrap(),
     });
 
     // initial state
