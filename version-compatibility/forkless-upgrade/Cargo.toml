@@ -4,12 +4,12 @@ license = "BUSL-1.1"
 name = "forkless-upgrade"
 publish = false
 version = "0.0.0"
+build = "build.rs"
 
-[dependencies]
-anyhow = "=1.0.82"
+[dev-dependencies]
+anyhow = "1.0"
 clap = "4.4"
 libp2p = "0.53.2"
-proptest = "1.1"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
