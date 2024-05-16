@@ -17,7 +17,7 @@ use libp2p::{
 use std::time::Duration;
 
 #[tokio::test]
-async fn latest_binary_can_load_testnet_config() {
+async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
     // When
     let latest_node = LatestFuelCoreDriver::spawn(&[
         "--debug",
@@ -38,7 +38,8 @@ async fn latest_binary_can_load_testnet_config() {
 }
 
 #[tokio::test]
-async fn latest_binary_follows_blocks_created_by_genesis_binary() {
+async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_genesis_binary(
+) {
     // Given
     let genesis_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
@@ -65,7 +66,7 @@ async fn latest_binary_follows_blocks_created_by_genesis_binary() {
     let genesis_peer_id = PeerId::from_public_key(&public_key);
     let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
 
-    // Starting node that uses latest furl core.
+    // Starting node that uses latest fuel core.
     // It will connect to the genesis node and sync blocks.
     let latest_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
