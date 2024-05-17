@@ -75,9 +75,10 @@ USAGE:
     fuel-core run [OPTIONS]
 
 OPTIONS:
-        --chain <CHAIN_CONFIG>
-            Specify either an alias to a built-in configuration or filepath to a JSON file [default:
-            local_testnet]
+        --snapshot <SNAPSHOT>
+          Snapshot from which to do (re)genesis. Defaults to local testnet configuration
+
+          [env: SNAPSHOT=]
         ...
 ```
 
