@@ -599,6 +599,7 @@ where
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod test {
     use super::*;
