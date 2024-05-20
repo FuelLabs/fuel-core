@@ -442,11 +442,10 @@ pub async fn nats_publisher(
     while let Ok(result) = subscription.recv().await {
         let result = &**result;
         let height = u32::from(result.sealed_block.entity.header().consensus().height);
-        info!("NATS Publisher: Block#{height}");
-
         let block = &result.sealed_block.entity;
 
         // Publish the block.
+        info!("NATS Publisher: Block#{height}");
         let payload = format!("{block:#?}");
         jetstream
             .publish(format!("blocks.{height}"), payload.into())
@@ -464,6 +463,7 @@ pub async fn nats_publisher(
             };
 
             // Publish the transaction.
+            info!("NATS Publisher: Transaction#{height}.{index}.{tx_kind}");
             let payload = format!("{tx:#?}");
             jetstream
                 .publish(
@@ -503,6 +503,7 @@ pub async fn nats_publisher(
                 );
 
                 // Publish the receipt.
+                info!("NATS Publisher: Receipt#{height}.{contract_id}.{receipt_kind}");
                 let payload = format!("{r:#?}");
                 let subject = format!("receipts.{height}.{contract_id}.{receipt_kind}");
                 jetstream.publish(subject, payload.into()).await?;
@@ -533,8 +534,7 @@ pub async fn nats_publisher(
 
                             // Publish
                             info!(
-                                "NATS Publisher: Publishing to topic: {}",
-                                format!("receipts.{height}.{contract_id}.{topics}")
+                                "NATS Publisher: Receipt#{height}.{contract_id}.{topics}"
                             );
                             jetstream
                                 .publish(
@@ -545,9 +545,6 @@ pub async fn nats_publisher(
                         }
                     }
                 }
-                let payload = format!("{r:#?}");
-                let subject = format!("receipts.{height}.{contract_id}.{receipt_kind}");
-                jetstream.publish(subject, payload.into()).await?;
             }
         }
     }
