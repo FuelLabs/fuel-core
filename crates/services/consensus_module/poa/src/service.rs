@@ -128,11 +128,12 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<T, B, I> {
+pub struct MainTask<T, B, I, SS> {
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
     block_importer: I,
     txpool: T,
+    shared_sequencer: SS,
     tx_status_update_stream: BoxStream<TxId>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -149,6 +150,7 @@ impl<T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
     I: BlockImporter,
+    SS: SharedSequencer,
 {
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,

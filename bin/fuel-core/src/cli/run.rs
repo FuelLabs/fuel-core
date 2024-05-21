@@ -181,6 +181,10 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
+    #[cfg_attr(feature = "shared-sequencer", clap(flatten))]
+    #[cfg(feature = "shared-sequencer")]
+    pub shared_sequencer_args: shared_sequencer::Args,
+
     #[arg(long = "metrics", env)]
     pub metrics: bool,
 

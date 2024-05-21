@@ -1,0 +1,39 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "The primitives and types use by Fuel core protocol."
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = [
+  "blockchain",
+  "cryptocurrencies",
+  "fuel-client",
+  "fuel-core",
+]
+license = { workspace = true }
+name = "fuel-core-shared-sequencer-client"
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+bip32 = { version = "0.5", features = ["mnemonic"] }
+cosmrs = "0.16.0"
+tendermint-rpc = { version = "0.36", features = ["http-client"] }
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tonic = "0.11.0"
+prost = "0.12"
+fuel-vm-private = { workspace = true, default-features = false, features = [
+  "std",
+] }
+thiserror = "1.0"
+
+fuel-sequencer-client = { path = "../../../../fuel-sequencer/rust_client/" }
+
+
+[features]
+default = ["std"]
+# serde = ["dep:serde", "fuel-vm-private/serde"]
+std = ["fuel-vm-private/std"]
+test-helpers = ["fuel-vm-private/test-helpers"]
+

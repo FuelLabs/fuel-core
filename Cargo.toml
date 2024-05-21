@@ -21,6 +21,7 @@ members = [
   "crates/services/p2p",
   "crates/services/producer",
   "crates/services/relayer",
+  "crates/services/shared-sequencer",
   "crates/services/sync",
   "crates/services/txpool",
   "crates/services/upgradable-executor",
