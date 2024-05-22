@@ -35,7 +35,7 @@ use fuel_core::{
     },
     types::{
         blockchain::primitives::SecretKeyWrapper,
-        fuel_tx::ContractId,
+        fuel_tx::{ContractId, field::Inputs},
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
@@ -407,6 +407,8 @@ use fuel_core_types::services::{
 ///   receipts.{height}.{contract_id}.{topic_1}.{topic_2}.{topic_3}
 ///   transactions.{height}.{index}.{kind}                           e.g. transactions.1.1.mint
 ///   blocks.{height}                                                e.g. blocks.1
+///   owners.{height}.{owner_id}                                     e.g. owners.*.0xab..cd
+///   assets.{height}.{asset_id}                                     e.g. assets.*.0xab..cd
 pub async fn nats_publisher(
     mut subscription: tokio::sync::broadcast::Receiver<
         std::sync::Arc<dyn std::ops::Deref<Target = ImportResult> + Send + Sync>,
@@ -431,6 +433,8 @@ pub async fn nats_publisher(
                 // receipts.{height}.{contract_id}.{topic_1}.{topic_2}.{topic_3}
                 "receipts.*.*.*.*.*".to_string(),
                 "transactions.*.*.*".to_string(),
+                "owners.*.*".to_string(),
+                "assets.*.*.".to_string(),
             ],
             storage: async_nats::jetstream::stream::StorageType::File,
             ..Default::default()
@@ -446,14 +450,42 @@ pub async fn nats_publisher(
 
         // Publish the block.
         info!("NATS Publisher: Block#{height}");
-        let payload = format!("{block:#?}");
+        let payload = serde_json::to_string_pretty(block)?;
         jetstream
             .publish(format!("blocks.{height}"), payload.into())
             .await?;
 
         use fuel_core_types::fuel_tx::Transaction;
         for (index, tx) in block.transactions().iter().enumerate() {
-            let payload = format!("{tx:#?}");
+            match tx {
+                Transaction::Script(s) => {
+                    for i in s.inputs() {
+                        if let Some(owner_id) = i.input_owner() {
+                            let payload = serde_json::to_string_pretty(tx)?;
+                            jetstream
+                                .publish(
+                                    format!("owners.{height}.{owner_id}"),
+                                    payload.into(),
+                                )
+                                .await?;
+                        }
+                        use fuel_core_types::fuel_tx::AssetId;
+                        // TODO: from chain config?
+                        let base_asset_id = AssetId::zeroed();
+                        if let Some(asset_id) = i.asset_id(&base_asset_id) {
+                            let payload = serde_json::to_string_pretty(tx)?;
+                            jetstream
+                                .publish(
+                                    format!("assets.{height}.{asset_id}"),
+                                    payload.into(),
+                                )
+                                .await?;
+                        }
+                    }
+                }
+                _ => (),
+            };
+
             let tx_kind = match tx {
                 Transaction::Create(_) => "create",
                 Transaction::Mint(_) => "mint",
@@ -464,7 +496,7 @@ pub async fn nats_publisher(
 
             // Publish the transaction.
             info!("NATS Publisher: Transaction#{height}.{index}.{tx_kind}");
-            let payload = format!("{tx:#?}");
+            let payload = serde_json::to_string_pretty(tx)?;
             jetstream
                 .publish(
                     format!("transactions.{height}.{index}.{tx_kind}"),
@@ -504,7 +536,7 @@ pub async fn nats_publisher(
 
                 // Publish the receipt.
                 info!("NATS Publisher: Receipt#{height}.{contract_id}.{receipt_kind}");
-                let payload = format!("{r:#?}");
+                let payload = serde_json::to_string_pretty(r)?;
                 let subject = format!("receipts.{height}.{contract_id}.{receipt_kind}");
                 jetstream.publish(subject, payload.into()).await?;
 
@@ -530,6 +562,7 @@ pub async fn nats_publisher(
                                 }
                             }
                             let topics = topics.join(".");
+                            // TODO: JSON payload to match other topics? {"data": payload}
                             let payload = data[NUM_TOPICS * 32..].to_owned();
 
                             // Publish
