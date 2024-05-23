@@ -4,8 +4,10 @@ expression: operation.query
 ---
 query($id: BlockId) {
   block(id: $id) {
+    version
     id
     header {
+      version
       id
       daHeight
       consensusParametersVersion
@@ -27,6 +29,7 @@ query($id: BlockId) {
         coinsRoot
         contractsRoot
         messagesRoot
+        transactionsRoot
       }
       ... on PoAConsensus {
         signature

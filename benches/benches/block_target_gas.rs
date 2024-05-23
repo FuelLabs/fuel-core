@@ -20,6 +20,7 @@ use fuel_core::{
     database::{
         balances::BalancesInitializer,
         state::StateInitializer,
+        Database,
     },
     service::{
         config::Trigger,
@@ -35,7 +36,6 @@ use fuel_core_benches::{
 use fuel_core_chain_config::{
     ChainConfig,
     ContractConfig,
-    SnapshotReader,
     StateConfig,
 };
 use fuel_core_services::Service;
@@ -296,10 +296,7 @@ fn service_with_many_contracts(
         contracts: contract_configs,
         ..Default::default()
     };
-    let mut config = Config {
-        snapshot_reader: SnapshotReader::new_in_memory(chain_config, state_config),
-        ..Config::local_node()
-    };
+    let mut config = Config::local_node_with_configs(chain_config, state_config);
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
@@ -430,8 +427,9 @@ fn run_with_service_with_extra_inputs(
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
 
-                let TransactionExecutionResult::Failed { result, receipts } =
-                    &res.tx_status[0].result
+                let TransactionExecutionResult::Failed {
+                    result, receipts, ..
+                } = &res.tx_status[0].result
                 else {
                     panic!("The execution should fails with out of gas")
                 };

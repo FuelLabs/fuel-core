@@ -58,7 +58,6 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            ExecutionTypes,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             UncommittedResult,
@@ -87,32 +86,31 @@ impl TxPool for TxPoolAdapter {
     }
 }
 
-impl fuel_core_producer::ports::Executor<TransactionsSource> for ExecutorAdapter {
-    fn execute_without_commit(
+impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAdapter {
+    fn produce_without_commit(
         &self,
         component: Components<TransactionsSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        self._execute_without_commit(ExecutionTypes::Production(component))
+        self.executor.produce_without_commit_with_source(component)
     }
 }
 
-impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
-    fn execute_without_commit(
+impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdapter {
+    fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let Components {
-            header_to_produce,
-            transactions_source,
-            gas_price,
-            coinbase_recipient,
-        } = component;
-        self._execute_without_commit(ExecutionTypes::Production(Components {
-            header_to_produce,
-            transactions_source: OnceTransactionsSource::new(transactions_source),
-            gas_price,
-            coinbase_recipient,
-        }))
+        let new_components = Components {
+            header_to_produce: component.header_to_produce,
+            transactions_source: OnceTransactionsSource::new(
+                component.transactions_source,
+            ),
+            gas_price: component.gas_price,
+            coinbase_recipient: component.coinbase_recipient,
+        };
+
+        self.executor
+            .produce_without_commit_with_source(new_components)
     }
 }
 
@@ -122,7 +120,7 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self._dry_run(block, utxo_validation)
+        self.executor.dry_run(block, utxo_validation)
     }
 }
 
@@ -136,7 +134,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_at_least_synced(height).await?;
-                let highest = sync.get_finalized_da_height()?;
+                let highest = sync.get_finalized_da_height();
                 Ok(highest)
             } else {
                 Ok(*height)
@@ -235,8 +233,8 @@ impl GasPriceProvider for StaticGasPrice {
 impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
     fn consensus_params_at_version(
         &self,
-        _: &ConsensusParametersVersion,
-    ) -> Arc<ConsensusParameters> {
-        self.consensus_parameters.clone()
+        version: &ConsensusParametersVersion,
+    ) -> anyhow::Result<Arc<ConsensusParameters>> {
+        Ok(self.shared_state.get_consensus_parameters(version)?)
     }
 }

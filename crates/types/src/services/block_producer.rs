@@ -1,7 +1,10 @@
 //! Types related to block producer service.
 
 use crate::{
-    blockchain::header::PartialBlockHeader,
+    blockchain::header::{
+        ConsensusParametersVersion,
+        PartialBlockHeader,
+    },
     fuel_tx::ContractId,
 };
 
@@ -19,4 +22,13 @@ pub struct Components<Source> {
     pub coinbase_recipient: ContractId,
     /// The gas price for all transactions in the block.
     pub gas_price: u64,
+}
+
+impl<T> Components<T> {
+    /// Getter for the `ConsensusParametersVersion` of the future block.
+    pub fn consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        self.header_to_produce
+            .application
+            .consensus_parameters_version
+    }
 }

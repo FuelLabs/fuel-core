@@ -33,6 +33,7 @@ use fuel_core_types::{
         output,
         policies::PolicyType,
         StorageSlot,
+        UploadBody,
     },
     fuel_types,
 };
@@ -116,6 +117,16 @@ pub struct Transaction {
     /// The result of a `is_mint()` helper function is stored here.
     /// It is not an original field of the `Transaction`.
     pub is_mint: bool,
+    /// It is `true` for `Transaction::Upgrade`.
+    ///
+    /// The result of a `is_upgrade()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
+    pub is_upgrade: bool,
+    /// It is `true` for `Transaction::Upload`.
+    ///
+    /// The result of a `is_upload()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
+    pub is_upload: bool,
     /// The field of the `Transaction` type.
     pub outputs: Vec<Output>,
     /// The field of the `Transaction::Mint`.
@@ -142,8 +153,18 @@ pub struct Transaction {
     pub salt: Option<Salt>,
     /// The field of the `Transaction::Create`.
     pub storage_slots: Option<Vec<HexString>>,
-    /// The field of the `Transaction::Create`.
+    /// The field of the `Transaction::Create` or `Transaction::Upload`.
     pub bytecode_witness_index: Option<U16>,
+    /// The field of the `Transaction::Upload`.
+    pub bytecode_root: Option<Bytes32>,
+    /// The field of the `Transaction::Upload`.
+    pub subsection_index: Option<U16>,
+    /// The field of the `Transaction::Upload`.
+    pub subsections_number: Option<U16>,
+    /// The field of the `Transaction::Upload`.
+    pub proof_set: Option<Vec<Bytes32>>,
+    /// The field of the `Transaction::Upgrade`.
+    pub upgrade_purpose: Option<UpgradePurpose>,
 }
 
 impl TryFrom<Transaction> for fuel_tx::Transaction {
@@ -245,7 +266,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .collect(),
             );
             create.into()
-        } else {
+        } else if tx.is_mint {
             let tx_pointer: fuel_tx::TxPointer = tx
                 .tx_pointer
                 .ok_or_else(|| ConversionError::MissingField("tx_pointer".to_string()))?
@@ -279,6 +300,95 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .into(),
             );
             mint.into()
+        } else if tx.is_upgrade {
+            let tx = fuel_tx::Transaction::upgrade(
+                tx.upgrade_purpose
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("upgrade_purpose".to_string())
+                    })?
+                    .try_into()?,
+                tx.policies
+                    .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
+                    .into(),
+                tx.inputs
+                    .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                tx.outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                tx.witnesses
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("witnesses".to_string())
+                    })?
+                    .into_iter()
+                    .map(|w| w.0 .0.into())
+                    .collect(),
+            );
+            tx.into()
+        } else if tx.is_upload {
+            let tx = fuel_tx::Transaction::upload(
+                UploadBody {
+                    root: tx
+                        .bytecode_root
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("bytecode_root".to_string())
+                        })?
+                        .into(),
+                    witness_index: tx
+                        .bytecode_witness_index
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("witness_index".to_string())
+                        })?
+                        .into(),
+                    subsection_index: tx
+                        .subsection_index
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("subsection_index".to_string())
+                        })?
+                        .into(),
+                    subsections_number: tx
+                        .subsections_number
+                        .ok_or_else(|| {
+                            ConversionError::MissingField(
+                                "subsections_number".to_string(),
+                            )
+                        })?
+                        .into(),
+                    proof_set: tx
+                        .proof_set
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("proof_set".to_string())
+                        })?
+                        .into_iter()
+                        .map(|w| w.0 .0)
+                        .collect(),
+                },
+                tx.policies
+                    .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
+                    .into(),
+                tx.inputs
+                    .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                tx.outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                tx.witnesses
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("witnesses".to_string())
+                    })?
+                    .into_iter()
+                    .map(|w| w.0 .0.into())
+                    .collect(),
+            );
+            tx.into()
+        } else {
+            return Err(ConversionError::UnknownVariant("Transaction"));
         };
 
         // This `match` block is added here to enforce compilation error if a new variant
@@ -289,6 +399,8 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
             fuel_tx::Transaction::Script(_) => {}
             fuel_tx::Transaction::Create(_) => {}
             fuel_tx::Transaction::Mint(_) => {}
+            fuel_tx::Transaction::Upgrade(_) => {}
+            fuel_tx::Transaction::Upload(_) => {}
         };
 
         Ok(tx)
@@ -546,5 +658,48 @@ impl From<Policies> for fuel_tx::policies::Policies {
         );
         policies.set(PolicyType::MaxFee, value.max_fee.map(Into::into));
         policies
+    }
+}
+
+#[derive(cynic::InlineFragments, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum UpgradePurpose {
+    ConsensusParameters(ConsensusParametersPurpose),
+    StateTransition(StateTransitionPurpose),
+    #[cynic(fallback)]
+    Unknown,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct ConsensusParametersPurpose {
+    witness_index: U16,
+    checksum: Bytes32,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct StateTransitionPurpose {
+    root: Bytes32,
+}
+
+impl TryFrom<UpgradePurpose> for fuel_tx::UpgradePurpose {
+    type Error = ConversionError;
+
+    fn try_from(value: UpgradePurpose) -> Result<Self, Self::Error> {
+        match value {
+            UpgradePurpose::ConsensusParameters(v) => {
+                Ok(fuel_tx::UpgradePurpose::ConsensusParameters {
+                    witness_index: v.witness_index.into(),
+                    checksum: v.checksum.into(),
+                })
+            }
+            UpgradePurpose::StateTransition(v) => {
+                Ok(fuel_tx::UpgradePurpose::StateTransition {
+                    root: v.root.into(),
+                })
+            }
+            UpgradePurpose::Unknown => Err(Self::Error::UnknownVariant("UpgradePurpose")),
+        }
     }
 }

@@ -6,6 +6,7 @@ use crate::{
     fuel_core_graphql_api::storage::messages::{
         OwnedMessageIds,
         OwnedMessageKey,
+        SpentMessages,
     },
 };
 use fuel_core_chain_config::TableEntry;
@@ -14,11 +15,7 @@ use fuel_core_storage::{
         IterDirection,
         IteratorOverTable,
     },
-    tables::{
-        Messages,
-        SpentMessages,
-    },
-    Error as StorageError,
+    tables::Messages,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -46,6 +43,10 @@ impl Database<OffChain> {
         )
         .map(|res| res.map(|(key, _)| *key.nonce()))
     }
+
+    pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {
+        fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self).contains_key(id)
+    }
 }
 
 impl Database {
@@ -62,23 +63,7 @@ impl Database {
         &self,
     ) -> impl Iterator<Item = StorageResult<TableEntry<Messages>>> + '_ {
         self.iter_all_by_start::<Messages>(None, None)
-            .filter_map(|msg| {
-                // Return only unspent messages
-                if let Ok(msg) = msg {
-                    match self.message_is_spent(msg.1.id()) {
-                        Ok(false) => Some(Ok(msg)),
-                        Ok(true) => None,
-                        Err(e) => Some(Err(e)),
-                    }
-                } else {
-                    Some(msg.map_err(StorageError::from))
-                }
-            })
             .map_ok(|(key, value)| TableEntry { key, value })
-    }
-
-    pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {
-        fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self).contains_key(id)
     }
 
     pub fn message_exists(&self, id: &Nonce) -> StorageResult<bool> {

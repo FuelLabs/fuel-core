@@ -39,5 +39,5 @@ pub trait ConsensusParametersProvider {
     fn consensus_params_at_version(
         &self,
         version: &ConsensusParametersVersion,
-    ) -> Arc<fuel_core_types::fuel_tx::ConsensusParameters>;
+    ) -> anyhow::Result<Arc<fuel_core_types::fuel_tx::ConsensusParameters>>;
 }

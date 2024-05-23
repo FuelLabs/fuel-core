@@ -218,13 +218,14 @@ impl RunnableService for Task {
 
     async fn into_task(
         self,
-        _: &StateWatcher,
+        watcher: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         // check if chain is initialized
         if let Err(err) = self.shared.database.on_chain().get_genesis() {
             if err.is_not_found() {
                 let result = genesis::execute_genesis_block(
+                    watcher.clone(),
                     &self.shared.config,
                     &self.shared.database,
                 )
@@ -319,7 +320,7 @@ mod tests {
 
         // current services: graphql, graphql worker, txpool, PoA
         #[allow(unused_mut)]
-        let mut expected_services = 4;
+        let mut expected_services = 5;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

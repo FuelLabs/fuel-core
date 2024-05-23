@@ -16,7 +16,10 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
         Transactions,
     },
     ContractsAssetKey,
@@ -26,7 +29,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::contract::ContractUtxoInfo,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
 };
 use itertools::Itertools;
 use serde::{
@@ -46,10 +52,18 @@ use bech32::{
 };
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
+use fuel_core_storage::tables::merkle::{
+    FuelBlockMerkleData,
+    FuelBlockMerkleMetadata,
+};
+use fuel_core_types::blockchain::header::{
+    BlockHeader,
+    ConsensusParametersVersion,
+    StateTransitionBytecodeVersion,
+};
 #[cfg(feature = "test-helpers")]
 use fuel_core_types::{
     fuel_types::Address,
-    fuel_types::Bytes32,
     fuel_vm::SecretKey,
 };
 
@@ -71,6 +85,36 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
 ];
 
+#[derive(Default, Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct LastBlockConfig {
+    /// The block height of the last block.
+    pub block_height: BlockHeight,
+    /// The da height used in the last block.
+    pub da_block_height: DaBlockHeight,
+    /// The version of consensus parameters used to produce last block.
+    pub consensus_parameters_version: ConsensusParametersVersion,
+    /// The version of state transition function used to produce last block.
+    pub state_transition_version: StateTransitionBytecodeVersion,
+    /// The Merkle root of all blocks before regenesis.
+    pub blocks_root: Bytes32,
+}
+
+impl LastBlockConfig {
+    pub fn from_header(header: &BlockHeader, blocks_root: Bytes32) -> Self {
+        Self {
+            block_height: *header.height(),
+            da_block_height: header.application().da_height,
+            consensus_parameters_version: header
+                .application()
+                .consensus_parameters_version,
+            state_transition_version: header
+                .application()
+                .state_transition_bytecode_version,
+            blocks_root,
+        }
+    }
+}
+
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
@@ -79,10 +123,8 @@ pub struct StateConfig {
     pub messages: Vec<MessageConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
-    /// Block height
-    pub block_height: BlockHeight,
-    /// Da block height
-    pub da_block_height: DaBlockHeight,
+    /// Last block config.
+    pub last_block: Option<LastBlockConfig>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -110,8 +152,7 @@ impl StateConfigBuilder {
     #[cfg(feature = "std")]
     pub fn build(
         self,
-        block_height: BlockHeight,
-        da_block_height: DaBlockHeight,
+        latest_block_config: Option<LastBlockConfig>,
     ) -> anyhow::Result<StateConfig> {
         use std::collections::HashMap;
 
@@ -200,8 +241,7 @@ impl StateConfigBuilder {
             coins,
             messages,
             contracts,
-            block_height,
-            da_block_height,
+            last_block: latest_block_config,
         })
     }
 }
@@ -246,8 +286,13 @@ impl crate::Randomize for StateConfig {
             coins: rand_collection(&mut rng, amount),
             messages: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
-            block_height: rng.gen(),
-            da_block_height: rng.gen(),
+            last_block: Some(LastBlockConfig {
+                block_height: rng.gen(),
+                da_block_height: rng.gen(),
+                consensus_parameters_version: rng.gen(),
+                state_transition_version: rng.gen(),
+                blocks_root: rng.gen(),
+            }),
         }
     }
 }
@@ -370,8 +415,56 @@ impl AsTable<Transactions> for StateConfig {
 }
 
 impl AddTable<Transactions> for StateConfigBuilder {
-    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {
-        // Do not include these for now
+    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {}
+}
+
+impl AsTable<FuelBlocks> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlocks>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlocks> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlocks>>) {}
+}
+
+impl AsTable<SealedBlockConsensus> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<SealedBlockConsensus>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<SealedBlockConsensus> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<SealedBlockConsensus>>) {}
+}
+
+impl AsTable<FuelBlockMerkleData> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlockMerkleData>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlockMerkleData> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockMerkleData>>) {}
+}
+
+impl AsTable<FuelBlockMerkleMetadata> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlockMerkleMetadata>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlockMerkleMetadata> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockMerkleMetadata>>) {}
+}
+
+impl AddTable<ProcessedTransactions> for StateConfigBuilder {
+    fn add(&mut self, _: Vec<TableEntry<ProcessedTransactions>>) {}
+}
+
+impl AsTable<ProcessedTransactions> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<ProcessedTransactions>> {
+        Vec::new() // Do not include these for now
     }
 }
 
@@ -418,7 +511,7 @@ impl StateConfig {
 
         let coins = reader
             .read::<Coins>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -426,7 +519,7 @@ impl StateConfig {
 
         let messages = reader
             .read::<Messages>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -434,7 +527,7 @@ impl StateConfig {
 
         let contract_state = reader
             .read::<ContractsState>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -442,7 +535,7 @@ impl StateConfig {
 
         let contract_balance = reader
             .read::<ContractsAssets>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -450,7 +543,7 @@ impl StateConfig {
 
         let contract_code = reader
             .read::<ContractsRawCode>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -458,16 +551,13 @@ impl StateConfig {
 
         let contract_utxo = reader
             .read::<ContractsLatestUtxo>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
         builder.add(contract_utxo);
 
-        let block_height = reader.block_height();
-        let da_block_height = reader.da_block_height();
-
-        builder.build(block_height, da_block_height)
+        builder.build(reader.last_block_config().cloned())
     }
 
     #[cfg(feature = "test-helpers")]
@@ -532,7 +622,8 @@ impl StateConfig {
 }
 
 pub use reader::{
-    IntoIter,
+    GroupIter,
+    Groups,
     SnapshotReader,
 };
 #[cfg(feature = "parquet")]
@@ -543,13 +634,6 @@ pub use writer::{
     SnapshotWriter,
 };
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Group<T> {
-    pub index: usize,
-    pub data: Vec<T>,
-}
-pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 
 #[cfg(test)]
 mod tests {
@@ -648,6 +732,8 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(0);
         let state_config = StateConfig::randomize(&mut rng);
 
+        let chain_config = ChainConfig::local_testnet();
+
         macro_rules! write_in_fragments {
                 ($($fragment_ty: ty,)*) => {
                 [
@@ -663,7 +749,6 @@ mod tests {
             }
             }
 
-        let chain_config = ChainConfig::local_testnet();
         let fragments = write_in_fragments!(
             Coins,
             Messages,
@@ -678,11 +763,7 @@ mod tests {
             .into_iter()
             .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
             .unwrap()
-            .finalize(
-                state_config.block_height,
-                state_config.da_block_height,
-                &chain_config,
-            )
+            .finalize(state_config.last_block, &chain_config)
             .unwrap();
 
         // then
@@ -700,21 +781,45 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
+        let consensus_parameters_version = 321u32;
+        let state_transition_version = 123u32;
+        let blocks_root = Bytes32::from([123; 32]);
+        let block_config = LastBlockConfig {
+            block_height,
+            da_block_height,
+            consensus_parameters_version,
+            state_transition_version,
+            blocks_root,
+        };
         let writer = writer(temp_dir.path());
 
         // when
         let snapshot = writer
-            .close(block_height, da_block_height, &ChainConfig::local_testnet())
+            .close(Some(block_config), &ChainConfig::local_testnet())
             .unwrap();
 
         // then
         let reader = SnapshotReader::open(snapshot).unwrap();
 
-        let block_height_decoded = reader.block_height();
-        pretty_assertions::assert_eq!(block_height, block_height_decoded);
+        let block_config_decoded = reader.last_block_config().cloned();
+        pretty_assertions::assert_eq!(Some(block_config), block_config_decoded);
+    }
 
-        let da_block_height_decoded = reader.da_block_height();
-        pretty_assertions::assert_eq!(da_block_height, da_block_height_decoded);
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn missing_tables_tolerated(writer: impl FnOnce(&Path) -> SnapshotWriter) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let writer = writer(temp_dir.path());
+        let snapshot = writer.close(None, &ChainConfig::local_testnet()).unwrap();
+
+        let reader = SnapshotReader::open(snapshot).unwrap();
+
+        // when
+        let coins = reader.read::<Coins>().unwrap();
+
+        // then
+        assert_eq!(coins.into_iter().count(), 0);
     }
 
     fn assert_roundtrip<T>(
@@ -752,10 +857,14 @@ mod tests {
             .into_iter()
             .collect_vec();
         let snapshot = snapshot_writer
-            .close(10.into(), DaBlockHeight(11), &ChainConfig::local_testnet())
+            .close(None, &ChainConfig::local_testnet())
             .unwrap();
 
-        let actual_groups = reader(snapshot, group_size).read().unwrap().collect_vec();
+        let actual_groups = reader(snapshot, group_size)
+            .read()
+            .unwrap()
+            .into_iter()
+            .collect_vec();
 
         // then
         assert_groups_identical(&expected_groups, actual_groups, skip_n_groups);
@@ -779,7 +888,7 @@ mod tests {
         fn write_groups<T>(
             &mut self,
             encoder: &mut SnapshotWriter,
-        ) -> Vec<Group<TableEntry<T>>>
+        ) -> Vec<Vec<TableEntry<T>>>
         where
             T: TableWithBlueprint,
             T::OwnedKey: serde::Serialize,
@@ -789,12 +898,12 @@ mod tests {
         {
             let groups = self.generate_groups();
             for group in &groups {
-                encoder.write(group.data.clone()).unwrap();
+                encoder.write(group.clone()).unwrap();
             }
             groups
         }
 
-        fn generate_groups<T>(&mut self) -> Vec<Group<T>>
+        fn generate_groups<T>(&mut self) -> Vec<Vec<T>>
         where
             T: Randomize,
         {
@@ -802,16 +911,14 @@ mod tests {
                 .chunks(self.group_size)
                 .into_iter()
                 .map(|chunk| chunk.collect_vec())
-                .enumerate()
-                .map(|(index, data)| Group { index, data })
                 .take(self.num_groups)
                 .collect()
         }
     }
 
     fn assert_groups_identical<T>(
-        original: &[Group<T>],
-        read: impl IntoIterator<Item = Result<Group<T>, anyhow::Error>>,
+        original: &[Vec<T>],
+        read: impl IntoIterator<Item = Result<Vec<T>, anyhow::Error>>,
         skip: usize,
     ) where
         Vec<T>: PartialEq,

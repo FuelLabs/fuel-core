@@ -977,30 +977,6 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 }
 
 #[tokio::test]
-async fn tx_rejected_when_input_message_id_is_spent() {
-    let mut context = TextContext::default();
-    let (message, input) = create_message_predicate_from_message(5_000, 0);
-
-    let tx = TransactionBuilder::script(vec![], vec![])
-        .script_gas_limit(GAS_LIMIT)
-        .add_input(input)
-        .finalize_as_transaction();
-
-    context.database_mut().insert_message(message.clone());
-    context.database_mut().spend_message(*message.id());
-    let mut txpool = context.build();
-
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
-    let err = txpool.insert_single(tx).expect_err("should fail");
-
-    // check error
-    assert!(matches!(
-        err,
-        Error::NotInsertedInputMessageSpent(msg_id) if msg_id == *message.id()
-    ));
-}
-
-#[tokio::test]
 async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
     let context = TextContext::default();
     let (message, input) = create_message_predicate_from_message(5000, 0);

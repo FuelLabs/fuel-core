@@ -124,6 +124,7 @@ mod produce_and_execute_block_txpool {
             transactions: vec![],
         }
         .generate(&[], Default::default())
+        .unwrap()
         .compress(&Default::default());
 
         let db = MockDb {
@@ -165,6 +166,7 @@ mod produce_and_execute_block_txpool {
             transactions: vec![],
         }
         .generate(&[], Default::default())
+        .unwrap()
         .compress(&Default::default());
 
         // Given
@@ -217,6 +219,7 @@ mod produce_and_execute_block_txpool {
             transactions: vec![],
         }
         .generate(&[], Default::default())
+        .unwrap()
         .compress(&Default::default());
 
         // Given
@@ -605,7 +608,7 @@ impl<Executor> TestContext<Executor> {
             MockConsensusParametersProvider::default();
         consensus_parameters_provider
             .expect_consensus_params_at_version()
-            .returning(move |_| consensus_params.clone());
+            .returning(move |_| Ok(consensus_params.clone()));
 
         Producer {
             config: self.config,
@@ -698,6 +701,7 @@ impl TestContextBuilder {
             transactions: vec![],
         }
         .generate(&[], Default::default())
+        .unwrap()
         .compress(&Default::default());
 
         let db = MockDb {

@@ -6,7 +6,7 @@ use super::{
         on_chain::OnChain,
         DatabaseDescription,
     },
-    Database,
+    GenesisDatabase,
 };
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_executor::refs::ContractRef;
@@ -20,6 +20,7 @@ use fuel_core_storage::{
         Coins,
         ContractsLatestUtxo,
         Messages,
+        ProcessedTransactions,
     },
     Error as StorageError,
     Mappable,
@@ -101,7 +102,7 @@ where
     }
 }
 
-impl Database {
+impl GenesisDatabase {
     pub fn genesis_coins_root(&self) -> Result<MerkleRoot> {
         let coins = self.iter_all::<Coins>(None);
 
@@ -134,6 +135,18 @@ impl Database {
             let (contract_id, _) = contract?;
             let root = ContractRef::new(self, contract_id).root()?;
             root_calculator.push(root.as_slice());
+        }
+
+        Ok(root_calculator.root())
+    }
+
+    pub fn processed_transactions_root(&self) -> Result<MerkleRoot> {
+        let txs = self.iter_all::<ProcessedTransactions>(None);
+
+        let mut root_calculator = MerkleRootCalculator::new();
+        for tx in txs {
+            let (tx_id, _) = tx?;
+            root_calculator.push(tx_id.as_slice());
         }
 
         Ok(root_calculator.root())

@@ -48,7 +48,6 @@ use fuel_core_types::{
             CheckedTransaction,
             IntoChecked,
         },
-        consts,
         interpreter::InterpreterParams,
         state::DebugEval,
         Interpreter,
@@ -98,12 +97,9 @@ impl ConcreteStorage {
     }
 
     pub fn memory(&self, id: &ID, start: usize, size: usize) -> Option<&[u8]> {
-        let (end, overflow) = start.overflowing_add(size);
-        if overflow || end as u64 > consts::VM_MAX_RAM {
-            return None
-        }
-
-        self.vm.get(id).map(|vm| &vm.memory()[start..end])
+        self.vm
+            .get(id)
+            .and_then(|vm| vm.memory().read(start, size).ok())
     }
 
     pub fn init(
@@ -203,6 +199,7 @@ impl ConcreteStorage {
         let vm_database = VmStorage::new(
             storage.into_transaction(),
             block.header().consensus(),
+            block.header().application(),
             // TODO: Use a real coinbase address
             Default::default(),
         );
@@ -475,26 +472,17 @@ impl DapMutation {
                     json_receipts,
                 })
             }
-            CheckedTransaction::Create(create) => {
-                let ready_tx = create
-                    .into_ready(GAS_PRICE, gas_costs, fee_params)
-                    .map_err(|e| {
-                        anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
-                    })?;
-                vm.deploy(ready_tx).map_err(|err| {
-                    async_graphql::Error::new(format!(
-                        "Transaction deploy failed: {err:?}"
-                    ))
-                })?;
-
-                Ok(gql_types::RunResult {
-                    state: gql_types::RunState::Completed,
-                    breakpoint: None,
-                    json_receipts: vec![],
-                })
+            CheckedTransaction::Create(_) => {
+                Err(async_graphql::Error::new("`Create` is not supported"))
             }
             CheckedTransaction::Mint(_) => {
                 Err(async_graphql::Error::new("`Mint` is not supported"))
+            }
+            CheckedTransaction::Upgrade(_) => {
+                Err(async_graphql::Error::new("`Upgrade` is not supported"))
+            }
+            CheckedTransaction::Upload(_) => {
+                Err(async_graphql::Error::new("`Upload` is not supported"))
             }
         }
     }

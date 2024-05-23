@@ -8,6 +8,7 @@ use crate::client::{
         contract::ContractBalanceQueryArgs,
         gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
+        relayed_tx::RelayedTransactionStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
@@ -22,6 +23,7 @@ use crate::client::{
             ContractId,
             UtxoId,
         },
+        RelayedTransactionStatus,
     },
 };
 use anyhow::Context;
@@ -41,6 +43,7 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        Bytes32,
         Receipt,
         Transaction,
         TxId,
@@ -743,7 +746,12 @@ impl FuelClient {
             id: Some((*id).into()),
         });
 
-        let block = self.query(query).await?.block.map(Into::into);
+        let block = self
+            .query(query)
+            .await?
+            .block
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(block)
     }
@@ -756,7 +764,12 @@ impl FuelClient {
             height: Some(U32(height.into())),
         });
 
-        let block = self.query(query).await?.block.map(Into::into);
+        let block = self
+            .query(query)
+            .await?
+            .block
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(block)
     }
@@ -768,7 +781,7 @@ impl FuelClient {
     ) -> io::Result<PaginatedResult<types::Block, String>> {
         let query = schema::block::BlocksQuery::build(request.into());
 
-        let blocks = self.query(query).await?.blocks.into();
+        let blocks = self.query(query).await?.blocks.try_into()?;
 
         Ok(blocks)
     }
@@ -964,9 +977,32 @@ impl FuelClient {
             commit_block_height,
         });
 
-        let proof = self.query(query).await?.message_proof.map(Into::into);
+        let proof = self
+            .query(query)
+            .await?
+            .message_proof
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(proof)
+    }
+
+    pub async fn relayed_transaction_status(
+        &self,
+        id: &Bytes32,
+    ) -> io::Result<Option<RelayedTransactionStatus>> {
+        let query = schema::relayed_tx::RelayedTransactionStatusQuery::build(
+            RelayedTransactionStatusArgs {
+                id: id.to_owned().into(),
+            },
+        );
+        let status = self
+            .query(query)
+            .await?
+            .relayed_transaction_status
+            .map(|status| status.try_into())
+            .transpose()?;
+        Ok(status)
     }
 }
 

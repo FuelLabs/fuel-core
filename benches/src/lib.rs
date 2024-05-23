@@ -1,8 +1,8 @@
-pub mod default_gas_costs;
-pub mod import;
-
-pub use fuel_core::database::Database;
-pub use fuel_core_storage::vm_storage::VmStorage;
+use fuel_core::database::GenesisDatabase;
+use fuel_core_storage::transactional::{
+    IntoTransaction,
+    StorageTransaction,
+};
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -30,14 +30,20 @@ use fuel_core_types::{
         *,
     },
 };
+use std::{
+    iter,
+    mem,
+};
 
-use fuel_core_storage::transactional::StorageTransaction;
+pub mod default_gas_costs;
+pub mod import;
+
+pub use fuel_core_storage::vm_storage::VmStorage;
 pub use rand::Rng;
-use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
-fn new_db() -> VmStorage<StorageTransaction<Database>> {
+fn new_db() -> VmStorage<StorageTransaction<GenesisDatabase>> {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
     VmStorage::default()
 }
@@ -90,7 +96,7 @@ pub struct VmBench {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub witnesses: Vec<Witness>,
-    pub db: Option<VmStorage<StorageTransaction<Database>>>,
+    pub db: Option<VmStorage<StorageTransaction<GenesisDatabase>>>,
     pub instruction: Instruction,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
@@ -101,7 +107,7 @@ pub struct VmBench {
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<VmStorage<StorageTransaction<Database>>, Script>,
+    pub vm: Interpreter<VmStorage<StorageTransaction<GenesisDatabase>>, Script>,
     pub instruction: Instruction,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
@@ -149,7 +155,7 @@ impl VmBench {
 
     pub fn contract_using_db<R>(
         rng: &mut R,
-        mut db: VmStorage<StorageTransaction<Database>>,
+        mut db: VmStorage<StorageTransaction<GenesisDatabase>>,
         instruction: Instruction,
     ) -> anyhow::Result<Self>
     where
@@ -208,7 +214,7 @@ impl VmBench {
             .with_prepare_call(prepare_call))
     }
 
-    pub fn with_db(mut self, db: VmStorage<StorageTransaction<Database>>) -> Self {
+    pub fn with_db(mut self, db: VmStorage<StorageTransaction<GenesisDatabase>>) -> Self {
         self.db.replace(db);
         self
     }
@@ -424,6 +430,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             db.deploy_contract_with_id(&[], &Contract::default(), &contract_id)?;
         }
+        let transaction = mem::take(db.database_mut());
+        let database = transaction.commit().expect("Failed to commit transaction");
+        *db.database_mut() = database.into_transaction();
 
         inputs.into_iter().for_each(|i| {
             tx.add_input(i);

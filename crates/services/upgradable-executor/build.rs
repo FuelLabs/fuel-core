@@ -9,9 +9,8 @@ use std::{
 };
 
 fn main() {
+    // It only forces a rerun of the build when `build.rs` is changed.
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
-
     #[cfg(feature = "wasm-executor")]
     build_wasm()
 }
@@ -20,28 +19,55 @@ fn main() {
 fn build_wasm() {
     let out_dir = env::var_os("OUT_DIR").expect("The output directory is not set");
     let dest_path = Path::new(&out_dir);
-    let manifest_dir =
-        env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
-    let manifest_path = Path::new(&manifest_dir);
-    let wasm_executor_path = manifest_path
-        .join("wasm-executor")
-        .join("Cargo.toml")
-        .to_string_lossy()
-        .to_string();
+    let bin_dir = format!("--root={}", dest_path.to_string_lossy());
+
+    // Set the own sub-target directory to prevent a cargo deadlock (cargo locks
+    // a target dir exclusive). This directory is also used as a cache directory
+    // to avoid building the same WASM binary each time. Also, caching reuses
+    // the artifacts from the previous build in the case if the executor is changed.
+    //
+    // The cache dir is: "target/{debug/release/other}/fuel-core-upgradable-executor-cache"
+    let mut cache_dir: std::path::PathBuf = out_dir.clone().into();
+    cache_dir.pop();
+    cache_dir.pop();
+    cache_dir.pop();
+    cache_dir.push("fuel-core-upgradable-executor-cache");
+    let target_dir = format!("--target-dir={}", cache_dir.to_string_lossy());
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
 
-    let target_dir = format!("--target-dir={}", dest_path.to_string_lossy());
-
-    let args = vec![
-        "build".to_owned(),
-        "--manifest-path".to_owned(),
-        wasm_executor_path,
+    let mut args = vec![
+        "install".to_owned(),
         "--target=wasm32-unknown-unknown".to_owned(),
         "--no-default-features".to_owned(),
-        "--release".to_owned(),
+        "--locked".to_owned(),
         target_dir,
+        bin_dir,
     ];
+
+    let manifest_dir =
+        env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
+    let manifest_path = Path::new(&manifest_dir);
+    let wasm_executor_path = manifest_path.join("wasm-executor");
+
+    // If the `wasm-executor` source code is available, then use it as a source for the
+    // `wasm-executor` binary. Otherwise, use the version from the crates.io.
+    if wasm_executor_path.exists() {
+        args.extend([
+            "--path".to_owned(),
+            wasm_executor_path.to_string_lossy().to_string(),
+        ]);
+    } else {
+        let crate_version = env!("CARGO_PKG_VERSION");
+        args.extend([
+            "--version".to_owned(),
+            crate_version.to_owned(),
+            // We can use the offline mode because it was already downloaded
+            // by the `build.rs` dependencies requirements.
+            "--offline".to_string(),
+            "fuel-core-wasm-executor".to_string(),
+        ]);
+    }
 
     let mut cargo = Command::new(cargo);
     cargo.env("CARGO_PROFILE_RELEASE_LTO", "true");
@@ -49,6 +75,7 @@ fn build_wasm() {
     cargo.env("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "1");
     cargo.env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "3");
     cargo.env("CARGO_PROFILE_RELEASE_STRIP", "symbols");
+    cargo.env("CARGO_PROFILE_RELEASE_DEBUG", "false");
     cargo.current_dir(project_root()).args(args);
 
     let output = cargo.output();

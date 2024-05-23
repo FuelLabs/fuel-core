@@ -372,7 +372,7 @@ impl transaction_pool::ports::BlockImporter for Service<BlockImporter> {
 
 #### Ports: fuel_core_executor::ports
 ```rust
-trait Database: IntepreterStorage 
+trait Database: InterpreterStorage
   + StorageMut<Coins, Error = StorageError>
   + StorageMut<Messages, Error = StorageError>
   + StorageMut<Contracts, Error = StorageError>

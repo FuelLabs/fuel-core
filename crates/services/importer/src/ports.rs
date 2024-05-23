@@ -35,19 +35,19 @@ use fuel_core_types::{
     },
     services::executor::{
         Result as ExecutorResult,
-        UncommittedResult,
+        UncommittedValidationResult,
     },
 };
 
 #[cfg_attr(test, mockall::automock(type Database = crate::importer::test::MockDatabase;))]
 /// The executors port.
-pub trait Executor: Send + Sync {
+pub trait Validator: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
-    fn execute_without_commit(
+    fn validate(
         &self,
-        block: Block,
-    ) -> ExecutorResult<UncommittedResult<Changes>>;
+        block: &Block,
+    ) -> ExecutorResult<UncommittedValidationResult<Changes>>;
 }
 
 /// The trait indicates that the type supports storage transactions.

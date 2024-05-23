@@ -13,7 +13,6 @@ use fuel_core_storage::{
         Coins,
         ContractsRawCode,
         Messages,
-        SpentMessages,
     },
     Result as StorageResult,
     StorageAsRef,
@@ -135,10 +134,6 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
             .get(id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
-
-    fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
-        self.storage::<SpentMessages>().contains_key(id)
-    }
 }
 
 impl GasPriceProvider for StaticGasPrice {
@@ -149,6 +144,6 @@ impl GasPriceProvider for StaticGasPrice {
 
 impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
     fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
-        self.consensus_parameters.clone()
+        self.shared_state.latest_consensus_parameters()
     }
 }

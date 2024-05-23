@@ -33,6 +33,7 @@ mod predicates;
 mod tx_pointer;
 mod txn_status_subscription;
 mod txpool;
+mod upgrade;
 mod utxo_validation;
 
 #[test]
@@ -80,7 +81,7 @@ async fn dry_run_script() {
     let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
     let log = tx_statuses
         .last()
-        .expect("Nonempty repsonse")
+        .expect("Nonempty response")
         .result
         .receipts();
     assert_eq!(3, log.len());

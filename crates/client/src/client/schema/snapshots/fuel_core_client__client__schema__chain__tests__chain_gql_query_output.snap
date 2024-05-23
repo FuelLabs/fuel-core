@@ -7,8 +7,10 @@ query {
     daHeight
     name
     latestBlock {
+      version
       id
       header {
+        version
         id
         daHeight
         consensusParametersVersion
@@ -30,6 +32,7 @@ query {
           coinsRoot
           contractsRoot
           messagesRoot
+          transactionsRoot
         }
         ... on PoAConsensus {
           signature
@@ -40,64 +43,35 @@ query {
       }
     }
     consensusParameters {
-      version {
-        __typename
-        ... on Version {
-          value
-        }
-      }
+      version
       txParams {
-        version {
-          __typename
-          ... on Version {
-            value
-          }
-        }
+        version
         maxInputs
         maxOutputs
         maxWitnesses
         maxGasPerTx
         maxSize
+        maxBytecodeSubsections
       }
       predicateParams {
-        version {
-          __typename
-          ... on Version {
-            value
-          }
-        }
+        version
         maxPredicateLength
         maxPredicateDataLength
         maxMessageDataLength
         maxGasPerPredicate
       }
       scriptParams {
-        version {
-          __typename
-          ... on Version {
-            value
-          }
-        }
+        version
         maxScriptLength
         maxScriptDataLength
       }
       contractParams {
-        version {
-          __typename
-          ... on Version {
-            value
-          }
-        }
+        version
         contractMaxSize
         maxStorageSlots
       }
       feeParams {
-        version {
-          __typename
-          ... on Version {
-            value
-          }
-        }
+        version
         gasPriceFactor
         gasPerByte
       }
@@ -105,12 +79,7 @@ query {
       blockGasLimit
       chainId
       gasCosts {
-        version {
-          __typename
-          ... on Version {
-            value
-          }
-        }
+        version
         add
         addi
         aloc

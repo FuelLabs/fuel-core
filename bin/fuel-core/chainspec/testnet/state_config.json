@@ -13,6 +13,5 @@
       "balances": []
     }
   ],
-  "block_height": 0,
-  "da_block_height": 0
+  "last_block": null
 }

@@ -37,7 +37,9 @@ fn correct() -> Input {
             ..Default::default()
         },
     };
-    let block_header = partial_header.generate(&txs, &[], Default::default());
+    let block_header = partial_header
+        .generate(&txs, &[], Default::default())
+        .unwrap();
 
     Input {
         block_header_merkle_root: [2u8; 32],
@@ -62,7 +64,7 @@ fn correct() -> Input {
         let mut i = correct();
         i.ch.prev_root = [3u8; 32].into();
         i
-    } => matches Err(_) ; "genesis verify prev root mis-match should error"
+    } => matches Err(_) ; "genesis verify prev root mismatch should error"
 )]
 #[test_case(
     {
@@ -76,7 +78,7 @@ fn correct() -> Input {
         let mut i = correct();
         i.ch.generated.application_hash = [0u8; 32].into();
         i
-    } => matches Err(_) ; "genesis verify application hash mis-match should error"
+    } => matches Err(_) ; "genesis verify application hash mismatch should error"
 )]
 #[test_case(
     {

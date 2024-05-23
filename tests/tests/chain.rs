@@ -2,7 +2,6 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         CoinConfig,
-        SnapshotReader,
         StateConfig,
     },
     service::{
@@ -81,8 +80,7 @@ async fn network_operates_with_non_zero_chain_id() {
         debug: true,
         utxo_validation: true,
         static_gas_price: 1,
-        snapshot_reader: SnapshotReader::new_in_memory(chain_config, state_config),
-        ..Config::local_node()
+        ..Config::local_node_with_configs(chain_config, state_config)
     };
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
@@ -144,8 +142,7 @@ async fn network_operates_with_non_zero_base_asset_id() {
         debug: true,
         utxo_validation: true,
         static_gas_price: 1,
-        snapshot_reader: SnapshotReader::new_in_memory(chain_config, state_config),
-        ..Config::local_node()
+        ..Config::local_node_with_configs(chain_config, state_config)
     };
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();

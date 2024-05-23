@@ -1,4 +1,3 @@
-use super::TransactionsSource;
 use crate::{
     database::Database,
     service::adapters::{
@@ -10,8 +9,8 @@ use crate::{
 use fuel_core_importer::{
     ports::{
         BlockVerifier,
-        Executor,
         ImporterDatabase,
+        Validator,
     },
     Config,
     Importer,
@@ -44,9 +43,8 @@ use fuel_core_types::{
         ChainId,
     },
     services::executor::{
-        ExecutionTypes,
         Result as ExecutorResult,
-        UncommittedResult as UncommittedExecutionResult,
+        UncommittedValidationResult,
     },
 };
 use std::sync::Arc;
@@ -102,13 +100,11 @@ impl ImporterDatabase for Database {
     }
 }
 
-impl Executor for ExecutorAdapter {
-    fn execute_without_commit(
+impl Validator for ExecutorAdapter {
+    fn validate(
         &self,
-        block: Block,
-    ) -> ExecutorResult<UncommittedExecutionResult<Changes>> {
-        self._execute_without_commit::<TransactionsSource>(ExecutionTypes::Validation(
-            block,
-        ))
+        block: &Block,
+    ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
+        self.executor.validate(block)
     }
 }

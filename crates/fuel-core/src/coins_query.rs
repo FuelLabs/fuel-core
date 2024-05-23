@@ -952,7 +952,7 @@ mod tests {
         fn service_database(&self) -> ServiceDatabase {
             let on_chain = self.database.on_chain().clone();
             let off_chain = self.database.off_chain().clone();
-            ServiceDatabase::new(on_chain, off_chain)
+            ServiceDatabase::new(0u32.into(), on_chain, off_chain)
         }
     }
 

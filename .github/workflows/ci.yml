@@ -21,6 +21,7 @@ env:
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
+  FUEL_ALWAYS_USE_WASM: true
 
 jobs:
   check-changelog:
@@ -193,6 +194,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: "wasm32-unknown-unknown"
       - name: Publish crate check
         uses: xgreenx/publish-crates@v1
         with:
@@ -245,6 +247,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: "wasm32-unknown-unknown"
 
       - name: Publish crate
         uses: xgreenx/publish-crates@v1
@@ -317,7 +320,7 @@ jobs:
   publish-docker-image-profiling:
     needs:
       - verifications-complete
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: buildjet-16vcpu-ubuntu-2204
     permissions:
       contents: read
       packages: write
@@ -497,7 +500,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          target: ${{ matrix.job.target }}
+          target: ${{ matrix.job.target }},"wasm32-unknown-unknown"
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1
@@ -554,6 +557,7 @@ jobs:
           mkdir -pv "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core-keygen" "$ARTIFACT"
+          cp "target/${{ matrix.job.target }}/release/fuel-core-upgradable-executor-cache/wasm32-unknown-unknown/release/fuel-core-wasm-executor.wasm" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
 
       - name: Upload Binary Artifact

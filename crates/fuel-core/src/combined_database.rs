@@ -6,6 +6,7 @@ use crate::{
             relayer::Relayer,
         },
         Database,
+        GenesisDatabase,
         Result as DatabaseResult,
     },
     service::DbType,
@@ -146,9 +147,15 @@ impl CombinedDatabase {
         &self.relayer
     }
 
+    #[cfg(any(feature = "test-helpers", test))]
+    pub fn relayer_mut(&mut self) -> &mut Database<Relayer> {
+        &mut self.relayer
+    }
+
     #[cfg(feature = "test-helpers")]
     pub fn read_state_config(&self) -> StorageResult<StateConfig> {
         use fuel_core_chain_config::AddTable;
+        use fuel_core_producer::ports::BlockProducerDatabase;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
 
@@ -173,10 +180,48 @@ impl CombinedDatabase {
             ContractsLatestUtxo
         );
 
-        let block = self.on_chain().latest_block()?;
+        let latest_block = self.on_chain().latest_block()?;
+        let blocks_root = self
+            .on_chain()
+            .block_header_merkle_root(latest_block.header().height())?;
         let state_config =
-            builder.build(*block.header().height(), block.header().da_height)?;
+            builder.build(Some(fuel_core_chain_config::LastBlockConfig::from_header(
+                latest_block.header(),
+                blocks_root,
+            )))?;
 
         Ok(state_config)
+    }
+
+    /// Converts the combined database into a genesis combined database.
+    pub fn into_genesis(self) -> CombinedGenesisDatabase {
+        CombinedGenesisDatabase {
+            on_chain: self.on_chain.into_genesis(),
+            off_chain: self.off_chain.into_genesis(),
+            relayer: self.relayer.into_genesis(),
+        }
+    }
+}
+
+/// A genesis database that combines the on-chain, off-chain and relayer
+/// genesis databases into one entity.
+#[derive(Default, Clone)]
+pub struct CombinedGenesisDatabase {
+    on_chain: GenesisDatabase<OnChain>,
+    off_chain: GenesisDatabase<OffChain>,
+    relayer: GenesisDatabase<Relayer>,
+}
+
+impl CombinedGenesisDatabase {
+    pub fn on_chain(&self) -> &GenesisDatabase<OnChain> {
+        &self.on_chain
+    }
+
+    pub fn off_chain(&self) -> &GenesisDatabase<OffChain> {
+        &self.off_chain
+    }
+
+    pub fn relayer(&self) -> &GenesisDatabase<Relayer> {
+        &self.relayer
     }
 }

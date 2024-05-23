@@ -385,7 +385,7 @@ pub mod test {
     type Storage = HashMap<(u32, Vec<u8>), Value>;
 
     /// The in-memory storage for testing purposes.
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct InMemoryStorage<Column> {
         pub(crate) storage: Storage,
         _marker: core::marker::PhantomData<Column>,

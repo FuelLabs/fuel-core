@@ -58,8 +58,6 @@ pub trait TxPoolDb: Send + Sync {
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
 
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
-
-    fn is_message_spent(&self, message_id: &Nonce) -> StorageResult<bool>;
 }
 
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height

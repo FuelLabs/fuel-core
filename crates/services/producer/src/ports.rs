@@ -71,10 +71,10 @@ pub trait Relayer: Send + Sync {
     async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64>;
 }
 
-pub trait Executor<TxSource>: Send + Sync {
+pub trait BlockProducer<TxSource>: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
-    fn execute_without_commit(
+    fn produce_without_commit(
         &self,
         component: Components<TxSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>>;

@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
+        LastBlockConfig,
         Randomize,
-        SnapshotReader,
         StateConfig,
     },
     combined_database::CombinedDatabase,
@@ -10,9 +10,11 @@ use fuel_core::{
         FuelService,
     },
 };
+use fuel_core_poa::ports::Database;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
+    Rng,
     SeedableRng,
 };
 
@@ -20,26 +22,39 @@ use rand::{
 async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
     let db = CombinedDatabase::default();
+    let blocks_root = rng.gen();
 
     // setup config
     let starting_state = StateConfig {
-        block_height: u32::MAX.into(),
-        da_block_height: DaBlockHeight(u64::MAX),
+        last_block: Some(LastBlockConfig {
+            block_height: (u32::MAX - 1).into(),
+            da_block_height: DaBlockHeight(u64::MAX),
+            consensus_parameters_version: u32::MAX - 1,
+            state_transition_version: u32::MAX - 1,
+            blocks_root,
+        }),
         ..StateConfig::randomize(&mut rng)
     };
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet()
-            .with_state_config(starting_state.clone()),
-        ..Config::local_node()
-    };
+    let config = Config::local_node_with_state_config(starting_state.clone());
 
     // setup server & client
     let _ = FuelService::from_combined_database(db.clone(), config)
         .await
         .unwrap();
 
-    let stored_state = db.read_state_config().unwrap();
+    let actual_state = db.read_state_config().unwrap();
+    let mut expected = starting_state.sorted();
+    expected.last_block = Some(LastBlockConfig {
+        block_height: u32::MAX.into(),
+        da_block_height: DaBlockHeight(u64::MAX),
+        consensus_parameters_version: u32::MAX,
+        state_transition_version: u32::MAX,
+        blocks_root: db
+            .on_chain()
+            .block_header_merkle_root(&u32::MAX.into())
+            .unwrap(),
+    });
 
     // initial state
-    pretty_assertions::assert_eq!(starting_state.sorted(), stored_state);
+    pretty_assertions::assert_eq!(expected, actual_state);
 }

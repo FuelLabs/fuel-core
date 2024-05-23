@@ -16,6 +16,7 @@ use fuel_core::{
         balances::BalancesInitializer,
         database_description::on_chain::OnChain,
         state::StateInitializer,
+        GenesisDatabase,
     },
     service::Config,
     state::rocks_db::{
@@ -37,7 +38,10 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusHeader,
+    blockchain::header::{
+        ApplicationHeader,
+        ConsensusHeader,
+    },
     fuel_asm::{
         op,
         GTFArgs,
@@ -60,7 +64,7 @@ use rand::{
 };
 
 pub struct BenchDb {
-    db: Database,
+    db: GenesisDatabase,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
     _tmp_dir: ShallowTempDir,
 }
@@ -76,7 +80,7 @@ impl BenchDb {
 
         let state_size = crate::utils::get_state_size();
 
-        let mut database = Database::new(db);
+        let mut database = GenesisDatabase::new(db);
         database.init_contract_state(
             contract_id,
             (0..state_size).map(|_| {
@@ -122,16 +126,23 @@ impl BenchDb {
     }
 
     /// Creates a `VmDatabase` instance.
-    fn to_vm_database(&self) -> VmStorage<StorageTransaction<Database>> {
-        let header = ConsensusHeader {
+    fn to_vm_database(&self) -> VmStorage<StorageTransaction<GenesisDatabase>> {
+        let consensus = ConsensusHeader {
             prev_root: Default::default(),
             height: 1.into(),
             time: Tai64::UNIX_EPOCH,
             generated: (),
         };
+        let application = ApplicationHeader {
+            da_height: Default::default(),
+            consensus_parameters_version: 0,
+            generated: (),
+            state_transition_bytecode_version: 0,
+        };
         VmStorage::new(
             self.db.clone().into_transaction(),
-            &header,
+            &consensus,
+            &application,
             ContractId::zeroed(),
         )
     }
@@ -254,6 +265,8 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
             op::movi(0x12, i as u32),
+            // Allocate space for storage values in the memory
+            op::cfei(i as u32 * Bytes32::LEN as u32),
         ];
         let mut bench = VmBench::contract_using_db(
             rng,
@@ -382,6 +395,7 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::movi(0x12, 100_000),
             op::movi(0x13, i.try_into().unwrap()),
+            op::cfe(0x13),
             op::movi(0x14, i.try_into().unwrap()),
             op::movi(0x15, i.try_into().unwrap()),
             op::add(0x15, 0x15, 0x15),
@@ -544,17 +558,38 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::cfsi(0)),
     );
 
-    {
-        let mut input = VmBench::contract(rng, op::croo(0x14, 0x16))
-            .expect("failed to prepare contract");
-        input.post_call.extend(vec![
+    let mut croo = c.benchmark_group("croo");
+
+    for i in linear.clone() {
+        let mut code = vec![0u8; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let mut code = ContractCode::from(code);
+        code.id = VmBench::CONTRACT;
+
+        let data = code.id.iter().copied().collect();
+
+        let prepare_script = vec![
             op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
             op::movi(0x15, 2000),
             op::aloc(0x15),
             op::move_(0x14, RegId::HP),
-        ]);
-        run_group_ref(&mut c.benchmark_group("croo"), "croo", input);
+        ];
+
+        croo.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut croo,
+            format!("{i}"),
+            VmBench::new(op::croo(0x14, 0x16))
+                .with_contract_code(code)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
     }
+
+    croo.finish();
 
     run_group_ref(
         &mut c.benchmark_group("flag"),

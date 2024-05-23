@@ -37,6 +37,7 @@ pub use message::{
 pub use node_info::NodeInfo;
 
 use crate::client::schema::{
+    relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
     tx::{
         OpaqueTransaction,
         TransactionStatus as SchemaTxStatus,
@@ -83,13 +84,13 @@ pub mod primitives {
     pub type TransactionId = Bytes32;
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransactionResponse {
     pub transaction: Transaction,
     pub status: TransactionStatus,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TransactionStatus {
     Submitted {
         submitted_at: Tai64,
@@ -99,6 +100,8 @@ pub enum TransactionStatus {
         time: Tai64,
         program_state: Option<ProgramState>,
         receipts: Vec<Receipt>,
+        total_gas: u64,
+        total_fee: u64,
     },
     SqueezedOut {
         reason: String,
@@ -109,6 +112,8 @@ pub enum TransactionStatus {
         reason: String,
         program_state: Option<ProgramState>,
         receipts: Vec<Receipt>,
+        total_gas: u64,
+        total_fee: u64,
     },
 }
 
@@ -129,6 +134,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<_>, _>>()?,
+                total_gas: s.total_gas.0,
+                total_fee: s.total_fee.0,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
                 block_height: s.block.height.into(),
@@ -140,6 +147,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<_>, _>>()?,
+                total_gas: s.total_gas.0,
+                total_fee: s.total_fee.0,
             },
             SchemaTxStatus::SqueezedOutStatus(s) => {
                 TransactionStatus::SqueezedOut { reason: s.reason }
@@ -166,6 +175,34 @@ impl TryFrom<OpaqueTransaction> for TransactionResponse {
         Ok(Self {
             transaction: tx,
             status,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelayedTransactionStatus {
+    Failed {
+        block_height: BlockHeight,
+        failure: String,
+    },
+}
+
+impl TryFrom<SchemaRelayedTransactionStatus> for RelayedTransactionStatus {
+    type Error = ConversionError;
+
+    fn try_from(status: SchemaRelayedTransactionStatus) -> Result<Self, Self::Error> {
+        Ok(match status {
+            SchemaRelayedTransactionStatus::Failed(s) => {
+                RelayedTransactionStatus::Failed {
+                    block_height: s.block_height.into(),
+                    failure: s.failure,
+                }
+            }
+            SchemaRelayedTransactionStatus::Unknown => {
+                return Err(Self::Error::UnknownVariant(
+                    "SchemaRelayedTransactionStatus",
+                ));
+            }
         })
     }
 }

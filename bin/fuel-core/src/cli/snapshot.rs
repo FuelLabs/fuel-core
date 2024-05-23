@@ -120,11 +120,14 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         MAX_GROUP_SIZE,
     };
 
+    use crate::cli::ShutdownListener;
+
     let db = open_db(
         &command.database_path,
         Some(command.max_database_cache_size),
     )?;
     let output_dir = command.output_dir;
+    let shutdown_listener = ShutdownListener::spawn();
 
     match command.subcommand {
         SubCommands::Everything {
@@ -149,15 +152,22 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                 load_chain_config_or_use_testnet(chain_config.as_deref())?,
                 writer,
                 group_size,
+                shutdown_listener,
             )
             .write_full_snapshot()
             .await
         }
         SubCommands::Contract { contract_id } => {
             let writer = move || Ok(SnapshotWriter::json(output_dir.clone()));
-            Exporter::new(db, local_testnet_chain_config(), writer, MAX_GROUP_SIZE)
-                .write_contract_snapshot(contract_id)
-                .await
+            Exporter::new(
+                db,
+                local_testnet_chain_config(),
+                writer,
+                MAX_GROUP_SIZE,
+                shutdown_listener,
+            )
+            .write_contract_snapshot(contract_id)
+            .await
         }
     }
 }
@@ -181,14 +191,18 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactionIndexKey,
-        OwnedTransactions,
-        TransactionStatuses,
+    use fuel_core::{
+        fuel_core_graphql_api::storage::transactions::{
+            OwnedTransactionIndexKey,
+            OwnedTransactions,
+            TransactionStatuses,
+        },
+        producer::ports::BlockProducerDatabase,
     };
     use fuel_core_chain_config::{
         AddTable,
         AsTable,
+        LastBlockConfig,
         SnapshotMetadata,
         SnapshotReader,
         StateConfig,
@@ -305,10 +319,12 @@ mod tests {
             builder.add(self.common.contract_state);
             builder.add(self.common.contract_balance);
 
-            let height = self.common.block.value.header().height();
-            let da_height = self.common.block.value.header().application().da_height;
-
-            builder.build(*height, da_height).unwrap()
+            builder
+                .build(Some(LastBlockConfig::from_header(
+                    self.common.block.value.header(),
+                    Default::default(),
+                )))
+                .unwrap()
         }
 
         fn read_from_snapshot(snapshot: SnapshotMetadata) -> Self {
@@ -323,7 +339,7 @@ mod tests {
                 reader
                     .read::<T>()
                     .unwrap()
-                    .map_ok(|group| group.data)
+                    .into_iter()
                     .flatten_ok()
                     .try_collect()
                     .unwrap()
@@ -331,11 +347,17 @@ mod tests {
 
             let block = {
                 let mut block = CompressedBlock::default();
-                let height = reader.block_height();
-                block.header_mut().application_mut().da_height = reader.da_block_height();
-                block.header_mut().set_block_height(height);
+                let last_block_config = reader
+                    .last_block_config()
+                    .cloned()
+                    .expect("Expects the last block config to be set");
+                block.header_mut().application_mut().da_height =
+                    last_block_config.da_block_height;
+                block
+                    .header_mut()
+                    .set_block_height(last_block_config.block_height);
                 TableEntry {
-                    key: height,
+                    key: last_block_config.block_height,
                     value: block,
                 }
             };
@@ -461,6 +483,8 @@ mod tests {
                     pc: self.rng.gen(),
                     is: self.rng.gen(),
                 }],
+                total_gas: self.rng.gen(),
+                total_fee: self.rng.gen(),
             };
 
             self.db
@@ -744,6 +768,12 @@ mod tests {
             .unwrap()
             .clone();
         let contract_id = randomly_chosen_contract.contract_id;
+        let mut latest_block = original_state.last_block.unwrap();
+        latest_block.blocks_root = db
+            .db
+            .on_chain()
+            .block_header_merkle_root(&latest_block.block_height)
+            .unwrap();
         db.flush();
 
         // when
@@ -765,8 +795,7 @@ mod tests {
                 coins: vec![],
                 messages: vec![],
                 contracts: vec![randomly_chosen_contract],
-                block_height: original_state.block_height,
-                da_block_height: original_state.da_block_height,
+                last_block: Some(latest_block),
             }
         );
 
@@ -784,11 +813,7 @@ mod tests {
         T::OwnedValue: serde::de::DeserializeOwned + core::fmt::Debug + PartialEq,
         StateConfig: AsTable<T>,
     {
-        let actual = reader
-            .read()
-            .unwrap()
-            .map(|group| group.unwrap().data)
-            .collect_vec();
+        let actual: Vec<_> = reader.read().unwrap().into_iter().try_collect().unwrap();
 
         let expected = expected_data
             .into_iter()

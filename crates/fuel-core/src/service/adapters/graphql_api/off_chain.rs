@@ -10,8 +10,14 @@ use crate::{
         },
         storage::{
             contracts::ContractsInfo,
+            relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
+    },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use fuel_core_storage::{
@@ -19,6 +25,7 @@ use fuel_core_storage::{
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
+        IteratorOverTable,
     },
     not_found,
     transactional::{
@@ -34,10 +41,17 @@ use fuel_core_txpool::types::{
     TxId,
 };
 use fuel_core_types::{
-    blockchain::primitives::BlockId,
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+        primitives::BlockId,
+    },
+    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         Address,
+        Bytes32,
         Salt,
+        Transaction,
         TxPointer,
         UtxoId,
     },
@@ -105,6 +119,56 @@ impl OffChainDatabase for Database<OffChain> {
             .salt();
 
         Ok(salt)
+    }
+
+    fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+        let block = self
+            .storage_as_ref::<OldFuelBlocks>()
+            .get(height)?
+            .ok_or(not_found!(OldFuelBlocks))?
+            .into_owned();
+
+        Ok(block)
+    }
+
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
+            .map(|r| r.map(|(_, block)| block))
+            .into_boxed()
+    }
+
+    fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
+        Ok(self
+            .storage_as_ref::<OldFuelBlockConsensus>()
+            .get(height)?
+            .ok_or(not_found!(OldFuelBlockConsensus))?
+            .into_owned())
+    }
+
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>> {
+        self.storage_as_ref::<OldTransactions>()
+            .get(id)
+            .map(|tx| tx.map(|tx| tx.into_owned()))
+    }
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>> {
+        let status = self
+            .storage_as_ref::<RelayedTransactionStatuses>()
+            .get(&id)
+            .map_err(StorageError::from)?
+            .map(|cow| cow.into_owned());
+        Ok(status)
+    }
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.message_is_spent(nonce)
     }
 }
 

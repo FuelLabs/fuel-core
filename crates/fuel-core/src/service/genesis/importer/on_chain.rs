@@ -6,19 +6,23 @@ use crate::database::{
     balances::BalancesInitializer,
     database_description::on_chain::OnChain,
     state::StateInitializer,
-    Database,
+    GenesisDatabase,
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         Coins,
         ContractsAssets,
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
         Messages,
-        Transactions,
+        ProcessedTransactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
@@ -33,7 +37,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-impl ImportTable for Handler<Coins> {
+impl ImportTable for Handler<Coins, Coins> {
     type TableInSnapshot = Coins;
     type TableBeingWritten = Coins;
     type DbDesc = OnChain;
@@ -41,7 +45,7 @@ impl ImportTable for Handler<Coins> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|coin| {
             init_coin(tx, &coin, self.block_height)?;
@@ -50,7 +54,7 @@ impl ImportTable for Handler<Coins> {
     }
 }
 
-impl ImportTable for Handler<Messages> {
+impl ImportTable for Handler<Messages, Messages> {
     type TableInSnapshot = Messages;
     type TableBeingWritten = Messages;
     type DbDesc = OnChain;
@@ -58,7 +62,7 @@ impl ImportTable for Handler<Messages> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group
             .into_iter()
@@ -66,7 +70,26 @@ impl ImportTable for Handler<Messages> {
     }
 }
 
-impl ImportTable for Handler<ContractsRawCode> {
+impl ImportTable for Handler<ProcessedTransactions, ProcessedTransactions> {
+    type TableInSnapshot = ProcessedTransactions;
+    type TableBeingWritten = ProcessedTransactions;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|transaction| {
+            tx.storage_as_mut::<ProcessedTransactions>()
+                .insert(&transaction.key, &transaction.value)
+                .map(|_| ())
+        })?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<ContractsRawCode, ContractsRawCode> {
     type TableInSnapshot = ContractsRawCode;
     type TableBeingWritten = ContractsRawCode;
     type DbDesc = OnChain;
@@ -74,7 +97,7 @@ impl ImportTable for Handler<ContractsRawCode> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
             init_contract_raw_code(tx, &contract)?;
@@ -83,7 +106,7 @@ impl ImportTable for Handler<ContractsRawCode> {
     }
 }
 
-impl ImportTable for Handler<ContractsLatestUtxo> {
+impl ImportTable for Handler<ContractsLatestUtxo, ContractsLatestUtxo> {
     type TableInSnapshot = ContractsLatestUtxo;
     type TableBeingWritten = ContractsLatestUtxo;
     type DbDesc = OnChain;
@@ -91,7 +114,7 @@ impl ImportTable for Handler<ContractsLatestUtxo> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
             init_contract_latest_utxo(tx, &contract, self.block_height)?;
@@ -100,7 +123,7 @@ impl ImportTable for Handler<ContractsLatestUtxo> {
     }
 }
 
-impl ImportTable for Handler<ContractsState> {
+impl ImportTable for Handler<ContractsState, ContractsState> {
     type TableInSnapshot = ContractsState;
     type TableBeingWritten = ContractsState;
     type DbDesc = OnChain;
@@ -108,14 +131,14 @@ impl ImportTable for Handler<ContractsState> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group)?;
         Ok(())
     }
 }
 
-impl ImportTable for Handler<ContractsAssets> {
+impl ImportTable for Handler<ContractsAssets, ContractsAssets> {
     type TableInSnapshot = ContractsAssets;
     type TableBeingWritten = ContractsAssets;
     type DbDesc = OnChain;
@@ -123,33 +146,56 @@ impl ImportTable for Handler<ContractsAssets> {
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
         Ok(())
     }
 }
 
-impl ImportTable for Handler<Transactions> {
-    type TableInSnapshot = Transactions;
-    type TableBeingWritten = Transactions;
+impl ImportTable for Handler<FuelBlockMerkleData, FuelBlockMerkleData> {
+    type TableInSnapshot = FuelBlockMerkleData;
+    type TableBeingWritten = FuelBlockMerkleData;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
         group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
-        for transaction in &group {
-            tx.storage::<Transactions>()
-                .insert(&transaction.key, &transaction.value)?;
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        for (height, block) in blocks {
+            tx.storage::<FuelBlockMerkleData>().insert(height, block)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<FuelBlockMerkleMetadata, FuelBlockMerkleMetadata> {
+    type TableInSnapshot = FuelBlockMerkleMetadata;
+    type TableBeingWritten = FuelBlockMerkleMetadata;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        for (height, metadata) in blocks {
+            tx.storage::<FuelBlockMerkleMetadata>()
+                .insert(height, metadata)?;
         }
         Ok(())
     }
 }
 
 fn init_coin(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     coin: &TableEntry<Coins>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -184,7 +230,7 @@ fn init_coin(
 }
 
 fn init_contract_latest_utxo(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     entry: &TableEntry<ContractsLatestUtxo>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -208,7 +254,7 @@ fn init_contract_latest_utxo(
 }
 
 fn init_contract_raw_code(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     entry: &TableEntry<ContractsRawCode>,
 ) -> anyhow::Result<()> {
     let contract = entry.value.as_ref();
@@ -227,7 +273,7 @@ fn init_contract_raw_code(
 }
 
 fn init_da_message(
-    transaction: &mut StorageTransaction<&mut Database>,
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
     msg: TableEntry<Messages>,
     da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {

@@ -13,7 +13,26 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use crate::{
+use crate as fuel_core_wasm_executor;
+use crate::utils::{
+    InputDeserializationType,
+    WasmDeserializationBlockTypes,
+};
+use fuel_core_executor::executor::ExecutionInstance;
+use fuel_core_storage::transactional::Changes;
+use fuel_core_types::{
+    blockchain::block::Block,
+    services::{
+        block_producer::Components,
+        executor::{
+            Error as ExecutorError,
+            ExecutionResult,
+            Result as ExecutorResult,
+        },
+        Uncommitted,
+    },
+};
+use fuel_core_wasm_executor::{
     relayer::WasmRelayer,
     storage::WasmStorage,
     tx_source::WasmTxSource,
@@ -22,16 +41,6 @@ use crate::{
         ReturnType,
     },
 };
-use fuel_core_executor::executor::ExecutionInstance;
-use fuel_core_types::services::{
-    block_producer::Components,
-    executor::{
-        Error as ExecutorError,
-        ExecutionResult,
-    },
-    Uncommitted,
-};
-use fuel_core_wasm_executor as _;
 
 mod ext;
 mod relayer;
@@ -40,9 +49,10 @@ mod tx_source;
 pub mod utils;
 
 #[no_mangle]
-pub extern "C" fn execute(component_len: u32, options_len: u32) -> u64 {
-    let result = execute_without_commit(component_len, options_len);
-    let encoded = postcard::to_allocvec(&result).expect("Failed to encode the result");
+pub extern "C" fn execute(input_len: u32) -> u64 {
+    let result = execute_without_commit(input_len);
+    let output = ReturnType::V1(result);
+    let encoded = postcard::to_allocvec(&output).expect("Failed to encode the output");
     let static_slice = encoded.leak();
     pack_ptr_and_len(
         static_slice.as_ptr() as u32,
@@ -50,11 +60,29 @@ pub extern "C" fn execute(component_len: u32, options_len: u32) -> u64 {
     )
 }
 
-pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnType {
-    let block = ext::input_component(component_len as usize)
+pub fn execute_without_commit(
+    input_len: u32,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    let input = ext::input(input_len as usize)
         .map_err(|e| ExecutorError::Other(e.to_string()))?;
-    let options = ext::input_options(options_len as usize)
-        .map_err(|e| ExecutorError::Other(e.to_string()))?;
+
+    let (block, options) = match input {
+        InputDeserializationType::V1 { block, options } => {
+            let block = match block {
+                WasmDeserializationBlockTypes::DryRun(c) => {
+                    WasmDeserializationBlockTypes::DryRun(use_wasm_tx_source(c))
+                }
+                WasmDeserializationBlockTypes::Production(c) => {
+                    WasmDeserializationBlockTypes::Production(use_wasm_tx_source(c))
+                }
+                WasmDeserializationBlockTypes::Validation(c) => {
+                    WasmDeserializationBlockTypes::Validation(c)
+                }
+            };
+
+            (block, options)
+        }
+    };
 
     let instance = ExecutionInstance {
         relayer: WasmRelayer {},
@@ -62,41 +90,54 @@ pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnTyp
         options,
     };
 
-    let block = block.map_p(|component| {
-        let Components {
-            header_to_produce,
-            gas_price,
-            coinbase_recipient,
-            ..
-        } = component;
+    match block {
+        WasmDeserializationBlockTypes::DryRun(c) => execute_dry_run(instance, c),
+        WasmDeserializationBlockTypes::Production(c) => execute_production(instance, c),
+        WasmDeserializationBlockTypes::Validation(c) => execute_validation(instance, c),
+    }
+}
 
-        Components {
-            header_to_produce,
-            gas_price,
-            transactions_source: WasmTxSource::new(),
-            coinbase_recipient,
-        }
-    });
+fn execute_dry_run(
+    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    block: Components<WasmTxSource>,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    instance.produce_without_commit(block, true)
+}
 
-    let (
-        ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ) = instance.execute_without_commit(block)?.into();
+fn execute_production(
+    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    block: Components<WasmTxSource>,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    instance.produce_without_commit(block, false)
+}
 
-    Ok(Uncommitted::new(
-        ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ))
+fn execute_validation(
+    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    block: Block,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    let result = instance
+        .validate_without_commit(&block)?
+        .into_execution_result(block, vec![]);
+
+    // TODO: Modify return type to differentiate between validation and production results
+    // https://github.com/FuelLabs/fuel-core/issues/1887
+    Ok(result)
+}
+
+fn use_wasm_tx_source(component: Components<()>) -> Components<WasmTxSource> {
+    let Components {
+        header_to_produce,
+        gas_price,
+        coinbase_recipient,
+        ..
+    } = component;
+
+    Components {
+        header_to_produce,
+        gas_price,
+        transactions_source: WasmTxSource::new(),
+        coinbase_recipient,
+    }
 }
 
 // It is not used. It was added to make clippy happy.

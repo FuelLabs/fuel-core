@@ -6,22 +6,109 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-Description of the upcoming release here.
+### Changed
+
+- [#1891](https://github.com/FuelLabs/fuel-core/pull/1891): Regenesis now preserves `FuelBlockMerkleData` and `FuelBlockMerkleMetadata` in the off-chain table. These tables are checked when querying message proofs.
+- [#1886](https://github.com/FuelLabs/fuel-core/pull/1886): Use ref to `Block` in validation code
+- [#1876](https://github.com/FuelLabs/fuel-core/pull/1876): Updated benchmark to include the worst scenario for `CROO` opcode. Also include consensus parameters in bench output.
+- [#1879](https://github.com/FuelLabs/fuel-core/pull/1879): Return the old behaviour for the `discovery_works` test.
+- [#1848](https://github.com/FuelLabs/fuel-core/pull/1848): Added `version` field to the `Block` and `BlockHeader` GraphQL entities. Added corresponding `version` field to the `Block` and `BlockHeader` client types in `fuel-core-client`.
+- [#1873](https://github.com/FuelLabs/fuel-core/pull/1873/): Separate dry runs from block production in executor code, remove `ExecutionKind` and `ExecutionType`, remove `thread_block_transaction` concept, remove `PartialBlockComponent` type, refactor away `inner` functions.
+- [#1900](https://github.com/FuelLabs/fuel-core/pull/1900): Update the root README as `fuel-core run` no longer has `--chain` as an option. It has been replaced by `--snapshot`.
+
+## [Version 0.26.0]
+
 ### Fixed
 
+#### Breaking
+
+- [#1868](https://github.com/FuelLabs/fuel-core/pull/1868): Include the `event_inbox_root` in the header hash. Changed types of the `transactions_count` to `u16` and `message_receipt_count` to `u32` instead of `u64`. Updated the application hash root calculation to not pad numbers.
+- [#1866](https://github.com/FuelLabs/fuel-core/pull/1866): Fixed a runtime panic that occurred when restarting a node. The panic happens when the relayer database is already populated, and the relayer attempts an empty commit during start up. This invalid commit is removed in this PR.
+- [#1871](https://github.com/FuelLabs/fuel-core/pull/1871): Fixed `block` endpoint to return fetch the blocks from both databases after regenesis.
+- [#1856](https://github.com/FuelLabs/fuel-core/pull/1856): Replaced instances of `Union` with `Enum` for GraphQL definitions of `ConsensusParametersVersion` and related types. This is needed because `Union` does not support multiple `Version`s inside discriminants or empty variants. 
+- [#1870](https://github.com/FuelLabs/fuel-core/pull/1870): Fixed benchmarks for the `0.25.3`. 
+- [#1870](https://github.com/FuelLabs/fuel-core/pull/1870): Improves the performance of getting the size of the contract from the `InMemoryTransaction`.
+- [#1851](https://github.com/FuelLabs/fuel-core/pull/1851/): Provided migration capabilities (enabled addition of new column families) to RocksDB instance.
+
+### Added 
+
+- [#1853](https://github.com/FuelLabs/fuel-core/pull/1853): Added a test case to verify the database's behavior when new columns are added to the RocksDB database.
+- [#1860](https://github.com/FuelLabs/fuel-core/pull/1860): Regenesis now preserves `FuelBlockIdsToHeights` off-chain table.
+
+### Changed
+
+- [#1847](https://github.com/FuelLabs/fuel-core/pull/1847): Simplify the validation interface to use `Block`. Remove `Validation` variant of `ExecutionKind`.
+- [#1832](https://github.com/FuelLabs/fuel-core/pull/1832): Snapshot generation can be cancelled. Progress is also reported.
+- [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
+
+## [Version 0.25.2]
+
+### Fixed
+
+- [#1844](https://github.com/FuelLabs/fuel-core/pull/1844): Fixed the publishing of the `fuel-core 0.25.1` release.
+- [#1842](https://github.com/FuelLabs/fuel-core/pull/1842): Ignore RUSTSEC-2024-0336: `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network
+
+## [Version 0.25.1]
+
+### Fixed
+
+- [#1840](https://github.com/FuelLabs/fuel-core/pull/1840): Fixed the publishing of the `fuel-core 0.25.0` release.
+
+## [Version 0.25.0]
+
+### Fixed
+
+- [#1821](https://github.com/FuelLabs/fuel-core/pull/1821): Can handle missing tables in snapshot.
 - [#1814](https://github.com/FuelLabs/fuel-core/pull/1814): Bugfix: the `iter_all_by_prefix` was not working for all tables. The change adds a `Rust` level filtering.
-=======
+
 ### Added
 
+- [#1831](https://github.com/FuelLabs/fuel-core/pull/1831): Included the total gas and fee used by transaction into `TransactionStatus`.
+- [#1821](https://github.com/FuelLabs/fuel-core/pull/1821): Propagate shutdown signal to (re)genesis. Also add progress bar for (re)genesis.
 - [#1813](https://github.com/FuelLabs/fuel-core/pull/1813): Added back support for `/health` endpoint.
 - [#1799](https://github.com/FuelLabs/fuel-core/pull/1799): Snapshot creation is now concurrent.
+- [#1811](https://github.com/FuelLabs/fuel-core/pull/1811): Regenesis now preserves old blocks and transactions for GraphQL API.
 
 ### Changed
 
+- [#1833](https://github.com/FuelLabs/fuel-core/pull/1833): Regenesis of `SpentMessages` and `ProcessedTransactions`.
+- [#1830](https://github.com/FuelLabs/fuel-core/pull/1830): Use versioning enum for WASM executor input and output.
+- [#1816](https://github.com/FuelLabs/fuel-core/pull/1816): Updated the upgradable executor to fetch the state transition bytecode from the database when the version doesn't match a native one. This change enables the WASM executor in the "production" build and requires a `wasm32-unknown-unknown` target.
 - [#1812](https://github.com/FuelLabs/fuel-core/pull/1812): Follow-up PR to simplify the logic around parallel snapshot creation.
+- [#1809](https://github.com/FuelLabs/fuel-core/pull/1809): Fetch `ConsensusParameters` from the database
+- [#1808](https://github.com/FuelLabs/fuel-core/pull/1808): Fetch consensus parameters from the provider.
 
-### Changed
-- [#1808](https://github.com/FuelLabs/fuel-core/pull/1808): Fetch consensus parameters from the database.
+#### Breaking
+
+- [#1826](https://github.com/FuelLabs/fuel-core/pull/1826): The changes make the state transition bytecode part of the `ChainConfig`. It guarantees the state transition's availability for the network's first blocks.
+    The change has many minor improvements in different areas related to the state transition bytecode:
+    - The state transition bytecode lies in its own file(`state_transition_bytecode.wasm`) along with the chain config file. The `ChainConfig` loads it automatically when `ChainConfig::load` is called and pushes it back when `ChainConfig::write` is called.
+    - The `fuel-core` release bundle also contains the `fuel-core-wasm-executor.wasm` file of the corresponding executor version.
+    - The regenesis process now considers the last block produced by the previous network. When we create a (re)genesis block of a new network, it has the `height = last_block_of_old_netowkr + 1`. It continues the old network and doesn't overlap blocks(before, we had `old_block.height == new_genesis_block.hegiht`).
+    - Along with the new block height, the regenesis process also increases the state transition bytecode and consensus parameters versions. It guarantees that a new network doesn't use values from the previous network and allows us not to migrate `StateTransitionBytecodeVersions` and `ConsensusParametersVersions` tables.
+    - Added a new CLI argument, `native-executor-version,` that allows overriding of the default version of the native executor. It can be useful for side rollups that have their own history of executor upgrades.
+    - Replaced:
+      
+      ```rust
+               let file = std::fs::File::open(path)?;
+               let mut snapshot: Self = serde_json::from_reader(&file)?;
+      ```
+      
+      with a:
+      
+      ```rust
+               let mut json = String::new();
+               std::fs::File::open(&path)
+                   .with_context(|| format!("Could not open snapshot file: {path:?}"))?
+                   .read_to_string(&mut json)?;
+               let mut snapshot: Self = serde_json::from_str(json.as_str())?;
+      ```
+      because it is 100 times faster for big JSON files.
+    - Updated all tests to use `Config::local_node_*` instead of working with the `SnapshotReader` directly. It is the preparation of the tests for the futures bumps of the `Executor::VERSION`. When we increase the version, all tests continue to use `GenesisBlock.state_transition_bytecode = 0` while the version is different, which forces the usage of the WASM executor, while for tests, we still prefer to test native execution. The `Config::local_node_*` handles it and forces the executor to use the native version.
+    - Reworked the `build.rs` file of the upgradable executor. The script now caches WASM bytecode to avoid recompilation. Also, fixed the issue with outdated WASM bytecode. The script reacts on any modifications of the `fuel-core-wasm-executor` and forces recompilation (it is why we need the cache), so WASM bytecode always is actual now.
+- [#1822](https://github.com/FuelLabs/fuel-core/pull/1822): Removed support of `Create` transaction from debugger since it doesn't have any script to execute.
+- [#1822](https://github.com/FuelLabs/fuel-core/pull/1822): Use `fuel-vm 0.49.0` with new transactions types - `Upgrade` and `Upload`. Also added `max_bytecode_subsections` field to the `ConsensusParameters` to limit the number of bytecode subsections in the state transition bytecode. 
+- [#1816](https://github.com/FuelLabs/fuel-core/pull/1816): Updated the upgradable executor to fetch the state transition bytecode from the database when the version doesn't match a native one. This change enables the WASM executor in the "production" build and requires a `wasm32-unknown-unknown` target.
 
 ## [Version 0.24.2]
 
@@ -40,6 +127,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1787](https://github.com/FuelLabs/fuel-core/pull/1787): Handle processing of relayed (forced) transactions
 - [#1786](https://github.com/FuelLabs/fuel-core/pull/1786): Regenesis now includes off-chain tables.
 - [#1716](https://github.com/FuelLabs/fuel-core/pull/1716): Added support of WASM state transition along with upgradable execution that works with native(std) and WASM(non-std) executors. The `fuel-core` now requires a `wasm32-unknown-unknown` target to build.
 - [#1770](https://github.com/FuelLabs/fuel-core/pull/1770): Add the new L1 event type for forced transactions.
@@ -97,11 +185,11 @@ Description of the upcoming release here.
       - The `StatisticTable` table lives in the off-chain worker.
       - Removed duplication of the `Database` from the `dap::ConcreteStorage` since it is already available from the VM.
       - The executor return only produced `Changes` instead of the storage transaction, which simplifies the interaction between modules and port definition.
-      - The logic related to the iteration over the storage is moved to the `fuel-core-storage` crate and is now reusable. It provides an `interator` method that duplicates the logic from `MemoryStore` on iterating over the `BTreeMap` and methods like `iter_all`, `iter_all_by_prefix`, etc. It was done in a separate revivable [commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/5b9bd78320e6f36d0650ec05698f12f7d1b3c7c9).
+      - The logic related to the iteration over the storage is moved to the `fuel-core-storage` crate and is now reusable. It provides an `iterator` method that duplicates the logic from `MemoryStore` on iterating over the `BTreeMap` and methods like `iter_all`, `iter_all_by_prefix`, etc. It was done in a separate revivable [commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/5b9bd78320e6f36d0650ec05698f12f7d1b3c7c9).
       - The `MemoryTransactionView` is fully replaced by the `StorageTransactionInner`.
       - Removed `flush` method from the `Database` since it is not needed after https://github.com/FuelLabs/fuel-core/pull/1664.
 
-- [#1693](https://github.com/FuelLabs/fuel-core/pull/1693): The change separates the initial chain state from the chain config and stores them in separate files when generating a snapshot. The state snapshot can be generated in a new format where parquet is used for compression and indexing while postcard is used for encoding. This enables importing in a stream like fashion which reduces memory requirements. Json encoding is still supported to enable easy manual setup. However, parquet is prefered for large state files.
+- [#1693](https://github.com/FuelLabs/fuel-core/pull/1693): The change separates the initial chain state from the chain config and stores them in separate files when generating a snapshot. The state snapshot can be generated in a new format where parquet is used for compression and indexing while postcard is used for encoding. This enables importing in a stream like fashion which reduces memory requirements. Json encoding is still supported to enable easy manual setup. However, parquet is preferred for large state files.
 
   ### Snapshot command
 
@@ -117,7 +205,7 @@ Description of the upcoming release here.
 
   Each item group in the genesis process is handled by a separate worker, allowing for parallel loading. Workers stream file contents in batches.
 
-  A database transaction is committed every time an item group is succesfully loaded. Resumability is achieved by recording the last loaded group index within the same db tx. If loading is aborted, the remaining workers are shutdown. Upon restart, workers resume from the last processed group.
+  A database transaction is committed every time an item group is successfully loaded. Resumability is achieved by recording the last loaded group index within the same db tx. If loading is aborted, the remaining workers are shutdown. Upon restart, workers resume from the last processed group.
 
   ### Contract States and Balances
 
@@ -137,6 +225,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1872](https://github.com/FuelLabs/fuel-core/pull/1872): Added Eq and PartialEq derives to TransactionStatus and TransactionResponse to enable comparison in the e2e tests.
 - [#1723](https://github.com/FuelLabs/fuel-core/pull/1723): Notify about imported blocks from the off-chain worker.
 - [#1717](https://github.com/FuelLabs/fuel-core/pull/1717): The fix for the [#1657](https://github.com/FuelLabs/fuel-core/pull/1657) to include the contract into `ContractsInfo` table.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Upgrade to `fuel-vm` 0.46.0.
