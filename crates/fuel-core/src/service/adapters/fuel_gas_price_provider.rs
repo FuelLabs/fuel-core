@@ -1,4 +1,8 @@
-use crate::service::adapters::fuel_gas_price_provider::ports::GasPriceAlgorithm;
+use crate::service::adapters::fuel_gas_price_provider::ports::{
+    GasPriceAlgorithm,
+    GasPriceHistory,
+    GasPrices,
+};
 use fuel_core_producer::block_producer::gas_price::{
     GasPriceParams,
     GasPriceProvider,
@@ -23,22 +27,29 @@ use ports::{
 mod tests;
 
 /// Gives the gas price for a given block height, and calculates the gas price if not yet committed.
-pub struct FuelGasPriceProvider<FB, DA, A> {
+pub struct FuelGasPriceProvider<FB, DA, A, GP> {
     profitablility_totals: ProfitablilityTotals,
 
     // adapters
     block_history: FB,
     da_recording_cost_history: DA,
     algorithm: A,
+    gas_price_history: GP,
 }
 
-impl<FB, DA, A> FuelGasPriceProvider<FB, DA, A> {
-    pub fn new(block_history: FB, da_recording_cost_history: DA, algorithm: A) -> Self {
+impl<FB, DA, A, GP> FuelGasPriceProvider<FB, DA, A, GP> {
+    pub fn new(
+        block_history: FB,
+        da_recording_cost_history: DA,
+        algorithm: A,
+        gas_price_history: GP,
+    ) -> Self {
         Self {
             profitablility_totals: ProfitablilityTotals::default(),
             block_history,
             da_recording_cost_history,
             algorithm,
+            gas_price_history,
         }
     }
 }
@@ -81,11 +92,12 @@ impl ProfitablilityTotals {
     }
 }
 
-impl<FB, DA, A> FuelGasPriceProvider<FB, DA, A>
+impl<FB, DA, A, GP> FuelGasPriceProvider<FB, DA, A, GP>
 where
     FB: FuelBlockHistory,
     DA: DARecordingCostHistory,
     A: GasPriceAlgorithm,
+    GP: GasPriceHistory,
 {
     fn inner_gas_price(&self, requested_block_height: BlockHeight) -> Result<u64> {
         let latest_block = self
@@ -93,14 +105,20 @@ where
             .latest_height()
             .map_err(Error::UnableToGetLatestBlockHeight)?;
         if latest_block > requested_block_height {
-            self.block_history
-                .gas_price(requested_block_height)
-                .map_err(Error::UnableToGetGasPrice)?
-                .ok_or(Error::GasPriceNotFoundForBlockHeight(
+            let gas_prices = self
+                .gas_price_history
+                .gas_prices(requested_block_height)
+                .map_err(Error::UnableToGetGasPrices)?
+                .ok_or(Error::GasPricesNotFoundForBlockHeight(
                     requested_block_height,
-                ))
+                ))?;
+            Ok(gas_prices.total())
         } else if Self::asking_for_next_block(latest_block, requested_block_height) {
-            self.calculate_new_gas_price(latest_block)
+            let new_gas_prices = self.calculate_new_gas_price(latest_block)?;
+            self.gas_price_history
+                .store_gas_prices(latest_block, &new_gas_prices)
+                .map_err(Error::UnableToStoreGasPrices)?;
+            Ok(new_gas_prices.total())
         } else {
             Err(Error::RequestedBlockHeightTooHigh {
                 requested: requested_block_height,
@@ -116,13 +134,16 @@ where
         *latest_block + 1 == *block_height
     }
 
-    fn calculate_new_gas_price(&self, latest_block_height: BlockHeight) -> Result<u64> {
+    fn calculate_new_gas_price(
+        &self,
+        latest_block_height: BlockHeight,
+    ) -> Result<GasPrices> {
         self.update_totals(latest_block_height)?;
-        let previous_gas_price = self
-            .block_history
-            .gas_price(latest_block_height)
-            .map_err(Error::UnableToGetGasPrice)?
-            .ok_or(Error::GasPriceNotFoundForBlockHeight(latest_block_height))?;
+        let previous_gas_prices = self
+            .gas_price_history
+            .gas_prices(latest_block_height)
+            .map_err(Error::UnableToGetGasPrices)?
+            .ok_or(Error::GasPricesNotFoundForBlockHeight(latest_block_height))?;
         let block_fullness = self
             .block_history
             .block_fullness(latest_block_height)
@@ -130,17 +151,14 @@ where
             .ok_or(Error::BlockFullnessNotFoundForBlockHeight(
                 latest_block_height,
             ))?;
-        let new_gas_price_candidate = self.algorithm.calculate_gas_price(
-            previous_gas_price,
+        let new_gas_prices = self.algorithm.calculate_gas_prices(
+            previous_gas_prices,
             self.total_reward(),
             self.total_cost(),
             block_fullness,
         );
-        let new_gas_price = core::cmp::min(
-            new_gas_price_candidate,
-            self.algorithm.maximum_next_gas_price(previous_gas_price),
-        );
-        Ok(new_gas_price)
+
+        Ok(new_gas_prices)
     }
 
     fn total_reward(&self) -> u64 {
@@ -175,11 +193,12 @@ where
     }
 }
 
-impl<FB, DA, A> GasPriceProvider for FuelGasPriceProvider<FB, DA, A>
+impl<FB, DA, A, GP> GasPriceProvider for FuelGasPriceProvider<FB, DA, A, GP>
 where
     FB: FuelBlockHistory,
     DA: DARecordingCostHistory,
     A: GasPriceAlgorithm,
+    GP: GasPriceHistory,
 {
     fn gas_price(&self, params: GasPriceParams) -> Option<u64> {
         // TODO: handle error

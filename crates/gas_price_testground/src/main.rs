@@ -13,16 +13,18 @@ use std::cmp::{
 };
 
 struct Algorithm {
-    amount: u64,
-    max_change_percent: u8,
+    // DA
+    da_max_change_percent: u8,
     min_da_price: u64,
-    min_exec_price: u64,
-    p_value_factor: i32,
-    d_value_factor: i32,
+    da_p_value_factor: i32,
+    da_d_value_factor: i32,
     moving_average_profit: RefCell<i32>,
     last_profit: RefCell<i32>,
     profit_slope: RefCell<i32>,
     moving_average_window: i32,
+    // EXEC
+    exec_change_amount: u64,
+    min_exec_price: u64,
 }
 
 impl Algorithm {
@@ -38,14 +40,15 @@ impl Algorithm {
         let avg_profit = *self.moving_average_profit.borrow();
         let slope = *self.profit_slope.borrow();
 
-        let max_change = (old_da_gas_price * self.max_change_percent as u64 / 100) as i32;
+        let max_change =
+            (old_da_gas_price * self.da_max_change_percent as u64 / 100) as i32;
 
         // if p > 0 and dp/db > 0, decrease
         // if p > 0 and dp/db < 0, hold/moderate
         // if p < 0 and dp/db < 0, increase
         // if p < 0 and dp/db > 0, hold/moderate
-        let p_comp = avg_profit / self.p_value_factor;
-        let d_comp = slope / self.d_value_factor;
+        let p_comp = avg_profit / self.da_p_value_factor;
+        let d_comp = slope / self.da_d_value_factor;
         let pd_change = p_comp + d_comp;
         let change = min(max_change, pd_change.abs());
         let sign = pd_change.signum();
@@ -61,9 +64,9 @@ impl Algorithm {
         capacity: u64,
     ) -> u64 {
         let new = if used > capacity / 2 {
-            old_exec_gas_price.saturating_add(10)
+            old_exec_gas_price.saturating_add(self.exec_change_amount)
         } else if used < capacity / 2 {
-            old_exec_gas_price.saturating_sub(10)
+            old_exec_gas_price.saturating_sub(self.exec_change_amount)
         } else {
             old_exec_gas_price
         };
@@ -104,16 +107,20 @@ impl Algorithm {
     }
 }
 
-fn noisy_cost<T: TryInto<f64>>(input: T) -> f64
-where
-    <T as TryInto<f64>>::Error: core::fmt::Debug,
-{
-    let input = input.try_into().unwrap();
-    let components: &[f64] = &[50.0, 100.0, 300.0, 1000.0, 500.0];
+fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
     components
         .iter()
         .fold(0f64, |acc, &c| acc + f64::sin(input / c))
         / components.len() as f64
+}
+
+fn noisy_cost<T: TryInto<f64>>(input: T) -> f64
+where
+    <T as TryInto<f64>>::Error: core::fmt::Debug,
+{
+    const COMPONENTS: &[f64] = &[50.0, 100.0, 300.0, 1000.0, 500.0];
+    let input = input.try_into().unwrap();
+    gen_noisy_signal(input, COMPONENTS)
 }
 
 fn arb_cost_signal(size: u32) -> Vec<u64> {
@@ -133,12 +140,9 @@ fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
 where
     <T as TryInto<f64>>::Error: core::fmt::Debug,
 {
+    const COMPONENTS: &[f64] = &[30.0, 40.0, 700.0, 340.0, 400.0];
     let input = input.try_into().unwrap();
-    let components: &[f64] = &[30.0, 40.0, 700.0, 340.0, 400.0];
-    components
-        .iter()
-        .fold(0f64, |acc, &c| acc + f64::sin(input / c))
-        / components.len() as f64
+    gen_noisy_signal(input, COMPONENTS)
 }
 
 fn arb_fullness_signal(size: u32, capacity: u64) -> Vec<(u64, u64)> {
@@ -156,30 +160,32 @@ fn arb_fullness_signal(size: u32, capacity: u64) -> Vec<(u64, u64)> {
 }
 
 fn main() {
-    let amount = 1;
-    let min = 10;
+    let min_da_price = 10;
+    let min_exec_price = 10;
     let p_value_factor = 4_000;
     let d_value_factor = 100;
     let moving_average_window = 10;
     let max_change_percent = 15;
+    let exec_change_amount = 10;
     let algo = Algorithm {
-        amount,
-        max_change_percent,
-        min_da_price: min,
-        p_value_factor,
-        d_value_factor,
+        da_max_change_percent: max_change_percent,
+        min_da_price,
+        da_p_value_factor: p_value_factor,
+        da_d_value_factor: d_value_factor,
         moving_average_profit: RefCell::new(0),
         last_profit: RefCell::new(0),
         profit_slope: RefCell::new(0),
         moving_average_window,
+        min_exec_price,
+        exec_change_amount,
     };
 
-    let gas_spent = 200;
-    let simulation_size = 100;
+    let capacity = 400;
+    let simulation_size = 200;
 
     // Run simulation
     let da_recording_cost = arb_cost_signal(simulation_size);
-    let exec_fullness = arb_fullness_signal(simulation_size, gas_spent * 2);
+    let exec_fullness = arb_fullness_signal(simulation_size, capacity);
     let mut da_gas_price = 100;
     let mut da_gas_prices = vec![da_gas_price as i32];
     let mut exec_gas_price = 0;
@@ -189,12 +195,11 @@ fn main() {
     let mut da_rewards = vec![];
     let mut total_da_cost = 0;
     let mut total_da_reward = 0;
-    // 50% capacity
+
     for (da_cost, (used, capacity)) in da_recording_cost.iter().zip(exec_fullness.iter())
     {
         total_da_cost += da_cost;
         let da_reward = da_gas_price * used;
-        // let exec_reward = exec_gas_price * gas_spent;
         da_rewards.push(da_reward);
         total_da_reward += da_reward;
         let total_profit = total_da_reward as i32 - total_da_cost as i32;
@@ -211,10 +216,11 @@ fn main() {
         exec_gas_prices.push(exec_gas_price as i32);
         total_gas_prices.push((da_gas_price + exec_gas_price) as i32);
     }
+
+    // Plotting code starts here
     let plot_width = 640 * 2;
     let plot_height = 480 * 3;
 
-    // Plotting code starts here
     let root = BitMapBackend::new("gas_prices.png", (plot_width, plot_height))
         .into_drawing_area();
     root.fill(&WHITE).unwrap();

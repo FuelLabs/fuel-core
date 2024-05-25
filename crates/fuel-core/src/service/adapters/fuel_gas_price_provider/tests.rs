@@ -15,7 +15,6 @@ mod producer_gas_price_tests;
 
 struct FakeBlockHistory {
     latest_height: BlockHeight,
-    gas_prices: HashMap<BlockHeight, u64>,
     production_rewards: HashMap<BlockHeight, u64>,
     block_fullness: HashMap<BlockHeight, BlockFullness>,
 }
@@ -23,10 +22,6 @@ struct FakeBlockHistory {
 impl FuelBlockHistory for FakeBlockHistory {
     fn latest_height(&self) -> ForeignResult<BlockHeight> {
         Ok(self.latest_height)
-    }
-
-    fn gas_price(&self, height: BlockHeight) -> ForeignResult<Option<u64>> {
-        Ok(self.gas_prices.get(&height).copied())
     }
 
     fn block_fullness(
@@ -38,6 +33,27 @@ impl FuelBlockHistory for FakeBlockHistory {
 
     fn production_reward(&self, height: BlockHeight) -> ForeignResult<Option<u64>> {
         Ok(self.production_rewards.get(&height).copied())
+    }
+}
+
+struct FakeGasPriceHistory {
+    gas_prices: RefCell<HashMap<BlockHeight, GasPrices>>,
+}
+
+impl GasPriceHistory for FakeGasPriceHistory {
+    fn gas_prices(&self, height: BlockHeight) -> ForeignResult<Option<GasPrices>> {
+        Ok(self.gas_prices.borrow().get(&height).copied())
+    }
+
+    fn store_gas_prices(
+        &self,
+        height: BlockHeight,
+        gas_price: &GasPrices,
+    ) -> ForeignResult<()> {
+        self.gas_prices
+            .borrow_mut()
+            .insert(height, gas_price.clone());
+        Ok(())
     }
 }
 
@@ -56,15 +72,6 @@ pub struct SimpleGasPriceAlgorithm {
     max_price_change: u64,
 }
 
-impl SimpleGasPriceAlgorithm {
-    pub fn new(flat_price_change: u64, max_price_change: u64) -> Self {
-        Self {
-            flat_price_change,
-            max_price_change,
-        }
-    }
-}
-
 impl Default for SimpleGasPriceAlgorithm {
     fn default() -> Self {
         Self {
@@ -75,28 +82,44 @@ impl Default for SimpleGasPriceAlgorithm {
 }
 
 impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
-    fn calculate_gas_price(
+    fn calculate_gas_prices(
         &self,
-        previous_gas_price: u64,
+        previous_gas_prices: GasPrices,
         total_production_reward: u64,
         total_da_recording_cost: u64,
         _block_fullness: BlockFullness,
-    ) -> u64 {
+    ) -> GasPrices {
         if total_production_reward < total_da_recording_cost {
-            previous_gas_price.saturating_add(self.flat_price_change)
+            let GasPrices {
+                execution_gas_price,
+                da_gas_price,
+            } = previous_gas_prices;
+            let da_gas_price = da_gas_price.saturating_add(self.flat_price_change);
+            GasPrices {
+                execution_gas_price,
+                da_gas_price,
+            }
         } else {
-            previous_gas_price
+            previous_gas_prices
         }
     }
 
-    fn maximum_next_gas_price(&self, previous_gas_price: u64) -> u64 {
-        previous_gas_price.saturating_add(self.max_price_change)
+    fn maximum_next_gas_prices(&self, previous_gas_price: GasPrices) -> GasPrices {
+        let GasPrices {
+            execution_gas_price,
+            da_gas_price,
+        } = previous_gas_price;
+        let da_gas_price = da_gas_price.saturating_add(self.max_price_change);
+        GasPrices {
+            execution_gas_price,
+            da_gas_price,
+        }
     }
 }
 
 struct ProviderBuilder {
     latest_height: BlockHeight,
-    historical_gas_price: HashMap<BlockHeight, u64>,
+    historical_gas_price: HashMap<BlockHeight, GasPrices>,
     historical_production_rewards: HashMap<BlockHeight, u64>,
     historical_block_fullness: HashMap<BlockHeight, BlockFullness>,
     da_recording_costs: HashMap<BlockHeight, u64>,
@@ -132,9 +155,9 @@ impl ProviderBuilder {
     fn with_historical_gas_price(
         mut self,
         block_height: BlockHeight,
-        gas_price: u64,
+        gas_prices: GasPrices,
     ) -> Self {
-        self.historical_gas_price.insert(block_height, gas_price);
+        self.historical_gas_price.insert(block_height, gas_prices);
         self
     }
 
@@ -179,20 +202,13 @@ impl ProviderBuilder {
         self
     }
 
-    fn with_alorithm_settings(mut self, flat_change: u64, max_change: u64) -> Self {
-        self.algorithm = SimpleGasPriceAlgorithm {
-            flat_price_change: flat_change,
-            max_price_change: max_change,
-        };
-        self
-    }
-
     fn build(
         self,
     ) -> FuelGasPriceProvider<
         FakeBlockHistory,
         FakeDARecordingCostHistory,
         SimpleGasPriceAlgorithm,
+        FakeGasPriceHistory,
     > {
         let Self {
             latest_height,
@@ -208,12 +224,14 @@ impl ProviderBuilder {
 
         let block_history = FakeBlockHistory {
             latest_height,
-            gas_prices: historical_gas_price,
             production_rewards: historical_production_rewards,
             block_fullness: historical_block_fullness,
         };
         let da_recording_cost_history = FakeDARecordingCostHistory {
             costs: da_recording_costs,
+        };
+        let gas_price_history = FakeGasPriceHistory {
+            gas_prices: historical_gas_price.into(),
         };
         FuelGasPriceProvider {
             profitablility_totals: ProfitablilityTotals::new(
@@ -224,6 +242,7 @@ impl ProviderBuilder {
             block_history,
             da_recording_cost_history,
             algorithm,
+            gas_price_history,
         }
     }
 }

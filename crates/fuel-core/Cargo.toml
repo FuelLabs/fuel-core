@@ -81,7 +81,6 @@ fuel-core-upgradable-executor = { workspace = true, features = [
   "test-helpers",
 ] }
 mockall = { workspace = true }
-plotters = "0.3.5"
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
