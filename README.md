@@ -82,9 +82,9 @@ OPTIONS:
         ...
 ```
 
-For many development purposes it is useful to have a state that won't persist and the `db-type` option can be set to `in-memory` as in the following example.
+### Running Examples
 
-### Example
+* In-Memory DB: For many development purposes it is useful to have a state that won't persist and the `db-type` option can be set to `in-memory` as in the following example.
 
 ```console
 $ ./target/debug/fuel-core run --db-type in-memory
@@ -94,9 +94,7 @@ $ ./target/debug/fuel-core run --db-type in-memory
 2023-06-13T12:38:47.097777Z  INFO new{name=fuel-core}: fuel_core::graphql_api::service: 208: Binding GraphQL provider to 127.0.0.1:4000
 ```
 
-To disable block production on your local node, set `--poa-instant=false`
-
-### Example
+* Disable block production: To disable block production on your local node, set `--poa-instant=false`
 
 ```console
 $ ./target/debug/fuel-core run --poa-instant=false
