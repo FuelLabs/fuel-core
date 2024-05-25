@@ -27,11 +27,11 @@ pub struct Command {
         value_parser,
         default_value = default_db_path().into_os_string()
     )]
-    pub(crate) database_path: PathBuf,
+    pub database_path: PathBuf,
 
     /// Where to save the snapshot
     #[arg(name = "OUTPUT_DIR", long = "output-directory")]
-    pub(crate) output_dir: PathBuf,
+    pub output_dir: PathBuf,
 
     /// The maximum database cache size in bytes.
     #[arg(
@@ -43,7 +43,7 @@ pub struct Command {
 
     /// The sub-command of the snapshot operation.
     #[command(subcommand)]
-    pub(crate) subcommand: SubCommands,
+    pub subcommand: SubCommands,
 }
 
 #[derive(Subcommand, Debug, Clone, Copy)]
