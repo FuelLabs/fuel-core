@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1873](https://github.com/FuelLabs/fuel-core/pull/1873/): Separate dry runs from block production in executor code, remove `ExecutionKind` and `ExecutionType`, remove `thread_block_transaction` concept, remove `PartialBlockComponent` type, refactor away `inner` functions.
 - [#1900](https://github.com/FuelLabs/fuel-core/pull/1900): Update the root README as `fuel-core run` no longer has `--chain` as an option. It has been replaced by `--snapshot`.
 
+#### Breaking
+
+- [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Use testnet configuration for local testnet.
+- [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Removed support for helm chart.
+
 ## [Version 0.26.0]
 
 ### Fixed
