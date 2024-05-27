@@ -84,11 +84,9 @@ impl ProfitablilityTotals {
         let mut totaled_block_height = self.totaled_block_height.borrow_mut();
         let mut total_reward = self.total_reward.borrow_mut();
         let mut total_cost = self.total_cost.borrow_mut();
-        while *totaled_block_height < block_height {
-            *totaled_block_height = block_height;
-            *total_reward += reward;
-            *total_cost += cost;
-        }
+        *totaled_block_height = block_height;
+        *total_reward += reward;
+        *total_cost += cost;
     }
 }
 
