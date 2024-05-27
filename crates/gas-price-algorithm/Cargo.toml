@@ -9,7 +9,6 @@ license = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
 
-
 [lib]
 name = "gas_price_algorithm"
 path = "src/lib.rs"
@@ -17,7 +16,6 @@ path = "src/lib.rs"
 [[bin]]
 name = "main"
 path = "src/main.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
