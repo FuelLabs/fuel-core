@@ -17,7 +17,6 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-async-nats = "0.35.0"
 async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive", "env", "string"] }
 const_format = { version = "0.2", optional = true }
@@ -26,6 +25,7 @@ dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-types = { workspace = true }
+fuel-core-nats = { workspace = true }
 hex = "0.4"
 humantime = "2.1"
 pyroscope = "0.5"
