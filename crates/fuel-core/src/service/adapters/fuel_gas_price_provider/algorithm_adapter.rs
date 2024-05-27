@@ -62,8 +62,6 @@ mod tests {
     #![allow(non_snake_case)]
     use super::*;
 
-    use criterion as _;
-
     #[test]
     fn calculate_gas_price__above_50_percent_increases_gas_price() {
         // given

@@ -3013,7 +3013,6 @@ dependencies = [
  "async-trait",
  "axum",
  "clap 4.5.4",
- "criterion",
  "derive_more",
  "enum-iterator",
  "fuel-core",
