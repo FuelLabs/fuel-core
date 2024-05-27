@@ -30,7 +30,6 @@ mod tests;
 pub struct FuelGasPriceProvider<FB, DA, A, GP> {
     profitablility_totals: ProfitablilityTotals,
 
-    // adapters
     block_history: FB,
     da_recording_cost_history: DA,
     algorithm: A,

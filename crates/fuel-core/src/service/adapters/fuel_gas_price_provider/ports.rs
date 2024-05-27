@@ -58,7 +58,6 @@ impl BlockFullness {
 }
 
 pub trait FuelBlockHistory {
-    // type BlockProductionReward;
     fn latest_height(&self) -> ForeignResult<BlockHeight>;
 
     fn block_fullness(&self, height: BlockHeight)

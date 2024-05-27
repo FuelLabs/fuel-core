@@ -4,7 +4,6 @@ use crate::service::adapters::fuel_gas_price_provider::ports::{
     GasPrices,
 };
 use gas_price_algorithm::AlgorithmV1;
-// use gas-price-algorithm::Algorithm;
 
 pub enum FuelGasPriceAlgorithm {
     V1(AlgorithmV1),
@@ -12,10 +11,6 @@ pub enum FuelGasPriceAlgorithm {
 
 impl FuelGasPriceAlgorithm {
     pub fn new(_target_profitability: f32, _max_price_change_percentage: f32) -> Self {
-        // Self {
-        //     _target_profitability: target_profitability,
-        //     _max_price_change_percentage: max_price_change_percentage,
-        // }
         todo!()
     }
 }
@@ -57,6 +52,8 @@ impl GasPriceAlgorithm for FuelGasPriceAlgorithm {
     }
 }
 
+// TODO: These tests need to be updated. Also the specific behavior should probably be managed by
+//     the specific algorithm _version_ we are using.
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]
