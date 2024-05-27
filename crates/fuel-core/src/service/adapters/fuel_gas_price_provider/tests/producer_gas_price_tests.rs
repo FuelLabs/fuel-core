@@ -34,7 +34,7 @@ fn gas_price__if_gas_price_too_high_return_error() {
     let maybe_price = gas_price_provider.gas_price(params);
 
     // then
-    assert!(maybe_price.is_none());
+    assert!(maybe_price.is_err());
 }
 
 #[test]

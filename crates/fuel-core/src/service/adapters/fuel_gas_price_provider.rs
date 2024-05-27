@@ -198,8 +198,11 @@ where
     A: GasPriceAlgorithm,
     GP: GasPriceHistory,
 {
-    fn gas_price(&self, params: GasPriceParams) -> Option<u64> {
-        // TODO: handle error
-        self.inner_gas_price(params.block_height()).ok()
+    fn gas_price(
+        &self,
+        params: GasPriceParams,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        self.inner_gas_price(params.block_height())
+            .map_err(|e| Box::new(e).into())
     }
 }
