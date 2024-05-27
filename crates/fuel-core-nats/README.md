@@ -179,7 +179,7 @@ Nats-Msg-Size: 8
 
 #### owners.{height}.{owner_id} and assets.{height}.{asset_id}
 
-Transactins with an owner_id or asset_id are additioanlly published to these two topics.
+Transactins with an owner_id or asset_id are additionally published to these two topics.
 
 ```rust
 Transaction::Script(s) => {
