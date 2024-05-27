@@ -176,3 +176,29 @@ Nats-Msg-Size: 8
   }
 }
 ```
+
+#### owners.{height}.{owner_id} and assets.{height}.{asset_id}
+
+Transactins with an owner_id or asset_id are additioanlly published to these two topics.
+
+```rust
+Transaction::Script(s) => {
+  for i in s.inputs() {
+      if let Some(owner_id) = i.input_owner() {
+          let payload = serde_json::to_string_pretty(tx)?;
+          jetstream
+              .publish(format!("owners.{height}.{owner_id}"), payload.into())
+              .await?;
+      }
+      use fuel_core_types::fuel_tx::AssetId;
+      // TODO: from chain config?
+      let base_asset_id = AssetId::zeroed();
+      if let Some(asset_id) = i.asset_id(&base_asset_id) {
+          let payload = serde_json::to_string_pretty(tx)?;
+          jetstream
+              .publish(format!("assets.{height}.{asset_id}"), payload.into())
+              .await?;
+      }
+  }
+}
+```
