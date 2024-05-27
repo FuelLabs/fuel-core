@@ -712,9 +712,9 @@ mod test {
         let seen_crate_versions = Executor::<Storage, DisabledRelayer>::CRATE_VERSIONS
             .iter()
             .map(|(crate_version, version)| {
-                let executor_cate_version = crate_version.to_string().replace('-', ".");
+                let executor_crate_version = crate_version.to_string().replace('-', ".");
                 seen_executor_versions.insert(*version);
-                (executor_cate_version, *version)
+                (executor_crate_version, *version)
             })
             .collect::<BTreeMap<_, _>>();
 
