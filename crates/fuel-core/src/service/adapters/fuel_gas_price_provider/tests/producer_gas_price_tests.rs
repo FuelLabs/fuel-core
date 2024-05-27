@@ -6,10 +6,10 @@ fn gas_price__can_get_a_historical_gas_price() {
     let block_height = 432;
     let latest_height = (432 + 2).into();
     let expected = 123;
-    let expeced_gas_prices = GasPrices::new(expected, 0);
+    let expected_gas_prices = GasPrices::new(expected, 0);
     let gas_price_provider = ProviderBuilder::new()
         .with_latest_height(latest_height)
-        .with_historical_gas_price(block_height.into(), expeced_gas_prices)
+        .with_historical_gas_price(block_height.into(), expected_gas_prices)
         .build();
 
     // when
