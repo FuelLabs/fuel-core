@@ -3035,6 +3035,7 @@ dependencies = [
  "fuel-core-types",
  "fuel-core-upgradable-executor",
  "futures",
+ "gas-price-algorithm",
  "hex",
  "hyper",
  "indicatif",
@@ -3893,7 +3894,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gas_price_testground"
+name = "gas-price-algorithm"
 version = "0.26.0"
 dependencies = [
  "plotters",

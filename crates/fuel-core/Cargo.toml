@@ -26,6 +26,7 @@ derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-consensus-module = { workspace = true }
+gas-price-algorithm = { workspace = true }
 fuel-core-database = { workspace = true }
 fuel-core-executor = { workspace = true, features = ["std"] }
 fuel-core-importer = { workspace = true }

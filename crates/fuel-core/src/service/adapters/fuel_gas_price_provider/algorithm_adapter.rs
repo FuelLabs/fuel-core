@@ -3,19 +3,20 @@ use crate::service::adapters::fuel_gas_price_provider::ports::{
     GasPriceAlgorithm,
     GasPrices,
 };
+use gas_price_algorithm::AlgorithmV1;
+// use gas-price-algorithm::Algorithm;
 
-// TODO: Don't use floats 🤢
-pub struct FuelGasPriceAlgorithm {
-    _target_profitability: f32,
-    _max_price_change_percentage: f32,
+pub enum FuelGasPriceAlgorithm {
+    V1(AlgorithmV1),
 }
 
 impl FuelGasPriceAlgorithm {
-    pub fn new(target_profitability: f32, max_price_change_percentage: f32) -> Self {
-        Self {
-            _target_profitability: target_profitability,
-            _max_price_change_percentage: max_price_change_percentage,
-        }
+    pub fn new(_target_profitability: f32, _max_price_change_percentage: f32) -> Self {
+        // Self {
+        //     _target_profitability: target_profitability,
+        //     _max_price_change_percentage: max_price_change_percentage,
+        // }
+        todo!()
     }
 }
 
@@ -70,12 +71,25 @@ mod tests {
         let old_gas_prices = GasPrices::new(old_gas_price, 0);
         let total_production_reward = 100;
         let total_da_recording_cost = total_production_reward;
+        let min_da_price = 10;
+        let min_exec_price = 10;
+        let p_value_factor = 4_000;
+        let d_value_factor = 100;
+        let moving_average_window = 10;
+        let max_change_percent = 15;
+        let exec_change_amount = 10;
         // 60% full
         let block_fullness = BlockFullness::new(60, 100);
-        let algo = FuelGasPriceAlgorithm {
-            _target_profitability: 1.,
-            _max_price_change_percentage: f32::MAX,
-        };
+        let v1 = AlgorithmV1::new(
+            min_da_price,
+            min_exec_price,
+            p_value_factor,
+            d_value_factor,
+            moving_average_window,
+            max_change_percent,
+            exec_change_amount,
+        );
+        let algo = FuelGasPriceAlgorithm::V1(v1);
         // when
         let new_gas_price = algo.calculate_gas_prices(
             old_gas_prices,
@@ -95,12 +109,25 @@ mod tests {
         let old_gas_prices = GasPrices::new(old_gas_price, 0);
         let total_production_reward = 100;
         let total_da_recording_cost = total_production_reward + 1;
+        let min_da_price = 10;
+        let min_exec_price = 10;
+        let p_value_factor = 4_000;
+        let d_value_factor = 100;
+        let moving_average_window = 10;
+        let max_change_percent = 15;
+        let exec_change_amount = 10;
         // 40% full
         let block_fullness = BlockFullness::new(40, 100);
-        let algo = FuelGasPriceAlgorithm {
-            _target_profitability: 1.,
-            _max_price_change_percentage: f32::MAX,
-        };
+        let v1 = AlgorithmV1::new(
+            min_da_price,
+            min_exec_price,
+            p_value_factor,
+            d_value_factor,
+            moving_average_window,
+            max_change_percent,
+            exec_change_amount,
+        );
+        let algo = FuelGasPriceAlgorithm::V1(v1);
 
         // when
         let new_gas_price = algo.calculate_gas_prices(
@@ -121,12 +148,25 @@ mod tests {
         let old_gas_prices = GasPrices::new(old_gas_price, 0);
         let total_production_reward = 100;
         let total_da_recording_cost = total_production_reward - 1;
+        let min_da_price = 10;
+        let min_exec_price = 10;
+        let p_value_factor = 4_000;
+        let d_value_factor = 100;
+        let moving_average_window = 10;
+        let max_change_percent = 15;
+        let exec_change_amount = 10;
         // 40% full
         let block_fullness = BlockFullness::new(40, 100);
-        let algo = FuelGasPriceAlgorithm {
-            _target_profitability: 1.,
-            _max_price_change_percentage: f32::MAX,
-        };
+        let v1 = AlgorithmV1::new(
+            min_da_price,
+            min_exec_price,
+            p_value_factor,
+            d_value_factor,
+            moving_average_window,
+            max_change_percent,
+            exec_change_amount,
+        );
+        let algo = FuelGasPriceAlgorithm::V1(v1);
 
         // when
         let new_gas_prices = algo.calculate_gas_prices(
