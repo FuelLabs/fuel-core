@@ -45,7 +45,7 @@ impl AlgorithmV1 {
         }
     }
 
-    fn calculate_da_gas_price(
+    pub fn calculate_da_gas_price(
         &self,
         old_da_gas_price: u64,
         total_production_reward: u64,
@@ -74,7 +74,7 @@ impl AlgorithmV1 {
         max(new_da_gas_price as u64, self.min_da_price)
     }
 
-    fn calculate_exec_gas_price(
+    pub fn calculate_exec_gas_price(
         &self,
         old_exec_gas_price: u64,
         used: u64,

@@ -16,34 +16,32 @@ impl FuelGasPriceAlgorithm {
 }
 
 impl GasPriceAlgorithm for FuelGasPriceAlgorithm {
-    fn calculate_gas_prices(
+    fn calculate_da_gas_price(
         &self,
-        previous_gas_prices: GasPrices,
+        previous_da_gas_prices: u64,
         total_production_reward: u64,
         total_da_recording_cost: u64,
+    ) -> u64 {
+        match self {
+            FuelGasPriceAlgorithm::V1(v1) => v1.calculate_da_gas_price(
+                previous_da_gas_prices,
+                total_production_reward,
+                total_da_recording_cost,
+            ),
+        }
+    }
+
+    fn calculate_execution_gas_price(
+        &self,
+        previous_execution_gas_prices: u64,
         block_fullness: BlockFullness,
-    ) -> GasPrices {
-        let GasPrices {
-            execution_gas_price,
-            da_gas_price,
-        } = previous_gas_prices;
-        if total_da_recording_cost > total_production_reward {
-            GasPrices {
-                execution_gas_price,
-                da_gas_price: da_gas_price + 1,
-            }
-        } else {
-            if block_fullness.used() > block_fullness.capacity() / 2 {
-                GasPrices {
-                    execution_gas_price: execution_gas_price + 1,
-                    da_gas_price,
-                }
-            } else {
-                GasPrices {
-                    execution_gas_price: execution_gas_price - 1,
-                    da_gas_price,
-                }
-            }
+    ) -> u64 {
+        match self {
+            FuelGasPriceAlgorithm::V1(v1) => v1.calculate_exec_gas_price(
+                previous_execution_gas_prices,
+                block_fullness.used(),
+                block_fullness.capacity(),
+            ),
         }
     }
 
@@ -62,8 +60,8 @@ mod tests {
     #[test]
     fn calculate_gas_price__above_50_percent_increases_gas_price() {
         // given
-        let old_gas_price = 444;
-        let old_gas_prices = GasPrices::new(old_gas_price, 0);
+        let old_da_gas_price = 444;
+        let old_exec_gas_price = 333;
         let total_production_reward = 100;
         let total_da_recording_cost = total_production_reward;
         let min_da_price = 10;
@@ -86,22 +84,25 @@ mod tests {
         );
         let algo = FuelGasPriceAlgorithm::V1(v1);
         // when
-        let new_gas_price = algo.calculate_gas_prices(
-            old_gas_prices,
+        let new_da_gas_price = algo.calculate_da_gas_price(
+            old_da_gas_price,
             total_production_reward,
             total_da_recording_cost,
-            block_fullness,
         );
+        let new_exec_gas_price =
+            algo.calculate_execution_gas_price(old_exec_gas_price, block_fullness);
+        let new_gas_price = new_exec_gas_price + new_da_gas_price;
+        let old_gas_price = old_exec_gas_price + old_da_gas_price;
 
         // then
-        assert!(new_gas_price.total() > old_gas_prices.total());
+        assert!(new_gas_price > old_gas_price);
     }
 
     #[test]
     fn calculate_gas_price__below_50_but_not_profitable_increase_gas_price() {
         // given
-        let old_gas_price = 444;
-        let old_gas_prices = GasPrices::new(old_gas_price, 0);
+        let old_da_gas_price = 444;
+        let old_exec_gas_price = 333;
         let total_production_reward = 100;
         let total_da_recording_cost = total_production_reward + 1;
         let min_da_price = 10;
@@ -125,22 +126,25 @@ mod tests {
         let algo = FuelGasPriceAlgorithm::V1(v1);
 
         // when
-        let new_gas_price = algo.calculate_gas_prices(
-            old_gas_prices,
+        let new_da_gas_price = algo.calculate_da_gas_price(
+            old_da_gas_price,
             total_production_reward,
             total_da_recording_cost,
-            block_fullness,
         );
+        let new_exec_gas_price =
+            algo.calculate_execution_gas_price(old_exec_gas_price, block_fullness);
+        let new_gas_price = new_exec_gas_price + new_da_gas_price;
+        let old_gas_price = old_exec_gas_price + old_da_gas_price;
 
         // then
-        assert!(new_gas_price.total() > old_gas_prices.total());
+        assert!(new_gas_price > old_gas_price);
     }
 
     #[test]
     fn calculate_gas_price__below_50_and_profitable_decrease_gas_price() {
         // given
-        let old_gas_price = 444;
-        let old_gas_prices = GasPrices::new(old_gas_price, 0);
+        let old_da_gas_price = 444;
+        let old_exec_gas_price = 333;
         let total_production_reward = 100;
         let total_da_recording_cost = total_production_reward - 1;
         let min_da_price = 10;
@@ -164,14 +168,17 @@ mod tests {
         let algo = FuelGasPriceAlgorithm::V1(v1);
 
         // when
-        let new_gas_prices = algo.calculate_gas_prices(
-            old_gas_prices,
+        let new_da_gas_price = algo.calculate_da_gas_price(
+            old_da_gas_price,
             total_production_reward,
             total_da_recording_cost,
-            block_fullness,
         );
+        let new_exec_gas_price =
+            algo.calculate_execution_gas_price(old_exec_gas_price, block_fullness);
+        let new_gas_price = new_exec_gas_price + new_da_gas_price;
+        let old_gas_price = old_exec_gas_price + old_da_gas_price;
 
         // then
-        assert!(new_gas_prices.total() < old_gas_price);
+        assert!(new_gas_price < old_gas_price);
     }
 }

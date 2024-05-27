@@ -62,6 +62,11 @@ struct FakeDARecordingCostHistory {
 }
 
 impl DARecordingCostHistory for FakeDARecordingCostHistory {
+    fn latest_height(&self) -> ForeignResult<BlockHeight> {
+        let max_height = self.costs.iter().map(|(h, _)| *h).max().unwrap_or(0.into());
+        Ok(max_height)
+    }
+
     fn recording_cost(&self, height: BlockHeight) -> ForeignResult<Option<u64>> {
         Ok(self.costs.get(&height).copied())
     }
@@ -82,26 +87,25 @@ impl Default for SimpleGasPriceAlgorithm {
 }
 
 impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
-    fn calculate_gas_prices(
+    fn calculate_da_gas_price(
         &self,
-        previous_gas_prices: GasPrices,
+        previous_da_gas_price: u64,
         total_production_reward: u64,
         total_da_recording_cost: u64,
-        _block_fullness: BlockFullness,
-    ) -> GasPrices {
+    ) -> u64 {
         if total_production_reward < total_da_recording_cost {
-            let GasPrices {
-                execution_gas_price,
-                da_gas_price,
-            } = previous_gas_prices;
-            let da_gas_price = da_gas_price.saturating_add(self.flat_price_change);
-            GasPrices {
-                execution_gas_price,
-                da_gas_price,
-            }
+            previous_da_gas_price.saturating_add(self.flat_price_change)
         } else {
-            previous_gas_prices
+            previous_da_gas_price
         }
+    }
+
+    fn calculate_execution_gas_price(
+        &self,
+        previous_execution_gas_prices: u64,
+        _block_fullness: BlockFullness,
+    ) -> u64 {
+        previous_execution_gas_prices
     }
 
     fn maximum_next_gas_prices(&self, previous_gas_price: GasPrices) -> GasPrices {

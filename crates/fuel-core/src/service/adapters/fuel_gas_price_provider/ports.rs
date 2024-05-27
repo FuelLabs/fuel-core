@@ -67,6 +67,7 @@ pub trait FuelBlockHistory {
 }
 
 pub trait DARecordingCostHistory {
+    fn latest_height(&self) -> ForeignResult<BlockHeight>;
     fn recording_cost(&self, height: BlockHeight) -> ForeignResult<Option<u64>>;
 }
 
@@ -109,13 +110,18 @@ pub trait GasPriceHistory {
 }
 
 pub trait GasPriceAlgorithm {
-    fn calculate_gas_prices(
+    fn calculate_da_gas_price(
         &self,
-        previous_gas_prices: GasPrices,
+        previous_da_gas_prices: u64,
         total_production_reward: u64,
         total_da_recording_cost: u64,
+    ) -> u64;
+
+    fn calculate_execution_gas_price(
+        &self,
+        previous_execution_gas_prices: u64,
         block_fullness: BlockFullness,
-    ) -> GasPrices;
+    ) -> u64;
 
     fn maximum_next_gas_prices(&self, previous_gas_prices: GasPrices) -> GasPrices;
 }

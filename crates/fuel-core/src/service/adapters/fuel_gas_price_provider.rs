@@ -135,12 +135,27 @@ where
         &self,
         latest_block_height: BlockHeight,
     ) -> Result<GasPrices> {
-        self.update_totals(latest_block_height)?;
         let previous_gas_prices = self
             .gas_price_history
             .gas_prices(latest_block_height)
             .map_err(Error::UnableToGetGasPrices)?
             .ok_or(Error::GasPricesNotFoundForBlockHeight(latest_block_height))?;
+        let latest_da_recorded_block = self
+            .da_recording_cost_history
+            .latest_height()
+            .map_err(Error::UnableToGetLatestBlockHeight)?;
+
+        let new_da_gas_price = if latest_da_recorded_block <= latest_block_height {
+            previous_gas_prices.da_gas_price
+        } else {
+            self.update_totals(latest_block_height)?;
+            self.algorithm.calculate_da_gas_price(
+                previous_gas_prices.da_gas_price,
+                self.total_reward(),
+                self.total_cost(),
+            )
+        };
+
         let block_fullness = self
             .block_history
             .block_fullness(latest_block_height)
@@ -148,14 +163,14 @@ where
             .ok_or(Error::BlockFullnessNotFoundForBlockHeight(
                 latest_block_height,
             ))?;
-        let new_gas_prices = self.algorithm.calculate_gas_prices(
-            previous_gas_prices,
-            self.total_reward(),
-            self.total_cost(),
+
+        let new_exec_gas_prices = self.algorithm.calculate_execution_gas_price(
+            previous_gas_prices.execution_gas_price,
             block_fullness,
         );
 
-        Ok(new_gas_prices)
+        let gas_prices = GasPrices::new(new_exec_gas_prices, new_da_gas_price);
+        Ok(gas_prices)
     }
 
     fn total_reward(&self) -> u64 {
