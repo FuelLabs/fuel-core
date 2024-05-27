@@ -29,7 +29,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::contract::ContractUtxoInfo,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
 };
 use itertools::Itertools;
 use serde::{
@@ -49,6 +52,10 @@ use bech32::{
 };
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
+use fuel_core_storage::tables::merkle::{
+    FuelBlockMerkleData,
+    FuelBlockMerkleMetadata,
+};
 use fuel_core_types::blockchain::header::{
     BlockHeader,
     ConsensusParametersVersion,
@@ -57,7 +64,6 @@ use fuel_core_types::blockchain::header::{
 #[cfg(feature = "test-helpers")]
 use fuel_core_types::{
     fuel_types::Address,
-    fuel_types::Bytes32,
     fuel_vm::SecretKey,
 };
 
@@ -89,16 +95,12 @@ pub struct LastBlockConfig {
     pub consensus_parameters_version: ConsensusParametersVersion,
     /// The version of state transition function used to produce last block.
     pub state_transition_version: StateTransitionBytecodeVersion,
+    /// The Merkle root of all blocks before regenesis.
+    pub blocks_root: Bytes32,
 }
 
-impl From<BlockHeader> for LastBlockConfig {
-    fn from(header: BlockHeader) -> Self {
-        Self::from(&header)
-    }
-}
-
-impl From<&BlockHeader> for LastBlockConfig {
-    fn from(header: &BlockHeader) -> Self {
+impl LastBlockConfig {
+    pub fn from_header(header: &BlockHeader, blocks_root: Bytes32) -> Self {
         Self {
             block_height: *header.height(),
             da_block_height: header.application().da_height,
@@ -108,6 +110,7 @@ impl From<&BlockHeader> for LastBlockConfig {
             state_transition_version: header
                 .application()
                 .state_transition_bytecode_version,
+            blocks_root,
         }
     }
 }
@@ -288,6 +291,7 @@ impl crate::Randomize for StateConfig {
                 da_block_height: rng.gen(),
                 consensus_parameters_version: rng.gen(),
                 state_transition_version: rng.gen(),
+                blocks_root: rng.gen(),
             }),
         }
     }
@@ -432,6 +436,26 @@ impl AsTable<SealedBlockConsensus> for StateConfig {
 
 impl AddTable<SealedBlockConsensus> for StateConfigBuilder {
     fn add(&mut self, _entries: Vec<TableEntry<SealedBlockConsensus>>) {}
+}
+
+impl AsTable<FuelBlockMerkleData> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlockMerkleData>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlockMerkleData> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockMerkleData>>) {}
+}
+
+impl AsTable<FuelBlockMerkleMetadata> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlockMerkleMetadata>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlockMerkleMetadata> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockMerkleMetadata>>) {}
 }
 
 impl AddTable<ProcessedTransactions> for StateConfigBuilder {
@@ -759,11 +783,13 @@ mod tests {
         let da_block_height = 14u64.into();
         let consensus_parameters_version = 321u32;
         let state_transition_version = 123u32;
+        let blocks_root = Bytes32::from([123; 32]);
         let block_config = LastBlockConfig {
             block_height,
             da_block_height,
             consensus_parameters_version,
             state_transition_version,
+            blocks_root,
         };
         let writer = writer(temp_dir.path());
 
