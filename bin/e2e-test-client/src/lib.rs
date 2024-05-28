@@ -101,11 +101,11 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             }),
         ),
         Trial::test(
-            "dry run transaction from `non_specific_tx.raw` file",
+            "dry run transaction from `arbitrary_tx.raw` file",
             with_cloned(&config, |config| {
                 async_execute(async {
                     let ctx = TestContext::new(config).await;
-                    tests::script::non_specific_transaction(&ctx).await
+                    tests::script::arbitrary_transaction(&ctx).await
                 })?;
                 Ok(())
             }),

@@ -1,7 +1,4 @@
-use std::{
-    env,
-    path::Path,
-};
+use std::env;
 
 use fuel_core::chain_config::{
     ChainConfig,
@@ -13,11 +10,9 @@ use fuel_core::chain_config::{
 use fuel_core_types::fuel_tx::GasCosts;
 use fuel_core_upgradable_executor::WASM_BYTECODE;
 
-#[allow(irrefutable_let_patterns)]
-#[test_case::test_case( "./../bin/fuel-core/chainspec/testnet" ; "Beta chainconfig" )]
-#[test_case::test_case( "./../bin/fuel-core/chainspec/dev-testnet" ; "Dev chainconfig"  )]
-fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
-    let path = path.as_ref();
+#[test]
+fn test_deployment_chainconfig() -> anyhow::Result<()> {
+    let path = "./../bin/fuel-core/chainspec/local-testnet";
     let stored_snapshot = SnapshotMetadata::read(path).unwrap();
     let mut chain_config = ChainConfig::from_snapshot_metadata(&stored_snapshot)?;
     let state_config = StateConfig::from_snapshot_metadata(stored_snapshot.clone())?;
@@ -75,8 +70,3 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
 
     Ok(())
 }
-
-/// This dummy test allows to run tests from IDE in this file.
-#[test]
-#[ignore]
-fn dummy() {}

@@ -115,10 +115,22 @@ impl<S, R> Executor<S, R> {
     /// on the block, native execution is used. If the version is not the same
     /// as in the block, then the WASM executor is used.
     pub const VERSION: u32 = StateTransitionBytecodeVersion::MIN;
+
     /// This constant is used along with the `version_check` test.
     /// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
-    #[cfg(test)]
-    pub const CRATE_VERSION: &'static str = "0-26-0";
+    /// Each release should have its own new version of the executor.
+    /// The version of the executor should grow without gaps.
+    /// If publishing the release fails or the release is invalid, and
+    /// we don't plan to upgrade the network to use this release,
+    /// we still need to increase the version. The network can
+    /// easily skip releases by upgrading to the old state transition function.
+    pub const CRATE_VERSIONS: &'static [(
+        &'static str,
+        StateTransitionBytecodeVersion,
+    )] = &[
+        ("0-26-0", StateTransitionBytecodeVersion::MIN),
+        // ("0-27-0", 1),
+    ];
 
     pub fn new(
         storage_view_provider: S,
@@ -587,6 +599,7 @@ where
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod test {
     use super::*;
@@ -619,6 +632,10 @@ mod test {
         },
         services::relayer::Event,
         tai64::Tai64,
+    };
+    use std::collections::{
+        BTreeMap,
+        BTreeSet,
     };
 
     #[derive(Clone, Debug)]
@@ -685,18 +702,62 @@ mod test {
         }
     }
 
+    // When this test fails, it is a sign that we need to increase the `Executor::VERSION`.
     #[test]
     fn version_check() {
         let crate_version = env!("CARGO_PKG_VERSION");
-        let executor_cate_version = Executor::<Storage, DisabledRelayer>::CRATE_VERSION
-            .to_string()
-            .replace('-', ".");
+        let dashed_crate_version = crate_version.to_string().replace('.', "-");
+        let mut seen_executor_versions =
+            BTreeSet::<StateTransitionBytecodeVersion>::new();
+        let seen_crate_versions = Executor::<Storage, DisabledRelayer>::CRATE_VERSIONS
+            .iter()
+            .map(|(crate_version, version)| {
+                let executor_crate_version = crate_version.to_string().replace('-', ".");
+                seen_executor_versions.insert(*version);
+                (executor_crate_version, *version)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        if let Some(expected_version) =
+            seen_crate_versions.get(&crate_version.to_string())
+        {
+            assert_eq!(
+                *expected_version,
+                Executor::<Storage, DisabledRelayer>::VERSION,
+                "The version of the executor should be the same as in the `CRATE_VERSIONS` constant"
+            );
+        } else {
+            let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
+            panic!(
+                "New release {crate_version} is not mentioned in the `CRATE_VERSIONS` constant.\
+                Please add the new entry `(\"{dashed_crate_version}\", {next_version})` \
+                to the `CRATE_VERSIONS` constant."
+            );
+        }
+
+        let last_crate_version = seen_crate_versions.last_key_value().unwrap().0.clone();
         assert_eq!(
-            executor_cate_version, crate_version,
-            "When this test fails, \
-            it is a sign that maybe we need to increase the `Executor::VERSION`. \
-            If there are no breaking changes that affect the execution, \
-            then you can only increase `Executor::CRATE_VERSION` to pass this test."
+            crate_version, last_crate_version,
+            "The last version in the `CRATE_VERSIONS` constant \
+                   should be the same as the current crate version."
+        );
+
+        assert_eq!(
+            seen_executor_versions.len(),
+            seen_crate_versions.len(),
+            "Each executor version should be unique"
+        );
+
+        assert_eq!(
+            seen_executor_versions.len() as u32 - 1,
+            Executor::<Storage, DisabledRelayer>::VERSION,
+            "The version of the executor should monotonically grow without gaps"
+        );
+
+        assert_eq!(
+            seen_executor_versions.last().cloned().unwrap(),
+            Executor::<Storage, DisabledRelayer>::VERSION,
+            "The latest version of the executor should be the last version in the `CRATE_VERSIONS` constant"
         );
     }
 
@@ -749,6 +810,7 @@ mod test {
     mod native {
         use super::*;
         use crate::executor::Executor;
+        use ntest as _;
 
         #[test]
         fn can_validate_block() {
@@ -759,7 +821,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -775,7 +837,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
