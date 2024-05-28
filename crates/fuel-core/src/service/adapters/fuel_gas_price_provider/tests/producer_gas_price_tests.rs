@@ -45,7 +45,7 @@ fn gas_price__next_block_calls_algorithm_function() {
     let latest_height = 432;
     let latest_da_gas_price = 123;
     let latest_exec_gas_price = 0;
-    let latest_gas_prices = GasPrices::new(latest_da_gas_price, latest_exec_gas_price);
+    let latest_gas_prices = GasPrices::new(latest_exec_gas_price, latest_da_gas_price);
     let next_height = (latest_height + 1).into();
     let cost = 100;
     let reward = cost - 1;
@@ -54,6 +54,7 @@ fn gas_price__next_block_calls_algorithm_function() {
         .with_historical_gas_price(latest_height.into(), latest_gas_prices)
         .with_latest_height(latest_height.into())
         .with_historical_block_fullness(latest_height.into(), block_fullness)
+        .with_historical_da_recording_cost(next_height, cost)
         .with_total_as_of_block(latest_height.into(), reward, cost)
         .build();
 
@@ -82,7 +83,7 @@ fn gas_price__if_total_is_for_old_block_then_update_to_latest_block() {
     let total_block_height = latest_height - 2;
     let latest_da_gas_price = 123;
     let latest_exec_gas_price = 0;
-    let latest_gas_prices = GasPrices::new(latest_da_gas_price, latest_exec_gas_price);
+    let latest_gas_prices = GasPrices::new(latest_exec_gas_price, latest_da_gas_price);
     let next_height = (latest_height + 1).into();
     let cost = 100;
     let reward = cost - 1;
@@ -124,7 +125,7 @@ fn gas_price__if_da_behind_fuel_block_then_do_not_update_da_gas_price() {
     let latest_da_height = latest_fuel_height - arb_previous_height_diff;
     let latest_da_gas_price = 123;
     let latest_exec_gas_price = 321;
-    let latest_gas_prices = GasPrices::new(latest_da_gas_price, latest_exec_gas_price);
+    let latest_gas_prices = GasPrices::new(latest_exec_gas_price, latest_da_gas_price);
     let next_height = (latest_fuel_height + 1).into();
     let cost = 100;
     let reward = cost - 1;

@@ -87,6 +87,10 @@ impl ProfitablilityTotals {
         *total_reward += reward;
         *total_cost += cost;
     }
+
+    fn totaled_block_height(&self) -> BlockHeight {
+        *self.totaled_block_height.borrow()
+    }
 }
 
 impl<FB, DA, A, GP> FuelGasPriceProvider<FB, DA, A, GP>
@@ -145,7 +149,9 @@ where
             .latest_height()
             .map_err(Error::UnableToGetLatestBlockHeight)?;
 
-        let new_da_gas_price = if latest_da_recorded_block <= latest_block_height {
+        let new_da_gas_price = if latest_da_recorded_block
+            <= self.profitablility_totals.totaled_block_height()
+        {
             previous_gas_prices.da_gas_price
         } else {
             self.update_totals(latest_block_height)?;
