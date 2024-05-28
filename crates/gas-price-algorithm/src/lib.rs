@@ -90,25 +90,6 @@ impl AlgorithmV1 {
         max(new, self.min_exec_price)
     }
 
-    pub fn calculate_gas_price(
-        &self,
-        old_da_gas_price: u64,
-        old_exec_gas_price: u64,
-        total_da_production_reward: u64,
-        total_da_recording_cost: u64,
-        used: u64,
-        capacity: u64,
-    ) -> (u64, u64) {
-        let new_da_gas_price = self.calculate_da_gas_price(
-            old_da_gas_price,
-            total_da_production_reward,
-            total_da_recording_cost,
-        );
-        let new_exec_gas_price =
-            self.calculate_exec_gas_price(old_exec_gas_price, used, capacity);
-        (new_da_gas_price, new_exec_gas_price)
-    }
-
     fn calculate_new_moving_average(&self, new_profit: i32) {
         let old = *self.moving_average_profit.borrow();
         *self.moving_average_profit.borrow_mut() = (old

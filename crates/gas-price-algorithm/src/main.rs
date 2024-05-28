@@ -42,7 +42,7 @@ fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
 where
     <T as TryInto<f64>>::Error: core::fmt::Debug,
 {
-    const COMPONENTS: &[f64] = &[30.0, 40.0, 700.0, 340.0, 400.0];
+    const COMPONENTS: &[f64] = &[-30.0, 40.0, 700.0, -340.0, 400.0];
     let input = input.try_into().unwrap();
     gen_noisy_signal(input, COMPONENTS)
 }
@@ -51,12 +51,13 @@ fn arb_fullness_signal(size: u32, capacity: u64) -> Vec<(u64, u64)> {
     let mut rng = StdRng::seed_from_u64(888);
     (0u32..size)
         .map(noisy_fullness)
-        .map(|x| (0.5 * x + 0.5) * capacity as f64)
+        .map(|x| (0.5 * x + 0.4) * capacity as f64)
         .map(|x| {
-            let val = rng.gen_range(-0.5 * capacity as f64..0.5 * capacity as f64);
+            let val = rng.gen_range(-0.25 * capacity as f64..0.25 * capacity as f64);
             x + val
         })
         .map(|x| f64::min(x, capacity as f64))
+        .map(|x| f64::max(x, 5.0))
         .map(|x| (x as u64, capacity))
         .collect()
 }
@@ -65,7 +66,7 @@ fn main() {
     let min_da_price = 10;
     let min_exec_price = 10;
     let p_value_factor = 4_000;
-    let d_value_factor = 100;
+    let d_value_factor = 200;
     let moving_average_window = 10;
     let max_change_percent = 15;
     let exec_change_amount = 10;
@@ -80,7 +81,7 @@ fn main() {
     );
 
     let capacity = 400;
-    let simulation_size = 200;
+    let simulation_size = 1_000;
 
     // Run simulation
     let da_recording_cost = arb_cost_signal(simulation_size);
@@ -95,6 +96,9 @@ fn main() {
     let mut total_da_cost = 0;
     let mut total_da_reward = 0;
 
+    let da_record_frequency = 12;
+    let mut da_record_counter = 0;
+
     for (da_cost, (used, capacity)) in da_recording_cost.iter().zip(exec_fullness.iter())
     {
         total_da_cost += da_cost;
@@ -103,14 +107,17 @@ fn main() {
         total_da_reward += da_reward;
         let total_profit = total_da_reward as i32 - total_da_cost as i32;
         total_profits.push(total_profit);
-        (da_gas_price, exec_gas_price) = algo.calculate_gas_price(
-            da_gas_price,
-            exec_gas_price,
-            total_da_reward,
-            total_da_cost,
-            *used,
-            *capacity,
-        );
+        exec_gas_price = algo.calculate_exec_gas_price(exec_gas_price, *used, *capacity);
+        // Only update the da gas price every da_record_frequency blocks
+        if da_record_counter % da_record_frequency == 0 {
+            da_gas_price = algo.calculate_da_gas_price(
+                da_gas_price as u64,
+                total_da_reward,
+                total_da_cost,
+            );
+        }
+        da_record_counter += 1;
+
         da_gas_prices.push(da_gas_price as i32);
         exec_gas_prices.push(exec_gas_price as i32);
         total_gas_prices.push((da_gas_price + exec_gas_price) as i32);
@@ -133,9 +140,7 @@ fn main() {
         &da_rewards,
         &da_gas_prices,
     );
-
     draw_exec_chart(&middle, &total_profits, &exec_fullness, &exec_gas_prices);
-
     draw_total_gas_price(&bottom, &da_gas_prices, &exec_gas_prices, &total_gas_prices);
 
     root.present().unwrap();
@@ -161,22 +166,12 @@ fn draw_total_gas_price<DB: DrawingBackend>(
         .y_label_area_size(60)
         .right_y_label_area_size(40)
         .build_cartesian_2d(0..total_gas_prices.len(), min..max)
-        .unwrap()
-        .set_secondary_coord(
-            0..da_gas_prices.len(),
-            0..*da_gas_prices.iter().max().unwrap() + 9,
-        );
+        .unwrap();
 
     total_gas_price_chart
         .configure_mesh()
         .y_desc("Gas Price")
         .x_desc("Block")
-        .draw()
-        .unwrap();
-
-    total_gas_price_chart
-        .configure_secondary_axes()
-        .y_desc("Gas Price")
         .draw()
         .unwrap();
 
@@ -242,7 +237,7 @@ fn draw_exec_chart<DB: DrawingBackend>(
 
     exec_chart
         .configure_mesh()
-        .y_desc("Fullness")
+        .y_desc("Fullness Percentage")
         .x_desc("Block")
         .draw()
         .unwrap();
