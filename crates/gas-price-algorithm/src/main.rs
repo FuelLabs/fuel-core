@@ -62,34 +62,37 @@ fn arb_fullness_signal(size: u32, capacity: u64) -> Vec<(u64, u64)> {
         .collect()
 }
 
-fn arbitrary_pd_values() -> Vec<(i64, i64)> {
+fn arbitrary_da_values() -> Vec<(i64, i64, u8)> {
     let mut rng = StdRng::seed_from_u64(777);
-    (0..1000)
+    (0..10_000)
         .map(|_| {
-            let p = rng.gen_range(1..10_000);
-            let d = rng.gen_range(1..10_000);
-            (p, d)
+            let p = rng.gen_range(-20_000..20_000);
+            let d = rng.gen_range(-500..500);
+            // let max_change = rng.gen_range(1..255);
+            let max_change = 50;
+            (p, d, max_change)
         })
+        .filter(|(p, d, _)| *p != 0 && *d != 0)
         .collect()
 }
 
 fn main() {
     // Try to find a good p and d value
-    let (vals, results, _error) = arbitrary_pd_values()
+    let (vals, results, _error) = arbitrary_da_values()
         .into_iter()
-        .map(|(p, d)| {
-            let results = run_simulation(p, d);
+        .map(|(p, d, max_change)| {
+            let results = run_simulation(p, d, max_change);
             let total_profits = &results.total_profits;
 
             let total_profits_abs: Vec<_> =
                 total_profits.iter().map(|x| x.abs()).collect();
-            let sum = total_profits_abs.iter().fold(0, |acc, val| {
-                let sum = acc + val;
+            let sum = total_profits_abs.iter().fold(0i64, |acc, val| {
+                let sum = acc.saturating_add(*val);
                 sum
             }) as f64;
             let len = total_profits_abs.len() as f64;
             let average_profit_error = sum / len;
-            ((p, d), results, average_profit_error)
+            ((p, d, max_change), results, average_profit_error)
         })
         .fold(None, |acc, (vals, result, err)| {
             if let Some((_, _, best_err)) = acc {
@@ -132,6 +135,9 @@ fn main() {
         &da_recording_cost,
         &da_rewards,
         &da_gas_prices,
+        vals.0,
+        vals.1,
+        vals.2,
     );
     draw_exec_chart(&middle, &total_profits, &exec_fullness, &exec_gas_prices);
     draw_total_gas_price(&bottom, &da_gas_prices, &exec_gas_prices, &total_gas_prices);
@@ -149,14 +155,18 @@ struct SimulationResults {
     da_rewards: Vec<u64>,
 }
 
-fn run_simulation(p_value_factor: i64, d_value_factor: i64) -> SimulationResults {
+fn run_simulation(
+    p_value_factor: i64,
+    d_value_factor: i64,
+    max_change_percent: u8,
+) -> SimulationResults {
     let min_da_price = 10;
     let min_exec_price = 10;
     let moving_average_window = 10;
-    // TODO: This value is large because it only changes once per `da_record_frequency` blocks.
-    //     Is it possible to decrease if we get the p and d values tuned better? We should be able
-    //     to solve for the lower granularity still, looking at how much we overshoot.
-    let max_change_percent = 200;
+    // // TODO: This value is large because it only changes once per `da_record_frequency` blocks.
+    // //     Is it possible to decrease if we get the p and d values tuned better? We should be able
+    // //     to solve for the lower granularity still, looking at how much we overshoot.
+    // let max_change_percent = 200;
     let exec_change_amount = 10;
     let algo = AlgorithmV1::new(
         max_change_percent,
@@ -182,7 +192,7 @@ fn run_simulation(p_value_factor: i64, d_value_factor: i64) -> SimulationResults
     let mut total_profits = vec![0i64];
     let mut da_rewards = vec![];
     let mut total_da_cost = 0;
-    let mut total_da_reward = 0;
+    let mut total_da_reward: u64 = 0;
 
     let da_record_frequency = 12;
     let mut da_record_counter = 0;
@@ -190,11 +200,9 @@ fn run_simulation(p_value_factor: i64, d_value_factor: i64) -> SimulationResults
     for (da_cost, (used, capacity)) in da_recording_cost.iter().zip(exec_fullness.iter())
     {
         total_da_cost += da_cost;
-        let da_reward = da_gas_price
-            .checked_mul(*used)
-            .expect(&format!("{} * {}", da_gas_price, used));
+        let da_reward = da_gas_price.saturating_mul(*used);
         da_rewards.push(da_reward);
-        total_da_reward += da_reward;
+        total_da_reward = total_da_reward.saturating_add(da_reward);
         let total_profit = total_da_reward as i64 - total_da_cost as i64;
         total_profits.push(total_profit);
         exec_gas_price = algo.calculate_exec_gas_price(exec_gas_price, *used, *capacity);
@@ -359,12 +367,18 @@ fn draw_da_chart<DB: DrawingBackend>(
     da_recording_cost: &Vec<u64>,
     da_rewards: &Vec<u64>,
     da_gas_prices: &Vec<i64>,
+    p_value: i64,
+    d_value: i64,
+    max_change: u8,
 ) {
     let da_min = *total_profits.iter().min().unwrap() - 10_000;
     let da_max = *total_profits.iter().max().unwrap() as i64 + 10_000;
 
     let mut da_chart = ChartBuilder::on(drawing_area)
-        .caption("DA Recording Costs", ("sans-serif", 50).into_font())
+        .caption(
+            &format!("DA Recording Costs (p: {p_value:?}, d: {d_value:?}, max_change: {max_change:?}%)"),
+            ("sans-serif", 50).into_font(),
+        )
         .margin(5)
         .x_label_area_size(40)
         .y_label_area_size(60)

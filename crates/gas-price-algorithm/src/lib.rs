@@ -57,8 +57,9 @@ impl AlgorithmV1 {
         let avg_profit = *self.moving_average_profit.borrow();
         let slope = *self.profit_slope.borrow();
 
-        let max_change =
-            (old_da_gas_price * self.da_max_change_percent as u64 / 100) as i64;
+        let max_change = (old_da_gas_price
+            .saturating_mul(self.da_max_change_percent as u64)
+            / 100) as i64;
 
         // if p > 0 and dp/db > 0, decrease
         // if p > 0 and dp/db < 0, hold/moderate
@@ -80,12 +81,15 @@ impl AlgorithmV1 {
         used: u64,
         capacity: u64,
     ) -> u64 {
-        let new = if used > capacity / 2 {
-            old_exec_gas_price.saturating_add(self.exec_change_amount)
-        } else if used < capacity / 2 {
-            old_exec_gas_price.saturating_sub(self.exec_change_amount)
-        } else {
-            old_exec_gas_price
+        // TODO: This could be more sophisticated, e.g. have target fullness, rather than hardcoding 50%.
+        let new = match used.cmp(&(capacity / 2)) {
+            std::cmp::Ordering::Greater => {
+                old_exec_gas_price.saturating_add(self.exec_change_amount)
+            }
+            std::cmp::Ordering::Less => {
+                old_exec_gas_price.saturating_sub(self.exec_change_amount)
+            }
+            std::cmp::Ordering::Equal => old_exec_gas_price,
         };
         max(new, self.min_exec_price)
     }
