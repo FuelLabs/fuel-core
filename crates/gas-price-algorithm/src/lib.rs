@@ -10,12 +10,12 @@ pub struct AlgorithmV1 {
     // DA
     da_max_change_percent: u8,
     min_da_price: u64,
-    da_p_value_factor: i32,
-    da_d_value_factor: i32,
-    moving_average_profit: RefCell<i32>,
-    last_profit: RefCell<i32>,
-    profit_slope: RefCell<i32>,
-    moving_average_window: i32,
+    da_p_value_factor: i64,
+    da_d_value_factor: i64,
+    moving_average_profit: RefCell<i64>,
+    last_profit: RefCell<i64>,
+    profit_slope: RefCell<i64>,
+    moving_average_window: i64,
     // EXEC
     exec_change_amount: u64,
     min_exec_price: u64,
@@ -25,9 +25,9 @@ impl AlgorithmV1 {
     pub fn new(
         da_max_change_percent: u8,
         min_da_price: u64,
-        da_p_value_factor: i32,
-        da_d_value_factor: i32,
-        moving_average_window: i32,
+        da_p_value_factor: i64,
+        da_d_value_factor: i64,
+        moving_average_window: i64,
         exec_change_amount: u64,
         min_exec_price: u64,
     ) -> Self {
@@ -51,14 +51,14 @@ impl AlgorithmV1 {
         total_production_reward: u64,
         total_da_recording_cost: u64,
     ) -> u64 {
-        let new_profit = total_production_reward as i32 - total_da_recording_cost as i32;
+        let new_profit = total_production_reward as i64 - total_da_recording_cost as i64;
         self.calculate_new_moving_average(new_profit);
         self.calculate_profit_slope(*self.moving_average_profit.borrow());
         let avg_profit = *self.moving_average_profit.borrow();
         let slope = *self.profit_slope.borrow();
 
         let max_change =
-            (old_da_gas_price * self.da_max_change_percent as u64 / 100) as i32;
+            (old_da_gas_price * self.da_max_change_percent as u64 / 100) as i64;
 
         // if p > 0 and dp/db > 0, decrease
         // if p > 0 and dp/db < 0, hold/moderate
@@ -70,8 +70,8 @@ impl AlgorithmV1 {
         let change = min(max_change, pd_change.abs());
         let sign = pd_change.signum();
         let change = change * sign;
-        let new_da_gas_price = old_da_gas_price as i32 - change;
-        max(new_da_gas_price, self.min_da_price as i32) as u64
+        let new_da_gas_price = old_da_gas_price as i64 - change;
+        max(new_da_gas_price, self.min_da_price as i64) as u64
     }
 
     pub fn calculate_exec_gas_price(
@@ -90,7 +90,7 @@ impl AlgorithmV1 {
         max(new, self.min_exec_price)
     }
 
-    fn calculate_new_moving_average(&self, new_profit: i32) {
+    fn calculate_new_moving_average(&self, new_profit: i64) {
         let old = *self.moving_average_profit.borrow();
         *self.moving_average_profit.borrow_mut() = (old
             * (self.moving_average_window - 1))
@@ -98,7 +98,7 @@ impl AlgorithmV1 {
             .saturating_div(self.moving_average_window);
     }
 
-    fn calculate_profit_slope(&self, new_profit: i32) {
+    fn calculate_profit_slope(&self, new_profit: i64) {
         let old_profit = *self.last_profit.borrow();
         *self.profit_slope.borrow_mut() = new_profit - old_profit;
         *self.last_profit.borrow_mut() = new_profit;

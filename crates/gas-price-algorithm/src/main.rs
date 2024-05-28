@@ -62,71 +62,59 @@ fn arb_fullness_signal(size: u32, capacity: u64) -> Vec<(u64, u64)> {
         .collect()
 }
 
+fn arbitrary_pd_values() -> Vec<(i64, i64)> {
+    let mut rng = StdRng::seed_from_u64(777);
+    (0..1000)
+        .map(|_| {
+            let p = rng.gen_range(1..10_000);
+            let d = rng.gen_range(1..10_000);
+            (p, d)
+        })
+        .collect()
+}
+
 fn main() {
-    let min_da_price = 10;
-    let min_exec_price = 10;
-    let p_value_factor = 4_000;
-    let d_value_factor = 100;
-    let moving_average_window = 10;
-    // TODO: This value is large because it only changes once per `da_record_frequency` blocks.
-    //     Is it possible to decrease if we get the p and d values tuned better? We should be able
-    //     to solve for the lower granularity still, looking at how much we overshoot.
-    let max_change_percent = 200;
-    let exec_change_amount = 10;
-    let algo = AlgorithmV1::new(
-        max_change_percent,
-        min_da_price,
-        p_value_factor,
-        d_value_factor,
-        moving_average_window,
-        min_exec_price,
-        exec_change_amount,
-    );
+    // Try to find a good p and d value
+    let (vals, results, _error) = arbitrary_pd_values()
+        .into_iter()
+        .map(|(p, d)| {
+            let results = run_simulation(p, d);
+            let total_profits = &results.total_profits;
 
-    let capacity = 400;
-    let simulation_size = 1_000;
+            let total_profits_abs: Vec<_> =
+                total_profits.iter().map(|x| x.abs()).collect();
+            let sum = total_profits_abs.iter().fold(0, |acc, val| {
+                let sum = acc + val;
+                sum
+            }) as f64;
+            let len = total_profits_abs.len() as f64;
+            let average_profit_error = sum / len;
+            ((p, d), results, average_profit_error)
+        })
+        .fold(None, |acc, (vals, result, err)| {
+            if let Some((_, _, best_err)) = acc {
+                if err < best_err {
+                    Some((vals, result, err))
+                } else {
+                    acc
+                }
+            } else {
+                Some((vals, result, err))
+            }
+        })
+        .unwrap();
 
-    // Run simulation
-    let da_recording_cost = arb_cost_signal(simulation_size);
-    let exec_fullness = arb_fullness_signal(simulation_size, capacity);
-    let mut da_gas_price: u64 = 100;
-    let mut da_gas_prices = vec![da_gas_price as i32];
-    let mut exec_gas_price = 0;
-    let mut exec_gas_prices = vec![exec_gas_price as i32];
-    let mut total_gas_prices = vec![(da_gas_price + exec_gas_price) as i32];
-    let mut total_profits = vec![0i32];
-    let mut da_rewards = vec![];
-    let mut total_da_cost = 0;
-    let mut total_da_reward = 0;
+    println!("Best p and d values: {:?}", vals);
 
-    let da_record_frequency = 12;
-    let mut da_record_counter = 0;
-
-    for (da_cost, (used, capacity)) in da_recording_cost.iter().zip(exec_fullness.iter())
-    {
-        total_da_cost += da_cost;
-        let da_reward = da_gas_price
-            .checked_mul(*used)
-            .expect(&format!("{} * {}", da_gas_price, used));
-        da_rewards.push(da_reward);
-        total_da_reward += da_reward;
-        let total_profit = total_da_reward as i32 - total_da_cost as i32;
-        total_profits.push(total_profit);
-        exec_gas_price = algo.calculate_exec_gas_price(exec_gas_price, *used, *capacity);
-        // Only update the da gas price every da_record_frequency blocks
-        if da_record_counter % da_record_frequency == 0 {
-            da_gas_price = algo.calculate_da_gas_price(
-                da_gas_price as u64,
-                total_da_reward,
-                total_da_cost,
-            );
-        }
-        da_record_counter += 1;
-
-        da_gas_prices.push(da_gas_price as i32);
-        exec_gas_prices.push(exec_gas_price as i32);
-        total_gas_prices.push((da_gas_price + exec_gas_price) as i32);
-    }
+    let SimulationResults {
+        da_recording_cost,
+        exec_fullness,
+        da_gas_prices,
+        exec_gas_prices,
+        total_gas_prices,
+        total_profits,
+        da_rewards,
+    } = results;
 
     // Plotting code starts here
     let plot_width = 640 * 2;
@@ -151,11 +139,93 @@ fn main() {
     root.present().unwrap();
 }
 
+struct SimulationResults {
+    da_recording_cost: Vec<u64>,
+    exec_fullness: Vec<(u64, u64)>,
+    da_gas_prices: Vec<i64>,
+    exec_gas_prices: Vec<i64>,
+    total_gas_prices: Vec<i64>,
+    total_profits: Vec<i64>,
+    da_rewards: Vec<u64>,
+}
+
+fn run_simulation(p_value_factor: i64, d_value_factor: i64) -> SimulationResults {
+    let min_da_price = 10;
+    let min_exec_price = 10;
+    let moving_average_window = 10;
+    // TODO: This value is large because it only changes once per `da_record_frequency` blocks.
+    //     Is it possible to decrease if we get the p and d values tuned better? We should be able
+    //     to solve for the lower granularity still, looking at how much we overshoot.
+    let max_change_percent = 200;
+    let exec_change_amount = 10;
+    let algo = AlgorithmV1::new(
+        max_change_percent,
+        min_da_price,
+        p_value_factor,
+        d_value_factor,
+        moving_average_window,
+        min_exec_price,
+        exec_change_amount,
+    );
+
+    let capacity = 400;
+    let simulation_size = 1_000;
+
+    // Run simulation
+    let da_recording_cost = arb_cost_signal(simulation_size);
+    let exec_fullness = arb_fullness_signal(simulation_size, capacity);
+    let mut da_gas_price: u64 = 100;
+    let mut da_gas_prices = vec![da_gas_price as i64];
+    let mut exec_gas_price = 0;
+    let mut exec_gas_prices = vec![exec_gas_price as i64];
+    let mut total_gas_prices = vec![(da_gas_price + exec_gas_price) as i64];
+    let mut total_profits = vec![0i64];
+    let mut da_rewards = vec![];
+    let mut total_da_cost = 0;
+    let mut total_da_reward = 0;
+
+    let da_record_frequency = 12;
+    let mut da_record_counter = 0;
+
+    for (da_cost, (used, capacity)) in da_recording_cost.iter().zip(exec_fullness.iter())
+    {
+        total_da_cost += da_cost;
+        let da_reward = da_gas_price
+            .checked_mul(*used)
+            .expect(&format!("{} * {}", da_gas_price, used));
+        da_rewards.push(da_reward);
+        total_da_reward += da_reward;
+        let total_profit = total_da_reward as i64 - total_da_cost as i64;
+        total_profits.push(total_profit);
+        exec_gas_price = algo.calculate_exec_gas_price(exec_gas_price, *used, *capacity);
+        // Only update the da gas price every da_record_frequency blocks
+        if da_record_counter % da_record_frequency == 0 {
+            da_gas_price =
+                algo.calculate_da_gas_price(da_gas_price, total_da_reward, total_da_cost);
+        }
+        da_record_counter += 1;
+
+        da_gas_prices.push(da_gas_price as i64);
+        exec_gas_prices.push(exec_gas_price as i64);
+        total_gas_prices.push((da_gas_price + exec_gas_price) as i64);
+    }
+
+    SimulationResults {
+        da_recording_cost,
+        exec_fullness,
+        da_gas_prices,
+        exec_gas_prices,
+        total_gas_prices,
+        total_profits,
+        da_rewards,
+    }
+}
+
 fn draw_total_gas_price<DB: DrawingBackend>(
     drawing_area: &DrawingArea<DB, Shift>,
-    da_gas_prices: &Vec<i32>,
-    exec_gas_prices: &Vec<i32>,
-    total_gas_prices: &Vec<i32>,
+    da_gas_prices: &Vec<i64>,
+    exec_gas_prices: &Vec<i64>,
+    total_gas_prices: &Vec<i64>,
 ) {
     const DA_COLOR: RGBColor = BLUE;
     const EXEC_COLOR: RGBColor = RED;
@@ -217,9 +287,9 @@ fn draw_total_gas_price<DB: DrawingBackend>(
 
 fn draw_exec_chart<DB: DrawingBackend>(
     drawing_area: &DrawingArea<DB, Shift>,
-    total_profits: &Vec<i32>,
+    total_profits: &Vec<i64>,
     exec_fullness: &Vec<(u64, u64)>,
-    exec_gas_prices: &Vec<i32>,
+    exec_gas_prices: &Vec<i64>,
 ) {
     const PRICE_COLOR: RGBColor = BLACK;
     const FULLNESS_COLOR: RGBColor = RED;
@@ -285,13 +355,13 @@ fn draw_exec_chart<DB: DrawingBackend>(
 
 fn draw_da_chart<DB: DrawingBackend>(
     drawing_area: &DrawingArea<DB, Shift>,
-    total_profits: &Vec<i32>,
+    total_profits: &Vec<i64>,
     da_recording_cost: &Vec<u64>,
     da_rewards: &Vec<u64>,
-    da_gas_prices: &Vec<i32>,
+    da_gas_prices: &Vec<i64>,
 ) {
     let da_min = *total_profits.iter().min().unwrap() - 10_000;
-    let da_max = *da_rewards.iter().max().unwrap() as i32 + 10_000;
+    let da_max = *total_profits.iter().max().unwrap() as i64 + 10_000;
 
     let mut da_chart = ChartBuilder::on(drawing_area)
         .caption("DA Recording Costs", ("sans-serif", 50).into_font())
@@ -338,7 +408,7 @@ fn draw_da_chart<DB: DrawingBackend>(
             da_recording_cost
                 .into_iter()
                 .enumerate()
-                .map(|(x, y)| (x, *y as i32)),
+                .map(|(x, y)| (x, *y as i64)),
             &COST_COLOR,
         ))
         .unwrap()
@@ -347,7 +417,7 @@ fn draw_da_chart<DB: DrawingBackend>(
 
     da_chart
         .draw_series(LineSeries::new(
-            da_rewards.iter().enumerate().map(|(x, y)| (x, *y as i32)),
+            da_rewards.iter().enumerate().map(|(x, y)| (x, *y as i64)),
             &REWARD_COLOR,
         ))
         .unwrap()
