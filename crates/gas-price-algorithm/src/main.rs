@@ -66,9 +66,12 @@ fn main() {
     let min_da_price = 10;
     let min_exec_price = 10;
     let p_value_factor = 4_000;
-    let d_value_factor = 200;
+    let d_value_factor = 100;
     let moving_average_window = 10;
-    let max_change_percent = 15;
+    // TODO: This value is large because it only changes once per `da_record_frequency` blocks.
+    //     Is it possible to decrease if we get the p and d values tuned better? We should be able
+    //     to solve for the lower granularity still, looking at how much we overshoot.
+    let max_change_percent = 200;
     let exec_change_amount = 10;
     let algo = AlgorithmV1::new(
         max_change_percent,
@@ -86,7 +89,7 @@ fn main() {
     // Run simulation
     let da_recording_cost = arb_cost_signal(simulation_size);
     let exec_fullness = arb_fullness_signal(simulation_size, capacity);
-    let mut da_gas_price = 100;
+    let mut da_gas_price: u64 = 100;
     let mut da_gas_prices = vec![da_gas_price as i32];
     let mut exec_gas_price = 0;
     let mut exec_gas_prices = vec![exec_gas_price as i32];
@@ -102,7 +105,9 @@ fn main() {
     for (da_cost, (used, capacity)) in da_recording_cost.iter().zip(exec_fullness.iter())
     {
         total_da_cost += da_cost;
-        let da_reward = da_gas_price * used;
+        let da_reward = da_gas_price
+            .checked_mul(*used)
+            .expect(&format!("{} * {}", da_gas_price, used));
         da_rewards.push(da_reward);
         total_da_reward += da_reward;
         let total_profit = total_da_reward as i32 - total_da_cost as i32;

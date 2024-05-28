@@ -71,7 +71,7 @@ impl AlgorithmV1 {
         let sign = pd_change.signum();
         let change = change * sign;
         let new_da_gas_price = old_da_gas_price as i32 - change;
-        max(new_da_gas_price as u64, self.min_da_price)
+        max(new_da_gas_price, self.min_da_price as i32) as u64
     }
 
     pub fn calculate_exec_gas_price(
