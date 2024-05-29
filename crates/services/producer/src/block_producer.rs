@@ -1,40 +1,23 @@
 use crate::{
     block_producer::gas_price::{
-        ConsensusParametersProvider,
-        GasPriceProvider as GasPriceProviderConstraint,
+        ConsensusParametersProvider, GasPriceProvider as GasPriceProviderConstraint,
     },
     ports,
     ports::BlockProducerDatabase,
     Config,
 };
-use anyhow::{
-    anyhow,
-    Context,
-};
-use fuel_core_storage::transactional::{
-    AtomicView,
-    Changes,
-};
+use anyhow::{anyhow, Context};
+use fuel_core_storage::transactional::{AtomicView, Changes};
 use fuel_core_types::{
     blockchain::{
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
+        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
         primitives::DaBlockHeight,
     },
     fuel_tx::Transaction,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::{BlockHeight, Bytes32},
     services::{
         block_producer::Components,
-        executor::{
-            TransactionExecutionStatus,
-            UncommittedResult,
-        },
+        executor::{TransactionExecutionStatus, UncommittedResult},
     },
     tai64::Tai64,
 };
@@ -219,13 +202,9 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let gas_price = if let Some(gas_price) = gas_price {
-            gas_price
-        } else {
-            self.gas_price_provider
-                .gas_price(height.into())
-                .ok_or(anyhow!("No gas price found for height {height:?}"))?
-        };
+        let gas_price = gas_price
+            .or_else(|| self.gas_price_provider.gas_price(height.into()))
+            .ok_or(anyhow!("No gas price found for height {height:?}"))?;
 
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
