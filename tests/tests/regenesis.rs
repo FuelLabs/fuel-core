@@ -2,6 +2,7 @@ use clap::Parser;
 use fuel_core::{
     chain_config::{
         ChainConfig,
+        LastBlockConfig,
         SnapshotWriter,
     },
     service::{
@@ -22,6 +23,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
     fuel_asm::{
         op,
         GTFArgs,
@@ -252,6 +254,10 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
             data: vec![],
             da_height: Default::default(),
         }],
+        last_block: Some(LastBlockConfig {
+            state_transition_version: LATEST_STATE_TRANSITION_VERSION - 1,
+            ..Default::default()
+        }),
         ..Default::default()
     };
     let writer = SnapshotWriter::json(state_config_dir.path());
