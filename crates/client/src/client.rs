@@ -1,18 +1,28 @@
 use crate::client::{
     schema::{
         block::BlockByHeightArgs,
-        coins::{ExcludeInput, SpendQueryElementInput},
+        coins::{
+            ExcludeInput,
+            SpendQueryElementInput,
+        },
         contract::ContractBalanceQueryArgs,
         gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
         relayed_tx::RelayedTransactionStatusArgs,
         tx::DryRunArg,
-        Tai64Timestamp, TransactionId,
+        Tai64Timestamp,
+        TransactionId,
     },
     types::{
         gas_price::LatestGasPrice,
         message::MessageStatus,
-        primitives::{Address, AssetId, BlockId, ContractId, UtxoId},
+        primitives::{
+            Address,
+            AssetId,
+            BlockId,
+            ContractId,
+            UtxoId,
+        },
         RelayedTransactionStatus,
     },
 };
@@ -20,44 +30,97 @@ use anyhow::Context;
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
-    http::ReqwestExt, GraphQlResponse, Id, MutationBuilder, Operation, QueryBuilder,
+    http::ReqwestExt,
+    GraphQlResponse,
+    Id,
+    MutationBuilder,
+    Operation,
+    QueryBuilder,
 };
 use fuel_core_types::{
-    fuel_asm::{Instruction, Word},
-    fuel_tx::{Bytes32, Receipt, Transaction, TxId},
+    fuel_asm::{
+        Instruction,
+        Word,
+    },
+    fuel_tx::{
+        Bytes32,
+        Receipt,
+        Transaction,
+        TxId,
+    },
     fuel_types,
-    fuel_types::{canonical::Serialize, BlockHeight, Nonce},
-    services::{executor::TransactionExecutionStatus, p2p::PeerInfo},
+    fuel_types::{
+        canonical::Serialize,
+        BlockHeight,
+        Nonce,
+    },
+    services::{
+        executor::TransactionExecutionStatus,
+        p2p::PeerInfo,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
-use pagination::{PageDirection, PaginatedResult, PaginationRequest};
+use pagination::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
-    tx::{TxArg, TxIdArgs},
-    Bytes, ContinueTx, ContinueTxArgs, ConversionError, HexString, IdArg, MemoryArgs,
-    RegisterArgs, RunResult, SetBreakpoint, SetBreakpointArgs, SetSingleStepping,
-    SetSingleSteppingArgs, StartTx, StartTxArgs, U32, U64,
+    tx::{
+        TxArg,
+        TxIdArgs,
+    },
+    Bytes,
+    ContinueTx,
+    ContinueTxArgs,
+    ConversionError,
+    HexString,
+    IdArg,
+    MemoryArgs,
+    RegisterArgs,
+    RunResult,
+    SetBreakpoint,
+    SetBreakpointArgs,
+    SetSingleStepping,
+    SetSingleSteppingArgs,
+    StartTx,
+    StartTxArgs,
+    U32,
+    U64,
 };
 #[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
     convert::TryInto,
-    io::{self, ErrorKind},
+    io::{
+        self,
+        ErrorKind,
+    },
     net,
-    str::{self, FromStr},
+    str::{
+        self,
+        FromStr,
+    },
 };
 use tai64::Tai64;
 use tracing as _;
-use types::{TransactionResponse, TransactionStatus};
+use types::{
+    TransactionResponse,
+    TransactionStatus,
+};
 
 use self::schema::{
     block::ProduceBlockArgs,
-    message::{MessageProofArgs, NonceArgs},
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
 };
 
 pub mod pagination;

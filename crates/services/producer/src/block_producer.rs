@@ -1,23 +1,40 @@
 use crate::{
     block_producer::gas_price::{
-        ConsensusParametersProvider, GasPriceProvider as GasPriceProviderConstraint,
+        ConsensusParametersProvider,
+        GasPriceProvider as GasPriceProviderConstraint,
     },
     ports,
     ports::BlockProducerDatabase,
     Config,
 };
-use anyhow::{anyhow, Context};
-use fuel_core_storage::transactional::{AtomicView, Changes};
+use anyhow::{
+    anyhow,
+    Context,
+};
+use fuel_core_storage::transactional::{
+    AtomicView,
+    Changes,
+};
 use fuel_core_types::{
     blockchain::{
-        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
         primitives::DaBlockHeight,
     },
     fuel_tx::Transaction,
-    fuel_types::{BlockHeight, Bytes32},
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
         block_producer::Components,
-        executor::{TransactionExecutionStatus, UncommittedResult},
+        executor::{
+            TransactionExecutionStatus,
+            UncommittedResult,
+        },
     },
     tai64::Tai64,
 };
