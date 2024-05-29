@@ -91,6 +91,8 @@ pub enum Error {
     ExecuteGenesis,
     #[display(fmt = "The database already contains the data at the height {_0}.")]
     NotUnique(BlockHeight),
+    #[display(fmt = "The previous block processing is not finished yet.")]
+    PreviousBlockProcessingNotFinished,
     #[from]
     StorageError(StorageError),
     UnsupportedConsensusVariant(String),
@@ -204,7 +206,18 @@ where
 
         // Await until all receivers of the notification process the result.
         if let Some(channel) = previous_block_result {
-            let _ = channel.await;
+            const TIMEOUT: u64 = 20;
+            let result =
+                tokio::time::timeout(tokio::time::Duration::from_secs(TIMEOUT), channel)
+                    .await;
+
+            if result.is_err() {
+                tracing::error!(
+                    "The previous block processing \
+                    was not finished for {TIMEOUT} seconds."
+                );
+                return Err(Error::PreviousBlockProcessingNotFinished)
+            }
         }
         let mut guard = self
             .database
