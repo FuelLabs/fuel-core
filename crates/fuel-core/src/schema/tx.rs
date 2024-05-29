@@ -247,6 +247,7 @@ impl TxMutation {
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
         utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let params = ctx
@@ -262,7 +263,7 @@ impl TxMutation {
         }
 
         let tx_statuses = block_producer
-            .dry_run_txs(transactions, None, utxo_validation)
+            .dry_run_txs(transactions, None, utxo_validation, gas_price)
             .await?;
         let tx_statuses = tx_statuses
             .into_iter()

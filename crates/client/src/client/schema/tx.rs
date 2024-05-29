@@ -370,6 +370,7 @@ pub struct EstimatePredicates {
 pub struct DryRunArg {
     pub txs: Vec<HexString>,
     pub utxo_validation: Option<bool>,
+    pub gas_price: Option<i32>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -379,7 +380,7 @@ pub struct DryRunArg {
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(txs: $txs, utxoValidation: $utxo_validation)]
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price)]
     pub dry_run: Vec<DryRunTransactionExecutionStatus>,
 }
 
@@ -468,6 +469,7 @@ pub mod tests {
         let query = DryRun::build(DryRunArg {
             txs: vec![HexString(Bytes(tx.to_bytes()))],
             utxo_validation: None,
+            gas_price: None,
         });
         insta::assert_snapshot!(query.query)
     }
