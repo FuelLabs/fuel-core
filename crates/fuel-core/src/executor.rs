@@ -19,6 +19,7 @@ mod tests {
         },
         transactional::{
             AtomicView,
+            InMemoryTransaction,
             WriteTransaction,
         },
         Result as StorageResult,
@@ -2235,7 +2236,9 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&Message]) -> Executor<Database, DisabledRelayer> {
+    fn create_executor_with_messages(
+        messages: &[&Message],
+    ) -> Executor<Database, DisabledRelayer> {
         let mut database = Database::default();
         let database_ref = &mut database;
 
@@ -2266,11 +2269,11 @@ mod tests {
             transactions: vec![tx],
         };
 
-        let ExecutionResult { block, .. } = make_executor(&[&message])
+        let ExecutionResult { block, .. } = create_executor_with_messages(&[&message])
             .produce_and_commit(block)
             .expect("block execution failed unexpectedly");
 
-        make_executor(&[&message])
+        create_executor_with_messages(&[&message])
             .validate_and_commit(&block)
             .expect("block validation failed unexpectedly");
     }
@@ -2299,7 +2302,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let mut exec = make_executor(&messages);
+        let mut exec = create_executor_with_messages(&messages);
         let view = exec.storage_view_provider.latest_view();
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
@@ -2346,7 +2349,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let mut exec = make_executor(&messages);
+        let mut exec = create_executor_with_messages(&messages);
         let view = exec.storage_view_provider.latest_view();
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
@@ -2377,7 +2380,7 @@ mod tests {
             skipped_transactions,
             mut block,
             ..
-        } = make_executor(&[]) // No messages in the db
+        } = create_executor_with_messages(&[]) // No messages in the db
             .produce_and_commit(block.clone().into())
             .unwrap();
         let err = &skipped_transactions[0].1;
@@ -2389,14 +2392,14 @@ mod tests {
         ));
 
         // Produced block is valid
-        make_executor(&[]) // No messages in the db
+        create_executor_with_messages(&[]) // No messages in the db
             .validate_and_commit(&block)
             .unwrap();
 
         // Invalidate block by returning back `tx` with not existing message
         let index = block.transactions().len() - 1;
         block.transactions_mut().insert(index, tx);
-        let res = make_executor(&[]) // No messages in the db
+        let res = create_executor_with_messages(&[]) // No messages in the db
             .validate_and_commit(&block);
         assert!(matches!(
             res,
@@ -2419,7 +2422,7 @@ mod tests {
             skipped_transactions,
             mut block,
             ..
-        } = make_executor(&[&message])
+        } = create_executor_with_messages(&[&message])
             .produce_and_commit(block.clone().into())
             .unwrap();
         let err = &skipped_transactions[0].1;
@@ -2431,14 +2434,14 @@ mod tests {
         ));
 
         // Produced block is valid
-        make_executor(&[&message])
+        create_executor_with_messages(&[&message])
             .validate_and_commit(&block)
             .unwrap();
 
         // Invalidate block by return back `tx` with not ready message.
         let index = block.transactions().len() - 1;
         block.transactions_mut().insert(index, tx);
-        let res = make_executor(&[&message]).validate_and_commit(&block);
+        let res = create_executor_with_messages(&[&message]).validate_and_commit(&block);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
@@ -2462,7 +2465,7 @@ mod tests {
         let ExecutionResult {
             skipped_transactions,
             ..
-        } = make_executor(&[&message])
+        } = create_executor_with_messages(&[&message])
             .produce_and_commit(block.clone().into())
             .unwrap();
         let err = &skipped_transactions[0].1;
@@ -2489,7 +2492,7 @@ mod tests {
             transactions: vec![tx1, tx2.clone()],
         };
 
-        let exec = make_executor(&[&message]);
+        let exec = create_executor_with_messages(&[&message]);
         let ExecutionResult {
             skipped_transactions,
             mut block,
@@ -2507,13 +2510,13 @@ mod tests {
         ));
 
         // Produced block is valid
-        let exec = make_executor(&[&message]);
+        let exec = create_executor_with_messages(&[&message]);
         let _ = exec.validate(&block).unwrap().into_result();
 
         // Invalidate block by return back `tx2` transaction skipped during production.
         let len = block.transactions().len();
         block.transactions_mut().insert(len - 1, tx2);
-        let exec = make_executor(&[&message]);
+        let exec = create_executor_with_messages(&[&message]);
         let res = exec.validate(&block);
         assert!(matches!(
             res,
