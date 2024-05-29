@@ -162,9 +162,11 @@ pub type ConsensusParametersVersion = u32;
 /// The type representing the version of the state transition bytecode.
 pub type StateTransitionBytecodeVersion = u32;
 
+/// The latest version of the state transition bytecode.
+pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 1;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// The fuel block application header.
 /// Contains everything except consensus related data.
 pub struct ApplicationHeader<Generated> {
@@ -181,6 +183,21 @@ pub struct ApplicationHeader<Generated> {
     pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
     /// Generated application fields.
     pub generated: Generated,
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<Generated> Default for ApplicationHeader<Generated>
+where
+    Generated: Default,
+{
+    fn default() -> Self {
+        Self {
+            da_height: Default::default(),
+            consensus_parameters_version: Default::default(),
+            state_transition_bytecode_version: LATEST_STATE_TRANSITION_VERSION,
+            generated: Default::default(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
