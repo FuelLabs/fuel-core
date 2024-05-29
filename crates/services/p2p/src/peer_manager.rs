@@ -243,9 +243,10 @@ impl PeerManager {
     /// Handles the first connection established with a Peer
     fn handle_initial_connection(&mut self, peer_id: &PeerId) -> bool {
         const HEARTBEAT_AVG_WINDOW: u32 = 10;
+        let is_reserved = self.reserved_peers.contains(peer_id);
 
         // if the connected Peer is not from the reserved peers
-        if !self.reserved_peers.contains(peer_id) {
+        if !is_reserved && !self.non_reserved_connected_peers.contains_key(peer_id) {
             let non_reserved_peers_connected = self.non_reserved_connected_peers.len();
             // check if all the slots are already taken
             if non_reserved_peers_connected >= self.max_non_reserved_peers {
@@ -264,7 +265,7 @@ impl PeerManager {
 
             self.non_reserved_connected_peers
                 .insert(*peer_id, PeerInfo::new(HEARTBEAT_AVG_WINDOW));
-        } else {
+        } else if is_reserved && !self.reserved_connected_peers.contains_key(peer_id) {
             self.reserved_connected_peers
                 .insert(*peer_id, PeerInfo::new(HEARTBEAT_AVG_WINDOW));
 
