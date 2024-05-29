@@ -474,20 +474,6 @@ where
     }
 }
 
-trait ShouldBeUnique {
-    fn should_be_unique(&self, height: &BlockHeight) -> Result<(), Error>;
-}
-
-impl<T> ShouldBeUnique for Option<T> {
-    fn should_be_unique(&self, height: &BlockHeight) -> Result<(), Error> {
-        if self.is_some() {
-            Err(Error::NotUnique(*height))
-        } else {
-            Ok(())
-        }
-    }
-}
-
 /// The wrapper around `ImportResult` to notify about the end of the processing of a new block.
 struct Awaiter {
     result: ImportResult,

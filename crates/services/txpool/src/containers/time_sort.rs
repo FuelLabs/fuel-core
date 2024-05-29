@@ -41,10 +41,6 @@ impl SortableKey for TimeSortKey {
     fn value(&self) -> &Self::Value {
         &self.time
     }
-
-    fn tx_id(&self) -> &TxId {
-        &self.tx_id
-    }
 }
 
 impl PartialEq for TimeSortKey {
