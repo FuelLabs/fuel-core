@@ -18,6 +18,7 @@ futures = { workspace = true }
 mockall = { workspace = true, optional = true }
 rand = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
