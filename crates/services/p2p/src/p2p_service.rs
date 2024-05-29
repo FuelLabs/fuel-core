@@ -57,6 +57,7 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::SwarmEvent,
+    tcp,
     Multiaddr,
     PeerId,
     Swarm,
@@ -174,11 +175,18 @@ impl FuelP2PService {
 
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);
+        let tcp_config = tcp::Config::new().port_reuse(true);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
         let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
-            .with_other_transport(transport_function)
+            .with_tcp(
+                tcp_config,
+                transport_function,
+                libp2p::yamux::Config::default,
+            )
+            .unwrap()
+            .with_dns()
             .unwrap()
             .with_behaviour(|_| behaviour)
             .unwrap()
@@ -512,36 +520,15 @@ impl FuelP2PService {
             PeerReportEvent::PerformDecay => {
                 self.peer_manager.batch_update_score_with_decay()
             }
-            PeerReportEvent::CheckReservedNodesHealth => {
-                let disconnected_peers: Vec<_> = self
-                    .peer_manager
-                    .get_disconnected_reserved_peers()
-                    .copied()
-                    .collect();
-
-                for peer_id in disconnected_peers {
-                    debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
-
-                    let _ = self.swarm.dial(peer_id);
-                }
-            }
-            PeerReportEvent::PeerConnected {
-                peer_id,
-                initial_connection,
-            } => {
-                if self
-                    .peer_manager
-                    .handle_peer_connected(&peer_id, initial_connection)
-                {
+            PeerReportEvent::PeerConnected { peer_id } => {
+                if self.peer_manager.handle_peer_connected(&peer_id) {
                     let _ = self.swarm.disconnect_peer_id(peer_id);
-                } else if initial_connection {
+                } else {
                     return Some(FuelP2PEvent::PeerConnected(peer_id));
                 }
             }
             PeerReportEvent::PeerDisconnected { peer_id } => {
-                if self.peer_manager.handle_peer_disconnect(peer_id) {
-                    let _ = self.swarm.dial(peer_id);
-                }
+                self.peer_manager.handle_peer_disconnect(peer_id);
                 return Some(FuelP2PEvent::PeerDisconnected(peer_id));
             }
         }
@@ -1023,12 +1010,12 @@ mod tests {
         let (mut second_guarded_node, second_sentry_nodes) =
             build_sentry_nodes(p2p_config).await;
 
-        let mut first_sentry_set: HashSet<_> = first_sentry_nodes
+        let first_sentry_set: HashSet<_> = first_sentry_nodes
             .iter()
             .map(|node| node.local_peer_id)
             .collect();
 
-        let mut second_sentry_set: HashSet<_> = second_sentry_nodes
+        let second_sentry_set: HashSet<_> = second_sentry_nodes
             .iter()
             .map(|node| node.local_peer_id)
             .collect();
@@ -1051,7 +1038,7 @@ mod tests {
             tokio::select! {
                 event_from_first_guarded = first_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
-                        if !first_sentry_set.remove(&peer_id) {
+                        if !first_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
@@ -1059,7 +1046,7 @@ mod tests {
                 },
                 event_from_second_guarded = second_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
-                        if !second_sentry_set.remove(&peer_id) {
+                        if !second_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
@@ -1075,10 +1062,7 @@ mod tests {
 
             // This reserved node has connected to more than the number of reserved nodes it is part of.
             // It means it has discovered other nodes in the network.
-            if !(sentry_node_connections.len() >= 2 * RESERVED_NODE_SIZE
-                && first_sentry_set.is_empty()
-                && first_sentry_set.is_empty())
-            {
+            if sentry_node_connections.len() < 2 * RESERVED_NODE_SIZE {
                 instance = tokio::time::Instant::now();
             }
         }
@@ -1420,7 +1404,7 @@ mod tests {
                             if !message_sent  {
                                 message_sent = true;
                                 let broadcast_request = broadcast_request.clone();
-                                node_a.publish_message(broadcast_request).unwrap();
+                                let _ = node_a.publish_message(broadcast_request);
                             }
                         }
                     }

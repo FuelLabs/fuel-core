@@ -115,10 +115,9 @@ impl FuelBehaviour {
         let req_res_protocol =
             core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
-        let req_res_config = request_response::Config::default();
-        req_res_config
-            .clone()
-            .with_request_timeout(p2p_config.set_request_timeout);
+        let req_res_config = request_response::Config::default()
+            .with_request_timeout(p2p_config.set_request_timeout)
+            .with_max_concurrent_streams(p2p_config.max_concurrent_streams);
 
         let request_response = request_response::Behaviour::with_codec(
             codec,
