@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+- [#1913](https://github.com/FuelLabs/fuel-core/pull/1913): Removed dead code from the project.
+
 ## [Version 0.27.0]
 
 ### Added

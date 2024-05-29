@@ -30,10 +30,6 @@ impl SortableKey for TipSortKey {
     fn value(&self) -> &Self::Value {
         &self.tip
     }
-
-    fn tx_id(&self) -> &TxId {
-        &self.tx_id
-    }
 }
 
 impl PartialEq for TipSortKey {
