@@ -395,7 +395,7 @@ impl FuelClient {
         txs: &[Transaction],
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
-        gas_price: Option<u64>,
+        gas_price: Option<U64>,
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
         let txs = txs
             .iter()

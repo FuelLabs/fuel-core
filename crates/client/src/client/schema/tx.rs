@@ -370,7 +370,7 @@ pub struct EstimatePredicates {
 pub struct DryRunArg {
     pub txs: Vec<HexString>,
     pub utxo_validation: Option<bool>,
-    pub gas_price: Option<i32>,
+    pub gas_price: Option<U64>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
