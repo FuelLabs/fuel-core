@@ -721,9 +721,7 @@ mod test {
             })
             .collect::<BTreeMap<_, _>>();
 
-        if let Some(expected_version) =
-            seen_crate_versions.get(&crate_version.to_string())
-        {
+        if let Some(expected_version) = seen_crate_versions.get(crate_version) {
             assert_eq!(
                 *expected_version,
                 Executor::<Storage, DisabledRelayer>::VERSION,

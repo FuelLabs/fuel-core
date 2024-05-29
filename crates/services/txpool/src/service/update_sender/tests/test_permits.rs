@@ -22,9 +22,6 @@ impl Permits for Arc<usize> {
             p
         })
     }
-    fn acquire(self: Arc<Self>) -> Pin<Box<dyn Future<Output = Permit> + Send + Sync>> {
-        unimplemented!()
-    }
 }
 
 #[proptest]
