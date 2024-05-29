@@ -114,7 +114,7 @@ impl<S, R> Executor<S, R> {
     /// we need to use a native executor or WASM. If the version is the same as
     /// on the block, native execution is used. If the version is not the same
     /// as in the block, then the WASM executor is used.
-    pub const VERSION: u32 = StateTransitionBytecodeVersion::MIN;
+    pub const VERSION: u32 = 1;
 
     /// This constant is used along with the `version_check` test.
     /// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
@@ -129,7 +129,7 @@ impl<S, R> Executor<S, R> {
         StateTransitionBytecodeVersion,
     )] = &[
         ("0-26-0", StateTransitionBytecodeVersion::MIN),
-        // ("0-27-0", 1),
+        ("0-27-0", 1),
     ];
 
     pub fn new(

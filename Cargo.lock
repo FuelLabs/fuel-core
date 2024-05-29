@@ -14,11 +14,11 @@ dependencies = [
 
 [[package]]
 name = "addr2line"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a30b2e23b9e17a9f90641c7ab1549cd9b44f296d3ccbf309d2863cfe398a0cb"
+checksum = "6e4503c46a5c0c7844e948c9a4d6acd9f50cccb4de1c48eb9e291ea17470c678"
 dependencies = [
- "gimli",
+ "gimli 0.29.0",
 ]
 
 [[package]]
@@ -718,16 +718,16 @@ dependencies = [
 
 [[package]]
 name = "backtrace"
-version = "0.3.71"
+version = "0.3.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b05800d2e817c8b3b4b54abd461726265fa9789ae34330622f2db9ee696f9d"
+checksum = "17c6a35df3749d2e8bb1b7b21a976d82b15548788d2735b9d82f329268f71a11"
 dependencies = [
  "addr2line",
  "cc",
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.35.0",
  "rustc-demangle",
  "serde",
 ]
@@ -875,12 +875,11 @@ dependencies = [
 
 [[package]]
 name = "blocking"
-version = "1.6.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "495f7104e962b7356f0aeb34247aca1fe7d2e783b346582db7f2904cb5717e88"
+checksum = "703f41c54fc768e63e091340b424302bb1c29ef4aa0c7f10fe849dfb114d29ea"
 dependencies = [
  "async-channel 2.3.1",
- "async-lock 3.3.0",
  "async-task",
  "futures-io",
  "futures-lite 2.3.0",
@@ -1103,9 +1102,9 @@ dependencies = [
 
 [[package]]
 name = "clang-sys"
-version = "1.7.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67523a3b4be3ce1989d607a828d036249522dd9c1c8de7f4dd2dae43a37369d1"
+checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
@@ -1292,9 +1291,9 @@ dependencies = [
 
 [[package]]
 name = "const-hex"
-version = "1.11.4"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70ff96486ccc291d36a958107caf2c0af8c78c0af7d31ae2f35ce055130de1a6"
+checksum = "94fb8a24a26d37e1ffd45343323dc9fe6654ceea44c12f2fcb3d7ac29e610bc6"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -1463,7 +1462,7 @@ dependencies = [
  "cranelift-control",
  "cranelift-entity",
  "cranelift-isle",
- "gimli",
+ "gimli 0.28.1",
  "hashbrown 0.14.5",
  "log",
  "regalloc2",
@@ -2666,9 +2665,9 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "5.3.0"
+version = "5.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d9944b8ca13534cdfb2800775f8dd4902ff3fc75a50101466decadfdf322a24"
+checksum = "6032be9bd27023a771701cc49f9f053c751055f71efb2e0ae5c15809093675ba"
 dependencies = [
  "concurrent-queue",
  "parking",
@@ -2691,7 +2690,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f214dc438f977e6d4e3500aaa277f5ad94ca83fbbd9b1a15713ce2344ccc5a1"
 dependencies = [
- "event-listener 5.3.0",
+ "event-listener 5.3.1",
  "pin-project-lite",
 ]
 
@@ -2851,7 +2850,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2938,11 +2937,11 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.26.0"
+version = "0.27.0"
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2975,7 +2974,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "bech32",
@@ -3001,7 +3000,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "cynic",
@@ -3024,7 +3023,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "clap 4.5.4",
  "fuel-core-client",
@@ -3035,7 +3034,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -3047,7 +3046,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3058,7 +3057,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3084,7 +3083,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -3098,7 +3097,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3115,7 +3114,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "clap 4.5.4",
@@ -3126,7 +3125,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen-bin"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "atty",
@@ -3139,7 +3138,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "axum",
  "once_cell",
@@ -3152,7 +3151,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3188,7 +3187,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3207,7 +3206,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3225,7 +3224,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3257,7 +3256,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3271,7 +3270,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3295,7 +3294,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3351,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "ctor",
  "tracing",
@@ -3361,7 +3360,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3386,7 +3385,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "bs58",
@@ -3403,7 +3402,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-upgradable-executor"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "fuel-core-executor",
@@ -3419,7 +3418,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-wasm-executor"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "fuel-core-executor",
@@ -3790,6 +3789,12 @@ dependencies = [
  "indexmap 2.2.6",
  "stable_deref_trait",
 ]
+
+[[package]]
+name = "gimli"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
 
 [[package]]
 name = "glob"
@@ -5866,6 +5871,15 @@ dependencies = [
  "crc32fast",
  "hashbrown 0.14.5",
  "indexmap 2.2.6",
+ "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.35.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8ec7ab813848ba4522158d5517a6093db1ded27575b070f4177b8d12b41db5e"
+dependencies = [
  "memchr",
 ]
 
@@ -8583,7 +8597,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow 0.6.8",
+ "winnow 0.6.9",
 ]
 
 [[package]]
@@ -9094,11 +9108,11 @@ dependencies = [
  "bincode",
  "bumpalo",
  "cfg-if",
- "gimli",
+ "gimli 0.28.1",
  "indexmap 2.2.6",
  "libc",
  "log",
- "object",
+ "object 0.32.2",
  "once_cell",
  "paste",
  "rayon",
@@ -9159,9 +9173,9 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
- "gimli",
+ "gimli 0.28.1",
  "log",
- "object",
+ "object 0.32.2",
  "target-lexicon",
  "thiserror",
  "wasmparser",
@@ -9180,8 +9194,8 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-control",
  "cranelift-native",
- "gimli",
- "object",
+ "gimli 0.28.1",
+ "object 0.32.2",
  "target-lexicon",
  "wasmtime-environ",
 ]
@@ -9195,10 +9209,10 @@ dependencies = [
  "anyhow",
  "bincode",
  "cranelift-entity",
- "gimli",
+ "gimli 0.28.1",
  "indexmap 2.2.6",
  "log",
- "object",
+ "object 0.32.2",
  "serde",
  "serde_derive",
  "target-lexicon",
@@ -9516,9 +9530,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.8"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3c52e9c97a68071b23e836c9380edae937f17b9c4667bd021973efc689f618d"
+checksum = "86c949fede1d13936a99f14fafd3e76fd642b556dd2ce96287fbe2e0151bfac6"
 dependencies = [
  "memchr",
 ]
