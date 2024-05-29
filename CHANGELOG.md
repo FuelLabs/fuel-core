@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Use testnet configuration for local testnet.
 - [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Removed support for helm chart.
+- [#1910](https://github.com/FuelLabs/fuel-core/pull/1910): `fuel-vm` upgraded to `0.50.0`. More information in the [changelog](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.50.0).
 
 ## [Version 0.26.0]
 
