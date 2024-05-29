@@ -85,8 +85,8 @@ impl State {
             // Currently processing a range and recording a commit.
             Status::Processing(range) => {
                 if height < *range.start() {
-                    // The commited height is less than the start of the processing range,
-                    // it is a lag between commiting and processing.
+                    // The committed height is less than the start of the processing range,
+                    // it is a lag between committing and processing.
                     None
                 } else {
                     match height.cmp(range.end()) {
