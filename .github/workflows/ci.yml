@@ -122,8 +122,12 @@ jobs:
             args: -p fuel-core-client --no-default-features
           - command: test
             args: -p fuel-core-chain-config --no-default-features
-          - command: test
-            args: --manifest-path version-compatibility/Cargo.toml --workspace
+          # Don't split this command; this is a workaround.
+          # We need to run `cargo check` first to fetch the locked dependencies
+          # for `fuel-core 0.26.0`(because of the bug with `--offline`
+          # and `--locked` when we build `fuel-core-wasm-executor 0.26.0`).
+          - command: check
+            args: --manifest-path version-compatibility/Cargo.toml --workspace && cargo test --manifest-path version-compatibility/Cargo.toml --workspace
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
 
