@@ -124,7 +124,7 @@ where
         let gas_price = self
             .gas_price_provider
             .gas_price(height.into())
-            .ok_or(anyhow!("No gas price found for block {height:?}"))?;
+            .map_err(|e| anyhow!("No gas price found for block {height:?}: {e:?}"))?;
 
         let component = Components {
             header_to_produce: header,
@@ -221,7 +221,7 @@ where
         let gas_price = self
             .gas_price_provider
             .gas_price(height.into())
-            .ok_or(anyhow!("No gas price found for height {height:?}"))?;
+            .map_err(|e| anyhow!("No gas price found for height {height:?}: {e:?}"))?;
 
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
