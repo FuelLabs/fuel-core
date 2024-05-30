@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   # Add new versions here when testing backwards compatibility between fuel-core-client and fuel-core
   "placeholder",
+  "forkless-upgrade",
 ]
 
 # exclude previous versions no longer maintained
