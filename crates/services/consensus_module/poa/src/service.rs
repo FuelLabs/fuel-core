@@ -7,6 +7,7 @@ use crate::{
         BlockImporter,
         BlockProducer,
         P2pPort,
+        SharedSequencerPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -74,7 +75,7 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 
-pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
+pub type Service<T, B, I, SS> = ServiceRunner<MainTask<T, B, I, SS>>;
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -146,11 +147,11 @@ pub struct MainTask<T, B, I, SS> {
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, SS> MainTask<T, B, I, SS>
 where
     T: TransactionPool,
     I: BlockImporter,
-    SS: SharedSequencer,
+    SS: SharedSequencerPort,
 {
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
@@ -159,6 +160,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
+        shared_sequencer: SS,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -193,6 +195,7 @@ where
             block_importer,
             tx_status_update_stream,
             request_receiver,
+            shared_sequencer,
             shared_state: SharedState { request_sender },
             last_height,
             last_timestamp,
@@ -243,11 +246,12 @@ where
     }
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, SS> MainTask<T, B, I, SS>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    SS: SharedSequencerPort,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -354,6 +358,11 @@ where
             entity: block,
             consensus: seal,
         };
+        // Send to the shared sequencer
+        self.shared_sequencer
+            .send(self.signing_key.as_ref().unwrap(), block.clone())
+            .await?;
+
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
@@ -418,14 +427,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableService for MainTask<T, B, I>
+impl<T, B, I, SS> RunnableService for MainTask<T, B, I, SS>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I>;
+    type Task = MainTask<T, B, I, SS>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -453,11 +462,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableTask for MainTask<T, B, I>
+impl<T, B, I, SS> RunnableTask for MainTask<T, B, I, SS>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    SS: SharedSequencerPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -539,19 +549,21 @@ where
     }
 }
 
-pub fn new_service<T, B, I, P>(
+pub fn new_service<T, B, I, P, SS>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
-) -> Service<T, B, I>
+    shared_sequencer: SS,
+) -> Service<T, B, I, SS>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
     P: P2pPort,
+    SS: SharedSequencerPort,
 {
     Service::new(MainTask::new(
         last_block,
@@ -560,6 +572,7 @@ where
         block_producer,
         block_importer,
         p2p_port,
+        shared_sequencer,
     ))
 }
 

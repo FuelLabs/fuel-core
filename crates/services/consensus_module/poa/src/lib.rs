@@ -3,6 +3,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(unused_must_use)]
 #![deny(warnings)]
+#![allow(clippy::blocks_in_conditions)] // False positives with tokio macros
 
 mod deadline_clock;
 mod sync;

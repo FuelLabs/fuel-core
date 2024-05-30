@@ -21,11 +21,11 @@ members = [
   "crates/services/p2p",
   "crates/services/producer",
   "crates/services/relayer",
-  "crates/services/shared-sequencer",
   "crates/services/sync",
   "crates/services/txpool",
   "crates/services/upgradable-executor",
   "crates/services/upgradable-executor/wasm-executor",
+  "crates/shared-sequencer",
   "crates/storage",
   "crates/trace",
   "crates/types",
@@ -64,6 +64,7 @@ fuel-core-database = { version = "0.26.0", path = "./crates/database" }
 fuel-core-metrics = { version = "0.26.0", path = "./crates/metrics" }
 fuel-core-services = { version = "0.26.0", path = "./crates/services" }
 fuel-core-consensus-module = { version = "0.26.0", path = "./crates/services/consensus_module" }
+fuel-core-shared-sequencer-client = { version = "0.26.0", path = "./crates/shared-sequencer" }
 fuel-core-bft = { version = "0.26.0", path = "./crates/services/consensus_module/bft" }
 fuel-core-poa = { version = "0.26.0", path = "./crates/services/consensus_module/poa" }
 fuel-core-executor = { version = "0.26.0", path = "./crates/services/executor", default-features = false }

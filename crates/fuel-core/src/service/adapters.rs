@@ -20,7 +20,11 @@ use fuel_core_types::{
     services::block_importer::SharedImportResult,
 };
 use fuel_core_upgradable_executor::executor::Executor;
+
 use std::sync::Arc;
+
+#[cfg(feature = "shared-sequencer")]
+use tokio::sync::Mutex;
 
 pub mod block_importer;
 pub mod consensus_module;
@@ -85,6 +89,22 @@ impl TransactionsSource {
         Self {
             txpool,
             _block_height: block_height,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedSequencerAdapter {
+    #[cfg(feature = "shared-sequencer")]
+    client: Arc<Mutex<fuel_core_shared_sequencer_client::Client>>,
+}
+
+#[cfg(feature = "shared-sequencer")]
+impl SharedSequencerAdapter {
+    pub fn new(config: fuel_core_shared_sequencer_client::Config) -> Self {
+        let client = fuel_core_shared_sequencer_client::Client::new(config);
+        Self {
+            client: Arc::new(Mutex::new(client)),
         }
     }
 }

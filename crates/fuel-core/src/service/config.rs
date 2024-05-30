@@ -64,6 +64,8 @@ pub struct Config {
     pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
+    #[cfg(feature = "shared-sequencer")]
+    pub shared_sequencer: fuel_core_shared_sequencer_client::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
@@ -145,6 +147,8 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer: fuel_core_shared_sequencer_client::Config::local_node(),
             consensus_key: Some(Secret::new(
                 fuel_core_chain_config::default_consensus_dev_key().into(),
             )),

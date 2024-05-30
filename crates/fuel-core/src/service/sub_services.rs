@@ -1,6 +1,9 @@
 #![allow(clippy::let_unit_value)]
 use super::{
-    adapters::P2PAdapter,
+    adapters::{
+        P2PAdapter,
+        SharedSequencerAdapter,
+    },
     genesis::create_genesis_block,
 };
 use crate::{
@@ -36,8 +39,12 @@ use crate::relayer::Config as RelayerConfig;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
-pub type PoAService =
-    fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
+pub type PoAService = fuel_core_poa::Service<
+    TxPoolAdapter,
+    BlockProducerAdapter,
+    BlockImporterAdapter,
+    SharedSequencerAdapter,
+>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
@@ -160,6 +167,12 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
+    #[cfg(feature = "shared-sequencer")]
+    let shared_sequencer = SharedSequencerAdapter::new(config.shared_sequencer.clone());
+
+    #[cfg(not(feature = "shared-sequencer"))]
+    let shared_sequencer = SharedSequencerAdapter {};
+
     let gas_price_provider = StaticGasPrice::new(config.static_gas_price);
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
@@ -200,6 +213,7 @@ pub fn init_sub_services(
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
+            shared_sequencer.clone(),
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));

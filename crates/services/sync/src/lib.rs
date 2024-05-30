@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(clippy::blocks_in_conditions)] // False positives with tokio macros
+
 //! # Sync Service
 //! Responsible for syncing the blockchain from the network.
 

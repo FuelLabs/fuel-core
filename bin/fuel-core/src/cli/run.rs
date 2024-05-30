@@ -72,6 +72,9 @@ pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 #[cfg(feature = "p2p")]
 mod p2p;
 
+#[cfg(feature = "shared-sequencer")]
+mod shared_sequencer;
+
 mod consensus;
 mod profiling;
 #[cfg(feature = "relayer")]
@@ -239,6 +242,8 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer_args,
             metrics,
             max_da_lag,
             max_wait_time,
@@ -366,6 +371,8 @@ impl Command {
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer: shared_sequencer_args.into(),
             consensus_key,
             name,
             relayer_consensus_config: verifier,

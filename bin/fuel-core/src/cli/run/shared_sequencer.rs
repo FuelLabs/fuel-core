@@ -1,3 +1,5 @@
+use fuel_core_types::fuel_types::Bytes32;
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct Args {
     /// If set to true, new blocks will be posted to the shared sequencer chain
@@ -5,18 +7,64 @@ pub struct Args {
     enable: bool,
     /// Address of the sequencer chain tendermint API
     /// (e.g. "http://127.0.0.1:26657")
-    #[clap(long = "ss-api-address", env = "SHARED_SEQUENCER_API_ADDRESS", default="http://127.0.0.1:26657")]
-    api_address: String,
+    #[clap(
+        long = "ss-tendermint-api",
+        env = "SHARED_SEQUENCER_TENDERMINT_API",
+        default_value = "http://127.0.0.1:26657"
+    )]
+    tendermint_api: String,
+    /// Address of the sequencer chain blockchain/rest API
+    /// (e.g. "http://127.0.0.1:1317")
+    #[clap(
+        long = "ss-blockchain-api",
+        env = "SHARED_SEQUENCER_BLOCKCHAIN_API",
+        default_value = "http://127.0.0.1:1317"
+    )]
+    blockchain_api: String,
     /// Coin denominator for the sequencer fee payment
     /// (e.g. "utest")
-    #[clap(long = "ss-coin-denom", env = "SHARED_SEQUENCER_COIN_DENOM", default="utest")]
+    #[clap(
+        long = "ss-coin-denom",
+        env = "SHARED_SEQUENCER_COIN_DENOM",
+        default_value = "utest"
+    )]
     coin_denom: String,
     /// Prefix of bech32 addresses on the sequencer chain
     /// (e.g. "fuelsequencer")
-    #[clap(long = "ss-account-prefix", env = "SHARED_SEQUENCER_ACCOUNT_PREFIX", default="fuelsequencer")]
+    #[clap(
+        long = "ss-account-prefix",
+        env = "SHARED_SEQUENCER_ACCOUNT_PREFIX",
+        default_value = "fuelsequencer"
+    )]
     account_prefix: String,
     /// Chain ID of the sequencer chain
     /// (e.g. "fuelsequencer-1")
-    #[clap(long = "ss-chain-id", env = "SHARED_SEQUENCER_CHAIN_ID", default="fuelsequencer-1")]
+    #[clap(
+        long = "ss-chain-id",
+        env = "SHARED_SEQUENCER_CHAIN_ID",
+        default_value = "fuelsequencer-1"
+    )]
     chain_id: String,
+    /// Topic to post blocks to
+    /// (e.g. "1111111111111111111111111111111111111111111111111111111111111111")
+    #[clap(
+        long = "ss-topic",
+        env = "SHARED_SEQUENCER_TOPIC",
+        default_value = "0000000000000000000000000000000000000000000000000000000000000000"
+    )]
+    topic: Bytes32,
+}
+
+#[cfg(feature = "shared-sequencer")]
+impl Into<fuel_core_shared_sequencer_client::Config> for Args {
+    fn into(self) -> fuel_core_shared_sequencer_client::Config {
+        fuel_core_shared_sequencer_client::Config {
+            tendermint_api: self.tendermint_api,
+            blockchain_api: self.blockchain_api,
+            coin_denom: self.coin_denom,
+            account_prefix: self.account_prefix,
+            chain_id: self.chain_id,
+            topic: *self.topic,
+        }
+    }
 }

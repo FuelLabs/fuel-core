@@ -6,7 +6,11 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
-        primitives::DaBlockHeight,
+        primitives::{
+            DaBlockHeight,
+            SecretKeyWrapper,
+        },
+        SealedBlock,
     },
     fuel_tx::{
         Transaction,
@@ -16,6 +20,7 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
+    secrecy::Secret,
     services::{
         block_importer::{
             BlockImportInfo,
@@ -93,6 +98,17 @@ pub trait RelayerPort {
         &self,
         da_height: &DaBlockHeight,
         max_da_lag: &DaBlockHeight,
+    ) -> anyhow::Result<()>;
+}
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+pub trait SharedSequencerPort: Send + Sync + 'static {
+    /// Submit a block to the shared sequencer.
+    async fn send(
+        &mut self,
+        signing_key: &Secret<SecretKeyWrapper>,
+        block: SealedBlock,
     ) -> anyhow::Result<()>;
 }
 

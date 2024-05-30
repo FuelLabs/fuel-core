@@ -24,6 +24,7 @@ dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
+fuel-core-shared-sequencer-client = { workspace = true, optional = true }
 fuel-core-types = { workspace = true }
 hex = "0.4"
 humantime = "2.1"
@@ -56,7 +57,7 @@ test-case = { workspace = true }
 default = ["env", "relayer", "rocksdb"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
-shared-sequencer = []
+shared-sequencer = ["dep:fuel-core-shared-sequencer-client"]
 relayer = ["fuel-core/relayer", "dep:url"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]

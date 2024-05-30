@@ -6,6 +6,7 @@ use crate::{
         MockBlockImporter,
         MockBlockProducer,
         MockP2pPort,
+        MockSharedSequencerPort,
         MockTransactionPool,
     },
     service::MainTask,
@@ -71,6 +72,7 @@ struct TestContextBuilder {
     txpool: Option<MockTransactionPool>,
     importer: Option<MockBlockImporter>,
     producer: Option<MockBlockProducer>,
+    shared_sequencer: Option<MockSharedSequencerPort>,
 }
 
 fn generate_p2p_port() -> MockP2pPort {
@@ -90,6 +92,7 @@ impl TestContextBuilder {
             txpool: None,
             importer: None,
             producer: None,
+            shared_sequencer: None,
         }
     }
 
@@ -110,6 +113,14 @@ impl TestContextBuilder {
 
     fn with_producer(&mut self, producer: MockBlockProducer) -> &mut Self {
         self.producer = Some(producer);
+        self
+    }
+
+    fn with_shared_sequencer(
+        &mut self,
+        shared_sequencer: MockSharedSequencerPort,
+    ) -> &mut Self {
+        self.shared_sequencer = Some(shared_sequencer);
         self
     }
 
@@ -148,6 +159,12 @@ impl TestContextBuilder {
 
         let p2p_port = generate_p2p_port();
 
+        let shared_sequencer = self.shared_sequencer.unwrap_or_else(|| {
+            let mut shared_sequencer = MockSharedSequencerPort::default();
+            shared_sequencer.expect_send().returning(|_, _| Ok(()));
+            shared_sequencer
+        });
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
             config,
@@ -155,6 +172,7 @@ impl TestContextBuilder {
             producer,
             importer,
             p2p_port,
+            shared_sequencer,
         );
         service.start().unwrap();
         TestContext { service }
@@ -162,7 +180,12 @@ impl TestContextBuilder {
 }
 
 struct TestContext {
-    service: Service<MockTransactionPool, MockBlockProducer, MockBlockImporter>,
+    service: Service<
+        MockTransactionPool,
+        MockBlockProducer,
+        MockBlockImporter,
+        MockSharedSequencerPort,
+    >,
 }
 
 impl TestContext {
@@ -301,6 +324,9 @@ async fn remove_skipped_transactions() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
 
+    let mut shared_sequencer_port = MockSharedSequencerPort::default();
+    shared_sequencer_port.expect_send().returning(|_, _| Ok(()));
+
     let mut txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
@@ -339,6 +365,7 @@ async fn remove_skipped_transactions() {
         block_producer,
         block_importer,
         p2p_port,
+        shared_sequencer_port,
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -379,6 +406,8 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let p2p_port = generate_p2p_port();
 
+    let shared_sequencer_port = MockSharedSequencerPort::default();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -386,6 +415,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_producer,
         block_importer,
         p2p_port,
+        shared_sequencer_port,
     );
 
     // simulate some txpool event to see if any block production is erroneously triggered

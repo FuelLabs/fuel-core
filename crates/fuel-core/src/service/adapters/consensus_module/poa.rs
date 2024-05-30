@@ -5,6 +5,7 @@ use crate::{
         BlockProducerAdapter,
         P2PAdapter,
         PoAAdapter,
+        SharedSequencerAdapter,
         TxPoolAdapter,
     },
 };
@@ -13,6 +14,7 @@ use fuel_core_poa::{
     ports::{
         BlockImporter,
         P2pPort,
+        SharedSequencerPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -24,8 +26,13 @@ use fuel_core_poa::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
+    blockchain::{
+        primitives::SecretKeyWrapper,
+        SealedBlock,
+    },
     fuel_tx::TxId,
     fuel_types::BlockHeight,
+    secrecy::Secret,
     services::{
         block_importer::{
             BlockImportInfo,
@@ -161,5 +168,31 @@ impl P2pPort for P2PAdapter {
 impl P2pPort for P2PAdapter {
     fn reserved_peers_count(&self) -> BoxStream<usize> {
         Box::pin(tokio_stream::pending())
+    }
+}
+
+#[async_trait::async_trait]
+impl SharedSequencerPort for SharedSequencerAdapter {
+    #[cfg(feature = "shared-sequencer")]
+    async fn send(
+        &mut self,
+        signing_key: &Secret<SecretKeyWrapper>,
+        block: SealedBlock,
+    ) -> anyhow::Result<()> {
+        use fuel_core_shared_sequencer_client::SigningKey;
+        use fuel_core_types::secrecy::ExposeSecret;
+        // TODO: zeroize the key on drop
+        let sk = SigningKey::from_slice(&***signing_key.expose_secret())
+            .expect("the key conversion never fails");
+        self.client.lock().await.send(&sk, block).await
+    }
+
+    #[cfg(not(feature = "shared-sequencer"))]
+    async fn send(
+        &mut self,
+        _signing_key: &Secret<SecretKeyWrapper>,
+        _block: SealedBlock,
+    ) -> anyhow::Result<()> {
+        Ok(())
     }
 }
