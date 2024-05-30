@@ -426,7 +426,6 @@ mod tests {
     fn produce_without_commit__includes_mint() {
         let mut producer = create_executor(Default::default(), Default::default());
         let block = test_block(1u32.into(), 0u64.into(), 10);
-        // let config = (*producer.config).clone();
 
         let ExecutionResult { block, .. } =
             producer.produce_and_commit(block.into()).unwrap();
@@ -449,24 +448,6 @@ mod tests {
         assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
         assert_eq!(mint.output_contract().input_index, 0);
     }
-
-    // fn mint_values_match_config(
-    //     mint: &Transaction,
-    //     config: &Config,
-    //
-    // ) {
-    //     // assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
-    //     // assert_eq!(mint.mint_amount(), &0);
-    //     // assert_eq!(mint.input_contract().contract_id, ContractId::zeroed());
-    //     // assert_eq!(mint.input_contract().balance_root, Bytes32::zeroed());
-    //     // assert_eq!(mint.input_contract().state_root, Bytes32::zeroed());
-    //     // assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
-    //     // assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
-    //     // assert_eq!(mint.output_contract().balance_root, Bytes32::zeroed());
-    //     // assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
-    //     // assert_eq!(mint.output_contract().input_index, 0);
-    //     assert!(mint.is_mint());
-    // }
 
     mod coinbase {
         use crate::graphql_api::ports::DatabaseContracts;
