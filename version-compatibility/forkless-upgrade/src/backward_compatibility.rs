@@ -85,10 +85,6 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
         genesis_multiaddr.as_str(),
         "--peering-port",
         "0",
-        // We need to set the native executor version to 1 to be
-        // sure it is not zero to force the usage of the WASM executor
-        "--native-executor-version",
-        "1",
     ])
     .await
     .unwrap();
