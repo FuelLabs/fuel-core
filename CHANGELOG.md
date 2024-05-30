@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Removed
 - [#1913](https://github.com/FuelLabs/fuel-core/pull/1913): Removed dead code from the project.
 
+### Fixed
+- [#1914](https://github.com/FuelLabs/fuel-core/pull/1914): Fixed halting of the node during synchronization in PoA service.
+
 ## [Version 0.27.0]
 
 ### Added
