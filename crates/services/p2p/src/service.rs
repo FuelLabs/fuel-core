@@ -553,10 +553,10 @@ where
                     }
                 }
             }
-            p2p_event = self.p2p_service.next_event() => {
+            Some(p2p_event) = self.p2p_service.next_event() => {
                 should_continue = true;
                 match p2p_event {
-                    Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
+                    FuelP2PEvent::PeerInfoUpdated { peer_id, block_height } => {
                         let peer_id: Vec<u8> = peer_id.into();
                         let block_height_data = BlockHeightHeartbeatData {
                             peer_id: peer_id.into(),
@@ -565,7 +565,7 @@ where
 
                         let _ = self.broadcast.block_height_broadcast(block_height_data);
                     }
-                    Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
+                    FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. } => {
                         let message_id = message_id.0;
 
                         match message {
@@ -575,7 +575,7 @@ where
                             },
                         }
                     },
-                    Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
+                    FuelP2PEvent::InboundRequestMessage { request_message, request_id } => {
                         match request_message {
                             RequestMessage::Transactions(range) => {
                                 let view = self.view_provider.latest_view();
