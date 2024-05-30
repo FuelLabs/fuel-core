@@ -19,7 +19,7 @@ mod tests {
         },
         transactional::{
             AtomicView,
-            InMemoryTransaction,
+            Changes,
             WriteTransaction,
         },
         Result as StorageResult,
@@ -293,6 +293,18 @@ mod tests {
         block
     }
 
+    fn strip_mint_from_block(mut block: Block) -> Block {
+        if let Some(last) = block.transactions().last() {
+            match last {
+                Transaction::Mint(_) => {
+                    block.transactions_mut().pop();
+                }
+                _ => {}
+            }
+        }
+        block
+    }
+
     fn script_tx_for_amount(amount: usize) -> Transaction {
         let asset = AssetId::BASE;
         TxBuilder::new(2322u64)
@@ -324,63 +336,137 @@ mod tests {
         (tx, contract_id)
     }
 
+    // `produce` can modify the transactions of the `block`, so we want to produce it a second time
+    // to ensure that the changes are consistent. Then we validate the block to ensure that the
+    // validator agrees with the producer.
+    fn produce_reproduce_and_validate_block(
+        producer: &Executor<Database, DisabledRelayer>,
+        validator: &Executor<Database, DisabledRelayer>,
+        block: Block,
+    ) -> (ExecutionResult, Changes) {
+        let (production_result, production_changes) = producer
+            .produce_without_commit(block.into())
+            .unwrap()
+            .into();
+        let second_block = strip_mint_from_block(production_result.block);
+        let (reproduction_result, reproduction_changes) = producer
+            .produce_without_commit(second_block.into())
+            .unwrap()
+            .into();
+        let (_validation_result, validation_changes) = validator
+            .validate(&reproduction_result.block)
+            .unwrap()
+            .into();
+        assert_eq!(production_changes, reproduction_changes);
+        assert_eq!(reproduction_changes, validation_changes);
+        (reproduction_result, reproduction_changes)
+    }
+
     // Happy path test case that a produced block will also validate
     #[test]
     fn executor_validates_correctly_produced_block() {
-        let mut producer = create_executor(Default::default(), Default::default());
-        let verifier = create_executor(Default::default(), Default::default());
+        let producer = create_executor(Default::default(), Default::default());
+        let validator = create_executor(Default::default(), Default::default());
         let block = test_block(1u32.into(), 0u64.into(), 10);
 
-        let ExecutionResult {
-            block,
-            skipped_transactions,
-            ..
-        } = producer.produce_and_commit(block.into()).unwrap();
-
-        let validation_result = verifier.validate(&block);
-        assert!(validation_result.is_ok());
-        assert!(skipped_transactions.is_empty());
+        let (result, _) =
+            produce_reproduce_and_validate_block(&producer, &validator, block);
+        assert!(result.skipped_transactions.is_empty());
     }
 
     // Ensure transaction commitment != default after execution
     #[test]
     fn executor_commits_transactions_to_block() {
-        let mut producer = create_executor(Default::default(), Default::default());
-        let block = test_block(1u32.into(), 0u64.into(), 10);
+        let producer = create_executor(Default::default(), Default::default());
+        let tx_count = 10;
+        let block = test_block(1u32.into(), 0u64.into(), tx_count);
         let start_block = block.clone();
 
-        let ExecutionResult {
-            block,
-            skipped_transactions,
-            ..
-        } = producer.produce_and_commit(block.into()).unwrap();
-
-        assert!(skipped_transactions.is_empty());
+        let (result, _) = producer
+            .produce_without_commit(block.into())
+            .unwrap()
+            .into();
+        let produced_block = result.block;
         assert_ne!(
             start_block.header().transactions_root,
-            block.header().transactions_root
+            produced_block.header().transactions_root
         );
-        assert_eq!(block.transactions().len(), 11);
-        assert!(block.transactions()[10].as_mint().is_some());
-        if let Some(mint) = block.transactions()[10].as_mint() {
-            assert_eq!(
-                mint.tx_pointer(),
-                &TxPointer::new(*block.header().height(), 10)
-            );
-            assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
-            assert_eq!(mint.mint_amount(), &0);
-            assert_eq!(mint.input_contract().contract_id, ContractId::zeroed());
-            assert_eq!(mint.input_contract().balance_root, Bytes32::zeroed());
-            assert_eq!(mint.input_contract().state_root, Bytes32::zeroed());
-            assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
-            assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
-            assert_eq!(mint.output_contract().balance_root, Bytes32::zeroed());
-            assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
-            assert_eq!(mint.output_contract().input_index, 0);
-        } else {
-            panic!("Invalid outputs of coinbase");
+        assert_eq!(produced_block.transactions().len(), tx_count + 1);
+        for (i, tx) in start_block.transactions().iter().enumerate() {
+            tx_matches_except_for_change(tx, &produced_block.transactions()[i]);
         }
     }
+
+    fn tx_matches_except_for_change(tx1: &Transaction, tx2: &Transaction) {
+        use fuel_core_types::fuel_tx::field::Witnesses;
+        match (tx1, tx2) {
+            (Transaction::Script(script1), Transaction::Script(script2)) => {
+                assert_eq!(script1.script(), script2.script());
+                assert_eq!(script1.policies(), script2.policies());
+                assert_eq!(script1.inputs(), script2.inputs());
+                assert_eq!(script1.witnesses(), script2.witnesses());
+                assert_eq!(script1.metadata(), script2.metadata());
+                assert_eq!(script1.outputs().len(), script2.outputs().len());
+                for (i, output1) in script1.outputs().iter().enumerate() {
+                    let output2 = &script2.outputs()[i];
+                    match output1 {
+                        Output::Coin { .. } => assert_eq!(output1, output2),
+                        Output::Change { .. } => {
+                            assert!(matches!(output2, Output::Change { .. }))
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn produce_without_commit__includes_mint() {
+        let mut producer = create_executor(Default::default(), Default::default());
+        let block = test_block(1u32.into(), 0u64.into(), 10);
+        // let config = (*producer.config).clone();
+
+        let ExecutionResult { block, .. } =
+            producer.produce_and_commit(block.into()).unwrap();
+
+        let maybe_mint = block.transactions().last().unwrap().as_mint();
+        assert!(maybe_mint.is_some());
+        let mint = maybe_mint.unwrap();
+        assert_eq!(
+            mint.tx_pointer(),
+            &TxPointer::new(*block.header().height(), 10)
+        );
+        assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
+        assert_eq!(mint.mint_amount(), &0);
+        assert_eq!(mint.input_contract().contract_id, ContractId::zeroed());
+        assert_eq!(mint.input_contract().balance_root, Bytes32::zeroed());
+        assert_eq!(mint.input_contract().state_root, Bytes32::zeroed());
+        assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
+        assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
+        assert_eq!(mint.output_contract().balance_root, Bytes32::zeroed());
+        assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
+        assert_eq!(mint.output_contract().input_index, 0);
+    }
+
+    // fn mint_values_match_config(
+    //     mint: &Transaction,
+    //     config: &Config,
+    //
+    // ) {
+    //     // assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
+    //     // assert_eq!(mint.mint_amount(), &0);
+    //     // assert_eq!(mint.input_contract().contract_id, ContractId::zeroed());
+    //     // assert_eq!(mint.input_contract().balance_root, Bytes32::zeroed());
+    //     // assert_eq!(mint.input_contract().state_root, Bytes32::zeroed());
+    //     // assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
+    //     // assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
+    //     // assert_eq!(mint.output_contract().balance_root, Bytes32::zeroed());
+    //     // assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
+    //     // assert_eq!(mint.output_contract().input_index, 0);
+    //     assert!(mint.is_mint());
+    // }
 
     mod coinbase {
         use crate::graphql_api::ports::DatabaseContracts;
@@ -3492,15 +3578,22 @@ mod tests {
 
             // When
             let producer = create_relayer_executor(on_chain_db, relayer_db);
-            let block = test_block(block_height.into(), block_da_height.into(), 10);
-            let (result, changes) = producer
-                .produce_without_commit(block.into())
+            let first_block = test_block(block_height.into(), block_da_height.into(), 10);
+            let (first_result, first_changes) = producer
+                .produce_without_commit(first_block.into())
+                .unwrap()
+                .into();
+
+            let second_block = strip_mint_from_block(first_result.block);
+            let (second_result, second_changes) = producer
+                .produce_without_commit(second_block.into())
                 .unwrap()
                 .into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
-            assert!(result.skipped_transactions.is_empty());
+            let view = ChangesIterator::<OnChain>::new(&second_changes);
+            assert_eq!(first_changes, second_changes);
+            assert!(second_result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
         }
 
