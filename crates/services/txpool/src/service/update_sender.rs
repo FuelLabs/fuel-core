@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    future::Future,
     pin::Pin,
     time::Duration,
 };
@@ -114,9 +113,6 @@ pub trait CreateChannel {
 trait Permits {
     /// Try to acquire a permit.
     fn try_acquire(self: Arc<Self>) -> Option<Permit>;
-
-    /// Wait for a permit to be available.
-    fn acquire(self: Arc<Self>) -> Pin<Box<dyn Future<Output = Permit> + Send + Sync>>;
 }
 
 /// Combines `Permits` and `std::fmt::Debug`.
@@ -138,16 +134,6 @@ impl CreateChannel for MpscChannel {
 impl Permits for Semaphore {
     fn try_acquire(self: Arc<Self>) -> Option<Permit> {
         Semaphore::try_acquire_owned(self).ok().map(|p| {
-            let b: Permit = Box::new(p);
-            b
-        })
-    }
-
-    fn acquire(self: Arc<Self>) -> Pin<Box<dyn Future<Output = Permit> + Send + Sync>> {
-        Box::pin(async move {
-            let p = Semaphore::acquire_owned(self)
-                .await
-                .expect("Semaphore is not ever closed");
             let b: Permit = Box::new(p);
             b
         })
