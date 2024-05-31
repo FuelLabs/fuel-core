@@ -1,12 +1,11 @@
 use fuel_core_types::fuel_types::BlockHeight;
-use thiserror::Error;
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub type ForeignResult<T> = std::result::Result<T, ForeignError>;
 
 type ForeignError = Box<dyn std::error::Error>;
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Requested block ({requested}) is too high, latest block is {latest}")]
     RequestedBlockHeightTooHigh {

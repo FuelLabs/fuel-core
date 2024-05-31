@@ -225,10 +225,7 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
 }
 
 impl GasPriceProvider for StaticGasPrice {
-    fn gas_price(
-        &self,
-        _block_height: GasPriceParams,
-    ) -> Result<u64, Box<dyn std::error::Error>> {
+    fn gas_price(&self, _block_height: GasPriceParams) -> anyhow::Result<u64> {
         Ok(self.gas_price)
     }
 }

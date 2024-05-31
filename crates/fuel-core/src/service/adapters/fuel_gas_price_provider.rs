@@ -218,11 +218,8 @@ where
     A: GasPriceAlgorithm,
     GP: GasPriceHistory,
 {
-    fn gas_price(
-        &self,
-        params: GasPriceParams,
-    ) -> Result<u64, Box<dyn std::error::Error>> {
+    fn gas_price(&self, params: GasPriceParams) -> anyhow::Result<u64> {
         self.inner_gas_price(params.block_height())
-            .map_err(|e| Box::new(e).into())
+            .map_err(|e| anyhow::anyhow!(e))
     }
 }
