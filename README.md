@@ -116,7 +116,7 @@ act release -s GITHUB_TOKEN=<YOUR_GITHUB_TOKEN> -j publish-crates-check --contai
 ```
 
 It requires GitHubToken to do request to the GitHub. You can create it 
-with [this](https://docs.github.com/en/enterprise-server@3.13/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) instruction.
+with [this](https://docs.github.com/en/enterprise-server@3.4/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) instruction.
 
 #### Outdated database
 
