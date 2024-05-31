@@ -6,8 +6,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+- [#1913](https://github.com/FuelLabs/fuel-core/pull/1913): Removed dead code from the project.
+
+### Fixed
+- [#1914](https://github.com/FuelLabs/fuel-core/pull/1914): Fixed halting of the node during synchronization in PoA service.
+
+## [Version 0.27.0]
+
+### Added
+
+- [#1895](https://github.com/FuelLabs/fuel-core/pull/1895): Added backward and forward compatibility integration tests for forkless upgrades.
+- [#1898](https://github.com/FuelLabs/fuel-core/pull/1898): Enforce increasing of the `Executor::VERSION` on each release.
+
 ### Changed
 
+- [#1906](https://github.com/FuelLabs/fuel-core/pull/1906): Makes `cli::snapshot::Command` members public such that clients can create and execute snapshot commands programmatically. This enables snapshot execution in external programs, such as the regenesis test suite. 
 - [#1891](https://github.com/FuelLabs/fuel-core/pull/1891): Regenesis now preserves `FuelBlockMerkleData` and `FuelBlockMerkleMetadata` in the off-chain table. These tables are checked when querying message proofs.
 - [#1886](https://github.com/FuelLabs/fuel-core/pull/1886): Use ref to `Block` in validation code
 - [#1876](https://github.com/FuelLabs/fuel-core/pull/1876): Updated benchmark to include the worst scenario for `CROO` opcode. Also include consensus parameters in bench output.
@@ -15,6 +29,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1848](https://github.com/FuelLabs/fuel-core/pull/1848): Added `version` field to the `Block` and `BlockHeader` GraphQL entities. Added corresponding `version` field to the `Block` and `BlockHeader` client types in `fuel-core-client`.
 - [#1873](https://github.com/FuelLabs/fuel-core/pull/1873/): Separate dry runs from block production in executor code, remove `ExecutionKind` and `ExecutionType`, remove `thread_block_transaction` concept, remove `PartialBlockComponent` type, refactor away `inner` functions.
 - [#1900](https://github.com/FuelLabs/fuel-core/pull/1900): Update the root README as `fuel-core run` no longer has `--chain` as an option. It has been replaced by `--snapshot`.
+
+#### Breaking
+
+- [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Use testnet configuration for local testnet.
+- [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Removed support for helm chart.
+- [#1910](https://github.com/FuelLabs/fuel-core/pull/1910): `fuel-vm` upgraded to `0.50.0`. More information in the [changelog](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.50.0).
 
 ## [Version 0.26.0]
 

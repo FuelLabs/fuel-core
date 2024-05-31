@@ -1,7 +1,4 @@
-use crate::{
-    types::*,
-    TxInfo,
-};
+use crate::TxInfo;
 use fuel_core_types::services::txpool::ArcPoolTx;
 use std::collections::BTreeMap;
 
@@ -51,6 +48,4 @@ pub trait SortableKey: Ord {
     fn new(info: &TxInfo) -> Self;
 
     fn value(&self) -> &Self::Value;
-
-    fn tx_id(&self) -> &TxId;
 }

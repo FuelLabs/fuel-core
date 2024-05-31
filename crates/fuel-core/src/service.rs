@@ -70,6 +70,12 @@ pub struct FuelService {
     pub bound_address: SocketAddr,
 }
 
+impl Drop for FuelService {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 impl FuelService {
     /// Creates a `FuelService` instance from service config
     #[tracing::instrument(skip_all, fields(name = %config.name))]

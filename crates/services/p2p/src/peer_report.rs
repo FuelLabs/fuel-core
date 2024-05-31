@@ -2,7 +2,6 @@ use crate::config::Config;
 use libp2p::{
     self,
     core::Endpoint,
-    identify,
     swarm::{
         derive_prelude::{
             ConnectionClosed,
@@ -157,47 +156,5 @@ impl NetworkBehaviour for Behaviour {
         }
 
         Poll::Pending
-    }
-}
-
-trait FromAction<T: NetworkBehaviour>: NetworkBehaviour {
-    fn convert_action(
-        &mut self,
-        action: ToSwarm<T::ToSwarm, THandlerInEvent<T>>,
-    ) -> Option<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>>;
-}
-
-impl FromSwarmEvent for Behaviour {}
-impl FromSwarmEvent for identify::Behaviour {}
-
-trait FromSwarmEvent: NetworkBehaviour {
-    fn handle_swarm_event(&mut self, event: &FromSwarm) {
-        match event {
-            FromSwarm::NewListener(e) => {
-                self.on_swarm_event(FromSwarm::NewListener(*e));
-            }
-            FromSwarm::ExpiredListenAddr(e) => {
-                self.on_swarm_event(FromSwarm::ExpiredListenAddr(*e));
-            }
-            FromSwarm::ListenerError(e) => {
-                self.on_swarm_event(FromSwarm::ListenerError(*e));
-            }
-            FromSwarm::ListenerClosed(e) => {
-                self.on_swarm_event(FromSwarm::ListenerClosed(*e));
-            }
-            FromSwarm::NewExternalAddrCandidate(e) => {
-                self.on_swarm_event(FromSwarm::NewExternalAddrCandidate(*e));
-            }
-            FromSwarm::ExternalAddrExpired(e) => {
-                self.on_swarm_event(FromSwarm::ExternalAddrExpired(*e));
-            }
-            FromSwarm::NewListenAddr(e) => {
-                self.on_swarm_event(FromSwarm::NewListenAddr(*e));
-            }
-            FromSwarm::AddressChange(e) => {
-                self.on_swarm_event(FromSwarm::AddressChange(*e));
-            }
-            _ => {}
-        }
     }
 }

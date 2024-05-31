@@ -2,6 +2,7 @@ use clap::Parser;
 use fuel_core::{
     chain_config::{
         ChainConfig,
+        LastBlockConfig,
         SnapshotWriter,
     },
     service::{
@@ -22,6 +23,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
     fuel_asm::{
         op,
         GTFArgs,
@@ -252,6 +254,10 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
             data: vec![],
             da_height: Default::default(),
         }],
+        last_block: Some(LastBlockConfig {
+            state_transition_version: LATEST_STATE_TRANSITION_VERSION - 1,
+            ..Default::default()
+        }),
         ..Default::default()
     };
     let writer = SnapshotWriter::json(state_config_dir.path());
@@ -396,6 +402,14 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
 async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
+    let base_asset_id = *core
+        .node
+        .shared
+        .config
+        .snapshot_reader
+        .chain_config()
+        .consensus_parameters
+        .base_asset_id();
 
     let secret = SecretKey::random(&mut rng);
     let public_key: PublicKey = (&secret).into();
@@ -420,13 +434,13 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             secret,
             rng.gen(),
             100_000_000,
-            Default::default(),
+            base_asset_id,
             Default::default(),
         )
         .add_output(Output::change(
             Default::default(),
             Default::default(),
-            Default::default(),
+            base_asset_id,
         ))
         .max_fee_limit(1_000_000)
         .script_gas_limit(1_000_000)

@@ -10,6 +10,7 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+use anyhow::anyhow;
 use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
 
@@ -33,6 +34,7 @@ pub mod test_helpers;
 pub mod transactional;
 pub mod vm_storage;
 
+use fuel_core_types::fuel_merkle::binary::MerkleTreeError;
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,
     ContractsStateData,
@@ -93,6 +95,15 @@ impl From<Error> for fuel_vm_private::prelude::InterpreterError<Error> {
 impl From<Error> for fuel_vm_private::prelude::RuntimeError<Error> {
     fn from(e: Error) -> Self {
         fuel_vm_private::prelude::RuntimeError::Storage(e)
+    }
+}
+
+impl From<MerkleTreeError<Error>> for Error {
+    fn from(e: MerkleTreeError<Error>) -> Self {
+        match e {
+            MerkleTreeError::StorageError(s) => s,
+            e => Error::Other(anyhow!(e)),
+        }
     }
 }
 
