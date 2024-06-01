@@ -117,7 +117,7 @@ where
         } else if Self::asking_for_next_block(latest_block, requested_block_height) {
             let new_gas_prices = self.calculate_new_gas_price(latest_block)?;
             self.gas_price_history
-                .store_gas_prices(latest_block, &new_gas_prices)
+                .store_gas_prices(requested_block_height, &new_gas_prices)
                 .map_err(Error::UnableToStoreGasPrices)?;
             Ok(new_gas_prices.total())
         } else {
@@ -220,6 +220,6 @@ where
 {
     fn gas_price(&self, params: GasPriceParams) -> anyhow::Result<u64> {
         self.inner_gas_price(params.block_height())
-            .map_err(|e| anyhow::anyhow!(e))
+            .map_err(|e| anyhow::anyhow!("Failed to query gas price: {e:?}"))
     }
 }
