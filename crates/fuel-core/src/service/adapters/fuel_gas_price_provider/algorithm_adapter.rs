@@ -33,12 +33,12 @@ impl GasPriceAlgorithm for FuelGasPriceAlgorithm {
 
     fn calculate_execution_gas_price(
         &self,
-        previous_execution_gas_prices: u64,
+        previous_execution_gas_price: u64,
         block_fullness: BlockFullness,
     ) -> u64 {
         match self {
             FuelGasPriceAlgorithm::V1(v1) => v1.calculate_exec_gas_price(
-                previous_execution_gas_prices,
+                previous_execution_gas_price,
                 block_fullness.used(),
                 block_fullness.capacity(),
             ),
