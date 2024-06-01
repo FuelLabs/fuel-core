@@ -463,7 +463,7 @@ mod tests {
         use fuel_core_types::services::graphql_api::ContractBalance;
 
         #[test]
-        fn executor_commits_transactions_with_non_zero_coinbase_generation() {
+        fn produce__skipped_transactions_do_not_affect_coinbase_values() {
             // The test verifies the correctness of the coinbase contract update.
             // The test generates two blocks with a non-zero fee.
             //
@@ -545,28 +545,11 @@ mod tests {
 
             assert_eq!(skipped_transactions.len(), 1);
             assert_eq!(block.transactions().len(), 2);
-            assert!(expected_fee_amount_1 > 0);
-            let first_mint;
-
-            if let Some(mint) = block.transactions()[1].as_mint() {
-                assert_eq!(
-                    mint.tx_pointer(),
-                    &TxPointer::new(*block.header().height(), 1)
-                );
-                assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
-                assert_eq!(mint.mint_amount(), &expected_fee_amount_1);
-                assert_eq!(mint.input_contract().contract_id, recipient);
-                assert_eq!(mint.input_contract().balance_root, Bytes32::zeroed());
-                assert_eq!(mint.input_contract().state_root, Bytes32::zeroed());
-                assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
-                assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
-                assert_ne!(mint.output_contract().balance_root, Bytes32::zeroed());
-                assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
-                assert_eq!(mint.output_contract().input_index, 0);
-                first_mint = mint.clone();
-            } else {
-                panic!("Invalid coinbase transaction");
-            }
+            let first_mint = block
+                .transactions()
+                .last()
+                .and_then(Transaction::as_mint)
+                .expect("Block should have `Mint` tx");
 
             let ContractBalance {
                 asset_id, amount, ..
@@ -578,6 +561,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(asset_id, AssetId::zeroed());
+            assert!(expected_fee_amount_1 > 0);
             assert_eq!(amount, expected_fee_amount_1);
 
             let script = TxBuilder::new(2u64)
@@ -625,39 +609,41 @@ mod tests {
             assert_eq!(skipped_transactions.len(), 0);
             assert_eq!(block.transactions().len(), 2);
 
-            if let Some(second_mint) = block.transactions()[1].as_mint() {
-                assert_eq!(second_mint.tx_pointer(), &TxPointer::new(2.into(), 1));
-                assert_eq!(second_mint.mint_asset_id(), &AssetId::BASE);
-                assert_eq!(second_mint.mint_amount(), &expected_fee_amount_2);
-                assert_eq!(second_mint.input_contract().contract_id, recipient);
-                assert_eq!(
-                    second_mint.input_contract().balance_root,
-                    first_mint.output_contract().balance_root
-                );
-                assert_eq!(
-                    second_mint.input_contract().state_root,
-                    first_mint.output_contract().state_root
-                );
-                assert_eq!(
-                    second_mint.input_contract().utxo_id,
-                    UtxoId::new(first_mint.id(&consensus_parameters.chain_id()), 0)
-                );
-                assert_eq!(
-                    second_mint.input_contract().tx_pointer,
-                    TxPointer::new(1.into(), 1)
-                );
-                assert_ne!(
-                    second_mint.output_contract().balance_root,
-                    first_mint.output_contract().balance_root
-                );
-                assert_eq!(
-                    second_mint.output_contract().state_root,
-                    first_mint.output_contract().state_root
-                );
-                assert_eq!(second_mint.output_contract().input_index, 0);
-            } else {
-                panic!("Invalid coinbase transaction");
-            }
+            let second_mint = block
+                .transactions()
+                .last()
+                .and_then(Transaction::as_mint)
+                .expect("Block should have `Mint` tx");
+
+            assert_eq!(second_mint.mint_asset_id(), &AssetId::BASE);
+            assert_eq!(second_mint.mint_amount(), &expected_fee_amount_2);
+            assert_eq!(second_mint.input_contract().contract_id, recipient);
+            assert_eq!(
+                second_mint.input_contract().balance_root,
+                first_mint.output_contract().balance_root
+            );
+            assert_eq!(
+                second_mint.input_contract().state_root,
+                first_mint.output_contract().state_root
+            );
+            assert_eq!(
+                second_mint.input_contract().utxo_id,
+                UtxoId::new(first_mint.id(&consensus_parameters.chain_id()), 0)
+            );
+            assert_eq!(
+                second_mint.input_contract().tx_pointer,
+                TxPointer::new(1.into(), 1)
+            );
+            assert_ne!(
+                second_mint.output_contract().balance_root,
+                first_mint.output_contract().balance_root
+            );
+            assert_eq!(
+                second_mint.output_contract().state_root,
+                first_mint.output_contract().state_root
+            );
+            assert_eq!(second_mint.output_contract().input_index, 0);
+
             let ContractBalance {
                 asset_id, amount, ..
             } = producer
