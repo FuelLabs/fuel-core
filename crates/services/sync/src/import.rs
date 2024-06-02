@@ -258,7 +258,11 @@ where
                         _ = shutdown_signal.while_started() => {
                             break;
                         },
-                        _ = batch_sender.send(block_batch) => {},
+                        result = batch_sender.send(block_batch) => {
+                            if result.is_err() {
+                                break
+                            }
+                        },
                     }
                 }
             }

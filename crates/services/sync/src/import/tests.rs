@@ -14,6 +14,7 @@ use crate::{
     },
 };
 use fuel_core_types::services::p2p::Transactions;
+use std::time::Duration;
 
 use super::*;
 
@@ -1024,6 +1025,65 @@ async fn import__missing_transactions_sends_peer_report() {
         // Then
         .run_with_expected_reports([PeerReportReason::MissingTransactions])
         .await;
+}
+
+#[tokio::test]
+async fn import__execution_error_on_header_4_when_awaits_for_1000000_blocks() {
+    // given
+    let mut consensus_port = MockConsensusPort::default();
+    consensus_port
+        .expect_check_sealed_header()
+        .returning(|_| Ok(true));
+    consensus_port
+        .expect_await_da_height()
+        .returning(|_| Ok(()));
+
+    let mut p2p = MockPeerToPeerPort::default();
+    p2p.expect_get_sealed_block_headers().returning(|range| {
+        let peer = random_peer();
+        let headers = Some(range.map(empty_header).collect());
+        let headers = peer.bind(headers);
+        Ok(headers)
+    });
+    p2p.expect_get_transactions().returning(|block_ids| {
+        let data = block_ids.data;
+        let v = data.into_iter().map(|_| Transactions::default()).collect();
+        Ok(Some(v))
+    });
+
+    let mut executor = MockBlockImporterPort::default();
+    executor
+        .expect_execute_and_commit()
+        .times(1)
+        .returning(|h| {
+            if **h.entity.header().height() == 4 {
+                Err(anyhow::anyhow!("Some execution error"))
+            } else {
+                Ok(())
+            }
+        });
+
+    let state = State::new(3, 1000000).into();
+    let mocks = Mocks {
+        consensus_port,
+        p2p,
+        executor,
+    };
+    let params = Config {
+        block_stream_buffer_size: 1,
+        header_batch_size: 1,
+    };
+
+    // when
+    let res = tokio::time::timeout(
+        Duration::from_secs(1),
+        test_import_inner(state, mocks, None, params),
+    )
+    .await;
+
+    // then
+    let res = res.expect("Should not timeout if the first block failed execution");
+    assert_eq!((State::new(3, None), false), res);
 }
 
 struct PeerReportTestBuilder {
