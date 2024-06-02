@@ -214,7 +214,11 @@ pub fn create_genesis_block(config: &Config) -> Block {
             da_height = 0u64.into();
         }
         consensus_parameters_version = ConsensusParametersVersion::MIN;
-        state_transition_bytecode_version = StateTransitionBytecodeVersion::MIN;
+        state_transition_bytecode_version = config
+            .snapshot_reader
+            .chain_config()
+            .genesis_state_transition_version
+            .unwrap_or(StateTransitionBytecodeVersion::MIN);
         prev_root = Bytes32::zeroed();
     }
 
@@ -646,6 +650,12 @@ mod tests {
         let mut expected_state = initial_state;
         let mut last_block = LastBlockConfig::default();
         last_block.block_height = db.on_chain().latest_height().unwrap().unwrap();
+        last_block.state_transition_version = db
+            .on_chain()
+            .latest_block()
+            .unwrap()
+            .header()
+            .state_transition_bytecode_version;
         last_block.blocks_root = db
             .on_chain()
             .block_header_merkle_root(&last_block.block_height)
