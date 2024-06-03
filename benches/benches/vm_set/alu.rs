@@ -50,7 +50,7 @@ pub fn run(c: &mut Criterion) {
         let mut aloc_linear = linear_short.clone();
         aloc_linear.push(1_000_000);
         aloc_linear.push(10_000_000);
-        aloc_linear.push(50_000_000);
+        aloc_linear.push(30_000_000);
         for i in aloc_linear {
             let bench =
                 VmBench::new(op::aloc(0x10)).with_prepare_script(set_full_word(0x10, i));
