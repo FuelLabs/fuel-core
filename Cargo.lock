@@ -8237,7 +8237,10 @@ dependencies = [
 name = "test-helpers"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "clap 4.5.4",
  "fuel-core",
+ "fuel-core-bin",
  "fuel-core-client",
  "fuel-core-p2p",
  "fuel-core-poa",
@@ -8248,6 +8251,7 @@ dependencies = [
  "fuel-core-types",
  "itertools 0.12.1",
  "rand",
+ "tempfile",
 ]
 
 [[package]]

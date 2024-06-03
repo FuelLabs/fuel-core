@@ -104,7 +104,9 @@ impl Config {
         // In tests, we always want to use the native executor as a default configuration.
         let native_executor_version = latest_block
             .map(|last_block| last_block.state_transition_version.saturating_add(1))
-            .unwrap_or(StateTransitionBytecodeVersion::MIN);
+            .unwrap_or(
+                fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+            );
 
         let utxo_validation = false;
         let min_gas_price = 0;
