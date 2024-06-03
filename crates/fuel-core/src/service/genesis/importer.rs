@@ -37,6 +37,10 @@ use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         Coins,
         ContractsAssets,
         ContractsLatestUtxo,
@@ -113,6 +117,8 @@ impl SnapshotImporter {
         self.spawn_worker_on_chain::<ContractsState>()?;
         self.spawn_worker_on_chain::<ContractsAssets>()?;
         self.spawn_worker_on_chain::<ProcessedTransactions>()?;
+        self.spawn_worker_on_chain::<FuelBlockMerkleData>()?;
+        self.spawn_worker_on_chain::<FuelBlockMerkleMetadata>()?;
 
         self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?;
         self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?;

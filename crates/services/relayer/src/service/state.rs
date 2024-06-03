@@ -21,10 +21,6 @@ pub struct EthState {
 type EthHeight = u64;
 
 #[derive(Clone, Debug)]
-/// Type for tracking block height ranges.
-struct Heights<T>(RangeInclusive<T>);
-
-#[derive(Clone, Debug)]
 /// The gap between the eth block height on
 /// the relayer and the Ethereum node.
 pub struct EthSyncGap(EthHeight, EthHeight);

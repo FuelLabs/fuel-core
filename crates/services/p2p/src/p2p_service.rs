@@ -923,7 +923,7 @@ mod tests {
             let mut p2p_config = p2p_config.clone();
             p2p_config.max_peers_connected = node_a_max_peers_allowed as u32;
             // it still tries to dial all nodes!
-            p2p_config.bootstrap_nodes = nodes_multiaddrs.clone();
+            p2p_config.bootstrap_nodes.clone_from(&nodes_multiaddrs);
 
             build_service_from_config(p2p_config).await
         };
@@ -933,7 +933,7 @@ mod tests {
             let mut p2p_config = p2p_config.clone();
             p2p_config.max_peers_connected = node_b_max_peers_allowed as u32;
             // it still tries to dial all nodes!
-            p2p_config.bootstrap_nodes = nodes_multiaddrs.clone();
+            p2p_config.bootstrap_nodes.clone_from(&nodes_multiaddrs);
 
             build_service_from_config(p2p_config).await
         };

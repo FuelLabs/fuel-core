@@ -68,7 +68,7 @@ mod test {
     crate::basic_storage_tests!(
         ContractsState,
         <ContractsState as Mappable>::Key::default(),
-        vec![0u8; 32],
+        [0u8; 32],
         vec![0u8; 32].into(),
         generate_key_for_same_contract
     );

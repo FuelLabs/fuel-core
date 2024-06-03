@@ -95,23 +95,6 @@ impl TxPool for MockTxPool {
 #[derive(Default)]
 pub struct MockExecutor(pub MockDb);
 
-#[derive(Debug)]
-struct DatabaseTransaction {
-    database: MockDb,
-}
-
-impl AsMut<MockDb> for DatabaseTransaction {
-    fn as_mut(&mut self) -> &mut MockDb {
-        &mut self.database
-    }
-}
-
-impl AsRef<MockDb> for DatabaseTransaction {
-    fn as_ref(&self) -> &MockDb {
-        &self.database
-    }
-}
-
 impl AsMut<MockDb> for MockDb {
     fn as_mut(&mut self) -> &mut MockDb {
         self

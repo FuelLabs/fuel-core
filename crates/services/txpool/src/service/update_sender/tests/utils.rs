@@ -187,10 +187,6 @@ impl Permits for () {
     fn try_acquire(self: Arc<Self>) -> Option<Permit> {
         Some(Permit::from(Box::new(())))
     }
-
-    fn acquire(self: Arc<Self>) -> Pin<Box<dyn Future<Output = Permit> + Send + Sync>> {
-        Box::pin(async move { Permit::from(Box::new(())) })
-    }
 }
 
 pub(super) struct MockCreateChannel;

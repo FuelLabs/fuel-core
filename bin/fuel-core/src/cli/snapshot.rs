@@ -27,11 +27,11 @@ pub struct Command {
         value_parser,
         default_value = default_db_path().into_os_string()
     )]
-    pub(crate) database_path: PathBuf,
+    pub database_path: PathBuf,
 
     /// Where to save the snapshot
     #[arg(name = "OUTPUT_DIR", long = "output-directory")]
-    pub(crate) output_dir: PathBuf,
+    pub output_dir: PathBuf,
 
     /// The maximum database cache size in bytes.
     #[arg(
@@ -43,7 +43,7 @@ pub struct Command {
 
     /// The sub-command of the snapshot operation.
     #[command(subcommand)]
-    pub(crate) subcommand: SubCommands,
+    pub subcommand: SubCommands,
 }
 
 #[derive(Subcommand, Debug, Clone, Copy)]
@@ -191,14 +191,18 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactionIndexKey,
-        OwnedTransactions,
-        TransactionStatuses,
+    use fuel_core::{
+        fuel_core_graphql_api::storage::transactions::{
+            OwnedTransactionIndexKey,
+            OwnedTransactions,
+            TransactionStatuses,
+        },
+        producer::ports::BlockProducerDatabase,
     };
     use fuel_core_chain_config::{
         AddTable,
         AsTable,
+        LastBlockConfig,
         SnapshotMetadata,
         SnapshotReader,
         StateConfig,
@@ -316,7 +320,10 @@ mod tests {
             builder.add(self.common.contract_balance);
 
             builder
-                .build(Some(self.common.block.value.header().into()))
+                .build(Some(LastBlockConfig::from_header(
+                    self.common.block.value.header(),
+                    Default::default(),
+                )))
                 .unwrap()
         }
 
@@ -761,6 +768,12 @@ mod tests {
             .unwrap()
             .clone();
         let contract_id = randomly_chosen_contract.contract_id;
+        let mut latest_block = original_state.last_block.unwrap();
+        latest_block.blocks_root = db
+            .db
+            .on_chain()
+            .block_header_merkle_root(&latest_block.block_height)
+            .unwrap();
         db.flush();
 
         // when
@@ -782,7 +795,7 @@ mod tests {
                 coins: vec![],
                 messages: vec![],
                 contracts: vec![randomly_chosen_contract],
-                last_block: original_state.last_block,
+                last_block: Some(latest_block),
             }
         );
 
