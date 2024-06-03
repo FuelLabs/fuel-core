@@ -371,7 +371,6 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            Self::trace_block_version_warning(block_version);
             self.wasm_produce_inner(&module, block, options, dry_run)
         }
     }
@@ -415,18 +414,17 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            Self::trace_block_version_warning(block_version);
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
         }
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn trace_block_version_warning(block_version: StateTransitionBytecodeVersion) {
+    fn trace_block_version_warning(&self, block_version: StateTransitionBytecodeVersion) {
         tracing::warn!(
             "The block version({}) is different from the native executor version({}). \
                 The WASM executor will be used.",
             block_version,
-            Self::VERSION
+            self.native_executor_version()
         );
     }
 
@@ -465,6 +463,9 @@ where
             coinbase_recipient,
             gas_price,
         } = component;
+        self.trace_block_version_warning(
+            header_to_produce.state_transition_bytecode_version,
+        );
 
         let source = Some(transactions_source);
 
@@ -502,6 +503,9 @@ where
         block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
+        self.trace_block_version_warning(
+            block.header().state_transition_bytecode_version,
+        );
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
 
