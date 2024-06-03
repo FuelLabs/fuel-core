@@ -468,8 +468,8 @@ pub mod tests {
         let tx = fuel_tx::Transaction::default_test_tx();
         let query = DryRun::build(DryRunArg {
             txs: vec![HexString(Bytes(tx.to_bytes()))],
-            utxo_validation: None,
-            gas_price: None,
+            utxo_validation: Some(true),
+            gas_price: Some(123),
         });
         insta::assert_snapshot!(query.query)
     }
