@@ -37,9 +37,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("aloc"),
         "aloc",
-        // We allocate zero because memory is usually
-        // allocated before and covered by the `vm_initialization`.
-        VmBench::new(op::aloc(0x10)).with_prepare_script(vec![op::movi(0x10, 0)]),
+        VmBench::new(op::aloc(0x10))
+            .with_prepare_script(vec![op::movi(0x10, (1 << 18) - 1)]),
     );
 
     run_group_ref(
