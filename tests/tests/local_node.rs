@@ -38,7 +38,7 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
         assert_eq!(
             chain_config.genesis_state_transition_version,
             Some(LATEST_STATE_TRANSITION_VERSION),
-            "Genesis state transition version should match the one in the deployment directory"
+            "Genesis state transition version should match the one in the local configuration"
         );
     }
 
@@ -54,7 +54,7 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
         .to_string();
     assert_eq!(
         chain_config, stored_chain_config,
-        "Chain config should match the one in the deployment directory"
+        "Chain config should match the one in the local configuration"
     );
 
     let stored_state_config = {
@@ -77,7 +77,7 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
     };
     assert_eq!(
         stored_state_config, generated_state_config,
-        "State config should match the one in the deployment directory"
+        "State config should match the one in the local configuration"
     );
 
     Ok(())
