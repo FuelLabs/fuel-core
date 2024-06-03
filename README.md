@@ -39,6 +39,14 @@ apt install -y cmake pkg-config build-essential git clang libclang-dev
 pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
 ```
 
+### Rust setup
+
+You'll need `wasm32-unknown-unknown` target installed.
+
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
 ### Compiling
 
 We recommend using `xtask` to build fuel-core:
