@@ -83,7 +83,7 @@ use fuel_core_types::{
     fuel_vm::{
         checked_transaction::EstimatePredicates,
         consts::WORD_SIZE,
-        pool::test_pool,
+        interpreter::MemoryInstance,
     },
     services::executor::TransactionExecutionResult,
 };
@@ -411,7 +411,7 @@ fn run_with_service_with_extra_inputs(
             let chain_config = shared.config.snapshot_reader.chain_config().clone();
             tx.estimate_predicates(
                 &chain_config.consensus_parameters.clone().into(),
-                DummyPool,
+                MemoryInstance::new(),
             )
             .unwrap();
             async move {

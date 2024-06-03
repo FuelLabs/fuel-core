@@ -25,9 +25,15 @@ use fuel_core_types::{
             IntoChecked,
             Ready,
         },
-        constraints::reg_key::Reg,
+        constraints::reg_key::{
+            Reg,
+            RegMut,
+        },
         consts::VM_MAX_RAM,
-        interpreter::NotSupportedEcal,
+        interpreter::{
+            MemoryInstance,
+            NotSupportedEcal,
+        },
         Interpreter,
     },
 };
@@ -112,7 +118,8 @@ pub fn vm_initialization(c: &mut Criterion) {
 fn unoptimized_vm_initialization_with_allocating_full_range_of_memory(
     ready_tx: &Ready<Script>,
 ) {
-    let vm = black_box(Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage());
+    let vm =
+        black_box(Interpreter::<_, _, Script, NotSupportedEcal>::with_memory_storage());
 
     black_box(initialize_vm_with_allocated_full_range_of_memory(
         black_box(ready_tx.clone()),
@@ -122,8 +129,8 @@ fn unoptimized_vm_initialization_with_allocating_full_range_of_memory(
 
 fn initialize_vm_with_allocated_full_range_of_memory<S>(
     ready_tx: Ready<Script>,
-    mut vm: Interpreter<S, Script>,
-) -> Interpreter<S, Script>
+    mut vm: Interpreter<MemoryInstance, S, Script>,
+) -> Interpreter<MemoryInstance, S, Script>
 where
     S: InterpreterStorage,
 {
@@ -136,18 +143,18 @@ where
 
     for i in 0..=POWER_OF_TWO_OF_HALF_VM {
         let stack = 1 << i;
-        let heap = VM_MAX_RAM - stack;
+        let heap = stack / 2;
 
         vm.memory_mut()
             .grow_stack(stack)
             .expect("Should be able to grow stack");
         vm.memory_mut()
-            .grow_heap(Reg::new(&0), heap)
+            .grow_heap_by(Reg::new(&0), RegMut::new(&mut 0), heap)
             .expect("Should be able to grow heap");
     }
 
     vm.memory_mut()
-        .grow_heap(Reg::new(&0), 0)
+        .grow_heap_by(Reg::new(&0), RegMut::new(&mut 0), VM_MEM_HALF)
         .expect("Should be able to grow heap");
 
     vm

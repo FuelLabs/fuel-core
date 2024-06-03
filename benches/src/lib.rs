@@ -25,7 +25,6 @@ use fuel_core_types::{
         interpreter::{
             diff,
             InterpreterParams,
-            Memory,
             ReceiptsCtx,
         },
         *,
@@ -40,6 +39,7 @@ pub mod default_gas_costs;
 pub mod import;
 
 pub use fuel_core_storage::vm_storage::VmStorage;
+use fuel_core_types::fuel_vm::interpreter::MemoryInstance;
 pub use rand::Rng;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
@@ -108,7 +108,11 @@ pub struct VmBench {
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<Memory, VmStorage<StorageTransaction<GenesisDatabase>>, Script>,
+    pub vm: Interpreter<
+        MemoryInstance,
+        VmStorage<StorageTransaction<GenesisDatabase>>,
+        Script,
+    >,
     pub instruction: Instruction,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
@@ -455,12 +459,15 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .maturity(maturity)
             .with_params(params.clone())
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::from(&params), Memory::new())
-            .unwrap();
-        let tx = tx.into_checked(height, &params, Memory::new()).unwrap();
+        tx.estimate_predicates(
+            &CheckPredicateParams::from(&params),
+            MemoryInstance::new(),
+        )
+        .unwrap();
+        let tx = tx.into_checked(height, &params).unwrap();
         let interpreter_params = InterpreterParams::new(gas_price, &params);
 
-        let mut txtor = Transactor::new(Memory::new(), db, interpreter_params);
+        let mut txtor = Transactor::new(MemoryInstance::new(), db, interpreter_params);
 
         txtor.transact(tx);
 

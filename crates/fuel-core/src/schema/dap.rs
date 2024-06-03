@@ -16,10 +16,6 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_executor::vm_pool::{
-    MemoryFromPool,
-    SharedVmMemoryPool,
-};
 use fuel_core_storage::{
     not_found,
     transactional::{
@@ -52,8 +48,10 @@ use fuel_core_types::{
             CheckedTransaction,
             IntoChecked,
         },
-        interpreter::InterpreterParams,
-        pool::VmMemoryPool,
+        interpreter::{
+            InterpreterParams,
+            MemoryInstance,
+        },
         state::DebugEval,
         Interpreter,
         InterpreterError,
@@ -81,8 +79,7 @@ type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
 
 #[derive(Default, Debug)]
 pub struct ConcreteStorage {
-    pool: SharedVmMemoryPool,
-    vm: HashMap<ID, Interpreter<MemoryFromPool, FrozenDatabase, Script>>,
+    vm: HashMap<ID, Interpreter<MemoryInstance, FrozenDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
 }
 
@@ -140,7 +137,7 @@ impl ConcreteStorage {
 
         let interpreter_params = InterpreterParams::new(GAS_PRICE, params.as_ref());
         let mut vm = Interpreter::with_storage(
-            self.pool.get_new(),
+            MemoryInstance::new(),
             vm_database,
             interpreter_params,
         );
@@ -184,7 +181,7 @@ impl ConcreteStorage {
 
         let interpreter_params = InterpreterParams::new(GAS_PRICE, params.as_ref());
         let mut vm = Interpreter::with_storage(
-            self.pool.get_new(),
+            MemoryInstance::new(),
             vm_database,
             interpreter_params,
         );

@@ -25,6 +25,7 @@ use crate::{
         },
         tx::types::TransactionStatus,
     },
+    service::adapters::SharedMemoryPool,
 };
 use async_graphql::{
     connection::{
@@ -35,15 +36,14 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_executor::vm_pool::SharedVmMemoryPool;
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
     Result as StorageResult,
 };
 use fuel_core_txpool::{
+    ports::MemoryPool,
     service::TxStatusMessage,
-    txpool::TokioWithRayon,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -215,12 +215,14 @@ impl TxQuery {
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
 
-        let vm_pool = ctx.data_unchecked::<SharedVmMemoryPool>().clone();
+        let memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
+        let memory = memory_pool.get_memory().await;
 
-        tx.estimate_predicates_async::<TokioWithRayon>(
-            &CheckPredicateParams::from(params.as_ref()),
-            vm_pool,
-        )
+        let parameters = CheckPredicateParams::from(params.as_ref());
+        let tx = tokio_rayon::spawn_fifo(move || {
+            let result = tx.estimate_predicates(&parameters, memory);
+            result.map(|_| tx)
+        })
         .await
         .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 

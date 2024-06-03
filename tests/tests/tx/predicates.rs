@@ -16,7 +16,7 @@ use fuel_core_types::{
             CheckPredicateParams,
             EstimatePredicates,
         },
-        interpreter::Memory,
+        interpreter::MemoryInstance,
     },
 };
 use rand::{
@@ -71,7 +71,7 @@ async fn transaction_with_valid_predicate_is_executed() {
                     .chain_config()
                     .consensus_parameters,
             ),
-            Memory::new(),
+            MemoryInstance::new(),
         )
         .expect("Predicate check failed");
 

@@ -39,7 +39,7 @@ pub mod fuel_vm {
         double_key,
         error::PredicateVerificationFailed,
         interpreter,
-        pool,
+        pool::VmMemoryPool,
         prelude::{
             Backtrace,
             Call,

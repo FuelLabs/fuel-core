@@ -40,7 +40,7 @@ use fuel_core_types::{
     },
     fuel_vm::{
         checked_transaction::EstimatePredicates,
-        pool::VmMemoryPool,
+        interpreter::MemoryInstance,
     },
 };
 
@@ -192,31 +192,20 @@ impl UnsetInput {
 pub trait IntoEstimated {
     #[cfg(feature = "test-helpers")]
     fn into_default_estimated(self) -> Self;
-    fn into_estimated(
-        self,
-        params: &ConsensusParameters,
-        vm_pool: impl VmMemoryPool,
-    ) -> Self;
+    fn into_estimated(self, params: &ConsensusParameters) -> Self;
 }
 
 impl IntoEstimated for Input {
     #[cfg(feature = "test-helpers")]
     fn into_default_estimated(self) -> Self {
-        self.into_estimated(
-            &Default::default(),
-            fuel_core_types::fuel_vm::pool::DummyPool,
-        )
+        self.into_estimated(&Default::default())
     }
 
-    fn into_estimated(
-        self,
-        params: &ConsensusParameters,
-        vm_pool: impl VmMemoryPool,
-    ) -> Self {
+    fn into_estimated(self, params: &ConsensusParameters) -> Self {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(self)
             .finalize();
-        let _ = tx.estimate_predicates(&params.into(), vm_pool.get_new());
+        let _ = tx.estimate_predicates(&params.into(), MemoryInstance::new());
         tx.inputs()[0].clone()
     }
 }
