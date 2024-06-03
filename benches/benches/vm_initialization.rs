@@ -120,6 +120,7 @@ pub fn vm_initialization(c: &mut Criterion) {
     group.finish();
 }
 
+#[allow(clippy::unit_arg)]
 fn unoptimized_vm_initialization_with_allocating_full_range_of_memory<S>(
     vm: &mut Interpreter<MemoryInstance, S, Script>,
     ready_tx: &Ready<Script>,
