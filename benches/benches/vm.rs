@@ -94,8 +94,16 @@ criterion_main!(benches);
 // But first you need to comment `criterion_group` and `criterion_main` macros above.
 //
 // fn main() {
-//     let mut criterio = Criterion::default();
+//     let criterio = Criterion::default();
+//     let mut criterio = criterio.with_filter("vm_initialization");
+//     alu::run(&mut criterio);
+//     crypto::run(&mut criterio);
+//     flow::run(&mut criterio);
+//     mem::run(&mut criterio);
 //     blockchain::run(&mut criterio);
+//     contract_root(&mut criterio);
+//     state_root(&mut criterio);
+//     vm_initialization(&mut criterio);
 // }
 //
 // #[test]

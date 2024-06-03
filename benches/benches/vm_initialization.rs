@@ -104,10 +104,15 @@ pub fn vm_initialization(c: &mut Criterion) {
         let tx = tx.test_into_ready();
 
         let name = format!("vm_initialization_with_tx_size_{}", tx_size);
+        let mut vm = black_box(
+            Interpreter::<_, _, Script, NotSupportedEcal>::with_memory_storage(),
+        );
         group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
-                unoptimized_vm_initialization_with_allocating_full_range_of_memory(&tx);
+                unoptimized_vm_initialization_with_allocating_full_range_of_memory(
+                    &mut vm, &tx,
+                );
             })
         });
     }
@@ -115,12 +120,12 @@ pub fn vm_initialization(c: &mut Criterion) {
     group.finish();
 }
 
-fn unoptimized_vm_initialization_with_allocating_full_range_of_memory(
+fn unoptimized_vm_initialization_with_allocating_full_range_of_memory<S>(
+    vm: &mut Interpreter<MemoryInstance, S, Script>,
     ready_tx: &Ready<Script>,
-) {
-    let vm =
-        black_box(Interpreter::<_, _, Script, NotSupportedEcal>::with_memory_storage());
-
+) where
+    S: InterpreterStorage,
+{
     black_box(initialize_vm_with_allocated_full_range_of_memory(
         black_box(ready_tx.clone()),
         vm,
@@ -129,9 +134,8 @@ fn unoptimized_vm_initialization_with_allocating_full_range_of_memory(
 
 fn initialize_vm_with_allocated_full_range_of_memory<S>(
     ready_tx: Ready<Script>,
-    mut vm: Interpreter<MemoryInstance, S, Script>,
-) -> Interpreter<MemoryInstance, S, Script>
-where
+    vm: &mut Interpreter<MemoryInstance, S, Script>,
+) where
     S: InterpreterStorage,
 {
     vm.init_script(ready_tx)
@@ -140,6 +144,7 @@ where
     const POWER_OF_TWO_OF_HALF_VM: u64 = 25;
     const VM_MEM_HALF: u64 = 1 << POWER_OF_TWO_OF_HALF_VM;
     assert_eq!(VM_MEM_HALF, VM_MAX_RAM / 2);
+    let mut hp = VM_MAX_RAM;
 
     for i in 0..=POWER_OF_TWO_OF_HALF_VM {
         let stack = 1 << i;
@@ -149,13 +154,11 @@ where
             .grow_stack(stack)
             .expect("Should be able to grow stack");
         vm.memory_mut()
-            .grow_heap_by(Reg::new(&0), RegMut::new(&mut 0), heap)
+            .grow_heap_by(Reg::new(&0), RegMut::new(&mut hp), heap)
             .expect("Should be able to grow heap");
     }
 
     vm.memory_mut()
-        .grow_heap_by(Reg::new(&0), RegMut::new(&mut 0), VM_MEM_HALF)
+        .grow_heap_by(Reg::new(&0), RegMut::new(&mut hp), VM_MEM_HALF)
         .expect("Should be able to grow heap");
-
-    vm
 }
