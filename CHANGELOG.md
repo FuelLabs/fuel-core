@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [#1929](https://github.com/FuelLabs/fuel-core/pull/1929): Added support of customization of the state transition version in the `ChainConfig`.
+
 ### Removed
 - [#1913](https://github.com/FuelLabs/fuel-core/pull/1913): Removed dead code from the project.
 

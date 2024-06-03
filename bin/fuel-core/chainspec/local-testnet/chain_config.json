@@ -263,6 +263,7 @@
       "privileged_address": "b62c6f41c4c380d78ae67a8b432a4a41e2465383f8cc9869b67106835685c388"
     }
   },
+  "genesis_state_transition_version": 1,
   "consensus": {
     "PoA": {
       "signing_key": "e8df6d432b2584a3ea9d0badf297c3b525bae71b577d22c1ccc12519adb64d92"
