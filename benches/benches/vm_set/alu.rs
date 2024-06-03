@@ -5,25 +5,17 @@ use criterion::{
     Throughput,
 };
 use ethnum::U256;
-use fuel_core::txpool::types::ContractId;
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
 
 use crate::utils::linear_short;
-use fuel_core_types::{
-    fuel_asm::wideint::{
-        CompareArgs,
-        CompareMode,
-        DivArgs,
-        MathArgs,
-        MathOp,
-        MulArgs,
-    },
-    fuel_tx::{
-        AssetId,
-        Bytes32,
-    },
-    fuel_vm::consts::WORD_SIZE,
+use fuel_core_types::fuel_asm::wideint::{
+    CompareArgs,
+    CompareMode,
+    DivArgs,
+    MathArgs,
+    MathOp,
+    MulArgs,
 };
 
 use super::utils::{

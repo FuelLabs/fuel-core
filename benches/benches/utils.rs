@@ -101,8 +101,7 @@ pub fn make_receipts(rng: &mut StdRng) -> ReceiptsCtx {
 const LAST_VALUE: u64 = 100_000;
 
 pub fn linear_short() -> Vec<u64> {
-    let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
-    let mut linear_short = linear.clone();
+    let mut linear_short = vec![1, 10, 100, 1000, 10_000];
     linear_short.push(LAST_VALUE);
     linear_short
 }
