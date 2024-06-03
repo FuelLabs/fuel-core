@@ -97,3 +97,23 @@ pub fn make_receipts(rng: &mut StdRng) -> ReceiptsCtx {
     }
     ctx
 }
+
+const LAST_VALUE: u64 = 100_000;
+
+pub fn linear_short() -> Vec<u64> {
+    let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
+    let mut linear_short = linear.clone();
+    linear_short.push(LAST_VALUE);
+    linear_short
+}
+
+pub fn linear() -> Vec<u64> {
+    let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
+    let mut l = successors(Some(LAST_VALUE as f64), |n| Some(n / 1.5))
+        .take(5)
+        .map(|f| f as u64)
+        .collect::<Vec<_>>();
+    l.sort_unstable();
+    linear.extend(l);
+    linear
+}

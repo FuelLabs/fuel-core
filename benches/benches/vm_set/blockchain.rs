@@ -3,7 +3,11 @@ use std::{
     sync::Arc,
 };
 
-use crate::utils::make_receipts;
+use crate::utils::{
+    linear,
+    linear_short,
+    make_receipts,
+};
 
 use super::run_group_ref;
 
@@ -151,16 +155,8 @@ impl BenchDb {
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
-    const LAST_VALUE: u64 = 100_000;
-    let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
-    let mut linear_short = linear.clone();
-    linear_short.push(LAST_VALUE);
-    let mut l = successors(Some(LAST_VALUE as f64), |n| Some(n / 1.5))
-        .take(5)
-        .map(|f| f as u64)
-        .collect::<Vec<_>>();
-    l.sort_unstable();
-    linear.extend(l);
+    let linear_short = linear_short();
+    let linear = linear();
 
     let asset = AssetId::zeroed();
     let contract: ContractId = VmBench::CONTRACT;
