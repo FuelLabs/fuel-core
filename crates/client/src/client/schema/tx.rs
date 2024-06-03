@@ -469,7 +469,7 @@ pub mod tests {
         let query = DryRun::build(DryRunArg {
             txs: vec![HexString(Bytes(tx.to_bytes()))],
             utxo_validation: Some(true),
-            gas_price: Some(123),
+            gas_price: Some(123u64.into()),
         });
         insta::assert_snapshot!(query.query)
     }
