@@ -38,3 +38,6 @@ genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", feature
 ] }
 genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
+
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "master" }
