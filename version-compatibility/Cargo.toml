@@ -11,6 +11,3 @@ exclude = [
   "0.14.1-0.15.0/fuel-core-0.14.1-client-0.15.0",
   "0.14.1-0.15.0/fuel-core-0.15.0-client-0.14.1",
 ]
-
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "master" }

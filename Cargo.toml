@@ -81,7 +81,7 @@ fuel-core-wasm-executor = { version = "0.27.0", path = "./crates/services/upgrad
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.50.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.51.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
@@ -133,6 +133,3 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
-
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "master" }
