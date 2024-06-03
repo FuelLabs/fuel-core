@@ -1,23 +1,43 @@
 #![allow(non_snake_case)]
 
-use crate::helpers::{TestContext, TestSetupBuilder};
+use crate::helpers::{
+    TestContext,
+    TestSetupBuilder,
+};
 
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        CoinConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     schema::gas_price::EstimateGasPrice,
     types::{
         gas_price::LatestGasPrice,
-        primitives::{Address, AssetId},
+        primitives::{
+            Address,
+            AssetId,
+        },
     },
     FuelClient,
 };
 use fuel_core_types::{
     fuel_asm::*,
-    fuel_crypto::{coins_bip32::ecdsa::signature::rand_core::SeedableRng, SecretKey},
-    fuel_tx::{Finalizable, Input, TransactionBuilder, UtxoId},
+    fuel_crypto::{
+        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
+        SecretKey,
+    },
+    fuel_tx::{
+        Finalizable,
+        Input,
+        TransactionBuilder,
+        UtxoId,
+    },
     services::executor::TransactionExecutionResult,
 };
 use rand::prelude::StdRng;
