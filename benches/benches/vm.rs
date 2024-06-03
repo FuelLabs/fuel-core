@@ -53,8 +53,8 @@ where
 
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
-                let start = black_box(clock.raw());
                 vm.memory_mut().clone_from(&original_memory);
+                let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {
                         let (ra, rb, rc, rd) = call.unpack();
