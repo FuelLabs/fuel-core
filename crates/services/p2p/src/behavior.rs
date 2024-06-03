@@ -9,6 +9,7 @@ use crate::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
+    health_check,
     heartbeat,
     peer_report,
     request_response::messages::{
@@ -59,6 +60,9 @@ pub struct FuelBehaviour {
 
     /// Node discovery
     discovery: discovery::Behaviour,
+
+    /// Regularly checks if reserved nodes are connected
+    health_check: health_check::Behavior,
 
     /// RequestResponse protocol
     request_response: request_response::Behaviour<PostcardCodec>,
@@ -134,6 +138,7 @@ impl FuelBehaviour {
             blocked_peer: Default::default(),
             identify,
             heartbeat,
+            health_check: health_check::Behavior::new(),
         }
     }
 

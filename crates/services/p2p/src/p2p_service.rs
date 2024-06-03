@@ -18,6 +18,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
+    health_check::HealthCheckEvent,
     heartbeat,
     peer_manager::{
         PeerManager,
@@ -458,8 +459,30 @@ impl FuelP2PService {
             }
             FuelBehaviourEvent::Identify(event) => self.handle_identify_event(event),
             FuelBehaviourEvent::Heartbeat(event) => self.handle_heartbeat_event(event),
+            FuelBehaviourEvent::HealthCheck(event) => {
+                self.handle_health_check_event(event)
+            }
             _ => None,
         }
+    }
+
+    fn handle_health_check_event(
+        &mut self,
+        _event: HealthCheckEvent,
+    ) -> Option<FuelP2PEvent> {
+        let disconnected_peers: Vec<_> = self
+            .peer_manager
+            .get_disconnected_reserved_peers()
+            .copied()
+            .collect();
+
+        for peer_id in disconnected_peers {
+            debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
+
+            let _ = self.swarm.dial(peer_id);
+        }
+
+        None
     }
 
     fn handle_gossipsub_event(
@@ -511,19 +534,6 @@ impl FuelP2PService {
         match event {
             PeerReportEvent::PerformDecay => {
                 self.peer_manager.batch_update_score_with_decay()
-            }
-            PeerReportEvent::CheckReservedNodesHealth => {
-                let disconnected_peers: Vec<_> = self
-                    .peer_manager
-                    .get_disconnected_reserved_peers()
-                    .copied()
-                    .collect();
-
-                for peer_id in disconnected_peers {
-                    debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
-
-                    let _ = self.swarm.dial(peer_id);
-                }
             }
             PeerReportEvent::PeerConnected {
                 peer_id,

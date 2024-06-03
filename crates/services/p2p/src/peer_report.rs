@@ -33,7 +33,6 @@ use tokio::time::{
     Interval,
 };
 
-const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
 const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 
 /// Events emitted by PeerReportBehavior
@@ -46,8 +45,6 @@ pub enum PeerReportEvent {
     PeerDisconnected {
         peer_id: PeerId,
     },
-    /// Informs p2p service / PeerManager to check health of reserved nodes' connections
-    CheckReservedNodesHealth,
     /// Informs p2p service / PeerManager to perform reputation decay of connected nodes
     PerformDecay,
 }
@@ -55,8 +52,6 @@ pub enum PeerReportEvent {
 // `Behaviour` that reports events about peers
 pub struct Behaviour {
     pending_events: VecDeque<PeerReportEvent>,
-    // regularly checks if reserved nodes are connected
-    health_check: Interval,
     decay_interval: Interval,
 }
 
@@ -64,9 +59,6 @@ impl Behaviour {
     pub(crate) fn new(_config: &Config) -> Self {
         Self {
             pending_events: VecDeque::default(),
-            health_check: time::interval(Duration::from_secs(
-                HEALTH_CHECK_INTERVAL_IN_SECONDS,
-            )),
             decay_interval: time::interval(Duration::from_secs(
                 REPUTATION_DECAY_INTERVAL_IN_SECONDS,
             )),
@@ -147,12 +139,6 @@ impl NetworkBehaviour for Behaviour {
 
         if self.decay_interval.poll_tick(cx).is_ready() {
             return Poll::Ready(ToSwarm::GenerateEvent(PeerReportEvent::PerformDecay))
-        }
-
-        if self.health_check.poll_tick(cx).is_ready() {
-            return Poll::Ready(ToSwarm::GenerateEvent(
-                PeerReportEvent::CheckReservedNodesHealth,
-            ))
         }
 
         Poll::Pending

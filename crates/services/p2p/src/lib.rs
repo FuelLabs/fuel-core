@@ -6,6 +6,7 @@ pub mod codecs;
 pub mod config;
 pub mod discovery;
 pub mod gossipsub;
+pub mod health_check;
 pub mod heartbeat;
 pub mod p2p_service;
 pub mod peer_manager;
