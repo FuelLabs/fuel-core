@@ -25,6 +25,7 @@ use fuel_core_types::{
         interpreter::{
             diff,
             InterpreterParams,
+            MemoryInstance,
             ReceiptsCtx,
         },
         *,
@@ -39,7 +40,6 @@ pub mod default_gas_costs;
 pub mod import;
 
 pub use fuel_core_storage::vm_storage::VmStorage;
-use fuel_core_types::fuel_vm::interpreter::MemoryInstance;
 pub use rand::Rng;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;

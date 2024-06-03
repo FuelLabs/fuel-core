@@ -18,6 +18,7 @@ use crate::{
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoAAdapter,
+            SharedMemoryPool,
             StaticGasPrice,
             TxPoolAdapter,
             VerifierAdapter,
@@ -33,7 +34,6 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::SharedMemoryPool;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
