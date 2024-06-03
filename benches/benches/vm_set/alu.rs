@@ -37,8 +37,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("aloc"),
         "aloc",
-        VmBench::new(op::aloc(0x10))
-            .with_prepare_script(vec![op::movi(0x10, (1 << 18) - 1)]),
+        VmBench::new(op::aloc(0x10)).with_prepare_script(vec![op::movi(0x10, 1)]),
     );
 
     run_group_ref(
