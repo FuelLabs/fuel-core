@@ -41,7 +41,6 @@ fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
-gas-price-algorithm = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }

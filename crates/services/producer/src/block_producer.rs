@@ -1,6 +1,7 @@
 use crate::{
     block_producer::gas_price::{
         ConsensusParametersProvider,
+        GasPriceParams,
         GasPriceProvider as GasPriceProviderConstraint,
     },
     ports,
@@ -121,9 +122,13 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
+        let block_bytes = 0;
+
+        let gas_price_params = GasPriceParams::new(height, block_bytes);
+
         let gas_price = self
             .gas_price_provider
-            .gas_price(height.into())
+            .gas_price(gas_price_params)
             .map_err(|e| anyhow!("No gas price found for block {height:?}: {e:?}"))?;
 
         let component = Components {
@@ -218,9 +223,13 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
+        let block_bytes = 0;
+
+        let gas_price_params = GasPriceParams::new(height, block_bytes);
+
         let gas_price = self
             .gas_price_provider
-            .gas_price(height.into())
+            .gas_price(gas_price_params)
             .map_err(|e| anyhow!("No gas price found for height {height:?}: {e:?}"))?;
 
         // The dry run execution should use the state of the blockchain based on the
