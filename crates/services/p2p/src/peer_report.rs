@@ -200,6 +200,9 @@ impl NetworkBehaviour for Behaviour {
             if instant.elapsed() > Duration::from_secs(HEALTH_CHECK_INTERVAL_IN_SECONDS) {
                 let peer_id = *peer_id;
                 self.reserved_nodes_to_connect.pop_front();
+                // The initial DNS address can be replaced with a real IP, but when
+                // the node disconnects, the IP may change. Using initial multiaddrs
+                // here allows you to reconnect and get a new IP again.
                 let multiaddrs = self
                     .reserved_nodes_multiaddr
                     .get(&peer_id)

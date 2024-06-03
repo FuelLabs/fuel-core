@@ -54,7 +54,7 @@ rand = { workspace = true }
 reqwest = { workspace = true }
 rstest = "0.15"
 serde_json = { workspace = true }
-tempfile = "3.3"
+tempfile = { workspace = true }
 test-case = { workspace = true }
 test-helpers = { path = "./test-helpers" }
 tokio = { workspace = true, features = [
