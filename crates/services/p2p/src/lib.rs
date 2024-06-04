@@ -4,13 +4,13 @@
 pub mod behavior;
 pub mod codecs;
 pub mod config;
+pub mod decay;
 pub mod discovery;
 pub mod gossipsub;
 pub mod health_check;
 pub mod heartbeat;
 pub mod p2p_service;
 pub mod peer_manager;
-pub mod peer_report;
 pub mod ports;
 pub mod request_response;
 pub mod service;

@@ -4,6 +4,7 @@ use crate::{
         NetworkCodec,
     },
     config::Config,
+    decay,
     discovery,
     gossipsub::{
         config::build_gossipsub_behaviour,
@@ -11,7 +12,6 @@ use crate::{
     },
     health_check,
     heartbeat,
-    peer_report,
     request_response::messages::{
         RequestMessage,
         ResponseMessage,
@@ -55,14 +55,14 @@ pub struct FuelBehaviour {
     /// The Behaviour to identify peers.
     identify: identify::Behaviour,
 
-    /// Identifies and periodically requests `BlockHeight` from connected nodes
-    peer_report: peer_report::Behaviour,
-
     /// Node discovery
     discovery: discovery::Behaviour,
 
     /// Regularly checks if reserved nodes are connected
     health_check: health_check::Behavior,
+
+    /// Regularly informs p2p service / PeerManager to perform reputation decay of connected nodes
+    decay: decay::Behavior,
 
     /// RequestResponse protocol
     request_response: request_response::Behaviour<PostcardCodec>,
@@ -96,8 +96,6 @@ impl FuelBehaviour {
         };
 
         let gossipsub = build_gossipsub_behaviour(p2p_config);
-
-        let peer_report = peer_report::Behaviour::new(p2p_config);
 
         let identify = {
             let identify_config = identify::Config::new(
@@ -133,12 +131,12 @@ impl FuelBehaviour {
         Self {
             discovery: discovery_config.finish(),
             gossipsub,
-            peer_report,
             request_response,
             blocked_peer: Default::default(),
             identify,
             heartbeat,
             health_check: health_check::Behavior::new(),
+            decay: decay::Behavior::new(),
         }
     }
 

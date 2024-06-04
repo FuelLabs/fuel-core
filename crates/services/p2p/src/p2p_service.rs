@@ -11,6 +11,7 @@ use crate::{
         build_transport_function,
         Config,
     },
+    decay::DecayEvent,
     gossipsub::{
         messages::{
             GossipsubBroadcastRequest,
@@ -24,7 +25,6 @@ use crate::{
         PeerManager,
         Punisher,
     },
-    peer_report::PeerReportEvent,
     request_response::messages::{
         RequestError,
         RequestMessage,
@@ -453,7 +453,6 @@ impl FuelP2PService {
     ) -> Option<FuelP2PEvent> {
         match event {
             FuelBehaviourEvent::Gossipsub(event) => self.handle_gossipsub_event(event),
-            FuelBehaviourEvent::PeerReport(event) => self.handle_peer_report_event(event),
             FuelBehaviourEvent::RequestResponse(event) => {
                 self.handle_request_response_event(event)
             }
@@ -462,8 +461,15 @@ impl FuelP2PService {
             FuelBehaviourEvent::HealthCheck(event) => {
                 self.handle_health_check_event(event)
             }
+            FuelBehaviourEvent::Decay(event) => self.handle_decay_event(event),
             _ => None,
         }
+    }
+
+    fn handle_decay_event(&mut self, _event: DecayEvent) -> Option<FuelP2PEvent> {
+        self.peer_manager.batch_update_score_with_decay();
+
+        None
     }
 
     fn handle_health_check_event(
@@ -522,37 +528,6 @@ impl FuelP2PService {
                 }
             } else {
                 warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
-            }
-        }
-        None
-    }
-
-    fn handle_peer_report_event(
-        &mut self,
-        event: PeerReportEvent,
-    ) -> Option<FuelP2PEvent> {
-        match event {
-            PeerReportEvent::PerformDecay => {
-                self.peer_manager.batch_update_score_with_decay()
-            }
-            PeerReportEvent::PeerConnected {
-                peer_id,
-                initial_connection,
-            } => {
-                if self
-                    .peer_manager
-                    .handle_peer_connected(&peer_id, initial_connection)
-                {
-                    let _ = self.swarm.disconnect_peer_id(peer_id);
-                } else if initial_connection {
-                    return Some(FuelP2PEvent::PeerConnected(peer_id));
-                }
-            }
-            PeerReportEvent::PeerDisconnected { peer_id } => {
-                if self.peer_manager.handle_peer_disconnect(peer_id) {
-                    let _ = self.swarm.dial(peer_id);
-                }
-                return Some(FuelP2PEvent::PeerDisconnected(peer_id));
             }
         }
         None
