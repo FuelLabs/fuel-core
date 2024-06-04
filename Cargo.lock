@@ -3286,6 +3286,7 @@ dependencies = [
  "rand",
  "test-case",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
 ]

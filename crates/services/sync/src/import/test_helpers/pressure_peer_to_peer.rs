@@ -44,9 +44,6 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.counts.apply(|c| c.inc_headers());
         tokio::time::sleep(self.durations[0]).await;
         self.counts.apply(|c| c.dec_headers());
-        for _ in block_height_range.clone() {
-            self.counts.apply(|c| c.inc_blocks());
-        }
         self.p2p.get_sealed_block_headers(block_height_range).await
     }
 
@@ -54,12 +51,12 @@ impl PeerToPeerPort for PressurePeerToPeer {
         &self,
         block_ids: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
-        let transactions_count = block_ids.data.len();
-        self.counts
-            .apply(|c| c.add_transactions(transactions_count));
+        self.counts.apply(|c| c.inc_transactions());
         tokio::time::sleep(self.durations[1]).await;
-        self.counts
-            .apply(|c| c.sub_transactions(transactions_count));
+        for _height in block_ids.data.clone() {
+            self.counts.apply(|c| c.inc_blocks());
+        }
+        self.counts.apply(|c| c.dec_transactions());
         self.p2p.get_transactions(block_ids).await
     }
 
