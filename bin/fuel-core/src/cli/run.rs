@@ -206,6 +206,10 @@ pub struct Command {
     #[clap(long = "api-request-timeout", default_value = "30m", env)]
     pub api_request_timeout: humantime::Duration,
 
+    /// The size of the memory pool in number of `MemoryInstance`s.
+    #[clap(long = "memory-pool-size", default_value = "32", env)]
+    pub memory_pool_size: usize,
+
     #[clap(flatten)]
     pub profiling: profiling::ProfilingArgs,
 }
@@ -243,6 +247,7 @@ impl Command {
             time_until_synced,
             query_log_threshold_time,
             api_request_timeout,
+            memory_pool_size,
             profiling: _,
         } = self;
 
@@ -368,6 +373,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             query_log_threshold_time: query_log_threshold_time.into(),
+            memory_pool_size,
         };
         Ok(config)
     }

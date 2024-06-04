@@ -31,9 +31,12 @@ use fuel_core_types::{
         Immediate12,
         Immediate18,
     },
-    fuel_vm::checked_transaction::{
-        CheckPredicateParams,
-        EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        interpreter::MemoryInstance,
     },
 };
 use rand::{
@@ -209,7 +212,7 @@ fn predicate_transfers(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::default())
+        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
             .expect("Predicate check failed");
         tx
     };
@@ -275,7 +278,7 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::default())
+        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
             .expect("Predicate check failed");
         tx
     };

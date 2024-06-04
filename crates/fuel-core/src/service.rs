@@ -30,6 +30,7 @@ pub mod genesis;
 pub mod metrics;
 mod query;
 pub mod sub_services;
+pub mod vm_pool;
 
 #[derive(Clone)]
 pub struct SharedState {
