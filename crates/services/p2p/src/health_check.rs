@@ -48,6 +48,12 @@ impl Behavior {
     }
 }
 
+impl Default for Behavior {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NetworkBehaviour for Behavior {
     type ConnectionHandler = dummy::ConnectionHandler;
     type ToSwarm = HealthCheckEvent;
