@@ -18,6 +18,7 @@ members = [
   "crates/services/consensus_module/bft",
   "crates/services/consensus_module/poa",
   "crates/services/executor",
+  "crates/services/gas_price_service",
   "crates/services/importer",
   "crates/services/p2p",
   "crates/services/producer",

@@ -3917,6 +3917,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "gas_price_service"
+version = "0.26.0"
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
