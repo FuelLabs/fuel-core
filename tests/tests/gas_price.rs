@@ -1,5 +1,10 @@
 #![allow(non_snake_case)]
 
+use crate::helpers::{
+    TestContext,
+    TestSetupBuilder,
+};
+
 use fuel_core::{
     chain_config::{
         CoinConfig,
@@ -22,6 +27,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
+    fuel_asm::*,
     fuel_crypto::{
         coins_bip32::ecdsa::signature::rand_core::SeedableRng,
         SecretKey,
@@ -32,6 +38,7 @@ use fuel_core_types::{
         TransactionBuilder,
         UtxoId,
     },
+    services::executor::TransactionExecutionResult,
 };
 use rand::prelude::StdRng;
 
@@ -143,4 +150,59 @@ async fn estimate_gas_price__should_be_static() {
     let expected = node_config.static_gas_price;
     let actual = u64::from(gas_price);
     assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn dry_run_opt_with_zero_gas_price() {
+    let tx = TransactionBuilder::script(
+        op::ret(RegId::ONE).to_bytes().into_iter().collect(),
+        vec![],
+    )
+    .add_random_fee_input()
+    .script_gas_limit(1000)
+    .max_fee_limit(600000)
+    .finalize_as_transaction();
+
+    let mut test_builder = TestSetupBuilder::new(2322u64);
+    test_builder.min_gas_price = 1;
+    let TestContext {
+        client,
+        srv: _dont_drop,
+        ..
+    } = test_builder.finalize().await;
+
+    let TransactionExecutionResult::Success {
+        total_fee,
+        total_gas,
+        ..
+    } = client
+        .dry_run_opt(&[tx.clone()], Some(false), None)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .result
+    else {
+        panic!("dry run should have succeeded");
+    };
+
+    let TransactionExecutionResult::Success {
+        total_fee: total_fee_zero_gas_price,
+        total_gas: total_gas_zero_gas_price,
+        ..
+    } = client
+        .dry_run_opt(&[tx], Some(false), Some(0))
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .result
+    else {
+        panic!("dry run should have succeeded");
+    };
+
+    assert_ne!(total_fee, total_fee_zero_gas_price);
+    assert_eq!(total_fee_zero_gas_price, 0);
+
+    assert_eq!(total_gas, total_gas_zero_gas_price);
 }
