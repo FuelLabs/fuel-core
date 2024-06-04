@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use core::iter::successors;
 use ethnum::U256;
 use fuel_core_types::{
@@ -80,7 +82,6 @@ pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
 const BENCH_RECEIPTS: usize = (u16::MAX - 4) as usize;
 
 /// Testing receipt context
-#[allow(dead_code)] // Unsure why this is needed, as the code is used
 pub fn make_receipts(rng: &mut StdRng) -> ReceiptsCtx {
     let mut ctx = ReceiptsCtx::default();
     for _ in 0..BENCH_RECEIPTS {

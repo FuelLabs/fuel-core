@@ -82,7 +82,6 @@ query {
         version
         add
         addi
-        aloc
         and
         andi
         bal
@@ -168,6 +167,17 @@ query {
         wqmm
         xor
         xori
+        alocDependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
         call {
           __typename
           ... on LightOperation {

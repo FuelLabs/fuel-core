@@ -2818,8 +2818,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0b13a9708f7c87e47c7bdac1ba53520dbb35d52a1c5bf077202874263c4ded2"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 dependencies = [
  "bitflags 2.5.0",
  "fuel-types",
@@ -3411,8 +3410,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73c08da09f3436a14c65a8bbac2f30cb91a78546661e98446be44318a457ae40"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3432,8 +3430,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23868a33cea329387876f0589276dadf148e320a4f9ea6b2734391420d4d9b12"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3444,8 +3441,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b9932b20011c055287839ae4578787216ab3c78b2b44fca5f6371bb618f3e9"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3459,14 +3455,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c786dcf141847a8f7a6a91ce108ee18b82ab4b8163d0de0ae4456cb4271519d"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 
 [[package]]
 name = "fuel-tx"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5437facc953b3dda2656f1782150a64c65acfb8bc44baddee4703530025c9bf6"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 dependencies = [
  "bitflags 2.5.0",
  "derivative",
@@ -3488,8 +3482,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00250cf68b66bc0689d24a20e6ebcedb509536e12967cfbeeefe45188e90e01e"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3500,8 +3493,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.51.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71ce30e132528432fe16af39696f943479a7bbd6a673e6f5659deba1b112ad24"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/dependent-cost-allocate#d8d50dd0467ab5ced3398c07d4d86e531f0433c1"
 dependencies = [
  "anyhow",
  "async-trait",

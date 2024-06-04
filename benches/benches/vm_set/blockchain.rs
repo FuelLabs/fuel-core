@@ -280,7 +280,7 @@ pub fn run(c: &mut Criterion) {
     let mut call = c.benchmark_group("call");
 
     for i in linear.clone() {
-        let mut code = vec![0u8; i as usize];
+        let mut code = vec![123u8; i as usize];
 
         rng.fill_bytes(&mut code);
 
