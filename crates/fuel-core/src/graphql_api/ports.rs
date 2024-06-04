@@ -202,6 +202,7 @@ pub trait BlockProducerPort: Send + Sync {
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
 }
 
