@@ -209,6 +209,7 @@ where
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let height = height.unwrap_or_else(|| {
             self.view_provider
@@ -218,9 +219,8 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let gas_price = self
-            .gas_price_provider
-            .gas_price(height.into())
+        let gas_price = gas_price
+            .or_else(|| self.gas_price_provider.gas_price(height.into()))
             .ok_or(anyhow!("No gas price found for height {height:?}"))?;
 
         // The dry run execution should use the state of the blockchain based on the

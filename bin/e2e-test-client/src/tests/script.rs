@@ -189,7 +189,7 @@ async fn _dry_runs(
             let query = ctx
                 .alice
                 .client
-                .dry_run_opt(transactions, Some(false))
+                .dry_run_opt(transactions, Some(false), None)
                 .await;
             println!(
                 "Received the response for the query number {i} for {}ms",

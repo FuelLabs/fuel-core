@@ -73,6 +73,8 @@ use types::{
     Transaction,
 };
 
+use super::scalars::U64;
+
 pub mod input;
 pub mod output;
 pub mod receipt;
@@ -247,6 +249,7 @@ impl TxMutation {
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
         utxo_validation: Option<bool>,
+        gas_price: Option<U64>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let params = ctx
@@ -262,7 +265,12 @@ impl TxMutation {
         }
 
         let tx_statuses = block_producer
-            .dry_run_txs(transactions, None, utxo_validation)
+            .dry_run_txs(
+                transactions,
+                None,
+                utxo_validation,
+                gas_price.map(|x| x.into()),
+            )
             .await?;
         let tx_statuses = tx_statuses
             .into_iter()
