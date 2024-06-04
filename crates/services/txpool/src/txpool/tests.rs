@@ -38,9 +38,12 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::ChainId,
-    fuel_vm::checked_transaction::{
-        CheckError,
-        Checked,
+    fuel_vm::{
+        checked_transaction::{
+            CheckError,
+            Checked,
+        },
+        interpreter::MemoryInstance,
     },
 };
 use std::{
@@ -70,6 +73,7 @@ async fn check_unwrap_tx_with_gas_price(
         config.utxo_validation,
         &ConsensusParameters::default(),
         &gas_price_provider,
+        MemoryInstance::new(),
     )
     .await
     .expect("Transaction should be checked")
@@ -95,6 +99,7 @@ async fn check_tx_with_gas_price(
         config.utxo_validation,
         &ConsensusParameters::default(),
         &gas_price_provider,
+        MemoryInstance::new(),
     )
     .await
 }

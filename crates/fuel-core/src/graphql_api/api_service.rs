@@ -18,7 +18,10 @@ use crate::{
         CoreSchema,
         CoreSchemaBuilder,
     },
-    service::metrics::metrics,
+    service::{
+        adapters::SharedMemoryPool,
+        metrics::metrics,
+    },
 };
 use async_graphql::{
     http::{
@@ -182,6 +185,7 @@ pub fn new_service<OnChain, OffChain>(
     p2p_service: P2pService,
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
+    memory_pool: SharedMemoryPool,
     log_threshold_ms: Duration,
     request_timeout: Duration,
 ) -> anyhow::Result<Service>
@@ -204,6 +208,7 @@ where
         .data(p2p_service)
         .data(gas_price_provider)
         .data(consensus_parameters_provider)
+        .data(memory_pool)
         .extension(async_graphql::extensions::Tracing)
         .extension(MetricsExtension::new(log_threshold_ms))
         .extension(ViewExtension::new())

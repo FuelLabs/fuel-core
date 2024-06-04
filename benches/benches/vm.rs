@@ -41,18 +41,19 @@ where
             let clock = quanta::Clock::new();
 
             let original_db = vm.as_mut().database_mut().clone();
+            let original_memory = vm.memory().clone();
             // During block production/validation for each state, which may affect the state of the database,
             // we create a new storage transaction. The code here simulates the same behavior to have
             // the same nesting level and the same performance.
             let block_database_tx = original_db.clone().into_transaction();
             let relayer_database_tx = block_database_tx.into_transaction();
-            let thread_database_tx = relayer_database_tx.into_transaction();
-            let tx_database_tx = thread_database_tx.into_transaction();
+            let tx_database_tx = relayer_database_tx.into_transaction();
             let database = GenesisDatabase::new(Arc::new(tx_database_tx));
             *vm.as_mut().database_mut() = database.into_transaction();
 
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
+                vm.memory_mut().clone_from(&original_memory);
                 let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {
@@ -71,6 +72,7 @@ where
                 vm.as_mut().database_mut().reset_changes();
             }
             *vm.as_mut().database_mut() = original_db;
+            *vm.memory_mut() = original_memory;
             total
         })
     });
@@ -94,8 +96,16 @@ criterion_main!(benches);
 // But first you need to comment `criterion_group` and `criterion_main` macros above.
 //
 // fn main() {
-//     let mut criterio = Criterion::default();
+//     let criterio = Criterion::default();
+//     let mut criterio = criterio.with_filter("vm_initialization");
+//     alu::run(&mut criterio);
+//     crypto::run(&mut criterio);
+//     flow::run(&mut criterio);
+//     mem::run(&mut criterio);
 //     blockchain::run(&mut criterio);
+//     contract_root(&mut criterio);
+//     state_root(&mut criterio);
+//     vm_initialization(&mut criterio);
 // }
 //
 // #[test]
