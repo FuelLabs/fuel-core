@@ -12,6 +12,7 @@ use crate::{
     },
     health_check,
     heartbeat,
+    peer_connection,
     request_response::messages::{
         RequestMessage,
         ResponseMessage,
@@ -55,14 +56,17 @@ pub struct FuelBehaviour {
     /// The Behaviour to identify peers.
     identify: identify::Behaviour,
 
-    /// Node discovery
-    discovery: discovery::Behaviour,
+    /// Handles peer connection and disconnection
+    peer_connection: peer_connection::Behavior,
 
     /// Regularly checks if reserved nodes are connected
     health_check: health_check::Behavior,
 
     /// Regularly informs p2p service / PeerManager to perform reputation decay of connected nodes
     decay: decay::Behavior,
+
+    /// Node discovery
+    discovery: discovery::Behaviour,
 
     /// RequestResponse protocol
     request_response: request_response::Behaviour<PostcardCodec>,
@@ -135,8 +139,9 @@ impl FuelBehaviour {
             blocked_peer: Default::default(),
             identify,
             heartbeat,
-            health_check: health_check::Behavior::new(),
-            decay: decay::Behavior::new(),
+            health_check: health_check::Behavior::default(),
+            decay: decay::Behavior::default(),
+            peer_connection: peer_connection::Behavior::default(),
         }
     }
 

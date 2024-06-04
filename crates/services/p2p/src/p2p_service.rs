@@ -21,6 +21,7 @@ use crate::{
     },
     health_check::HealthCheckEvent,
     heartbeat,
+    peer_connection::PeerConnectionEvent,
     peer_manager::{
         PeerManager,
         Punisher,
@@ -458,12 +459,44 @@ impl FuelP2PService {
             }
             FuelBehaviourEvent::Identify(event) => self.handle_identify_event(event),
             FuelBehaviourEvent::Heartbeat(event) => self.handle_heartbeat_event(event),
+            FuelBehaviourEvent::PeerConnection(event) => {
+                self.handle_peer_connection_event(event)
+            }
             FuelBehaviourEvent::HealthCheck(event) => {
                 self.handle_health_check_event(event)
             }
             FuelBehaviourEvent::Decay(event) => self.handle_decay_event(event),
             _ => None,
         }
+    }
+
+    fn handle_peer_connection_event(
+        &mut self,
+        event: PeerConnectionEvent,
+    ) -> Option<FuelP2PEvent> {
+        match event {
+            PeerConnectionEvent::PeerConnected {
+                peer_id,
+                initial_connection,
+            } => {
+                if self
+                    .peer_manager
+                    .handle_peer_connected(&peer_id, initial_connection)
+                {
+                    let _ = self.swarm.disconnect_peer_id(peer_id);
+                } else if initial_connection {
+                    return Some(FuelP2PEvent::PeerConnected(peer_id));
+                }
+            }
+            PeerConnectionEvent::PeerDisconnected { peer_id } => {
+                if self.peer_manager.handle_peer_disconnect(peer_id) {
+                    let _ = self.swarm.dial(peer_id);
+                }
+                return Some(FuelP2PEvent::PeerDisconnected(peer_id));
+            }
+        }
+
+        None
     }
 
     fn handle_decay_event(&mut self, _event: DecayEvent) -> Option<FuelP2PEvent> {
@@ -1188,9 +1221,7 @@ mod tests {
         // Node B
         p2p_config.bootstrap_nodes = node_a.multiaddrs();
         let mut node_b = build_service_from_config(p2p_config).await;
-
         let latest_block_height = 40_u32.into();
-
         loop {
             tokio::select! {
                 node_a_event = node_a.next_event() => {

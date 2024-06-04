@@ -10,6 +10,7 @@ pub mod gossipsub;
 pub mod health_check;
 pub mod heartbeat;
 pub mod p2p_service;
+pub mod peer_connection;
 pub mod peer_manager;
 pub mod ports;
 pub mod request_response;
