@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Removed
 - [#1913](https://github.com/FuelLabs/fuel-core/pull/1913): Removed dead code from the project.
 
+### Changed
+- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): optimization: Reuse VM memory across executions.
+
+#### Breaking
+- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): Upgraded `fuel-vm` to `0.51.0`. See [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.51.0) for more information.
+
 ### Fixed
 - [#1914](https://github.com/FuelLabs/fuel-core/pull/1914): Fixed halting of the node during synchronization in PoA service.
 

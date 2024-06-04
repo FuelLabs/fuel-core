@@ -38,7 +38,10 @@ use fuel_core_types::{
         AssetId,
         Word,
     },
-    fuel_vm::checked_transaction::EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        interpreter::MemoryInstance,
+    },
 };
 
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
@@ -187,11 +190,13 @@ impl UnsetInput {
 }
 
 pub trait IntoEstimated {
+    #[cfg(feature = "test-helpers")]
     fn into_default_estimated(self) -> Self;
     fn into_estimated(self, params: &ConsensusParameters) -> Self;
 }
 
 impl IntoEstimated for Input {
+    #[cfg(feature = "test-helpers")]
     fn into_default_estimated(self) -> Self {
         self.into_estimated(&Default::default())
     }
@@ -200,7 +205,7 @@ impl IntoEstimated for Input {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(self)
             .finalize();
-        let _ = tx.estimate_predicates(&params.into());
+        let _ = tx.estimate_predicates(&params.into(), MemoryInstance::new());
         tx.inputs()[0].clone()
     }
 }

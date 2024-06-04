@@ -634,7 +634,7 @@ pub fn run(c: &mut Criterion) {
             let coin_input = Input::coin_predicate(
                 Default::default(),
                 owner,
-                Word::MAX,
+                Word::MAX >> 2,
                 AssetId::zeroed(),
                 Default::default(),
                 Default::default(),
