@@ -83,16 +83,26 @@ impl State {
     pub fn commit(&mut self, height: u32) {
         let new_status = match &self.status {
             // Currently processing a range and recording a commit.
-            Status::Processing(range) => match height.cmp(range.end()) {
-                // The commit is less than the end of the range, so the range
-                // is still being processed.
-                Ordering::Less => {
-                    Some(Status::Processing(height.saturating_add(1)..=*range.end()))
+            Status::Processing(range) => {
+                if height < *range.start() {
+                    // The committed height is less than the start of the processing range,
+                    // it is a lag between committing and processing.
+                    None
+                } else {
+                    match height.cmp(range.end()) {
+                        // The commit is less than the end of the range, so the range
+                        // is still being processed.
+                        Ordering::Less => Some(Status::Processing(
+                            height.saturating_add(1)..=*range.end(),
+                        )),
+                        // The commit is equal or greater than the end of the range,
+                        // so the range is fully committed.
+                        Ordering::Equal | Ordering::Greater => {
+                            Some(Status::Committed(height))
+                        }
+                    }
                 }
-                // The commit is equal or greater than the end of the range,
-                // so the range is fully committed.
-                Ordering::Equal | Ordering::Greater => Some(Status::Committed(height)),
-            },
+            }
             // Currently uninitialized so now are committed.
             Status::Uninitialized => Some(Status::Committed(height)),
             // Currently committed and recording a commit.
