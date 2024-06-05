@@ -25,12 +25,13 @@ pub struct Command {
         name = "DB_PATH",
         long = "db-path",
         value_parser,
-        default_value = default_db_path().into_os_string()
+        default_value = default_db_path().into_os_string(),
+        env
     )]
     pub database_path: PathBuf,
 
     /// Where to save the snapshot
-    #[arg(name = "OUTPUT_DIR", long = "output-directory")]
+    #[arg(name = "OUTPUT_DIR", long = "output-directory", env)]
     pub output_dir: PathBuf,
 
     /// The maximum database cache size in bytes.
@@ -52,13 +53,19 @@ pub enum Encoding {
     #[cfg(feature = "parquet")]
     Parquet {
         /// The number of entries to write per parquet group.
-        #[clap(name = "GROUP_SIZE", long = "group-size", default_value = "10000")]
+        #[clap(
+            name = "GROUP_SIZE",
+            long = "group-size",
+            default_value = "10000",
+            env = "PARQUET_ENCODING_GROUP_SIZE"
+        )]
         group_size: usize,
         /// Level of compression. Valid values are 0..=12.
         #[clap(
             name = "COMPRESSION_LEVEL",
             long = "compression-level",
-            default_value = "1"
+            default_value = "1",
+            env = "PARQUET_ENCODING_COMPRESSION_LEVEL"
         )]
         compression: u8,
     },
@@ -97,7 +104,7 @@ pub enum SubCommands {
     Everything {
         /// Specify a path to the chain config. Defaults used if no path
         /// is provided.
-        #[clap(name = "CHAIN_CONFIG", long = "chain")]
+        #[clap(name = "CHAIN_CONFIG", long = "chain", env)]
         chain_config: Option<PathBuf>,
         /// Encoding format for the chain state files.
         #[clap(subcommand)]
@@ -107,7 +114,7 @@ pub enum SubCommands {
     #[command(arg_required_else_help = true)]
     Contract {
         /// The id of the contract to snapshot.
-        #[clap(long = "id")]
+        #[clap(long = "id", env = "CONTRACT_ID")]
         contract_id: ContractId,
     },
 }
