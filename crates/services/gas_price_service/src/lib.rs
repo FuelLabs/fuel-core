@@ -19,12 +19,12 @@ pub enum Error {
     UpdateFailed(String),
 }
 
-pub struct GasPriceAlgorithmUpdateTask<A, U> {
+pub struct GasPriceService<A, U> {
     next_block_algorithm: Arc<RwLock<(BlockHeight, A)>>,
     update_algorithm: U,
 }
 
-impl<A, U> GasPriceAlgorithmUpdateTask<A, U>
+impl<A, U> GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A>,
 {
@@ -55,7 +55,7 @@ fn next_block_height(block_height: &BlockHeight) -> BlockHeight {
     (u32::from(*block_height) + 1).into()
 }
 
-impl<A, U> GasPriceAlgorithmUpdateTask<A, U>
+impl<A, U> GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A>,
 {
@@ -80,7 +80,7 @@ where
 }
 
 #[async_trait]
-impl<A, U> RunnableService for GasPriceAlgorithmUpdateTask<A, U>
+impl<A, U> RunnableService for GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A> + Send,
     A: Send + Sync,
@@ -104,7 +104,7 @@ where
 }
 
 #[async_trait]
-impl<A, U> RunnableTask for GasPriceAlgorithmUpdateTask<A, U>
+impl<A, U> RunnableTask for GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A> + Send,
     A: Send + Sync,
@@ -132,7 +132,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        GasPriceAlgorithmUpdateTask,
+        GasPriceService,
         UpdateAlgorithm,
     };
     use fuel_core_services::{
@@ -176,7 +176,7 @@ mod tests {
         let updater = TestAlgorithmUpdater {
             price_source: price_receiver,
         };
-        let mut service = GasPriceAlgorithmUpdateTask::new(0.into(), updater).await;
+        let mut service = GasPriceService::new(0.into(), updater).await;
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
         let read_algo = service.next_block_algorithm();

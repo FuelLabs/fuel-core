@@ -45,7 +45,7 @@ use gas_price_service::{
         StaticAlgorithm,
         StaticAlgorithmUpdater,
     },
-    GasPriceAlgorithmUpdateTask,
+    GasPriceService,
 };
 
 pub type PoAService =
@@ -181,7 +181,7 @@ pub fn init_sub_services(
     let old_gas_price_provider = StaticGasPrice::new(config.static_gas_price);
 
     let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
-    let gas_price_task = GasPriceAlgorithmUpdateTask::new(last_height, update_algo);
+    let gas_price_task = GasPriceService::new(last_height, update_algo);
     let next_algo = gas_price_task.next_block_algorithm();
     let gas_price_service = ServiceRunner::new(gas_price_task);
 
