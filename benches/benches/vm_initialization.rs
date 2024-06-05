@@ -100,6 +100,7 @@ pub fn vm_initialization(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
+                #[allow(clippy::unit_arg)]
                 black_box(
                     vm.init_script(tx.clone())
                         .expect("Should be able to execute transaction"),
