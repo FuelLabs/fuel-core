@@ -30,7 +30,7 @@ impl StaticAlgorithm {
 impl UpdateAlgorithm for StaticAlgorithmUpdater {
     type Algorithm = StaticAlgorithm;
 
-    fn start(&self, for_block: BlockHeight) -> Self::Algorithm {
+    fn start(&self, _for_block: BlockHeight) -> Self::Algorithm {
         StaticAlgorithm::new(self.static_price)
     }
 

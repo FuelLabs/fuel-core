@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
-    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -28,7 +27,7 @@ impl<A, U> GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A>,
 {
-    pub fn new(starting_block_height: BlockHeight, mut update_algorithm: U) -> Self {
+    pub fn new(starting_block_height: BlockHeight, update_algorithm: U) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
         let next_block_algorithm =
             Arc::new(RwLock::new((starting_block_height, algorithm)));
@@ -129,6 +128,7 @@ where
     }
 }
 
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -146,6 +146,7 @@ mod tests {
     use fuel_core_types::fuel_types::BlockHeight;
     use tokio::sync::mpsc;
 
+    #[derive(Clone, Debug)]
     struct TestAlgorithm {
         price: u64,
     }
@@ -157,12 +158,17 @@ mod tests {
     }
 
     struct TestAlgorithmUpdater {
+        start: TestAlgorithm,
         price_source: mpsc::Receiver<u64>,
     }
 
     #[async_trait::async_trait]
     impl UpdateAlgorithm for TestAlgorithmUpdater {
         type Algorithm = TestAlgorithm;
+
+        fn start(&self, _for_block: BlockHeight) -> Self::Algorithm {
+            self.start.clone()
+        }
 
         async fn next(&mut self, _for_block: BlockHeight) -> Self::Algorithm {
             let price = self.price_source.recv().await.unwrap();
@@ -174,9 +180,10 @@ mod tests {
         // given
         let (price_sender, price_receiver) = mpsc::channel(1);
         let updater = TestAlgorithmUpdater {
+            start: TestAlgorithm { price: 0 },
             price_source: price_receiver,
         };
-        let mut service = GasPriceService::new(0.into(), updater).await;
+        let service = GasPriceService::new(0.into(), updater);
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
         let read_algo = service.next_block_algorithm();
@@ -185,7 +192,7 @@ mod tests {
         let expected_price = 100;
 
         let service = ServiceRunner::new(task);
-        service.start().await.unwrap();
+        service.start().unwrap();
 
         // when
         price_sender.send(expected_price).await.unwrap();
