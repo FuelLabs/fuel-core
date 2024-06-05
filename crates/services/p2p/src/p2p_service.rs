@@ -13,6 +13,7 @@ use crate::{
     },
     gossipsub::{
         messages::{
+            GossipTopicTag,
             GossipsubBroadcastRequest,
             GossipsubMessage as FuelGossipsubMessage,
         },
@@ -150,6 +151,10 @@ pub enum FuelP2PEvent {
         message_id: MessageId,
         topic_hash: TopicHash,
         message: FuelGossipsubMessage,
+    },
+    NewSubscription {
+        peer_id: PeerId,
+        tag: GossipTopicTag,
     },
     InboundRequestMessage {
         request_id: InboundRequestId,
@@ -454,6 +459,18 @@ impl FuelP2PService {
         &self.peer_manager
     }
 
+    fn get_topic_tag(&self, topic_hash: &TopicHash) -> Option<GossipTopicTag> {
+        let topic = self
+            .network_metadata
+            .gossipsub_data
+            .topics
+            .get_gossipsub_tag(topic_hash);
+        if topic.is_none() {
+            warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &topic_hash);
+        }
+        topic
+    }
+
     fn handle_behaviour_event(
         &mut self,
         event: FuelBehaviourEvent,
@@ -474,27 +491,20 @@ impl FuelP2PService {
         &mut self,
         event: gossipsub::Event,
     ) -> Option<FuelP2PEvent> {
-        if let gossipsub::Event::Message {
-            propagation_source,
-            message,
-            message_id,
-        } = event
-        {
-            if let Some(correct_topic) = self
-                .network_metadata
-                .gossipsub_data
-                .topics
-                .get_gossipsub_tag(&message.topic)
-            {
+        match event {
+            gossipsub::Event::Message {
+                propagation_source,
+                message,
+                message_id,
+            } => {
+                let correct_topic = self.get_topic_tag(&message.topic)?;
                 match self.network_codec.decode(&message.data, correct_topic) {
-                    Ok(decoded_message) => {
-                        return Some(FuelP2PEvent::GossipsubMessage {
-                            peer_id: propagation_source,
-                            message_id,
-                            topic_hash: message.topic,
-                            message: decoded_message,
-                        })
-                    }
+                    Ok(decoded_message) => Some(FuelP2PEvent::GossipsubMessage {
+                        peer_id: propagation_source,
+                        message_id,
+                        topic_hash: message.topic,
+                        message: decoded_message,
+                    }),
                     Err(err) => {
                         warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
 
@@ -503,13 +513,16 @@ impl FuelP2PService {
                             propagation_source,
                             MessageAcceptance::Reject,
                         );
+                        None
                     }
                 }
-            } else {
-                warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
             }
+            gossipsub::Event::Subscribed { peer_id, topic } => {
+                let tag = self.get_topic_tag(&topic)?;
+                Some(FuelP2PEvent::NewSubscription { peer_id, tag })
+            }
+            _ => None,
         }
-        None
     }
 
     fn handle_peer_report_event(
@@ -1223,21 +1236,37 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_tx_with_accept() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
-            GossipsubMessageAcceptance::Accept,
-        )
-        .await;
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::NewTx(Arc::new(
+                        Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Accept,
+                ),
+            )
+            .await
+            .unwrap();
+        }
     }
 
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_tx_with_reject() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
-            GossipsubMessageAcceptance::Reject,
-        )
-        .await;
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::NewTx(Arc::new(
+                        Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Reject,
+                ),
+            )
+            .await
+            .unwrap();
+        }
     }
 
     #[tokio::test]
@@ -1395,23 +1424,32 @@ mod tests {
             .behaviour_mut()
             .block_peer(node_a.local_peer_id);
 
+        let mut a_connected_to_b = false;
+        let mut b_connected_to_c = false;
         loop {
+            // verifies that we've got at least a single peer address to send message to
+            if a_connected_to_b && b_connected_to_c && !message_sent {
+                message_sent = true;
+                let broadcast_request = broadcast_request.clone();
+                node_a.publish_message(broadcast_request).unwrap();
+            }
+
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
-                            // verifies that we've got at least a single peer address to send message to
-                            if !message_sent  {
-                                message_sent = true;
-                                let broadcast_request = broadcast_request.clone();
-                                let _ = node_a.publish_message(broadcast_request);
-                            }
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_a_event {
+                        if peer_id == &node_b.local_peer_id {
+                            a_connected_to_b = true;
                         }
                     }
-
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_b_event {
+                        if peer_id == &node_c.local_peer_id {
+                            b_connected_to_c = true;
+                        }
+                    }
+
                     if let Some(FuelP2PEvent::GossipsubMessage { topic_hash, message, message_id, peer_id }) = node_b_event.clone() {
                         // Message Validation must be reported
                         // If it's `Accept`, Node B will propagate the message to Node C
