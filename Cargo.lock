@@ -3919,6 +3919,14 @@ dependencies = [
 [[package]]
 name = "gas_price_service"
 version = "0.26.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-services",
+ "fuel-core-types",
+ "thiserror",
+ "tokio",
+]
 
 [[package]]
 name = "generic-array"
