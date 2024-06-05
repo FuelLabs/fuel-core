@@ -30,6 +30,10 @@ impl StaticAlgorithm {
 impl UpdateAlgorithm for StaticAlgorithmUpdater {
     type Algorithm = StaticAlgorithm;
 
+    fn start(&self, for_block: BlockHeight) -> Self::Algorithm {
+        StaticAlgorithm::new(self.static_price)
+    }
+
     async fn next(&mut self, _for_block: BlockHeight) -> Self::Algorithm {
         StaticAlgorithm::new(self.static_price)
     }

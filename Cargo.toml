@@ -81,6 +81,7 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-upgradable-executor = { version = "0.26.0", path = "./crates/services/upgradable-executor" }
 fuel-core-wasm-executor = { version = "0.26.0", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
+gas_price_service = { path = "crates/services/gas_price_service" }
 gas-price-algorithm = { path = "crates/gas-price-algorithm" }
 
 # Fuel dependencies

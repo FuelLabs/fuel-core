@@ -10,10 +10,6 @@ name = "fuel-core"
 repository = { workspace = true }
 version = { workspace = true }
 
-[[bench]]
-name = "gas_price_algo"
-harness = false
-
 [dependencies]
 anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
@@ -41,6 +37,7 @@ fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
+gas_price_service = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }

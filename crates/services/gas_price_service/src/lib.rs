@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
+    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -27,11 +28,8 @@ impl<A, U> GasPriceAlgorithmUpdateTask<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A>,
 {
-    pub async fn new(
-        starting_block_height: BlockHeight,
-        mut update_algorithm: U,
-    ) -> Self {
-        let algorithm = update_algorithm.next(starting_block_height).await;
+    pub fn new(starting_block_height: BlockHeight, mut update_algorithm: U) -> Self {
+        let algorithm = update_algorithm.start(starting_block_height);
         let next_block_algorithm =
             Arc::new(RwLock::new((starting_block_height, algorithm)));
         Self {
@@ -48,6 +46,8 @@ where
 #[async_trait]
 pub trait UpdateAlgorithm {
     type Algorithm;
+
+    fn start(&self, for_block: BlockHeight) -> Self::Algorithm;
     async fn next(&mut self, for_block: BlockHeight) -> Self::Algorithm;
 }
 

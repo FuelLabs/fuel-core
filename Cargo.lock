@@ -3039,6 +3039,7 @@ dependencies = [
  "fuel-core-types",
  "fuel-core-upgradable-executor",
  "futures",
+ "gas_price_service",
  "hex",
  "hyper",
  "indicatif",
