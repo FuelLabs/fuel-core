@@ -181,6 +181,69 @@ where
         columns: Vec<Description::Column>,
         capacity: Option<usize>,
     ) -> DatabaseResult<Self> {
+        Self::open_with(DB::open_cf_descriptors, path, columns, capacity)
+    }
+
+    pub fn open_read_only<P: AsRef<Path>>(
+        path: P,
+        columns: Vec<Description::Column>,
+        capacity: Option<usize>,
+        error_if_log_file_exist: bool,
+    ) -> DatabaseResult<Self> {
+        Self::open_with(
+            |options, primary_path, cfs| {
+                DB::open_cf_descriptors_read_only(
+                    options,
+                    primary_path,
+                    cfs,
+                    error_if_log_file_exist,
+                )
+            },
+            path,
+            columns,
+            capacity,
+        )
+    }
+
+    pub fn open_secondary<PrimaryPath, SecondaryPath>(
+        path: PrimaryPath,
+        secondary_path: SecondaryPath,
+        columns: Vec<Description::Column>,
+        capacity: Option<usize>,
+    ) -> DatabaseResult<Self>
+    where
+        PrimaryPath: AsRef<Path>,
+        SecondaryPath: AsRef<Path>,
+    {
+        Self::open_with(
+            |options, primary_path, cfs| {
+                DB::open_cf_descriptors_as_secondary(
+                    options,
+                    primary_path,
+                    secondary_path.as_ref().to_path_buf(),
+                    cfs,
+                )
+            },
+            path,
+            columns,
+            capacity,
+        )
+    }
+
+    pub fn open_with<F, P>(
+        opener: F,
+        path: P,
+        columns: Vec<Description::Column>,
+        capacity: Option<usize>,
+    ) -> DatabaseResult<Self>
+    where
+        F: Fn(
+            &Options,
+            PathBuf,
+            Vec<ColumnFamilyDescriptor>,
+        ) -> Result<DB, rocksdb::Error>,
+        P: AsRef<Path>,
+    {
         let path = path.as_ref().join(Description::name());
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
@@ -237,9 +300,10 @@ where
         let iterator = cf_descriptors_to_open
             .clone()
             .into_iter()
-            .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+            .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts))
+            .collect::<Vec<_>>();
 
-        let db = match DB::open_cf_descriptors(&opts, &path, iterator) {
+        let db = match opener(&opts, path.clone(), iterator) {
             Ok(db) => {
                 Ok(db)
             },
@@ -251,9 +315,10 @@ where
                 let iterator = cf_descriptors_to_open
                     .clone()
                     .into_iter()
-                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts))
+                    .collect::<Vec<_>>();
 
-                DB::open_cf_descriptors(&opts, &path, iterator)
+                opener(&opts, path, iterator)
             },
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
@@ -801,5 +866,60 @@ mod tests {
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn open_primary_db_second_time_fails() {
+        // Given
+        let (_primary_db, tmp_dir) = create_db();
+
+        // When
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let result = RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None);
+
+        // Then
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn open_second_read_only_db() {
+        // Given
+        let (_primary_db, tmp_dir) = create_db();
+
+        // When
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let result = RocksDb::<OnChain>::open_read_only(
+            tmp_dir.path(),
+            old_columns.clone(),
+            None,
+            false,
+        )
+        .map(|_| ());
+
+        // Then
+        assert_eq!(Ok(()), result);
+    }
+
+    #[test]
+    fn open_secondary_db() {
+        // Given
+        let (_primary_db, tmp_dir) = create_db();
+        let secondary_temp = TempDir::new().unwrap();
+
+        // When
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let result = RocksDb::<OnChain>::open_secondary(
+            tmp_dir.path(),
+            secondary_temp.path(),
+            old_columns.clone(),
+            None,
+        )
+        .map(|_| ());
+
+        // Then
+        assert_eq!(Ok(()), result);
     }
 }
