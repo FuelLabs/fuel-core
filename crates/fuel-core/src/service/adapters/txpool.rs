@@ -49,6 +49,7 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             TransactionGossipData,
         },
+        txpool::Result as TxPoolResult,
     },
 };
 use std::sync::Arc;
@@ -141,9 +142,14 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
     }
 }
 
+#[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    fn gas_price(&self, _block_height: BlockHeight) -> Option<u64> {
-        Some(self.gas_price)
+    async fn gas_price(
+        &self,
+        _block_height: BlockHeight,
+        _block_bytes: u64,
+    ) -> TxPoolResult<u64> {
+        Ok(self.gas_price)
     }
 }
 

@@ -52,7 +52,7 @@ pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
-    StaticGasPrice,
+    FuelGasPriceProvider<StaticAlgorithm>,
     ConsensusParametersProvider,
     SharedMemoryPool,
 >;
@@ -190,7 +190,7 @@ pub fn init_sub_services(
         importer_adapter.clone(),
         p2p_adapter.clone(),
         last_height,
-        old_gas_price_provider.clone(),
+        new_gas_price_provider.clone(),
         consensus_parameters_provider.clone(),
         SharedMemoryPool::new(config.memory_pool_size),
     );

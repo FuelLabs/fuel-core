@@ -4,7 +4,14 @@ use fuel_core_producer::block_producer::gas_price::{
     GasPriceParams,
     GasPriceProvider as ProducerGasPriceProvider,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPricProvider;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::txpool::{
+        Error as TxPoolError,
+        Result as TxPoolResult,
+    },
+};
 use std::cmp::Ordering;
 
 pub mod ports;
@@ -28,10 +35,18 @@ pub enum Error {
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 /// Gives the gas price for a given block height, and calculates the gas price if not yet committed.
 pub struct FuelGasPriceProvider<A> {
     algorithm: BlockGasPriceAlgo<A>,
+}
+
+impl<A> Clone for FuelGasPriceProvider<A> {
+    fn clone(&self) -> Self {
+        Self {
+            algorithm: self.algorithm.clone(),
+        }
+    }
 }
 
 impl<A> FuelGasPriceProvider<A> {
@@ -77,5 +92,21 @@ where
         self.try_to_get(params.block_height(), params.block_bytes())
             .await
             .map_err(Into::into)
+    }
+}
+
+#[async_trait::async_trait]
+impl<A> TxPoolGasPricProvider for FuelGasPriceProvider<A>
+where
+    A: GasPriceAlgorithm + Send + Sync,
+{
+    async fn gas_price(
+        &self,
+        block_height: BlockHeight,
+        block_bytes: u64,
+    ) -> TxPoolResult<u64> {
+        self.try_to_get(block_height, block_bytes)
+            .await
+            .map_err(|e| TxPoolError::GasPriceNotFound(format!("{e:?}")))
     }
 }
