@@ -237,17 +237,16 @@ mod tests {
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
                 .into_iter()
-                .map(|(_key, value)| value)
                 .collect();
 
             let mut original_state = state_groups
                 .into_iter()
                 .flatten()
-                .map(|v| v.value)
+                .map(|v| (v.key, v.value))
                 .collect::<Vec<_>>();
 
-            states_in_db.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
-            original_state.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+            states_in_db.sort_by(|(ak, av), (bk, bv)| (ak.as_ref(), av.as_ref()).cmp(&(bk.as_ref(), bv.as_ref())));
+            original_state.sort_by(|(ak, av), (bk, bv)| (ak.as_ref(), av.as_ref()).cmp(&(bk.as_ref(), bv.as_ref())));
 
             assert_eq!(states_in_db, original_state);
         }
