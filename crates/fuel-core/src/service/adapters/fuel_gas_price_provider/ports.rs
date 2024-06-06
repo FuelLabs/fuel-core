@@ -1,3 +1,5 @@
+use fuel_core_types::fuel_types::BlockHeight;
+
 #[derive(Debug, Clone, Copy)]
 pub struct BlockFullness {
     used: u64,
@@ -20,4 +22,8 @@ impl BlockFullness {
 
 pub trait GasPriceAlgorithm {
     fn gas_price(&self, block_bytes: u64) -> u64;
+}
+
+pub trait GasPriceEstimate {
+    fn estimate(&self, block_height: BlockHeight) -> u64;
 }

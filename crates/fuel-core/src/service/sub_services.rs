@@ -19,7 +19,6 @@ use crate::{
             MaybeRelayerAdapter,
             PoAAdapter,
             SharedMemoryPool,
-            StaticGasPrice,
             TxPoolAdapter,
             VerifierAdapter,
         },
@@ -35,7 +34,10 @@ use tokio::sync::Mutex;
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
 use crate::service::adapters::fuel_gas_price_provider::{
-    ports::GasPriceAlgorithm,
+    ports::{
+        GasPriceAlgorithm,
+        GasPriceEstimate,
+    },
     FuelGasPriceProvider,
 };
 use fuel_core_gas_price_service::static_updater::{
@@ -44,6 +46,7 @@ use fuel_core_gas_price_service::static_updater::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
@@ -66,6 +69,12 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
 
 impl GasPriceAlgorithm for StaticAlgorithm {
     fn gas_price(&self, _block_bytes: u64) -> u64 {
+        self.price()
+    }
+}
+
+impl GasPriceEstimate for StaticAlgorithm {
+    fn estimate(&self, _block_height: BlockHeight) -> u64 {
         self.price()
     }
 }
@@ -176,21 +185,19 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    let old_gas_price_provider = StaticGasPrice::new(config.static_gas_price);
-
     let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
     let gas_price_service =
         fuel_core_gas_price_service::new_service(last_height, update_algo)?;
     let next_algo = gas_price_service.shared.clone();
 
-    let new_gas_price_provider = FuelGasPriceProvider::new(next_algo);
+    let gas_price_provider = FuelGasPriceProvider::new(next_algo);
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
         database.on_chain().clone(),
         importer_adapter.clone(),
         p2p_adapter.clone(),
         last_height,
-        new_gas_price_provider.clone(),
+        gas_price_provider.clone(),
         consensus_parameters_provider.clone(),
         SharedMemoryPool::new(config.memory_pool_size),
     );
@@ -203,7 +210,7 @@ pub fn init_sub_services(
         executor: Arc::new(executor),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
-        gas_price_provider: new_gas_price_provider,
+        gas_price_provider: gas_price_provider.clone(),
         consensus_parameters_provider: consensus_parameters_provider.clone(),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
@@ -271,7 +278,7 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
-        Box::new(old_gas_price_provider),
+        Box::new(gas_price_provider),
         Box::new(consensus_parameters_provider),
         SharedMemoryPool::new(config.memory_pool_size),
         config.query_log_threshold_time,

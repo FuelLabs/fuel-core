@@ -1,4 +1,10 @@
-use crate::service::adapters::fuel_gas_price_provider::ports::GasPriceAlgorithm;
+use crate::{
+    fuel_core_graphql_api::ports::GasPriceEstimate as GraphqlGasPriceEstimate,
+    service::adapters::fuel_gas_price_provider::ports::{
+        GasPriceAlgorithm,
+        GasPriceEstimate,
+    },
+};
 use fuel_core_gas_price_service::BlockGasPriceAlgo;
 use fuel_core_producer::block_producer::gas_price::{
     GasPriceParams,
@@ -108,5 +114,15 @@ where
         self.try_to_get(block_height, block_bytes)
             .await
             .map_err(|e| TxPoolError::GasPriceNotFound(format!("{e:?}")))
+    }
+}
+
+#[async_trait::async_trait]
+impl<A> GraphqlGasPriceEstimate for FuelGasPriceProvider<A>
+where
+    A: GasPriceEstimate + Send + Sync,
+{
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
+        self.algorithm.read().await.1.estimate(height)
     }
 }
