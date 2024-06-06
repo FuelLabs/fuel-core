@@ -2,7 +2,7 @@ use crate::service::adapters::fuel_gas_price_provider::{
     ports::GasPriceAlgorithm,
     tests::{
         build_provider,
-        SimpleGasPriceAlgorithm,
+        TestGasPriceAlgorithm,
     },
 };
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
@@ -13,7 +13,7 @@ async fn gas_price__if_requested_block_height_too_high_return_error() {
     let latest_height = 432;
     let too_new_height = (latest_height + 2).into();
     let gas_price_provider =
-        build_provider(latest_height.into(), SimpleGasPriceAlgorithm::default());
+        build_provider(latest_height.into(), TestGasPriceAlgorithm::default());
     let bytes = 0;
 
     // when
@@ -29,7 +29,7 @@ async fn gas_price__if_requested_block_height_too_old_return_error() {
     let latest_height = 432;
     let too_old_height = (latest_height - 2).into();
     let gas_price_provider =
-        build_provider(latest_height.into(), SimpleGasPriceAlgorithm::default());
+        build_provider(latest_height.into(), TestGasPriceAlgorithm::default());
     let bytes = 0;
 
     // when
@@ -43,7 +43,7 @@ async fn gas_price__if_requested_block_height_too_old_return_error() {
 async fn gas_price__if_requested_block_height_is_latest_return_gas_price() {
     // given
     let latest_height = 432;
-    let algo = SimpleGasPriceAlgorithm::default();
+    let algo = TestGasPriceAlgorithm::default();
     let gas_price_provider = build_provider(latest_height.into(), algo);
     let bytes = 10;
 

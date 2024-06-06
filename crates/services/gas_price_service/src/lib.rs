@@ -27,12 +27,6 @@ where
     Ok(ServiceRunner::new(service))
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("Failed to update gas price algorithm")]
-    UpdateFailed(String),
-}
-
 pub struct GasPriceService<A, U> {
     next_block_algorithm: BlockGasPriceAlgo<A>,
     update_algorithm: U,

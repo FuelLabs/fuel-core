@@ -4,7 +4,7 @@ use super::*;
 async fn estimate_gas_price__happy_path() {
     // given
     let next_height = 432.into();
-    let algo = SimpleGasPriceAlgorithm::default();
+    let algo = TestGasPriceAlgorithm::default();
     let gas_price_provider = build_provider(next_height, algo);
 
     // when

@@ -12,23 +12,23 @@ mod tx_pool_gas_price_tests;
 mod graph_ql_gas_price_estimate_tests;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SimpleGasPriceAlgorithm {
+pub struct TestGasPriceAlgorithm {
     multiply: u64,
 }
 
-impl Default for SimpleGasPriceAlgorithm {
+impl Default for TestGasPriceAlgorithm {
     fn default() -> Self {
         Self { multiply: 2 }
     }
 }
 
-impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
+impl GasPriceAlgorithm for TestGasPriceAlgorithm {
     fn gas_price(&self, block_bytes: u64) -> u64 {
         self.multiply * block_bytes
     }
 }
 
-impl GasPriceEstimate for SimpleGasPriceAlgorithm {
+impl GasPriceEstimate for TestGasPriceAlgorithm {
     fn estimate(&self, _block_height: BlockHeight) -> u64 {
         self.multiply * 10_000_000 // Arbitrary fake bytes
     }

@@ -12,7 +12,7 @@ repository = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-fuel-core-services =  { workspace = true }
+fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

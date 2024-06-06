@@ -39,7 +39,7 @@ pub enum Error {
 mod tests;
 
 #[derive(Debug)]
-/// Gives the gas price for a given block height, and calculates the gas price if not yet committed.
+/// Receives the next gas price algorithm via a shared `BlockGasPriceAlgo` instance
 pub struct FuelGasPriceProvider<A> {
     algorithm: BlockGasPriceAlgo<A>,
 }
