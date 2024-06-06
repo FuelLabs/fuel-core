@@ -2866,6 +2866,7 @@ dependencies = [
  "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
+ "fuel-core-gas-price-service",
  "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
@@ -2880,7 +2881,6 @@ dependencies = [
  "fuel-core-types",
  "fuel-core-upgradable-executor",
  "futures",
- "gas_price_service",
  "hex",
  "hyper",
  "indicatif",
@@ -3095,6 +3095,20 @@ dependencies = [
  "parking_lot",
  "serde",
  "tracing",
+]
+
+[[package]]
+name = "fuel-core-gas-price-service"
+version = "0.26.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-services",
+ "fuel-core-types",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3747,20 +3761,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
 dependencies = [
  "byteorder",
-]
-
-[[package]]
-name = "gas_price_service"
-version = "0.26.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "fuel-core-services",
- "fuel-core-types",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

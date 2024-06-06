@@ -38,15 +38,15 @@ use crate::service::adapters::fuel_gas_price_provider::{
     ports::GasPriceAlgorithm,
     FuelGasPriceProvider,
 };
-#[cfg(feature = "relayer")]
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use gas_price_service::{
+use fuel_core_gas_price_service::{
     static_updater::{
         StaticAlgorithm,
         StaticAlgorithmUpdater,
     },
     GasPriceService,
 };
+#[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;

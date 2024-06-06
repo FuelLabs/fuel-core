@@ -1,5 +1,5 @@
 [package]
-name = "gas_price_service"
+name = "fuel-core-gas-price-service"
 description = "Service for updating the gas price algorthm"
 version = { workspace = true }
 authors = { workspace = true }
