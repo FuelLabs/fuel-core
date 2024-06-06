@@ -99,7 +99,7 @@ where
 
     pub async fn block_height(&self) -> BlockHeight {
         let lock = self.0.read().await;
-        lock.0.clone()
+        lock.0
     }
 
     pub async fn read(&self) -> RwLockReadGuard<(BlockHeight, A)> {

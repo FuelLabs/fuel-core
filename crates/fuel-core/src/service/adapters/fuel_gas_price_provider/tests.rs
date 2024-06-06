@@ -24,13 +24,13 @@ impl Default for TestGasPriceAlgorithm {
 
 impl GasPriceAlgorithm for TestGasPriceAlgorithm {
     fn gas_price(&self, block_bytes: u64) -> u64 {
-        self.multiply * block_bytes
+        self.multiply.saturating_mul(block_bytes)
     }
 }
 
 impl GasPriceEstimate for TestGasPriceAlgorithm {
     fn estimate(&self, _block_height: BlockHeight) -> u64 {
-        self.multiply * 10_000_000 // Arbitrary fake bytes
+        self.multiply.saturating_mul(10_000_000) // Arbitrary fake bytes
     }
 }
 

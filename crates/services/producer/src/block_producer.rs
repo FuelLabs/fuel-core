@@ -127,7 +127,9 @@ where
 
         let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
         let max_gas_per_block = consensus_params.block_gas_limit();
-        let max_block_bytes = max_gas_per_block.saturating_div(gas_per_bytes);
+        let max_block_bytes = max_gas_per_block
+            .checked_div(gas_per_bytes)
+            .ok_or(anyhow!("Failed to calculated max block bytes"))?;
 
         let gas_price = self
             .gas_price_provider
