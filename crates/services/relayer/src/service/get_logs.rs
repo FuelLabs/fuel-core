@@ -93,9 +93,9 @@ where
             unordered_events.entry(height).or_default().push(event);
         }
 
+        let empty_events = Vec::new();
         for height in start_height..=last_height {
             let height: DaBlockHeight = height.into();
-            let empty_events = Vec::new();
             let events = unordered_events.get(&height).unwrap_or(&empty_events);
             database.insert_events(&height, events)?;
         }
