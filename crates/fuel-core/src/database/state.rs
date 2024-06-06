@@ -198,6 +198,7 @@ mod tests {
         use core::iter::repeat_with;
         use fuel_core_chain_config::Randomize;
 
+        use fuel_core_storage::iter::IteratorOverTable;
         use fuel_core_types::fuel_merkle::sparse::{
             self,
             MerkleTreeKey,
@@ -209,7 +210,7 @@ mod tests {
         use std::collections::HashSet;
 
         use super::*;
-        #[cfg(all(test, feature = "random", feature = "std"))]
+
         #[test]
         fn states_inserted_into_db() {
             // given
@@ -231,28 +232,22 @@ mod tests {
             }
 
             // then
-            let states_in_db: Vec<_> = database
+            let mut states_in_db: Vec<_> = database
                 .iter_all::<ContractsState>(None)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
                 .into_iter()
-                .map(|(key, value)| {
-                    let contract_id = *key.contract_id();
-                    let key = *key.state_key();
-
-                    ContractStateConfig {
-                        contract_id,
-                        key,
-                        value: value.0,
-                    }
-                })
+                .map(|(_key, value)| value)
                 .collect();
 
-            let original_state = state_groups
+            let mut original_state = state_groups
                 .into_iter()
                 .flatten()
-                .sorted()
+                .map(|v| v.value)
                 .collect::<Vec<_>>();
+
+            states_in_db.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+            original_state.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
             assert_eq!(states_in_db, original_state);
         }

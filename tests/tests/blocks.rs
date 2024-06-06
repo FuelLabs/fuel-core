@@ -356,6 +356,7 @@ mod full_block {
         schema_path = "../crates/client/assets/schema.sdl",
         graphql_type = "Block"
     )]
+    #[allow(dead_code)]
     pub struct FullBlock {
         pub id: BlockId,
         pub header: Header,
