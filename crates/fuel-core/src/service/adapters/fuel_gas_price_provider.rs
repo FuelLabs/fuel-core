@@ -6,10 +6,7 @@ use crate::{
     },
 };
 use fuel_core_gas_price_service::BlockGasPriceAlgo;
-use fuel_core_producer::block_producer::gas_price::{
-    GasPriceParams,
-    GasPriceProvider as ProducerGasPriceProvider,
-};
+use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPricProvider;
 use fuel_core_types::{
     fuel_types::BlockHeight,
@@ -94,8 +91,12 @@ impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn gas_price(&self, params: GasPriceParams) -> anyhow::Result<u64> {
-        self.try_to_get(params.block_height(), params.block_bytes())
+    async fn gas_price(
+        &self,
+        block_height: BlockHeight,
+        block_bytes: u64,
+    ) -> anyhow::Result<u64> {
+        self.try_to_get(block_height, block_bytes)
             .await
             .map_err(Into::into)
     }

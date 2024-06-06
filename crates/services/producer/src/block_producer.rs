@@ -1,7 +1,6 @@
 use crate::{
     block_producer::gas_price::{
         ConsensusParametersProvider,
-        GasPriceParams,
         GasPriceProvider as GasPriceProviderConstraint,
     },
     ports,
@@ -130,11 +129,9 @@ where
         let max_gas_per_block = consensus_params.block_gas_limit();
         let max_block_bytes = max_gas_per_block.saturating_div(gas_per_bytes);
 
-        let gas_price_params = GasPriceParams::new(height, max_block_bytes);
-
         let gas_price = self
             .gas_price_provider
-            .gas_price(gas_price_params)
+            .gas_price(height, max_block_bytes)
             .await
             .map_err(|e| anyhow!("No gas price found for block {height:?}: {e:?}"))?;
 
@@ -234,12 +231,12 @@ where
         // TODO: Do we use max here too?
         let block_bytes = 0;
 
-        let gas_price_params = GasPriceParams::new(height, block_bytes);
-
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.gas_price_provider.gas_price(gas_price_params).await?
+            self.gas_price_provider
+                .gas_price(height, block_bytes)
+                .await?
         };
 
         // The dry run execution should use the state of the blockchain based on the
