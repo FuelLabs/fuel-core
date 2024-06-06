@@ -30,6 +30,7 @@ pub mod genesis;
 pub mod metrics;
 mod query;
 pub mod sub_services;
+pub mod vm_pool;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -68,6 +69,12 @@ pub struct FuelService {
     pub shared: SharedState,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
+}
+
+impl Drop for FuelService {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 impl FuelService {

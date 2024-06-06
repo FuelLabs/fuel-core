@@ -214,6 +214,7 @@ where
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let height = height.unwrap_or_else(|| {
             self.view_provider
@@ -227,9 +228,8 @@ where
 
         let gas_price_params = GasPriceParams::new(height, block_bytes);
 
-        let gas_price = self
-            .gas_price_provider
-            .gas_price(gas_price_params)
+        let gas_price = gas_price
+            .or_else(|| self.gas_price_provider.gas_price(gas_price_params))
             .map_err(|e| anyhow!("No gas price found for height {height:?}: {e:?}"))?;
 
         // The dry run execution should use the state of the blockchain based on the

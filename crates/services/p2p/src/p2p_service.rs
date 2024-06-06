@@ -13,6 +13,7 @@ use crate::{
     },
     gossipsub::{
         messages::{
+            GossipTopicTag,
             GossipsubBroadcastRequest,
             GossipsubMessage as FuelGossipsubMessage,
         },
@@ -57,6 +58,7 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::SwarmEvent,
+    tcp,
     Multiaddr,
     PeerId,
     Swarm,
@@ -150,6 +152,10 @@ pub enum FuelP2PEvent {
         topic_hash: TopicHash,
         message: FuelGossipsubMessage,
     },
+    NewSubscription {
+        peer_id: PeerId,
+        tag: GossipTopicTag,
+    },
     InboundRequestMessage {
         request_id: InboundRequestId,
         request_message: RequestMessage,
@@ -174,11 +180,18 @@ impl FuelP2PService {
 
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);
+        let tcp_config = tcp::Config::new().port_reuse(true);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
         let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
-            .with_other_transport(transport_function)
+            .with_tcp(
+                tcp_config,
+                transport_function,
+                libp2p::yamux::Config::default,
+            )
+            .unwrap()
+            .with_dns()
             .unwrap()
             .with_behaviour(|_| behaviour)
             .unwrap()
@@ -446,6 +459,18 @@ impl FuelP2PService {
         &self.peer_manager
     }
 
+    fn get_topic_tag(&self, topic_hash: &TopicHash) -> Option<GossipTopicTag> {
+        let topic = self
+            .network_metadata
+            .gossipsub_data
+            .topics
+            .get_gossipsub_tag(topic_hash);
+        if topic.is_none() {
+            warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &topic_hash);
+        }
+        topic
+    }
+
     fn handle_behaviour_event(
         &mut self,
         event: FuelBehaviourEvent,
@@ -466,27 +491,20 @@ impl FuelP2PService {
         &mut self,
         event: gossipsub::Event,
     ) -> Option<FuelP2PEvent> {
-        if let gossipsub::Event::Message {
-            propagation_source,
-            message,
-            message_id,
-        } = event
-        {
-            if let Some(correct_topic) = self
-                .network_metadata
-                .gossipsub_data
-                .topics
-                .get_gossipsub_tag(&message.topic)
-            {
+        match event {
+            gossipsub::Event::Message {
+                propagation_source,
+                message,
+                message_id,
+            } => {
+                let correct_topic = self.get_topic_tag(&message.topic)?;
                 match self.network_codec.decode(&message.data, correct_topic) {
-                    Ok(decoded_message) => {
-                        return Some(FuelP2PEvent::GossipsubMessage {
-                            peer_id: propagation_source,
-                            message_id,
-                            topic_hash: message.topic,
-                            message: decoded_message,
-                        })
-                    }
+                    Ok(decoded_message) => Some(FuelP2PEvent::GossipsubMessage {
+                        peer_id: propagation_source,
+                        message_id,
+                        topic_hash: message.topic,
+                        message: decoded_message,
+                    }),
                     Err(err) => {
                         warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
 
@@ -495,13 +513,16 @@ impl FuelP2PService {
                             propagation_source,
                             MessageAcceptance::Reject,
                         );
+                        None
                     }
                 }
-            } else {
-                warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
             }
+            gossipsub::Event::Subscribed { peer_id, topic } => {
+                let tag = self.get_topic_tag(&topic)?;
+                Some(FuelP2PEvent::NewSubscription { peer_id, tag })
+            }
+            _ => None,
         }
-        None
     }
 
     fn handle_peer_report_event(
@@ -512,36 +533,15 @@ impl FuelP2PService {
             PeerReportEvent::PerformDecay => {
                 self.peer_manager.batch_update_score_with_decay()
             }
-            PeerReportEvent::CheckReservedNodesHealth => {
-                let disconnected_peers: Vec<_> = self
-                    .peer_manager
-                    .get_disconnected_reserved_peers()
-                    .copied()
-                    .collect();
-
-                for peer_id in disconnected_peers {
-                    debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
-
-                    let _ = self.swarm.dial(peer_id);
-                }
-            }
-            PeerReportEvent::PeerConnected {
-                peer_id,
-                initial_connection,
-            } => {
-                if self
-                    .peer_manager
-                    .handle_peer_connected(&peer_id, initial_connection)
-                {
+            PeerReportEvent::PeerConnected { peer_id } => {
+                if self.peer_manager.handle_peer_connected(&peer_id) {
                     let _ = self.swarm.disconnect_peer_id(peer_id);
-                } else if initial_connection {
+                } else {
                     return Some(FuelP2PEvent::PeerConnected(peer_id));
                 }
             }
             PeerReportEvent::PeerDisconnected { peer_id } => {
-                if self.peer_manager.handle_peer_disconnect(peer_id) {
-                    let _ = self.swarm.dial(peer_id);
-                }
+                self.peer_manager.handle_peer_disconnect(peer_id);
                 return Some(FuelP2PEvent::PeerDisconnected(peer_id));
             }
         }
@@ -923,7 +923,7 @@ mod tests {
             let mut p2p_config = p2p_config.clone();
             p2p_config.max_peers_connected = node_a_max_peers_allowed as u32;
             // it still tries to dial all nodes!
-            p2p_config.bootstrap_nodes = nodes_multiaddrs.clone();
+            p2p_config.bootstrap_nodes.clone_from(&nodes_multiaddrs);
 
             build_service_from_config(p2p_config).await
         };
@@ -933,7 +933,7 @@ mod tests {
             let mut p2p_config = p2p_config.clone();
             p2p_config.max_peers_connected = node_b_max_peers_allowed as u32;
             // it still tries to dial all nodes!
-            p2p_config.bootstrap_nodes = nodes_multiaddrs.clone();
+            p2p_config.bootstrap_nodes.clone_from(&nodes_multiaddrs);
 
             build_service_from_config(p2p_config).await
         };
@@ -1023,12 +1023,12 @@ mod tests {
         let (mut second_guarded_node, second_sentry_nodes) =
             build_sentry_nodes(p2p_config).await;
 
-        let mut first_sentry_set: HashSet<_> = first_sentry_nodes
+        let first_sentry_set: HashSet<_> = first_sentry_nodes
             .iter()
             .map(|node| node.local_peer_id)
             .collect();
 
-        let mut second_sentry_set: HashSet<_> = second_sentry_nodes
+        let second_sentry_set: HashSet<_> = second_sentry_nodes
             .iter()
             .map(|node| node.local_peer_id)
             .collect();
@@ -1051,7 +1051,7 @@ mod tests {
             tokio::select! {
                 event_from_first_guarded = first_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
-                        if !first_sentry_set.remove(&peer_id) {
+                        if !first_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
@@ -1059,7 +1059,7 @@ mod tests {
                 },
                 event_from_second_guarded = second_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
-                        if !second_sentry_set.remove(&peer_id) {
+                        if !second_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
@@ -1075,10 +1075,7 @@ mod tests {
 
             // This reserved node has connected to more than the number of reserved nodes it is part of.
             // It means it has discovered other nodes in the network.
-            if !(sentry_node_connections.len() >= 2 * RESERVED_NODE_SIZE
-                && first_sentry_set.is_empty()
-                && first_sentry_set.is_empty())
-            {
+            if sentry_node_connections.len() < 2 * RESERVED_NODE_SIZE {
                 instance = tokio::time::Instant::now();
             }
         }
@@ -1239,21 +1236,37 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_tx_with_accept() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
-            GossipsubMessageAcceptance::Accept,
-        )
-        .await;
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::NewTx(Arc::new(
+                        Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Accept,
+                ),
+            )
+            .await
+            .unwrap();
+        }
     }
 
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_tx_with_reject() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
-            GossipsubMessageAcceptance::Reject,
-        )
-        .await;
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::NewTx(Arc::new(
+                        Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Reject,
+                ),
+            )
+            .await
+            .unwrap();
+        }
     }
 
     #[tokio::test]
@@ -1411,23 +1424,32 @@ mod tests {
             .behaviour_mut()
             .block_peer(node_a.local_peer_id);
 
+        let mut a_connected_to_b = false;
+        let mut b_connected_to_c = false;
         loop {
+            // verifies that we've got at least a single peer address to send message to
+            if a_connected_to_b && b_connected_to_c && !message_sent {
+                message_sent = true;
+                let broadcast_request = broadcast_request.clone();
+                node_a.publish_message(broadcast_request).unwrap();
+            }
+
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
-                            // verifies that we've got at least a single peer address to send message to
-                            if !message_sent  {
-                                message_sent = true;
-                                let broadcast_request = broadcast_request.clone();
-                                node_a.publish_message(broadcast_request).unwrap();
-                            }
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_a_event {
+                        if peer_id == &node_b.local_peer_id {
+                            a_connected_to_b = true;
                         }
                     }
-
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_b_event {
+                        if peer_id == &node_c.local_peer_id {
+                            b_connected_to_c = true;
+                        }
+                    }
+
                     if let Some(FuelP2PEvent::GossipsubMessage { topic_hash, message, message_id, peer_id }) = node_b_event.clone() {
                         // Message Validation must be reported
                         // If it's `Accept`, Node B will propagate the message to Node C

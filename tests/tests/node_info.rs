@@ -82,6 +82,7 @@ async fn test_peer_info() {
         .shared
         .config
         .p2p
+        .as_ref()
         .unwrap()
         .keypair
         .public()

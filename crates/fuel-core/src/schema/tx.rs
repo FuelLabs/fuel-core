@@ -25,6 +25,7 @@ use crate::{
         },
         tx::types::TransactionStatus,
     },
+    service::adapters::SharedMemoryPool,
 };
 use async_graphql::{
     connection::{
@@ -41,8 +42,8 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_txpool::{
+    ports::MemoryPool,
     service::TxStatusMessage,
-    txpool::TokioWithRayon,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -72,6 +73,8 @@ use types::{
     DryRunTransactionExecutionStatus,
     Transaction,
 };
+
+use super::scalars::U64;
 
 pub mod input;
 pub mod output;
@@ -214,9 +217,14 @@ impl TxQuery {
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
 
-        tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
-            params.as_ref(),
-        ))
+        let memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
+        let memory = memory_pool.get_memory().await;
+
+        let parameters = CheckPredicateParams::from(params.as_ref());
+        let tx = tokio_rayon::spawn_fifo(move || {
+            let result = tx.estimate_predicates(&parameters, memory);
+            result.map(|_| tx)
+        })
         .await
         .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
@@ -247,6 +255,7 @@ impl TxMutation {
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
         utxo_validation: Option<bool>,
+        gas_price: Option<U64>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let params = ctx
@@ -262,7 +271,12 @@ impl TxMutation {
         }
 
         let tx_statuses = block_producer
-            .dry_run_txs(transactions, None, utxo_validation)
+            .dry_run_txs(
+                transactions,
+                None,
+                utxo_validation,
+                gas_price.map(|x| x.into()),
+            )
             .await?;
         let tx_statuses = tx_statuses
             .into_iter()

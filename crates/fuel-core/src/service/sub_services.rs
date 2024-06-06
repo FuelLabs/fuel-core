@@ -18,6 +18,7 @@ use crate::{
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoAAdapter,
+            SharedMemoryPool,
             StaticGasPrice,
             TxPoolAdapter,
             VerifierAdapter,
@@ -57,6 +58,7 @@ pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     Database,
     StaticGasPrice,
     ConsensusParametersProvider,
+    SharedMemoryPool,
 >;
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
@@ -194,6 +196,7 @@ pub fn init_sub_services(
         last_height,
         old_gas_price_provider.clone(),
         consensus_parameters_provider.clone(),
+        SharedMemoryPool::new(config.memory_pool_size),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -274,6 +277,7 @@ pub fn init_sub_services(
         Box::new(p2p_adapter),
         Box::new(old_gas_price_provider),
         Box::new(consensus_parameters_provider),
+        SharedMemoryPool::new(config.memory_pool_size),
         config.query_log_threshold_time,
         config.api_request_timeout,
     )?;

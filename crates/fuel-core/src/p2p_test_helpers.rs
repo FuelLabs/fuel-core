@@ -299,10 +299,20 @@ pub async fn make_nodes(
         {
             match bootstrap_type {
                 BootstrapType::BootstrapNodes => {
-                    node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .bootstrap_nodes
+                        .clone_from(&boots);
                 }
                 BootstrapType::ReservedNodes => {
-                    node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .reserved_nodes
+                        .clone_from(&boots);
                 }
             }
 
@@ -341,10 +351,20 @@ pub async fn make_nodes(
 
             match bootstrap_type {
                 BootstrapType::BootstrapNodes => {
-                    node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .bootstrap_nodes
+                        .clone_from(&boots);
                 }
                 BootstrapType::ReservedNodes => {
-                    node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .reserved_nodes
+                        .clone_from(&boots);
                 }
             }
             update_signing_key(&mut node_config, pub_key);

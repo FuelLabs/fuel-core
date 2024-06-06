@@ -1,10 +1,8 @@
 use crate::config::fuel_upgrade::Checksum;
 use futures::{
-    future,
     AsyncRead,
     AsyncWrite,
     Future,
-    TryFutureExt,
 };
 use libp2p::{
     self,
@@ -71,17 +69,16 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_inbound(self, socket: T, _: Self::Info) -> Self::Future {
-        Box::pin(
-            self.noise_authenticated
-                .upgrade_inbound(socket, "")
-                .and_then(move |(remote_peer_id, io)| {
-                    if self.approver.allow_peer(&remote_peer_id) {
-                        future::ok((remote_peer_id, io))
-                    } else {
-                        future::err(noise::Error::AuthenticationFailed)
-                    }
-                }),
-        )
+        Box::pin(async move {
+            let (remote_peer_id, io) =
+                self.noise_authenticated.upgrade_inbound(socket, "").await?;
+
+            if self.approver.allow_peer(&remote_peer_id) {
+                Ok((remote_peer_id, io))
+            } else {
+                Err(noise::Error::AuthenticationFailed)
+            }
+        })
     }
 }
 
@@ -95,16 +92,17 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_outbound(self, socket: T, _: Self::Info) -> Self::Future {
-        Box::pin(
-            self.noise_authenticated
+        Box::pin(async move {
+            let (remote_peer_id, io) = self
+                .noise_authenticated
                 .upgrade_outbound(socket, "")
-                .and_then(move |(remote_peer_id, io)| {
-                    if self.approver.allow_peer(&remote_peer_id) {
-                        future::ok((remote_peer_id, io))
-                    } else {
-                        future::err(noise::Error::AuthenticationFailed)
-                    }
-                }),
-        )
+                .await?;
+
+            if self.approver.allow_peer(&remote_peer_id) {
+                Ok((remote_peer_id, io))
+            } else {
+                Err(noise::Error::AuthenticationFailed)
+            }
+        })
     }
 }

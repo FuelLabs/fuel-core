@@ -73,6 +73,8 @@ pub struct Config {
     pub time_until_synced: Duration,
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
+    /// The size of the memory pool in number of `MemoryInstance`s.
+    pub memory_pool_size: usize,
 }
 
 impl Config {
@@ -104,7 +106,9 @@ impl Config {
         // In tests, we always want to use the native executor as a default configuration.
         let native_executor_version = latest_block
             .map(|last_block| last_block.state_transition_version.saturating_add(1))
-            .unwrap_or(StateTransitionBytecodeVersion::MIN);
+            .unwrap_or(
+                fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+            );
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -153,6 +157,7 @@ impl Config {
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
             query_log_threshold_time: Duration::from_secs(2),
+            memory_pool_size: 4,
         }
     }
 

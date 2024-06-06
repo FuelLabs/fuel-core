@@ -20,13 +20,13 @@ use std::{
 #[derive(Debug, Clone)]
 pub(crate) struct ConnectionTracker {
     reserved_nodes: HashSet<PeerId>,
-    connection_state: Arc<RwLock<ConnectionState>>,
+    connection_state: Option<Arc<RwLock<ConnectionState>>>,
 }
 
 impl ConnectionTracker {
     pub(crate) fn new(
         reserved_nodes: &[Multiaddr],
-        connection_state: Arc<RwLock<ConnectionState>>,
+        connection_state: Option<Arc<RwLock<ConnectionState>>>,
     ) -> Self {
         Self {
             reserved_nodes: peer_ids_set_from(reserved_nodes),
@@ -41,8 +41,10 @@ impl Approver for ConnectionTracker {
             return true
         }
 
-        if let Ok(connection_state) = self.connection_state.read() {
-            return connection_state.available_slot()
+        if let Some(connection_state) = &self.connection_state {
+            if let Ok(connection_state) = connection_state.read() {
+                return connection_state.available_slot()
+            }
         }
 
         false

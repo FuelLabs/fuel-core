@@ -54,7 +54,10 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
-use fuel_core_types::services::executor::ValidationResult;
+use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+    services::executor::ValidationResult,
+};
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -114,7 +117,7 @@ impl<S, R> Executor<S, R> {
     /// we need to use a native executor or WASM. If the version is the same as
     /// on the block, native execution is used. If the version is not the same
     /// as in the block, then the WASM executor is used.
-    pub const VERSION: u32 = StateTransitionBytecodeVersion::MIN;
+    pub const VERSION: u32 = LATEST_STATE_TRANSITION_VERSION;
 
     /// This constant is used along with the `version_check` test.
     /// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
@@ -129,7 +132,7 @@ impl<S, R> Executor<S, R> {
         StateTransitionBytecodeVersion,
     )] = &[
         ("0-26-0", StateTransitionBytecodeVersion::MIN),
-        // ("0-27-0", 1),
+        ("0-27-0", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
@@ -368,7 +371,6 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            Self::trace_block_version_warning(block_version);
             self.wasm_produce_inner(&module, block, options, dry_run)
         }
     }
@@ -412,18 +414,17 @@ where
             }
         } else {
             let module = self.get_module(block_version)?;
-            Self::trace_block_version_warning(block_version);
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
         }
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn trace_block_version_warning(block_version: StateTransitionBytecodeVersion) {
+    fn trace_block_version_warning(&self, block_version: StateTransitionBytecodeVersion) {
         tracing::warn!(
             "The block version({}) is different from the native executor version({}). \
                 The WASM executor will be used.",
             block_version,
-            Self::VERSION
+            self.native_executor_version()
         );
     }
 
@@ -462,6 +463,9 @@ where
             coinbase_recipient,
             gas_price,
         } = component;
+        self.trace_block_version_warning(
+            header_to_produce.state_transition_bytecode_version,
+        );
 
         let source = Some(transactions_source);
 
@@ -499,6 +503,9 @@ where
         block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
+        self.trace_block_version_warning(
+            block.header().state_transition_bytecode_version,
+        );
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
 
@@ -718,9 +725,7 @@ mod test {
             })
             .collect::<BTreeMap<_, _>>();
 
-        if let Some(expected_version) =
-            seen_crate_versions.get(&crate_version.to_string())
-        {
+        if let Some(expected_version) = seen_crate_versions.get(crate_version) {
             assert_eq!(
                 *expected_version,
                 Executor::<Storage, DisabledRelayer>::VERSION,
