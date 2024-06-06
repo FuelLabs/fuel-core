@@ -3759,6 +3759,8 @@ dependencies = [
  "fuel-core-types",
  "thiserror",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

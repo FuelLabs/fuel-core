@@ -112,12 +112,15 @@ where
         let should_continue;
         let latest_block = self.latest_block_height();
         tokio::select! {
+            biased;
+            _ = watcher.while_started() => {
+                tracing::debug!("Stopping gas price service");
+                should_continue = false;
+            }
             new_algo = self.update_algorithm.next(latest_block) => {
+                tracing::debug!("Updating gas price algorithm");
                 self.update(next_block_height(&latest_block), new_algo)?;
                 should_continue = true;
-            }
-            _ = watcher.while_started() => {
-                should_continue = false;
             }
         }
         Ok(should_continue)
@@ -177,6 +180,8 @@ mod tests {
     }
     #[tokio::test]
     async fn run__updates_gas_price() {
+        let _ = tracing_subscriber::fmt::try_init();
+
         // given
         let (price_sender, price_receiver) = mpsc::channel(1);
         let updater = TestAlgorithmUpdater {
@@ -185,17 +190,16 @@ mod tests {
         };
         let service = GasPriceService::new(0.into(), updater);
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
-        let mut watcher = StateWatcher::from(watch_receiver);
+        let watcher = StateWatcher::from(watch_receiver);
         let read_algo = service.next_block_algorithm();
-        let mut task = service.into_task(&watcher, ()).await.unwrap();
-        task.run(&mut watcher).await.unwrap();
+        let task = service.into_task(&watcher, ()).await.unwrap();
         let expected_price = 100;
-
         let service = ServiceRunner::new(task);
         service.start().unwrap();
 
         // when
         price_sender.send(expected_price).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
         let actual_price = read_algo.read().unwrap().1.gas_price();

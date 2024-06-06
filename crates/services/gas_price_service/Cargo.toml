@@ -17,6 +17,8 @@ fuel-core-services =  { workspace = true }
 fuel-core-types = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
+tracing-subscriber = {workspace = true}
