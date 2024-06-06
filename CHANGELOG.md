@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- [#1942](https://github.com/FuelLabs/fuel-core/pull/1942): Sequential relayer's commits.
 - [#1916](https://github.com/FuelLabs/fuel-core/pull/1916): Speed up synchronisation of the blocks for the `fuel-core-sync` service.
 
 #### Breaking
