@@ -28,10 +28,11 @@ impl GasPriceParams {
     }
 }
 
+#[async_trait::async_trait]
 /// Interface for retrieving the gas price for a block
 pub trait GasPriceProvider {
     /// The gas price for all transactions in the block.
-    fn gas_price(&self, params: GasPriceParams) -> anyhow::Result<u64>;
+    async fn gas_price(&self, params: GasPriceParams) -> anyhow::Result<u64>;
 }
 
 /// Interface for retrieving the consensus parameters.

@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::service::adapters::BlockHeight;
 
 #[cfg(test)]
 mod producer_gas_price_tests;
@@ -23,11 +22,11 @@ impl GasPriceAlgorithm for SimpleGasPriceAlgorithm {
     }
 }
 
-fn build_provider<A>(
-    latest_height: BlockHeight,
-    algorithm: A,
-) -> FuelGasPriceProvider<A> {
-    let algorithm = Arc::new(RwLock::new((latest_height, algorithm)));
+fn build_provider<A>(latest_height: BlockHeight, algorithm: A) -> FuelGasPriceProvider<A>
+where
+    A: Send + Sync,
+{
+    let algorithm = BlockGasPriceAlgo::new(latest_height, algorithm);
     FuelGasPriceProvider::new(algorithm)
 }
 

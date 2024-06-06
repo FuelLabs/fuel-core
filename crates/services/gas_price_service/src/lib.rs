@@ -6,9 +6,11 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use std::sync::{
-    Arc,
+use std::sync::Arc;
+
+use tokio::sync::{
     RwLock,
+    RwLockReadGuard,
 };
 
 pub mod static_updater;
@@ -18,7 +20,7 @@ pub fn new_service<A, U>(
     update_algo: U,
 ) -> anyhow::Result<ServiceRunner<GasPriceService<A, U>>>
 where
-    U: UpdateAlgorithm<Algorithm = A> + Send,
+    U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
     A: Send + Sync,
 {
     let service = GasPriceService::new(current_fuel_block_height, update_algo);
@@ -32,25 +34,26 @@ pub enum Error {
 }
 
 pub struct GasPriceService<A, U> {
-    next_block_algorithm: Arc<RwLock<(BlockHeight, A)>>,
+    next_block_algorithm: BlockGasPriceAlgo<A>,
     update_algorithm: U,
 }
 
 impl<A, U> GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A>,
+    A: Send + Sync,
 {
     pub fn new(starting_block_height: BlockHeight, update_algorithm: U) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
         let next_block_algorithm =
-            Arc::new(RwLock::new((starting_block_height, algorithm)));
+            BlockGasPriceAlgo::new(starting_block_height, algorithm);
         Self {
             next_block_algorithm,
             update_algorithm,
         }
     }
 
-    pub fn next_block_algorithm(&self) -> Arc<RwLock<(BlockHeight, A)>> {
+    pub fn next_block_algorithm(&self) -> BlockGasPriceAlgo<A> {
         self.next_block_algorithm.clone()
     }
 }
@@ -70,35 +73,60 @@ fn next_block_height(block_height: &BlockHeight) -> BlockHeight {
 impl<A, U> GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A>,
+    A: Send + Sync,
 {
-    fn update(
-        &self,
-        new_block_height: BlockHeight,
-        new_algorithm: A,
-    ) -> Result<(), Error> {
-        let mut latest_algorithm = self
-            .next_block_algorithm
-            .write()
-            .map_err(|e| Error::UpdateFailed(format!("{e:?}")))?;
-        let (block_height, algorithm) = &mut *latest_algorithm;
-        *algorithm = new_algorithm;
-        *block_height = new_block_height;
-        Ok(())
+    async fn update(&mut self, new_block_height: BlockHeight, new_algorithm: A) {
+        self.next_block_algorithm
+            .update(new_block_height, new_algorithm)
+            .await;
     }
 
-    fn latest_block_height(&self) -> BlockHeight {
-        self.next_block_algorithm.read().unwrap().0
+    async fn latest_block_height(&self) -> BlockHeight {
+        self.next_block_algorithm.read().await.0
+    }
+}
+
+#[derive(Debug)]
+pub struct BlockGasPriceAlgo<A>(Arc<RwLock<(BlockHeight, A)>>);
+
+impl<A> Clone for BlockGasPriceAlgo<A> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<A> BlockGasPriceAlgo<A>
+where
+    A: Send + Sync,
+{
+    pub fn new(block_height: BlockHeight, algo: A) -> Self {
+        Self(Arc::new(RwLock::new((block_height, algo))))
+    }
+
+    pub async fn block_height(&self) -> BlockHeight {
+        let lock = self.0.read().await;
+        lock.0.clone()
+    }
+
+    pub async fn read(&self) -> RwLockReadGuard<(BlockHeight, A)> {
+        self.0.read().await
+    }
+
+    pub async fn update(&mut self, new_block_height: BlockHeight, new_algo: A) {
+        let mut write_lock = self.0.write().await;
+        write_lock.0 = new_block_height;
+        write_lock.1 = new_algo;
     }
 }
 
 #[async_trait]
 impl<A, U> RunnableService for GasPriceService<A, U>
 where
-    U: UpdateAlgorithm<Algorithm = A> + Send,
+    U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
     A: Send + Sync,
 {
     const NAME: &'static str = "GasPriceUpdater";
-    type SharedData = Arc<RwLock<(BlockHeight, A)>>;
+    type SharedData = BlockGasPriceAlgo<A>;
     type Task = Self;
     type TaskParams = ();
 
@@ -118,12 +146,12 @@ where
 #[async_trait]
 impl<A, U> RunnableTask for GasPriceService<A, U>
 where
-    U: UpdateAlgorithm<Algorithm = A> + Send,
+    U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
     A: Send + Sync,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
-        let latest_block = self.latest_block_height();
+        let latest_block = self.latest_block_height().await;
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
@@ -132,7 +160,7 @@ where
             }
             new_algo = self.update_algorithm.next(latest_block) => {
                 tracing::debug!("Updating gas price algorithm");
-                self.update(next_block_height(&latest_block), new_algo)?;
+                self.update(next_block_height(&latest_block), new_algo).await;
                 should_continue = true;
             }
         }
