@@ -122,9 +122,15 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
-        let block_bytes = 0;
+        let consensus_params = self
+            .consensus_parameters_provider
+            .consensus_params_at_version(&header.consensus_parameters_version)?;
 
-        let gas_price_params = GasPriceParams::new(height, block_bytes);
+        let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
+        let max_gas_per_block = consensus_params.block_gas_limit();
+        let max_block_bytes = max_gas_per_block.saturating_div(gas_per_bytes);
+
+        let gas_price_params = GasPriceParams::new(height, max_block_bytes);
 
         let gas_price = self
             .gas_price_provider
