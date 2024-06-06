@@ -14,16 +14,12 @@ use crate::{
 use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    fuel_vm::{
-        checked_transaction::{
-            CheckPredicates,
-            Checked,
-            CheckedTransaction,
-            Checks,
-            IntoChecked,
-            ParallelExecutor,
-        },
-        PredicateVerificationFailed,
+    fuel_vm::checked_transaction::{
+        CheckPredicates,
+        Checked,
+        CheckedTransaction,
+        Checks,
+        IntoChecked,
     },
     services::txpool::{
         ArcPoolTx,
@@ -32,7 +28,10 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-use crate::ports::GasPriceProvider;
+use crate::ports::{
+    GasPriceProvider,
+    MemoryPool,
+};
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -52,7 +51,10 @@ use fuel_core_types::{
         ConsensusParameters,
         Input,
     },
-    fuel_vm::checked_transaction::CheckPredicateParams,
+    fuel_vm::{
+        checked_transaction::CheckPredicateParams,
+        interpreter::Memory,
+    },
     services::executor::TransactionExecutionStatus,
 };
 use std::{
@@ -61,7 +63,6 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use tokio_rayon::AsyncRayonHandle;
 
 #[cfg(test)]
 mod test_helpers;
@@ -459,15 +460,17 @@ where
     }
 }
 
-pub async fn check_transactions<Provider>(
+pub async fn check_transactions<Provider, MP>(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
     utxp_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &Provider,
+    memory_pool: Arc<MP>,
 ) -> Vec<Result<Checked<Transaction>, Error>>
 where
     Provider: GasPriceProvider,
+    MP: MemoryPool,
 {
     let mut checked_txs = Vec::with_capacity(txs.len());
 
@@ -479,6 +482,7 @@ where
                 utxp_validation,
                 consensus_params,
                 gas_price_provider,
+                memory_pool.get_memory().await,
             )
             .await,
         );
@@ -487,13 +491,18 @@ where
     checked_txs
 }
 
-pub async fn check_single_tx<GasPrice: GasPriceProvider>(
+pub async fn check_single_tx<GasPrice, M>(
     tx: Transaction,
     current_height: BlockHeight,
     utxo_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &GasPrice,
-) -> Result<Checked<Transaction>, Error> {
+    memory: M,
+) -> Result<Checked<Transaction>, Error>
+where
+    GasPrice: GasPriceProvider,
+    M: Memory + Send + Sync + 'static,
+{
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType)
     }
@@ -503,11 +512,10 @@ pub async fn check_single_tx<GasPrice: GasPriceProvider>(
             .into_checked_basic(current_height, consensus_params)?
             .check_signatures(&consensus_params.chain_id())?;
 
-        let tx = tx
-            .check_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
-                consensus_params,
-            ))
-            .await?;
+        let parameters = CheckPredicateParams::from(consensus_params);
+        let tx =
+            tokio_rayon::spawn_fifo(move || tx.check_predicates(&parameters, memory))
+                .await?;
 
         debug_assert!(tx.checks().contains(Checks::all()));
 
@@ -557,26 +565,4 @@ fn verify_tx_min_gas_price(
         CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
     };
     Ok(read.into())
-}
-
-pub struct TokioWithRayon;
-
-#[async_trait::async_trait]
-impl ParallelExecutor for TokioWithRayon {
-    type Task = AsyncRayonHandle<Result<(Word, usize), PredicateVerificationFailed>>;
-
-    fn create_task<F>(func: F) -> Self::Task
-    where
-        F: FnOnce() -> Result<(Word, usize), PredicateVerificationFailed>
-            + Send
-            + 'static,
-    {
-        tokio_rayon::spawn(func)
-    }
-
-    async fn execute_tasks(
-        futures: Vec<Self::Task>,
-    ) -> Vec<Result<(Word, usize), PredicateVerificationFailed>> {
-        futures::future::join_all(futures).await
-    }
 }

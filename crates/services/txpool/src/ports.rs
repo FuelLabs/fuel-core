@@ -16,6 +16,7 @@ use fuel_core_types::{
         ContractId,
         Nonce,
     },
+    fuel_vm::interpreter::Memory,
     services::{
         block_importer::SharedImportResult,
         p2p::{
@@ -64,6 +65,15 @@ pub trait TxPoolDb: Send + Sync {
 pub trait GasPriceProvider {
     /// Get gas price for specific block height if it is known
     fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
+}
+
+/// Trait for getting VM memory.
+#[async_trait::async_trait]
+pub trait MemoryPool {
+    type Memory: Memory + Send + Sync + 'static;
+
+    /// Get the memory instance.
+    async fn get_memory(&self) -> Self::Memory;
 }
 
 /// Trait for getting the latest consensus parameters.

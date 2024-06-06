@@ -26,6 +26,7 @@ use fuel_core_types::{
         TransactionBuilder,
         Word,
     },
+    fuel_vm::interpreter::MemoryInstance,
     services::{
         block_importer::ImportResult,
         p2p::GossipsubMessageAcceptance,
@@ -35,12 +36,24 @@ use std::cell::RefCell;
 
 type GossipedTransaction = GossipData<Transaction>;
 
+pub struct DummyPool;
+
+#[async_trait::async_trait]
+impl MemoryPool for DummyPool {
+    type Memory = MemoryInstance;
+
+    async fn get_memory(&self) -> Self::Memory {
+        MemoryInstance::new()
+    }
+}
+
 pub struct TestContext {
     pub(crate) service: Service<
         MockP2P,
         MockDBProvider,
         MockTxPoolGasPrice,
         MockConsensusParametersProvider,
+        DummyPool,
     >,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
@@ -81,6 +94,7 @@ impl TestContext {
         MockDBProvider,
         MockTxPoolGasPrice,
         MockConsensusParametersProvider,
+        DummyPool,
     > {
         &self.service
     }
@@ -257,6 +271,7 @@ impl TestContextBuilder {
             Default::default(),
             gas_price_provider,
             consensus_parameters_provider,
+            DummyPool,
         );
 
         TestContext {

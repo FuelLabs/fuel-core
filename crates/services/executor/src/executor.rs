@@ -66,8 +66,8 @@ use fuel_core_types::{
             OutputContract,
             TxPointer as TxPointerField,
         },
-        input,
         input::{
+            self,
             coin::{
                 CoinPredicate,
                 CoinSigned,
@@ -102,8 +102,8 @@ use fuel_core_types::{
         ContractId,
         MessageId,
     },
-    fuel_vm,
     fuel_vm::{
+        self,
         checked_transaction::{
             CheckPredicateParams,
             CheckPredicates,
@@ -116,6 +116,8 @@ use fuel_core_types::{
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
+            Memory,
+            MemoryInstance,
         },
         state::StateTransition,
         Backtrace as FuelBacktrace,
@@ -370,18 +372,21 @@ where
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
+        let mut memory = MemoryInstance::new();
 
         self.process_l1_txs(
             &mut partial_block,
             components.coinbase_recipient,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
         self.process_l2_txs(
             &mut partial_block,
             &components,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
 
         self.produce_mint_tx(
@@ -389,6 +394,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
         debug_assert!(data.found_mint, "Mint transaction is not found");
 
@@ -402,6 +408,7 @@ where
         components: &Components<TxSource>,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -445,6 +452,7 @@ where
             MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
             gas_price,
             coinbase_contract_id,
+            memory,
         )?;
 
         Ok(())
@@ -469,6 +477,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
+            &mut MemoryInstance::new(),
         )?;
 
         data.changes = block_storage_tx.into_changes();
@@ -481,14 +490,20 @@ where
         coinbase_contract_id: ContractId,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
     {
         let block_height = *block.header.height();
         let da_block_height = block.header.da_height;
-        let relayed_txs =
-            self.get_relayed_txs(block_height, da_block_height, data, storage_tx)?;
+        let relayed_txs = self.get_relayed_txs(
+            block_height,
+            da_block_height,
+            data,
+            storage_tx,
+            memory,
+        )?;
 
         self.process_relayed_txs(
             relayed_txs,
@@ -496,6 +511,7 @@ where
             storage_tx,
             data,
             coinbase_contract_id,
+            memory,
         )?;
 
         Ok(())
@@ -507,6 +523,7 @@ where
         components: &Components<TxSource>,
         storage_tx: &mut StorageTransaction<T>,
         data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -536,6 +553,7 @@ where
                     transaction,
                     *gas_price,
                     *coinbase_contract_id,
+                    memory,
                 ) {
                     Ok(_) => {}
                     Err(err) => {
@@ -555,6 +573,7 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_transaction_and_commit<'a, W>(
         &'a self,
         block: &'a mut PartialFuelBlock,
@@ -563,6 +582,7 @@ where
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         W: KeyValueInspect<Column = Column>,
@@ -581,6 +601,7 @@ where
                 gas_price,
                 execution_data,
                 &mut tx_st_transaction,
+                memory,
             )?;
             tx_st_transaction.commit()?;
             tx
@@ -608,6 +629,7 @@ where
         let partial_header = PartialBlockHeader::from(block.header());
         let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
         let transactions = block.transactions();
+        let mut memory = MemoryInstance::new();
 
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
@@ -617,6 +639,7 @@ where
             coinbase_contract_id,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
         let processed_l1_tx_count = partial_block.transactions.len();
 
@@ -630,6 +653,7 @@ where
                 maybe_checked_tx,
                 gas_price,
                 coinbase_contract_id,
+                &mut memory,
             )?;
         }
 
@@ -658,6 +682,7 @@ where
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -676,6 +701,7 @@ where
                 maybe_checked_transaction,
                 Self::RELAYED_GAS_PRICE,
                 coinbase_contract_id,
+                memory,
             ) {
                 Ok(_) => {}
                 Err(err) => {
@@ -697,12 +723,19 @@ where
         da_block_height: DaBlockHeight,
         data: &mut ExecutionData,
         block_storage_tx: &mut BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Vec<CheckedTransaction>>
     where
         D: KeyValueInspect<Column = Column>,
     {
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(block_height, da_block_height, data, block_storage_tx)?
+            self.process_da(
+                block_height,
+                da_block_height,
+                data,
+                block_storage_tx,
+                memory,
+            )?
         } else {
             Vec::with_capacity(0)
         };
@@ -751,6 +784,7 @@ where
         da_block_height: DaBlockHeight,
         execution_data: &mut ExecutionData,
         block_storage_tx: &mut BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Vec<CheckedTransaction>>
     where
         D: KeyValueInspect<Column = Column>,
@@ -798,6 +832,7 @@ where
                             relayed_tx,
                             block_height,
                             &self.consensus_params,
+                            memory,
                         );
                         match checked_tx_res {
                             Ok(checked_tx) => {
@@ -828,6 +863,7 @@ where
         relayed_tx: RelayedTransaction,
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
+        memory: &mut MemoryInstance,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
         Self::tx_is_valid_variant(&parsed_tx)?;
@@ -836,7 +872,8 @@ where
             &relayed_tx,
             consensus_params,
         )?;
-        let checked_tx = Self::get_checked_tx(parsed_tx, block_height, consensus_params)?;
+        let checked_tx =
+            Self::get_checked_tx(parsed_tx, block_height, consensus_params, memory)?;
         Ok(CheckedTransaction::from(checked_tx))
     }
 
@@ -853,9 +890,10 @@ where
         tx: Transaction,
         height: BlockHeight,
         consensus_params: &ConsensusParameters,
+        memory: &mut MemoryInstance,
     ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
         let checked_tx = tx
-            .into_checked(height, consensus_params)
+            .into_checked_reusable_memory(height, consensus_params, memory)
             .map_err(ForcedTransactionFailure::CheckError)?;
         Ok(checked_tx)
     }
@@ -906,6 +944,7 @@ where
         gas_price: Word,
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Transaction>
     where
         T: KeyValueInspect<Column = Column>,
@@ -922,6 +961,7 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
             ),
             CheckedTransaction::Create(tx) => self.execute_chargeable_transaction(
                 tx,
@@ -930,6 +970,7 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
             ),
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
@@ -946,6 +987,7 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
             ),
             CheckedTransaction::Upload(tx) => self.execute_chargeable_transaction(
                 tx,
@@ -954,6 +996,7 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
             ),
         }
     }
@@ -1061,6 +1104,7 @@ where
         gas_price: Word,
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + Cacheable + Send + Sync + 'static,
@@ -1070,7 +1114,7 @@ where
         let tx_id = checked_tx.id();
 
         if self.options.extra_tx_checks {
-            checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx)?;
+            checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
         let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
@@ -1079,6 +1123,7 @@ where
             coinbase_contract_id,
             gas_price,
             storage_tx,
+            memory,
         )?;
 
         self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
@@ -1361,6 +1406,7 @@ where
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         storage_tx: &mut TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Checked<Tx>>
     where
         Tx: ExecutableTransaction + Send + Sync + 'static,
@@ -1368,7 +1414,7 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         checked_tx = checked_tx
-            .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
+            .check_predicates(&CheckPredicateParams::from(&self.consensus_params), memory)
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
                     e,
@@ -1395,6 +1441,7 @@ where
         coinbase_contract_id: ContractId,
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
     where
         Tx: ExecutableTransaction + Cacheable,
@@ -1414,11 +1461,6 @@ where
             coinbase_contract_id,
         );
 
-        let mut vm = Interpreter::with_storage(
-            vm_db,
-            InterpreterParams::new(gas_price, &self.consensus_params),
-        );
-
         let gas_costs = self.consensus_params.gas_costs();
         let fee_params = self.consensus_params.fee_params();
 
@@ -1429,6 +1471,12 @@ where
             .map(|input| input.predicate_gas_used())
             .collect();
         let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+
+        let mut vm = Interpreter::with_storage(
+            memory,
+            vm_db,
+            InterpreterParams::new(gas_price, &self.consensus_params),
+        );
 
         let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
@@ -1769,11 +1817,13 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<T, Tx>(
+    fn log_backtrace<M, T, Tx>(
         &self,
-        vm: &Interpreter<VmStorage<T>, Tx>,
+        vm: &Interpreter<M, VmStorage<T>, Tx>,
         receipts: &[Receipt],
-    ) {
+    ) where
+        M: Memory,
+    {
         if self.options.backtrace {
             if let Some(backtrace) = receipts
                 .iter()

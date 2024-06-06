@@ -48,6 +48,7 @@ use fuel_core_types::{
         ContractId,
         Nonce,
     },
+    fuel_vm::interpreter::Memory,
     services::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
@@ -236,6 +237,15 @@ pub trait P2pPort: Send + Sync {
 pub trait GasPriceEstimate: Send + Sync {
     /// The worst case scenario for gas price at a given horizon
     async fn worst_case_gas_price(&self, height: BlockHeight) -> u64;
+}
+
+/// Trait for getting VM memory.
+#[async_trait::async_trait]
+pub trait MemoryPool {
+    type Memory: Memory + Send + Sync + 'static;
+
+    /// Get the memory instance.
+    async fn get_memory(&self) -> Self::Memory;
 }
 
 pub mod worker {
