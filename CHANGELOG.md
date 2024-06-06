@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1924](https://github.com/FuelLabs/fuel-core/pull/1924): `dry_run_opt` has new `gas_price: Option<u64>` argument
 
 ### Added
+- [#1889](https://github.com/FuelLabs/fuel-core/pull/1889): Add new `FuelGasPriceProvider` that receives the gas price algorithm from a `GasPriceService`
 - [#1939](https://github.com/FuelLabs/fuel-core/pull/1939): Added API functions to open a RocksDB in different modes.
 - [#1929](https://github.com/FuelLabs/fuel-core/pull/1929): Added support of customization of the state transition version in the `ChainConfig`.
 
@@ -37,7 +38,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [#1895](https://github.com/FuelLabs/fuel-core/pull/1895): Added backward and forward compatibility integration tests for forkless upgrades.
 - [#1898](https://github.com/FuelLabs/fuel-core/pull/1898): Enforce increasing of the `Executor::VERSION` on each release.
-- [#1889](https://github.com/FuelLabs/fuel-core/pull/1889): Add new `FuelGasPriceProvider`
 
 ### Changed
 
