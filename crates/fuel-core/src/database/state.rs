@@ -245,8 +245,12 @@ mod tests {
                 .map(|v| (v.key, v.value))
                 .collect::<Vec<_>>();
 
-            states_in_db.sort_by(|(ak, av), (bk, bv)| (ak.as_ref(), av.as_ref()).cmp(&(bk.as_ref(), bv.as_ref())));
-            original_state.sort_by(|(ak, av), (bk, bv)| (ak.as_ref(), av.as_ref()).cmp(&(bk.as_ref(), bv.as_ref())));
+            states_in_db.sort_by(|(ak, av), (bk, bv)| {
+                (ak.as_ref(), av.as_ref()).cmp(&(bk.as_ref(), bv.as_ref()))
+            });
+            original_state.sort_by(|(ak, av), (bk, bv)| {
+                (ak.as_ref(), av.as_ref()).cmp(&(bk.as_ref(), bv.as_ref()))
+            });
 
             assert_eq!(states_in_db, original_state);
         }
