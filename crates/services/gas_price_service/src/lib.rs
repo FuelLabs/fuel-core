@@ -175,7 +175,6 @@ mod tests {
     };
     use fuel_core_services::{
         RunnableService,
-        RunnableTask,
         Service,
         ServiceRunner,
         State,
@@ -237,7 +236,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.read().unwrap().1.gas_price();
+        let actual_price = read_algo.read().await.1.gas_price();
         assert_eq!(expected_price, actual_price);
 
         watch_sender.send(State::Stopped).unwrap();
