@@ -607,6 +607,7 @@ where
 }
 
 #[allow(clippy::cast_possible_truncation)]
+#[allow(unexpected_cfgs)] // for cfg(coverage)
 #[cfg(test)]
 mod test {
     use super::*;
@@ -979,6 +980,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
+        #[cfg(not(coverage))] // Too slow for coverage
         #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__native_strategy() {
             // Given
@@ -999,6 +1001,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
+        #[cfg(not(coverage))] // Too slow for coverage
         #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__wasm_strategy() {
             // Given
