@@ -44,10 +44,9 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V1": {
+        "V2": {
           "add": 1,
           "addi": 1,
-          "aloc": 1,
           "and": 1,
           "andi": 1,
           "bal": 13,
@@ -133,6 +132,12 @@ expression: json
           "wqmm": 3,
           "xor": 1,
           "xori": 1,
+          "aloc": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
           "call": {
             "LightOperation": {
               "base": 144,
