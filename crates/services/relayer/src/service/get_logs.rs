@@ -9,13 +9,19 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod test;
 
+pub struct DownloadedLogs {
+    pub start_height: u64,
+    pub last_height: u64,
+    pub logs: Vec<Log>,
+}
+
 /// Download the logs from the DA layer.
 pub(crate) fn download_logs<'a, P>(
     eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<H160>,
     eth_node: &'a P,
     page_size: u64,
-) -> impl futures::Stream<Item = Result<(u64, u64, Vec<Log>), ProviderError>> + 'a
+) -> impl futures::Stream<Item = Result<DownloadedLogs, ProviderError>> + 'a
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -48,10 +54,16 @@ where
                         let page = page.reduce();
 
                         // Get the logs and return the reduced page.
-                        eth_node
-                            .get_logs(&filter)
-                            .await
-                            .map(|logs| Some(((oldest_block, latest_block, logs), page)))
+                        eth_node.get_logs(&filter).await.map(|logs| {
+                            Some((
+                                DownloadedLogs {
+                                    start_height: oldest_block,
+                                    last_height: latest_block,
+                                    logs,
+                                },
+                                page,
+                            ))
+                        })
                     }
                 }
             }
@@ -63,10 +75,15 @@ where
 pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
-    S: futures::Stream<Item = Result<(u64, u64, Vec<Log>), ProviderError>>,
+    S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some((start_height, last_height, events)) = logs.try_next().await? {
+    while let Some(DownloadedLogs {
+        start_height,
+        last_height,
+        logs: events,
+    }) = logs.try_next().await?
+    {
         let mut unordered_events = HashMap::<DaBlockHeight, Vec<Event>>::new();
         let sorted_events = sort_events_by_log_index(events)?;
         let fuel_events = sorted_events.into_iter().filter_map(|event| {
