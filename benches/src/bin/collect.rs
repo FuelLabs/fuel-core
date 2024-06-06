@@ -1,6 +1,6 @@
 use clap::Parser;
 use fuel_core_types::fuel_tx::{
-    consensus_parameters::gas::GasCostsValuesV1,
+    consensus_parameters::gas::GasCostsValuesV2,
     ConsensusParameters,
     GasCosts,
 };
@@ -371,7 +371,7 @@ pub const GIT: &str = ""#,
     r#"";"#,
     r##"
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValuesV1 {"##,
+    GasCostsValuesV2 {"##,
     r##"    }.into()
 }
 "##,
@@ -495,7 +495,7 @@ impl State {
         )
     }
 
-    fn to_gas_costs(&self) -> GasCostsValuesV1 {
+    fn to_gas_costs(&self) -> GasCostsValuesV2 {
         serde_yaml::from_value(self.to_yaml()).unwrap()
     }
 

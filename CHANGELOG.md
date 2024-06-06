@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- [#1934](https://github.com/FuelLabs/fuel-core/pull/1934): Updated benchmark for the `aloc` opcode to be `DependentCost`. Updated `vm_initialization` benchmark to exclude growing of memory(It is handled by VM reuse).
 - [#1916](https://github.com/FuelLabs/fuel-core/pull/1916): Speed up synchronisation of the blocks for the `fuel-core-sync` service.
+- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): optimization: Reuse VM memory across executions.
 
 #### Breaking
 
+- [#1934](https://github.com/FuelLabs/fuel-core/pull/1934): Changed `GasCosts` endpoint to return `DependentCost` for the `aloc` opcode via `alocDependentCost`.
+- [#1934](https://github.com/FuelLabs/fuel-core/pull/1934): Updated default gas costs for the local testnet configuration. All opcodes became cheaper.
 - [#1924](https://github.com/FuelLabs/fuel-core/pull/1924): `dry_run_opt` has new `gas_price: Option<u64>` argument
+- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): Upgraded `fuel-vm` to `0.51.0`. See [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.51.0) for more information.
 
 ### Added
 - [#1939](https://github.com/FuelLabs/fuel-core/pull/1939): Added API functions to open a RocksDB in different modes.
@@ -19,12 +24,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Removed
 - [#1913](https://github.com/FuelLabs/fuel-core/pull/1913): Removed dead code from the project.
-
-### Changed
-- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): optimization: Reuse VM memory across executions.
-
-#### Breaking
-- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): Upgraded `fuel-vm` to `0.51.0`. See [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.51.0) for more information.
 
 ### Fixed
 - [#1921](https://github.com/FuelLabs/fuel-core/pull/1921): Fixed unstable `gossipsub_broadcast_tx_with_accept` test.

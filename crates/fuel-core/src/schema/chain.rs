@@ -325,7 +325,7 @@ impl FeeParameters {
 impl GasCosts {
     async fn version(&self) -> GasCostsVersion {
         match self.0.deref() {
-            GasCostsValues::V1(_) => GasCostsVersion::V1,
+            GasCostsValues::V1(_) | GasCostsValues::V2(_) => GasCostsVersion::V1,
         }
     }
 
@@ -338,7 +338,7 @@ impl GasCosts {
     }
 
     async fn aloc(&self) -> U64 {
-        self.0.aloc().into()
+        self.0.aloc().base().into()
     }
 
     async fn and(&self) -> U64 {
@@ -679,6 +679,10 @@ impl GasCosts {
 
     async fn xori(&self) -> U64 {
         self.0.xori().into()
+    }
+
+    async fn aloc_dependent_cost(&self) -> DependentCost {
+        self.0.aloc().into()
     }
 
     async fn call(&self) -> DependentCost {
