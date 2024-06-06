@@ -68,7 +68,7 @@ fuel-core-bft = { version = "0.27.0", path = "./crates/services/consensus_module
 fuel-core-poa = { version = "0.27.0", path = "./crates/services/consensus_module/poa" }
 fuel-core-executor = { version = "0.27.0", path = "./crates/services/executor", default-features = false }
 fuel-core-importer = { version = "0.27.0", path = "./crates/services/importer" }
-fuel-core-gas-price-service = { version = "0.26.0", path = "crates/services/gas_price_service" }
+fuel-core-gas-price-service = { version = "0.27.0", path = "crates/services/gas_price_service" }
 fuel-core-p2p = { version = "0.27.0", path = "./crates/services/p2p" }
 fuel-core-producer = { version = "0.27.0", path = "./crates/services/producer" }
 fuel-core-relayer = { version = "0.27.0", path = "./crates/services/relayer" }

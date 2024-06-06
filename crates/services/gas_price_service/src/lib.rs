@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
+    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -11,6 +12,18 @@ use std::sync::{
 };
 
 pub mod static_updater;
+
+pub fn new_service<A, U>(
+    current_fuel_block_height: BlockHeight,
+    update_algo: U,
+) -> anyhow::Result<ServiceRunner<GasPriceService<A, U>>>
+where
+    U: UpdateAlgorithm<Algorithm = A> + Send,
+    A: Send + Sync,
+{
+    let service = GasPriceService::new(current_fuel_block_height, update_algo);
+    Ok(ServiceRunner::new(service))
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

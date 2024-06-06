@@ -224,13 +224,16 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
+        // TODO: Do we use max here too?
         let block_bytes = 0;
 
         let gas_price_params = GasPriceParams::new(height, block_bytes);
 
-        let gas_price = gas_price
-            .or_else(|| self.gas_price_provider.gas_price(gas_price_params))
-            .map_err(|e| anyhow!("No gas price found for height {height:?}: {e:?}"))?;
+        let gas_price = if let Some(inner) = gas_price {
+            inner
+        } else {
+            self.gas_price_provider.gas_price(gas_price_params)?
+        };
 
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to

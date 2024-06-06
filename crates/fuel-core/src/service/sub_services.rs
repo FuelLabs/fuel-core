@@ -29,7 +29,6 @@ use crate::{
     },
 };
 use fuel_core_poa::Trigger;
-use fuel_core_services::ServiceRunner;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -39,12 +38,9 @@ use crate::service::adapters::fuel_gas_price_provider::{
     ports::GasPriceAlgorithm,
     FuelGasPriceProvider,
 };
-use fuel_core_gas_price_service::{
-    static_updater::{
-        StaticAlgorithm,
-        StaticAlgorithmUpdater,
-    },
-    GasPriceService,
+use fuel_core_gas_price_service::static_updater::{
+    StaticAlgorithm,
+    StaticAlgorithmUpdater,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
@@ -183,9 +179,9 @@ pub fn init_sub_services(
     let old_gas_price_provider = StaticGasPrice::new(config.static_gas_price);
 
     let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
-    let gas_price_task = GasPriceService::new(last_height, update_algo);
-    let next_algo = gas_price_task.next_block_algorithm();
-    let gas_price_service = ServiceRunner::new(gas_price_task);
+    let gas_price_service =
+        fuel_core_gas_price_service::new_service(last_height, update_algo)?;
+    let next_algo = gas_price_service.shared.clone();
 
     let new_gas_price_provider = FuelGasPriceProvider::new(next_algo);
     let txpool = fuel_core_txpool::new_service(
