@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)] // for cfg(coverage)
+
 use fuel_core::{
     combined_database::CombinedDatabase,
     service::{
@@ -83,6 +85,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 }
 
 #[cfg(feature = "p2p")]
+#[cfg(not(coverage))] // too slow for coverage
 mod p2p {
     use super::*;
     use fuel_core::{
