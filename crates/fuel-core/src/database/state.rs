@@ -196,7 +196,10 @@ mod tests {
 
     mod update_contract_state {
         use core::iter::repeat_with;
-        use fuel_core_chain_config::{ContractStateConfig, Randomize};
+        use fuel_core_chain_config::{
+            ContractStateConfig,
+            Randomize,
+        };
 
         use fuel_core_storage::iter::IteratorOverTable;
         use fuel_core_types::fuel_merkle::sparse::{
@@ -237,22 +240,18 @@ mod tests {
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
                 .into_iter()
-                .map(|(key, value)| {
-                    ContractStateConfig {
-                        key: *key.state_key(),
-                        value: value.0,
-                    }
+                .map(|(key, value)| ContractStateConfig {
+                    key: *key.state_key(),
+                    value: value.0,
                 })
                 .collect();
 
             let mut original_state = state_groups
                 .into_iter()
                 .flatten()
-                .map(|entry| {
-                    ContractStateConfig {
-                        key: *entry.key.state_key(),
-                        value: entry.value.into(),
-                    }
+                .map(|entry| ContractStateConfig {
+                    key: *entry.key.state_key(),
+                    value: entry.value.into(),
                 })
                 .collect::<Vec<_>>();
 
