@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)] // for cfg(coverage)
+
 use fuel_core::{
     combined_database::CombinedDatabase,
     service::{
@@ -83,6 +85,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 }
 
 #[cfg(feature = "p2p")]
+#[cfg(not(coverage))] // too slow for coverage
 mod p2p {
     use super::*;
     use fuel_core::{
@@ -110,7 +113,7 @@ mod p2p {
     // after the first_producer stops, second_producer should start producing blocks
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
-        const SYNC_TIMEOUT: u64 = 120;
+        const SYNC_TIMEOUT: u64 = 30;
         const TIME_UNTIL_SYNCED: u64 = SYNC_TIMEOUT + 10;
 
         let mut rng = StdRng::seed_from_u64(2222);

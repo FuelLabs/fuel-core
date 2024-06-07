@@ -3,13 +3,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-#[cfg(test)]
-mod _ignore {
-    #![allow(unexpected_cfgs)] // for cfg(coverage)
-    #[cfg(coverage)]
-    use ntest as _; // Only used outside cdg(coverage)
-}
-
 pub mod config;
 pub mod executor;
 

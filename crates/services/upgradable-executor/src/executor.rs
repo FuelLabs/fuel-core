@@ -610,6 +610,9 @@ where
 #[allow(unexpected_cfgs)] // for cfg(coverage)
 #[cfg(test)]
 mod test {
+    #[cfg(coverage)]
+    use ntest as _; // Only used outside cdg(coverage)
+
     use super::*;
     use fuel_core_storage::{
         kv_store::Value,
