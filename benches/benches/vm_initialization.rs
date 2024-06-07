@@ -3,7 +3,6 @@ use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core_storage::InterpreterStorage;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -23,17 +22,8 @@ use fuel_core_types::{
         checked_transaction::{
             Checked,
             IntoChecked,
-            Ready,
         },
-        constraints::reg_key::{
-            Reg,
-            RegMut,
-        },
-        consts::VM_MAX_RAM,
-        interpreter::{
-            MemoryInstance,
-            NotSupportedEcal,
-        },
+        interpreter::NotSupportedEcal,
         Interpreter,
     },
 };
@@ -110,56 +100,14 @@ pub fn vm_initialization(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
-                unoptimized_vm_initialization_with_allocating_full_range_of_memory(
-                    &mut vm, &tx,
+                #[allow(clippy::unit_arg)]
+                black_box(
+                    vm.init_script(tx.clone())
+                        .expect("Should be able to execute transaction"),
                 );
             })
         });
     }
 
     group.finish();
-}
-
-#[allow(clippy::unit_arg)]
-fn unoptimized_vm_initialization_with_allocating_full_range_of_memory<S>(
-    vm: &mut Interpreter<MemoryInstance, S, Script>,
-    ready_tx: &Ready<Script>,
-) where
-    S: InterpreterStorage,
-{
-    black_box(initialize_vm_with_allocated_full_range_of_memory(
-        black_box(ready_tx.clone()),
-        vm,
-    ));
-}
-
-fn initialize_vm_with_allocated_full_range_of_memory<S>(
-    ready_tx: Ready<Script>,
-    vm: &mut Interpreter<MemoryInstance, S, Script>,
-) where
-    S: InterpreterStorage,
-{
-    vm.init_script(ready_tx)
-        .expect("Should be able to execute transaction");
-
-    const POWER_OF_TWO_OF_HALF_VM: u64 = 25;
-    const VM_MEM_HALF: u64 = 1 << POWER_OF_TWO_OF_HALF_VM;
-    assert_eq!(VM_MEM_HALF, VM_MAX_RAM / 2);
-    let mut hp = VM_MAX_RAM;
-
-    for i in 0..=POWER_OF_TWO_OF_HALF_VM {
-        let stack = 1 << i;
-        let heap = stack / 2;
-
-        vm.memory_mut()
-            .grow_stack(stack)
-            .expect("Should be able to grow stack");
-        vm.memory_mut()
-            .grow_heap_by(Reg::new(&0), RegMut::new(&mut hp), heap)
-            .expect("Should be able to grow heap");
-    }
-
-    vm.memory_mut()
-        .grow_heap_by(Reg::new(&0), RegMut::new(&mut hp), VM_MEM_HALF)
-        .expect("Should be able to grow heap");
 }

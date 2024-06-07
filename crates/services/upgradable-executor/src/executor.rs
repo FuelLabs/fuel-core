@@ -132,7 +132,8 @@ impl<S, R> Executor<S, R> {
         StateTransitionBytecodeVersion,
     )] = &[
         ("0-26-0", StateTransitionBytecodeVersion::MIN),
-        ("0-27-0", LATEST_STATE_TRANSITION_VERSION),
+        ("0-27-0", 1),
+        ("0-28-0", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
