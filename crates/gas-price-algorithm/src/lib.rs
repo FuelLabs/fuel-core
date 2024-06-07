@@ -21,6 +21,47 @@ pub struct AlgorithmV1 {
     min_exec_price: u64,
 }
 
+pub struct AlgorithmBuilderV1 {
+    total_reward: u64,
+    actual_total_cost: u64,
+    projected_total_cost: u64,
+    latest_gas_per_byte: u64,
+}
+
+impl AlgorithmBuilderV1 {
+    pub fn new() -> Self {
+        Self {
+            total_reward: 0,
+            actual_total_cost: 0,
+            projected_total_cost: 0,
+        }
+    }
+
+    pub fn update_reward(&mut self, reward: u64) -> &mut Self {
+        self.total_reward += reward;
+        self
+    }
+
+    pub fn update_projected_cost(&mut self, cost: u64) -> &mut Self {
+        self.projected_total_cost += cost;
+        self
+    }
+    pub fn update_actual_cost(
+        &mut self,
+        cost: u64,
+        latest_gas_per_byte: u64,
+    ) -> &mut Self {
+        self.actual_total_cost += cost;
+        self.projected_total_cost = self.actual_total_cost;
+        self.latest_gas_per_byte = latest_gas_per_byte;
+        self
+    }
+
+    pub fn build(self) -> AlgorithmV1 {
+        todo!()
+    }
+}
+
 impl AlgorithmV1 {
     pub fn new(
         da_max_change_percent: u8,
@@ -43,6 +84,10 @@ impl AlgorithmV1 {
             exec_change_amount,
             min_exec_price,
         }
+    }
+
+    pub fn calculate_gas_price(block_bytes: u64) -> u64 {
+        todo!()
     }
 
     pub fn calculate_da_gas_price(

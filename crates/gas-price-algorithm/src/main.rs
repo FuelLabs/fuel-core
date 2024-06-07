@@ -25,6 +25,24 @@ where
     gen_noisy_signal(input, COMPONENTS)
 }
 
+fn noisy_bytes<T: TryInto<f64>>(input: T) -> f64
+where
+    <T as TryInto<f64>>::Error: core::fmt::Debug,
+{
+    const COMPONENTS: &[f64] = &[50.0, 100.0, 300.0, 1000.0, 500.0];
+    let input = input.try_into().unwrap();
+    gen_noisy_signal(input, COMPONENTS)
+}
+
+fn noisy_eth_price<T: TryInto<f64>>(input: T) -> f64
+where
+    <T as TryInto<f64>>::Error: core::fmt::Debug,
+{
+    const COMPONENTS: &[f64] = &[70.0, 130.0];
+    let input = input.try_into().unwrap();
+    gen_noisy_signal(input, COMPONENTS)
+}
+
 fn arb_cost_signal(size: u32) -> Vec<u64> {
     let mut rng = StdRng::seed_from_u64(999);
     (0u32..size)
@@ -34,6 +52,14 @@ fn arb_cost_signal(size: u32) -> Vec<u64> {
             let val = rng.gen_range(-19_000.0..10_000.0);
             x + val
         })
+        .map(|x| x as u64)
+        .collect()
+}
+
+fn arb_eth_per_bytes_signal(size: u32) -> Vec<u64> {
+    (0u32..size)
+        .map(noisy_bytes)
+        .map(|x| x * 10. + 20.)
         .map(|x| x as u64)
         .collect()
 }
@@ -59,6 +85,28 @@ fn arb_fullness_signal(size: u32, capacity: u64) -> Vec<(u64, u64)> {
         .map(|x| f64::min(x, capacity as f64))
         .map(|x| f64::max(x, 5.0))
         .map(|x| (x as u64, capacity))
+        .collect()
+}
+
+fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
+    let mut rng = StdRng::seed_from_u64(888);
+    (0usize..size)
+        .map(noisy_fullness)
+        .map(|signal| (0.5 * signal + 0.4) * capacity as f64)
+        .map(|fullness| {
+            // Add noisy to the fullness
+            let val = rng.gen_range(-0.25 * capacity as f64..0.25 * capacity as f64);
+            fullness + val
+        })
+        .map(|x| f64::min(x, capacity as f64))
+        .map(|x| f64::max(x, 5.0))
+        .map(|fullness| {
+            // calculate bytes that are an arbitrary fraction of the gas scaled
+            let scale = rng.gen_range(0.1..1.0) * 4.0;
+            let bytes = fullness * scale;
+            (fullness, bytes)
+        })
+        .map(|(fullness, bytes)| (fullness as u64, bytes as u64))
         .collect()
 }
 
@@ -123,8 +171,10 @@ fn main() {
     let plot_width = 640 * 2;
     let plot_height = 480 * 3;
 
-    let root = BitMapBackend::new("gas_prices.png", (plot_width, plot_height))
-        .into_drawing_area();
+    const FILE_PATH: &str = "gas_prices.png";
+
+    let root =
+        BitMapBackend::new(FILE_PATH, (plot_width, plot_height)).into_drawing_area();
     root.fill(&WHITE).unwrap();
     let (upper, lower) = root.split_vertically(plot_height / 3);
     let (middle, bottom) = lower.split_vertically(plot_height / 3);
