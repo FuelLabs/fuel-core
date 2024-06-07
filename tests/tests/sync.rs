@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)] // for cfg(coverage)
+
 use fuel_core::p2p_test_helpers::*;
 use fuel_core_types::{
     fuel_crypto::SecretKey,
@@ -12,7 +14,6 @@ use std::{
     collections::{
         hash_map::DefaultHasher,
         HashMap,
-        VecDeque,
     },
     hash::{
         Hash,
@@ -127,11 +128,14 @@ async fn test_partition_single(num_txs: usize) {
 #[test_case(10, 8, 4; "partition with 10 txs 8 validators 4 partitions")]
 #[test_case(100, 8, 4; "partition with 100 txs 8 validators 4 partitions")]
 #[tokio::test(flavor = "multi_thread")]
+#[cfg(not(coverage))] // This test is too slow for coverage
 async fn test_partitions_larger_groups(
     num_txs: usize,
     num_validators: usize,
     num_partitions: usize,
 ) {
+    use std::collections::VecDeque;
+
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
     (num_txs, num_validators, num_partitions, line!()).hash(&mut hasher);
