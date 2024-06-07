@@ -1,10 +1,17 @@
 use super::run_group_ref;
 
-use criterion::Criterion;
+use criterion::{
+    Criterion,
+    Throughput,
+};
 use ethnum::U256;
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
 
+use crate::utils::{
+    linear_short,
+    set_full_word,
+};
 use fuel_core_types::fuel_asm::wideint::{
     CompareArgs,
     CompareMode,
@@ -20,6 +27,8 @@ use super::utils::{
 };
 
 pub fn run(c: &mut Criterion) {
+    let linear_short = linear_short();
+
     run_group_ref(
         &mut c.benchmark_group("add"),
         "add",
@@ -34,12 +43,23 @@ pub fn run(c: &mut Criterion) {
             .with_prepare_script(vec![op::movi(0x11, 100000)]),
     );
 
-    run_group_ref(
-        &mut c.benchmark_group("aloc"),
-        "aloc",
-        VmBench::new(op::aloc(0x10))
-            .with_prepare_script(vec![op::movi(0x10, (1 << 18) - 1)]),
-    );
+    // aloc
+    {
+        let mut aloc = c.benchmark_group("aloc");
+
+        let mut aloc_linear = linear_short.clone();
+        aloc_linear.push(1_000_000);
+        aloc_linear.push(10_000_000);
+        aloc_linear.push(30_000_000);
+        for i in aloc_linear {
+            let bench =
+                VmBench::new(op::aloc(0x10)).with_prepare_script(set_full_word(0x10, i));
+            aloc.throughput(Throughput::Bytes(i));
+            run_group_ref(&mut aloc, format!("{i}"), bench);
+        }
+
+        aloc.finish();
+    }
 
     run_group_ref(
         &mut c.benchmark_group("and"),

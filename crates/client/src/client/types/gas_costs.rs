@@ -19,8 +19,8 @@ impl GasCosts {
         self.0.addi()
     }
 
-    pub fn aloc(&self) -> Word {
-        self.0.aloc()
+    pub fn aloc(&self) -> DependentCost {
+        self.0.aloc().into()
     }
 
     pub fn and(&self) -> Word {

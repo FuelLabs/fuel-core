@@ -199,7 +199,6 @@ pub struct GasCosts {
     pub version: GasCostsVersion,
     pub add: U64,
     pub addi: U64,
-    pub aloc: U64,
     pub and: U64,
     pub andi: U64,
     pub bal: U64,
@@ -286,6 +285,7 @@ pub struct GasCosts {
     pub xor: U64,
     pub xori: U64,
 
+    pub aloc_dependent_cost: DependentCost,
     pub call: DependentCost,
     pub ccp: DependentCost,
     pub croo: DependentCost,
@@ -324,10 +324,9 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
     fn try_from(value: GasCosts) -> Result<Self, Self::Error> {
         match value.version {
             GasCostsVersion::V1 => {
-                let values = fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV1 {
+                let values = fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV2 {
                     add: value.add.into(),
                     addi: value.addi.into(),
-                    aloc: value.aloc.into(),
                     and: value.and.into(),
                     andi: value.andi.into(),
                     bal: value.bal.into(),
@@ -413,6 +412,8 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     wqmm: value.wqmm.into(),
                     xor: value.xor.into(),
                     xori: value.xori.into(),
+
+                    aloc: value.aloc_dependent_cost.into(),
                     call: value.call.into(),
                     ccp: value.ccp.into(),
                     croo: value.croo.into(),
