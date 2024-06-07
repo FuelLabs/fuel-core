@@ -80,7 +80,6 @@ impl MockTxPoolGasPrice {
 impl GasPriceProviderConstraint for MockTxPoolGasPrice {
     async fn gas_price(
         &self,
-        _block_height: BlockHeight,
         _block_bytes: u64,
     ) -> fuel_core_types::services::txpool::Result<GasPrice> {
         self.gas_price.ok_or(TxPoolError::GasPriceNotFound(

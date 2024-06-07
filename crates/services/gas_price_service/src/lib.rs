@@ -39,8 +39,7 @@ where
 {
     pub fn new(starting_block_height: BlockHeight, update_algorithm: U) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
-        let next_block_algorithm =
-            BlockGasPriceAlgo::new(starting_block_height, algorithm);
+        let next_block_algorithm = BlockGasPriceAlgo::new(algorithm);
         Self {
             next_block_algorithm,
             update_algorithm,
@@ -57,11 +56,7 @@ pub trait UpdateAlgorithm {
     type Algorithm;
 
     fn start(&self, for_block: BlockHeight) -> Self::Algorithm;
-    async fn next(&mut self, for_block: BlockHeight) -> Self::Algorithm;
-}
-
-fn next_block_height(block_height: &BlockHeight) -> BlockHeight {
-    (u32::from(*block_height) + 1).into()
+    async fn next(&mut self) -> Self::Algorithm;
 }
 
 impl<A, U> GasPriceService<A, U>
@@ -69,19 +64,13 @@ where
     U: UpdateAlgorithm<Algorithm = A>,
     A: Send + Sync,
 {
-    async fn update(&mut self, new_block_height: BlockHeight, new_algorithm: A) {
-        self.next_block_algorithm
-            .update(new_block_height, new_algorithm)
-            .await;
-    }
-
-    async fn latest_block_height(&self) -> BlockHeight {
-        self.next_block_algorithm.read().await.0
+    async fn update(&mut self, new_algorithm: A) {
+        self.next_block_algorithm.update(new_algorithm).await;
     }
 }
 
 #[derive(Debug)]
-pub struct BlockGasPriceAlgo<A>(Arc<RwLock<(BlockHeight, A)>>);
+pub struct BlockGasPriceAlgo<A>(Arc<RwLock<A>>);
 
 impl<A> Clone for BlockGasPriceAlgo<A> {
     fn clone(&self) -> Self {
@@ -93,23 +82,17 @@ impl<A> BlockGasPriceAlgo<A>
 where
     A: Send + Sync,
 {
-    pub fn new(block_height: BlockHeight, algo: A) -> Self {
-        Self(Arc::new(RwLock::new((block_height, algo))))
+    pub fn new(algo: A) -> Self {
+        Self(Arc::new(RwLock::new(algo)))
     }
 
-    pub async fn block_height(&self) -> BlockHeight {
-        let lock = self.0.read().await;
-        lock.0
-    }
-
-    pub async fn read(&self) -> RwLockReadGuard<(BlockHeight, A)> {
+    pub async fn read(&self) -> RwLockReadGuard<A> {
         self.0.read().await
     }
 
-    pub async fn update(&mut self, new_block_height: BlockHeight, new_algo: A) {
+    pub async fn update(&mut self, new_algo: A) {
         let mut write_lock = self.0.write().await;
-        write_lock.0 = new_block_height;
-        write_lock.1 = new_algo;
+        *write_lock = new_algo;
     }
 }
 
@@ -145,16 +128,15 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
-        let latest_block = self.latest_block_height().await;
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
                 tracing::debug!("Stopping gas price service");
                 should_continue = false;
             }
-            new_algo = self.update_algorithm.next(latest_block) => {
+            new_algo = self.update_algorithm.next() => {
                 tracing::debug!("Updating gas price algorithm");
-                self.update(next_block_height(&latest_block), new_algo).await;
+                self.update(new_algo).await;
                 should_continue = true;
             }
         }
@@ -207,7 +189,7 @@ mod tests {
             self.start.clone()
         }
 
-        async fn next(&mut self, _for_block: BlockHeight) -> Self::Algorithm {
+        async fn next(&mut self) -> Self::Algorithm {
             let price = self.price_source.recv().await.unwrap();
             TestAlgorithm { price }
         }
@@ -236,7 +218,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.read().await.1.gas_price();
+        let actual_price = read_algo.read().await.gas_price();
         assert_eq!(expected_price, actual_price);
 
         watch_sender.send(State::Stopped).unwrap();

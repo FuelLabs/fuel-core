@@ -10,12 +10,8 @@ use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerG
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPricProvider;
 use fuel_core_types::{
     fuel_types::BlockHeight,
-    services::txpool::{
-        Error as TxPoolError,
-        Result as TxPoolResult,
-    },
+    services::txpool::Result as TxPoolResult,
 };
-use std::cmp::Ordering;
 
 pub mod ports;
 
@@ -63,26 +59,7 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn execute_algorithm(&self, block_bytes: u64) -> u64 {
-        self.algorithm.read().await.1.gas_price(block_bytes)
-    }
-
-    async fn try_to_get(
-        &self,
-        requested_height: BlockHeight,
-        block_bytes: u64,
-    ) -> Result<u64> {
-        let latest_height = self.algorithm.block_height().await;
-        match requested_height.cmp(&latest_height) {
-            Ordering::Equal => Ok(self.execute_algorithm(block_bytes).await),
-            Ordering::Greater => Err(Error::AlgorithmNotUpToDate {
-                requested_height,
-                latest_height,
-            }),
-            Ordering::Less => Err(Error::RequestedOldBlockHeight {
-                requested_height,
-                latest_height,
-            }),
-        }
+        self.algorithm.read().await.gas_price(block_bytes)
     }
 }
 
@@ -91,14 +68,8 @@ impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn gas_price(
-        &self,
-        block_height: BlockHeight,
-        block_bytes: u64,
-    ) -> anyhow::Result<u64> {
-        self.try_to_get(block_height, block_bytes)
-            .await
-            .map_err(Into::into)
+    async fn gas_price(&self, block_bytes: u64) -> anyhow::Result<u64> {
+        Ok(self.execute_algorithm(block_bytes).await)
     }
 }
 
@@ -107,14 +78,8 @@ impl<A> TxPoolGasPricProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn gas_price(
-        &self,
-        block_height: BlockHeight,
-        block_bytes: u64,
-    ) -> TxPoolResult<u64> {
-        self.try_to_get(block_height, block_bytes)
-            .await
-            .map_err(|e| TxPoolError::GasPriceNotFound(format!("{e:?}")))
+    async fn gas_price(&self, block_bytes: u64) -> TxPoolResult<u64> {
+        Ok(self.execute_algorithm(block_bytes).await)
     }
 }
 
@@ -124,6 +89,6 @@ where
     A: GasPriceEstimate + Send + Sync,
 {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
-        self.algorithm.read().await.1.estimate(height)
+        self.algorithm.read().await.estimate(height)
     }
 }

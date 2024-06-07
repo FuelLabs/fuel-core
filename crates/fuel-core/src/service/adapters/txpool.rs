@@ -38,7 +38,6 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -144,11 +143,7 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn gas_price(
-        &self,
-        _block_height: BlockHeight,
-        _block_bytes: u64,
-    ) -> TxPoolResult<u64> {
+    async fn gas_price(&self, _block_bytes: u64) -> TxPoolResult<u64> {
         Ok(self.gas_price)
     }
 }

@@ -225,11 +225,7 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn gas_price(
-        &self,
-        _block_height: BlockHeight,
-        _block_bytes: u64,
-    ) -> anyhow::Result<u64> {
+    async fn gas_price(&self, _block_bytes: u64) -> anyhow::Result<u64> {
         Ok(self.gas_price)
     }
 }

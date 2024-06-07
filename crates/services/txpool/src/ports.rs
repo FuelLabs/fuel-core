@@ -12,7 +12,6 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -68,7 +67,6 @@ pub trait GasPriceProvider {
     /// Get gas price for specific block height if it is known
     async fn gas_price(
         &self,
-        block_height: BlockHeight,
         block_bytes: u64,
     ) -> fuel_core_types::services::txpool::Result<GasPrice>;
 }
@@ -94,11 +92,7 @@ impl<T> GasPriceProvider for Arc<T>
 where
     T: GasPriceProvider + Send + Sync,
 {
-    async fn gas_price(
-        &self,
-        block_height: BlockHeight,
-        block_bytes: u64,
-    ) -> TxPoolResult<GasPrice> {
-        self.deref().gas_price(block_height, block_bytes).await
+    async fn gas_price(&self, block_bytes: u64) -> TxPoolResult<GasPrice> {
+        self.deref().gas_price(block_bytes).await
     }
 }

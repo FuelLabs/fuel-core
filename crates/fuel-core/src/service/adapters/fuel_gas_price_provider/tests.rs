@@ -34,11 +34,11 @@ impl GasPriceEstimate for TestGasPriceAlgorithm {
     }
 }
 
-fn build_provider<A>(latest_height: BlockHeight, algorithm: A) -> FuelGasPriceProvider<A>
+fn build_provider<A>(algorithm: A) -> FuelGasPriceProvider<A>
 where
     A: Send + Sync,
 {
-    let algorithm = BlockGasPriceAlgo::new(latest_height, algorithm);
+    let algorithm = BlockGasPriceAlgo::new(algorithm);
     FuelGasPriceProvider::new(algorithm)
 }
 

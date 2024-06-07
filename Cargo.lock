@@ -3084,6 +3084,7 @@ dependencies = [
  "async-trait",
  "fuel-core-services",
  "fuel-core-types",
+ "futures",
  "thiserror",
  "tokio",
  "tracing",

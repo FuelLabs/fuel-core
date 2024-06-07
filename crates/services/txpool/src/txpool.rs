@@ -533,9 +533,7 @@ where
                 "Failed to calculated max block bytes".to_string(),
             ))?;
 
-    let gas_price = gas_price_provider
-        .gas_price(current_height, max_block_bytes)
-        .await?;
+    let gas_price = gas_price_provider.gas_price(max_block_bytes).await?;
 
     let tx = verify_tx_min_gas_price(tx, consensus_params, gas_price)?;
 

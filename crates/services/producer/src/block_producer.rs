@@ -133,7 +133,7 @@ where
 
         let gas_price = self
             .gas_price_provider
-            .gas_price(height, max_block_bytes)
+            .gas_price(max_block_bytes)
             .await
             .map_err(|e| anyhow!("No gas price found for block {height:?}: {e:?}"))?;
 
@@ -236,9 +236,7 @@ where
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.gas_price_provider
-                .gas_price(height, block_bytes)
-                .await?
+            self.gas_price_provider.gas_price(block_bytes).await?
         };
 
         // The dry run execution should use the state of the blockchain based on the

@@ -5,7 +5,7 @@ async fn estimate_gas_price__happy_path() {
     // given
     let next_height = 432.into();
     let algo = TestGasPriceAlgorithm::default();
-    let gas_price_provider = build_provider(next_height, algo);
+    let gas_price_provider = build_provider(algo);
 
     // when
     let expected_price = algo.estimate(next_height);

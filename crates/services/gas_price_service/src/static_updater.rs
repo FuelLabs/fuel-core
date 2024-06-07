@@ -34,7 +34,7 @@ impl UpdateAlgorithm for StaticAlgorithmUpdater {
         StaticAlgorithm::new(self.static_price)
     }
 
-    async fn next(&mut self, _for_block: BlockHeight) -> Self::Algorithm {
-        StaticAlgorithm::new(self.static_price)
+    async fn next(&mut self) -> Self::Algorithm {
+        futures::future::pending().await
     }
 }
