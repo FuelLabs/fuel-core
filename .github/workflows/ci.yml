@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
   CARGO_TERM_COLOR: always
   RUST_VERSION: 1.75.0
   RUST_VERSION_FMT: nightly-2023-10-29
@@ -207,6 +208,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION_COV }}
+          targets: wasm32-unknown-unknown
 
       - name: Install cargo-llvm-codecov
         uses: taiki-e/install-action@cargo-llvm-cov
