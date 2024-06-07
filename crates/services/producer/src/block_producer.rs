@@ -230,13 +230,22 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
-        // TODO: Do we use max here too?
-        let block_bytes = 0;
+        let header = self.new_header(height, Tai64::now()).await?;
+
+        let consensus_params = self
+            .consensus_parameters_provider
+            .consensus_params_at_version(&header.consensus_parameters_version)?;
+
+        let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
+        let max_gas_per_block = consensus_params.block_gas_limit();
+        let max_block_bytes = max_gas_per_block
+            .checked_div(gas_per_bytes)
+            .ok_or(anyhow!("Failed to calculated max block bytes"))?;
 
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.gas_price_provider.gas_price(block_bytes).await?
+            self.gas_price_provider.gas_price(max_block_bytes).await?
         };
 
         // The dry run execution should use the state of the blockchain based on the
