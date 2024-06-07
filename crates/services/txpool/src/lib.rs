@@ -55,7 +55,7 @@ impl TxInfo {
     pub fn new(tx: ArcPoolTx) -> Self {
         let since_epoch = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("Now is bellow of the `UNIX_EPOCH`");
+            .expect("Now is below of the `UNIX_EPOCH`");
 
         Self {
             tx,
