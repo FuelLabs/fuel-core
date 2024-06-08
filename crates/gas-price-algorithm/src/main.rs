@@ -7,7 +7,7 @@ use rand::{
 
 use plotters::coord::Shift;
 
-use gas_price_algorithm::AlgorithmV1;
+use gas_price_algorithm::{AlgorithmUpdaterV1, AlgorithmV0};
 
 fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
     components
@@ -129,7 +129,7 @@ fn main() {
     let (vals, results, _error) = arbitrary_da_values()
         .into_iter()
         .map(|(p, d, max_change)| {
-            let results = run_simulation(p, d, max_change);
+            let results = run_simulation_v0(p, d, max_change);
             let total_profits = &results.total_profits;
 
             let total_profits_abs: Vec<_> =
@@ -205,7 +205,11 @@ struct SimulationResults {
     da_rewards: Vec<u64>,
 }
 
-fn run_simulation(
+struct SimulationResultsV1 {
+
+}
+
+fn run_simulation_v0(
     p_value_factor: i64,
     d_value_factor: i64,
     max_change_percent: u8,
@@ -218,7 +222,7 @@ fn run_simulation(
     // //     to solve for the lower granularity still, looking at how much we overshoot.
     // let max_change_percent = 200;
     let exec_change_amount = 10;
-    let algo = AlgorithmV1::new(
+    let algo = AlgorithmV0::new(
         max_change_percent,
         min_da_price,
         p_value_factor,
@@ -277,6 +281,10 @@ fn run_simulation(
         total_profits,
         da_rewards,
     }
+}
+
+fn run_simulation_v1() -> SimulationResults {
+    let builder = AlgorithmUpdaterV1::new();
 }
 
 fn draw_total_gas_price<DB: DrawingBackend>(

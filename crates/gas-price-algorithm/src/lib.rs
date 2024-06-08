@@ -6,7 +6,29 @@ use std::{
     },
 };
 
-pub struct AlgorithmV1 {
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug, thiserror::Error, PartialEq)]
+pub enum Error {
+    #[error("Skipped L2 block update: expected {expected:?}, got {got:?}")]
+    SkippedL2Block{
+        expected: u32,
+        got: u32,
+    },
+    #[error("Skipped DA block update: expected {expected:?}, got {got:?}")]
+    SkippedDABlock{
+        expected: u32,
+        got: u32,
+    },
+    #[error("Could not calculate cost per byte: {bytes:?} bytes, {cost:?} cost")]
+    CouldNotCalculateCostPerByte {
+        bytes: u64,
+        cost: u64,
+    }
+}
+
+pub struct AlgorithmV0 {
     // DA
     da_max_change_percent: u8,
     min_da_price: u64,
@@ -21,48 +43,127 @@ pub struct AlgorithmV1 {
     min_exec_price: u64,
 }
 
-pub struct AlgorithmBuilderV1 {
-    total_reward: u64,
-    actual_total_cost: u64,
-    projected_total_cost: u64,
-    latest_gas_per_byte: u64,
+pub struct AlgorithmV1 {
+
 }
 
-impl AlgorithmBuilderV1 {
-    pub fn new() -> Self {
+pub struct AlgorithmUpdaterV1 {
+    pub(crate) l2_block_height: u32,
+    // total_reward: u64,
+    // actual_total_cost: u64,
+    // latest_gas_per_byte: u64,
+    pub(crate) da_recorded_block_height: u32,
+    pub(crate) projected_total_cost: u64,
+
+    pub(crate) latest_da_cost_per_byte: u64,
+}
+
+enum UpdateValues {
+    L2Block {
+        height: u32,
+        block_reward: u64,
+        block_bytes: u64,
+    },
+    DARecording {
+        blocks: Vec<RecordedBlock>
+    },
+}
+
+pub struct RecordedBlock {
+    height: u32,
+    block_bytes: u64,
+    block_cost: u64,
+}
+
+impl AlgorithmUpdaterV1 {
+    pub fn new(l2_block_height: u32, da_recorded_block_height: u32, latest_da_cost_per_byte: u64) -> Self {
         Self {
-            total_reward: 0,
-            actual_total_cost: 0,
+            // total_reward: 0,
+            // actual_total_cost: 0,
+            // projected_total_cost: 0,
+            // latest_gas_per_byte: 0,
+            l2_block_height,
+            da_recorded_block_height,
             projected_total_cost: 0,
+            latest_da_cost_per_byte,
         }
     }
 
-    pub fn update_reward(&mut self, reward: u64) -> &mut Self {
-        self.total_reward += reward;
-        self
+    pub fn update(&mut self, update: UpdateValues) -> Result<(), Error> {
+        match update {
+            UpdateValues::L2Block {
+                height,
+                block_reward,
+                block_bytes,
+            } => {
+                self.l2_block_update(height, block_reward, block_bytes)
+            }
+            UpdateValues::DARecording { blocks } => {
+                for block in blocks {
+                    self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
+                }
+                Ok(())
+            }
+        }
+    }
+    fn l2_block_update(&mut self, height: u32, block_reward: u64, block_bytes: u64) -> Result<(), Error> {
+        let expected = self.l2_block_height.saturating_add(1);
+        if height != expected {
+            return Err(Error::SkippedL2Block {
+                expected,
+                got: height,
+            })
+        } else {
+            self.l2_block_height = height;
+            self.projected_total_cost += block_bytes * self.latest_da_cost_per_byte;
+            Ok(())
+        }
     }
 
-    pub fn update_projected_cost(&mut self, cost: u64) -> &mut Self {
-        self.projected_total_cost += cost;
-        self
+    fn da_block_update(&mut self, height: u32, block_bytes: u64, block_cost: u64) -> Result<(), Error> {
+        let expected = self.da_recorded_block_height.saturating_add(1);
+        if height != expected {
+            return Err(Error::SkippedDABlock {
+                expected: self.da_recorded_block_height.saturating_add(1),
+                got: height,
+            })
+        } else {
+            self.da_recorded_block_height = height;
+            let new_cost_per_byte = block_cost.checked_div(block_bytes).ok_or(Error::CouldNotCalculateCostPerByte {
+                bytes: block_bytes,
+                cost: block_cost,
+            })?;
+            self.latest_da_cost_per_byte = new_cost_per_byte;
+            Ok(())
+        }
     }
-    pub fn update_actual_cost(
-        &mut self,
-        cost: u64,
-        latest_gas_per_byte: u64,
-    ) -> &mut Self {
-        self.actual_total_cost += cost;
-        self.projected_total_cost = self.actual_total_cost;
-        self.latest_gas_per_byte = latest_gas_per_byte;
-        self
-    }
+
+    // pub fn update_reward(&mut self, reward: u64) -> &mut Self {
+    //     self.total_reward += reward;
+    //     self
+    // }
+    //
+    // pub fn update_projected_cost(&mut self, cost: u64) -> &mut Self {
+    //     self.projected_total_cost += cost;
+    //     self
+    // }
+    // pub fn update_actual_cost(
+    //     &mut self,
+    //     cost: u64,
+    //     latest_gas_per_byte: u64,
+    // ) -> &mut Self {
+    //     self.actual_total_cost += cost;
+    //     self.projected_total_cost = self.actual_total_cost;
+    //     self.latest_gas_per_byte = latest_gas_per_byte;
+    //     self
+    // }
 
     pub fn build(self) -> AlgorithmV1 {
         todo!()
     }
 }
 
-impl AlgorithmV1 {
+impl AlgorithmV0 {
     pub fn new(
         da_max_change_percent: u8,
         min_da_price: u64,

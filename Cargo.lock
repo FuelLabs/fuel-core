@@ -3915,6 +3915,7 @@ dependencies = [
  "plotters",
  "rand",
  "rand_distr",
+ "thiserror",
 ]
 
 [[package]]
