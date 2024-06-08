@@ -53,9 +53,11 @@ pub struct AlgorithmUpdaterV1 {
     // actual_total_cost: u64,
     // latest_gas_per_byte: u64,
     pub(crate) da_recorded_block_height: u32,
+    pub(crate) latest_known_total_cost: u64,
     pub(crate) projected_total_cost: u64,
 
     pub(crate) latest_da_cost_per_byte: u64,
+    pub(crate) unrecorded_blocks: Vec<BlockBytes>,
 }
 
 enum UpdateValues {
@@ -75,6 +77,12 @@ pub struct RecordedBlock {
     block_cost: u64,
 }
 
+#[derive(Debug, Clone)]
+pub struct BlockBytes {
+    height: u32,
+    block_bytes: u64,
+}
+
 impl AlgorithmUpdaterV1 {
     pub fn new(l2_block_height: u32, da_recorded_block_height: u32, latest_da_cost_per_byte: u64) -> Self {
         Self {
@@ -84,8 +92,10 @@ impl AlgorithmUpdaterV1 {
             // latest_gas_per_byte: 0,
             l2_block_height,
             da_recorded_block_height,
+            latest_known_total_cost: 0,
             projected_total_cost: 0,
             latest_da_cost_per_byte,
+            unrecorded_blocks: Vec::new(),
         }
     }
 
@@ -102,6 +112,7 @@ impl AlgorithmUpdaterV1 {
                 for block in blocks {
                     self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
                 }
+                self.recalculate_projected_cost();
                 Ok(())
             }
         }
@@ -128,35 +139,23 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
-            self.da_recorded_block_height = height;
             let new_cost_per_byte = block_cost.checked_div(block_bytes).ok_or(Error::CouldNotCalculateCostPerByte {
                 bytes: block_bytes,
                 cost: block_cost,
             })?;
+            self.da_recorded_block_height = height;
+            self.latest_known_total_cost += block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
         }
     }
 
-    // pub fn update_reward(&mut self, reward: u64) -> &mut Self {
-    //     self.total_reward += reward;
-    //     self
-    // }
-    //
-    // pub fn update_projected_cost(&mut self, cost: u64) -> &mut Self {
-    //     self.projected_total_cost += cost;
-    //     self
-    // }
-    // pub fn update_actual_cost(
-    //     &mut self,
-    //     cost: u64,
-    //     latest_gas_per_byte: u64,
-    // ) -> &mut Self {
-    //     self.actual_total_cost += cost;
-    //     self.projected_total_cost = self.actual_total_cost;
-    //     self.latest_gas_per_byte = latest_gas_per_byte;
-    //     self
-    // }
+    fn recalculate_projected_cost(&mut self) {
+        // remove all blocks that have been recorded
+        self.unrecorded_blocks.retain(|block| block.height > self.da_recorded_block_height);
+        // add the cost of the remaining blocks
+        self.projected_total_cost = self.unrecorded_blocks.iter().map(|block| block.block_bytes * self.latest_da_cost_per_byte).sum();
+    }
 
     pub fn build(self) -> AlgorithmV1 {
         todo!()

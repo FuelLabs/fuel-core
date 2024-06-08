@@ -5,6 +5,9 @@ struct UpdaterBuilder {
     starting_block: u32,
     da_recorded_block_height: u32,
     da_cost_per_byte: u64,
+    project_total_cost: u64,
+    latest_known_total_cost: u64,
+    unrecorded_blocks: Vec<BlockBytes>,
 }
 
 impl UpdaterBuilder {
@@ -13,10 +16,13 @@ impl UpdaterBuilder {
             starting_block: 0,
             da_recorded_block_height: 0,
             da_cost_per_byte: 0,
+            project_total_cost: 0,
+            latest_known_total_cost: 0,
+            unrecorded_blocks: vec![],
         }
     }
 
-    fn with_starting_block(mut self, starting_block: u32) -> Self {
+    fn with_l2_block_height(mut self, starting_block: u32) -> Self {
         self.starting_block = starting_block;
         self
     }
@@ -31,8 +37,31 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_projected_total_cost(mut self, projected_total_cost: u64) -> Self {
+        self.project_total_cost = projected_total_cost;
+        self
+    }
+
+    fn with_known_total_cost(mut self, latest_known_total_cost: u64) -> Self {
+        self.latest_known_total_cost = latest_known_total_cost;
+        self
+    }
+
+    fn with_unrecorded_blocks(mut self, unrecorded_blocks: Vec<BlockBytes>) -> Self {
+        self.unrecorded_blocks = unrecorded_blocks;
+        self
+    }
+
+
     fn build(self) -> AlgorithmUpdaterV1 {
-        AlgorithmUpdaterV1::new(self.starting_block, self.da_recorded_block_height, self.da_cost_per_byte)
+        AlgorithmUpdaterV1 {
+            l2_block_height: self.starting_block,
+            da_recorded_block_height: self.da_recorded_block_height,
+            latest_da_cost_per_byte: self.da_cost_per_byte,
+            projected_total_cost: self.project_total_cost,
+            latest_known_total_cost: self.latest_known_total_cost,
+            unrecorded_blocks: self.unrecorded_blocks,
+        }
     }
 }
 
@@ -42,7 +71,7 @@ fn update__l2_block() {
     let starting_block = 0;
 
     let mut updater = UpdaterBuilder::new()
-        .with_starting_block(starting_block)
+        .with_l2_block_height(starting_block)
         .build();
 
     let update = UpdateValues::L2Block {
@@ -65,7 +94,7 @@ fn update__skipped_block_height_throws_error() {
     // given
     let starting_block = 0;
     let mut updater = UpdaterBuilder::new()
-        .with_starting_block(starting_block)
+        .with_l2_block_height(starting_block)
         .build();
 
     let update = UpdateValues::L2Block {
@@ -198,4 +227,120 @@ fn update__da_recorded_blocks_updates_cost_per_byte() {
     let expected = new_cost_per_byte;
     let actual = updater.latest_da_cost_per_byte;
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn update__da_block_updates_known_total_cost() {
+    // given
+    let da_cost_per_byte = 20;
+    let da_recorded_block_height = 10;
+    let l2_block_height = 15;
+    let projected_total_cost = 2000;
+    let known_total_cost = 1500;
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte)
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_l2_block_height(l2_block_height)
+        .with_projected_total_cost(projected_total_cost)
+        .with_known_total_cost(known_total_cost)
+        .build();
+
+    let block_bytes = 1000;
+    let block_cost = 100;
+    let update = UpdateValues::DARecording {
+        blocks: vec![RecordedBlock {
+            height: 11,
+            block_bytes,
+            block_cost,
+        }, RecordedBlock {
+            height: 12,
+            block_bytes,
+            block_cost,
+        }, RecordedBlock {
+            height: 13,
+            block_bytes,
+            block_cost,
+        }
+        ],
+    };
+
+    // when
+    updater.update(update).unwrap();
+
+    // then
+    let actual = updater.latest_known_total_cost;
+    let expected = known_total_cost + 3 * block_cost;
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top() {
+    // given
+    let da_cost_per_byte = 20;
+    let da_recorded_block_height = 10;
+    let l2_block_height = 15;
+    let known_total_cost = 1500;
+    let mut unrecorded_blocks = vec![BlockBytes {
+        height: 11,
+        block_bytes: 1000,
+    }, BlockBytes {
+        height: 12,
+        block_bytes: 1000,
+    }, BlockBytes {
+        height: 13,
+        block_bytes: 1000,
+    }];
+
+    let remaining = vec![BlockBytes {
+        height: 14,
+        block_bytes: 1000,
+    }, BlockBytes {
+        height: 15,
+        block_bytes: 1000,
+    }];
+    unrecorded_blocks.extend(remaining.clone());
+    let guessed_cost: u64 = unrecorded_blocks.iter().map(|block| block.block_bytes * da_cost_per_byte).sum();
+    let projected_total_cost = known_total_cost + guessed_cost;
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte)
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_l2_block_height(l2_block_height)
+        .with_projected_total_cost(projected_total_cost)
+        .with_known_total_cost(known_total_cost)
+        .with_unrecorded_blocks(unrecorded_blocks)
+        .build();
+
+    dbg!(updater.projected_total_cost);
+
+    let block_bytes = 1000;
+    let new_cost_per_byte = 100;
+    let block_cost = block_bytes * new_cost_per_byte;
+    let update = UpdateValues::DARecording {
+        blocks: vec![RecordedBlock {
+            height: 11,
+            block_bytes,
+            block_cost,
+        }, RecordedBlock {
+            height: 12,
+            block_bytes,
+            block_cost,
+        }, RecordedBlock {
+            height: 13,
+            block_bytes,
+            block_cost,
+        }
+        ],
+    };
+
+    // when
+    updater.update(update).unwrap();
+
+    // then
+    let actual = updater.projected_total_cost;
+    let new_known_total_cost = known_total_cost + 3 * block_cost;
+    let guessed_part: u64 = remaining.iter().map(|block| block.block_bytes * new_cost_per_byte).sum();
+    let expected = new_known_total_cost + guessed_part;
+    assert_eq!(actual, expected);
+
+
 }
