@@ -57,6 +57,7 @@ pub struct AlgorithmUpdaterV1 {
     pub l2_block_height: u32,
     pub l2_block_fullness_threshold_percent: u64,
     pub exec_gas_price_increase_amount: u64,
+    pub total_rewards: u64,
     // total_reward: u64,
     // actual_total_cost: u64,
     // latest_gas_per_byte: u64,
@@ -114,6 +115,8 @@ impl AlgorithmUpdaterV1 {
         } else {
             self.l2_block_height = height;
             self.projected_total_cost += block_bytes * self.latest_da_cost_per_byte;
+            let reward = fullness.0 * self.gas_price;
+            self.total_rewards += reward;
             let fullness_percent = fullness.0 * 100 / fullness.1;
             if fullness_percent > self.l2_block_fullness_threshold_percent {
                 self.gas_price += self.exec_gas_price_increase_amount;

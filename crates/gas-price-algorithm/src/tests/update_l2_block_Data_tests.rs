@@ -116,3 +116,25 @@ fn update_l2_block_data__if_below_capacity_threshold_decrease_price() {
     let actual = updater.gas_price();
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn update_l2_block_data__updates_the_total_reward_value() {
+    // given
+    let starting_gas_price = 100;
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_gas_price(starting_gas_price)
+        .build();
+
+    let height = 1;
+    let gas_used = 50;
+    let fullness = (gas_used, 100);
+    let block_bytes = 1000;
+
+    // when
+    updater.update_l2_block_data(height, fullness, block_bytes).unwrap();
+
+    // then
+    let expected = gas_used * starting_gas_price;
+    let actual = updater.total_rewards;
+    assert_eq!(actual, expected);
+}

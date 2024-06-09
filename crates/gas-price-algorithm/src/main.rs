@@ -206,6 +206,7 @@ fn main() {
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: fullness_threshold,
         exec_gas_price_increase_amount,
+        total_rewards: 0,
         da_recorded_block_height: 0,
         latest_da_cost_per_byte: 0,
         projected_total_cost: 0,
@@ -214,11 +215,22 @@ fn main() {
     };
 
     let mut gas_prices = vec![];
-    for (height, (l2_block, da_block)) in blocks {
+    let mut actual_rewards = vec![];
+    let mut projected_costs = vec![];
+    let mut actual_costs = vec![];
+    for (index, (l2_block, da_block)) in blocks {
+        let height = index as u32 + 1;
         gas_prices.push(updater.gas_price());
+        actual_rewards.push(updater.total_rewards);
+        projected_costs.push(updater.projected_total_cost);
         let (fullness, bytes) = l2_block;
-        updater.update_l2_block_data(height as u32, (*fullness, capacity), *bytes);
+        updater.update_l2_block_data(height, (*fullness, capacity), *bytes).unwrap();
         if let Some(da_blocks) = da_block {
+            let mut total_costs = updater.latest_known_total_cost;
+            for block in da_blocks {
+                total_costs += block.block_cost;
+                actual_costs.push(total_costs);
+            }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
         }
     }
@@ -237,6 +249,14 @@ fn main() {
 
     let fullness = fullness_and_bytes.iter().map(|(fullness, _)| (*fullness, capacity)).collect();
     draw_fullness(&upper, &fullness, "Fullness");
+
+    let actual_profit = actual_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
+        *reward as i64 - *cost as i64
+    }).collect();
+    let projected_profit = projected_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
+        *reward as i64 - *cost as i64
+    }).collect();
+    draw_profit(&middle, &actual_profit, &projected_profit, "Profit");
     draw_gas_price(&bottom, &gas_prices, "Gas Prices");
 
     // draw_da_chart(
@@ -643,6 +663,57 @@ fn draw_fullness(
             &BLACK,
         ))
         .unwrap();
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()
+        .unwrap();
+}
+
+fn draw_profit(
+    drawing_area: &DrawingArea<BitMapBackend, Shift>,
+    actual_profit: &Vec<i64>,
+    projected_profit: &Vec<i64>,
+    title: &str,
+) {
+    let min = *actual_profit.iter().min().unwrap();
+    let max = *actual_profit.iter().max().unwrap();
+
+    let mut chart = ChartBuilder::on(drawing_area)
+        .caption(title, ("sans-serif", 50).into_font())
+        .margin(5)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .right_y_label_area_size(40)
+        .build_cartesian_2d(0..actual_profit.len(), min..max)
+        .unwrap();
+
+    chart
+        .configure_mesh()
+        .y_desc("Profit")
+        .x_desc("Block")
+        .draw()
+        .unwrap();
+
+    chart
+        .draw_series(LineSeries::new(
+            actual_profit.iter().enumerate().map(|(x, y)| (x, *y)),
+            &BLACK,
+        ))
+        .unwrap()
+        .label("Actual Profit")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
+
+    chart
+        .draw_series(LineSeries::new(
+            projected_profit.iter().enumerate().map(|(x, y)| (x, *y)),
+            &RED,
+        ))
+        .unwrap()
+        .label("Projected Profit")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
 
     chart
         .configure_series_labels()
