@@ -60,17 +60,6 @@ pub struct AlgorithmUpdaterV1 {
     pub(crate) unrecorded_blocks: Vec<BlockBytes>,
 }
 
-enum UpdateValues {
-    L2Block {
-        height: u32,
-        block_reward: u64,
-        block_bytes: u64,
-    },
-    DARecording {
-        blocks: Vec<RecordedBlock>
-    },
-}
-
 pub struct RecordedBlock {
     height: u32,
     block_bytes: u64,
@@ -99,23 +88,12 @@ impl AlgorithmUpdaterV1 {
         }
     }
 
-    pub fn update(&mut self, update: UpdateValues) -> Result<(), Error> {
-        match update {
-            UpdateValues::L2Block {
-                height,
-                block_reward,
-                block_bytes,
-            } => {
-                self.l2_block_update(height, block_reward, block_bytes)
-            }
-            UpdateValues::DARecording { blocks } => {
-                for block in blocks {
-                    self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
-                }
-                self.recalculate_projected_cost();
-                Ok(())
-            }
+    pub fn update_da_record_data(&mut self, blocks: Vec<RecordedBlock>) -> Result<(), Error> {
+        for block in blocks {
+            self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
         }
+        self.recalculate_projected_cost();
+        Ok(())
     }
     fn l2_block_update(&mut self, height: u32, block_reward: u64, block_bytes: u64) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
@@ -154,7 +132,8 @@ impl AlgorithmUpdaterV1 {
         // remove all blocks that have been recorded
         self.unrecorded_blocks.retain(|block| block.height > self.da_recorded_block_height);
         // add the cost of the remaining blocks
-        self.projected_total_cost = self.unrecorded_blocks.iter().map(|block| block.block_bytes * self.latest_da_cost_per_byte).sum();
+        let projection_portion: u64 = self.unrecorded_blocks.iter().map(|block| block.block_bytes * self.latest_da_cost_per_byte).sum();
+        self.projected_total_cost = self.latest_known_total_cost + projection_portion;
     }
 
     pub fn build(self) -> AlgorithmV1 {

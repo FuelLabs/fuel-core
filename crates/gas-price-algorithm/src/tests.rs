@@ -1,4 +1,4 @@
-#[allow(non_snake_case)]
+#![allow(non_snake_case)]
 use super::*;
 
 struct UpdaterBuilder {
@@ -66,7 +66,7 @@ impl UpdaterBuilder {
 }
 
 #[test]
-fn update__l2_block() {
+fn l2_block_update__updates_l2_block() {
     // given
     let starting_block = 0;
 
@@ -74,14 +74,13 @@ fn update__l2_block() {
         .with_l2_block_height(starting_block)
         .build();
 
-    let update = UpdateValues::L2Block {
-        height: 1,
-        block_reward: 100,
-        block_bytes: 1000,
-    };
+    let height = 1;
+    let block_reward = 100;
+let block_bytes = 1000;
+
 
     // when
-    updater.update(update).unwrap();
+    updater.l2_block_update(height, block_reward, block_bytes).unwrap();
 
     //  then
     let expected = starting_block + 1;
@@ -90,21 +89,19 @@ fn update__l2_block() {
 }
 
 #[test]
-fn update__skipped_block_height_throws_error() {
+fn l2_block_update__skipped_block_height_throws_error() {
     // given
     let starting_block = 0;
     let mut updater = UpdaterBuilder::new()
         .with_l2_block_height(starting_block)
         .build();
 
-    let update = UpdateValues::L2Block {
-        height: 2,
-        block_reward: 100,
-        block_bytes: 1000,
-    };
+    let height = 2;
+    let block_reward = 100;
+    let block_bytes = 1000;
 
     // when
-    let actual_error = updater.update(update).unwrap_err();
+    let actual_error = updater.l2_block_update(height, block_reward, block_bytes).unwrap_err();
 
     // then
     let expected_error = Error::SkippedL2Block {
@@ -115,15 +112,15 @@ fn update__skipped_block_height_throws_error() {
 }
 
 #[test]
-fn update__da_recorded_block() {
+fn update_da_record_data__increases_block() {
     // given
     let da_recorded_block_height = 0;
     let mut updater = UpdaterBuilder::new()
         .with_da_recorded_block_height(da_recorded_block_height)
         .build();
 
-    let update = UpdateValues::DARecording {
-        blocks: vec![RecordedBlock {
+    let blocks =
+         vec![RecordedBlock {
             height: 1,
             block_bytes: 1000,
             block_cost: 100,
@@ -131,12 +128,10 @@ fn update__da_recorded_block() {
             height: 2,
             block_bytes: 1000,
             block_cost: 100,
-        }
-        ],
-    };
+        }];
 
     // when
-    updater.update(update).unwrap();
+    updater.update_da_record_data(blocks).unwrap();
 
     // then
     let expected = 2;
@@ -145,28 +140,26 @@ fn update__da_recorded_block() {
 }
 
 #[test]
-fn update__da_recorded_blocks_must_come_in_order() {
+fn update_da_record_data__throws_error_if_out_of_order() {
     // given
     let da_recorded_block_height = 0;
     let mut updater = UpdaterBuilder::new()
         .with_da_recorded_block_height(da_recorded_block_height)
         .build();
 
-    let update = UpdateValues::DARecording {
-        blocks: vec![RecordedBlock {
-            height: 1,
-            block_bytes: 1000,
-            block_cost: 100,
-        }, RecordedBlock {
-            height: 3,
-            block_bytes: 1000,
-            block_cost: 100,
-        }
-        ],
-    };
+    let blocks = vec![RecordedBlock {
+        height: 1,
+        block_bytes: 1000,
+        block_cost: 100,
+    }, RecordedBlock {
+        height: 3,
+        block_bytes: 1000,
+        block_cost: 100,
+    }
+    ];
 
     // when
-    let actual_error = updater.update(update).unwrap_err();
+    let actual_error = updater.update_da_record_data(blocks).unwrap_err();
 
     // then
     let expected_error = Error::SkippedDABlock {
@@ -177,22 +170,19 @@ fn update__da_recorded_blocks_must_come_in_order() {
 }
 
 #[test]
-fn update__l2_block_updates_projected_cost() {
+fn l2_block_update__updates_projected_cost() {
     // given
     let da_cost_per_byte = 20;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
         .build();
 
+    let height = 1;
+    let block_reward = 100;
     let block_bytes = 1000;
-    let update = UpdateValues::L2Block {
-        height: 1,
-        block_reward: 100,
-        block_bytes,
-    };
 
     // when
-    updater.update(update).unwrap();
+    updater.l2_block_update(height, block_reward, block_bytes).unwrap();
 
     // then
     let expected = block_bytes * da_cost_per_byte;
@@ -201,7 +191,7 @@ fn update__l2_block_updates_projected_cost() {
 }
 
 #[test]
-fn update__da_recorded_blocks_updates_cost_per_byte() {
+fn update_da_record_data__updates_cost_per_byte() {
     // given
     let da_cost_per_byte = 20;
     let mut updater = UpdaterBuilder::new()
@@ -211,17 +201,15 @@ fn update__da_recorded_blocks_updates_cost_per_byte() {
     let block_bytes = 1000;
     let new_cost_per_byte = 100;
     let block_cost = block_bytes * new_cost_per_byte;
-    let update = UpdateValues::DARecording {
-        blocks: vec![RecordedBlock {
+    let blocks =
+         vec![RecordedBlock {
             height: 1,
             block_bytes,
             block_cost,
         }
-        ],
-    };
-
+        ];
     // when
-    updater.update(update).unwrap();
+    updater.update_da_record_data(blocks).unwrap();
 
     // then
     let expected = new_cost_per_byte;
@@ -230,7 +218,7 @@ fn update__da_recorded_blocks_updates_cost_per_byte() {
 }
 
 #[test]
-fn update__da_block_updates_known_total_cost() {
+fn update_da_record_data__updates_known_total_cost() {
     // given
     let da_cost_per_byte = 20;
     let da_recorded_block_height = 10;
@@ -247,8 +235,7 @@ fn update__da_block_updates_known_total_cost() {
 
     let block_bytes = 1000;
     let block_cost = 100;
-    let update = UpdateValues::DARecording {
-        blocks: vec![RecordedBlock {
+        let blocks =  vec![RecordedBlock {
             height: 11,
             block_bytes,
             block_cost,
@@ -261,11 +248,9 @@ fn update__da_block_updates_known_total_cost() {
             block_bytes,
             block_cost,
         }
-        ],
-    };
-
+        ];
     // when
-    updater.update(update).unwrap();
+    updater.update_da_record_data(blocks).unwrap();
 
     // then
     let actual = updater.latest_known_total_cost;
@@ -285,18 +270,18 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
         block_bytes: 1000,
     }, BlockBytes {
         height: 12,
-        block_bytes: 1000,
+        block_bytes: 2000,
     }, BlockBytes {
         height: 13,
-        block_bytes: 1000,
+        block_bytes: 1500,
     }];
 
     let remaining = vec![BlockBytes {
         height: 14,
-        block_bytes: 1000,
+        block_bytes: 1200,
     }, BlockBytes {
         height: 15,
-        block_bytes: 1000,
+        block_bytes: 3000,
     }];
     unrecorded_blocks.extend(remaining.clone());
     let guessed_cost: u64 = unrecorded_blocks.iter().map(|block| block.block_bytes * da_cost_per_byte).sum();
@@ -315,8 +300,8 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
     let block_bytes = 1000;
     let new_cost_per_byte = 100;
     let block_cost = block_bytes * new_cost_per_byte;
-    let update = UpdateValues::DARecording {
-        blocks: vec![RecordedBlock {
+    let blocks =
+         vec![RecordedBlock {
             height: 11,
             block_bytes,
             block_cost,
@@ -329,11 +314,9 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
             block_bytes,
             block_cost,
         }
-        ],
-    };
-
+        ];
     // when
-    updater.update(update).unwrap();
+    updater.update_da_record_data(blocks).unwrap();
 
     // then
     let actual = updater.projected_total_cost;
@@ -341,6 +324,4 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
     let guessed_part: u64 = remaining.iter().map(|block| block.block_bytes * new_cost_per_byte).sum();
     let expected = new_known_total_cost + guessed_part;
     assert_eq!(actual, expected);
-
-
 }
