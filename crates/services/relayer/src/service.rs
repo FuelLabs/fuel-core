@@ -13,7 +13,6 @@ use ethers_core::types::{
     Log,
     SyncingStatus,
     ValueOrArray,
-    H160,
 };
 use ethers_providers::{
     Http,
