@@ -163,8 +163,6 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    dbg!(updater.projected_total_cost);
-
     let block_bytes = 1000;
     let new_cost_per_byte = 100;
     let block_cost = block_bytes * new_cost_per_byte;

@@ -49,23 +49,31 @@ pub struct AlgorithmV1 {
     max_change_percent: u8,
 }
 
+// TODO: Add contstructor
 pub struct AlgorithmUpdaterV1 {
-    pub(crate) l2_block_height: u32,
+    pub gas_price: u64,
+
+    // L2
+    pub l2_block_height: u32,
+    pub l2_block_fullness_threshold_percent: u64,
+    pub exec_gas_price_increase_amount: u64,
     // total_reward: u64,
     // actual_total_cost: u64,
     // latest_gas_per_byte: u64,
-    pub(crate) da_recorded_block_height: u32,
-    pub(crate) latest_known_total_cost: u64,
-    pub(crate) projected_total_cost: u64,
+    pub da_recorded_block_height: u32,
+    pub latest_known_total_cost: u64,
+    pub projected_total_cost: u64,
 
-    pub(crate) latest_da_cost_per_byte: u64,
-    pub(crate) unrecorded_blocks: Vec<BlockBytes>,
+    pub latest_da_cost_per_byte: u64,
+    pub unrecorded_blocks: Vec<BlockBytes>,
 }
 
+// TODO: Add contstructor
+#[derive(Debug, Clone)]
 pub struct RecordedBlock {
-    height: u32,
-    block_bytes: u64,
-    block_cost: u64,
+    pub height: u32,
+    pub block_bytes: u64,
+    pub block_cost: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -75,16 +83,19 @@ pub struct BlockBytes {
 }
 
 impl AlgorithmUpdaterV1 {
-    pub fn new(l2_block_height: u32, da_recorded_block_height: u32, latest_da_cost_per_byte: u64) -> Self {
-        Self {
-            l2_block_height,
-            da_recorded_block_height,
-            latest_known_total_cost: 0,
-            projected_total_cost: 0,
-            latest_da_cost_per_byte,
-            unrecorded_blocks: Vec::new(),
-        }
-    }
+    // pub fn new(l2_block_height: u32, da_recorded_block_height: u32, latest_da_cost_per_byte: u64) -> Self {
+    //     Self {
+    //         gas_price: 0,
+    //         l2_block_height,
+    //         l2_block_fullness_threshold: 0,
+    //         exec_gas_price_increase_amount: 0,
+    //         da_recorded_block_height,
+    //         latest_known_total_cost: 0,
+    //         projected_total_cost: 0,
+    //         latest_da_cost_per_byte,
+    //         unrecorded_blocks: Vec::new(),
+    //     }
+    // }
 
     pub fn update_da_record_data(&mut self, blocks: Vec<RecordedBlock>) -> Result<(), Error> {
         for block in blocks {
@@ -93,7 +104,7 @@ impl AlgorithmUpdaterV1 {
         self.recalculate_projected_cost();
         Ok(())
     }
-    fn update_l2_block_data(&mut self, height: u32, block_reward: u64, block_bytes: u64) -> Result<(), Error> {
+    pub fn update_l2_block_data(&mut self, height: u32, fullness: (u64, u64), block_bytes: u64) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
             return Err(Error::SkippedL2Block {
@@ -103,6 +114,10 @@ impl AlgorithmUpdaterV1 {
         } else {
             self.l2_block_height = height;
             self.projected_total_cost += block_bytes * self.latest_da_cost_per_byte;
+            let fullness_percent = fullness.0 * 100 / fullness.1;
+            if fullness_percent > self.l2_block_fullness_threshold_percent {
+                self.gas_price += self.exec_gas_price_increase_amount;
+            }
             Ok(())
         }
     }
@@ -134,8 +149,8 @@ impl AlgorithmUpdaterV1 {
         self.projected_total_cost = self.latest_known_total_cost + projection_portion;
     }
 
-    pub fn update(self) -> AlgorithmV1 {
-        todo!()
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
     }
 }
 
@@ -161,10 +176,6 @@ impl AlgorithmV0 {
             exec_change_amount,
             min_exec_price,
         }
-    }
-
-    pub fn calculate_gas_price(block_bytes: u64) -> u64 {
-        todo!()
     }
 
     pub fn calculate_da_gas_price(

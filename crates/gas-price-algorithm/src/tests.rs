@@ -2,7 +2,10 @@
 use super::*;
 
 struct UpdaterBuilder {
-    starting_block: u32,
+    starting_gas_price: u64,
+    l2_block_height: u32,
+    l2_block_capacity_threshold: u64,
+    l2_comp_gas_price_increase_amount: u64,
     da_recorded_block_height: u32,
     da_cost_per_byte: u64,
     project_total_cost: u64,
@@ -13,7 +16,10 @@ struct UpdaterBuilder {
 impl UpdaterBuilder {
     fn new() -> Self {
         Self {
-            starting_block: 0,
+            starting_gas_price: 0,
+            l2_block_height: 0,
+            l2_block_capacity_threshold: 50,
+            l2_comp_gas_price_increase_amount: 0,
             da_recorded_block_height: 0,
             da_cost_per_byte: 0,
             project_total_cost: 0,
@@ -22,8 +28,23 @@ impl UpdaterBuilder {
         }
     }
 
+    fn with_starting_gas_price(mut self, starting_gas_price: u64) -> Self {
+        self.starting_gas_price = starting_gas_price;
+        self
+    }
+
     fn with_l2_block_height(mut self, starting_block: u32) -> Self {
-        self.starting_block = starting_block;
+        self.l2_block_height = starting_block;
+        self
+    }
+
+    fn with_l2_block_capacity_threshold(mut self, l2_block_capacity_threshold: u64) -> Self {
+        self.l2_block_capacity_threshold = l2_block_capacity_threshold;
+        self
+    }
+
+    fn with_l2_comp_gas_price_increase_amount(mut self, l2_comp_gas_price_increase_amount: u64) -> Self {
+        self.l2_comp_gas_price_increase_amount = l2_comp_gas_price_increase_amount;
         self
     }
 
@@ -55,7 +76,10 @@ impl UpdaterBuilder {
 
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
-            l2_block_height: self.starting_block,
+            gas_price: self.starting_gas_price,
+            l2_block_height: self.l2_block_height,
+            l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,
+            exec_gas_price_increase_amount: self.l2_comp_gas_price_increase_amount,
             da_recorded_block_height: self.da_recorded_block_height,
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_cost: self.project_total_cost,
