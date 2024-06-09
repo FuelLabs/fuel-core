@@ -1,19 +1,32 @@
 use crate::helpers::TestContext;
 use fuel_core::{
     schema::tx::receipt::all_receipts,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
-    pagination::{PageDirection, PaginationRequest},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
     FuelClient,
 };
 use fuel_core_poa::service::Mode;
 use fuel_core_types::{
-    fuel_asm::*, fuel_crypto::SecretKey, fuel_tx::*, fuel_types::ChainId,
+    fuel_asm::*,
+    fuel_crypto::SecretKey,
+    fuel_tx::*,
+    fuel_types::ChainId,
 };
 use itertools::Itertools;
-use rand::{prelude::StdRng, Rng, SeedableRng};
+use rand::{
+    prelude::StdRng,
+    Rng,
+    SeedableRng,
+};
 use std::io::ErrorKind::NotFound;
 
 mod predicates;
@@ -307,7 +320,10 @@ async fn get_transactions() {
         direction: PageDirection::Forward,
     };
 
-    let response = client.transactions(first_middle_page_request.clone()).await.unwrap();
+    let response = client
+        .transactions(first_middle_page_request.clone())
+        .await
+        .unwrap();
     let transactions = &response
         .results
         .iter()
