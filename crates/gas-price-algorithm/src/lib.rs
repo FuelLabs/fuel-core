@@ -44,7 +44,9 @@ pub struct AlgorithmV0 {
 }
 
 pub struct AlgorithmV1 {
-
+    block_height: u32,
+    price: u64,
+    max_change_percent: u8,
 }
 
 pub struct AlgorithmUpdaterV1 {
@@ -75,10 +77,6 @@ pub struct BlockBytes {
 impl AlgorithmUpdaterV1 {
     pub fn new(l2_block_height: u32, da_recorded_block_height: u32, latest_da_cost_per_byte: u64) -> Self {
         Self {
-            // total_reward: 0,
-            // actual_total_cost: 0,
-            // projected_total_cost: 0,
-            // latest_gas_per_byte: 0,
             l2_block_height,
             da_recorded_block_height,
             latest_known_total_cost: 0,
@@ -95,7 +93,7 @@ impl AlgorithmUpdaterV1 {
         self.recalculate_projected_cost();
         Ok(())
     }
-    fn l2_block_update(&mut self, height: u32, block_reward: u64, block_bytes: u64) -> Result<(), Error> {
+    fn update_l2_block_data(&mut self, height: u32, block_reward: u64, block_bytes: u64) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
             return Err(Error::SkippedL2Block {
@@ -136,7 +134,7 @@ impl AlgorithmUpdaterV1 {
         self.projected_total_cost = self.latest_known_total_cost + projection_portion;
     }
 
-    pub fn build(self) -> AlgorithmV1 {
+    pub fn update(self) -> AlgorithmV1 {
         todo!()
     }
 }
