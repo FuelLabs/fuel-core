@@ -112,7 +112,7 @@ fn update_l2_block_data__if_below_capacity_threshold_decrease_price() {
     updater.update_l2_block_data(height, fullness, block_bytes).unwrap();
 
     // then
-    let expected = starting_gas_price;
+    let expected = starting_gas_price - increase_amount;
     let actual = updater.gas_price();
     assert_eq!(actual, expected);
 }
@@ -137,4 +137,66 @@ fn update_l2_block_data__updates_the_total_reward_value() {
     let expected = gas_used * starting_gas_price;
     let actual = updater.total_rewards;
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn update_l2_block_data__positive_profit_decreases_gas_price() {
+    // given
+    let starting_gas_price = 100;
+    let starting_reward = 1000;
+    let starting_cost = 1000;
+    let latest_gas_per_byte = 1;
+    let da_gas_price_increase_amount = 10;
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_gas_price(starting_gas_price)
+        .with_da_gas_price_increase_amount(da_gas_price_increase_amount)
+        .with_total_rewards(starting_reward)
+        .with_known_total_cost(starting_cost)
+        .with_da_cost_per_byte(latest_gas_per_byte)
+        .build();
+
+    let height = 1;
+    let gas_used = 50;
+    let fullness = (gas_used, 100);
+    let block_bytes = 1000;
+
+    // 1 * 1000 < 50 * 100 (1000 < 5000)
+    // when
+    updater.update_l2_block_data(height, fullness, block_bytes).unwrap();
+
+    // then
+    let expected = starting_gas_price - da_gas_price_increase_amount;
+    let actual = updater.gas_price();
+    assert_eq!(expected, actual);
+}
+
+#[test]
+fn update_l2_block_data__negative_profit_increases_gas_price() {
+    // given
+    let starting_gas_price = 100;
+    let starting_reward = 1000;
+    let starting_cost = 1000;
+    let latest_gas_per_byte = 10;
+    let da_gas_price_increase_amount = 10;
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_gas_price(starting_gas_price)
+        .with_da_gas_price_increase_amount(da_gas_price_increase_amount)
+        .with_total_rewards(starting_reward)
+        .with_known_total_cost(starting_cost)
+        .with_da_cost_per_byte(latest_gas_per_byte)
+        .build();
+
+    let height = 1;
+    let gas_used = 50;
+    let fullness = (gas_used, 100);
+    let block_bytes = 1000;
+
+    // 10 * 1000 > 50 * 100 (10_000 > 5_000)
+    // when
+    updater.update_l2_block_data(height, fullness, block_bytes).unwrap();
+
+    // then
+    let expected = starting_gas_price + da_gas_price_increase_amount;
+    let actual = updater.gas_price();
+    assert_eq!(expected, actual);
 }

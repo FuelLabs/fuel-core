@@ -192,3 +192,4 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
     assert_eq!(actual, expected);
 }
 
+

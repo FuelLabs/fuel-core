@@ -171,6 +171,7 @@ fn main() {
     let starting_gas_price = 0;
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
+    let da_gas_price_denominator = 5_000;
     let size = 100;
     let da_recoring_rate = 10;
     let capacity = 20_000;
@@ -212,6 +213,7 @@ fn main() {
         projected_total_cost: 0,
         latest_known_total_cost: 0,
         unrecorded_blocks: vec![],
+        da_gas_price_denominator,
     };
 
     let mut gas_prices = vec![];

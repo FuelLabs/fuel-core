@@ -52,11 +52,12 @@ pub struct AlgorithmV1 {
 // TODO: Add contstructor
 pub struct AlgorithmUpdaterV1 {
     pub gas_price: u64,
+    pub exec_gas_price_increase_amount: u64,
+    pub da_gas_price_denominator: u64,
 
     // L2
     pub l2_block_height: u32,
     pub l2_block_fullness_threshold_percent: u64,
-    pub exec_gas_price_increase_amount: u64,
     pub total_rewards: u64,
     // total_reward: u64,
     // actual_total_cost: u64,
@@ -118,8 +119,22 @@ impl AlgorithmUpdaterV1 {
             let reward = fullness.0 * self.gas_price;
             self.total_rewards += reward;
             let fullness_percent = fullness.0 * 100 / fullness.1;
+            // EXEC PORTION
             if fullness_percent > self.l2_block_fullness_threshold_percent {
                 self.gas_price += self.exec_gas_price_increase_amount;
+            } else if fullness_percent < self.l2_block_fullness_threshold_percent {
+                self.gas_price -= self.exec_gas_price_increase_amount;
+            }
+            // DA PORTION
+            let projected_profit = self.total_rewards as i64 - self.projected_total_cost as i64;
+            if projected_profit > 0 {
+                let change = projected_profit as u64 / self.da_gas_price_denominator;
+                let new = self.gas_price.saturating_sub(change);
+                self.gas_price = new;
+            } else if projected_profit < 0 {
+                let change = projected_profit.abs() as u64 / self.da_gas_price_denominator;
+                let new = self.gas_price.saturating_add(change);
+                self.gas_price = new;
             }
             Ok(())
         }

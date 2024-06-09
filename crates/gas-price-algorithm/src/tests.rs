@@ -3,9 +3,11 @@ use super::*;
 
 struct UpdaterBuilder {
     starting_gas_price: u64,
+    l2_comp_gas_price_increase_amount: u64,
+    da_gas_price_increase_amount: u64,
+
     l2_block_height: u32,
     l2_block_capacity_threshold: u64,
-    l2_comp_gas_price_increase_amount: u64,
     total_rewards: u64,
     da_recorded_block_height: u32,
     da_cost_per_byte: u64,
@@ -18,9 +20,10 @@ impl UpdaterBuilder {
     fn new() -> Self {
         Self {
             starting_gas_price: 0,
+            l2_comp_gas_price_increase_amount: 0,
+            da_gas_price_increase_amount: 0,
             l2_block_height: 0,
             l2_block_capacity_threshold: 50,
-            l2_comp_gas_price_increase_amount: 0,
             total_rewards: 0,
             da_recorded_block_height: 0,
             da_cost_per_byte: 0,
@@ -35,6 +38,16 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_l2_comp_gas_price_increase_amount(mut self, l2_comp_gas_price_increase_amount: u64) -> Self {
+        self.l2_comp_gas_price_increase_amount = l2_comp_gas_price_increase_amount;
+        self
+    }
+
+    fn with_da_gas_price_increase_amount(mut self, da_gas_price_increase_amount: u64) -> Self {
+        self.da_gas_price_increase_amount = da_gas_price_increase_amount;
+        self
+    }
+
     fn with_l2_block_height(mut self, starting_block: u32) -> Self {
         self.l2_block_height = starting_block;
         self
@@ -45,8 +58,9 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_l2_comp_gas_price_increase_amount(mut self, l2_comp_gas_price_increase_amount: u64) -> Self {
-        self.l2_comp_gas_price_increase_amount = l2_comp_gas_price_increase_amount;
+
+    fn with_total_rewards(mut self, total_rewards: u64) -> Self {
+        self.total_rewards = total_rewards;
         self
     }
 
@@ -79,9 +93,10 @@ impl UpdaterBuilder {
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
             gas_price: self.starting_gas_price,
+            exec_gas_price_increase_amount: self.l2_comp_gas_price_increase_amount,
+            da_gas_price_denominator:  self.da_gas_price_increase_amount,
             l2_block_height: self.l2_block_height,
             l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,
-            exec_gas_price_increase_amount: self.l2_comp_gas_price_increase_amount,
             total_rewards: self.total_rewards,
             da_recorded_block_height: self.da_recorded_block_height,
             latest_da_cost_per_byte: self.da_cost_per_byte,
