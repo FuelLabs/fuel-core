@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- [#1951](https://github.com/FuelLabs/fuel-core/pull/1951): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
+
 ## [Version 0.28.0]
 
 ### Changed
