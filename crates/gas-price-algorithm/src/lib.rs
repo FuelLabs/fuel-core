@@ -143,7 +143,7 @@ impl AlgorithmUpdaterV1 {
         self.recalculate_projected_cost();
         Ok(())
     }
-    pub fn update_l2_block_data(&mut self, height: u32, fullness: (u64, u64), block_bytes: u64) -> Result<(), Error> {
+    pub fn update_l2_block_data(&mut self, height: u32, fullness: (u64, u64), block_bytes: u64, gas_price: u64) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
             return Err(Error::SkippedL2Block {
@@ -151,6 +151,7 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
+            self.gas_price = gas_price;
             self.l2_block_height = height;
             self.projected_total_cost += block_bytes * self.latest_da_cost_per_byte;
             let reward = fullness.0 * self.gas_price;
