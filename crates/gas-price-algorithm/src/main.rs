@@ -140,6 +140,7 @@ fn main() {
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
     let da_gas_price_denominator = 5_000;
+    let starting_gas_per_byte = 100;
     let size = 100;
     let da_recoring_rate = 10;
     let capacity = 20_000;
@@ -176,8 +177,9 @@ fn main() {
         l2_block_fullness_threshold_percent: fullness_threshold,
         exec_gas_price_increase_amount,
         total_rewards: 0,
+        last_l2_fullness: (fullness_threshold, 100),
         da_recorded_block_height: 0,
-        latest_da_cost_per_byte: 0,
+        latest_da_cost_per_byte: starting_gas_per_byte,
         projected_total_cost: 0,
         latest_known_total_cost: 0,
         unrecorded_blocks: vec![],
@@ -188,13 +190,15 @@ fn main() {
     let mut actual_rewards = vec![];
     let mut projected_costs = vec![];
     let mut actual_costs = vec![];
+    let pessimistic_bytes = capacity * 4;
     for (index, (l2_block, da_block)) in blocks {
         let height = index as u32 + 1;
-        gas_prices.push(updater.gas_price());
+        let gas_price = updater.algorithm().calculate(pessimistic_bytes);
+        gas_prices.push(gas_price);
         actual_rewards.push(updater.total_rewards);
         projected_costs.push(updater.projected_total_cost);
         let (fullness, bytes) = l2_block;
-        updater.update_l2_block_data(height, (*fullness, capacity), *bytes).unwrap();
+        updater.update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price).unwrap();
         if let Some(da_blocks) = da_block {
             let mut total_costs = updater.latest_known_total_cost;
             for block in da_blocks {
