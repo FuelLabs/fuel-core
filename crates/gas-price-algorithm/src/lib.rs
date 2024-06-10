@@ -45,8 +45,44 @@ pub struct AlgorithmV0 {
 
 pub struct AlgorithmV1 {
     block_height: u32,
-    price: u64,
-    max_change_percent: u8,
+    last_price: u64,
+
+    // L2
+    last_fullness: (u64, u64),
+    l2_block_fullness_threshold_percent: u64,
+    exec_gas_price_increase_amount: u64,
+
+    // DA
+    latest_da_cost_per_byte: u64,
+    total_rewards: u64,
+    total_costs: u64,
+    da_gas_price_denominator: u64
+}
+
+impl AlgorithmV1 {
+    pub fn calculate(&self, block_bytes: u64) -> u64 {
+        let mut new_gas_price = self.last_price;
+        // TODO: Deal with division by zero
+        let fullness_percent = self.last_fullness.0 * 100 / self.last_fullness.1;
+        // EXEC PORTION
+        if fullness_percent > self.l2_block_fullness_threshold_percent {
+            new_gas_price += self.exec_gas_price_increase_amount;
+        } else if fullness_percent < self.l2_block_fullness_threshold_percent {
+            new_gas_price -= self.exec_gas_price_increase_amount;
+        }
+        // DA PORTION
+        let pessimistic_cost = self.total_costs + block_bytes * self.latest_da_cost_per_byte;
+        let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
+        if projected_profit > 0 {
+            let change = projected_profit as u64 / self.da_gas_price_denominator;
+            new_gas_price = new_gas_price.saturating_sub(change);
+        } else if projected_profit < 0 {
+            let change = projected_profit.abs() as u64 / self.da_gas_price_denominator;
+            new_gas_price = new_gas_price.saturating_add(change);
+        }
+        new_gas_price
+    }
+
 }
 
 // TODO: Add contstructor
@@ -59,6 +95,7 @@ pub struct AlgorithmUpdaterV1 {
     pub l2_block_height: u32,
     pub l2_block_fullness_threshold_percent: u64,
     pub total_rewards: u64,
+    pub last_l2_fullness: (u64, u64),
     // total_reward: u64,
     // actual_total_cost: u64,
     // latest_gas_per_byte: u64,
@@ -118,24 +155,7 @@ impl AlgorithmUpdaterV1 {
             self.projected_total_cost += block_bytes * self.latest_da_cost_per_byte;
             let reward = fullness.0 * self.gas_price;
             self.total_rewards += reward;
-            let fullness_percent = fullness.0 * 100 / fullness.1;
-            // EXEC PORTION
-            if fullness_percent > self.l2_block_fullness_threshold_percent {
-                self.gas_price += self.exec_gas_price_increase_amount;
-            } else if fullness_percent < self.l2_block_fullness_threshold_percent {
-                self.gas_price -= self.exec_gas_price_increase_amount;
-            }
-            // DA PORTION
-            let projected_profit = self.total_rewards as i64 - self.projected_total_cost as i64;
-            if projected_profit > 0 {
-                let change = projected_profit as u64 / self.da_gas_price_denominator;
-                let new = self.gas_price.saturating_sub(change);
-                self.gas_price = new;
-            } else if projected_profit < 0 {
-                let change = projected_profit.abs() as u64 / self.da_gas_price_denominator;
-                let new = self.gas_price.saturating_add(change);
-                self.gas_price = new;
-            }
+            self.last_l2_fullness = fullness;
             Ok(())
         }
     }
@@ -167,10 +187,21 @@ impl AlgorithmUpdaterV1 {
         self.projected_total_cost = self.latest_known_total_cost + projection_portion;
     }
 
-    pub fn gas_price(&self) -> u64 {
-        self.gas_price
+    pub fn algorithm(&self) -> AlgorithmV1 {
+        AlgorithmV1 {
+            block_height: self.l2_block_height + 1,
+            last_price: self.gas_price,
+            last_fullness: self.last_l2_fullness,
+            l2_block_fullness_threshold_percent: self.l2_block_fullness_threshold_percent,
+            exec_gas_price_increase_amount: self.exec_gas_price_increase_amount,
+            latest_da_cost_per_byte: self.latest_da_cost_per_byte,
+            total_rewards: self.total_rewards,
+            total_costs: self.projected_total_cost,
+            da_gas_price_denominator: self.da_gas_price_denominator,
+        }
     }
 }
+
 
 impl AlgorithmV0 {
     pub fn new(

@@ -4,10 +4,12 @@ use super::*;
 struct UpdaterBuilder {
     starting_gas_price: u64,
     l2_comp_gas_price_increase_amount: u64,
-    da_gas_price_increase_amount: u64,
+    da_gas_price_denominator: u64,
 
     l2_block_height: u32,
     l2_block_capacity_threshold: u64,
+    l2_last_fullness: (u64, u64),
+
     total_rewards: u64,
     da_recorded_block_height: u32,
     da_cost_per_byte: u64,
@@ -21,9 +23,12 @@ impl UpdaterBuilder {
         Self {
             starting_gas_price: 0,
             l2_comp_gas_price_increase_amount: 0,
-            da_gas_price_increase_amount: 0,
+            da_gas_price_denominator: 0,
+
             l2_block_height: 0,
             l2_block_capacity_threshold: 50,
+            l2_last_fullness: (50, 100),
+
             total_rewards: 0,
             da_recorded_block_height: 0,
             da_cost_per_byte: 0,
@@ -43,8 +48,8 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_da_gas_price_increase_amount(mut self, da_gas_price_increase_amount: u64) -> Self {
-        self.da_gas_price_increase_amount = da_gas_price_increase_amount;
+    fn with_da_gas_price_denominator(mut self, da_gas_price_denominator: u64) -> Self {
+        self.da_gas_price_denominator = da_gas_price_denominator;
         self
     }
 
@@ -61,6 +66,11 @@ impl UpdaterBuilder {
 
     fn with_total_rewards(mut self, total_rewards: u64) -> Self {
         self.total_rewards = total_rewards;
+        self
+    }
+
+fn with_last_l2_fullness(mut self, l2_last_fullness: (u64, u64)) -> Self {
+       self.l2_last_fullness = l2_last_fullness;
         self
     }
 
@@ -94,10 +104,13 @@ impl UpdaterBuilder {
         AlgorithmUpdaterV1 {
             gas_price: self.starting_gas_price,
             exec_gas_price_increase_amount: self.l2_comp_gas_price_increase_amount,
-            da_gas_price_denominator:  self.da_gas_price_increase_amount,
+            da_gas_price_denominator:  self.da_gas_price_denominator,
+
             l2_block_height: self.l2_block_height,
             l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,
             total_rewards: self.total_rewards,
+            last_l2_fullness: self.l2_last_fullness,
+
             da_recorded_block_height: self.da_recorded_block_height,
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_cost: self.project_total_cost,
@@ -112,6 +125,9 @@ mod update_l2_block_data_tests;
 
 #[cfg(test)]
 mod update_da_record_data_tests;
+
+#[cfg(test)]
+mod algorithm_v1_tests;
 
 
 #[ignore]
