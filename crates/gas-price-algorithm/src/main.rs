@@ -139,10 +139,10 @@ fn main() {
     let starting_gas_price = 0;
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
-    let da_gas_price_denominator = 5_000;
+    let da_gas_price_denominator = 10_000;
     let starting_gas_per_byte = 100;
     let size = 100;
-    let da_recoring_rate = 10;
+    let da_recording_rate = 10;
     let capacity = 20_000;
     let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
     let da_cost_per_byte = arb_cost_per_byte(size as u32);
@@ -160,7 +160,7 @@ fn main() {
                 block_cost: total_cost,
             };
             delayed.push(converted);
-            if delayed.len() == da_recoring_rate {
+            if delayed.len() == da_recording_rate {
                 recorded.push(Some(delayed));
                 (vec![], recorded)
             } else {
@@ -195,8 +195,6 @@ fn main() {
         let height = index as u32 + 1;
         let gas_price = updater.algorithm().calculate(pessimistic_bytes);
         gas_prices.push(gas_price);
-        actual_rewards.push(updater.total_rewards);
-        projected_costs.push(updater.projected_total_cost);
         let (fullness, bytes) = l2_block;
         updater.update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price).unwrap();
         if let Some(da_blocks) = da_block {
@@ -206,7 +204,11 @@ fn main() {
                 actual_costs.push(total_costs);
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
+            assert_eq!(updater.latest_known_total_cost, total_costs);
+            assert_eq!(updater.projected_total_cost, total_costs);
         }
+        actual_rewards.push(updater.total_rewards);
+        projected_costs.push(updater.projected_total_cost);
     }
 
     // Plotting code starts here
@@ -224,12 +226,15 @@ fn main() {
     let fullness = fullness_and_bytes.iter().map(|(fullness, _)| (*fullness, capacity)).collect();
     draw_fullness(&upper, &fullness, "Fullness");
 
-    let actual_profit = actual_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
+    let actual_profit: Vec<i64> = actual_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
         *reward as i64 - *cost as i64
     }).collect();
-    let projected_profit = projected_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
+    let projected_profit: Vec<i64> = projected_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
         *reward as i64 - *cost as i64
     }).collect();
+    for i in 0..actual_profit.len() {
+        println!("{i:?} Actual Profit: {}, Projected Profit: {}", actual_profit[i], projected_profit[i]);
+    }
     draw_profit(&middle, &actual_profit, &projected_profit, "Profit");
     draw_gas_price(&bottom, &gas_prices, "Gas Prices");
 

@@ -66,12 +66,13 @@ impl AlgorithmV1 {
         let fullness_percent = self.last_fullness.0 * 100 / self.last_fullness.1;
         // EXEC PORTION
         if fullness_percent > self.l2_block_fullness_threshold_percent {
-            new_gas_price += self.exec_gas_price_increase_amount;
+             new_gas_price = new_gas_price.saturating_add(self.exec_gas_price_increase_amount);
         } else if fullness_percent < self.l2_block_fullness_threshold_percent {
-            new_gas_price -= self.exec_gas_price_increase_amount;
+            new_gas_price = new_gas_price.saturating_sub( self.exec_gas_price_increase_amount);
         }
         // DA PORTION
-        let pessimistic_cost = self.total_costs + block_bytes * self.latest_da_cost_per_byte;
+        let extra_for_this_block = block_bytes * self.latest_da_cost_per_byte;
+        let pessimistic_cost = self.total_costs + extra_for_this_block;
         let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
         if projected_profit > 0 {
             let change = projected_profit as u64 / self.da_gas_price_denominator;
