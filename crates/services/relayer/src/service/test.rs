@@ -38,7 +38,7 @@ async fn can_download_logs() {
         &eth_node,
         DEFAULT_LOG_PAGE_SIZE,
     )
-    .map_ok(|(_, l)| l)
+    .map_ok(|logs| logs.logs)
     .try_concat()
     .await
     .unwrap();
