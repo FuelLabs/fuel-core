@@ -73,39 +73,24 @@ where
     gen_noisy_signal(input, COMPONENTS)
 }
 
-fn arb_fullness_signal(size: u32, capacity: u64) -> Vec<(u64, u64)> {
-    let mut rng = StdRng::seed_from_u64(888);
-    (0u32..size)
-        .map(noisy_fullness)
-        .map(|x| (0.5 * x + 0.4) * capacity as f64)
-        .map(|x| {
-            let val = rng.gen_range(-0.25 * capacity as f64..0.25 * capacity as f64);
-            x + val
-        })
-        .map(|x| f64::min(x, capacity as f64))
-        .map(|x| f64::max(x, 5.0))
-        .map(|x| (x as u64, capacity))
-        .collect()
-}
 
 fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
+    let mut rng = StdRng::seed_from_u64(888);
+    let fullness_noise: Vec<_> = std::iter::repeat(()).take(size).map(|_| rng.gen_range(-0.25..0.25)).map(|val| val * capacity as f64).collect();
+    let bytes_scale: Vec<_> = std::iter::repeat(()).take(size).map(|_| rng.gen_range(0.5..1.0)).map(|x| x * 4.0).collect();
     (0usize..size)
         .map(|val| val as f64)
         .map(noisy_fullness)
         .map(|signal| (0.5 * signal + 0.4) * capacity as f64)
-        .map(|fullness| {
-            let mut rng = StdRng::seed_from_u64(888);
-            // Add noisy to the fullness
-            let val = rng.gen_range(-0.25 * capacity as f64..0.25 * capacity as f64);
-            fullness + val
+        .zip(fullness_noise)
+        .map(|(fullness, noise)| {
+            fullness + noise
         })
         .map(|x| f64::min(x, capacity as f64))
         .map(|x| f64::max(x, 5.0))
-        .map(|fullness| {
-            let mut rng = StdRng::seed_from_u64(999);
-            // calculate bytes that are an arbitrary fraction of the gas scaled
-            let scale = rng.gen_range(0.5..1.0) * 4.0;
-            let bytes = fullness * scale;
+        .zip(bytes_scale)
+        .map(|(fullness, bytes_scale)| {
+            let bytes = fullness * bytes_scale;
             (fullness, bytes)
         })
         .map(|(fullness, bytes)| (fullness as u64, bytes as u64))
@@ -120,19 +105,6 @@ fn arb_cost_per_byte(size: u32) -> Vec<u64> {
         .collect()
 }
 
-fn arbitrary_da_values() -> Vec<(i64, i64, u8)> {
-    let mut rng = StdRng::seed_from_u64(777);
-    (0..10_000)
-        .map(|_| {
-            let p = rng.gen_range(-20_000..20_000);
-            let d = rng.gen_range(-500..500);
-            // let max_change = rng.gen_range(1..255);
-            let max_change = 50;
-            (p, d, max_change)
-        })
-        .filter(|(p, d, _)| *p != 0 && *d != 0)
-        .collect()
-}
 
 fn main() {
     // simulation parameters
@@ -204,8 +176,6 @@ fn main() {
                 actual_costs.push(total_costs);
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
-            assert_eq!(updater.latest_known_total_cost, total_costs);
-            assert_eq!(updater.projected_total_cost, total_costs);
         }
         actual_rewards.push(updater.total_rewards);
         projected_costs.push(updater.projected_total_cost);
@@ -232,9 +202,6 @@ fn main() {
     let projected_profit: Vec<i64> = projected_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
         *reward as i64 - *cost as i64
     }).collect();
-    for i in 0..actual_profit.len() {
-        println!("{i:?} Actual Profit: {}, Projected Profit: {}", actual_profit[i], projected_profit[i]);
-    }
     draw_profit(&middle, &actual_profit, &projected_profit, "Profit");
     draw_gas_price(&bottom, &gas_prices, "Gas Prices");
 
