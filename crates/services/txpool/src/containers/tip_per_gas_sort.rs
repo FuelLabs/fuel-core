@@ -27,7 +27,7 @@ impl SortableKey for RatioGasTipSortKey {
 
     fn new(info: &TxInfo) -> Self {
         Self {
-            tip_per_gas: Ratio::new(info.tx().max_gas(), info.tx().tip()),
+            tip_per_gas: Ratio::new(info.tx().tip(), info.tx().max_gas()),
             tx_id: info.tx().id(),
         }
     }
