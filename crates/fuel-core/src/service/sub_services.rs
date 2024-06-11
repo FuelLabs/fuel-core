@@ -71,10 +71,14 @@ impl GasPriceAlgorithm for StaticAlgorithm {
     fn gas_price(&self, _block_bytes: u64) -> u64 {
         self.price()
     }
+
+    fn last_gas_price(&self) -> u64 {
+        self.price()
+    }
 }
 
 impl GasPriceEstimate for StaticAlgorithm {
-    fn estimate(&self, _block_height: BlockHeight) -> u64 {
+    fn worst_case_gas_price(&self, _block_height: BlockHeight) -> u64 {
         self.price()
     }
 }

@@ -58,8 +58,12 @@ impl<A> FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn execute_algorithm(&self, block_bytes: u64) -> u64 {
+    async fn next_gas_price(&self, block_bytes: u64) -> u64 {
         self.algorithm.read().await.gas_price(block_bytes)
+    }
+
+    async fn last_gas_price(&self) -> u64 {
+        self.algorithm.read().await.last_gas_price()
     }
 }
 
@@ -69,7 +73,7 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn gas_price(&self, block_bytes: u64) -> anyhow::Result<u64> {
-        Ok(self.execute_algorithm(block_bytes).await)
+        Ok(self.next_gas_price(block_bytes).await)
     }
 }
 
@@ -78,8 +82,8 @@ impl<A> TxPoolGasPricProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn gas_price(&self, block_bytes: u64) -> TxPoolResult<u64> {
-        Ok(self.execute_algorithm(block_bytes).await)
+    async fn gas_price(&self) -> TxPoolResult<u64> {
+        Ok(self.last_gas_price().await)
     }
 }
 
@@ -89,6 +93,6 @@ where
     A: GasPriceEstimate + Send + Sync,
 {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
-        self.algorithm.read().await.estimate(height)
+        self.algorithm.read().await.worst_case_gas_price(height)
     }
 }

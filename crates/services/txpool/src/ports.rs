@@ -66,8 +66,7 @@ pub trait TxPoolDb: Send + Sync {
 pub trait GasPriceProvider {
     /// Calculate gas price for the next block with a given size `block_bytes`.
     async fn gas_price(
-        &self,
-        block_bytes: u64,
+        &self
     ) -> fuel_core_types::services::txpool::Result<GasPrice>;
 }
 
@@ -92,7 +91,7 @@ impl<T> GasPriceProvider for Arc<T>
 where
     T: GasPriceProvider + Send + Sync,
 {
-    async fn gas_price(&self, block_bytes: u64) -> TxPoolResult<GasPrice> {
-        self.deref().gas_price(block_bytes).await
+    async fn gas_price(&self) -> TxPoolResult<GasPrice> {
+        self.deref().gas_price().await
     }
 }

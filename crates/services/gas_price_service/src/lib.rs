@@ -1,3 +1,8 @@
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(unused_crate_dependencies)]
+#![deny(warnings)]
+
 use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
@@ -167,7 +172,6 @@ mod tests {
         RunnableService,
         Service,
         ServiceRunner,
-        State,
         StateWatcher,
     };
     use fuel_core_types::fuel_types::BlockHeight;
@@ -213,8 +217,7 @@ mod tests {
             price_source: price_receiver,
         };
         let service = GasPriceService::new(0.into(), updater);
-        let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
-        let watcher = StateWatcher::from(watch_receiver);
+        let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
         let task = service.into_task(&watcher, ()).await.unwrap();
         let expected_price = 100;
@@ -228,7 +231,5 @@ mod tests {
         // then
         let actual_price = read_algo.read().await.gas_price();
         assert_eq!(expected_price, actual_price);
-
-        watch_sender.send(State::Stopped).unwrap();
     }
 }

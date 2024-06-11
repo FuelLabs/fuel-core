@@ -524,20 +524,7 @@ where
         tx.into_checked_basic(current_height, consensus_params)?
     };
 
-    let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
-    let max_gas_per_block = consensus_params.block_gas_limit();
-    let max_block_bytes =
-        max_gas_per_block
-            .checked_div(gas_per_bytes)
-            .ok_or(Error::MaxBlockBytes(
-                format!(
-                    "Could not divide {} by {}",
-                    max_gas_per_block, gas_per_bytes
-                )
-                .to_string(),
-            ))?;
-
-    let gas_price = gas_price_provider.gas_price(max_block_bytes).await?;
+    let gas_price = gas_price_provider.gas_price().await?;
 
     let tx = verify_tx_min_gas_price(tx, consensus_params, gas_price)?;
 
