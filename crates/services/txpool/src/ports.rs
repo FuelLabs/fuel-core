@@ -65,9 +65,8 @@ pub trait TxPoolDb: Send + Sync {
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider {
     /// Calculate gas price for the next block with a given size `block_bytes`.
-    async fn last_gas_price(
-        &self
-    ) -> fuel_core_types::services::txpool::Result<GasPrice>;
+    async fn last_gas_price(&self)
+        -> fuel_core_types::services::txpool::Result<GasPrice>;
 }
 
 /// Trait for getting VM memory.

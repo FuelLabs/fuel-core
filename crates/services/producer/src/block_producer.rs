@@ -143,7 +143,10 @@ where
         Ok(result)
     }
 
-    async fn calculate_gas_price(&self, header: &PartialBlockHeader) -> anyhow::Result<u64> {
+    async fn calculate_gas_price(
+        &self,
+        header: &PartialBlockHeader,
+    ) -> anyhow::Result<u64> {
         let consensus_params = self
             .consensus_parameters_provider
             .consensus_params_at_version(&header.consensus_parameters_version)
@@ -151,7 +154,10 @@ where
         let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
         let max_gas_per_block = consensus_params.block_gas_limit();
         let max_block_bytes = max_gas_per_block / gas_per_bytes;
-        self.gas_price_provider.next_gas_price(max_block_bytes).await.map_err(|e| anyhow!("No gas price found: {e:?}"))
+        self.gas_price_provider
+            .next_gas_price(max_block_bytes)
+            .await
+            .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
 }
 

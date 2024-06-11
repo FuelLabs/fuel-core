@@ -1,4 +1,7 @@
-use crate::{GasPriceAlgorithm, UpdateAlgorithm};
+use crate::{
+    GasPriceAlgorithm,
+    UpdateAlgorithm,
+};
 use async_trait::async_trait;
 use fuel_core_types::fuel_types::BlockHeight;
 

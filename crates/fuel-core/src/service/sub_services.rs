@@ -33,9 +33,7 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::fuel_gas_price_provider::{
-    FuelGasPriceProvider,
-};
+use crate::service::adapters::fuel_gas_price_provider::FuelGasPriceProvider;
 use fuel_core_gas_price_service::static_updater::{
     StaticAlgorithm,
     StaticAlgorithmUpdater,

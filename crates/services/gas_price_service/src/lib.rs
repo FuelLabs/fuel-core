@@ -13,9 +13,7 @@ use fuel_core_services::{
 use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;
 
-use tokio::sync::{
-    RwLock,
-};
+use tokio::sync::RwLock;
 
 pub mod static_updater;
 
@@ -97,8 +95,8 @@ impl<A> Clone for SharedGasPriceAlgo<A> {
 }
 
 impl<A> SharedGasPriceAlgo<A>
-    where
-        A: Send + Sync,
+where
+    A: Send + Sync,
 {
     pub fn new(algo: A) -> Self {
         Self(Arc::new(RwLock::new(algo)))
@@ -113,7 +111,6 @@ impl<A> SharedGasPriceAlgo<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-
     pub async fn next_gas_price(&self, block_bytes: u64) -> u64 {
         self.0.read().await.next_gas_price(block_bytes)
     }
@@ -126,8 +123,6 @@ where
         self.0.read().await.worst_case_gas_price(block_height)
     }
 }
-
-
 
 #[async_trait]
 impl<A, U> RunnableService for GasPriceService<A, U>
@@ -184,7 +179,11 @@ where
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-    use crate::{GasPriceAlgorithm, GasPriceService, UpdateAlgorithm};
+    use crate::{
+        GasPriceAlgorithm,
+        GasPriceService,
+        UpdateAlgorithm,
+    };
     use fuel_core_services::{
         RunnableService,
         Service,
