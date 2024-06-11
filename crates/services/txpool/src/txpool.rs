@@ -1,8 +1,8 @@
 use crate::{
     containers::{
         dependency::Dependency,
-        price_sort::TipSort,
         time_sort::TimeSort,
+        tip_per_gas_sort::RatioGasTipSort,
     },
     ports::TxPoolDb,
     service::TxStatusChange,
@@ -27,6 +27,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use num_rational::Ratio;
 
 use crate::ports::{
     GasPriceProvider,
@@ -72,7 +73,7 @@ mod tests;
 #[derive(Debug, Clone)]
 pub struct TxPool<ViewProvider> {
     by_hash: HashMap<TxId, TxInfo>,
-    by_tip: TipSort,
+    by_ratio_gas_tip: RatioGasTipSort,
     by_time: TimeSort,
     by_dependency: Dependency,
     config: Config,
@@ -85,7 +86,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
         Self {
             by_hash: HashMap::new(),
-            by_tip: TipSort::default(),
+            by_ratio_gas_tip: RatioGasTipSort::default(),
             by_time: TimeSort::default(),
             by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
@@ -113,7 +114,11 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
     /// Return all sorted transactions that are includable in next block.
     pub fn sorted_includable(&self) -> impl Iterator<Item = ArcPoolTx> + '_ {
-        self.by_tip.sort.iter().rev().map(|(_, tx)| tx.clone())
+        self.by_ratio_gas_tip
+            .sort
+            .iter()
+            .rev()
+            .map(|(_, tx)| tx.clone())
     }
 
     pub fn remove_inner(&mut self, tx: &ArcPoolTx) -> Vec<ArcPoolTx> {
@@ -139,7 +144,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
         let info = self.by_hash.remove(tx_id);
         if let Some(info) = &info {
             self.by_time.remove(info);
-            self.by_tip.remove(info);
+            self.by_ratio_gas_tip.remove(info);
         }
 
         info
@@ -373,8 +378,8 @@ where
         if self.by_hash.len() >= self.config.max_tx {
             max_limit_hit = true;
             // limit is hit, check if we can push out lowest priced tx
-            let lowest_tip = self.by_tip.lowest_value().unwrap_or_default();
-            if lowest_tip >= tx.tip() {
+            let lowest_ratio = self.by_ratio_gas_tip.lowest_value().unwrap_or_default();
+            if lowest_ratio >= Ratio::new(tx.tip(), tx.max_gas()) {
                 return Err(Error::NotInsertedLimitHit)
             }
         }
@@ -387,7 +392,7 @@ where
         let rem = self.by_dependency.insert(&self.by_hash, view, &tx)?;
         let info = TxInfo::new(tx.clone());
         let submitted_time = info.submitted_time();
-        self.by_tip.insert(&info);
+        self.by_ratio_gas_tip.insert(&info);
         self.by_time.insert(&info);
         self.by_hash.insert(tx.id(), info);
 
@@ -395,7 +400,7 @@ where
         let removed = if rem.is_empty() {
             if max_limit_hit {
                 // remove last tx from sort
-                let rem_tx = self.by_tip.lowest_tx().unwrap(); // safe to unwrap limit is hit
+                let rem_tx = self.by_ratio_gas_tip.lowest_tx().unwrap(); // safe to unwrap limit is hit
                 self.remove_inner(&rem_tx);
                 vec![rem_tx]
             } else {

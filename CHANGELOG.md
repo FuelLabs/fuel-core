@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - [#1942](https://github.com/FuelLabs/fuel-core/pull/1942): Sequential relayer's commits.
+- [#1952](https://github.com/FuelLabs/fuel-core/pull/1952): Change tip sorting to ratio between tip and max gas sorting in txpool
 
 ### Fixed
 - [#1950](https://github.com/FuelLabs/fuel-core/pull/1950): Fix cursor `BlockHeight` encoding in `SortedTXCursor`

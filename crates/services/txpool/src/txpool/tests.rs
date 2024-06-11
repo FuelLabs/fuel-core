@@ -54,7 +54,7 @@ use std::{
 
 use super::check_single_tx;
 
-const GAS_LIMIT: Word = 1000;
+const GAS_LIMIT: Word = 100000;
 
 async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transaction> {
     let gas_price = 0;
@@ -791,7 +791,7 @@ async fn tx_depth_hit() {
 }
 
 #[tokio::test]
-async fn sorted_out_tx1_2_4() {
+async fn sorted_out_tx1_2_3() {
     let mut context = TextContext::default();
 
     let (_, gas_coin) = context.setup_coin();
@@ -835,7 +835,7 @@ async fn sorted_out_tx1_2_4() {
         .expect("Tx2 should be Ok, got Err");
     txpool
         .insert_single(tx3)
-        .expect("Tx4 should be Ok, got Err");
+        .expect("Tx3 should be Ok, got Err");
 
     let txs = txpool.sorted_includable().collect::<Vec<_>>();
 
@@ -843,6 +843,116 @@ async fn sorted_out_tx1_2_4() {
     assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
     assert_eq!(txs[1].id(), tx1_id, "Second should be tx1");
     assert_eq!(txs[2].id(), tx2_id, "Third should be tx2");
+}
+
+#[tokio::test]
+async fn sorted_out_tx_same_tips() {
+    let mut context = TextContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT / 2)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT / 4)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    txpool
+        .insert_single(tx1)
+        .expect("Tx1 should be Ok, got Err");
+    txpool
+        .insert_single(tx2)
+        .expect("Tx2 should be Ok, got Err");
+    txpool
+        .insert_single(tx3)
+        .expect("Tx4 should be Ok, got Err");
+
+    let txs = txpool.sorted_includable().collect::<Vec<_>>();
+
+    assert_eq!(txs.len(), 3, "Should have 3 txs");
+    assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
+}
+
+#[tokio::test]
+async fn sorted_out_tx_profitable_ratios() {
+    let mut context = TextContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(2)
+        .max_fee_limit(2)
+        .script_gas_limit(GAS_LIMIT / 10)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(1)
+        .max_fee_limit(1)
+        .script_gas_limit(GAS_LIMIT / 100)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    txpool
+        .insert_single(tx1)
+        .expect("Tx1 should be Ok, got Err");
+    txpool
+        .insert_single(tx2)
+        .expect("Tx2 should be Ok, got Err");
+    txpool
+        .insert_single(tx3)
+        .expect("Tx4 should be Ok, got Err");
+
+    let txs = txpool.sorted_includable().collect::<Vec<_>>();
+
+    assert_eq!(txs.len(), 3, "Should have 3 txs");
+    assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
 }
 
 #[tokio::test]

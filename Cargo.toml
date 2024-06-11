@@ -94,6 +94,7 @@ derivative = { version = "2" }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 hyper = { version = "0.14.26" }
+num-rational = "0.4.2"
 primitive-types = { version = "0.12", default-features = false }
 rand = "0.8"
 parking_lot = "0.12"
