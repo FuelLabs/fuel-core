@@ -16,6 +16,7 @@ use fuel_core::{
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
     fuel_asm::op,
     fuel_tx::{
         field::Inputs,
@@ -210,7 +211,7 @@ impl TestSetupBuilder {
 
         let latest_block = self.starting_block.map(|starting_block| LastBlockConfig {
             block_height: starting_block,
-            state_transition_version: 0,
+            state_transition_version: LATEST_STATE_TRANSITION_VERSION - 1,
             ..Default::default()
         });
 
