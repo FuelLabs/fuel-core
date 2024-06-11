@@ -19,7 +19,6 @@ use crate::{
             MaybeRelayerAdapter,
             PoAAdapter,
             SharedMemoryPool,
-            StaticGasPrice,
             TxPoolAdapter,
             VerifierAdapter,
         },
@@ -34,6 +33,11 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+use crate::service::adapters::fuel_gas_price_provider::FuelGasPriceProvider;
+use fuel_core_gas_price_service::static_updater::{
+    StaticAlgorithm,
+    StaticAlgorithmUpdater,
+};
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -44,7 +48,7 @@ pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
-    StaticGasPrice,
+    FuelGasPriceProvider<StaticAlgorithm>,
     ConsensusParametersProvider,
     SharedMemoryPool,
 >;
@@ -52,9 +56,10 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    StaticGasPrice,
+    FuelGasPriceProvider<StaticAlgorithm>,
     ConsensusParametersProvider,
 >;
+
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
 pub fn init_sub_services(
@@ -162,7 +167,12 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    let gas_price_provider = StaticGasPrice::new(config.static_gas_price);
+    let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
+    let gas_price_service =
+        fuel_core_gas_price_service::new_service(last_height, update_algo)?;
+    let next_algo = gas_price_service.shared.clone();
+
+    let gas_price_provider = FuelGasPriceProvider::new(next_algo);
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
         database.on_chain().clone(),
@@ -277,6 +287,7 @@ pub fn init_sub_services(
         Box::new(graph_ql),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),
+        Box::new(gas_price_service),
     ];
 
     if let Some(poa) = poa {

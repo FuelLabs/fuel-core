@@ -2844,6 +2844,7 @@ dependencies = [
  "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
+ "fuel-core-gas-price-service",
  "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
@@ -3073,6 +3074,20 @@ dependencies = [
  "parking_lot",
  "serde",
  "tracing",
+]
+
+[[package]]
+name = "fuel-core-gas-price-service"
+version = "0.28.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-services",
+ "fuel-core-types",
+ "futures",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
