@@ -19,25 +19,24 @@ pub struct TestGasPriceAlgorithm {
 
 impl Default for TestGasPriceAlgorithm {
     fn default() -> Self {
-        Self { last: 100, multiply: 2 }
+        Self { last: 100,  multiply: 2 }
     }
 }
 
 impl GasPriceAlgorithm for TestGasPriceAlgorithm {
-    fn gas_price(&self, block_bytes: u64) -> u64 {
-        self.multiply.saturating_mul(block_bytes)
-    }
-
     fn last_gas_price(&self) -> u64 {
         self.last
     }
-}
 
-impl GasPriceEstimate for TestGasPriceAlgorithm {
+    fn next_gas_price(&self, block_bytes: u64) -> u64 {
+        self.multiply.saturating_mul(block_bytes)
+    }
+
     fn worst_case_gas_price(&self, _block_height: BlockHeight) -> u64 {
         self.multiply.saturating_mul(10_000_000) // Arbitrary fake bytes
     }
 }
+
 
 fn build_provider<A>(algorithm: A) -> FuelGasPriceProvider<A>
 where

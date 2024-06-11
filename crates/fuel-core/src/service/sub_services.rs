@@ -34,10 +34,6 @@ use tokio::sync::Mutex;
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
 use crate::service::adapters::fuel_gas_price_provider::{
-    ports::{
-        GasPriceAlgorithm,
-        GasPriceEstimate,
-    },
     FuelGasPriceProvider,
 };
 use fuel_core_gas_price_service::static_updater::{
@@ -46,7 +42,6 @@ use fuel_core_gas_price_service::static_updater::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::fuel_types::BlockHeight;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
@@ -67,21 +62,6 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     ConsensusParametersProvider,
 >;
 
-impl GasPriceAlgorithm for StaticAlgorithm {
-    fn gas_price(&self, _block_bytes: u64) -> u64 {
-        self.price()
-    }
-
-    fn last_gas_price(&self) -> u64 {
-        self.price()
-    }
-}
-
-impl GasPriceEstimate for StaticAlgorithm {
-    fn worst_case_gas_price(&self, _block_height: BlockHeight) -> u64 {
-        self.price()
-    }
-}
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
 pub fn init_sub_services(

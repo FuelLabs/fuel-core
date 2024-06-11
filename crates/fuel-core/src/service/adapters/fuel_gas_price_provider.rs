@@ -1,19 +1,13 @@
 use crate::{
     fuel_core_graphql_api::ports::GasPriceEstimate as GraphqlGasPriceEstimate,
-    service::adapters::fuel_gas_price_provider::ports::{
-        GasPriceAlgorithm,
-        GasPriceEstimate,
-    },
 };
-use fuel_core_gas_price_service::SharedGasPriceAlgo;
+use fuel_core_gas_price_service::{GasPriceAlgorithm, SharedGasPriceAlgo};
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPricProvider;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::txpool::Result as TxPoolResult,
 };
-
-pub mod ports;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -59,11 +53,11 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self, block_bytes: u64) -> u64 {
-        self.algorithm.read().await.gas_price(block_bytes)
+        self.algorithm.next_gas_price(block_bytes).await
     }
 
     async fn last_gas_price(&self) -> u64 {
-        self.algorithm.read().await.last_gas_price()
+        self.algorithm.last_gas_price().await
     }
 }
 
@@ -90,9 +84,9 @@ where
 #[async_trait::async_trait]
 impl<A> GraphqlGasPriceEstimate for FuelGasPriceProvider<A>
 where
-    A: GasPriceEstimate + Send + Sync,
+    A: GasPriceAlgorithm + Send + Sync,
 {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
-        self.algorithm.read().await.worst_case_gas_price(height)
+        self.algorithm.worst_case_gas_price(height).await
     }
 }

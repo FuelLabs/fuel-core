@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use tokio::sync::{
     RwLock,
-    RwLockReadGuard,
 };
 
 pub mod static_updater;
@@ -72,6 +71,12 @@ pub trait UpdateAlgorithm {
     async fn next(&mut self) -> Self::Algorithm;
 }
 
+pub trait GasPriceAlgorithm {
+    fn last_gas_price(&self) -> u64;
+    fn next_gas_price(&self, block_bytes: u64) -> u64;
+    fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64;
+}
+
 impl<A, U> GasPriceService<A, U>
 where
     U: UpdateAlgorithm<Algorithm = A>,
@@ -92,22 +97,37 @@ impl<A> Clone for SharedGasPriceAlgo<A> {
 }
 
 impl<A> SharedGasPriceAlgo<A>
-where
-    A: Send + Sync,
+    where
+        A: Send + Sync,
 {
     pub fn new(algo: A) -> Self {
         Self(Arc::new(RwLock::new(algo)))
     }
-
-    pub async fn read(&self) -> RwLockReadGuard<A> {
-        self.0.read().await
-    }
-
     pub async fn update(&mut self, new_algo: A) {
         let mut write_lock = self.0.write().await;
         *write_lock = new_algo;
     }
 }
+
+impl<A> SharedGasPriceAlgo<A>
+where
+    A: GasPriceAlgorithm + Send + Sync,
+{
+
+    pub async fn next_gas_price(&self, block_bytes: u64) -> u64 {
+        self.0.read().await.next_gas_price(block_bytes)
+    }
+
+    pub async fn last_gas_price(&self) -> u64 {
+        self.0.read().await.last_gas_price()
+    }
+
+    pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
+        self.0.read().await.worst_case_gas_price(block_height)
+    }
+}
+
+
 
 #[async_trait]
 impl<A, U> RunnableService for GasPriceService<A, U>
@@ -164,10 +184,7 @@ where
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-    use crate::{
-        GasPriceService,
-        UpdateAlgorithm,
-    };
+    use crate::{GasPriceAlgorithm, GasPriceService, UpdateAlgorithm};
     use fuel_core_services::{
         RunnableService,
         Service,
@@ -182,8 +199,16 @@ mod tests {
         price: u64,
     }
 
-    impl TestAlgorithm {
-        fn gas_price(&self) -> u64 {
+    impl GasPriceAlgorithm for TestAlgorithm {
+        fn last_gas_price(&self) -> u64 {
+            self.price
+        }
+
+        fn next_gas_price(&self, block_bytes: u64) -> u64 {
+            self.price + block_bytes
+        }
+
+        fn worst_case_gas_price(&self, _block_height: BlockHeight) -> u64 {
             self.price
         }
     }
@@ -229,7 +254,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.read().await.gas_price();
+        let actual_price = read_algo.last_gas_price().await;
         assert_eq!(expected_price, actual_price);
     }
 }
