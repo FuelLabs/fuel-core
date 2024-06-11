@@ -53,7 +53,7 @@ impl PartialOrd for RatioGasTipSortKey {
 
 impl Ord for RatioGasTipSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let cmp = other.tip_per_gas.cmp(&self.tip_per_gas);
+        let cmp = self.tip_per_gas.cmp(&other.tip_per_gas);
         if cmp == cmp::Ordering::Equal {
             return self.tx_id.cmp(&other.tx_id);
         }
