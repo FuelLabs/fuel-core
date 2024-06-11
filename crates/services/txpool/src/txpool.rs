@@ -379,7 +379,7 @@ where
             max_limit_hit = true;
             // limit is hit, check if we can push out lowest priced tx
             let lowest_ratio = self.by_ratio_gas_tip.lowest_value().unwrap_or_default();
-            if lowest_ratio >= Ratio::new(tx.max_gas(), tx.tip()) {
+            if lowest_ratio >= Ratio::new(tx.tip(), tx.max_gas()) {
                 return Err(Error::NotInsertedLimitHit)
             }
         }
