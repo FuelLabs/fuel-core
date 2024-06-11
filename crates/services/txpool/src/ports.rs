@@ -64,7 +64,7 @@ pub trait TxPoolDb: Send + Sync {
 #[async_trait::async_trait]
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider {
-    /// Get gas price for specific block height if it is known
+    /// Calculate gas price for the next block with a given size `block_bytes`.
     async fn gas_price(
         &self,
         block_bytes: u64,

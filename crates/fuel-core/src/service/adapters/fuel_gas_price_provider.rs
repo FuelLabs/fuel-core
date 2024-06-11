@@ -5,7 +5,7 @@ use crate::{
         GasPriceEstimate,
     },
 };
-use fuel_core_gas_price_service::BlockGasPriceAlgo;
+use fuel_core_gas_price_service::SharedGasPriceAlgo;
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPricProvider;
 use fuel_core_types::{
@@ -37,7 +37,7 @@ mod tests;
 #[derive(Debug)]
 /// Receives the next gas price algorithm via a shared `BlockGasPriceAlgo` instance
 pub struct FuelGasPriceProvider<A> {
-    algorithm: BlockGasPriceAlgo<A>,
+    algorithm: SharedGasPriceAlgo<A>,
 }
 
 impl<A> Clone for FuelGasPriceProvider<A> {
@@ -49,7 +49,7 @@ impl<A> Clone for FuelGasPriceProvider<A> {
 }
 
 impl<A> FuelGasPriceProvider<A> {
-    pub fn new(algorithm: BlockGasPriceAlgo<A>) -> Self {
+    pub fn new(algorithm: SharedGasPriceAlgo<A>) -> Self {
         Self { algorithm }
     }
 }

@@ -27,8 +27,11 @@ where
     Ok(ServiceRunner::new(service))
 }
 
+/// The service that updates the gas price algorithm.
 pub struct GasPriceService<A, U> {
-    next_block_algorithm: BlockGasPriceAlgo<A>,
+    /// The algorithm that can be used in the next block
+    next_block_algorithm: SharedGasPriceAlgo<A>,
+    /// The code that is run to update your specific algorithm
     update_algorithm: U,
 }
 
@@ -39,23 +42,28 @@ where
 {
     pub fn new(starting_block_height: BlockHeight, update_algorithm: U) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
-        let next_block_algorithm = BlockGasPriceAlgo::new(algorithm);
+        let next_block_algorithm = SharedGasPriceAlgo::new(algorithm);
         Self {
             next_block_algorithm,
             update_algorithm,
         }
     }
 
-    pub fn next_block_algorithm(&self) -> BlockGasPriceAlgo<A> {
+    pub fn next_block_algorithm(&self) -> SharedGasPriceAlgo<A> {
         self.next_block_algorithm.clone()
     }
 }
 
+/// The interface the Service has with the code that updates the gas price algorithm.
 #[async_trait]
 pub trait UpdateAlgorithm {
+    /// The type of the algorithm that is being updated
     type Algorithm;
 
+    /// Start the algorithm at a given block height
     fn start(&self, for_block: BlockHeight) -> Self::Algorithm;
+
+    /// Wait for the next algorithm to be available
     async fn next(&mut self) -> Self::Algorithm;
 }
 
@@ -70,15 +78,15 @@ where
 }
 
 #[derive(Debug)]
-pub struct BlockGasPriceAlgo<A>(Arc<RwLock<A>>);
+pub struct SharedGasPriceAlgo<A>(Arc<RwLock<A>>);
 
-impl<A> Clone for BlockGasPriceAlgo<A> {
+impl<A> Clone for SharedGasPriceAlgo<A> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<A> BlockGasPriceAlgo<A>
+impl<A> SharedGasPriceAlgo<A>
 where
     A: Send + Sync,
 {
@@ -103,7 +111,7 @@ where
     A: Send + Sync,
 {
     const NAME: &'static str = "GasPriceUpdater";
-    type SharedData = BlockGasPriceAlgo<A>;
+    type SharedData = SharedGasPriceAlgo<A>;
     type Task = Self;
     type TaskParams = ();
 

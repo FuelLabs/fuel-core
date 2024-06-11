@@ -38,7 +38,7 @@ fn build_provider<A>(algorithm: A) -> FuelGasPriceProvider<A>
 where
     A: Send + Sync,
 {
-    let algorithm = BlockGasPriceAlgo::new(algorithm);
+    let algorithm = SharedGasPriceAlgo::new(algorithm);
     FuelGasPriceProvider::new(algorithm)
 }
 

@@ -285,6 +285,8 @@ pub fn from_executor_to_status(
 pub enum Error {
     #[error("Gas price not found for block height {0}")]
     GasPriceNotFound(String),
+    #[error("Failed to calculate max block bytes: {0}")]
+    MaxBlockBytes(String),
     #[error("TxPool required that transaction contains metadata")]
     NoMetadata,
     #[error("TxPool doesn't support this type of transaction.")]
