@@ -65,7 +65,7 @@ pub trait TxPoolDb: Send + Sync {
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider {
     /// Calculate gas price for the next block with a given size `block_bytes`.
-    async fn gas_price(
+    async fn last_gas_price(
         &self
     ) -> fuel_core_types::services::txpool::Result<GasPrice>;
 }
@@ -91,7 +91,7 @@ impl<T> GasPriceProvider for Arc<T>
 where
     T: GasPriceProvider + Send + Sync,
 {
-    async fn gas_price(&self) -> TxPoolResult<GasPrice> {
-        self.deref().gas_price().await
+    async fn last_gas_price(&self) -> TxPoolResult<GasPrice> {
+        self.deref().last_gas_price().await
     }
 }

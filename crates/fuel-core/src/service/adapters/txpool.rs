@@ -143,7 +143,7 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn gas_price(&self) -> TxPoolResult<u64> {
+    async fn last_gas_price(&self) -> TxPoolResult<u64> {
         Ok(self.gas_price)
     }
 }
