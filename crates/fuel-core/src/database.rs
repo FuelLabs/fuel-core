@@ -479,9 +479,7 @@ where
                 .advance_height()
                 .ok_or(DatabaseError::FailedToAdvanceHeight)?;
 
-            // TODO: After https://github.com/FuelLabs/fuel-core/issues/451
-            //  we can replace `next_expected_height > new_height` with `next_expected_height != new_height`.
-            if next_expected_height > new_height {
+            if next_expected_height != new_height {
                 return Err(DatabaseError::HeightsAreNotLinked {
                     prev_height: prev_height.as_u64(),
                     new_height: new_height.as_u64(),
