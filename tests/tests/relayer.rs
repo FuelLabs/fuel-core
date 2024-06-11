@@ -30,10 +30,10 @@ use fuel_core_client::client::{
 };
 use fuel_core_poa::service::Mode;
 use fuel_core_relayer::test_helpers::{
-        middleware::MockMiddleware,
-        EvtToLog,
-        LogTestHelper,
-    };
+    middleware::MockMiddleware,
+    EvtToLog,
+    LogTestHelper,
+};
 use fuel_core_storage::{
     tables::Messages,
     StorageAsMut,
