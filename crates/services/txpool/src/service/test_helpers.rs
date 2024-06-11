@@ -5,13 +5,13 @@ use crate::{
         BlockImporter,
         MockConsensusParametersProvider,
     },
+    types::GasPrice,
     MockDb,
 };
 use fuel_core_services::{
     stream::BoxStream,
     Service as ServiceTrait,
 };
-use fuel_core_txpool::types::GasPrice;
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coins::coin::Coin,
@@ -30,6 +30,7 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::GossipsubMessageAcceptance,
+        txpool::Result as TxPoolResult,
     },
 };
 use std::cell::RefCell;
@@ -76,9 +77,12 @@ impl MockTxPoolGasPrice {
     }
 }
 
+#[async_trait::async_trait]
 impl GasPriceProviderConstraint for MockTxPoolGasPrice {
-    fn gas_price(&self, _block_height: BlockHeight) -> Option<GasPrice> {
-        self.gas_price
+    async fn last_gas_price(&self) -> TxPoolResult<GasPrice> {
+        self.gas_price.ok_or(TxPoolError::GasPriceNotFound(
+            "Gas price not found".to_string(),
+        ))
     }
 }
 

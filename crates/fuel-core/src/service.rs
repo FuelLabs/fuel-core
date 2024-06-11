@@ -325,9 +325,9 @@ mod tests {
             i += 1;
         }
 
-        // current services: graphql, graphql worker, txpool, PoA
+        // current services: graphql, graphql worker, txpool, PoA, gas price service
         #[allow(unused_mut)]
-        let mut expected_services = 5;
+        let mut expected_services = 6;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

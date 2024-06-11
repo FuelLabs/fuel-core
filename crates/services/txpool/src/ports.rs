@@ -12,7 +12,6 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -24,6 +23,7 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             NetworkData,
         },
+        txpool::Result as TxPoolResult,
     },
 };
 use std::{
@@ -61,10 +61,11 @@ pub trait TxPoolDb: Send + Sync {
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 }
 
+#[async_trait::async_trait]
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider {
-    /// Get gas price for specific block height if it is known
-    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
+    /// Calculate gas price for the next block with a given size `block_bytes`.
+    async fn last_gas_price(&self) -> TxPoolResult<GasPrice>;
 }
 
 /// Trait for getting VM memory.
@@ -83,8 +84,12 @@ pub trait ConsensusParametersProvider {
     fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters>;
 }
 
-impl<T: GasPriceProvider> GasPriceProvider for Arc<T> {
-    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice> {
-        self.deref().gas_price(block_height)
+#[async_trait::async_trait]
+impl<T> GasPriceProvider for Arc<T>
+where
+    T: GasPriceProvider + Send + Sync,
+{
+    async fn last_gas_price(&self) -> TxPoolResult<GasPrice> {
+        self.deref().last_gas_price().await
     }
 }
