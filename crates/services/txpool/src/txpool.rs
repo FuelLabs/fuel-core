@@ -530,7 +530,11 @@ where
         max_gas_per_block
             .checked_div(gas_per_bytes)
             .ok_or(Error::MaxBlockBytes(
-                format!("Could not divide {} by {}", max_gas_per_block, gas_per_bytes).to_string(),
+                format!(
+                    "Could not divide {} by {}",
+                    max_gas_per_block, gas_per_bytes
+                )
+                .to_string(),
             ))?;
 
     let gas_price = gas_price_provider.gas_price(max_block_bytes).await?;
