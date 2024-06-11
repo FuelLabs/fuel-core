@@ -30,10 +30,10 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::GossipsubMessageAcceptance,
+        txpool::Result as TxPoolResult,
     },
 };
 use std::cell::RefCell;
-use fuel_core_types::services::txpool::Result as TxPoolResult;
 
 type GossipedTransaction = GossipData<Transaction>;
 
@@ -79,9 +79,7 @@ impl MockTxPoolGasPrice {
 
 #[async_trait::async_trait]
 impl GasPriceProviderConstraint for MockTxPoolGasPrice {
-    async fn gas_price(
-        &self,
-    ) -> TxPoolResult<GasPrice> {
+    async fn gas_price(&self) -> TxPoolResult<GasPrice> {
         self.gas_price.ok_or(TxPoolError::GasPriceNotFound(
             "Gas price not found".to_string(),
         ))
