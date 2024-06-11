@@ -12,20 +12,11 @@ mod tests;
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum Error {
     #[error("Skipped L2 block update: expected {expected:?}, got {got:?}")]
-    SkippedL2Block{
-        expected: u32,
-        got: u32,
-    },
+    SkippedL2Block { expected: u32, got: u32 },
     #[error("Skipped DA block update: expected {expected:?}, got {got:?}")]
-    SkippedDABlock{
-        expected: u32,
-        got: u32,
-    },
+    SkippedDABlock { expected: u32, got: u32 },
     #[error("Could not calculate cost per byte: {bytes:?} bytes, {cost:?} cost")]
-    CouldNotCalculateCostPerByte {
-        bytes: u64,
-        cost: u64,
-    }
+    CouldNotCalculateCostPerByte { bytes: u64, cost: u64 },
 }
 
 pub struct AlgorithmV0 {
@@ -45,10 +36,10 @@ pub struct AlgorithmV0 {
 
 pub struct AlgorithmV1 {
     block_height: u32,
-    last_price: u64,
+    new_exec_price: u64,
+    last_da_price: u64,
 
     // L2
-    last_fullness: (u64, u64),
     l2_block_fullness_threshold_percent: u64,
     exec_gas_price_increase_amount: u64,
 
@@ -56,53 +47,44 @@ pub struct AlgorithmV1 {
     latest_da_cost_per_byte: u64,
     total_rewards: u64,
     total_costs: u64,
-    da_gas_price_denominator: u64
+    da_gas_price_denominator: u64,
 }
 
 impl AlgorithmV1 {
     pub fn calculate(&self, block_bytes: u64) -> u64 {
-        let mut new_gas_price = self.last_price;
-        // TODO: Deal with division by zero
-        let fullness_percent = self.last_fullness.0 * 100 / self.last_fullness.1;
-        // EXEC PORTION
-        if fullness_percent > self.l2_block_fullness_threshold_percent {
-             new_gas_price = new_gas_price.saturating_add(self.exec_gas_price_increase_amount);
-        } else if fullness_percent < self.l2_block_fullness_threshold_percent {
-            new_gas_price = new_gas_price.saturating_sub( self.exec_gas_price_increase_amount);
-        }
         // DA PORTION
+        let mut new_da_gas_price = self.last_da_price;
         let extra_for_this_block = block_bytes * self.latest_da_cost_per_byte;
         let pessimistic_cost = self.total_costs + extra_for_this_block;
         let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
         if projected_profit > 0 {
             let change = projected_profit as u64 / self.da_gas_price_denominator;
-            new_gas_price = new_gas_price.saturating_sub(change);
+            new_da_gas_price = new_da_gas_price.saturating_sub(change);
         } else if projected_profit < 0 {
             let change = projected_profit.abs() as u64 / self.da_gas_price_denominator;
-            new_gas_price = new_gas_price.saturating_add(change);
+            new_da_gas_price = new_da_gas_price.saturating_add(change);
         }
-        new_gas_price
+        self.new_exec_price + new_da_gas_price
     }
-
 }
 
 // TODO: Add contstructor
 pub struct AlgorithmUpdaterV1 {
-    pub gas_price: u64,
+    pub new_exec_price: u64,
+    pub last_da_price: u64,
     pub exec_gas_price_increase_amount: u64,
     pub da_gas_price_denominator: u64,
 
     // L2
     pub l2_block_height: u32,
     pub l2_block_fullness_threshold_percent: u64,
-    pub total_rewards: u64,
-    pub last_l2_fullness: (u64, u64),
+    pub total_da_rewards: u64,
     // total_reward: u64,
     // actual_total_cost: u64,
     // latest_gas_per_byte: u64,
     pub da_recorded_block_height: u32,
-    pub latest_known_total_cost: u64,
-    pub projected_total_cost: u64,
+    pub latest_known_total_da_cost: u64,
+    pub projected_total_da_cost: u64,
 
     pub latest_da_cost_per_byte: u64,
     pub unrecorded_blocks: Vec<BlockBytes>,
@@ -137,14 +119,23 @@ impl AlgorithmUpdaterV1 {
     //     }
     // }
 
-    pub fn update_da_record_data(&mut self, blocks: Vec<RecordedBlock>) -> Result<(), Error> {
+    pub fn update_da_record_data(
+        &mut self,
+        blocks: Vec<RecordedBlock>,
+    ) -> Result<(), Error> {
         for block in blocks {
             self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
         }
         self.recalculate_projected_cost();
         Ok(())
     }
-    pub fn update_l2_block_data(&mut self, height: u32, fullness: (u64, u64), block_bytes: u64, gas_price: u64) -> Result<(), Error> {
+    pub fn update_l2_block_data(
+        &mut self,
+        height: u32,
+        fullness: (u64, u64),
+        block_bytes: u64,
+        gas_price: u64,
+    ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
             return Err(Error::SkippedL2Block {
@@ -152,17 +143,37 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
-            self.gas_price = gas_price;
             self.l2_block_height = height;
-            self.projected_total_cost += block_bytes * self.latest_da_cost_per_byte;
-            let reward = fullness.0 * self.gas_price;
-            self.total_rewards += reward;
-            self.last_l2_fullness = fullness;
+            self.projected_total_da_cost += block_bytes * self.latest_da_cost_per_byte;
+            // implicitly deduce what our da gas price was for the l2 block
+            self.last_da_price = gas_price - self.new_exec_price;
+            self.update_exec_gas_price(fullness.0, fullness.1);
+            let reward = fullness.0 * self.last_da_price;
+            self.total_da_rewards += reward;
             Ok(())
         }
     }
 
-    fn da_block_update(&mut self, height: u32, block_bytes: u64, block_cost: u64) -> Result<(), Error> {
+    fn update_exec_gas_price(&mut self, used: u64, capacity: u64) {
+        let mut exec_gas_price = self.new_exec_price;
+        let fullness_percent = used * 100 / capacity;
+        // EXEC PORTION
+        if fullness_percent > self.l2_block_fullness_threshold_percent {
+            exec_gas_price =
+                exec_gas_price.saturating_add(self.exec_gas_price_increase_amount);
+        } else if fullness_percent < self.l2_block_fullness_threshold_percent {
+            exec_gas_price =
+                exec_gas_price.saturating_sub(self.exec_gas_price_increase_amount);
+        }
+        self.new_exec_price = exec_gas_price;
+    }
+
+    fn da_block_update(
+        &mut self,
+        height: u32,
+        block_bytes: u64,
+        block_cost: u64,
+    ) -> Result<(), Error> {
         let expected = self.da_recorded_block_height.saturating_add(1);
         if height != expected {
             return Err(Error::SkippedDABlock {
@@ -170,12 +181,14 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
-            let new_cost_per_byte = block_cost.checked_div(block_bytes).ok_or(Error::CouldNotCalculateCostPerByte {
-                bytes: block_bytes,
-                cost: block_cost,
-            })?;
+            let new_cost_per_byte = block_cost.checked_div(block_bytes).ok_or(
+                Error::CouldNotCalculateCostPerByte {
+                    bytes: block_bytes,
+                    cost: block_cost,
+                },
+            )?;
             self.da_recorded_block_height = height;
-            self.latest_known_total_cost += block_cost;
+            self.latest_known_total_da_cost += block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
         }
@@ -183,27 +196,34 @@ impl AlgorithmUpdaterV1 {
 
     fn recalculate_projected_cost(&mut self) {
         // remove all blocks that have been recorded
-        self.unrecorded_blocks.retain(|block| block.height > self.da_recorded_block_height);
+        self.unrecorded_blocks
+            .retain(|block| block.height > self.da_recorded_block_height);
         // add the cost of the remaining blocks
-        let projection_portion: u64 = self.unrecorded_blocks.iter().map(|block| block.block_bytes * self.latest_da_cost_per_byte).sum();
-        self.projected_total_cost = self.latest_known_total_cost + projection_portion;
+        let projection_portion: u64 = self
+            .unrecorded_blocks
+            .iter()
+            .map(|block| block.block_bytes * self.latest_da_cost_per_byte)
+            .sum();
+        self.projected_total_da_cost =
+            self.latest_known_total_da_cost + projection_portion;
     }
 
     pub fn algorithm(&self) -> AlgorithmV1 {
         AlgorithmV1 {
-            block_height: self.l2_block_height + 1,
-            last_price: self.gas_price,
-            last_fullness: self.last_l2_fullness,
+            block_height: self.l2_block_height.saturating_add(1),
+            new_exec_price: self.new_exec_price,
+            last_da_price: self.last_da_price,
+
             l2_block_fullness_threshold_percent: self.l2_block_fullness_threshold_percent,
             exec_gas_price_increase_amount: self.exec_gas_price_increase_amount,
+
             latest_da_cost_per_byte: self.latest_da_cost_per_byte,
-            total_rewards: self.total_rewards,
-            total_costs: self.projected_total_cost,
+            total_rewards: self.total_da_rewards,
+            total_costs: self.projected_total_da_cost,
             da_gas_price_denominator: self.da_gas_price_denominator,
         }
     }
 }
-
 
 impl AlgorithmV0 {
     pub fn new(

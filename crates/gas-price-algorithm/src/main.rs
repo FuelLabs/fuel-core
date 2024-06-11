@@ -7,7 +7,11 @@ use rand::{
 
 use plotters::coord::Shift;
 
-use gas_price_algorithm::{AlgorithmUpdaterV1, AlgorithmV0, RecordedBlock};
+use gas_price_algorithm::{
+    AlgorithmUpdaterV1,
+    AlgorithmV0,
+    RecordedBlock,
+};
 
 fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
     components
@@ -73,19 +77,24 @@ where
     gen_noisy_signal(input, COMPONENTS)
 }
 
-
 fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
     let mut rng = StdRng::seed_from_u64(888);
-    let fullness_noise: Vec<_> = std::iter::repeat(()).take(size).map(|_| rng.gen_range(-0.25..0.25)).map(|val| val * capacity as f64).collect();
-    let bytes_scale: Vec<_> = std::iter::repeat(()).take(size).map(|_| rng.gen_range(0.5..1.0)).map(|x| x * 4.0).collect();
+    let fullness_noise: Vec<_> = std::iter::repeat(())
+        .take(size)
+        .map(|_| rng.gen_range(-0.25..0.25))
+        .map(|val| val * capacity as f64)
+        .collect();
+    let bytes_scale: Vec<_> = std::iter::repeat(())
+        .take(size)
+        .map(|_| rng.gen_range(0.5..1.0))
+        .map(|x| x * 4.0)
+        .collect();
     (0usize..size)
         .map(|val| val as f64)
         .map(noisy_fullness)
         .map(|signal| (0.5 * signal + 0.4) * capacity as f64)
         .zip(fullness_noise)
-        .map(|(fullness, noise)| {
-            fullness + noise
-        })
+        .map(|(fullness, noise)| fullness + noise)
         .map(|x| f64::min(x, capacity as f64))
         .map(|x| f64::max(x, 5.0))
         .zip(bytes_scale)
@@ -105,7 +114,6 @@ fn arb_cost_per_byte(size: u32) -> Vec<u64> {
         .collect()
 }
 
-
 fn main() {
     // simulation parameters
     let starting_gas_price = 0;
@@ -119,27 +127,35 @@ fn main() {
     let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
     let da_cost_per_byte = arb_cost_per_byte(size as u32);
 
-    let l2_blocks = fullness_and_bytes.iter().map(|(fullness, bytes)| {
-        (*fullness, *bytes)
-    }).collect::<Vec<_>>();
-    let da_blocks = fullness_and_bytes.iter().zip(da_cost_per_byte.iter())
-        .enumerate().fold((vec![], vec![]), |(mut delayed, mut recorded), (index, ((fullness, bytes), cost_per_byte))| {
-            let total_cost = bytes * cost_per_byte;
-        let height = index as u32 + 1;
-            let converted = RecordedBlock {
-                height: height,
-                block_bytes: *bytes,
-                block_cost: total_cost,
-            };
-            delayed.push(converted);
-            if delayed.len() == da_recording_rate {
-                recorded.push(Some(delayed));
-                (vec![], recorded)
-            } else {
-                recorded.push(None);
-                (delayed, recorded)
-            }
-        }).1;
+    let l2_blocks = fullness_and_bytes
+        .iter()
+        .map(|(fullness, bytes)| (*fullness, *bytes))
+        .collect::<Vec<_>>();
+    let da_blocks = fullness_and_bytes
+        .iter()
+        .zip(da_cost_per_byte.iter())
+        .enumerate()
+        .fold(
+            (vec![], vec![]),
+            |(mut delayed, mut recorded), (index, ((fullness, bytes), cost_per_byte))| {
+                let total_cost = bytes * cost_per_byte;
+                let height = index as u32 + 1;
+                let converted = RecordedBlock {
+                    height,
+                    block_bytes: *bytes,
+                    block_cost: total_cost,
+                };
+                delayed.push(converted);
+                if delayed.len() == da_recording_rate {
+                    recorded.push(Some(delayed));
+                    (vec![], recorded)
+                } else {
+                    recorded.push(None);
+                    (delayed, recorded)
+                }
+            },
+        )
+        .1;
 
     let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
 
@@ -148,12 +164,12 @@ fn main() {
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: fullness_threshold,
         exec_gas_price_increase_amount,
-        total_rewards: 0,
+        total_da_rewards: 0,
         last_l2_fullness: (fullness_threshold, 100),
         da_recorded_block_height: 0,
         latest_da_cost_per_byte: starting_gas_per_byte,
-        projected_total_cost: 0,
-        latest_known_total_cost: 0,
+        projected_total_da_cost: 0,
+        latest_known_total_da_cost: 0,
         unrecorded_blocks: vec![],
         da_gas_price_denominator,
     };
@@ -168,17 +184,19 @@ fn main() {
         let gas_price = updater.algorithm().calculate(pessimistic_bytes);
         gas_prices.push(gas_price);
         let (fullness, bytes) = l2_block;
-        updater.update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price).unwrap();
+        updater
+            .update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price)
+            .unwrap();
         if let Some(da_blocks) = da_block {
-            let mut total_costs = updater.latest_known_total_cost;
+            let mut total_costs = updater.latest_known_total_da_cost;
             for block in da_blocks {
                 total_costs += block.block_cost;
                 actual_costs.push(total_costs);
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
         }
-        actual_rewards.push(updater.total_rewards);
-        projected_costs.push(updater.projected_total_cost);
+        actual_rewards.push(updater.total_da_rewards);
+        projected_costs.push(updater.projected_total_da_cost);
     }
 
     // Plotting code starts here
@@ -193,21 +211,27 @@ fn main() {
     let (upper, lower) = root.split_vertically(plot_height / 3);
     let (middle, bottom) = lower.split_vertically(plot_height / 3);
 
-    let fullness = fullness_and_bytes.iter().map(|(fullness, _)| (*fullness, capacity)).collect();
+    let fullness = fullness_and_bytes
+        .iter()
+        .map(|(fullness, _)| (*fullness, capacity))
+        .collect();
     draw_fullness(&upper, &fullness, "Fullness");
 
-    let actual_profit: Vec<i64> = actual_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
-        *reward as i64 - *cost as i64
-    }).collect();
-    let projected_profit: Vec<i64> = projected_costs.iter().zip(actual_rewards.iter()).map(|(cost, reward)| {
-        *reward as i64 - *cost as i64
-    }).collect();
+    let actual_profit: Vec<i64> = actual_costs
+        .iter()
+        .zip(actual_rewards.iter())
+        .map(|(cost, reward)| *reward as i64 - *cost as i64)
+        .collect();
+    let projected_profit: Vec<i64> = projected_costs
+        .iter()
+        .zip(actual_rewards.iter())
+        .map(|(cost, reward)| *reward as i64 - *cost as i64)
+        .collect();
     draw_profit(&middle, &actual_profit, &projected_profit, "Profit");
     draw_gas_price(&bottom, &gas_prices, "Gas Prices");
 
     root.present().unwrap();
 }
-
 
 fn draw_gas_price(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
