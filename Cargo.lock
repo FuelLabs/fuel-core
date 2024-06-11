@@ -3353,7 +3353,7 @@ dependencies = [
  "fuel-core-types",
  "itertools 0.12.1",
  "mockall",
- "num",
+ "num-rational",
  "parking_lot",
  "proptest",
  "rstest",
@@ -5728,7 +5728,6 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
 dependencies = [
- "num-bigint",
  "num-complex",
  "num-integer",
  "num-iter",

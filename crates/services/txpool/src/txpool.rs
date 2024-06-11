@@ -27,7 +27,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use num::rational::Ratio;
+use num_rational::Ratio;
 
 use crate::ports::{
     GasPriceProvider,
