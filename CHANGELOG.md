@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Breaking
 - [#1951](https://github.com/FuelLabs/fuel-core/pull/1951): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
 
+### Changed
+- [#1942](https://github.com/FuelLabs/fuel-core/pull/1942): Sequential relayer's commits.
+
 ### Fixed
 - [#1950](https://github.com/FuelLabs/fuel-core/pull/1950): Fix cursor `BlockHeight` encoding in `SortedTXCursor`
 

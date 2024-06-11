@@ -6,10 +6,16 @@ use fuel_core_types::{
     services::relayer::Event,
 };
 use futures::TryStreamExt;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 #[cfg(test)]
 mod test;
+
+pub struct DownloadedLogs {
+    pub start_height: u64,
+    pub last_height: u64,
+    pub logs: Vec<Log>,
+}
 
 /// Download the logs from the DA layer.
 pub(crate) fn download_logs<'a, P>(
@@ -17,7 +23,7 @@ pub(crate) fn download_logs<'a, P>(
     contracts: Vec<Bytes20>,
     eth_node: &'a P,
     page_size: u64,
-) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>> + 'a
+) -> impl futures::Stream<Item = Result<DownloadedLogs, ProviderError>> + 'a
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -46,16 +52,23 @@ where
                             page.latest()
                         );
 
+                        let oldest_block = page.oldest();
                         let latest_block = page.latest();
 
                         // Reduce the page.
                         let page = page.reduce();
 
                         // Get the logs and return the reduced page.
-                        eth_node
-                            .get_logs(&filter)
-                            .await
-                            .map(|logs| Some(((latest_block, logs), page)))
+                        eth_node.get_logs(&filter).await.map(|logs| {
+                            Some((
+                                DownloadedLogs {
+                                    start_height: oldest_block,
+                                    last_height: latest_block,
+                                    logs,
+                                },
+                                page,
+                            ))
+                        })
                     }
                 }
             }
@@ -67,12 +80,16 @@ where
 pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
-    S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
+    S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some((last_height, events)) = logs.try_next().await? {
-        let last_height = last_height.into();
-        let mut ordered_events = BTreeMap::<DaBlockHeight, Vec<Event>>::new();
+    while let Some(DownloadedLogs {
+        start_height,
+        last_height,
+        logs: events,
+    }) = logs.try_next().await?
+    {
+        let mut unordered_events = HashMap::<DaBlockHeight, Vec<Event>>::new();
         let sorted_events = sort_events_by_log_index(events)?;
         let fuel_events = sorted_events.into_iter().filter_map(|event| {
             match EthEventLog::try_from(&event) {
@@ -95,21 +112,14 @@ where
         for event in fuel_events {
             let event = event?;
             let height = event.da_height();
-            ordered_events.entry(height).or_default().push(event);
+            unordered_events.entry(height).or_default().push(event);
         }
 
-        let mut inserted_last_height = false;
-        for (height, events) in ordered_events {
-            database.insert_events(&height, &events)?;
-            if height == last_height {
-                inserted_last_height = true;
-            }
-        }
-
-        // TODO: For https://github.com/FuelLabs/fuel-core/issues/451 we need to write each height
-        //  (not only the last height), even if it's empty.
-        if !inserted_last_height {
-            database.insert_events(&last_height, &[])?;
+        let empty_events = Vec::new();
+        for height in start_height..=last_height {
+            let height: DaBlockHeight = height.into();
+            let events = unordered_events.get(&height).unwrap_or(&empty_events);
+            database.insert_events(&height, events)?;
         }
     }
     Ok(())
