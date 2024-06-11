@@ -67,7 +67,7 @@ impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn gas_price(&self, block_bytes: u64) -> anyhow::Result<u64> {
+    async fn next_gas_price(&self, block_bytes: u64) -> anyhow::Result<u64> {
         Ok(self.next_gas_price(block_bytes).await)
     }
 }
@@ -77,7 +77,7 @@ impl<A> TxPoolGasPricProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn gas_price(&self) -> TxPoolResult<u64> {
+    async fn last_gas_price(&self) -> TxPoolResult<u64> {
         Ok(self.last_gas_price().await)
     }
 }

@@ -176,6 +176,7 @@ where
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {

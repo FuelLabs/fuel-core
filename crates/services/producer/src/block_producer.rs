@@ -153,7 +153,9 @@ where
             .unwrap();
         let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
         let max_gas_per_block = consensus_params.block_gas_limit();
-        let max_block_bytes = max_gas_per_block / gas_per_bytes;
+        let max_block_bytes = max_gas_per_block.checked_div(gas_per_bytes).ok_or(anyhow!(
+            "Unable to calculate max block bytes from gas limit: {max_gas_per_block}, gas per byte: {gas_per_bytes}"
+        ))?;
         self.gas_price_provider
             .next_gas_price(max_block_bytes)
             .await
