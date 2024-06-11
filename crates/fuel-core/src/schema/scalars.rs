@@ -145,9 +145,8 @@ impl CursorType for SortedTxCursor {
             s.split_once('#').ok_or("Incorrect format provided")?;
 
         Ok(Self::new(
-            u32::from_str(block_height)
-                .map_err(|_| "Failed to decode block_height")?
-                .into(),
+            BlockHeight::from_str(block_height)
+                .map_err(|_| "Failed to decode block_height")?,
             Bytes32::decode_cursor(tx_id)?,
         ))
     }

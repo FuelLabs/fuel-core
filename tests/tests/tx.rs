@@ -275,6 +275,19 @@ async fn get_transactions() {
     let charlie = Address::from([3; 32]);
 
     let mut context = TestContext::new(100).await;
+    // Produce 10 blocks to ensure https://github.com/FuelLabs/fuel-core/issues/1825 is tested
+    context
+        .srv
+        .shared
+        .poa_adapter
+        .manually_produce_blocks(
+            None,
+            Mode::Blocks {
+                number_of_blocks: 10,
+            },
+        )
+        .await
+        .expect("Should produce block");
     let tx1 = context.transfer(alice, charlie, 1).await.unwrap();
     let tx2 = context.transfer(charlie, bob, 2).await.unwrap();
     let tx3 = context.transfer(bob, charlie, 3).await.unwrap();
@@ -282,21 +295,35 @@ async fn get_transactions() {
     let tx5 = context.transfer(charlie, alice, 1).await.unwrap();
     let tx6 = context.transfer(alice, charlie, 1).await.unwrap();
 
-    // there are 12 transactions
+    // Skip the 10 first txs included in the tx pool by the creation of the 10 blocks above
+    let page_request = PaginationRequest {
+        cursor: None,
+        results: 10,
+        direction: PageDirection::Forward,
+    };
+    let client = context.client;
+    let response = client.transactions(page_request.clone()).await.unwrap();
+    assert_eq!(response.results.len(), 10);
+    assert!(!response.has_previous_page);
+    assert!(response.has_next_page);
+
+    // Now, there are 12 transactions
     // [
     //  tx1, coinbase_tx1, tx2, coinbase_tx2, tx3, coinbase_tx3,
     //  tx4, coinbase_tx4, tx5, coinbase_tx5, tx6, coinbase_tx6,
     // ]
 
     // Query for first 6: [tx1, coinbase_tx1, tx2, coinbase_tx2, tx3, coinbase_tx3]
-    let client = context.client;
-    let page_request = PaginationRequest {
-        cursor: None,
+    let first_middle_page_request = PaginationRequest {
+        cursor: response.cursor.clone(),
         results: 6,
         direction: PageDirection::Forward,
     };
 
-    let response = client.transactions(page_request.clone()).await.unwrap();
+    let response = client
+        .transactions(first_middle_page_request.clone())
+        .await
+        .unwrap();
     let transactions = &response
         .results
         .iter()
@@ -308,9 +335,9 @@ async fn get_transactions() {
     // coinbase_tx2
     assert_eq!(transactions[4], tx3);
     // coinbase_tx3
-    // Check pagination state for first page
+    // Check pagination state for middle page
     assert!(response.has_next_page);
-    assert!(!response.has_previous_page);
+    assert!(response.has_previous_page);
 
     // Query for second page 2 with last given cursor: [tx4, coinbase_tx4, tx5, coinbase_tx5]
     let page_request_middle_page = PaginationRequest {
@@ -319,10 +346,10 @@ async fn get_transactions() {
         direction: PageDirection::Forward,
     };
 
-    // Query backwards from last given cursor [3]: [tx3, coinbase_tx2, tx2, coinbase_tx1, tx1]
+    // Query backwards from last given cursor [3]: [tx3, coinbase_tx2, tx2, coinbase_tx1, tx1, tx_block_creation_10, tx_block_creation_9, ...]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor.clone(),
-        results: 6,
+        results: 16,
         direction: PageDirection::Backward,
     };
 
