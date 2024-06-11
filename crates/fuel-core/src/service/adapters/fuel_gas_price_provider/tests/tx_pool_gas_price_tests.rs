@@ -3,7 +3,6 @@ use crate::service::adapters::fuel_gas_price_provider::tests::{
     TestGasPriceAlgorithm,
 };
 use fuel_core_gas_price_service::GasPriceAlgorithm;
-use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 
 #[tokio::test]
 async fn gas_price__if_requested_block_height_is_latest_return_gas_price() {
@@ -13,7 +12,7 @@ async fn gas_price__if_requested_block_height_is_latest_return_gas_price() {
 
     // when
     let expected_price = algo.last_gas_price();
-    let actual_price = gas_price_provider.gas_price().await.unwrap();
+    let actual_price = gas_price_provider.last_gas_price().await;
 
     // then
     assert_eq!(expected_price, actual_price);
