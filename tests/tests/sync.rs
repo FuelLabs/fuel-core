@@ -5,7 +5,6 @@ use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::Input,
 };
-use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -134,6 +133,7 @@ async fn test_partitions_larger_groups(
     num_validators: usize,
     num_partitions: usize,
 ) {
+    use itertools::Itertools;
     use std::collections::VecDeque;
 
     // Create a random seed based on the test parameters.
@@ -218,7 +218,10 @@ async fn test_partitions_larger_groups(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[cfg(not(coverage))] // This test is too slow for coverage
 async fn test_multiple_producers_different_keys() {
+    use itertools::Itertools;
+
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
     let num_txs = 10;
