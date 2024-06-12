@@ -65,6 +65,11 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_da_d_component(mut self, da_d_component: i64) -> Self {
+        self.da_d_component = da_d_component;
+        self
+    }
+
     fn with_l2_block_height(mut self, starting_block: u32) -> Self {
         self.l2_block_height = starting_block;
         self
@@ -119,7 +124,7 @@ impl UpdaterBuilder {
             last_da_price: self.starting_da_gas_price,
             exec_gas_price_increase_amount: self.exec_gas_price_increase_amount,
             da_p_component: self.da_p_component,
-            da_d_component: 0,
+            da_d_component: self.da_d_component,
 
             l2_block_height: self.l2_block_height,
             l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,

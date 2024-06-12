@@ -47,7 +47,9 @@ pub struct AlgorithmV1 {
     latest_da_cost_per_byte: u64,
     total_rewards: u64,
     total_costs: u64,
+    last_profit: i64,
     da_p_component: i64,
+    da_d_component: i64,
 }
 
 impl AlgorithmV1 {
@@ -57,10 +59,20 @@ impl AlgorithmV1 {
         let extra_for_this_block = block_bytes * self.latest_da_cost_per_byte;
         let pessimistic_cost = self.total_costs + extra_for_this_block;
         let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
-        let checked = projected_profit.checked_div(self.da_p_component);
-        if let Some(new_p) = checked {
-            new_da_gas_price = new_da_gas_price.saturating_sub(new_p);
+
+        // P
+        let checked_p = projected_profit.checked_div(self.da_p_component);
+        if let Some(p) = checked_p {
+            new_da_gas_price = new_da_gas_price.saturating_sub(p);
         };
+
+        // D
+        let slope = projected_profit - self.last_profit;
+        let checked_d = slope.checked_div(self.da_d_component);
+        if let Some(d) = checked_d {
+            new_da_gas_price = new_da_gas_price.saturating_sub(d);
+        };
+
         self.new_exec_price + new_da_gas_price as u64
     }
 }
@@ -220,7 +232,9 @@ impl AlgorithmUpdaterV1 {
             latest_da_cost_per_byte: self.latest_da_cost_per_byte,
             total_rewards: self.total_da_rewards,
             total_costs: self.projected_total_da_cost,
+            last_profit: self.last_profit,
             da_p_component: self.da_p_component,
+            da_d_component: self.da_d_component,
         }
     }
 }
