@@ -389,7 +389,7 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
-    GasPriceProvider: GasPriceProviderConstraint,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider,
     MP: MemoryPool + Send + Sync,
 {

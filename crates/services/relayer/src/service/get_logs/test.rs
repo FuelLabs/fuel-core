@@ -137,7 +137,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         &eth_node,
         DEFAULT_LOG_PAGE_SIZE,
     )
-    .map_ok(|(_, l)| l)
+    .map_ok(|logs| logs.logs)
     .try_concat()
     .await
     .unwrap();
@@ -148,32 +148,39 @@ async fn can_paginate_logs(input: Input) -> Expected {
 }
 
 #[test_case(vec![
-    Ok((1, messages_n(1, 0)))
+    Ok((1, 1, messages_n(1, 0)))
     ] => 1 ; "Can add single"
 )]
 #[test_case(vec![
-    Ok((3, messages_n(3, 0))),
-    Ok((4, messages_n(1, 4)))
+    Ok((3, 3, messages_n(3, 0))),
+    Ok((4, 4, messages_n(1, 4)))
     ] => 4 ; "Can add two"
 )]
 #[test_case(vec![
-    Ok((3, messages_n(3, 0))),
-    Ok((4, vec![]))
+    Ok((3, 3, messages_n(3, 0))),
+    Ok((4, 4, vec![]))
     ] => 4 ; "Can add empty"
 )]
 #[test_case(vec![
-    Ok((7, messages_n(3, 0))),
-    Ok((19, messages_n(1, 4))),
+    Ok((1, 7, messages_n(3, 0))),
+    Ok((8, 19, messages_n(1, 4))),
     Err(ProviderError::CustomError("".to_string()))
     ] => 19 ; "Still adds height when error"
 )]
 #[tokio::test]
+#[allow(clippy::type_complexity)]
 async fn test_da_height_updates(
-    stream: Vec<Result<(u64, Vec<Log>), ProviderError>>,
+    stream: Vec<Result<(u64, u64, Vec<Log>), ProviderError>>,
 ) -> u64 {
     let mut mock_db = crate::mock_db::MockDb::default();
 
-    let logs = futures::stream::iter(stream);
+    let logs = futures::stream::iter(stream).map(|result| {
+        result.map(|(start_height, last_height, logs)| DownloadedLogs {
+            start_height,
+            last_height,
+            logs,
+        })
+    });
 
     let _ = write_logs(&mut mock_db, logs).await;
 

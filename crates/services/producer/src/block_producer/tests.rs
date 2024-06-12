@@ -3,7 +3,6 @@
 use crate::{
     block_producer::{
         gas_price::{
-            GasPriceParams,
             GasPriceProvider,
             MockConsensusParametersProvider,
         },
@@ -62,9 +61,11 @@ impl MockProducerGasPrice {
     }
 }
 
+#[async_trait::async_trait]
 impl GasPriceProvider for MockProducerGasPrice {
-    fn gas_price(&self, _params: GasPriceParams) -> Option<u64> {
+    async fn next_gas_price(&self, _block_bytes: u64) -> anyhow::Result<u64> {
         self.gas_price
+            .ok_or_else(|| anyhow::anyhow!("Gas price not provided"))
     }
 }
 

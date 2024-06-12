@@ -1,3 +1,5 @@
+use num_rational::Ratio;
+
 use crate::{
     containers::sort::{
         Sort,
@@ -9,48 +11,51 @@ use crate::{
 use std::cmp;
 
 /// all transactions sorted by min/max price
-pub type TipSort = Sort<TipSortKey>;
+pub type RatioGasTipSort = Sort<RatioGasTipSortKey>;
+
+/// A ratio between gas and tip
+pub type RatioGasTip = Ratio<Word>;
 
 #[derive(Clone, Debug)]
-pub struct TipSortKey {
-    tip: Word,
+pub struct RatioGasTipSortKey {
+    tip_per_gas: RatioGasTip,
     tx_id: TxId,
 }
 
-impl SortableKey for TipSortKey {
-    type Value = GasPrice;
+impl SortableKey for RatioGasTipSortKey {
+    type Value = RatioGasTip;
 
     fn new(info: &TxInfo) -> Self {
         Self {
-            tip: info.tx().tip(),
+            tip_per_gas: Ratio::new(info.tx().tip(), info.tx().max_gas()),
             tx_id: info.tx().id(),
         }
     }
 
     fn value(&self) -> &Self::Value {
-        &self.tip
+        &self.tip_per_gas
     }
 }
 
-impl PartialEq for TipSortKey {
+impl PartialEq for RatioGasTipSortKey {
     fn eq(&self, other: &Self) -> bool {
         self.tx_id == other.tx_id
     }
 }
 
-impl Eq for TipSortKey {}
+impl Eq for RatioGasTipSortKey {}
 
-impl PartialOrd for TipSortKey {
+impl PartialOrd for RatioGasTipSortKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for TipSortKey {
+impl Ord for RatioGasTipSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let cmp = self.tip.cmp(&other.tip);
+        let cmp = self.tip_per_gas.cmp(&other.tip_per_gas);
         if cmp == cmp::Ordering::Equal {
-            return self.tx_id.cmp(&other.tx_id)
+            return self.tx_id.cmp(&other.tx_id);
         }
         cmp
     }

@@ -121,10 +121,7 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
-        let gas_price = self
-            .gas_price_provider
-            .gas_price(height.into())
-            .ok_or(anyhow!("No gas price found for block {height:?}"))?;
+        let gas_price = self.calculate_gas_price(&header).await?;
 
         let component = Components {
             header_to_produce: header,
@@ -144,6 +141,24 @@ where
 
         debug!("Produced block with result: {:?}", result.result());
         Ok(result)
+    }
+
+    async fn calculate_gas_price(
+        &self,
+        header: &PartialBlockHeader,
+    ) -> anyhow::Result<u64> {
+        let consensus_params = self
+            .consensus_parameters_provider
+            .consensus_params_at_version(&header.consensus_parameters_version)?;
+        let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
+        let max_gas_per_block = consensus_params.block_gas_limit();
+        let max_block_bytes = max_gas_per_block.checked_div(gas_per_bytes).ok_or(anyhow!(
+            "Unable to calculate max block bytes from gas limit: {max_gas_per_block}, gas per byte: {gas_per_bytes}"
+        ))?;
+        self.gas_price_provider
+            .next_gas_price(max_block_bytes)
+            .await
+            .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
 }
 
@@ -219,16 +234,19 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let gas_price = gas_price
-            .or_else(|| self.gas_price_provider.gas_price(height.into()))
-            .ok_or(anyhow!("No gas price found for height {height:?}"))?;
+        let header = self._new_header(height, Tai64::now())?;
+
+        let gas_price = if let Some(inner) = gas_price {
+            inner
+        } else {
+            self.calculate_gas_price(&header).await?
+        };
 
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
         // use the same configuration as the last block -> the same DA height.
         // It is deterministic from the result perspective, plus it is more performant
         // because we don't need to wait for the relayer to sync.
-        let header = self._new_header(height, Tai64::now())?;
         let component = Components {
             header_to_produce: header,
             transactions_source: transactions.clone(),
