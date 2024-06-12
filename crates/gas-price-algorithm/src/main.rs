@@ -121,11 +121,11 @@ fn main() {
     // simulation parameters
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
-    let da_p_component = 150_000_000;
-    let da_d_component = 150_000_000;
+    let da_p_component = 20_000_000;
+    let da_d_component = 2_500_000;
     let starting_da_cost_per_byte = 200;
     let size = 200;
-    let da_recording_rate = 1;
+    let da_recording_rate = 10;
     let capacity = 30_000_000;
     let gas_per_byte = 63;
     let max_block_bytes = capacity / gas_per_byte;
@@ -178,7 +178,8 @@ fn main() {
         unrecorded_blocks: vec![],
         da_p_component,
         da_d_component,
-        last_profit: 0,
+        profit_avg: 0,
+        avg_window: 10,
     };
 
     let mut gas_prices = vec![];
@@ -211,7 +212,6 @@ fn main() {
         projected_costs.push(updater.projected_total_da_cost);
         let profit =
             updater.total_da_rewards as i64 - updater.projected_total_da_cost as i64;
-        dbg!(profit);
     }
 
     // Plotting code starts here
@@ -376,6 +376,7 @@ fn draw_profit(
 ) {
     let min = *actual_profit.iter().min().unwrap();
     let max = *actual_profit.iter().max().unwrap();
+    println!("min: {}, max: {}", min, max);
 
     let mut chart = ChartBuilder::on(drawing_area)
         .caption(title, ("sans-serif", 50).into_font())

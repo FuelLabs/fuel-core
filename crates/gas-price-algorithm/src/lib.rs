@@ -47,9 +47,10 @@ pub struct AlgorithmV1 {
     latest_da_cost_per_byte: u64,
     total_rewards: u64,
     total_costs: u64,
-    last_profit: i64,
     da_p_component: i64,
     da_d_component: i64,
+    avg_profit: i64,
+    avg_window: u32,
 }
 
 impl AlgorithmV1 {
@@ -60,17 +61,20 @@ impl AlgorithmV1 {
         // let extra_for_this_block = 0;
         let pessimistic_cost = self.total_costs + extra_for_this_block;
         let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
+        let projected_profit_avg = (projected_profit
+            + (self.avg_profit * (self.avg_window as i64 - 1)))
+            / self.avg_window as i64;
 
         // P
-        let checked_p = projected_profit.checked_div(self.da_p_component);
+        let checked_p = projected_profit_avg.checked_div(self.da_p_component);
         let p = -checked_p.unwrap_or(0);
 
         // D
-        let slope = projected_profit - self.last_profit;
+        let slope = projected_profit_avg - self.avg_profit;
         let checked_d = slope.checked_div(self.da_d_component);
         let d = -checked_d.unwrap_or(0);
+        // let d = 0;
 
-        dbg!(projected_profit, slope, p, d);
         new_da_gas_price = new_da_gas_price + p + d;
         let min = 0;
         let new_da_gas_price = max(new_da_gas_price, min);
@@ -95,7 +99,8 @@ pub struct AlgorithmUpdaterV1 {
     pub projected_total_da_cost: u64,
     pub da_p_component: i64,
     pub da_d_component: i64,
-    pub last_profit: i64,
+    pub profit_avg: i64,
+    pub avg_window: u32,
 
     pub latest_da_cost_per_byte: u64,
     pub unrecorded_blocks: Vec<BlockBytes>,
@@ -116,20 +121,6 @@ pub struct BlockBytes {
 }
 
 impl AlgorithmUpdaterV1 {
-    // pub fn new(l2_block_height: u32, da_recorded_block_height: u32, latest_da_cost_per_byte: u64) -> Self {
-    //     Self {
-    //         gas_price: 0,
-    //         l2_block_height,
-    //         l2_block_fullness_threshold: 0,
-    //         exec_gas_price_increase_amount: 0,
-    //         da_recorded_block_height,
-    //         latest_known_total_cost: 0,
-    //         projected_total_cost: 0,
-    //         latest_da_cost_per_byte,
-    //         unrecorded_blocks: Vec::new(),
-    //     }
-    // }
-
     pub fn update_da_record_data(
         &mut self,
         blocks: Vec<RecordedBlock>,
@@ -155,8 +146,9 @@ impl AlgorithmUpdaterV1 {
             })
         } else {
             self.l2_block_height = height;
-            self.last_profit =
+            let last_profit =
                 self.total_da_rewards as i64 - self.projected_total_da_cost as i64;
+            self.update_profit_avg(last_profit);
             self.projected_total_da_cost += block_bytes * self.latest_da_cost_per_byte;
             // implicitly deduce what our da gas price was for the l2 block
             self.last_da_price = gas_price.saturating_sub(self.new_exec_price);
@@ -165,6 +157,13 @@ impl AlgorithmUpdaterV1 {
             self.total_da_rewards += da_reward;
             Ok(())
         }
+    }
+
+    fn update_profit_avg(&mut self, new_profit: i64) {
+        let old_avg = self.profit_avg;
+        let new_avg = (old_avg * (self.avg_window as i64 - 1) + new_profit)
+            / self.avg_window as i64;
+        self.profit_avg = new_avg;
     }
 
     fn update_exec_gas_price(&mut self, used: u64, capacity: u64) {
@@ -233,9 +232,10 @@ impl AlgorithmUpdaterV1 {
             latest_da_cost_per_byte: self.latest_da_cost_per_byte,
             total_rewards: self.total_da_rewards,
             total_costs: self.projected_total_da_cost,
-            last_profit: self.last_profit,
+            avg_profit: self.profit_avg,
             da_p_component: self.da_p_component,
             da_d_component: self.da_d_component,
+            avg_window: self.avg_window,
         }
     }
 }

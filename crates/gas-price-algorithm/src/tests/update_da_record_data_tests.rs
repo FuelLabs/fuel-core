@@ -278,6 +278,3 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
     let expected = new_known_total_cost + guessed_part;
     assert_eq!(actual, expected);
 }
-
-#[test]
-fn update_da_record_data__updates_previous_profit() {}

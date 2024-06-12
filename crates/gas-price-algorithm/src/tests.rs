@@ -18,6 +18,8 @@ struct UpdaterBuilder {
     latest_known_total_cost: u64,
     unrecorded_blocks: Vec<BlockBytes>,
     last_profit: i64,
+    profit_avg: i64,
+    avg_window: u32,
 }
 
 impl UpdaterBuilder {
@@ -39,6 +41,8 @@ impl UpdaterBuilder {
             latest_known_total_cost: 0,
             unrecorded_blocks: vec![],
             last_profit: 0,
+            profit_avg: 0,
+            avg_window: 1,
         }
     }
 
@@ -118,6 +122,12 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_profit_avg(mut self, profit_avg: i64, window: u32) -> Self {
+        self.profit_avg = profit_avg;
+        self.avg_window = window;
+        self
+    }
+
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
             new_exec_price: self.starting_exec_gas_price,
@@ -135,7 +145,8 @@ impl UpdaterBuilder {
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost: self.latest_known_total_cost,
             unrecorded_blocks: self.unrecorded_blocks,
-            last_profit: self.last_profit,
+            profit_avg: self.profit_avg,
+            avg_window: self.avg_window,
         }
     }
 }

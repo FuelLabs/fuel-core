@@ -39,7 +39,8 @@ fn calculate__negative_profit_increase_gas_price() {
     let da_p_component = 100;
     let da_d_component = 10;
     let block_bytes = 500;
-    let latest_profit = 100;
+    let profit_avg = 100;
+    let avg_window = 10;
     let arb_value = 1000;
     let smaller_starting_reward =
         starting_cost + block_bytes * latest_gas_per_byte - arb_value;
@@ -52,7 +53,7 @@ fn calculate__negative_profit_increase_gas_price() {
         .with_known_total_cost(starting_cost)
         .with_projected_total_cost(starting_cost)
         .with_da_cost_per_byte(latest_gas_per_byte)
-        .with_last_profit(latest_profit)
+        .with_profit_avg(profit_avg, avg_window)
         .build();
 
     // when
@@ -60,18 +61,14 @@ fn calculate__negative_profit_increase_gas_price() {
     let actual = algo.calculate(block_bytes);
 
     // then
-    // let profit = (smaller_starting_reward as i64
-    //     - (starting_cost + block_bytes * latest_gas_per_byte) as i64);
-    // let expected = starting_exec_gas_price
-    //     + last_da_gas_price
-    //     + (profit.abs() / da_p_component) as u64;
-    // assert_eq!(expected, actual);
-
     let profit = smaller_starting_reward as i64
         - (starting_cost + block_bytes * latest_gas_per_byte) as i64;
-    let da_p_comp = (profit / da_p_component);
-    let slope = profit - latest_profit;
-    let da_d_comp = (slope / da_d_component);
+    let new_profit_avg =
+        (profit_avg * (avg_window as i64 - 1) + profit) / avg_window as i64;
+
+    let da_p_comp = new_profit_avg / da_p_component;
+    let slope = new_profit_avg - profit_avg;
+    let da_d_comp = slope / da_d_component;
     let expected =
         starting_exec_gas_price as i64 + last_da_gas_price as i64 - da_p_comp - da_d_comp;
     assert_eq!(expected as u64, actual);
@@ -88,6 +85,8 @@ fn calculate__positive_profit_decrease_gas_price() {
     let da_d_component = 10;
     let block_bytes = 500;
     let latest_profit = 100;
+    let profit_avg = 100;
+    let avg_window = 10;
     let arb_value = 1000;
     let larger_starting_reward =
         starting_cost + block_bytes * latest_gas_per_byte + arb_value;
@@ -100,7 +99,7 @@ fn calculate__positive_profit_decrease_gas_price() {
         .with_known_total_cost(starting_cost)
         .with_projected_total_cost(starting_cost)
         .with_da_cost_per_byte(latest_gas_per_byte)
-        .with_last_profit(latest_profit)
+        .with_profit_avg(profit_avg, avg_window)
         .build();
 
     // when
@@ -110,9 +109,12 @@ fn calculate__positive_profit_decrease_gas_price() {
     // then
     let profit = larger_starting_reward as i64
         - (starting_cost + block_bytes * latest_gas_per_byte) as i64;
-    let slope = profit - latest_profit;
-    let da_p_comp = (profit / da_p_component);
-    let da_d_comp = (slope / da_d_component);
+    let new_profit_avg =
+        (profit_avg * (avg_window as i64 - 1) + profit) / avg_window as i64;
+
+    let da_p_comp = new_profit_avg / da_p_component;
+    let slope = new_profit_avg - profit_avg;
+    let da_d_comp = slope / da_d_component;
     let expected =
         starting_exec_gas_price as i64 + last_da_gas_price as i64 - da_p_comp - da_d_comp;
     assert_eq!(expected as u64, actual);
