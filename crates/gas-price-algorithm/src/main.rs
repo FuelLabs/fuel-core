@@ -121,11 +121,11 @@ fn main() {
     // simulation parameters
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
-    let da_p_component = 100_000_000;
-    let da_d_component = 50_000_000;
-    let starting_da_cost_per_byte = 100;
-    let size = 100;
-    let da_recording_rate = 10;
+    let da_p_component = 150_000_000;
+    let da_d_component = 150_000_000;
+    let starting_da_cost_per_byte = 200;
+    let size = 200;
+    let da_recording_rate = 1;
     let capacity = 30_000_000;
     let gas_per_byte = 63;
     let max_block_bytes = capacity / gas_per_byte;
