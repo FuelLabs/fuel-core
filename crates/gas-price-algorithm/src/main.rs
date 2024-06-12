@@ -79,20 +79,23 @@ where
 
 fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
     let mut rng = StdRng::seed_from_u64(888);
+
     let fullness_noise: Vec<_> = std::iter::repeat(())
         .take(size)
         .map(|_| rng.gen_range(-0.25..0.25))
         .map(|val| val * capacity as f64)
         .collect();
+
     let bytes_scale: Vec<_> = std::iter::repeat(())
         .take(size)
         .map(|_| rng.gen_range(0.5..1.0))
         .map(|x| x * 4.0)
         .collect();
+
     (0usize..size)
         .map(|val| val as f64)
         .map(noisy_fullness)
-        .map(|signal| (0.5 * signal + 0.4) * capacity as f64)
+        .map(|signal| (0.5 * signal + 0.5) * capacity as f64)
         .zip(fullness_noise)
         .map(|(fullness, noise)| fullness + noise)
         .map(|x| f64::min(x, capacity as f64))
@@ -116,11 +119,10 @@ fn arb_cost_per_byte(size: u32) -> Vec<u64> {
 
 fn main() {
     // simulation parameters
-    let starting_gas_price = 0;
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
     let da_p_component = 10_000;
-    let da_d_component = 10;
+    let da_d_component = 10_000;
     let starting_gas_per_byte = 100;
     let size = 100;
     let da_recording_rate = 10;
@@ -161,8 +163,8 @@ fn main() {
     let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
 
     let mut updater = AlgorithmUpdaterV1 {
-        new_exec_price: 0,
-        last_da_price: 0,
+        new_exec_price: 800,
+        last_da_price: 800,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: fullness_threshold,
         exec_gas_price_increase_amount,
@@ -174,6 +176,7 @@ fn main() {
         unrecorded_blocks: vec![],
         da_p_component,
         da_d_component,
+        last_profit: 0,
     };
 
     let mut gas_prices = vec![];
@@ -186,7 +189,6 @@ fn main() {
     let pessimistic_bytes = capacity * 4;
     for (index, (l2_block, da_block)) in blocks {
         let height = index as u32 + 1;
-        pessimistic_costs.push(pessimistic_bytes * updater.latest_da_cost_per_byte);
         let gas_price = updater.algorithm().calculate(pessimistic_bytes);
         gas_prices.push(gas_price);
         let (fullness, bytes) = l2_block;
@@ -203,8 +205,12 @@ fn main() {
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
         }
+        pessimistic_costs.push(pessimistic_bytes * updater.latest_da_cost_per_byte);
         actual_rewards.push(updater.total_da_rewards);
         projected_costs.push(updater.projected_total_da_cost);
+        let profit =
+            updater.total_da_rewards as i64 - updater.projected_total_da_cost as i64;
+        dbg!(profit);
     }
 
     // Plotting code starts here
@@ -260,7 +266,8 @@ fn draw_gas_prices(
     da_gas_prices: &Vec<u64>,
     title: &str,
 ) {
-    let min = *gas_prices.iter().min().unwrap();
+    // let min = *gas_prices.iter().min().unwrap();
+    let min = 0;
     let max = *gas_prices.iter().max().unwrap();
 
     let mut chart = ChartBuilder::on(drawing_area)

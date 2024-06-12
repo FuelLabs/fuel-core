@@ -214,12 +214,14 @@ fn update_l2_block_data__updates_the_previous_profit() {
     let starting_exec_gas_price = 100;
     let starting_da_gas_price = 10;
     let price_per_byte = 10;
-    let starting_last_profit = 0;
+    let total_rewards = 1000;
+    let total_cost = 500;
     let mut updater = UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_exec_gas_price)
         .with_starting_da_gas_price(starting_da_gas_price)
         .with_da_cost_per_byte(price_per_byte)
-        .with_last_profit(starting_last_profit)
+        .with_total_rewards(total_rewards)
+        .with_projected_total_cost(total_cost)
         .build();
 
     let height = 1;
@@ -234,10 +236,11 @@ fn update_l2_block_data__updates_the_previous_profit() {
         .unwrap();
 
     // then
-    let new_da_price = new_gas_price - starting_exec_gas_price;
-    let cost = block_bytes * price_per_byte;
-    let reward = new_da_price * gas_used;
-    let expected = reward as i64 - cost as i64;
+    // let new_da_price = new_gas_price - starting_exec_gas_price;
+    // let cost = block_bytes * price_per_byte;
+    // let reward = new_da_price * gas_used;
+    // let expected = reward as i64 - cost as i64;
+    let expected = total_rewards as i64 - total_cost as i64;
     let actual = updater.last_profit;
     assert_eq!(actual, expected);
 }
