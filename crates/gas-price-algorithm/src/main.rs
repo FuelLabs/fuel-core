@@ -119,7 +119,8 @@ fn main() {
     let starting_gas_price = 0;
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
-    let da_gas_price_denominator = 10_000;
+    let da_p_component = 10_000;
+    let da_d_component = 10;
     let starting_gas_per_byte = 100;
     let size = 100;
     let da_recording_rate = 10;
@@ -160,33 +161,40 @@ fn main() {
     let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
 
     let mut updater = AlgorithmUpdaterV1 {
-        gas_price: starting_gas_price,
+        new_exec_price: 0,
+        last_da_price: 0,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: fullness_threshold,
         exec_gas_price_increase_amount,
         total_da_rewards: 0,
-        last_l2_fullness: (fullness_threshold, 100),
         da_recorded_block_height: 0,
         latest_da_cost_per_byte: starting_gas_per_byte,
         projected_total_da_cost: 0,
         latest_known_total_da_cost: 0,
         unrecorded_blocks: vec![],
-        da_gas_price_denominator,
+        da_p_component,
+        da_d_component,
     };
 
     let mut gas_prices = vec![];
+    let mut exec_gas_prices = vec![];
+    let mut da_gas_prices = vec![];
     let mut actual_rewards = vec![];
     let mut projected_costs = vec![];
     let mut actual_costs = vec![];
+    let mut pessimistic_costs = vec![];
     let pessimistic_bytes = capacity * 4;
     for (index, (l2_block, da_block)) in blocks {
         let height = index as u32 + 1;
+        pessimistic_costs.push(pessimistic_bytes * updater.latest_da_cost_per_byte);
         let gas_price = updater.algorithm().calculate(pessimistic_bytes);
         gas_prices.push(gas_price);
         let (fullness, bytes) = l2_block;
+        exec_gas_prices.push(updater.new_exec_price);
         updater
             .update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price)
             .unwrap();
+        da_gas_prices.push(updater.last_da_price);
         if let Some(da_blocks) = da_block {
             let mut total_costs = updater.latest_known_total_da_cost;
             for block in da_blocks {
@@ -227,15 +235,29 @@ fn main() {
         .zip(actual_rewards.iter())
         .map(|(cost, reward)| *reward as i64 - *cost as i64)
         .collect();
-    draw_profit(&middle, &actual_profit, &projected_profit, "Profit");
-    draw_gas_price(&bottom, &gas_prices, "Gas Prices");
+    draw_profit(
+        &middle,
+        &actual_profit,
+        &projected_profit,
+        &pessimistic_costs,
+        "Profit",
+    );
+    draw_gas_prices(
+        &bottom,
+        &gas_prices,
+        &exec_gas_prices,
+        &da_gas_prices,
+        "Gas Prices",
+    );
 
     root.present().unwrap();
 }
 
-fn draw_gas_price(
+fn draw_gas_prices(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     gas_prices: &Vec<u64>,
+    exec_gas_prices: &Vec<u64>,
+    da_gas_prices: &Vec<u64>,
     title: &str,
 ) {
     let min = *gas_prices.iter().min().unwrap();
@@ -262,7 +284,29 @@ fn draw_gas_price(
             gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
             &BLACK,
         ))
-        .unwrap();
+        .unwrap()
+        .label("Gas Price")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
+
+    // Draw the exec gas prices
+    chart
+        .draw_series(LineSeries::new(
+            exec_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
+            &RED,
+        ))
+        .unwrap()
+        .label("Exec Gas Price")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+    // Draw the da gas prices
+    chart
+        .draw_series(LineSeries::new(
+            da_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
+            &BLUE,
+        ))
+        .unwrap()
+        .label("DA Gas Price")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
 
     chart
         .configure_series_labels()
@@ -319,6 +363,7 @@ fn draw_profit(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     actual_profit: &Vec<i64>,
     projected_profit: &Vec<i64>,
+    pessimistic_block_costs: &Vec<u64>,
     title: &str,
 ) {
     let min = *actual_profit.iter().min().unwrap();
@@ -357,6 +402,19 @@ fn draw_profit(
         .unwrap()
         .label("Projected Profit")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+    // draw the block bytes
+    chart
+        .draw_series(LineSeries::new(
+            pessimistic_block_costs
+                .iter()
+                .enumerate()
+                .map(|(x, y)| (x, *y as i64)),
+            &BLUE,
+        ))
+        .unwrap()
+        .label("Pessimistic Block Costs")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
 
     chart
         .configure_series_labels()

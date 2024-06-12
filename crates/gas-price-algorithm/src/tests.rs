@@ -5,7 +5,8 @@ struct UpdaterBuilder {
     starting_exec_gas_price: u64,
     starting_da_gas_price: u64,
     exec_gas_price_increase_amount: u64,
-    da_gas_price_denominator: u64,
+    da_p_component: i64,
+    da_d_component: i64,
 
     l2_block_height: u32,
     l2_block_capacity_threshold: u64,
@@ -16,6 +17,7 @@ struct UpdaterBuilder {
     project_total_cost: u64,
     latest_known_total_cost: u64,
     unrecorded_blocks: Vec<BlockBytes>,
+    last_profit: i64,
 }
 
 impl UpdaterBuilder {
@@ -24,7 +26,8 @@ impl UpdaterBuilder {
             starting_exec_gas_price: 0,
             starting_da_gas_price: 0,
             exec_gas_price_increase_amount: 0,
-            da_gas_price_denominator: 0,
+            da_p_component: 0,
+            da_d_component: 0,
 
             l2_block_height: 0,
             l2_block_capacity_threshold: 50,
@@ -35,6 +38,7 @@ impl UpdaterBuilder {
             project_total_cost: 0,
             latest_known_total_cost: 0,
             unrecorded_blocks: vec![],
+            last_profit: 0,
         }
     }
 
@@ -56,8 +60,8 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_da_gas_price_denominator(mut self, da_gas_price_denominator: u64) -> Self {
-        self.da_gas_price_denominator = da_gas_price_denominator;
+    fn with_da_p_component(mut self, da_p_component: i64) -> Self {
+        self.da_p_component = da_p_component;
         self
     }
 
@@ -104,12 +108,18 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_last_profit(mut self, last_profit: i64) -> Self {
+        self.last_profit = last_profit;
+        self
+    }
+
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
             new_exec_price: self.starting_exec_gas_price,
             last_da_price: self.starting_da_gas_price,
             exec_gas_price_increase_amount: self.exec_gas_price_increase_amount,
-            da_gas_price_denominator: self.da_gas_price_denominator,
+            da_p_component: self.da_p_component,
+            da_d_component: 0,
 
             l2_block_height: self.l2_block_height,
             l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,
@@ -120,6 +130,7 @@ impl UpdaterBuilder {
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost: self.latest_known_total_cost,
             unrecorded_blocks: self.unrecorded_blocks,
+            last_profit: self.last_profit,
         }
     }
 }

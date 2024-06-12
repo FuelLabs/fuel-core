@@ -207,3 +207,37 @@ fn update_l2_block_data__updates_last_da_gas_price() {
     let actual = updater.last_da_price;
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn update_l2_block_data__updates_the_previous_profit() {
+    // given
+    let starting_exec_gas_price = 100;
+    let starting_da_gas_price = 10;
+    let price_per_byte = 10;
+    let starting_last_profit = 0;
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_starting_da_gas_price(starting_da_gas_price)
+        .with_da_cost_per_byte(price_per_byte)
+        .with_last_profit(starting_last_profit)
+        .build();
+
+    let height = 1;
+    let gas_used = 50;
+    let fullness = (gas_used, 100);
+    let block_bytes = 1000;
+    let new_gas_price = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .unwrap();
+
+    // then
+    let new_da_price = new_gas_price - starting_exec_gas_price;
+    let cost = block_bytes * price_per_byte;
+    let reward = new_da_price * gas_used;
+    let expected = reward as i64 - cost as i64;
+    let actual = updater.last_profit;
+    assert_eq!(actual, expected);
+}
