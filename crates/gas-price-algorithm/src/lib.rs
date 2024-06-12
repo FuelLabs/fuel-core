@@ -60,25 +60,20 @@ impl AlgorithmV1 {
         // let extra_for_this_block = 0;
         let pessimistic_cost = self.total_costs + extra_for_this_block;
         let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
-        dbg!(projected_profit);
 
         // P
         let checked_p = projected_profit.checked_div(self.da_p_component);
-        if let Some(p) = checked_p {
-            let min = 0;
-            let potential = new_da_gas_price.saturating_sub(p);
-            new_da_gas_price = max(min, potential);
-        };
+        let p = -checked_p.unwrap_or(0);
 
         // D
         let slope = projected_profit - self.last_profit;
         let checked_d = slope.checked_div(self.da_d_component);
-        if let Some(d) = checked_d {
-            let min = 0;
-            let potential = new_da_gas_price.saturating_add(d);
-            new_da_gas_price = max(min, potential);
-        };
+        let d = -checked_d.unwrap_or(0);
 
+        dbg!(projected_profit, slope, p, d);
+        new_da_gas_price = new_da_gas_price + p + d;
+        let min = 0;
+        let new_da_gas_price = max(new_da_gas_price, min);
         self.new_exec_price + new_da_gas_price as u64
     }
 }

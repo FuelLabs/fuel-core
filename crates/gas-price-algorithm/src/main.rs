@@ -121,12 +121,14 @@ fn main() {
     // simulation parameters
     let fullness_threshold = 50;
     let exec_gas_price_increase_amount = 10;
-    let da_p_component = 10_000;
-    let da_d_component = 10_000;
-    let starting_gas_per_byte = 100;
+    let da_p_component = 100_000_000;
+    let da_d_component = 50_000_000;
+    let starting_da_cost_per_byte = 100;
     let size = 100;
     let da_recording_rate = 10;
-    let capacity = 20_000;
+    let capacity = 30_000_000;
+    let gas_per_byte = 63;
+    let max_block_bytes = capacity / gas_per_byte;
     let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
     let da_cost_per_byte = arb_cost_per_byte(size as u32);
 
@@ -164,13 +166,13 @@ fn main() {
 
     let mut updater = AlgorithmUpdaterV1 {
         new_exec_price: 800,
-        last_da_price: 800,
+        last_da_price: 400,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: fullness_threshold,
         exec_gas_price_increase_amount,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
-        latest_da_cost_per_byte: starting_gas_per_byte,
+        latest_da_cost_per_byte: starting_da_cost_per_byte,
         projected_total_da_cost: 0,
         latest_known_total_da_cost: 0,
         unrecorded_blocks: vec![],
@@ -186,10 +188,9 @@ fn main() {
     let mut projected_costs = vec![];
     let mut actual_costs = vec![];
     let mut pessimistic_costs = vec![];
-    let pessimistic_bytes = capacity * 4;
     for (index, (l2_block, da_block)) in blocks {
         let height = index as u32 + 1;
-        let gas_price = updater.algorithm().calculate(pessimistic_bytes);
+        let gas_price = updater.algorithm().calculate(max_block_bytes);
         gas_prices.push(gas_price);
         let (fullness, bytes) = l2_block;
         exec_gas_prices.push(updater.new_exec_price);
@@ -205,7 +206,7 @@ fn main() {
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
         }
-        pessimistic_costs.push(pessimistic_bytes * updater.latest_da_cost_per_byte);
+        pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
         actual_rewards.push(updater.total_da_rewards);
         projected_costs.push(updater.projected_total_da_cost);
         let profit =
