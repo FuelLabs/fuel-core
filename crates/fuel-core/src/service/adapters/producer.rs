@@ -17,7 +17,6 @@ use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::{
     block_producer::gas_price::{
         ConsensusParametersProvider as ConsensusParametersProviderTrait,
-        GasPriceParams,
         GasPriceProvider,
     },
     ports::TxPool,
@@ -224,9 +223,10 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
     }
 }
 
+#[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    fn gas_price(&self, _block_height: GasPriceParams) -> Option<u64> {
-        Some(self.gas_price)
+    async fn next_gas_price(&self, _block_bytes: u64) -> anyhow::Result<u64> {
+        Ok(self.gas_price)
     }
 }
 

@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Breaking
 - [#1951](https://github.com/FuelLabs/fuel-core/pull/1951): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
 
+### Added
+- [#1889](https://github.com/FuelLabs/fuel-core/pull/1889): Add new `FuelGasPriceProvider` that receives the gas price algorithm from a `GasPriceService`
+
+
 ### Changed
 - [#1942](https://github.com/FuelLabs/fuel-core/pull/1942): Sequential relayer's commits.
+- [#1952](https://github.com/FuelLabs/fuel-core/pull/1952): Change tip sorting to ratio between tip and max gas sorting in txpool
 
 ### Fixed
 - [#1950](https://github.com/FuelLabs/fuel-core/pull/1950): Fix cursor `BlockHeight` encoding in `SortedTXCursor`

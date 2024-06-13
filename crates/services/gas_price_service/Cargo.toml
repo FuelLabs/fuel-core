@@ -1,0 +1,22 @@
+[package]
+name = "fuel-core-gas-price-service"
+description = "Service for updating the gas price algorithm"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-types = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+fuel-core-services = { workspace = true, features = ["test-helpers"] }
+tracing-subscriber = { workspace = true }
