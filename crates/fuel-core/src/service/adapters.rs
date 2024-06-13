@@ -39,6 +39,8 @@ pub mod relayer;
 pub mod sync;
 pub mod txpool;
 
+pub mod fuel_gas_price_provider;
+
 #[derive(Debug, Clone)]
 pub struct ConsensusParametersProvider {
     shared_state: consensus_parameters_provider::SharedState,

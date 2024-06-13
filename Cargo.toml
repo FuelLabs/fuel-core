@@ -18,6 +18,7 @@ members = [
   "crates/services/consensus_module/bft",
   "crates/services/consensus_module/poa",
   "crates/services/executor",
+  "crates/services/gas_price_service",
   "crates/services/importer",
   "crates/services/p2p",
   "crates/services/producer",
@@ -68,6 +69,7 @@ fuel-core-bft = { version = "0.28.0", path = "./crates/services/consensus_module
 fuel-core-poa = { version = "0.28.0", path = "./crates/services/consensus_module/poa" }
 fuel-core-executor = { version = "0.28.0", path = "./crates/services/executor", default-features = false }
 fuel-core-importer = { version = "0.28.0", path = "./crates/services/importer" }
+fuel-core-gas-price-service = { version = "0.28.0", path = "crates/services/gas_price_service" }
 fuel-core-p2p = { version = "0.28.0", path = "./crates/services/p2p" }
 fuel-core-producer = { version = "0.28.0", path = "./crates/services/producer" }
 fuel-core-relayer = { version = "0.28.0", path = "./crates/services/relayer" }
@@ -94,6 +96,7 @@ derivative = { version = "2" }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 hyper = { version = "0.14.26" }
+num-rational = "0.4.2"
 primitive-types = { version = "0.12", default-features = false }
 rand = "0.8"
 parking_lot = "0.12"
