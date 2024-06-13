@@ -138,7 +138,7 @@ fn update_da_record_data__if_da_height_matches_l2_height_prjected_and_known_matc
     let da_recorded_block_height = 10;
     let l2_block_height = 13;
     let known_total_cost = 1500;
-    let mut unrecorded_blocks = vec![
+    let unrecorded_blocks = vec![
         BlockBytes {
             height: 11,
             block_bytes: 1000,

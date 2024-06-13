@@ -19,7 +19,6 @@ struct UpdaterBuilder {
     project_total_cost: u64,
     latest_known_total_cost: u64,
     unrecorded_blocks: Vec<BlockBytes>,
-    last_profit: i64,
     profit_avg: i64,
     avg_window: u32,
 }
@@ -44,7 +43,6 @@ impl UpdaterBuilder {
             project_total_cost: 0,
             latest_known_total_cost: 0,
             unrecorded_blocks: vec![],
-            last_profit: 0,
             profit_avg: 0,
             avg_window: 1,
         }
@@ -65,6 +63,11 @@ impl UpdaterBuilder {
         exec_gas_price_increase_amount: u64,
     ) -> Self {
         self.exec_gas_price_increase_amount = exec_gas_price_increase_amount;
+        self
+    }
+
+    fn with_max_change_percent(mut self, max_change_percent: u8) -> Self {
+        self.max_change_percent = max_change_percent;
         self
     }
 
@@ -118,11 +121,6 @@ impl UpdaterBuilder {
 
     fn with_unrecorded_blocks(mut self, unrecorded_blocks: Vec<BlockBytes>) -> Self {
         self.unrecorded_blocks = unrecorded_blocks;
-        self
-    }
-
-    fn with_last_profit(mut self, last_profit: i64) -> Self {
-        self.last_profit = last_profit;
         self
     }
 

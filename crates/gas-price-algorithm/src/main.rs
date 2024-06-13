@@ -230,19 +230,17 @@ fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 50,
         exec_gas_price_increase_amount: 10,
+        max_change_percent: 10,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
         latest_da_cost_per_byte: 200,
         projected_total_da_cost: 0,
         latest_known_total_da_cost: 0,
         unrecorded_blocks: vec![],
-        // da_p_component: 20_000_000,
-        // da_d_component: 2_500_000,
         da_p_component,
         da_d_component,
         profit_avg: 0,
         avg_window: 10,
-        max_change_percent: u8::MAX,
     };
 
     let mut gas_prices = vec![];
