@@ -9,7 +9,6 @@ use plotters::coord::Shift;
 
 use gas_price_algorithm::{
     AlgorithmUpdaterV1,
-    AlgorithmV0,
     RecordedBlock,
 };
 
@@ -117,13 +116,73 @@ fn arb_cost_per_byte(size: u32) -> Vec<u64> {
         .collect()
 }
 
+fn da_pid_comp(size: usize) -> Vec<(i64, i64)> {
+    let mut rng = StdRng::seed_from_u64(777);
+    // let p = rng.gen_range(1_000..100_000_000);
+    // let d = rng.gen_range(1_000..100_000_000);
+    // (p, d)
+    (0usize..size)
+        .map(|_| {
+            let p = rng.gen_range(1_000..100_000_000);
+            let d = rng.gen_range(1_000..100_000_000);
+            (p, d)
+        })
+        .collect()
+}
+
 fn main() {
+    let (best, (p_comp, d_comp)) = da_pid_comp(100_000)
+        .iter()
+        .map(|(p, d)| (run_simulation(*p, *d), (*p, *d)))
+        .min_by_key(|(results, pair)| {
+            let SimulationResults { actual_profit, .. } = results;
+            actual_profit.iter().sum::<i64>()
+        })
+        .unwrap();
+
+    let SimulationResults {
+        gas_prices,
+        exec_gas_prices,
+        da_gas_prices,
+        fullness,
+        actual_profit,
+        projected_profit,
+        pessimistic_costs,
+    } = best;
+
+    let plot_width = 640 * 2;
+    let plot_height = 480 * 3;
+
+    const FILE_PATH: &str = "gas_prices.png";
+
+    let root =
+        BitMapBackend::new(FILE_PATH, (plot_width, plot_height)).into_drawing_area();
+    root.fill(&WHITE).unwrap();
+    let (upper, lower) = root.split_vertically(plot_height / 3);
+    let (middle, bottom) = lower.split_vertically(plot_height / 3);
+
+    draw_fullness(&upper, &fullness, "Fullness");
+
+    draw_profit(
+        &middle,
+        &actual_profit,
+        &projected_profit,
+        &pessimistic_costs,
+        &format!("Profit p_comp: {p_comp:?}, d_comp: {d_comp:?}"),
+    );
+    draw_gas_prices(
+        &bottom,
+        &gas_prices,
+        &exec_gas_prices,
+        &da_gas_prices,
+        "Gas Prices",
+    );
+
+    root.present().unwrap();
+}
+
+fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults {
     // simulation parameters
-    let fullness_threshold = 50;
-    let exec_gas_price_increase_amount = 10;
-    let da_p_component = 20_000_000;
-    let da_d_component = 2_500_000;
-    let starting_da_cost_per_byte = 200;
     let size = 200;
     let da_recording_rate = 10;
     let capacity = 30_000_000;
@@ -168,14 +227,16 @@ fn main() {
         new_exec_price: 800,
         last_da_price: 400,
         l2_block_height: 0,
-        l2_block_fullness_threshold_percent: fullness_threshold,
-        exec_gas_price_increase_amount,
+        l2_block_fullness_threshold_percent: 50,
+        exec_gas_price_increase_amount: 10,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
-        latest_da_cost_per_byte: starting_da_cost_per_byte,
+        latest_da_cost_per_byte: 200,
         projected_total_da_cost: 0,
         latest_known_total_da_cost: 0,
         unrecorded_blocks: vec![],
+        // da_p_component: 20_000_000,
+        // da_d_component: 2_500_000,
         da_p_component,
         da_d_component,
         profit_avg: 0,
@@ -210,54 +271,44 @@ fn main() {
         pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
         actual_rewards.push(updater.total_da_rewards);
         projected_costs.push(updater.projected_total_da_cost);
-        let profit =
-            updater.total_da_rewards as i64 - updater.projected_total_da_cost as i64;
     }
-
-    // Plotting code starts here
-    let plot_width = 640 * 2;
-    let plot_height = 480 * 3;
-
-    const FILE_PATH: &str = "gas_prices.png";
-
-    let root =
-        BitMapBackend::new(FILE_PATH, (plot_width, plot_height)).into_drawing_area();
-    root.fill(&WHITE).unwrap();
-    let (upper, lower) = root.split_vertically(plot_height / 3);
-    let (middle, bottom) = lower.split_vertically(plot_height / 3);
 
     let fullness = fullness_and_bytes
         .iter()
         .map(|(fullness, _)| (*fullness, capacity))
         .collect();
-    draw_fullness(&upper, &fullness, "Fullness");
 
     let actual_profit: Vec<i64> = actual_costs
         .iter()
         .zip(actual_rewards.iter())
         .map(|(cost, reward)| *reward as i64 - *cost as i64)
         .collect();
+
     let projected_profit: Vec<i64> = projected_costs
         .iter()
         .zip(actual_rewards.iter())
         .map(|(cost, reward)| *reward as i64 - *cost as i64)
         .collect();
-    draw_profit(
-        &middle,
-        &actual_profit,
-        &projected_profit,
-        &pessimistic_costs,
-        "Profit",
-    );
-    draw_gas_prices(
-        &bottom,
-        &gas_prices,
-        &exec_gas_prices,
-        &da_gas_prices,
-        "Gas Prices",
-    );
 
-    root.present().unwrap();
+    SimulationResults {
+        gas_prices,
+        exec_gas_prices,
+        da_gas_prices,
+        fullness,
+        actual_profit,
+        projected_profit,
+        pessimistic_costs,
+    }
+}
+
+struct SimulationResults {
+    gas_prices: Vec<u64>,
+    exec_gas_prices: Vec<u64>,
+    da_gas_prices: Vec<u64>,
+    fullness: Vec<(u64, u64)>,
+    actual_profit: Vec<i64>,
+    projected_profit: Vec<i64>,
+    pessimistic_costs: Vec<u64>,
 }
 
 fn draw_gas_prices(
