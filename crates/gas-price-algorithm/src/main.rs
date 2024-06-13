@@ -242,6 +242,7 @@ fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults
         da_d_component,
         profit_avg: 0,
         avg_window: 10,
+        max_change_percent: u8::MAX,
     };
 
     let mut gas_prices = vec![];

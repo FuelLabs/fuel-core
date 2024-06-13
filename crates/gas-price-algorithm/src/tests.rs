@@ -5,6 +5,8 @@ struct UpdaterBuilder {
     starting_exec_gas_price: u64,
     starting_da_gas_price: u64,
     exec_gas_price_increase_amount: u64,
+    max_change_percent: u8,
+
     da_p_component: i64,
     da_d_component: i64,
 
@@ -28,6 +30,8 @@ impl UpdaterBuilder {
             starting_exec_gas_price: 0,
             starting_da_gas_price: 0,
             exec_gas_price_increase_amount: 0,
+            max_change_percent: u8::MAX,
+
             da_p_component: 0,
             da_d_component: 0,
 
@@ -133,6 +137,8 @@ impl UpdaterBuilder {
             new_exec_price: self.starting_exec_gas_price,
             last_da_price: self.starting_da_gas_price,
             exec_gas_price_increase_amount: self.exec_gas_price_increase_amount,
+            max_change_percent: self.max_change_percent,
+
             da_p_component: self.da_p_component,
             da_d_component: self.da_d_component,
 

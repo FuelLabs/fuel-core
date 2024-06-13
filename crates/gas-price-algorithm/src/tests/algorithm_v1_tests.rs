@@ -84,7 +84,6 @@ fn calculate__positive_profit_decrease_gas_price() {
     let da_p_component = 100;
     let da_d_component = 10;
     let block_bytes = 500;
-    let latest_profit = 100;
     let profit_avg = 100;
     let avg_window = 10;
     let arb_value = 1000;
@@ -119,3 +118,48 @@ fn calculate__positive_profit_decrease_gas_price() {
         starting_exec_gas_price as i64 + last_da_gas_price as i64 - da_p_comp - da_d_comp;
     assert_eq!(expected as u64, actual);
 }
+
+// #[test]
+// fn calculate__price_does_not_change_more_than_max_percent() {
+//     // given
+//     let starting_exec_gas_price = 100;
+//     let last_da_gas_price = 100;
+//     let starting_cost = 500;
+//     let latest_gas_per_byte = 10;
+//     let da_p_component = 100;
+//     let da_d_component = 10;
+//     let block_bytes = 500;
+//     let profit_avg = 100;
+//     let avg_window = 10;
+//     let arb_value = 1000;
+//     let smaller_starting_reward =
+//         starting_cost + block_bytes * latest_gas_per_byte - arb_value;
+//     let mut updater = UpdaterBuilder::new()
+//         .with_starting_exec_gas_price(starting_exec_gas_price)
+//         .with_starting_da_gas_price(last_da_gas_price)
+//         .with_da_p_component(da_p_component)
+//         .with_da_d_component(da_d_component)
+//         .with_total_rewards(smaller_starting_reward)
+//         .with_known_total_cost(starting_cost)
+//         .with_projected_total_cost(starting_cost)
+//         .with_da_cost_per_byte(latest_gas_per_byte)
+//         .with_profit_avg(profit_avg, avg_window)
+//         .build();
+//
+//     // when
+//     let algo = updater.algorithm();
+//     let actual = algo.calculate(block_bytes);
+//
+//     // then
+//     let profit = smaller_starting_reward as i64
+//         - (starting_cost + block_bytes * latest_gas_per_byte) as i64;
+//     let new_profit_avg =
+//         (profit_avg * (avg_window as i64 - 1) + profit) / avg_window as i64;
+//
+//     let da_p_comp = new_profit_avg / da_p_component;
+//     let slope = new_profit_avg - profit_avg;
+//     let da_d_comp = slope / da_d_component;
+//     let expected =
+//         starting_exec_gas_price as i64 + last_da_gas_price as i64 - da_p_comp - da_d_comp;
+//     assert_eq!(expected as u64, actual);
+// }

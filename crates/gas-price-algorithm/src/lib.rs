@@ -23,6 +23,7 @@ pub struct AlgorithmV1 {
     block_height: u32,
     new_exec_price: u64,
     last_da_price: u64,
+    max_change_percent: u8,
 
     // L2
     l2_block_fullness_threshold_percent: u64,
@@ -58,7 +59,6 @@ impl AlgorithmV1 {
         let slope = projected_profit_avg - self.avg_profit;
         let checked_d = slope.checked_div(self.da_d_component);
         let d = -checked_d.unwrap_or(0);
-        let d = 0;
 
         new_da_gas_price = new_da_gas_price + p + d;
         let min = 0;
@@ -72,6 +72,7 @@ pub struct AlgorithmUpdaterV1 {
     pub new_exec_price: u64,
     pub last_da_price: u64,
     pub exec_gas_price_increase_amount: u64,
+    pub max_change_percent: u8,
 
     // L2
     pub l2_block_height: u32,
@@ -210,6 +211,7 @@ impl AlgorithmUpdaterV1 {
             block_height: self.l2_block_height.saturating_add(1),
             new_exec_price: self.new_exec_price,
             last_da_price: self.last_da_price,
+            max_change_percent: self.max_change_percent,
 
             l2_block_fullness_threshold_percent: self.l2_block_fullness_threshold_percent,
             exec_gas_price_increase_amount: self.exec_gas_price_increase_amount,
