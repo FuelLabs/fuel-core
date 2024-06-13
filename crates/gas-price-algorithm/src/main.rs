@@ -127,11 +127,12 @@ fn da_pid_comp(size: usize) -> Vec<(i64, i64)> {
         .collect()
 }
 
-fn naive_optimisation(iterations: usize) -> (SimulationResults, (i64, i64)) {
+fn naive_optimisation(iterations: usize) -> (SimulationResults, (i64, i64, u32)) {
+    let avg_window = 1;
     da_pid_comp(iterations)
         .iter()
-        .map(|(p, d)| (run_simulation(*p, *d), (*p, *d)))
-        .min_by_key(|(results, pair)| {
+        .map(|(p, d)| (run_simulation(*p, *d, avg_window), (*p, *d, avg_window)))
+        .min_by_key(|(results, _)| {
             let SimulationResults { actual_profit, .. } = results;
             actual_profit.iter().sum::<i64>()
         })
@@ -140,7 +141,8 @@ fn naive_optimisation(iterations: usize) -> (SimulationResults, (i64, i64)) {
 
 fn main() {
     let optimisation_iterations = 10_000;
-    let (best, (p_comp, d_comp)) = naive_optimisation(optimisation_iterations);
+    let (best, (p_comp, d_comp, avg_window)) =
+        naive_optimisation(optimisation_iterations);
     let SimulationResults {
         gas_prices,
         exec_gas_prices,
@@ -169,7 +171,9 @@ fn main() {
         &actual_profit,
         &projected_profit,
         &pessimistic_costs,
-        &format!("Profit p_comp: {p_comp:?}, d_comp: {d_comp:?}"),
+        &format!(
+            "Profit p_comp: {p_comp:?}, d_comp: {d_comp:?}, avg window: {avg_window:?}"
+        ),
     );
     draw_gas_prices(
         &bottom,
@@ -182,7 +186,11 @@ fn main() {
     root.present().unwrap();
 }
 
-fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults {
+fn run_simulation(
+    da_p_component: i64,
+    da_d_component: i64,
+    avg_window: u32,
+) -> SimulationResults {
     // simulation parameters
     let size = 200;
     let da_recording_rate = 10;
@@ -226,7 +234,7 @@ fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults
 
     let mut updater = AlgorithmUpdaterV1 {
         new_exec_price: 800,
-        last_da_price: 400,
+        last_da_price: 200,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 50,
         exec_gas_price_increase_amount: 10,
@@ -240,7 +248,7 @@ fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults
         da_p_component,
         da_d_component,
         profit_avg: 0,
-        avg_window: 10,
+        avg_window,
     };
 
     let mut gas_prices = vec![];
