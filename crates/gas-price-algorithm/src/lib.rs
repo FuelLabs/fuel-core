@@ -163,7 +163,7 @@ impl AlgorithmUpdaterV1 {
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
-            return Err(Error::SkippedL2Block {
+            Err(Error::SkippedL2Block {
                 expected,
                 got: height,
             })
@@ -192,13 +192,16 @@ impl AlgorithmUpdaterV1 {
     fn update_exec_gas_price(&mut self, used: u64, capacity: u64) {
         let mut exec_gas_price = self.new_exec_price;
         let fullness_percent = used * 100 / capacity;
-        // EXEC PORTION
-        if fullness_percent > self.l2_block_fullness_threshold_percent {
-            exec_gas_price =
-                exec_gas_price.saturating_add(self.exec_gas_price_increase_amount);
-        } else if fullness_percent < self.l2_block_fullness_threshold_percent {
-            exec_gas_price =
-                exec_gas_price.saturating_sub(self.exec_gas_price_increase_amount);
+        match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {
+            std::cmp::Ordering::Greater => {
+                exec_gas_price =
+                    exec_gas_price.saturating_add(self.exec_gas_price_increase_amount);
+            }
+            std::cmp::Ordering::Less => {
+                exec_gas_price =
+                    exec_gas_price.saturating_sub(self.exec_gas_price_increase_amount);
+            }
+            std::cmp::Ordering::Equal => {}
         }
         self.new_exec_price = exec_gas_price;
     }
@@ -211,7 +214,7 @@ impl AlgorithmUpdaterV1 {
     ) -> Result<(), Error> {
         let expected = self.da_recorded_block_height.saturating_add(1);
         if height != expected {
-            return Err(Error::SkippedDABlock {
+            Err(Error::SkippedDABlock {
                 expected: self.da_recorded_block_height.saturating_add(1),
                 got: height,
             })

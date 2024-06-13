@@ -2,12 +2,11 @@ use super::*;
 
 pub fn draw_gas_prices(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    gas_prices: &Vec<u64>,
-    exec_gas_prices: &Vec<u64>,
-    da_gas_prices: &Vec<u64>,
+    gas_prices: &[u64],
+    exec_gas_prices: &[u64],
+    da_gas_prices: &[u64],
     title: &str,
 ) {
-    // let min = *gas_prices.iter().min().unwrap();
     let min = 0;
     let max = *gas_prices.iter().max().unwrap();
 
@@ -30,36 +29,36 @@ pub fn draw_gas_prices(
     chart
         .draw_series(LineSeries::new(
             gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            &BLACK,
+            BLACK,
         ))
         .unwrap()
         .label("Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
 
     // Draw the exec gas prices
     chart
         .draw_series(LineSeries::new(
             exec_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            &RED,
+            RED,
         ))
         .unwrap()
         .label("Exec Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
 
     // Draw the da gas prices
     chart
         .draw_series(LineSeries::new(
             da_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            &BLUE,
+            BLUE,
         ))
         .unwrap()
         .label("DA Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
 
     chart
         .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
         .draw()
         .unwrap();
 }
@@ -95,23 +94,23 @@ pub fn draw_fullness(
                 .map(|(x, y)| (*x as f64 / *y as f64) * 100.)
                 .map(|x| x as i32)
                 .enumerate(),
-            &BLACK,
+            BLACK,
         ))
         .unwrap();
 
     chart
         .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
         .draw()
         .unwrap();
 }
 
 pub fn draw_profit(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    actual_profit: &Vec<i64>,
-    projected_profit: &Vec<i64>,
-    pessimistic_block_costs: &Vec<u64>,
+    actual_profit: &[i64],
+    projected_profit: &[i64],
+    pessimistic_block_costs: &[u64],
     title: &str,
 ) {
     let min = *actual_profit.iter().min().unwrap();
@@ -137,20 +136,20 @@ pub fn draw_profit(
     chart
         .draw_series(LineSeries::new(
             actual_profit.iter().enumerate().map(|(x, y)| (x, *y)),
-            &BLACK,
+            BLACK,
         ))
         .unwrap()
         .label("Actual Profit")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
 
     chart
         .draw_series(LineSeries::new(
             projected_profit.iter().enumerate().map(|(x, y)| (x, *y)),
-            &RED,
+            RED,
         ))
         .unwrap()
         .label("Projected Profit")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
 
     // draw the block bytes
     chart
@@ -163,12 +162,12 @@ pub fn draw_profit(
         ))
         .unwrap()
         .label("Pessimistic Block Costs")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
 
     chart
         .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
         .draw()
         .unwrap();
 }
