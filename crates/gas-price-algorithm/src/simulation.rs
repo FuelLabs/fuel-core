@@ -1,13 +1,13 @@
 use super::*;
 
 pub struct SimulationResults {
-    gas_prices: Vec<u64>,
-    exec_gas_prices: Vec<u64>,
-    da_gas_prices: Vec<u64>,
-    fullness: Vec<(u64, u64)>,
-    actual_profit: Vec<i64>,
-    projected_profit: Vec<i64>,
-    pessimistic_costs: Vec<u64>,
+    pub gas_prices: Vec<u64>,
+    pub exec_gas_prices: Vec<u64>,
+    pub da_gas_prices: Vec<u64>,
+    pub fullness: Vec<(u64, u64)>,
+    pub actual_profit: Vec<i64>,
+    pub projected_profit: Vec<i64>,
+    pub pessimistic_costs: Vec<u64>,
 }
 
 pub fn run_simulation(
