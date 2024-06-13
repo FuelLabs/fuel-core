@@ -117,10 +117,7 @@ fn arb_cost_per_byte(size: u32) -> Vec<u64> {
 }
 
 fn da_pid_comp(size: usize) -> Vec<(i64, i64)> {
-    let mut rng = StdRng::seed_from_u64(777);
-    // let p = rng.gen_range(1_000..100_000_000);
-    // let d = rng.gen_range(1_000..100_000_000);
-    // (p, d)
+    let mut rng = StdRng::seed_from_u64(9982);
     (0usize..size)
         .map(|_| {
             let p = rng.gen_range(1_000..100_000_000);
@@ -130,16 +127,20 @@ fn da_pid_comp(size: usize) -> Vec<(i64, i64)> {
         .collect()
 }
 
-fn main() {
-    let (best, (p_comp, d_comp)) = da_pid_comp(100_000)
+fn naive_optimisation(iterations: usize) -> (SimulationResults, (i64, i64)) {
+    da_pid_comp(iterations)
         .iter()
         .map(|(p, d)| (run_simulation(*p, *d), (*p, *d)))
         .min_by_key(|(results, pair)| {
             let SimulationResults { actual_profit, .. } = results;
             actual_profit.iter().sum::<i64>()
         })
-        .unwrap();
+        .unwrap()
+}
 
+fn main() {
+    let optimisation_iterations = 10_000;
+    let (best, (p_comp, d_comp)) = naive_optimisation(optimisation_iterations);
     let SimulationResults {
         gas_prices,
         exec_gas_prices,
