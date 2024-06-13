@@ -16,82 +16,120 @@ pub enum Error {
     CouldNotCalculateCostPerByte { bytes: u64, cost: u64 },
 }
 
-pub struct AlgorithmV1 {
-    new_exec_price: u64,
-    last_da_price: u64,
-    max_change_percent: u8,
-
-    // DA
-    latest_da_cost_per_byte: u64,
-    total_rewards: u64,
-    total_costs: u64,
-    da_p_component: i64,
-    da_d_component: i64,
-    avg_profit: i64,
-    avg_window: u32,
-}
-
 impl AlgorithmV1 {
     pub fn calculate(&self, block_bytes: u64) -> u64 {
-        // DA PORTION
-        let mut new_da_gas_price = self.last_da_price as i64;
+        let projected_profit_avg = self.calculate_avg_profit(block_bytes);
+
+        let p = self.p(projected_profit_avg);
+        let d = self.d(projected_profit_avg);
+        let da_change = self.change(p, d);
+
+        self.assemble_price(da_change)
+    }
+
+    fn calculate_avg_profit(&self, block_bytes: u64) -> i64 {
         let extra_for_this_block = block_bytes * self.latest_da_cost_per_byte;
-        // let extra_for_this_block = 0;
         let pessimistic_cost = self.total_costs + extra_for_this_block;
         let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
-        let projected_profit_avg = (projected_profit
-            + (self.avg_profit * (self.avg_window as i64 - 1)))
-            / self.avg_window as i64;
+        (projected_profit + (self.avg_profit * (self.avg_window as i64 - 1)))
+            / self.avg_window as i64
+    }
 
-        // P
+    fn p(&self, projected_profit_avg: i64) -> i64 {
         let checked_p = projected_profit_avg.checked_div(self.da_p_component);
-        let p = -checked_p.unwrap_or(0);
+        -checked_p.unwrap_or(0)
+    }
 
-        // D
+    fn d(&self, projected_profit_avg: i64) -> i64 {
         let slope = projected_profit_avg - self.avg_profit;
         let checked_d = slope.checked_div(self.da_d_component);
-        let d = -checked_d.unwrap_or(0);
+        -checked_d.unwrap_or(0)
+    }
 
+    fn change(&self, p: i64, d: i64) -> i64 {
         let pd_change = p + d;
         let max_change =
             (self.new_exec_price as f64 * self.max_change_percent as f64 / 100.0) as i64;
         let sign = pd_change.signum();
         let signless_da_change = min(max_change, pd_change.abs());
-        let da_change = sign * signless_da_change;
+        sign * signless_da_change
+    }
 
-        new_da_gas_price = new_da_gas_price + da_change;
-        let min = 0;
-        let new_da_gas_price = max(new_da_gas_price, min);
+    fn assemble_price(&self, change: i64) -> u64 {
+        let mut new_da_gas_price = self.last_da_price as i64;
+        new_da_gas_price += change;
+        // TODO: This should be parameterised
+        const MIN: i64 = 0;
+        let new_da_gas_price = max(new_da_gas_price, MIN);
         self.new_exec_price + new_da_gas_price as u64
     }
 }
 
-// TODO: Add contstructor
+/// The state of the algorithm used to update the gas price algorithm for each block
 pub struct AlgorithmUpdaterV1 {
+    /// The gas price for to cover the execution of the next block
     pub new_exec_price: u64,
+    /// The gas price for the DA portion of the last block. This can be used to calculate
+    /// the DA portion of the next block
     pub last_da_price: u64,
+    // Execution
+    /// How much the gas price can change in a single block, either increase or decrease
     pub exec_gas_price_increase_amount: u64,
-    pub max_change_percent: u8,
-
-    // L2
+    /// The height of the next L2 block
     pub l2_block_height: u32,
+    /// The threshold of gas usage above and below which the gas price will increase or decrease
+    /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: u64,
-    pub total_da_rewards: u64,
-
     // DA
+    /// The maximum percentage that the DA portion of the gas price can change in a single block
+    pub max_da_gas_price_change_percent: u8,
+    /// The cumulative reward from the DA portion of the gas price
+    pub total_da_rewards: u64,
+    /// The height of the las L2 block recorded on the DA chain
     pub da_recorded_block_height: u32,
+    /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
     pub latest_known_total_da_cost: u64,
+    /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
+    /// (This value is added on top of the `latest_known_total_da_cost` if the L2 height is higher)
     pub projected_total_da_cost: u64,
+    /// The P component of the PID control for the DA gas price
     pub da_p_component: i64,
+    /// The D component of the PID control for the DA gas price
     pub da_d_component: i64,
+    /// The average profit over the last `avg_window` blocks
     pub profit_avg: i64,
+    /// The number of blocks to consider when calculating the average profit
     pub avg_window: u32,
-
+    /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u64,
+    /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: Vec<BlockBytes>,
 }
 
-// TODO: Add contstructor
+/// An algorithm for calculating the gas price for the next block
+pub struct AlgorithmV1 {
+    /// The gas price for to cover the execution of the next block
+    new_exec_price: u64,
+    /// The gas price for the DA portion of the last block. This can be used to calculate
+    last_da_price: u64,
+    /// The maximum percentage that the DA portion of the gas price can change in a single block
+    max_change_percent: u8,
+    /// The latest known cost per byte for recording blocks on the DA chain
+    latest_da_cost_per_byte: u64,
+    /// The cumulative reward from the DA portion of the gas price
+    total_rewards: u64,
+    /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
+    total_costs: u64,
+    /// The P component of the PID control for the DA gas price
+    da_p_component: i64,
+    /// The D component of the PID control for the DA gas price
+    da_d_component: i64,
+    /// The average profit over the last `avg_window` blocks
+    avg_profit: i64,
+    /// The number of blocks to consider when calculating the average profit
+    avg_window: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct RecordedBlock {
     pub height: u32,
@@ -101,8 +139,8 @@ pub struct RecordedBlock {
 
 #[derive(Debug, Clone)]
 pub struct BlockBytes {
-    height: u32,
-    block_bytes: u64,
+    pub height: u32,
+    pub block_bytes: u64,
 }
 
 impl AlgorithmUpdaterV1 {
@@ -209,7 +247,7 @@ impl AlgorithmUpdaterV1 {
         AlgorithmV1 {
             new_exec_price: self.new_exec_price,
             last_da_price: self.last_da_price,
-            max_change_percent: self.max_change_percent,
+            max_change_percent: self.max_da_gas_price_change_percent,
 
             latest_da_cost_per_byte: self.latest_da_cost_per_byte,
             total_rewards: self.total_da_rewards,

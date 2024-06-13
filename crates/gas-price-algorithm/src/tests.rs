@@ -135,7 +135,7 @@ impl UpdaterBuilder {
             new_exec_price: self.starting_exec_gas_price,
             last_da_price: self.starting_da_gas_price,
             exec_gas_price_increase_amount: self.exec_gas_price_increase_amount,
-            max_change_percent: self.max_change_percent,
+            max_da_gas_price_change_percent: self.max_change_percent,
 
             da_p_component: self.da_p_component,
             da_d_component: self.da_d_component,
