@@ -1020,11 +1020,11 @@ async fn sorted_out_tx_by_creation_instant() {
     // This order doesn't match the lexicographical order of the tx ids
     // and so it verifies that the txs are sorted by creation instant
     // The newest tx should be first
-    assert_eq!(txs.len(), 4, "Should have 3 txs");
-    assert_eq!(txs[0].id(), tx4_id, "First should be tx4");
-    assert_eq!(txs[1].id(), tx3_id, "Second should be tx3");
-    assert_eq!(txs[2].id(), tx2_id, "Third should be tx2");
-    assert_eq!(txs[3].id(), tx1_id, "Fourth should be tx1");
+    assert_eq!(txs.len(), 4, "Should have 4 txs");
+    assert_eq!(txs[0].id(), tx1_id, "First should be tx1");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx3_id, "Third should be tx3");
+    assert_eq!(txs[3].id(), tx4_id, "Fourth should be tx4");
 }
 
 #[tokio::test]

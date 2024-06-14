@@ -58,7 +58,7 @@ impl Ord for RatioGasTipSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         let cmp = self.tip_per_gas.cmp(&other.tip_per_gas);
         if cmp == cmp::Ordering::Equal {
-            let instant_cmp = self.creation_instant.cmp(&other.creation_instant);
+            let instant_cmp = other.creation_instant.cmp(&self.creation_instant);
             if instant_cmp == cmp::Ordering::Equal {
                 self.tx_id.cmp(&other.tx_id)
             } else {
