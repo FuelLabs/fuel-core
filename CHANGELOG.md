@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.29.0]
+
 ### Added
 - [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): Added new CLI arguments:
   - `graphql-max-depth`
