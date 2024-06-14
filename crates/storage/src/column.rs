@@ -16,12 +16,13 @@ use crate::kv_store::StorageColumn;
     Eq,
     enum_iterator::Sequence,
     Hash,
+    num_enum::TryFromPrimitive,
 )]
 pub enum Column {
+    /// The column id of metadata about the blockchain
+    Metadata = 0,
     /// See [`ContractsRawCode`](crate::tables::ContractsRawCode)
-    ContractsRawCode = 0,
-    /// See [`ContractsInfo`](crate::tables::ContractsInfo)
-    ContractsInfo = 1,
+    ContractsRawCode = 1,
     /// See [`ContractsState`](crate::tables::ContractsState)
     ContractsState = 2,
     /// See [`ContractsLatestUtxo`](crate::tables::ContractsLatestUtxo)
@@ -38,40 +39,30 @@ pub enum Column {
     FuelBlockMerkleData = 8,
     /// See [`FuelBlockMerkleMetadata`](crate::tables::merkle::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 9,
-    /// Messages that have been spent.
-    /// Existence of a key in this column means that the message has been spent.
-    /// See [`SpentMessages`](crate::tables::SpentMessages)
-    SpentMessages = 10,
     /// See [`ContractsAssetsMerkleData`](crate::tables::merkle::ContractsAssetsMerkleData)
-    ContractsAssetsMerkleData = 11,
+    ContractsAssetsMerkleData = 10,
     /// See [`ContractsAssetsMerkleMetadata`](crate::tables::merkle::ContractsAssetsMerkleMetadata)
-    ContractsAssetsMerkleMetadata = 12,
+    ContractsAssetsMerkleMetadata = 11,
     /// See [`ContractsStateMerkleData`](crate::tables::merkle::ContractsStateMerkleData)
-    ContractsStateMerkleData = 13,
+    ContractsStateMerkleData = 12,
     /// See [`ContractsStateMerkleMetadata`](crate::tables::merkle::ContractsStateMerkleMetadata)
-    ContractsStateMerkleMetadata = 14,
+    ContractsStateMerkleMetadata = 13,
     /// See [`Messages`](crate::tables::Messages)
-    Messages = 15,
+    Messages = 14,
     /// See [`ProcessedTransactions`](crate::tables::ProcessedTransactions)
-    ProcessedTransactions = 16,
-
-    // TODO: Extract the columns below into a separate enum to not mix
-    //  required columns and non-required columns. It will break `MemoryStore`
-    //  and `MemoryTransactionView` because they rely on linear index incrementation.
-
-    // Below are the tables used for p2p, block production, starting the node.
-    /// The column id of metadata about the blockchain
-    Metadata = 17,
-    /// See `FuelBlockSecondaryKeyBlockHeights`
-    FuelBlockSecondaryKeyBlockHeights = 18,
+    ProcessedTransactions = 15,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 19,
+    FuelBlockConsensus = 16,
+    /// See [`ConsensusParametersVersions`](crate::tables::ConsensusParametersVersions)
+    ConsensusParametersVersions = 17,
+    /// See [`StateTransitionBytecodeVersions`](crate::tables::StateTransitionBytecodeVersions)
+    StateTransitionBytecodeVersions = 18,
+    /// See [`UploadedBytecodes`](crate::tables::UploadedBytecodes)
+    UploadedBytecodes = 19,
 
-    // Below are not required tables. They are used for API and may be removed or moved to another place in the future.
-    /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 20,
-    /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 21,
+    // TODO: Remove this column and use `Metadata` column instead.
+    /// Table for genesis state import progress tracking.
+    GenesisMetadata = 20,
 }
 
 impl Column {

@@ -56,18 +56,18 @@ impl HeartbeatData {
 
     pub fn update(&mut self, block_height: BlockHeight) {
         self.block_height = Some(block_height);
-        let old_hearbeat = self.last_heartbeat;
+        let old_heartbeat = self.last_heartbeat;
         self.last_heartbeat = Instant::now();
         self.last_heartbeat_sys = SystemTime::now();
-        let new_duration = self.last_heartbeat.saturating_duration_since(old_hearbeat);
+        let new_duration = self.last_heartbeat.saturating_duration_since(old_heartbeat);
         self.add_new_duration(new_duration);
     }
 }
 
 #[allow(clippy::cast_possible_truncation)]
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-    #![allow(non_snake_case)]
     use super::*;
 
     #[tokio::test(start_paused = true)]

@@ -1,4 +1,4 @@
-use super::block::BlockIdFragment;
+use super::block::BlockHeightFragment;
 use crate::client::{
     schema::{
         schema,
@@ -10,6 +10,7 @@ use crate::client::{
         PageInfo,
         Tai64Timestamp,
         TransactionId,
+        U64,
     },
     types::TransactionResponse,
     PageDirection,
@@ -42,7 +43,7 @@ pub struct TxIdArgs {
 }
 
 /// Retrieves the transaction in opaque form
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -53,7 +54,7 @@ pub struct TransactionQuery {
     pub transaction: Option<OpaqueTransaction>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -64,7 +65,7 @@ pub struct TransactionsQuery {
     pub transactions: TransactionConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
     pub edges: Vec<TransactionEdge>,
@@ -87,14 +88,14 @@ impl TryFrom<TransactionConnection> for PaginatedResult<TransactionResponse, Str
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionEdge {
     pub cursor: String,
     pub node: OpaqueTransaction,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
@@ -111,7 +112,7 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Transaction")]
 pub struct TransactionIdFragment {
     pub id: TransactionId,
@@ -157,7 +158,7 @@ impl TryFrom<ProgramState> for fuel_vm::ProgramState {
 }
 
 #[allow(clippy::enum_variant_names)]
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
@@ -168,41 +169,45 @@ pub enum TransactionStatus {
     Unknown,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SubmittedStatus {
     pub time: Tai64Timestamp,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub transaction_id: TransactionId,
-    pub block: BlockIdFragment,
+    pub block: BlockHeightFragment,
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub transaction_id: TransactionId,
-    pub block: BlockIdFragment,
+    pub block: BlockHeightFragment,
     pub time: Tai64Timestamp,
     pub reason: String,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SqueezedOutStatus {
     pub reason: String,
 }
 
 #[allow(clippy::enum_variant_names)]
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum DryRunTransactionStatus {
     SuccessStatus(DryRunSuccessStatus),
@@ -225,6 +230,8 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                 TransactionExecutionResult::Success {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
                     receipts,
+                    total_gas: s.total_gas.0,
+                    total_fee: s.total_fee.0,
                 }
             }
             DryRunTransactionStatus::FailureStatus(s) => {
@@ -236,6 +243,8 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                 TransactionExecutionResult::Failed {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
                     receipts,
+                    total_gas: s.total_gas.0,
+                    total_fee: s.total_fee.0,
                 }
             }
             DryRunTransactionStatus::Unknown => {
@@ -245,21 +254,25 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct DryRunSuccessStatus {
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct DryRunFailureStatus {
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct DryRunTransactionExecutionStatus {
     pub id: TransactionId,
@@ -313,7 +326,7 @@ impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectio
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -324,7 +337,7 @@ pub struct TransactionsByOwnerQuery {
     pub transactions_by_owner: TransactionConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
@@ -342,7 +355,7 @@ pub struct TxArg {
     pub tx: HexString,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -357,20 +370,21 @@ pub struct EstimatePredicates {
 pub struct DryRunArg {
     pub txs: Vec<HexString>,
     pub utxo_validation: Option<bool>,
+    pub gas_price: Option<U64>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(txs: $txs, utxoValidation: $utxo_validation)]
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price)]
     pub dry_run: Vec<DryRunTransactionExecutionStatus>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
@@ -381,7 +395,7 @@ pub struct Submit {
     pub submit: TransactionIdFragment,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
@@ -392,7 +406,7 @@ pub struct SubmitAndAwaitSubscription {
     pub submit_and_await: TransactionStatus,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct AllReceipts {
     pub all_receipts: Vec<Receipt>,
@@ -454,7 +468,8 @@ pub mod tests {
         let tx = fuel_tx::Transaction::default_test_tx();
         let query = DryRun::build(DryRunArg {
             txs: vec![HexString(Bytes(tx.to_bytes()))],
-            utxo_validation: None,
+            utxo_validation: Some(true),
+            gas_price: Some(123u64.into()),
         });
         insta::assert_snapshot!(query.query)
     }

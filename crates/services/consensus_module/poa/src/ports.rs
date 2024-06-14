@@ -1,6 +1,6 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    transactional::StorageTransaction,
+    transactional::Changes,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -8,7 +8,6 @@ use fuel_core_types::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
-    fuel_asm::Word,
     fuel_tx::{
         Transaction,
         TxId,
@@ -22,7 +21,10 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImportResult,
         },
-        executor::UncommittedResult as UncommittedExecutionResult,
+        executor::{
+            Error as ExecutorError,
+            UncommittedResult as UncommittedExecutionResult,
+        },
         txpool::ArcPoolTx,
     },
     tai64::Tai64,
@@ -35,13 +37,10 @@ pub trait TransactionPool: Send + Sync {
 
     fn total_consumable_gas(&self) -> u64;
 
-    fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
+    fn remove_txs(&self, tx_ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx>;
 
     fn transaction_status_events(&self) -> BoxStream<TxId>;
 }
-
-#[cfg(test)]
-use fuel_core_storage::test_helpers::EmptyStorage;
 
 /// The source of transactions for the block.
 pub enum TransactionsSource {
@@ -51,28 +50,23 @@ pub enum TransactionsSource {
     SpecificTransactions(Vec<Transaction>),
 }
 
-#[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
-    type Database;
-
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        max_gas: Word,
-    ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<Self::Database>>>;
+    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 }
 
-#[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait BlockImporter: Send + Sync {
-    type Database;
-
     async fn commit_result(
         &self,
-        result: UncommittedImportResult<StorageTransaction<Self::Database>>,
+        result: UncommittedImportResult<Changes>,
     ) -> anyhow::Result<()>;
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo>;

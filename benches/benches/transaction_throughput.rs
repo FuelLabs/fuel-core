@@ -31,9 +31,12 @@ use fuel_core_types::{
         Immediate12,
         Immediate18,
     },
-    fuel_vm::checked_transaction::{
-        CheckPredicateParams,
-        EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        interpreter::MemoryInstance,
     },
 };
 use rand::{
@@ -105,7 +108,7 @@ where
                                 test_builder.finalize().await;
 
                             // insert all transactions
-                            srv.shared.txpool.insert(transactions).await;
+                            srv.shared.txpool_shared_state.insert(transactions).await;
                             let _ = client.produce_blocks(1, None).await;
 
                             // sanity check block to ensure the transactions were actually processed
@@ -158,12 +161,10 @@ fn signed_transfers(c: &mut Criterion) {
     let generator = |rng: &mut StdRng| {
         TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
-            .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(rng),
                 rng.gen(),
                 1000,
-                Default::default(),
                 Default::default(),
                 Default::default(),
             )
@@ -171,7 +172,6 @@ fn signed_transfers(c: &mut Criterion) {
                 SecretKey::random(rng),
                 rng.gen(),
                 1000,
-                Default::default(),
                 Default::default(),
                 Default::default(),
             )
@@ -189,12 +189,10 @@ fn predicate_transfers(c: &mut Criterion) {
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
-            .gas_price(1)
             .add_input(Input::coin_predicate(
                 rng.gen(),
                 owner,
                 1000,
-                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -208,14 +206,13 @@ fn predicate_transfers(c: &mut Criterion) {
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                Default::default(),
                 predicate,
                 vec![],
             ))
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::default())
+        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
             .expect("Predicate check failed");
         tx
     };
@@ -258,12 +255,10 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
-            .gas_price(1)
             .add_input(Input::coin_predicate(
                 rng.gen(),
                 owner,
                 1000,
-                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -277,14 +272,13 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                Default::default(),
                 predicate,
                 predicate_data,
             ))
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::default())
+        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
             .expect("Predicate check failed");
         tx
     };

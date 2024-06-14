@@ -16,7 +16,6 @@ use fuel_core_types::{
         Output,
         Script,
         Transaction,
-        Word,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
@@ -48,7 +47,6 @@ fn transaction<R: Rng>(
                 rng.gen(),
                 AssetId::BASE,
                 rng.gen(),
-                rng.gen(),
                 0,
                 vec![255; 1],
                 vec![255; 1],
@@ -66,10 +64,7 @@ fn transaction<R: Rng>(
         1_000_000,
         script,
         script_data,
-        Policies::new()
-            .with_gas_price(0)
-            .with_maturity(0.into())
-            .with_max_fee(Word::MAX),
+        Policies::new().with_max_fee(0).with_maturity(0.into()),
         inputs,
         outputs,
         vec![vec![123; 32].into(); 1],
@@ -80,34 +75,38 @@ fn transaction<R: Rng>(
 
 pub fn vm_initialization(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(8586);
-
+    let consensus_params = ConsensusParameters::default();
     let mut group = c.benchmark_group("vm_initialization");
 
-    let consensus_params = ConsensusParameters::default();
-    let mut i = 5usize;
-    loop {
+    // Increase the size of the script to measure the performance of the VM initialization
+    // with a large script. THe largest allowed script is 64 KB = 8 * 2^13 bytes.
+    const TX_SIZE_POWER_OF_TWO: usize = 12;
+
+    for i in 5..=TX_SIZE_POWER_OF_TWO {
         let size = 8 * (1 << i);
-        if size as u64 > consensus_params.script_params.max_script_data_length {
-            break
-        }
+
         let script = vec![op::ret(1); size / Instruction::SIZE]
             .into_iter()
             .collect();
         let script_data = vec![255; size];
         let tx = transaction(&mut rng, script, script_data, &consensus_params);
         let tx_size = tx.transaction().size();
+        let tx = tx.test_into_ready();
+
         let name = format!("vm_initialization_with_tx_size_{}", tx_size);
+        let mut vm = black_box(
+            Interpreter::<_, _, Script, NotSupportedEcal>::with_memory_storage(),
+        );
         group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
-                let mut vm = black_box(
-                    Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
+                #[allow(clippy::unit_arg)]
+                black_box(
+                    vm.init_script(tx.clone())
+                        .expect("Should be able to execute transaction"),
                 );
-                black_box(vm.init_script(tx.clone()))
-                    .expect("Should be able to execute transaction");
             })
         });
-        i += 1;
     }
 
     group.finish();

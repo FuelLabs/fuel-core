@@ -29,7 +29,7 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -41,7 +41,6 @@ use fuel_core_types::{
         primitives::SecretKeyWrapper,
         SealedBlock,
     },
-    fuel_asm::Word,
     fuel_crypto::Signature,
     fuel_tx::{
         Transaction,
@@ -130,7 +129,6 @@ pub(crate) enum RequestType {
 }
 
 pub struct MainTask<T, B, I> {
-    block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
     block_importer: I,
@@ -169,7 +167,6 @@ where
         let peer_connections_stream = p2p_port.reserved_peers_count();
 
         let Config {
-            block_gas_limit,
             signing_key,
             min_connected_reserved_peers,
             time_until_synced,
@@ -188,7 +185,6 @@ where
         let sync_task_handle = ServiceRunner::new(sync_task);
 
         Self {
-            block_gas_limit,
             signing_key,
             txpool,
             block_producer,
@@ -245,11 +241,11 @@ where
     }
 }
 
-impl<D, T, B, I> MainTask<T, B, I>
+impl<T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
-    B: BlockProducer<Database = D>,
-    I: BlockImporter<Database = D>,
+    B: BlockProducer,
+    I: BlockImporter,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -257,9 +253,9 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-    ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<D>>> {
+    ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
         self.block_producer
-            .produce_and_execute_block(height, block_time, source, self.block_gas_limit)
+            .produce_and_execute_block(height, block_time, source)
             .await
     }
 
@@ -331,8 +327,9 @@ where
                 block,
                 skipped_transactions,
                 tx_status,
+                events,
             },
-            db_transaction,
+            changes,
         ) = self
             .signal_produce_block(height, block_time, source)
             .await?
@@ -345,7 +342,7 @@ where
                 tx_id,
                 err
             );
-            tx_ids_to_remove.push(tx_id);
+            tx_ids_to_remove.push((tx_id, err));
         }
         self.txpool.remove_txs(tx_ids_to_remove);
 
@@ -358,8 +355,8 @@ where
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
-                ImportResult::new_from_local(block, tx_status),
-                db_transaction,
+                ImportResult::new_from_local(block, tx_status, events),
+                changes,
             ))
             .await?;
 
@@ -454,31 +451,42 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B, I> RunnableTask for MainTask<T, B, I>
+impl<T, B, I> RunnableTask for MainTask<T, B, I>
 where
     T: TransactionPool,
-    B: BlockProducer<Database = D>,
-    I: BlockImporter<Database = D>,
+    B: BlockProducer,
+    I: BlockImporter,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+        let mut state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
-        while *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
+        while *state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     should_continue = result?.started();
                     return Ok(should_continue);
                 }
-                _ = self.sync_task_handle.shared.changed() => {
-                    if let SyncState::Synced(block_header) = &*self.sync_task_handle.shared.borrow() {
-                        let (last_height, last_timestamp, last_block_created) =
-                            Self::extract_block_info(block_header);
-                        self.last_height = last_height;
-                        self.last_timestamp = last_timestamp;
-                        self.last_block_created = last_block_created;
-                    }
+                _ = state.changed() => {
+                    break;
                 }
+                _ = self.tx_status_update_stream.next() => {
+                    // ignore txpool events while syncing
+                }
+                _ = self.timer.wait() => {
+                    // ignore timer events while syncing
+                }
+            }
+        }
+
+        if let SyncState::Synced(block_header) = &*state.borrow_and_update() {
+            let (last_height, last_timestamp, last_block_created) =
+                Self::extract_block_info(block_header);
+            if last_height > self.last_height {
+                self.last_height = last_height;
+                self.last_timestamp = last_timestamp;
+                self.last_block_created = last_block_created;
             }
         }
 
@@ -529,7 +537,7 @@ where
     }
 }
 
-pub fn new_service<D, T, B, I, P>(
+pub fn new_service<T, B, I, P>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
@@ -539,8 +547,8 @@ pub fn new_service<D, T, B, I, P>(
 ) -> Service<T, B, I>
 where
     T: TransactionPool + 'static,
-    B: BlockProducer<Database = D> + 'static,
-    I: BlockImporter<Database = D> + 'static,
+    B: BlockProducer + 'static,
+    I: BlockImporter + 'static,
     P: P2pPort,
 {
     Service::new(MainTask::new(

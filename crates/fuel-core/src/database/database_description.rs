@@ -10,7 +10,7 @@ pub trait DatabaseDescription: 'static + Clone + Debug + Send + Sync {
     /// The type of the column used by the database.
     type Column: StorageColumn + strum::EnumCount + enum_iterator::Sequence;
     /// The type of the height of the database used to track commits.
-    type Height: Copy;
+    type Height: Default + Copy;
 
     /// Returns the expected version of the database.
     fn version() -> u32;

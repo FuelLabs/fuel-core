@@ -13,12 +13,12 @@ description = "Transaction pool"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-futures = { workspace = true }
+mockall = { workspace = true, optional = true }
+num-rational = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-rayon = { workspace = true }
@@ -30,17 +30,14 @@ fuel-core-trace = { path = "./../../trace" }
 fuel-core-txpool = { path = "", features = ["test-helpers"] }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 itertools = { workspace = true }
-mockall = { workspace = true }
 proptest = { workspace = true }
 rstest = "0.15"
 test-strategy = { workspace = true }
-tokio = { workspace = true, features = [
-    "sync",
-    "test-util",
-] }
+tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [features]
 test-helpers = [
-    "fuel-core-types/test-helpers",
-    "fuel-core-storage/test-helpers",
+  "dep:mockall",
+  "fuel-core-types/test-helpers",
+  "fuel-core-storage/test-helpers",
 ]

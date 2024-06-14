@@ -1,7 +1,11 @@
 use super::*;
 use crate::{
     mock_db::MockDBProvider,
-    ports::BlockImporter,
+    ports::{
+        BlockImporter,
+        MockConsensusParametersProvider,
+    },
+    types::GasPrice,
     MockDb,
 };
 use fuel_core_services::{
@@ -22,19 +26,64 @@ use fuel_core_types::{
         TransactionBuilder,
         Word,
     },
+    fuel_vm::interpreter::MemoryInstance,
     services::{
         block_importer::ImportResult,
         p2p::GossipsubMessageAcceptance,
+        txpool::Result as TxPoolResult,
     },
 };
 use std::cell::RefCell;
 
 type GossipedTransaction = GossipData<Transaction>;
 
+pub struct DummyPool;
+
+#[async_trait::async_trait]
+impl MemoryPool for DummyPool {
+    type Memory = MemoryInstance;
+
+    async fn get_memory(&self) -> Self::Memory {
+        MemoryInstance::new()
+    }
+}
+
 pub struct TestContext {
-    pub(crate) service: Service<MockP2P, MockDBProvider>,
+    pub(crate) service: Service<
+        MockP2P,
+        MockDBProvider,
+        MockTxPoolGasPrice,
+        MockConsensusParametersProvider,
+        DummyPool,
+    >,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MockTxPoolGasPrice {
+    pub gas_price: Option<GasPrice>,
+}
+
+impl MockTxPoolGasPrice {
+    pub fn new(gas_price: GasPrice) -> Self {
+        Self {
+            gas_price: Some(gas_price),
+        }
+    }
+
+    pub fn new_none() -> Self {
+        Self { gas_price: None }
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceProviderConstraint for MockTxPoolGasPrice {
+    async fn last_gas_price(&self) -> TxPoolResult<GasPrice> {
+        self.gas_price.ok_or(TxPoolError::GasPriceNotFound(
+            "Gas price not found".to_string(),
+        ))
+    }
 }
 
 impl TestContext {
@@ -42,14 +91,23 @@ impl TestContext {
         TestContextBuilder::new().build_and_start().await
     }
 
-    pub fn service(&self) -> &Service<MockP2P, MockDBProvider> {
+    pub fn service(
+        &self,
+    ) -> &Service<
+        MockP2P,
+        MockDBProvider,
+        MockTxPoolGasPrice,
+        MockConsensusParametersProvider,
+        DummyPool,
+    > {
         &self.service
     }
 
-    pub fn setup_script_tx(&self, gas_price: Word) -> Transaction {
+    pub fn setup_script_tx(&self, tip: Word) -> Transaction {
         let (_, gas_coin) = self.setup_coin();
         let mut tx = TransactionBuilder::script(vec![], vec![])
-            .gas_price(gas_price)
+            .max_fee_limit(tip)
+            .tip(tip)
             .script_gas_limit(1000)
             .add_input(gas_coin)
             .finalize_as_transaction();
@@ -97,8 +155,7 @@ impl MockP2P {
             });
             Box::pin(stream)
         });
-        p2p.expect_broadcast_transaction()
-            .returning(move |_| Ok(()));
+
         p2p
     }
 }
@@ -119,8 +176,9 @@ impl MockImporter {
             let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
                 let block = blocks.pop();
                 if let Some(sealed_block) = block {
-                    let result: SharedImportResult =
-                        Arc::new(ImportResult::new_from_local(sealed_block, vec![]));
+                    let result: SharedImportResult = Arc::new(
+                        ImportResult::new_from_local(sealed_block, vec![], vec![]),
+                    );
 
                     Some((result, blocks))
                 } else {
@@ -171,10 +229,11 @@ impl TestContextBuilder {
         self.p2p = Some(p2p)
     }
 
-    pub fn setup_script_tx(&mut self, gas_price: Word) -> Transaction {
+    pub fn setup_script_tx(&mut self, tip: Word) -> Transaction {
         let (_, gas_coin) = self.setup_coin();
         TransactionBuilder::script(vec![], vec![])
-            .gas_price(gas_price)
+            .tip(tip)
+            .max_fee_limit(tip)
             .script_gas_limit(1000)
             .add_input(gas_coin)
             .finalize_as_transaction()
@@ -186,13 +245,27 @@ impl TestContextBuilder {
 
     pub fn build(self) -> TestContext {
         let rng = RefCell::new(self.rng);
+        let gas_price = 0;
         let config = self.config.unwrap_or_default();
         let mock_db = self.mock_db;
 
-        let p2p = self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
+        let mut p2p = self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
+        // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
+        // ordering of methods handlers: https://docs.rs/mockall/0.12.1/mockall/index.html#matching-multiple-calls
+        p2p.expect_notify_gossip_transaction_validity()
+            .returning(move |_, _| Ok(()));
+        p2p.expect_broadcast_transaction()
+            .returning(move |_| Ok(()));
+
         let importer = self
             .importer
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
+        let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+        let mut consensus_parameters_provider =
+            MockConsensusParametersProvider::default();
+        consensus_parameters_provider
+            .expect_latest_consensus_parameters()
+            .returning(|| Arc::new(Default::default()));
 
         let service = new_service(
             config,
@@ -200,6 +273,9 @@ impl TestContextBuilder {
             importer,
             p2p,
             Default::default(),
+            gas_price_provider,
+            consensus_parameters_provider,
+            DummyPool,
         );
 
         TestContext {

@@ -24,20 +24,27 @@ There are several system requirements including clang.
 ```bash
 brew update
 brew install cmake
-brew install protobuf
 ```
 
 #### Debian
 
 ```bash
 apt update
-apt install -y cmake pkg-config build-essential git clang libclang-dev protobuf-compiler
+apt install -y cmake pkg-config build-essential git clang libclang-dev
 ```
 
 #### Arch
 
 ```bash
-pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang protobuf-compiler
+pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
+```
+
+### Rust setup
+
+You'll need `wasm32-unknown-unknown` target installed.
+
+```bash
+rustup target add wasm32-unknown-unknown
 ```
 
 ### Compiling
@@ -76,9 +83,10 @@ USAGE:
     fuel-core run [OPTIONS]
 
 OPTIONS:
-        --chain <CHAIN_CONFIG>
-            Specify either an alias to a built-in configuration or filepath to a JSON file [default:
-            local_testnet]
+        --snapshot <SNAPSHOT>
+          Snapshot from which to do (re)genesis. Defaults to local testnet configuration
+
+          [env: SNAPSHOT=]
         ...
 ```
 
@@ -170,7 +178,7 @@ The client functionality is available through a service endpoint that expect Gra
 
 The transaction executor currently performs instant block production. Changes are persisted to RocksDB by default.
 
--   Service endpoint: `/graphql`
+-   Service endpoint: `/v1/graphql`
 -   Schema (available after building): `crates/client/assets/schema.sdl`
 
 The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/transaction.md).

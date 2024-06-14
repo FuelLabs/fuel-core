@@ -1,3 +1,10 @@
+use fuel_core_chain_config::{
+    AddTable,
+    AsTable,
+    StateConfig,
+    StateConfigBuilder,
+    TableEntry,
+};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -42,6 +49,18 @@ impl TableWithBlueprint for OwnedTransactions {
     }
 }
 
+impl AsTable<OwnedTransactions> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<OwnedTransactions>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<OwnedTransactions> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<OwnedTransactions>>) {
+        // Do not include these for now
+    }
+}
+
 /// The table stores the status of each transaction.
 pub struct TransactionStatuses;
 
@@ -58,6 +77,18 @@ impl TableWithBlueprint for TransactionStatuses {
 
     fn column() -> Self::Column {
         Self::Column::TransactionStatus
+    }
+}
+
+impl AsTable<TransactionStatuses> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<TransactionStatuses>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<TransactionStatuses> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<TransactionStatuses>>) {
+        // Do not include these for now
     }
 }
 
@@ -84,7 +115,9 @@ fn owned_tx_index_key(
 
 pub type TransactionIndex = u16;
 
-#[derive(Clone)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct OwnedTransactionIndexKey {
     pub owner: Address,
     pub block_height: BlockHeight,

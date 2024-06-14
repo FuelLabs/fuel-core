@@ -1,31 +1,38 @@
 #![allow(unused_variables)]
+
 use crate::{
     cli::{
-        run::consensus::PoATriggerArgs,
-        DEFAULT_DB_PATH,
+        default_db_path,
+        run::{
+            consensus::PoATriggerArgs,
+            tx_pool::TxPoolArgs,
+        },
+        ShutdownListener,
     },
     FuelService,
 };
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
-    chain_config::{
-        default_consensus_dev_key,
-        ChainConfig,
+    chain_config::default_consensus_dev_key,
+    combined_database::{
+        CombinedDatabase,
+        CombinedDatabaseConfig,
     },
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
+        genesis::NotifyCancel,
         Config,
         DbType,
         RelayerConsensusConfig,
         ServiceTrait,
         VMConfig,
     },
-    txpool::Config as TxPoolConfig,
+    txpool::{
+        config::BlackList,
+        Config as TxPoolConfig,
+    },
     types::{
         blockchain::primitives::SecretKeyWrapper,
         fuel_tx::ContractId,
@@ -33,6 +40,11 @@ use fuel_core::{
         secrecy::Secret,
     },
 };
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    SnapshotReader,
+};
+use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -53,9 +65,9 @@ use tracing::{
     warn,
 };
 
+use super::DEFAULT_DATABASE_CACHE_SIZE;
+
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
-// Default database cache is 1 GB
-const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[cfg(feature = "p2p")]
 mod p2p;
@@ -64,6 +76,7 @@ mod consensus;
 mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
+mod tx_pool;
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
@@ -90,7 +103,7 @@ pub struct Command {
         name = "DB_PATH",
         long = "db-path",
         value_parser,
-        default_value = (*DEFAULT_DB_PATH).to_str().unwrap(),
+        default_value = default_db_path().into_os_string(),
         env
     )]
     pub database_path: PathBuf,
@@ -104,14 +117,14 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
-    /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-    #[arg(
-        name = "CHAIN_CONFIG",
-        long = "chain",
-        default_value = "local_testnet",
-        env
-    )]
-    pub chain_config: String,
+    /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
+    #[arg(name = "SNAPSHOT", long = "snapshot", env)]
+    pub snapshot: Option<PathBuf>,
+
+    /// Prunes the db. Genesis is done from the provided snapshot or the local testnet
+    /// configuration.
+    #[arg(name = "DB_PRUNE", long = "db-prune", env, default_value = "false")]
+    pub db_prune: bool,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -128,6 +141,10 @@ pub struct Command {
     /// disabled by default until downstream consumers stabilize
     #[arg(long = "utxo-validation", env)]
     pub utxo_validation: bool,
+
+    /// Overrides the version of the native executor.
+    #[arg(long = "native-executor-version", env)]
+    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
     /// The minimum allowed gas price
     #[arg(long = "min-gas-price", default_value = "0", env)]
@@ -146,7 +163,11 @@ pub struct Command {
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
     #[arg(long = "coinbase-recipient", env)]
-    pub coinbase_recipient: Option<String>,
+    pub coinbase_recipient: Option<ContractId>,
+
+    /// The cli arguments supported by the `TxPool`.
+    #[clap(flatten)]
+    pub tx_pool: TxPoolArgs,
 
     #[cfg_attr(feature = "relayer", clap(flatten))]
     #[cfg(feature = "relayer")]
@@ -169,22 +190,6 @@ pub struct Command {
     #[clap(long = "verify-max-relayer-wait", default_value = "30s", env)]
     pub max_wait_time: humantime::Duration,
 
-    /// The max time to live of the transaction inside of the `TxPool`.
-    #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
-    pub tx_pool_ttl: humantime::Duration,
-
-    /// The max number of transactions that the `TxPool` can simultaneously store.
-    #[clap(long = "tx-max-number", default_value = "4064", env)]
-    pub tx_max_number: usize,
-
-    /// The max depth of the dependent transactions that supported by the `TxPool`.
-    #[clap(long = "tx-max-depth", default_value = "10", env)]
-    pub tx_max_depth: usize,
-
-    /// The maximum number of active subscriptions that supported by the `TxPool`.
-    #[clap(long = "tx-number-active-subscriptions", default_value = "4064", env)]
-    pub tx_number_active_subscriptions: usize,
-
     /// The number of reserved peers to connect to before starting to sync.
     #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
     pub min_connected_reserved_peers: usize,
@@ -201,6 +206,10 @@ pub struct Command {
     #[clap(long = "api-request-timeout", default_value = "30m", env)]
     pub api_request_timeout: humantime::Duration,
 
+    /// The size of the memory pool in number of `MemoryInstance`s.
+    #[clap(long = "memory-pool-size", default_value = "32", env)]
+    pub memory_pool_size: usize,
+
     #[clap(flatten)]
     pub profiling: profiling::ProfilingArgs,
 }
@@ -214,10 +223,12 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_config,
+            db_prune,
+            snapshot,
             vm_backtrace,
             debug,
             utxo_validation,
+            native_executor_version,
             min_gas_price,
             consensus_key,
             poa_trigger,
@@ -231,26 +242,31 @@ impl Command {
             metrics,
             max_da_lag,
             max_wait_time,
-            tx_pool_ttl,
-            tx_max_number,
-            tx_max_depth,
-            tx_number_active_subscriptions,
+            tx_pool,
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
             api_request_timeout,
+            memory_pool_size,
             profiling: _,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        let snapshot_reader = match snapshot.as_ref() {
+            None => crate::cli::local_testnet_reader(),
+            Some(path) => {
+                let metadata = SnapshotMetadata::read(path)?;
+                SnapshotReader::open(metadata)?
+            }
+        };
+        let chain_config = snapshot_reader.chain_config();
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(chain_conf.chain_name.clone(), metrics)?;
+        let p2p_cfg = p2p_args.into_config(chain_config.chain_name.clone(), metrics)?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -280,10 +296,7 @@ impl Command {
         });
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
-            Some(
-                ContractId::from_str(coinbase_recipient.as_str())
-                    .map_err(|err| anyhow!(err))?,
-            )
+            Some(coinbase_recipient)
         } else {
             tracing::warn!("The coinbase recipient `ContractId` is not set!");
             None
@@ -294,17 +307,40 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        let combined_db_config = CombinedDatabaseConfig {
+            database_path,
+            database_type,
+            max_database_cache_size,
+        };
+
         let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new(&chain_conf);
+            fuel_core::service::config::fuel_core_importer::Config::new();
+
+        let TxPoolArgs {
+            tx_pool_ttl,
+            tx_max_number,
+            tx_max_depth,
+            tx_number_active_subscriptions,
+            tx_blacklist_addresses,
+            tx_blacklist_coins,
+            tx_blacklist_messages,
+            tx_blacklist_contracts,
+        } = tx_pool;
+
+        let blacklist = BlackList::new(
+            tx_blacklist_addresses,
+            tx_blacklist_coins,
+            tx_blacklist_messages,
+            tx_blacklist_contracts,
+        );
 
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
-            max_database_cache_size,
-            database_path,
-            database_type,
-            chain_conf: chain_conf.clone(),
+            combined_db_config,
+            snapshot_reader,
             debug,
+            native_executor_version,
             utxo_validation,
             block_production: trigger,
             vm: VMConfig {
@@ -313,18 +349,17 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_conf,
-                min_gas_price,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
                 tx_number_active_subscriptions,
+                blacklist,
             ),
             block_producer: ProducerConfig {
-                utxo_validation,
                 coinbase_recipient,
                 metrics,
             },
+            static_gas_price: min_gas_price,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,
@@ -338,12 +373,18 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             query_log_threshold_time: query_log_threshold_time.into(),
+            memory_pool_size,
         };
         Ok(config)
     }
 }
 
-pub async fn exec(command: Command) -> anyhow::Result<()> {
+pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
+    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+    if command.db_prune && command.database_path.exists() {
+        fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
+    }
+
     let profiling = command.profiling.clone();
     let config = command.get_config()?;
 
@@ -354,16 +395,35 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");
     // initialize the server
-    let server = FuelService::new_node(config).await?;
-    // pause the main task while service is running
+    let combined_database = CombinedDatabase::from_config(&config.combined_db_config)?;
+
+    FuelService::new(combined_database, config)
+}
+
+pub async fn exec(command: Command) -> anyhow::Result<()> {
+    let service = get_service(command)?;
+
+    let shutdown_listener = ShutdownListener::spawn();
+    // Genesis could take a long time depending on the snapshot size. Start needs to be
+    // interruptible by the shutdown_signal
     tokio::select! {
-        result = server.await_stop() => {
+        result = service.start_and_await() => {
             result?;
         }
-        _ = shutdown_signal() => {}
+        _ = shutdown_listener.wait_until_cancelled() => {
+            service.stop();
+        }
     }
 
-    server.stop_and_await().await?;
+    // pause the main task while service is running
+    tokio::select! {
+        result = service.await_stop() => {
+            result?;
+        }
+        _ = shutdown_listener.wait_until_cancelled() => {}
+    }
+
+    service.stop_and_await().await?;
 
     Ok(())
 }
@@ -396,11 +456,11 @@ fn start_pyroscope_agent(
         .pyroscope_url
         .as_ref()
         .map(|url| -> anyhow::Result<_> {
-            // Configure profiling backend
+            let chain_config = config.snapshot_reader.chain_config();
             let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
                 .tags(vec![
                     ("service", config.name.as_str()),
-                    ("network", config.chain_conf.chain_name.as_str()),
+                    ("network", chain_config.chain_name.as_str()),
                 ])
                 .backend(pprof_backend(
                     PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),
@@ -411,29 +471,4 @@ fn start_pyroscope_agent(
             Ok(agent_running)
         })
         .transpose()
-}
-
-async fn shutdown_signal() -> anyhow::Result<()> {
-    #[cfg(unix)]
-    {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-
-        let mut sigint =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        tokio::select! {
-            _ = sigterm.recv() => {
-                tracing::info!("sigterm received");
-            }
-            _ = sigint.recv() => {
-                tracing::info!("sigint received");
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c().await?;
-        tracing::info!("CTRL+C received");
-    }
-    Ok(())
 }

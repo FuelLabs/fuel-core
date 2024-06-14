@@ -8,17 +8,13 @@ query($id: TransactionId!) {
     id
     txPointer
     inputAssetIds
-    inputContracts {
-      id
-    }
+    inputContracts
     inputContract {
       utxoId
       balanceRoot
       stateRoot
       txPointer
-      contract {
-        id
-      }
+      contractId
     }
     inputs {
       __typename
@@ -29,7 +25,6 @@ query($id: TransactionId!) {
         assetId
         txPointer
         witnessIndex
-        maturity
         predicateGasUsed
         predicate
         predicateData
@@ -39,9 +34,7 @@ query($id: TransactionId!) {
         balanceRoot
         stateRoot
         txPointer
-        contract {
-          id
-        }
+        contractId
       }
       ... on InputMessage {
         sender
@@ -58,6 +51,8 @@ query($id: TransactionId!) {
     isScript
     isCreate
     isMint
+    isUpgrade
+    isUpload
     outputs {
       __typename
       ... on CoinOutput {
@@ -81,9 +76,7 @@ query($id: TransactionId!) {
         assetId
       }
       ... on ContractCreated {
-        contract {
-          id
-        }
+        contract
         stateRoot
       }
     }
@@ -94,6 +87,7 @@ query($id: TransactionId!) {
     }
     mintAmount
     mintAssetId
+    mintGasPrice
     receiptsRoot
     status {
       __typename
@@ -103,7 +97,7 @@ query($id: TransactionId!) {
       ... on SuccessStatus {
         transactionId
         block {
-          id
+          height
         }
         time
         programState {
@@ -117,9 +111,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -129,9 +121,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
@@ -144,6 +134,8 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
       ... on SqueezedOutStatus {
         reason
@@ -151,7 +143,7 @@ query($id: TransactionId!) {
       ... on FailureStatus {
         transactionId
         block {
-          id
+          height
         }
         time
         reason
@@ -166,9 +158,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -178,9 +168,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
@@ -193,13 +181,15 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
     }
     witnesses
     script
     scriptData
     policies {
-      gasPrice
+      tip
       maturity
       witnessLimit
       maxFee
@@ -207,8 +197,19 @@ query($id: TransactionId!) {
     salt
     storageSlots
     bytecodeWitnessIndex
-    bytecodeLength
+    bytecodeRoot
+    subsectionIndex
+    subsectionsNumber
+    proofSet
+    upgradePurpose {
+      __typename
+      ... on ConsensusParametersPurpose {
+        witnessIndex
+        checksum
+      }
+      ... on StateTransitionPurpose {
+        root
+      }
+    }
   }
 }
-
-

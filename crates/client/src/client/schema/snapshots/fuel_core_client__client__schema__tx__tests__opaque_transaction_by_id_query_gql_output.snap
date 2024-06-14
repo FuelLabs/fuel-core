@@ -13,7 +13,7 @@ query($id: TransactionId!) {
       ... on SuccessStatus {
         transactionId
         block {
-          id
+          height
         }
         time
         programState {
@@ -27,9 +27,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -39,9 +37,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
@@ -54,6 +50,8 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
       ... on SqueezedOutStatus {
         reason
@@ -61,7 +59,7 @@ query($id: TransactionId!) {
       ... on FailureStatus {
         transactionId
         block {
-          id
+          height
         }
         time
         reason
@@ -76,9 +74,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -88,9 +84,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
@@ -103,9 +97,9 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
     }
   }
 }
-
-

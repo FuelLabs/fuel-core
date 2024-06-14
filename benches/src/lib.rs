@@ -1,8 +1,8 @@
-pub mod default_gas_costs;
-pub mod import;
-
-pub use fuel_core::database::Database;
-pub use fuel_core_storage::vm_storage::VmStorage;
+use fuel_core::database::GenesisDatabase;
+use fuel_core_storage::transactional::{
+    IntoTransaction,
+    StorageTransaction,
+};
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -25,18 +25,26 @@ use fuel_core_types::{
         interpreter::{
             diff,
             InterpreterParams,
+            MemoryInstance,
             ReceiptsCtx,
         },
         *,
     },
 };
+use std::{
+    iter,
+    mem,
+};
 
+pub mod default_gas_costs;
+pub mod import;
+
+pub use fuel_core_storage::vm_storage::VmStorage;
 pub use rand::Rng;
-use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
-fn new_db() -> VmStorage<Database> {
+fn new_db() -> VmStorage<StorageTransaction<GenesisDatabase>> {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
     VmStorage::default()
 }
@@ -61,10 +69,10 @@ impl From<Vec<u8>> for ContractCode {
 
         Self {
             contract,
+            salt,
             id,
             root,
             storage_root,
-            salt,
             slots,
         }
     }
@@ -89,7 +97,7 @@ pub struct VmBench {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub witnesses: Vec<Witness>,
-    pub db: Option<VmStorage<Database>>,
+    pub db: Option<VmStorage<StorageTransaction<GenesisDatabase>>>,
     pub instruction: Instruction,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
@@ -100,7 +108,11 @@ pub struct VmBench {
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<VmStorage<Database>, Script>,
+    pub vm: Interpreter<
+        MemoryInstance,
+        VmStorage<StorageTransaction<GenesisDatabase>>,
+        Script,
+    >,
     pub instruction: Instruction,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
@@ -110,15 +122,15 @@ impl VmBench {
     pub const CONTRACT: ContractId = ContractId::zeroed();
 
     pub fn new(instruction: Instruction) -> Self {
-        let tx_params = TxParameters {
-            max_gas_per_tx: LARGE_GAS_LIMIT + 1,
-            ..Default::default()
-        };
+        let mut consensus_params = ConsensusParameters::default();
+        consensus_params.set_tx_params(
+            TxParameters::default().with_max_gas_per_tx(LARGE_GAS_LIMIT + 1),
+        );
+        consensus_params.set_fee_params(FeeParameters::default().with_gas_per_byte(0));
+        consensus_params.set_gas_costs(GasCosts::free());
+
         Self {
-            params: ConsensusParameters {
-                tx_params,
-                ..Default::default()
-            },
+            params: consensus_params,
             gas_price: 0,
             gas_limit: LARGE_GAS_LIMIT,
             maturity: Default::default(),
@@ -148,7 +160,7 @@ impl VmBench {
 
     pub fn contract_using_db<R>(
         rng: &mut R,
-        mut db: VmStorage<Database>,
+        mut db: VmStorage<StorageTransaction<GenesisDatabase>>,
         instruction: Instruction,
     ) -> anyhow::Result<Self>
     where
@@ -162,8 +174,6 @@ impl VmBench {
 
         let program = Witness::from(program);
 
-        let salt = rng.gen();
-
         let contract = Contract::from(program.as_ref());
         let state_root = Contract::default_state_root();
         let id = VmBench::CONTRACT;
@@ -175,7 +185,7 @@ impl VmBench {
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
 
-        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
+        db.deploy_contract_with_id(&[], &contract, &id)?;
 
         let data = id
             .iter()
@@ -209,7 +219,7 @@ impl VmBench {
             .with_prepare_call(prepare_call))
     }
 
-    pub fn with_db(mut self, db: VmStorage<Database>) -> Self {
+    pub fn with_db(mut self, db: VmStorage<StorageTransaction<GenesisDatabase>>) -> Self {
         self.db.replace(db);
         self
     }
@@ -344,7 +354,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         {
             return Err(anyhow::anyhow!(
                 "a prepare script should not call/return into different contexts.",
-            ))
+            ));
         }
 
         let prepare_script = prepare_script
@@ -359,11 +369,10 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             let code = iter::once(op::ret(RegId::ONE));
             let code: Vec<u8> = code.collect();
             let code = Contract::from(code);
-            let root = code.root();
 
             let input = tx.inputs().len();
             let output =
-                Output::contract(input as u8, Bytes32::zeroed(), Bytes32::zeroed());
+                Output::contract(input as u16, Bytes32::zeroed(), Bytes32::zeroed());
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
@@ -375,21 +384,23 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)?;
+            db.deploy_contract_with_id(&[], &code, &contract)?;
         }
 
         if let Some(ContractCode {
             contract,
-            salt,
             id,
-            root,
             slots,
             storage_root,
+            ..
         }) = contract_code
         {
             let input_count = tx.inputs().len();
-            let output =
-                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let output = Output::contract(
+                input_count as u16,
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+            );
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
@@ -401,13 +412,16 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
+            db.deploy_contract_with_id(&slots, &contract, &id)?;
         }
 
         for contract_id in empty_contracts {
             let input_count = tx.inputs().len();
-            let output =
-                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let output = Output::contract(
+                input_count as u16,
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+            );
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
@@ -419,14 +433,11 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(
-                &VmBench::SALT,
-                &[],
-                &Contract::default(),
-                &Bytes32::zeroed(),
-                &contract_id,
-            )?;
+            db.deploy_contract_with_id(&[], &Contract::default(), &contract_id)?;
         }
+        let transaction = mem::take(db.database_mut());
+        let database = transaction.commit().expect("Failed to commit transaction");
+        *db.database_mut() = database.into_transaction();
 
         inputs.into_iter().for_each(|i| {
             tx.add_input(i);
@@ -443,24 +454,24 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         // add at least one coin input
         tx.add_random_fee_input();
 
-        let mut params = params;
-        params.fee_params.gas_per_byte = 0;
-        params.gas_costs = GasCosts::free();
         let mut tx = tx
-            .gas_price(gas_price)
             .script_gas_limit(gas_limit)
             .maturity(maturity)
             .with_params(params.clone())
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::from(&params))
-            .unwrap();
+        tx.estimate_predicates(
+            &CheckPredicateParams::from(&params),
+            MemoryInstance::new(),
+        )
+        .unwrap();
         let tx = tx.into_checked(height, &params).unwrap();
+        let interpreter_params = InterpreterParams::new(gas_price, &params);
 
-        let mut txtor = Transactor::new(db, InterpreterParams::from(&params));
+        let mut txtor = Transactor::new(MemoryInstance::new(), db, interpreter_params);
 
         txtor.transact(tx);
 
-        let mut vm: Interpreter<_, _> = txtor.into();
+        let mut vm: Interpreter<_, _, _> = txtor.into();
 
         if let Some(receipts_ctx) = receipts_ctx {
             *vm.receipts_mut() = receipts_ctx;
@@ -478,8 +489,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let start_vm = vm.clone();
         let original_db = vm.as_mut().database_mut().clone();
-        let database_tx = original_db.transaction().as_ref().clone();
-        *vm.as_mut().database_mut() = database_tx;
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {

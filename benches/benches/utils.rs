@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use core::iter::successors;
 use ethnum::U256;
 use fuel_core_types::{
@@ -80,7 +82,6 @@ pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
 const BENCH_RECEIPTS: usize = (u16::MAX - 4) as usize;
 
 /// Testing receipt context
-#[allow(dead_code)] // Unsure why this is needed, as the code is used
 pub fn make_receipts(rng: &mut StdRng) -> ReceiptsCtx {
     let mut ctx = ReceiptsCtx::default();
     for _ in 0..BENCH_RECEIPTS {
@@ -96,4 +97,23 @@ pub fn make_receipts(rng: &mut StdRng) -> ReceiptsCtx {
         .expect("Context should not be full");
     }
     ctx
+}
+
+const LAST_VALUE: u64 = 100_000;
+
+pub fn linear_short() -> Vec<u64> {
+    let mut linear_short = vec![1, 10, 100, 1000, 10_000];
+    linear_short.push(LAST_VALUE);
+    linear_short
+}
+
+pub fn linear() -> Vec<u64> {
+    let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
+    let mut l = successors(Some(LAST_VALUE as f64), |n| Some(n / 1.5))
+        .take(5)
+        .map(|f| f as u64)
+        .collect::<Vec<_>>();
+    l.sort_unstable();
+    linear.extend(l);
+    linear
 }

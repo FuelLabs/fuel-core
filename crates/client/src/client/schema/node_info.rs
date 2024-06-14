@@ -15,18 +15,17 @@ use std::{
     },
 };
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct NodeInfo {
     pub utxo_validation: bool,
     pub vm_backtrace: bool,
-    pub min_gas_price: U64,
     pub max_tx: U64,
     pub max_depth: U64,
     pub node_version: String,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct QueryNodeInfo {
     pub node_info: NodeInfo,
@@ -35,19 +34,19 @@ pub struct QueryNodeInfo {
 // Use a separate GQL query for showing peer info, as the endpoint is bulky and may return an error
 // if the `p2p` feature is disabled.
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "NodeInfo")]
 pub struct PeersInfo {
     pub peers: Vec<PeerInfo>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct QueryPeersInfo {
     pub node_info: PeersInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct PeerInfo {
     pub id: String,

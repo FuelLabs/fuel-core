@@ -10,6 +10,7 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+use anyhow::anyhow;
 use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
 
@@ -33,8 +34,10 @@ pub mod test_helpers;
 pub mod transactional;
 pub mod vm_storage;
 
+use fuel_core_types::fuel_merkle::binary::MerkleTreeError;
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,
+    ContractsStateData,
     ContractsStateKey,
 };
 #[doc(hidden)]
@@ -71,9 +74,15 @@ impl From<Error> for anyhow::Error {
     }
 }
 
+impl From<TryFromSliceError> for Error {
+    fn from(e: TryFromSliceError) -> Self {
+        Self::Other(anyhow::anyhow!(e))
+    }
+}
+
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(anyhow::anyhow!(e))
+        ExecutorError::StorageError(e.to_string())
     }
 }
 
@@ -89,9 +98,12 @@ impl From<Error> for fuel_vm_private::prelude::RuntimeError<Error> {
     }
 }
 
-impl From<TryFromSliceError> for Error {
-    fn from(e: TryFromSliceError) -> Self {
-        Self::Other(anyhow::anyhow!(e))
+impl From<MerkleTreeError<Error>> for Error {
+    fn from(e: MerkleTreeError<Error>) -> Self {
+        match e {
+            MerkleTreeError::StorageError(s) => s,
+            e => Error::Other(anyhow!(e)),
+        }
     }
 }
 
@@ -118,6 +130,7 @@ impl<T> IsNotFound for Result<T> {
 
 /// The traits allow work with the storage in batches.
 /// Some implementations can perform batch operations faster than one by one.
+#[impl_tools::autoimpl(for<T: trait> &mut T)]
 pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
     /// Initialize the storage with batch insertion. This method is more performant than
     /// [`Self::insert_batch`] in some cases.

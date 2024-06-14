@@ -21,10 +21,6 @@ pub struct EthState {
 type EthHeight = u64;
 
 #[derive(Clone, Debug)]
-/// Type for tracking block height ranges.
-struct Heights<T>(RangeInclusive<T>);
-
-#[derive(Clone, Debug)]
 /// The gap between the eth block height on
 /// the relayer and the Ethereum node.
 pub struct EthSyncGap(EthHeight, EthHeight);
@@ -47,6 +43,7 @@ impl EthState {
         self.is_synced_at().is_some()
     }
 
+    /// If synced to the remote Ethereum node, return the block height.
     pub fn is_synced_at(&self) -> Option<u64> {
         self.local.filter(|local| *local >= self.remote)
     }

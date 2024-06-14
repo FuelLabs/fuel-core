@@ -38,7 +38,7 @@ where
     type View = OnChainView;
     type Height = Height;
 
-    fn latest_height(&self) -> Self::Height {
+    fn latest_height(&self) -> Option<Self::Height> {
         self.inner.latest_height()
     }
 
@@ -60,7 +60,7 @@ where
     type View = OffChainView;
     type Height = Height;
 
-    fn latest_height(&self) -> Self::Height {
+    fn latest_height(&self) -> Option<Self::Height> {
         self.inner.latest_height()
     }
 

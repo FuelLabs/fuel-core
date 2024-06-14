@@ -5,10 +5,27 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
-use fuel_core::database::Database;
-use fuel_core_storage::vm_storage::VmStorage;
+use fuel_core::database::{
+    database_description::on_chain::OnChain,
+    state::StateInitializer,
+    Database,
+};
+use fuel_core_storage::{
+    transactional::{
+        IntoTransaction,
+        ReadTransaction,
+        WriteTransaction,
+    },
+    vm_storage::VmStorage,
+};
 use fuel_core_types::{
-    blockchain::header::GeneratedConsensusFields,
+    blockchain::{
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+        },
+        primitives::Empty,
+    },
     fuel_tx::Bytes32,
     fuel_types::ContractId,
     fuel_vm::InterpreterStorage,
@@ -28,14 +45,17 @@ use std::{
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-fn setup(db: &mut Database, contract: &ContractId, n: usize) {
+fn setup<D>(db: &mut D, contract: &ContractId, n: usize)
+where
+    D: StateInitializer,
+{
     let mut rng_keys = thread_rng();
     let gen_keys = || -> Bytes32 { rng_keys.gen() };
     let state_keys = iter::repeat_with(gen_keys).take(n);
 
     let mut rng_values = thread_rng();
     let gen_values = || -> Bytes32 { rng_values.gen() };
-    let state_values = iter::repeat_with(gen_values).take(n);
+    let state_values = iter::repeat_with(gen_values).map(|b| b.to_vec()).take(n);
 
     // State key-values
     let state_key_values = state_keys.zip(state_values);
@@ -51,22 +71,23 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmStorage::default();
+            let mut db = Database::<OnChain>::default();
             let contract: ContractId = rng.gen();
-            setup(db.database_mut(), &contract, n);
-            let outer = db.database_mut().transaction();
+            setup(&mut db, &contract, n);
+            let outer = db.write_transaction();
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
-                    let mut inner = outer.transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
-                        inner.as_mut().clone(),
-                        &Default::default(),
+                    let inner = outer.read_transaction();
+                    let mut inner_db = VmStorage::new(
+                        inner,
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -112,22 +133,23 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmStorage::<Database>::default();
+            let db = Database::<OnChain>::default();
             let contract: ContractId = rng.gen();
-            let mut outer = db.database_mut().transaction();
-            setup(outer.as_mut(), &contract, n);
+            let mut outer = db.into_transaction();
+            setup(&mut outer, &contract, n);
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
-                    let mut inner = outer.transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
-                        inner.as_mut().clone(),
-                        &Default::default(),
+                    let inner = outer.read_transaction();
+                    let mut inner_db = VmStorage::new(
+                        inner,
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -173,25 +195,26 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmStorage::<Database>::default();
+            let mut db = Database::<OnChain>::default();
             for _ in 0..n {
                 let contract: ContractId = rng.gen();
-                setup(db.database_mut(), &contract, 1);
+                setup(&mut db, &contract, 1);
             }
-            let outer = db.database_mut().transaction();
+            let outer = db.into_transaction();
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
-                    let mut inner = outer.transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
-                        inner.as_mut().clone(),
-                        &Default::default(),
+                    let inner = outer.read_transaction();
+                    let mut inner_db = VmStorage::new(
+                        inner,
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -237,25 +260,26 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmStorage::<Database>::default();
-            let mut outer = db.database_mut().transaction();
+            let db = Database::<OnChain>::default();
+            let mut outer = db.into_transaction();
             for _ in 0..n {
                 let contract: ContractId = rng.gen();
-                setup(outer.as_mut(), &contract, 1);
+                setup(&mut outer, &contract, 1);
             }
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
-                    let mut inner = outer.transaction();
-                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
-                        inner.as_mut().clone(),
-                        &Default::default(),
+                    let inner = outer.read_transaction();
+                    let mut inner_db = VmStorage::new(
+                        inner,
+                        &ConsensusHeader::<Empty>::default(),
+                        &ApplicationHeader::<Empty>::default(),
                         Default::default(),
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }

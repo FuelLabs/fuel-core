@@ -7,7 +7,9 @@ use ethers::{
     },
 };
 use fuel_core::{
+    combined_database::CombinedDatabase,
     database::Database,
+    fuel_core_graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
     relayer,
     service::{
         Config,
@@ -20,7 +22,10 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::TransactionStatus,
+    types::{
+        RelayedTransactionStatus as ClientRelayedTransactionStatus,
+        TransactionStatus,
+    },
     FuelClient,
 };
 use fuel_core_poa::service::Mode;
@@ -34,13 +39,18 @@ use fuel_core_relayer::{
 };
 use fuel_core_storage::{
     tables::Messages,
+    StorageAsMut,
     StorageAsRef,
 };
 use fuel_core_types::{
+    entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
 };
 use hyper::{
     service::{
@@ -84,6 +94,7 @@ async fn relayer_can_download_logs() {
             None,
             None,
             None,
+            0,
         )
     };
 
@@ -157,6 +168,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         Some(recipient.into()),
         Some(amount),
         None,
+        0,
     )];
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
@@ -215,7 +227,6 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     // attempt to spend the message downloaded from the relayer
     let tx = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
         .script_gas_limit(10_000)
-        .gas_price(0)
         .add_unsigned_message_input(secret_key, sender, nonce, amount, vec![])
         .add_output(Output::change(rng.gen(), 0, AssetId::BASE))
         .finalize();
@@ -251,6 +262,114 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     eth_node_handle.shutdown.send(()).unwrap();
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn can_find_failed_relayed_tx() {
+    let mut db = CombinedDatabase::in_memory();
+    let id = [1; 32].into();
+    let block_height: BlockHeight = 999.into();
+    let failure = "lolz".to_string();
+
+    // given
+    let status = FuelRelayedTransactionStatus::Failed {
+        block_height,
+        failure: failure.clone(),
+    };
+    db.off_chain_mut()
+        .storage_as_mut::<RelayedTransactionStatuses>()
+        .insert(&id, &status)
+        .unwrap();
+
+    // when
+    let srv = FuelService::from_combined_database(db.clone(), Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // then
+    let expected = Some(ClientRelayedTransactionStatus::Failed {
+        block_height,
+        failure,
+    });
+    let actual = client.relayed_transaction_status(&id).await.unwrap();
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_restart_node_with_relayer_data() {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let mut config = Config::local_node();
+    config.relayer = Some(relayer::Config::default());
+    let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
+    let eth_node = MockMiddleware::default();
+    let contract_address = relayer_config.eth_v2_listening_contracts[0];
+
+    // setup a real spendable message
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
+    let pk = secret_key.public_key();
+    let recipient = Input::owner(&pk);
+    let sender = Address::zeroed();
+    let amount = 100;
+    let nonce = Nonce::from(2u64);
+    let logs = vec![make_message_event(
+        nonce,
+        5,
+        contract_address,
+        Some(sender.into()),
+        Some(recipient.into()),
+        Some(amount),
+        None,
+        0,
+    )];
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    // Setup the eth node with a block high enough that there
+    // will be some finalized blocks.
+    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    let eth_node = Arc::new(eth_node);
+    let eth_node_handle = spawn_eth_node(eth_node).await;
+
+    relayer_config.relayer = Some(
+        format!("http://{}", eth_node_handle.address)
+            .as_str()
+            .try_into()
+            .unwrap(),
+    );
+
+    let capacity = 1024 * 1024;
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+
+    {
+        // Given
+        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
+
+        let service = FuelService::from_combined_database(database, config.clone())
+            .await
+            .unwrap();
+        let client = FuelClient::from(service.bound_address);
+        client.health().await.unwrap();
+
+        for _ in 0..5 {
+            let tx = Transaction::default_test_tx();
+            client.submit_and_await_commit(&tx).await.unwrap();
+        }
+
+        service.stop_and_await().await.unwrap();
+    }
+
+    {
+        // When
+        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
+        let service = FuelService::from_combined_database(database, config)
+            .await
+            .unwrap();
+        let client = FuelClient::from(service.bound_address);
+
+        // Then
+        client.health().await.unwrap();
+        service.stop_and_await().await.unwrap();
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn make_message_event(
     nonce: Nonce,
     block_number: u64,
@@ -259,6 +378,7 @@ fn make_message_event(
     recipient: Option<[u8; 32]>,
     amount: Option<u64>,
     data: Option<Vec<u8>>,
+    log_index: u64,
 ) -> Log {
     let message = fuel_core_relayer::bridge::MessageSentFilter {
         nonce: U256::from_big_endian(nonce.as_ref()),
@@ -270,6 +390,7 @@ fn make_message_event(
     let mut log = message.into_log();
     log.address = contract_address;
     log.block_number = Some(block_number.into());
+    log.log_index = Some(log_index.into());
     log
 }
 

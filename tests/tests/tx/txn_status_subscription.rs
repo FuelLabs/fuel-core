@@ -19,9 +19,12 @@ use fuel_core_types::{
         *,
     },
     fuel_types::ChainId,
-    fuel_vm::checked_transaction::{
-        CheckPredicateParams,
-        EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        interpreter::MemoryInstance,
     },
 };
 use futures::StreamExt;
@@ -37,12 +40,10 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
     let script = script.into_iter().collect();
     let mut tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(10000)
-        .gas_price(1)
         .add_input(Input::coin_predicate(
             rng.gen(),
             owner,
             1000,
-            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),
@@ -56,14 +57,13 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
             Default::default(),
             Default::default(),
             Default::default(),
-            Default::default(),
             predicate,
             vec![],
         ))
         .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
         .add_output(Output::change(rng.gen(), 0, AssetId::default()))
         .finalize();
-    tx.estimate_predicates(&CheckPredicateParams::default())
+    tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
         .expect("Predicate check failed");
     tx.into()
 }
@@ -77,7 +77,6 @@ async fn subscribe_txn_status() {
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = 10;
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 
@@ -101,7 +100,6 @@ async fn subscribe_txn_status() {
             AssetId::zeroed(),
             TxPointer::default(),
             Default::default(),
-            Default::default(),
             predicate,
             vec![],
         );
@@ -110,15 +108,15 @@ async fn subscribe_txn_status() {
             script,
             vec![],
             policies::Policies::new()
-                .with_gas_price(gas_price + (i as u64))
-                .with_maturity(maturity),
+                .with_maturity(maturity)
+                .with_max_fee(0),
             vec![coin_input],
             vec![],
             vec![],
         )
         .into();
         // estimate predicate gas for coin_input predicate
-        tx.estimate_predicates(&CheckPredicateParams::default())
+        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
             .expect("should estimate predicate");
 
         tx
@@ -176,7 +174,6 @@ async fn test_regression_in_subscribe() {
         rng.gen(),
         rng.gen(),
         rng.gen(),
-        Default::default(),
         Default::default(),
         predicate,
         vec![],

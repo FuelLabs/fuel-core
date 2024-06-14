@@ -1,5 +1,4 @@
 use crate::{
-    database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
     service::adapters::{
         BlockImporterAdapter,
@@ -23,9 +22,8 @@ use fuel_core_poa::{
     },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
-    fuel_asm::Word,
     fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
@@ -33,7 +31,10 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImporterResult,
         },
-        executor::UncommittedResult,
+        executor::{
+            Error as ExecutorError,
+            UncommittedResult,
+        },
         txpool::ArcPoolTx,
     },
     tai64::Tai64,
@@ -82,8 +83,12 @@ impl TransactionPool for TxPoolAdapter {
         self.service.total_consumable_gas()
     }
 
-    fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.service.remove_txs(ids)
+    fn remove_txs(&self, ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx> {
+        self.service.remove_txs(
+            ids.into_iter()
+                .map(|(tx_id, err)| (tx_id, err.to_string()))
+                .collect(),
+        )
     }
 
     fn transaction_status_events(&self) -> BoxStream<TxId> {
@@ -96,26 +101,21 @@ impl TransactionPool for TxPoolAdapter {
 
 #[async_trait::async_trait]
 impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
-    type Database = Database;
-
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
         match source {
             TransactionsSource::TxPool => {
                 self.block_producer
-                    .produce_and_execute_block_txpool(height, block_time, max_gas)
+                    .produce_and_execute_block_txpool(height, block_time)
                     .await
             }
             TransactionsSource::SpecificTransactions(txs) => {
                 self.block_producer
-                    .produce_and_execute_block_transactions(
-                        height, block_time, txs, max_gas,
-                    )
+                    .produce_and_execute_block_transactions(height, block_time, txs)
                     .await
             }
         }
@@ -124,11 +124,9 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
 
 #[async_trait::async_trait]
 impl BlockImporter for BlockImporterAdapter {
-    type Database = Database;
-
     async fn commit_result(
         &self,
-        result: UncommittedImporterResult<StorageTransaction<Self::Database>>,
+        result: UncommittedImporterResult<Changes>,
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)

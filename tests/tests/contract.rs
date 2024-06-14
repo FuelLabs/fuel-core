@@ -2,9 +2,15 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
-use fuel_core::service::{
-    Config,
-    FuelService,
+use fuel_core::{
+    database::{
+        database_description::on_chain::OnChain,
+        Database,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     pagination::{
@@ -14,15 +20,124 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
     fuel_types::canonical::Serialize,
-    fuel_vm::*,
+    fuel_vm::{
+        checked_transaction::IntoChecked,
+        *,
+    },
+};
+use rand::SeedableRng;
+
+use fuel_core::chain_config::{
+    CoinConfig,
+    StateConfig,
 };
 use rstest::rstest;
 
 const SEED: u64 = 2322;
+
+#[tokio::test]
+async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0xBAADF00D);
+    let secret = SecretKey::random(&mut rng);
+    let amount = 10000;
+    let owner = Input::owner(&secret.public_key());
+    let utxo_id_1 = UtxoId::new([1; 32].into(), 0);
+    let utxo_id_2 = UtxoId::new([1; 32].into(), 1);
+
+    let state_config = StateConfig {
+        coins: vec![
+            CoinConfig {
+                tx_id: *utxo_id_1.tx_id(),
+                output_index: utxo_id_1.output_index(),
+                owner,
+                amount,
+                asset_id: AssetId::BASE,
+                ..Default::default()
+            },
+            CoinConfig {
+                tx_id: *utxo_id_2.tx_id(),
+                output_index: utxo_id_2.output_index(),
+                owner,
+                amount,
+                asset_id: AssetId::BASE,
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let config = Config {
+        debug: true,
+        utxo_validation: true,
+        ..Config::local_node_with_state_config(state_config)
+    };
+
+    let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
+        .await
+        .unwrap();
+    let client = FuelClient::from(node.bound_address);
+
+    // Given
+    let contract_input = {
+        let bytecode: Witness = vec![].into();
+        let salt = Salt::zeroed();
+        let contract = Contract::from(bytecode.as_ref());
+        let code_root = contract.root();
+        let balance_root = Contract::default_state_root();
+        let state_root = Contract::default_state_root();
+
+        let contract_id = contract.id(&salt, &code_root, &state_root);
+        let output = Output::contract_created(contract_id, state_root);
+        let create_tx = TransactionBuilder::create(bytecode, salt, vec![])
+            .add_unsigned_coin_input(
+                secret,
+                utxo_id_1,
+                amount,
+                Default::default(),
+                Default::default(),
+            )
+            .add_output(output)
+            .finalize_as_transaction()
+            .into_checked(Default::default(), &Default::default())
+            .expect("Cannot check transaction");
+
+        let contract_input = Input::contract(
+            UtxoId::new(create_tx.id(), 1),
+            balance_root,
+            state_root,
+            Default::default(),
+            contract_id,
+        );
+
+        client
+            .submit_and_await_commit(create_tx.transaction())
+            .await
+            .expect("cannot insert tx into transaction pool");
+
+        contract_input
+    };
+
+    // When
+    let contract_tx = TransactionBuilder::script(vec![], vec![])
+        .add_input(contract_input)
+        .add_unsigned_coin_input(
+            secret,
+            utxo_id_2,
+            amount,
+            Default::default(),
+            Default::default(),
+        )
+        .add_output(Output::contract(0, Default::default(), Default::default()))
+        .finalize_as_transaction();
+    let tx_status = client.submit_and_await_commit(&contract_tx).await.unwrap();
+
+    // Then
+    assert!(matches!(tx_status, TransactionStatus::Success { .. }));
+}
 
 #[rstest]
 #[tokio::test]
@@ -31,11 +146,15 @@ async fn test_contract_balance(
     asset: AssetId,
     #[values(100, 0, 18446744073709551615)] test_balance: u64,
 ) {
+    use fuel_core::chain_config::ContractBalanceConfig;
+
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) = test_builder.setup_contract(
         vec![],
-        Some(vec![(asset, test_balance)]),
-        None,
+        vec![ContractBalanceConfig {
+            asset_id: asset,
+            amount: test_balance,
+        }],
         None,
     );
 
@@ -59,17 +178,18 @@ async fn test_contract_balance(
 async fn test_5_contract_balances(
     #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
 ) {
+    use fuel_core::chain_config::ContractBalanceConfig;
+
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) = test_builder.setup_contract(
-        vec![],
-        Some(vec![
-            (AssetId::new([1u8; 32]), 1000),
-            (AssetId::new([2u8; 32]), 400),
-            (AssetId::new([3u8; 32]), 700),
-        ]),
-        None,
-        None,
-    );
+    let balances = [
+        (AssetId::new([1u8; 32]), 1000),
+        (AssetId::new([2u8; 32]), 400),
+        (AssetId::new([3u8; 32]), 700),
+    ]
+    .map(|(asset_id, amount)| ContractBalanceConfig { asset_id, amount })
+    .to_vec();
+
+    let (_, contract_id) = test_builder.setup_contract(vec![], balances, None);
 
     let TestContext {
         client,
@@ -116,15 +236,14 @@ fn key(i: u8) -> Bytes32 {
 async fn can_get_message_proof() {
     let config = Config::local_node();
     let coin = config
-        .chain_conf
-        .initial_state
-        .as_ref()
+        .snapshot_reader
+        .read::<Coins>()
         .unwrap()
-        .coins
-        .as_ref()
+        .into_iter()
+        .next()
         .unwrap()
-        .first()
-        .unwrap()
+        .unwrap()[0]
+        .value
         .clone();
 
     let slots_to_read = 2;
@@ -213,9 +332,8 @@ async fn can_get_message_proof() {
         Default::default(),
         owner,
         1000,
-        coin.asset_id,
+        *coin.asset_id(),
         TxPointer::default(),
-        Default::default(),
         Default::default(),
         predicate,
         vec![],
@@ -241,7 +359,7 @@ async fn can_get_message_proof() {
         1_000_000,
         script,
         script_data,
-        policies::Policies::new().with_gas_price(0),
+        policies::Policies::new().with_max_fee(0),
         inputs,
         outputs,
         vec![],

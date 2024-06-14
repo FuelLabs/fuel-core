@@ -2,7 +2,10 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         CoinConfig,
+        ContractBalanceConfig,
         ContractConfig,
+        LastBlockConfig,
+        SnapshotMetadata,
         StateConfig,
     },
     service::{
@@ -13,6 +16,7 @@ use fuel_core::{
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
     fuel_asm::op,
     fuel_tx::{
         field::Inputs,
@@ -62,12 +66,11 @@ impl TestContext {
             1_000_000,
             script,
             vec![],
-            Policies::new().with_gas_price(0),
+            Policies::new().with_max_fee(0),
             vec![Input::coin_signed(
                 self.rng.gen(),
                 from,
                 amount,
-                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -88,9 +91,11 @@ pub struct TestSetupBuilder {
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
-    pub gas_limit: u64,
+    pub gas_limit: Option<u64>,
     pub starting_block: Option<BlockHeight>,
     pub utxo_validation: bool,
+    pub privileged_address: Address,
+    pub base_asset_id: AssetId,
     pub trigger: Trigger,
 }
 
@@ -106,28 +111,27 @@ impl TestSetupBuilder {
     pub fn setup_contract(
         &mut self,
         code: Vec<u8>,
-        balances: Option<Vec<(AssetId, u64)>>,
-        utxo_id: Option<UtxoId>,
+        balances: Vec<ContractBalanceConfig>,
         tx_pointer: Option<TxPointer>,
     ) -> (Salt, ContractId) {
         let contract = Contract::from(code.clone());
         let root = contract.root();
         let salt: Salt = self.rng.gen();
-        let contract_id =
-            contract.id(&salt.clone(), &root, &Contract::default_state_root());
+        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
+        let tx_pointer = tx_pointer.unwrap_or_default();
+        let utxo_id: UtxoId = self.rng.gen();
         self.contracts.insert(
             contract_id,
             ContractConfig {
                 contract_id,
                 code,
-                salt,
-                state: None,
+                tx_id: *utxo_id.tx_id(),
+                output_index: utxo_id.output_index(),
+                tx_pointer_block_height: tx_pointer.block_height(),
+                tx_pointer_tx_idx: tx_pointer.tx_index(),
+                states: vec![],
                 balances,
-                tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
-                output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
-                tx_pointer_block_height: tx_pointer.map(|pointer| pointer.block_height()),
-                tx_pointer_tx_idx: tx_pointer.map(|pointer| pointer.tx_index()),
             },
         );
 
@@ -135,10 +139,13 @@ impl TestSetupBuilder {
     }
 
     /// add input coins from a set of transaction to the genesis config
-    pub fn config_coin_inputs_from_transactions(
+    pub fn config_coin_inputs_from_transactions<T>(
         &mut self,
-        transactions: &[&Script],
-    ) -> &mut Self {
+        transactions: &[&T],
+    ) -> &mut Self
+    where
+        T: Inputs,
+    {
         self.initial_coins.extend(
             transactions
                 .iter()
@@ -162,11 +169,10 @@ impl TestSetupBuilder {
                     }) = input
                     {
                         Some(CoinConfig {
-                            tx_id: Some(*utxo_id.tx_id()),
-                            output_index: Some(utxo_id.output_index()),
-                            tx_pointer_block_height: Some(tx_pointer.block_height()),
-                            tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
-                            maturity: None,
+                            tx_id: *utxo_id.tx_id(),
+                            output_index: utxo_id.output_index(),
+                            tx_pointer_block_height: tx_pointer.block_height(),
+                            tx_pointer_tx_idx: tx_pointer.tx_index(),
                             owner: *owner,
                             amount: *amount,
                             asset_id: *asset_id,
@@ -182,27 +188,46 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let mut chain_config = ChainConfig {
-            initial_state: Some(StateConfig {
-                coins: Some(self.initial_coins.clone()),
-                contracts: Some(self.contracts.values().cloned().collect_vec()),
-                height: self.starting_block,
-                ..StateConfig::default()
-            }),
-            ..ChainConfig::local_testnet()
+        let metadata =
+            SnapshotMetadata::read("../bin/fuel-core/chainspec/local-testnet").unwrap();
+        let mut chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
+
+        if let Some(gas_limit) = self.gas_limit {
+            let tx_params = *chain_conf.consensus_parameters.tx_params();
+            chain_conf
+                .consensus_parameters
+                .set_tx_params(tx_params.with_max_gas_per_tx(gas_limit));
+            chain_conf
+                .consensus_parameters
+                .set_block_gas_limit(gas_limit);
+        }
+
+        chain_conf
+            .consensus_parameters
+            .set_privileged_address(self.privileged_address);
+        chain_conf
+            .consensus_parameters
+            .set_base_asset_id(self.base_asset_id);
+
+        let latest_block = self.starting_block.map(|starting_block| LastBlockConfig {
+            block_height: starting_block,
+            state_transition_version: LATEST_STATE_TRANSITION_VERSION - 1,
+            ..Default::default()
+        });
+
+        let state = StateConfig {
+            coins: self.initial_coins.clone(),
+            contracts: self.contracts.values().cloned().collect_vec(),
+            last_block: latest_block,
+            ..StateConfig::default()
         };
-        chain_config.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
-        chain_config.block_gas_limit = self.gas_limit;
+
         let config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::Config {
-                chain_config: chain_config.clone(),
-                min_gas_price: self.min_gas_price,
-                ..fuel_core_txpool::Config::default()
-            },
-            chain_conf: chain_config,
+            txpool: fuel_core_txpool::Config::default(),
             block_production: self.trigger,
-            ..Config::local_node()
+            static_gas_price: self.min_gas_price,
+            ..Config::local_node_with_configs(chain_conf, state)
         };
 
         let srv = FuelService::new_node(config).await.unwrap();
@@ -223,9 +248,11 @@ impl Default for TestSetupBuilder {
             contracts: Default::default(),
             initial_coins: vec![],
             min_gas_price: 0,
-            gas_limit: u64::MAX,
+            gas_limit: None,
             starting_block: None,
             utxo_validation: true,
+            privileged_address: Default::default(),
+            base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
         }
     }

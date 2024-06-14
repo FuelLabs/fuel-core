@@ -83,7 +83,7 @@ async fn poa_interval_produces_empty_blocks_at_correct_rate() {
         round_time_seconds <= secs_per_round
             && secs_per_round
                 <= round_time_seconds + 2 * (rounds as u64) / round_time_seconds,
-        "Round time not within treshold"
+        "Round time not within threshold"
     );
 }
 
@@ -120,7 +120,6 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
             rng.gen(),
             rng.gen(),
             rng.gen(),
-            Default::default(),
             Default::default(),
         )
         .finalize_as_transaction();
@@ -168,7 +167,7 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
         round_time_seconds <= secs_per_round
             && secs_per_round
                 <= round_time_seconds + 2 * (rounds as u64) / round_time_seconds,
-        "Round time not within treshold"
+        "Round time not within threshold"
     );
 
     // Make sure all txs got produced

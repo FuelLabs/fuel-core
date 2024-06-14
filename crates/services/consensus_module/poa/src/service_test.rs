@@ -18,10 +18,6 @@ use fuel_core_services::{
     Service as StorageTrait,
     State,
 };
-use fuel_core_storage::{
-    test_helpers::EmptyStorage,
-    transactional::StorageTransaction,
-};
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
@@ -123,14 +119,15 @@ impl TestContextBuilder {
             let mut producer = MockBlockProducer::default();
             producer
                 .expect_produce_and_execute_block()
-                .returning(|_, _, _, _| {
+                .returning(|_, _, _| {
                     Ok(UncommittedResult::new(
                         ExecutionResult {
                             block: Default::default(),
                             skipped_transactions: Default::default(),
                             tx_status: Default::default(),
+                            events: Default::default(),
                         },
-                        StorageTransaction::new(EmptyStorage),
+                        Default::default(),
                     ))
                 });
             producer
@@ -231,15 +228,15 @@ impl MockTransactionPool {
                 .sum()
         });
         let removed = txs.clone();
-        txpool
-            .expect_remove_txs()
-            .returning(move |tx_ids: Vec<TxId>| {
+        txpool.expect_remove_txs().returning(
+            move |tx_ids: Vec<(TxId, ExecutorError)>| {
                 let mut guard = removed.lock().unwrap();
-                for id in tx_ids {
+                for (id, _) in tx_ids {
                     guard.retain(|tx| tx.id(&ChainId::default()) == id);
                 }
                 vec![]
-            });
+            },
+        );
 
         TxPoolContext {
             txpool,
@@ -251,8 +248,8 @@ impl MockTransactionPool {
 
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
-        .gas_price(0)
-        .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx))
+        .max_fee_limit(0)
+        .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx()))
         .finalize_without_signature()
 }
 
@@ -272,7 +269,7 @@ async fn remove_skipped_transactions() {
     block_producer
         .expect_produce_and_execute_block()
         .times(1)
-        .returning(move |_, _, _, _| {
+        .returning(move |_, _, _| {
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block: Default::default(),
@@ -287,8 +284,9 @@ async fn remove_skipped_transactions() {
                         })
                         .collect(),
                     tx_status: Default::default(),
+                    events: Default::default(),
                 },
-                StorageTransaction::new(EmptyStorage),
+                Default::default(),
             ))
         });
 
@@ -306,6 +304,7 @@ async fn remove_skipped_transactions() {
     let mut txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
+        let skipped_ids: Vec<_> = skipped_ids.into_iter().map(|(id, _)| id).collect();
         // Transform transactions into ids.
         let skipped_transactions: Vec<_> = skipped_transactions
             .iter()
@@ -326,7 +325,6 @@ async fn remove_skipped_transactions() {
 
     let config = Config {
         trigger: Trigger::Instant,
-        block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
         ..Default::default()
@@ -357,7 +355,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     block_producer
         .expect_produce_and_execute_block()
-        .returning(|_, _, _, _| panic!("Block production should not be called"));
+        .returning(|_, _, _| panic!("Block production should not be called"));
 
     let mut block_importer = MockBlockImporter::default();
 
@@ -374,7 +372,6 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let config = Config {
         trigger: Trigger::Instant,
-        block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
         ..Default::default()

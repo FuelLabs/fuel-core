@@ -7,14 +7,19 @@ query {
     daHeight
     name
     latestBlock {
+      version
       id
       header {
+        version
         id
         daHeight
+        consensusParametersVersion
+        stateTransitionBytecodeVersion
         transactionsCount
         messageReceiptCount
         transactionsRoot
-        messageReceiptRoot
+        messageOutboxRoot
+        eventInboxRoot
         height
         prevRoot
         time
@@ -27,6 +32,7 @@ query {
           coinsRoot
           contractsRoot
           messagesRoot
+          transactionsRoot
         }
         ... on PoAConsensus {
           signature
@@ -37,37 +43,45 @@ query {
       }
     }
     consensusParameters {
+      version
       txParams {
+        version
         maxInputs
         maxOutputs
         maxWitnesses
         maxGasPerTx
         maxSize
+        maxBytecodeSubsections
       }
       predicateParams {
+        version
         maxPredicateLength
         maxPredicateDataLength
         maxMessageDataLength
         maxGasPerPredicate
       }
       scriptParams {
+        version
         maxScriptLength
         maxScriptDataLength
       }
       contractParams {
+        version
         contractMaxSize
         maxStorageSlots
       }
       feeParams {
+        version
         gasPriceFactor
         gasPerByte
       }
       baseAssetId
+      blockGasLimit
       chainId
       gasCosts {
+        version
         add
         addi
-        aloc
         and
         andi
         bal
@@ -77,7 +91,6 @@ query {
         cb
         cfei
         cfsi
-        croo
         div
         divi
         eck1
@@ -154,6 +167,17 @@ query {
         wqmm
         xor
         xori
+        alocDependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
         call {
           __typename
           ... on LightOperation {
@@ -166,6 +190,17 @@ query {
           }
         }
         ccp {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        croo {
           __typename
           ... on LightOperation {
             base
@@ -376,8 +411,7 @@ query {
         }
         newStoragePerByte
       }
+      privilegedAddress
     }
   }
 }
-
-

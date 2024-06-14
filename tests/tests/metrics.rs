@@ -15,8 +15,9 @@ use tempfile::TempDir;
 async fn test_metrics_endpoint() {
     let mut config = Config::local_node();
     let tmp_dir = TempDir::new().unwrap();
-    config.database_type = DbType::RocksDb;
-    config.database_path = tmp_dir.path().to_path_buf();
+
+    config.combined_db_config.database_path = tmp_dir.path().to_path_buf();
+    config.combined_db_config.database_type = DbType::RocksDb;
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
 
@@ -47,7 +48,7 @@ async fn test_metrics_endpoint() {
         .await
         .unwrap();
 
-    let resp = reqwest::get(format!("http://{}/metrics", srv.bound_address))
+    let resp = reqwest::get(format!("http://{}/v1/metrics", srv.bound_address))
         .await
         .unwrap()
         .text()

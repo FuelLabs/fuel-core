@@ -21,6 +21,7 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
+use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -36,11 +37,21 @@ use fuel_core_types::{
     },
     fuel_types::ChainId,
 };
+use itertools::Itertools;
 use rstest::rstest;
 use std::ops::Deref;
 
 #[cfg(feature = "relayer")]
 mod relayer;
+
+fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
+    let state = StateConfig {
+        messages: messages.into_iter().collect_vec(),
+        ..Default::default()
+    };
+
+    Config::local_node_with_state_config(state)
+}
 
 #[tokio::test]
 async fn messages_returns_messages_for_all_owners() {
@@ -68,11 +79,7 @@ async fn messages_returns_messages_for_all_owners() {
     };
 
     // configure the messages
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![first_msg, second_msg, third_msg]),
-        ..Default::default()
-    });
+    let config = setup_config(vec![first_msg, second_msg, third_msg]);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -116,12 +123,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
         ..Default::default()
     };
 
-    // configure the messages
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![first_msg, second_msg, third_msg]),
-        ..Default::default()
-    });
+    let config = setup_config(vec![first_msg, second_msg, third_msg]);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -203,11 +205,7 @@ async fn message_status__can_get_unspent() {
         ..Default::default()
     };
 
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![msg]),
-        ..Default::default()
-    });
+    let config = setup_config(vec![msg]);
 
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -237,11 +235,7 @@ async fn message_status__can_get_spent() {
         ..Default::default()
     };
 
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![msg]),
-        ..Default::default()
-    });
+    let config = setup_config(vec![msg]);
 
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -260,7 +254,7 @@ async fn message_status__can_get_spent() {
         1_000_000,
         vec![],
         vec![],
-        policies::Policies::new().with_gas_price(0),
+        policies::Policies::new().with_max_fee(0),
         vec![input],
         vec![output],
         vec![Vec::new().into()],
@@ -298,15 +292,14 @@ async fn can_get_message_proof() {
         let config = Config::local_node();
 
         let coin = config
-            .chain_conf
-            .initial_state
-            .as_ref()
+            .snapshot_reader
+            .read::<Coins>()
             .unwrap()
-            .coins
-            .as_ref()
+            .into_iter()
+            .next()
             .unwrap()
-            .first()
-            .unwrap()
+            .unwrap()[0]
+            .value
             .clone();
 
         struct MessageArgs {
@@ -410,9 +403,8 @@ async fn can_get_message_proof() {
             Default::default(),
             owner,
             1000,
-            coin.asset_id,
+            *coin.asset_id(),
             TxPointer::default(),
-            Default::default(),
             Default::default(),
             predicate,
             vec![],
@@ -438,7 +430,7 @@ async fn can_get_message_proof() {
             1_000_000,
             script,
             script_data,
-            policies::Policies::new().with_gas_price(0),
+            policies::Policies::new().with_max_fee(0),
             inputs,
             outputs,
             vec![],
@@ -525,11 +517,11 @@ async fn can_get_message_proof() {
                 .map(Bytes32::from)
                 .collect();
             assert!(verify_merkle(
-                result.message_block_header.message_receipt_root,
+                result.message_block_header.message_outbox_root,
                 &generated_message_id,
                 message_proof_index,
                 &message_proof_set,
-                result.message_block_header.message_receipt_count,
+                result.message_block_header.message_receipt_count as u64,
             ));
 
             // Generate a proof to compare
@@ -545,7 +537,7 @@ async fn can_get_message_proof() {
 
             // Check the root matches the proof and the root on the header.
             assert_eq!(
-                <[u8; 32]>::from(result.message_block_header.message_receipt_root),
+                <[u8; 32]>::from(result.message_block_header.message_outbox_root),
                 expected_root
             );
 
@@ -594,12 +586,12 @@ async fn can_get_message() {
         ..Default::default()
     };
 
-    // configure the messges
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![first_msg.clone()]),
+    // configure the messages
+    let state_config = StateConfig {
+        messages: vec![first_msg.clone()],
         ..Default::default()
-    });
+    };
+    let config = Config::local_node_with_state_config(state_config);
 
     // setup service and client
     let service = FuelService::new_node(config).await.unwrap();
@@ -615,10 +607,7 @@ async fn can_get_message() {
 
 #[tokio::test]
 async fn can_get_empty_message() {
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        ..Default::default()
-    });
+    let config = Config::local_node_with_state_config(StateConfig::default());
 
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);

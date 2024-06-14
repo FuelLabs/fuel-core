@@ -1,13 +1,11 @@
 use crate::{
     database::Database,
-    service::{
-        adapters::{
-            MaybeRelayerAdapter,
-            VerifierAdapter,
-        },
-        Config,
+    service::adapters::{
+        MaybeRelayerAdapter,
+        VerifierAdapter,
     },
 };
+use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_consensus_module::block_verifier::{
     config::Config as VerifierConfig,
     Verifier,
@@ -21,6 +19,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::CompressedBlock,
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
@@ -32,8 +31,14 @@ use std::sync::Arc;
 pub mod poa;
 
 impl VerifierAdapter {
-    pub fn new(config: &Config, database: Database) -> Self {
-        let config = VerifierConfig::new(config.chain_conf.clone());
+    pub fn new(
+        genesis_block: &CompressedBlock,
+        consensus: ConsensusConfig,
+        database: Database,
+    ) -> Self {
+        let block_height = *genesis_block.header().height();
+        let da_block_height = genesis_block.header().da_height;
+        let config = VerifierConfig::new(consensus, block_height, da_block_height);
         Self {
             block_verifier: Arc::new(Verifier::new(config, database)),
         }
@@ -60,7 +65,7 @@ impl RelayerPort for MaybeRelayerAdapter {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
-                let current_height = sync.get_finalized_da_height()?;
+                let current_height = sync.get_finalized_da_height();
                 anyhow::ensure!(
                     da_height.saturating_sub(*current_height) <= **_max_da_lag,
                     "Relayer is too far out of sync"

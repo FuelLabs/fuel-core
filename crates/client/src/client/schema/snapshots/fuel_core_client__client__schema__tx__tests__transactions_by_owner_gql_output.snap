@@ -16,7 +16,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
           ... on SuccessStatus {
             transactionId
             block {
-              id
+              height
             }
             time
             programState {
@@ -30,9 +30,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               assetId
               gas
               digest
-              contract {
-                id
-              }
+              id
               is
               pc
               ptr
@@ -42,9 +40,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               rd
               reason
               receiptType
-              to {
-                id
-              }
+              to
               toAddress
               val
               len
@@ -57,6 +53,8 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               contractId
               subId
             }
+            totalGas
+            totalFee
           }
           ... on SqueezedOutStatus {
             reason
@@ -64,7 +62,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
           ... on FailureStatus {
             transactionId
             block {
-              id
+              height
             }
             time
             reason
@@ -79,9 +77,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               assetId
               gas
               digest
-              contract {
-                id
-              }
+              id
               is
               pc
               ptr
@@ -91,9 +87,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               rd
               reason
               receiptType
-              to {
-                id
-              }
+              to
               toAddress
               val
               len
@@ -106,6 +100,8 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               contractId
               subId
             }
+            totalGas
+            totalFee
           }
         }
       }
@@ -118,5 +114,3 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
     }
   }
 }
-
-

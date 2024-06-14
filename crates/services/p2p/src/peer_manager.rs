@@ -126,16 +126,8 @@ impl PeerManager {
     }
 
     /// Returns `true` signaling that the peer should be disconnected
-    pub fn handle_peer_connected(
-        &mut self,
-        peer_id: &PeerId,
-        initial_connection: bool,
-    ) -> bool {
-        if initial_connection {
-            self.handle_initial_connection(peer_id)
-        } else {
-            false
-        }
+    pub fn handle_peer_connected(&mut self, peer_id: &PeerId) -> bool {
+        self.handle_initial_connection(peer_id)
     }
 
     pub fn handle_peer_identified(
@@ -202,12 +194,6 @@ impl PeerManager {
             .chain(self.reserved_connected_peers.iter())
     }
 
-    pub fn get_disconnected_reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
-        self.reserved_peers
-            .iter()
-            .filter(|peer_id| !self.reserved_connected_peers.contains_key(peer_id))
-    }
-
     /// Handles on peer's last connection getting disconnected
     /// Returns 'true' signaling we should try reconnecting
     pub fn handle_peer_disconnect(&mut self, peer_id: PeerId) -> bool {
@@ -254,12 +240,13 @@ impl PeerManager {
             .choose(&mut range)
     }
 
-    /// Handles the first connnection established with a Peer    
+    /// Handles the first connection established with a Peer
     fn handle_initial_connection(&mut self, peer_id: &PeerId) -> bool {
         const HEARTBEAT_AVG_WINDOW: u32 = 10;
+        let is_reserved = self.reserved_peers.contains(peer_id);
 
         // if the connected Peer is not from the reserved peers
-        if !self.reserved_peers.contains(peer_id) {
+        if !is_reserved && !self.non_reserved_connected_peers.contains_key(peer_id) {
             let non_reserved_peers_connected = self.non_reserved_connected_peers.len();
             // check if all the slots are already taken
             if non_reserved_peers_connected >= self.max_non_reserved_peers {
@@ -278,7 +265,7 @@ impl PeerManager {
 
             self.non_reserved_connected_peers
                 .insert(*peer_id, PeerInfo::new(HEARTBEAT_AVG_WINDOW));
-        } else {
+        } else if is_reserved && !self.reserved_connected_peers.contains_key(peer_id) {
             self.reserved_connected_peers
                 .insert(*peer_id, PeerInfo::new(HEARTBEAT_AVG_WINDOW));
 

@@ -1,15 +1,12 @@
 use std::ops::Deref;
 
 use fuel_core_types::{
-    blockchain::{
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
-        primitives::BlockId,
+    blockchain::header::{
+        ApplicationHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
     },
-    entities::message::MerkleProof,
+    entities::relayer::message::MerkleProof,
     fuel_tx::{
         Script,
         Transaction,
@@ -63,7 +60,6 @@ mockall::mock! {
     pub ProofDataStorage {}
     impl SimpleBlockData for ProofDataStorage {
         fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
-        fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
     }
 
     impl DatabaseMessageProof for ProofDataStorage {
@@ -134,6 +130,8 @@ async fn can_build_message_proof() {
     let commit_block_header = PartialBlockHeader {
         application: ApplicationHeader {
             da_height: 0u64.into(),
+            consensus_parameters_version: Default::default(),
+            state_transition_bytecode_version: Default::default(),
             generated: Default::default(),
         },
         consensus: ConsensusHeader {
@@ -143,11 +141,14 @@ async fn can_build_message_proof() {
             generated: Default::default(),
         },
     }
-    .generate(&[], &[]);
+    .generate(&[], &[], Default::default())
+    .unwrap();
     let commit_block = CompressedBlock::test(commit_block_header, vec![]);
     let message_block_header = PartialBlockHeader {
         application: ApplicationHeader {
             da_height: 0u64.into(),
+            consensus_parameters_version: Default::default(),
+            state_transition_bytecode_version: Default::default(),
             generated: Default::default(),
         },
         consensus: ConsensusHeader {
@@ -157,7 +158,8 @@ async fn can_build_message_proof() {
             generated: Default::default(),
         },
     }
-    .generate(&[], &message_ids);
+    .generate(&[], &message_ids, Default::default())
+    .unwrap();
     let message_block = CompressedBlock::test(message_block_header, TXNS.to_vec());
 
     let block_proof = MerkleProof {
@@ -175,34 +177,27 @@ async fn can_build_message_proof() {
             move |_, _| Ok(block_proof.clone())
         });
 
-    let message_block_id = message_block.id();
+    let message_block_height = *message_block.header().height();
     data.expect_transaction_status()
         .with(eq(transaction_id))
         .returning(move |_| {
             Ok(TransactionStatus::Success {
-                block_id: message_block_id,
+                block_height: message_block_height,
                 time: Tai64::UNIX_EPOCH,
                 result: None,
                 receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
             })
         });
 
-    data.expect_block().times(1).returning({
+    data.expect_block().times(2).returning({
         let commit_block = commit_block.clone();
+        let message_block = message_block.clone();
         move |block_height| {
             let block = if commit_block.header().height() == block_height {
                 commit_block.clone()
-            } else {
-                panic!("Shouldn't request any other block")
-            };
-            Ok(block)
-        }
-    });
-
-    data.expect_block_by_id().times(1).returning({
-        let message_block = message_block.clone();
-        move |block_id| {
-            let block = if &message_block.id() == block_id {
+            } else if message_block.header().height() == block_height {
                 message_block.clone()
             } else {
                 panic!("Shouldn't request any other block")
@@ -222,8 +217,8 @@ async fn can_build_message_proof() {
     .unwrap()
     .unwrap();
     assert_eq!(
-        proof.message_block_header.message_receipt_root,
-        message_block.header().message_receipt_root
+        proof.message_block_header.message_outbox_root,
+        message_block.header().message_outbox_root
     );
     assert_eq!(
         proof.message_block_header.height(),

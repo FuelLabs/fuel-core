@@ -5,7 +5,10 @@ use fuel_core::service::{
 
 // Add methods on commands
 use fuel_core::txpool::types::ContractId;
-use fuel_core_chain_config::ChainConfig;
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    SnapshotReader,
+};
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{
     fs,
@@ -92,22 +95,35 @@ async fn execute_suite(config_path: String) {
 }
 
 fn dev_config() -> Config {
-    let mut config = Config::local_node();
-    let dev_config_bytes =
-        include_str!("../../../deployment/scripts/chainspec/dev_chainspec.json");
-    let chain_config: ChainConfig = serde_json::from_str(dev_config_bytes)
-        .expect("Should be able to decode chain config");
+    let snapshot = SnapshotMetadata::read("../../bin/fuel-core/chainspec/local-testnet")
+        .expect("Should be able to open snapshot metadata");
+    let reader =
+        SnapshotReader::open(snapshot).expect("Should be able to open snapshot reader");
 
-    // The `run_contract_large_state` test creates a contract with a huge state
-    assert!(
-        chain_config
-            .consensus_parameters
-            .contract_params
-            .max_storage_slots
-            >= 1 << 17 // 131072
-    );
+    let mut chain_config = reader.chain_config().clone();
+    let contract_parameters = *chain_config.consensus_parameters.contract_params();
+    let tx_parameters = *chain_config.consensus_parameters.tx_params();
+    let fee_params = *chain_config.consensus_parameters.fee_params();
 
-    config.chain_conf = chain_config;
+    // The `run_contract_large_state` test creates a big contract with a huge state.
+    let max_storage_slots = 1 << 17 /* 131072 */;
+    let contract_max_size = 16 * 1024 * 1024 /* 16 MB */;
+    let contract_parameters = contract_parameters
+        .with_max_storage_slots(max_storage_slots)
+        .with_contract_max_size(contract_max_size);
+    let tx_parameters = tx_parameters.with_max_size(1024 * max_storage_slots);
+    let fee_params = fee_params.with_gas_per_byte(1);
+    chain_config
+        .consensus_parameters
+        .set_contract_params(contract_parameters);
+    chain_config
+        .consensus_parameters
+        .set_tx_params(tx_parameters);
+    chain_config.consensus_parameters.set_fee_params(fee_params);
+    let reader = reader.with_chain_config(chain_config);
+
+    let mut config = Config::local_node_with_reader(reader);
+    config.static_gas_price = 1;
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
             "0x7777777777777777777777777777777777777777777777777777777777777777",

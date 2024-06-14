@@ -11,9 +11,12 @@ use fuel_core_types::{
         *,
     },
     fuel_types::ChainId,
-    fuel_vm::checked_transaction::{
-        CheckPredicateParams,
-        EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        interpreter::MemoryInstance,
     },
 };
 use rand::{
@@ -42,7 +45,6 @@ async fn transaction_with_valid_predicate_is_executed() {
                 asset_id,
                 Default::default(),
                 Default::default(),
-                Default::default(),
                 predicate,
                 vec![],
             ))
@@ -50,19 +52,30 @@ async fn transaction_with_valid_predicate_is_executed() {
             .script_gas_limit(limit)
             .finalize();
 
-    assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
-
-    predicate_tx
-        .estimate_predicates(&CheckPredicateParams::default())
-        .expect("Predicate check failed");
-
-    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
-
     // create test context with predicates disabled
     let context = TestSetupBuilder::default()
         .config_coin_inputs_from_transactions(&[&predicate_tx])
         .finalize()
         .await;
+
+    assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
+
+    predicate_tx
+        .estimate_predicates(
+            &CheckPredicateParams::from(
+                &context
+                    .srv
+                    .shared
+                    .config
+                    .snapshot_reader
+                    .chain_config()
+                    .consensus_parameters,
+            ),
+            MemoryInstance::new(),
+        )
+        .expect("Predicate check failed");
+
+    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 
     let predicate_tx = predicate_tx.into();
     context
@@ -103,7 +116,6 @@ async fn transaction_with_invalid_predicate_is_rejected() {
             asset_id,
             Default::default(),
             Default::default(),
-            Default::default(),
             predicate,
             vec![],
         ))
@@ -137,7 +149,6 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
             owner,
             amount,
             asset_id,
-            Default::default(),
             Default::default(),
             Default::default(),
             predicate,

@@ -6,10 +6,6 @@ use anyhow::{
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
     types::{
         CoinType,
         TransactionStatus,
@@ -30,7 +26,6 @@ use fuel_core_types::{
         Finalizable,
         Input,
         Output,
-        StorageSlot,
         Transaction,
         TransactionBuilder,
         TxId,
@@ -41,9 +36,11 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
+        Salt,
     },
     fuel_vm::SecretKey,
 };
+use itertools::Itertools;
 
 use crate::config::{
     ClientConfig,
@@ -51,7 +48,7 @@ use crate::config::{
 };
 
 // The base amount needed to cover the cost of a simple transaction
-pub const BASE_AMOUNT: u64 = 1_000_000;
+pub const BASE_AMOUNT: u64 = 100_000_000;
 
 pub struct TestContext {
     pub alice: Wallet,
@@ -111,38 +108,9 @@ impl Wallet {
 
     /// Checks if wallet has a coin (regardless of spent status)
     pub async fn owns_coin(&self, utxo_id: UtxoId) -> anyhow::Result<bool> {
-        let mut first_page = true;
-        let mut results = vec![];
-        let mut cursor = None;
+        let coin = self.client.coin(&utxo_id).await?;
 
-        while first_page || !results.is_empty() {
-            first_page = false;
-            let response = self
-                .client
-                .coins(
-                    &self.address,
-                    None,
-                    PaginationRequest {
-                        cursor,
-                        results: 100,
-                        direction: PageDirection::Forward,
-                    },
-                )
-                .await?;
-            results = response.results;
-            // check if page has the utxos we're looking for
-            if results.iter().any(|coin| coin.utxo_id == utxo_id) {
-                return Ok(true)
-            }
-            // otherwise update the cursor to check the next page
-            if response.has_next_page {
-                cursor = response.cursor;
-            } else {
-                break
-            }
-        }
-
-        Ok(false)
+        Ok(coin.is_some())
     }
 
     /// Creates the transfer transaction.
@@ -152,7 +120,7 @@ impl Wallet {
         transfer_amount: u64,
         asset_id: Option<AssetId>,
     ) -> anyhow::Result<Transaction> {
-        let asset_id = asset_id.unwrap_or_default();
+        let asset_id = asset_id.unwrap_or(*self.consensus_params.base_asset_id());
         let total_amount = transfer_amount + BASE_AMOUNT;
         // select coins
         let coins = &self
@@ -162,7 +130,7 @@ impl Wallet {
 
         // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
-        tx.gas_price(1);
+        tx.max_fee_limit(BASE_AMOUNT);
         tx.script_gas_limit(0);
 
         for coin in coins {
@@ -173,7 +141,6 @@ impl Wallet {
                     coin.amount,
                     coin.asset_id,
                     Default::default(),
-                    coin.maturity.into(),
                 );
             }
         }
@@ -203,7 +170,7 @@ impl Wallet {
             .client
             .coins_to_spend(
                 &self.address,
-                vec![(AssetId::BASE, BASE_AMOUNT, None)],
+                vec![(*self.consensus_params.base_asset_id(), BASE_AMOUNT, None)],
                 None,
             )
             .await?[0];
@@ -235,8 +202,8 @@ impl Wallet {
                 .chain(0u64.to_bytes().into_iter())
                 .collect(),
         );
-        tx.gas_price(1);
-        tx.script_gas_limit(BASE_AMOUNT);
+        tx.max_fee_limit(BASE_AMOUNT);
+        tx.script_gas_limit(self.consensus_params.tx_params().max_gas_per_tx() / 10);
 
         tx.add_input(Input::contract(
             Default::default(),
@@ -253,7 +220,6 @@ impl Wallet {
                     coin.amount,
                     coin.asset_id,
                     Default::default(),
-                    coin.maturity.into(),
                 );
             }
         }
@@ -283,7 +249,7 @@ impl Wallet {
         let tx = self
             .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
-        let tx_id = tx.id(&self.consensus_params.chain_id);
+        let tx_id = tx.id(&self.consensus_params.chain_id());
         println!("submitting tx... {:?}", tx_id);
         let status = self.client.submit_and_await_commit(&tx).await?;
 
@@ -299,8 +265,12 @@ impl Wallet {
         })
     }
 
-    pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
-        let asset_id = AssetId::zeroed();
+    pub async fn deploy_contract(
+        &self,
+        config: ContractConfig,
+        salt: Salt,
+    ) -> anyhow::Result<()> {
+        let asset_id = *self.consensus_params.base_asset_id();
         let total_amount = BASE_AMOUNT;
         // select coins
         let coins = &self
@@ -311,18 +281,17 @@ impl Wallet {
         let ContractConfig {
             contract_id,
             code: bytes,
-            salt,
-            state,
+            states,
             ..
         } = config;
-        let slots = state
-            .unwrap_or_default()
+
+        let state: Vec<_> = states
             .into_iter()
-            .map(|(key, value)| StorageSlot::new(key, value))
-            .collect::<Vec<_>>();
-        let state_root = Contract::initial_state_root(slots.iter());
-        let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
-        tx.gas_price(1);
+            .map(|entry| entry.try_into())
+            .try_collect()?;
+
+        let state_root = Contract::initial_state_root(state.iter());
+        let mut tx = TransactionBuilder::create(bytes.into(), salt, state);
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
@@ -332,10 +301,10 @@ impl Wallet {
                     coin.amount,
                     coin.asset_id,
                     Default::default(),
-                    coin.maturity.into(),
                 );
             }
         }
+
         tx.add_output(Output::ContractCreated {
             contract_id,
             state_root,
@@ -345,6 +314,7 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
+        tx.max_fee_limit(BASE_AMOUNT);
 
         let tx = tx.finalize();
         println!("The size of the transaction is {}", tx.size());
@@ -358,7 +328,7 @@ impl Wallet {
         if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
             &status
         {
-            return Err(anyhow!(format!("unexpected transaction status {status:?}")))
+            return Err(anyhow!(format!("unexpected transaction status {status:?}")));
         }
 
         Ok(())

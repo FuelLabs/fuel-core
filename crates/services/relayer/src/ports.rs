@@ -21,14 +21,28 @@ pub trait RelayerDb: Send + Sync {
         events: &[Event],
     ) -> StorageResult<()>;
 
-    /// Set finalized da height that represent last block from da layer that got finalized.
-    /// This will only set the value if it is greater than the current.
-    fn set_finalized_da_height_to_at_least(
-        &mut self,
-        block: &DaBlockHeight,
-    ) -> StorageResult<()>;
-
     /// Get finalized da height that represent last block from da layer that got finalized.
     /// Panics if height is not set as of initialization of database.
-    fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
+    fn get_finalized_da_height(&self) -> Option<DaBlockHeight>;
+}
+
+/// The trait that should be implemented by the database transaction returned by the database.
+#[cfg_attr(test, mockall::automock)]
+pub trait DatabaseTransaction {
+    /// Commits the changes to the underlying storage.
+    fn commit(self) -> StorageResult<()>;
+}
+
+/// The trait indicates that the type supports storage transactions.
+pub trait Transactional {
+    /// The type of the storage transaction;
+    type Transaction<'a>: DatabaseTransaction
+    where
+        Self: 'a;
+
+    /// Returns the storage transaction.
+    fn transaction(&mut self) -> Self::Transaction<'_>;
+
+    /// Returns the latest da block height.
+    fn latest_da_height(&self) -> Option<DaBlockHeight>;
 }

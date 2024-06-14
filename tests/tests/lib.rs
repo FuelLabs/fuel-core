@@ -9,8 +9,8 @@ mod coins;
 mod contract;
 mod dap;
 mod debugger;
-mod deployment;
 mod fee_collection_contract;
+mod local_node;
 
 mod gas_price;
 mod health;
@@ -19,6 +19,7 @@ mod messages;
 mod metrics;
 mod node_info;
 mod poa;
+mod regenesis;
 #[cfg(feature = "relayer")]
 mod relayer;
 mod snapshot;

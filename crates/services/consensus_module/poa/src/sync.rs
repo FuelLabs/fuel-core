@@ -4,21 +4,23 @@ use std::{
 };
 
 use fuel_core_services::{
-    stream::BoxStream,
+    stream::{
+        BoxFuture,
+        BoxStream,
+    },
     RunnableService,
     RunnableTask,
     StateWatcher,
 };
-use fuel_core_types::services::block_importer::BlockImportInfo;
-
-use fuel_core_types::blockchain::header::BlockHeader;
-use tokio::sync::watch;
-use tokio_stream::StreamExt;
-
-use crate::deadline_clock::{
-    DeadlineClock,
-    OnConflict,
+use fuel_core_types::{
+    blockchain::header::BlockHeader,
+    services::block_importer::BlockImportInfo,
 };
+use tokio::{
+    sync::watch,
+    time::MissedTickBehavior,
+};
+use tokio_stream::StreamExt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SyncState {
@@ -42,14 +44,13 @@ impl SyncState {
 
 pub struct SyncTask {
     min_connected_reserved_peers: usize,
-    time_until_synced: Duration,
     peer_connections_stream: BoxStream<usize>,
     block_stream: BoxStream<BlockImportInfo>,
     state_sender: watch::Sender<SyncState>,
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
     inner_state: InnerSyncState,
-    timer: DeadlineClock,
+    timer: Option<tokio::time::Interval>,
 }
 
 impl SyncTask {
@@ -65,7 +66,13 @@ impl SyncTask {
             time_until_synced,
             block_header.clone(),
         );
-        let timer = DeadlineClock::new();
+        let timer = if time_until_synced == Duration::ZERO {
+            None
+        } else {
+            let mut timer = tokio::time::interval(time_until_synced);
+            timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            Some(timer)
+        };
 
         let initial_sync_state = SyncState::from_config(
             min_connected_reserved_peers,
@@ -79,7 +86,6 @@ impl SyncTask {
         Self {
             peer_connections_stream,
             min_connected_reserved_peers,
-            time_until_synced,
             block_stream,
             state_sender,
             state_receiver,
@@ -100,10 +106,10 @@ impl SyncTask {
             });
     }
 
-    async fn restart_timer(&mut self) {
-        self.timer
-            .set_timeout(self.time_until_synced, OnConflict::Overwrite)
-            .await;
+    fn restart_timer(&mut self) {
+        if let Some(timer) = &mut self.timer {
+            timer.reset();
+        }
     }
 }
 
@@ -135,7 +141,14 @@ impl RunnableTask for SyncTask {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut should_continue = true;
 
+        let tick: BoxFuture<tokio::time::Instant> = if let Some(timer) = &mut self.timer {
+            Box::pin(timer.tick())
+        } else {
+            let future = core::future::pending();
+            Box::pin(future)
+        };
         tokio::select! {
+            biased;
             _ = watcher.while_started() => {
                 should_continue = false;
             }
@@ -145,11 +158,11 @@ impl RunnableTask for SyncTask {
                 match &self.inner_state {
                     InnerSyncState::InsufficientPeers(block_header) if sufficient_peers => {
                         self.inner_state = InnerSyncState::SufficientPeers(block_header.clone());
-                        self.restart_timer().await;
+                        self.restart_timer();
                     }
                     InnerSyncState::SufficientPeers(block_header) if !sufficient_peers => {
                         self.inner_state = InnerSyncState::InsufficientPeers(block_header.clone());
-                        self.timer.clear().await;
+                        self.restart_timer();
                     }
                     InnerSyncState::Synced { block_header, .. } => {
                         self.inner_state = InnerSyncState::Synced {
@@ -169,19 +182,20 @@ impl RunnableTask for SyncTask {
                     }
                     InnerSyncState::SufficientPeers(block_header) if new_block_height > block_header.height() => {
                         self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
-                        self.restart_timer().await;
+                        self.restart_timer();
                     }
                     InnerSyncState::Synced { block_header, has_sufficient_peers } if new_block_height > block_header.height() => {
                         if block_info.is_locally_produced() {
                             self.inner_state = InnerSyncState::Synced {
-                                block_header: block_info.block_header,
+                                block_header: block_info.block_header.clone(),
                                 has_sufficient_peers: *has_sufficient_peers
                             };
+                            self.update_sync_state(SyncState::Synced(Arc::new(block_info.block_header)));
                         } else {
                             // we considered to be synced but we're obviously not!
                             if *has_sufficient_peers {
                                 self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
-                                self.restart_timer().await;
+                                self.restart_timer();
                             } else {
                                 self.inner_state = InnerSyncState::InsufficientPeers(block_info.block_header);
                             }
@@ -192,7 +206,7 @@ impl RunnableTask for SyncTask {
                     _ => {}
                 }
             }
-            _ = self.timer.wait() => {
+            _ = tick => {
                 if let InnerSyncState::SufficientPeers(block_header) = &self.inner_state {
                     let block_header = block_header.clone();
                     self.inner_state = InnerSyncState::Synced {

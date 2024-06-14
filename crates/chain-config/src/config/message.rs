@@ -1,14 +1,15 @@
 use crate::{
-    serialization::{
-        HexNumber,
-        HexType,
-    },
+    serialization::HexIfHumanReadable,
     GenesisCommitment,
+    TableEntry,
 };
-use fuel_core_storage::MerkleRoot;
+use fuel_core_storage::{
+    tables::Messages,
+    MerkleRoot,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::{
+    entities::relayer::message::{
         Message,
         MessageV1,
     },
@@ -28,19 +29,57 @@ use serde_with::serde_as;
 #[serde_as]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct MessageConfig {
-    #[serde_as(as = "HexType")]
     pub sender: Address,
-    #[serde_as(as = "HexType")]
     pub recipient: Address,
-    #[serde_as(as = "HexType")]
     pub nonce: Nonce,
-    #[serde_as(as = "HexNumber")]
     pub amount: Word,
-    #[serde_as(as = "HexType")]
+    #[serde_as(as = "HexIfHumanReadable")]
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
-    #[serde_as(as = "HexNumber")]
     pub da_height: DaBlockHeight,
+}
+
+impl From<TableEntry<Messages>> for MessageConfig {
+    fn from(value: TableEntry<Messages>) -> Self {
+        Self {
+            sender: *value.value.sender(),
+            recipient: *value.value.recipient(),
+            nonce: *value.value.nonce(),
+            amount: value.value.amount(),
+            data: value.value.data().to_vec(),
+            da_height: value.value.da_height(),
+        }
+    }
+}
+
+impl From<MessageConfig> for TableEntry<Messages> {
+    fn from(value: MessageConfig) -> Self {
+        TableEntry {
+            key: value.nonce,
+            value: Message::V1(MessageV1 {
+                sender: value.sender,
+                recipient: value.recipient,
+                nonce: value.nonce,
+                amount: value.amount,
+                data: value.data,
+                da_height: value.da_height,
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "test-helpers")]
+impl crate::Randomize for MessageConfig {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
+        Self {
+            sender: crate::Randomize::randomize(&mut rng),
+            recipient: crate::Randomize::randomize(&mut rng),
+            nonce: crate::Randomize::randomize(&mut rng),
+            amount: crate::Randomize::randomize(&mut rng),
+            data: fuel_core_types::fuel_types::Bytes32::randomize(&mut rng).to_vec(),
+            da_height: crate::Randomize::randomize(&mut rng),
+        }
+    }
 }
 
 impl From<MessageConfig> for Message {

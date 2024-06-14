@@ -1,29 +1,7 @@
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
-        ProcessedTransactions,
-        SpentMessages,
-    },
-    transactional::Transactional,
-    Error as StorageError,
-    MerkleRootStorage,
-    StorageBatchMutate,
-    StorageMutate,
-    StorageRead,
-};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_merkle::storage::StorageInspect,
     fuel_tx,
     fuel_tx::{
-        ContractId,
         TxId,
         UniqueIdentifier,
     },
@@ -50,6 +28,12 @@ impl MaybeCheckedTransaction {
             MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Mint(tx)) => {
                 tx.id()
             }
+            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Upgrade(
+                tx,
+            )) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Upload(
+                tx,
+            )) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
         }
     }
@@ -66,23 +50,4 @@ pub trait RelayerPort {
 
     /// Get events from the relayer at a given da height.
     fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>>;
-}
-
-// TODO: Remove `Clone` bound
-pub trait ExecutorDatabaseTrait<D>:
-    StorageInspect<FuelBlocks, Error = StorageError>
-    + StorageMutate<Messages, Error = StorageError>
-    + StorageMutate<ProcessedTransactions, Error = StorageError>
-    + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
-    + StorageMutate<Coins, Error = StorageError>
-    + StorageMutate<SpentMessages, Error = StorageError>
-    + StorageMutate<ContractsLatestUtxo, Error = StorageError>
-    + StorageMutate<ContractsRawCode, Error = StorageError>
-    + StorageRead<ContractsRawCode>
-    + StorageMutate<ContractsInfo, Error = StorageError>
-    + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
-    + StorageBatchMutate<ContractsState, Error = StorageError>
-    + Transactional<Storage = D>
-    + Clone
-{
 }

@@ -1,4 +1,8 @@
 use fuel_core::{
+    chain_config::{
+        LastBlockConfig,
+        StateConfig,
+    },
     database::Database,
     service::{
         Config,
@@ -19,6 +23,7 @@ use fuel_core_storage::{
         FuelBlocks,
         SealedBlockConsensus,
     },
+    transactional::WriteTransaction,
     vm_storage::VmStorageRequirements,
     StorageAsMut,
 };
@@ -28,7 +33,6 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     fuel_tx::*,
-    fuel_types::ChainId,
     secrecy::ExposeSecret,
     tai64::Tai64,
 };
@@ -45,8 +49,9 @@ use std::{
 #[tokio::test]
 async fn block() {
     // setup test data in the node
-    let block = CompressedBlock::default();
-    let height = block.header().height();
+    let mut block = CompressedBlock::default();
+    let height = 1.into();
+    block.header_mut().set_block_height(height);
     let mut db = Database::default();
     // setup server & client
     let srv = FuelService::from_database(db.clone(), Config::local_node())
@@ -54,30 +59,50 @@ async fn block() {
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    db.storage::<FuelBlocks>().insert(height, &block).unwrap();
-    db.storage::<SealedBlockConsensus>()
-        .insert(height, &Consensus::PoA(Default::default()))
+    let mut transaction = db.write_transaction();
+    transaction
+        .storage::<FuelBlocks>()
+        .insert(&height, &block)
         .unwrap();
+    transaction
+        .storage::<SealedBlockConsensus>()
+        .insert(&height, &Consensus::PoA(Default::default()))
+        .unwrap();
+    transaction.commit().unwrap();
 
     // run test
-    let block = client.block_by_height(**height).await.unwrap();
+    let block = client.block_by_height(height).await.unwrap();
     assert!(block.is_some());
 }
 
 #[tokio::test]
-async fn get_genesis_block() {
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state.as_mut().unwrap().height = Some(13u32.into());
+async fn block_by_height_returns_genesis_block() {
+    // Given
+    let block_height_of_last_block_before_regenesis = 13u32.into();
+    let config = Config::local_node_with_state_config(StateConfig {
+        last_block: Some(LastBlockConfig {
+            block_height: block_height_of_last_block_before_regenesis,
+            state_transition_version: 0,
+            ..Default::default()
+        }),
+        ..StateConfig::local_testnet()
+    });
+
+    // When
     let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();
 
+    // Then
     let client = FuelClient::from(srv.bound_address);
-    let tx = Transaction::default_test_tx();
-    client.submit_and_await_commit(&tx).await.unwrap();
-
-    let block = client.block_by_height(13).await.unwrap().unwrap();
-    assert_eq!(block.header.height, 13);
+    let block_height_of_new_genesis_block =
+        block_height_of_last_block_before_regenesis.succ().unwrap();
+    let block = client
+        .block_by_height(block_height_of_new_genesis_block)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(block.header.height, 14);
     assert!(matches!(
         block.consensus,
         fuel_core_client::client::types::Consensus::Genesis(_)
@@ -95,18 +120,10 @@ async fn produce_block() {
     let client = FuelClient::from(srv.bound_address);
 
     let tx = Transaction::default_test_tx();
-    client.submit_and_await_commit(&tx).await.unwrap();
+    let status = client.submit_and_await_commit(&tx).await.unwrap();
 
-    let transaction_response = client
-        .transaction(&tx.id(&ChainId::default()))
-        .await
-        .unwrap();
-
-    if let TransactionStatus::Success { block_id, .. } =
-        transaction_response.unwrap().status
-    {
-        let block_id = block_id.parse().unwrap();
-        let block = client.block(&block_id).await.unwrap().unwrap();
+    if let TransactionStatus::Success { block_height, .. } = status {
+        let block = client.block_by_height(block_height).await.unwrap().unwrap();
         let actual_pub_key = block.block_producer().unwrap();
         let block_height: u32 = block.header.height;
         let expected_pub_key = config
@@ -138,7 +155,7 @@ async fn produce_block_manually() {
     let new_height = client.produce_blocks(1, None).await.unwrap();
 
     assert_eq!(1, *new_height);
-    let block = client.block_by_height(1).await.unwrap().unwrap();
+    let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
     let expected_pub_key = config
@@ -339,6 +356,7 @@ mod full_block {
         schema_path = "../crates/client/assets/schema.sdl",
         graphql_type = "Block"
     )]
+    #[allow(dead_code)]
     pub struct FullBlock {
         pub id: BlockId,
         pub header: Header,

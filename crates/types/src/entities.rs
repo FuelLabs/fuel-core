@@ -1,12 +1,15 @@
 //! Higher level domain types
 
-use crate::entities::message::MessageV1;
+use crate::entities::relayer::message::MessageV1;
 use coins::message_coin::MessageCoin;
-use message::Message;
+pub use relayer::{
+    message::Message,
+    transaction::RelayedTransaction,
+};
 
 pub mod coins;
 pub mod contract;
-pub mod message;
+pub mod relayer;
 
 impl TryFrom<Message> for MessageCoin {
     type Error = anyhow::Error;

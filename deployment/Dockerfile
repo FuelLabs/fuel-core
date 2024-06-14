@@ -3,7 +3,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
 FROM --platform=$BUILDPLATFORM rust:1.75.0 AS chef
 
 ARG TARGETPLATFORM
-RUN cargo install cargo-chef
+RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
 WORKDIR /build/
 
 COPY --from=xx / /
@@ -14,7 +14,6 @@ RUN apt-get update && \
     lld \
     clang \
     libclang-dev \
-    protobuf-compiler \
     && xx-apt-get update  \
     && xx-apt-get install -y libc6-dev g++ binutils \
     && apt-get clean \
@@ -36,7 +35,7 @@ ENV BUILD_FEATURES=$FEATURES
 COPY --from=planner /build/recipe.json recipe.json
 RUN echo $CARGO_PROFILE_RELEASE_DEBUG
 RUN echo $BUILD_FEATURES
-# Build our project dependecies, not our application!
+# Build our project dependencies, not our application!
 RUN xx-cargo chef cook --release --no-default-features --features "${BUILD_FEATURES}" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.

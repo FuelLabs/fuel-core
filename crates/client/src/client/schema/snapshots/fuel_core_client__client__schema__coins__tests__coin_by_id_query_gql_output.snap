@@ -6,11 +6,9 @@ query($utxoId: UtxoId!) {
   coin(utxoId: $utxoId) {
     amount
     blockCreated
+    txCreatedIdx
     assetId
     utxoId
-    maturity
     owner
   }
 }
-
-

@@ -3,8 +3,10 @@ use crate::{
     service::{
         adapters::{
             BlockProducerAdapter,
+            ConsensusParametersProvider,
             ExecutorAdapter,
             MaybeRelayerAdapter,
+            StaticGasPrice,
             TransactionsSource,
             TxPoolAdapter,
         },
@@ -12,21 +14,42 @@ use crate::{
     },
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
-use fuel_core_producer::ports::TxPool;
+use fuel_core_producer::{
+    block_producer::gas_price::{
+        ConsensusParametersProvider as ConsensusParametersProviderTrait,
+        GasPriceProvider,
+    },
+    ports::TxPool,
+};
 use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
-    tables::FuelBlocks,
-    transactional::StorageTransaction,
+    tables::{
+        ConsensusParametersVersions,
+        FuelBlocks,
+        StateTransitionBytecodeVersions,
+    },
+    transactional::Changes,
     Result as StorageResult,
     StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
+        primitives::DaBlockHeight,
     },
     fuel_tx,
-    fuel_tx::Transaction,
+    fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -34,7 +57,6 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            ExecutionTypes,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             UncommittedResult,
@@ -63,34 +85,31 @@ impl TxPool for TxPoolAdapter {
     }
 }
 
-impl fuel_core_producer::ports::Executor<TransactionsSource> for ExecutorAdapter {
-    type Database = Database;
-
-    fn execute_without_commit(
+impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAdapter {
+    fn produce_without_commit(
         &self,
         component: Components<TransactionsSource>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
-        self._execute_without_commit(ExecutionTypes::Production(component))
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        self.executor.produce_without_commit_with_source(component)
     }
 }
 
-impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
-    type Database = Database;
-
-    fn execute_without_commit(
+impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdapter {
+    fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
-        let Components {
-            header_to_produce,
-            transactions_source,
-            gas_limit,
-        } = component;
-        self._execute_without_commit(ExecutionTypes::Production(Components {
-            header_to_produce,
-            transactions_source: OnceTransactionsSource::new(transactions_source),
-            gas_limit,
-        }))
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        let new_components = Components {
+            header_to_produce: component.header_to_produce,
+            transactions_source: OnceTransactionsSource::new(
+                component.transactions_source,
+            ),
+            gas_price: component.gas_price,
+            coinbase_recipient: component.coinbase_recipient,
+        };
+
+        self.executor
+            .produce_without_commit_with_source(new_components)
     }
 }
 
@@ -100,23 +119,24 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self._dry_run(block, utxo_validation)
+        self.executor.dry_run(block, utxo_validation)
     }
 }
 
 #[async_trait::async_trait]
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
-    async fn wait_for_at_least(
+    async fn wait_for_at_least_height(
         &self,
-        height: &primitives::DaBlockHeight,
-    ) -> anyhow::Result<primitives::DaBlockHeight> {
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_at_least_synced(height).await?;
-                sync.get_finalized_da_height()
+                let highest = sync.get_finalized_da_height();
+                Ok(highest)
             } else {
-                Ok(0u64.into())
+                Ok(*height)
             }
         }
         #[cfg(not(feature = "relayer"))]
@@ -129,6 +149,44 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
             Ok(0u64.into())
         }
     }
+
+    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
+        #[cfg(feature = "relayer")]
+        {
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                get_gas_cost_for_height(**height, sync)
+            } else {
+                Ok(0)
+            }
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            anyhow::ensure!(
+                **height == 0,
+                "Cannot have a da height above zero without a relayer"
+            );
+            // If the relayer is not enabled, then all blocks are zero.
+            Ok(0)
+        }
+    }
+}
+
+#[cfg(feature = "relayer")]
+fn get_gas_cost_for_height(
+    height: u64,
+    sync: &fuel_core_relayer::SharedState<
+        Database<crate::database::database_description::relayer::Relayer>,
+    >,
+) -> anyhow::Result<u64> {
+    let da_height = DaBlockHeight(height);
+    let cost = sync
+        .database()
+        .storage::<fuel_core_relayer::storage::EventsHistory>()
+        .get(&da_height)?
+        .unwrap_or_default()
+        .iter()
+        .fold(0u64, |acc, event| acc.saturating_add(event.cost()));
+    Ok(cost)
 }
 
 impl fuel_core_producer::ports::BlockProducerDatabase for Database {
@@ -140,5 +198,43 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         self.storage::<FuelBlocks>().root(height).map(Into::into)
+    }
+
+    fn latest_consensus_parameters_version(
+        &self,
+    ) -> StorageResult<ConsensusParametersVersion> {
+        let (version, _) = self
+            .iter_all::<ConsensusParametersVersions>(Some(IterDirection::Reverse))
+            .next()
+            .ok_or(not_found!(ConsensusParametersVersions))??;
+
+        Ok(version)
+    }
+
+    fn latest_state_transition_bytecode_version(
+        &self,
+    ) -> StorageResult<StateTransitionBytecodeVersion> {
+        let (version, _) = self
+            .iter_all::<StateTransitionBytecodeVersions>(Some(IterDirection::Reverse))
+            .next()
+            .ok_or(not_found!(StateTransitionBytecodeVersions))??;
+
+        Ok(version)
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceProvider for StaticGasPrice {
+    async fn next_gas_price(&self, _block_bytes: u64) -> anyhow::Result<u64> {
+        Ok(self.gas_price)
+    }
+}
+
+impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+    fn consensus_params_at_version(
+        &self,
+        version: &ConsensusParametersVersion,
+    ) -> anyhow::Result<Arc<ConsensusParameters>> {
+        Ok(self.shared_state.get_consensus_parameters(version)?)
     }
 }

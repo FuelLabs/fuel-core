@@ -45,7 +45,9 @@ input BalanceFilterInput {
 }
 
 type Block {
+	version: BlockVersion!
 	id: BlockId!
+	height: U32!
 	header: Header!
 	consensus: Consensus!
 	transactions: [Transaction!]!
@@ -82,6 +84,10 @@ type BlockEdge {
 
 scalar BlockId
 
+enum BlockVersion {
+	V1
+}
+
 
 """
 Breakpoint, defined as a tuple of contract ID and relative PC offset inside it
@@ -112,7 +118,6 @@ type Coin {
 	owner: Address!
 	amount: U64!
 	assetId: AssetId!
-	maturity: U32!
 	"""
 	TxPointer - the height of the block this coin was created in
 	"""
@@ -120,7 +125,7 @@ type Coin {
 	"""
 	TxPointer - the index of the transaction that created this coin
 	"""
-	txCreatedIdx: U64!
+	txCreatedIdx: U16!
 }
 
 type CoinConnection {
@@ -177,14 +182,26 @@ union CoinType = Coin | MessageCoin
 union Consensus = Genesis | PoAConsensus
 
 type ConsensusParameters {
+	version: ConsensusParametersVersion!
 	txParams: TxParameters!
 	predicateParams: PredicateParameters!
 	scriptParams: ScriptParameters!
 	contractParams: ContractParameters!
 	feeParams: FeeParameters!
 	baseAssetId: AssetId!
+	blockGasLimit: U64!
 	chainId: U64!
 	gasCosts: GasCosts!
+	privilegedAddress: Address!
+}
+
+type ConsensusParametersPurpose {
+	witnessIndex: U16!
+	checksum: Bytes32!
+}
+
+enum ConsensusParametersVersion {
+	V1
 }
 
 type Contract {
@@ -236,21 +253,26 @@ input ContractBalanceFilterInput {
 }
 
 type ContractCreated {
-	contract: Contract!
+	contract: ContractId!
 	stateRoot: Bytes32!
 }
 
 scalar ContractId
 
 type ContractOutput {
-	inputIndex: Int!
+	inputIndex: U16!
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 }
 
 type ContractParameters {
+	version: ContractParametersVersion!
 	contractMaxSize: U64!
 	maxStorageSlots: U64!
+}
+
+enum ContractParametersVersion {
+	V1
 }
 
 union DependentCost = LightOperation | HeavyOperation
@@ -259,11 +281,15 @@ type DryRunFailureStatus {
 	programState: ProgramState
 	reason: String!
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type DryRunSuccessStatus {
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type DryRunTransactionExecutionStatus {
@@ -296,15 +322,23 @@ type FailureStatus {
 	reason: String!
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type FeeParameters {
+	version: FeeParametersVersion!
 	gasPriceFactor: U64!
 	gasPerByte: U64!
 }
 
+enum FeeParametersVersion {
+	V1
+}
+
 
 type GasCosts {
+	version: GasCostsVersion!
 	add: U64!
 	addi: U64!
 	aloc: U64!
@@ -317,7 +351,6 @@ type GasCosts {
 	cb: U64!
 	cfei: U64!
 	cfsi: U64!
-	croo: U64!
 	div: U64!
 	divi: U64!
 	ecr1: U64!
@@ -394,8 +427,10 @@ type GasCosts {
 	wqmm: U64!
 	xor: U64!
 	xori: U64!
+	alocDependentCost: DependentCost!
 	call: DependentCost!
 	ccp: DependentCost!
+	croo: DependentCost!
 	csiz: DependentCost!
 	k256: DependentCost!
 	ldc: DependentCost!
@@ -417,6 +452,10 @@ type GasCosts {
 	newStoragePerByte: U64!
 }
 
+enum GasCostsVersion {
+	V1
+}
+
 type Genesis {
 	"""
 	The chain configs define what consensus type to use, what settlement layer to use,
@@ -435,9 +474,17 @@ type Genesis {
 	The Binary Merkle Tree root of all genesis messages.
 	"""
 	messagesRoot: Bytes32!
+	"""
+	The Binary Merkle Tree root of all processed transaction ids.
+	"""
+	transactionsRoot: Bytes32!
 }
 
 type Header {
+	"""
+	Version of the header
+	"""
+	version: HeaderVersion!
 	"""
 	Hash of the header
 	"""
@@ -447,13 +494,21 @@ type Header {
 	"""
 	daHeight: U64!
 	"""
+	The version of the consensus parameters used to create this block.
+	"""
+	consensusParametersVersion: U32!
+	"""
+	The version of the state transition bytecode used to create this block.
+	"""
+	stateTransitionBytecodeVersion: U32!
+	"""
 	Number of transactions in this block.
 	"""
-	transactionsCount: U64!
+	transactionsCount: U16!
 	"""
 	Number of message receipts in this block.
 	"""
-	messageReceiptCount: U64!
+	messageReceiptCount: U32!
 	"""
 	Merkle root of transactions.
 	"""
@@ -461,7 +516,11 @@ type Header {
 	"""
 	Merkle root of message receipts in this block.
 	"""
-	messageReceiptRoot: Bytes32!
+	messageOutboxRoot: Bytes32!
+	"""
+	Merkle root of inbox events in this block.
+	"""
+	eventInboxRoot: Bytes32!
 	"""
 	Fuel block height.
 	"""
@@ -478,6 +537,10 @@ type Header {
 	Hash of the application header.
 	"""
 	applicationHash: Bytes32!
+}
+
+enum HeaderVersion {
+	V1
 }
 
 type HeavyOperation {
@@ -497,7 +560,6 @@ type InputCoin {
 	assetId: AssetId!
 	txPointer: TxPointer!
 	witnessIndex: Int!
-	maturity: U32!
 	predicateGasUsed: U64!
 	predicate: HexString!
 	predicateData: HexString!
@@ -508,7 +570,7 @@ type InputContract {
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 	txPointer: TxPointer!
-	contract: Contract!
+	contractId: ContractId!
 }
 
 type InputMessage {
@@ -516,7 +578,7 @@ type InputMessage {
 	recipient: Address!
 	amount: U64!
 	nonce: Nonce!
-	witnessIndex: Int!
+	witnessIndex: U16!
 	predicateGasUsed: U64!
 	data: HexString!
 	predicate: HexString!
@@ -649,7 +711,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean): [DryRunTransactionExecutionStatus!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64): [DryRunTransactionExecutionStatus!]!
 	"""
 	Submits transaction to the `TxPool`.
 	
@@ -668,7 +730,6 @@ type Mutation {
 type NodeInfo {
 	utxoValidation: Boolean!
 	vmBacktrace: Boolean!
-	minGasPrice: U64!
 	maxTx: U64!
 	maxDepth: U64!
 	nodeVersion: String!
@@ -745,17 +806,22 @@ type PoAConsensus {
 }
 
 type Policies {
-	gasPrice: U64
+	tip: U64
 	witnessLimit: U64
 	maturity: U32
 	maxFee: U64
 }
 
 type PredicateParameters {
+	version: PredicateParametersVersion!
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
 	maxGasPerPredicate: U64!
 	maxMessageDataLength: U64!
+}
+
+enum PredicateParametersVersion {
+	V1
 }
 
 type ProgramState {
@@ -823,13 +889,14 @@ type Query {
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, nonce: Nonce!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
 	messageStatus(nonce: Nonce!): MessageStatus!
+	relayedTransactionStatus(id: RelayedTransactionId!): RelayedTransactionStatus
 }
 
 type Receipt {
-	contract: Contract
+	id: ContractId
 	pc: U64
 	is: U64
-	to: Contract
+	to: ContractId
 	toAddress: Address
 	amount: U64
 	assetId: AssetId
@@ -852,6 +919,9 @@ type Receipt {
 	sender: Address
 	recipient: Address
 	nonce: Nonce
+	"""
+	Set in the case of a Panic receipt to indicate a missing contract input id
+	"""
 	contractId: ContractId
 	subId: Bytes32
 }
@@ -871,6 +941,15 @@ enum ReceiptType {
 	MINT
 	BURN
 }
+
+type RelayedTransactionFailed {
+	blockHeight: U32!
+	failure: String!
+}
+
+scalar RelayedTransactionId
+
+union RelayedTransactionStatus = RelayedTransactionFailed
 
 enum ReturnType {
 	RETURN
@@ -892,8 +971,13 @@ enum RunState {
 scalar Salt
 
 type ScriptParameters {
+	version: ScriptParametersVersion!
 	maxScriptLength: U64!
 	maxScriptDataLength: U64!
+}
+
+enum ScriptParametersVersion {
+	V1
 }
 
 scalar Signature
@@ -915,6 +999,10 @@ input SpendQueryElementInput {
 
 type SqueezedOutStatus {
 	reason: String!
+}
+
+type StateTransitionPurpose {
+	root: Bytes32!
 }
 
 
@@ -950,6 +1038,8 @@ type SuccessStatus {
 	time: Tai64Timestamp!
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 scalar Tai64Timestamp
@@ -957,18 +1047,20 @@ scalar Tai64Timestamp
 type Transaction {
 	id: TransactionId!
 	inputAssetIds: [AssetId!]
-	inputContracts: [Contract!]
+	inputContracts: [ContractId!]
 	inputContract: InputContract
 	policies: Policies
-	gasPrice: U64
 	scriptGasLimit: U64
 	maturity: U32
 	mintAmount: U64
 	mintAssetId: AssetId
+	mintGasPrice: U64
 	txPointer: TxPointer
 	isScript: Boolean!
 	isCreate: Boolean!
 	isMint: Boolean!
+	isUpgrade: Boolean!
+	isUpload: Boolean!
 	inputs: [Input!]
 	outputs: [Output!]!
 	outputContract: ContractOutput
@@ -977,10 +1069,14 @@ type Transaction {
 	status: TransactionStatus
 	script: HexString
 	scriptData: HexString
-	bytecodeWitnessIndex: Int
-	bytecodeLength: U64
+	bytecodeWitnessIndex: U16
 	salt: Salt
 	storageSlots: [HexString!]
+	bytecodeRoot: Bytes32
+	subsectionIndex: U16
+	subsectionsNumber: U16
+	proofSet: [Bytes32!]
+	upgradePurpose: UpgradePurpose
 	"""
 	Return the transaction bytes using canonical encoding
 	"""
@@ -1021,20 +1117,28 @@ scalar TransactionId
 union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 type TxParameters {
-	maxInputs: U8!
-	maxOutputs: U8!
+	version: TxParametersVersion!
+	maxInputs: U16!
+	maxOutputs: U16!
 	maxWitnesses: U32!
 	maxGasPerTx: U64!
 	maxSize: U64!
+	maxBytecodeSubsections: U16!
+}
+
+enum TxParametersVersion {
+	V1
 }
 
 scalar TxPointer
+
+scalar U16
 
 scalar U32
 
 scalar U64
 
-scalar U8
+union UpgradePurpose = ConsensusParametersPurpose | StateTransitionPurpose
 
 scalar UtxoId
 

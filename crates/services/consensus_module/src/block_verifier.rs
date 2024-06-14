@@ -10,6 +10,7 @@ use fuel_core_types::{
         block::Block,
         consensus::Consensus,
         header::BlockHeader,
+        primitives::DaBlockHeight,
         SealedBlockHeader,
     },
     fuel_types::{
@@ -55,14 +56,13 @@ where
     ) -> anyhow::Result<()> {
         match consensus {
             Consensus::Genesis(_) => {
-                let expected_genesis_height = self
-                    .config
-                    .chain_config
-                    .initial_state
-                    .as_ref()
-                    .map(|config| config.height.unwrap_or_else(|| 0u32.into()))
-                    .unwrap_or_else(|| 0u32.into());
-                verify_genesis_block_fields(expected_genesis_height, block.header())
+                let expected_genesis_height = self.config.block_height;
+                let expected_genesis_da_height = self.config.da_block_height;
+                verify_genesis_block_fields(
+                    expected_genesis_height,
+                    expected_genesis_da_height,
+                    block.header(),
+                )
             }
             Consensus::PoA(_) => {
                 let view = self.view_provider.latest_view();
@@ -81,7 +81,7 @@ where
         match consensus {
             Consensus::Genesis(_) => true,
             Consensus::PoA(consensus) => fuel_core_poa::verifier::verify_consensus(
-                &self.config.chain_config.consensus,
+                &self.config.consensus,
                 header,
                 consensus,
             ),
@@ -92,6 +92,7 @@ where
 
 fn verify_genesis_block_fields(
     expected_genesis_height: BlockHeight,
+    expected_genesis_da_height: DaBlockHeight,
     header: &BlockHeader,
 ) -> anyhow::Result<()> {
     let actual_genesis_height = *header.height();
@@ -105,8 +106,7 @@ fn verify_genesis_block_fields(
         "The genesis time should be unix epoch time"
     );
     ensure!(
-        // TODO: Set `da_height` based on the chain config.
-        header.da_height == Default::default(),
+        header.da_height == expected_genesis_da_height,
         "The genesis `da_height` is not as expected"
     );
     ensure!(
