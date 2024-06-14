@@ -125,7 +125,7 @@ impl MessageQuery {
         .await
     }
 
-    // 256 * QUERY_COSTS.storage_read because the depth of hte Merkle tree in the worst case is 256
+    // 256 * QUERY_COSTS.storage_read because the depth of the Merkle tree in the worst case is 256
     #[graphql(complexity = "256 * QUERY_COSTS.storage_read + child_complexity")]
     async fn message_proof(
         &self,
