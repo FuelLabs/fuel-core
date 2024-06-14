@@ -17,6 +17,8 @@ use tokio::sync::RwLock;
 
 pub mod static_updater;
 
+pub mod fuel_gas_price_updater;
+
 pub fn new_service<A, U>(
     current_fuel_block_height: BlockHeight,
     update_algo: U,
