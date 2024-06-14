@@ -19,12 +19,14 @@ pub enum Error {
 /// An algorithm for calculating the gas price for the next block
 ///
 /// The algorithm breaks up the gas price into two components:
-/// - The execution gas price, which is used to cover the cost of executing the next block
+/// - The execution gas price, which is used to cover the cost of executing the next block as well
+///   as moderating the congestion of the network by increasing the price when traffic is high.
 /// - The data availability (DA) gas price, which is used to cover the cost of recording the block on the DA chain
 ///
 /// The execution gas price is calculated eagerly based on the fullness of the last received l2 block. Each
-/// block has a capacity threshold, and if the block is above this threshold, the gas price is increased, and if
-/// it is below, the gas price is decreased. The gas price can only change by a fixed amount each block.
+/// block has a capacity threshold, and if the block is above this threshold, the gas price is increased. If
+/// it is below the threshold, the gas price is decreased.
+/// The gas price can only change by a fixed amount each block.
 ///
 /// The DA gas price is calculated based on the profit of previous blocks. The profit is the
 /// difference between the rewards from the DA portion of the gas price and the cost of recording the blocks on the DA chain.
@@ -113,6 +115,15 @@ impl AlgorithmV1 {
 }
 
 /// The state of the algorithm used to update the gas price algorithm for each block
+///
+/// Because there will always be a delay between blocks submitted to the L2 chain and the blocks
+/// being recorded on the DA chain, the updater needs to make "projections" about the cost of
+/// recording any given block to the DA chain. This is done by tracking the cost per byte of recording
+/// for the most recent blocks, and using the known bytes of the unrecorded blocks to estimate
+/// the cost for that block. Every time the DA recording is updated, that the projections are recalculated.
+///
+/// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
+/// to account for the worst case scenario when calculating the parameters of the algorithm.
 pub struct AlgorithmUpdaterV1 {
     /// The gas price for to cover the execution of the next block
     pub new_exec_price: u64,

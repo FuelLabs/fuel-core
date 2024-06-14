@@ -1,6 +1,6 @@
 use super::*;
 
-fn da_pid_comp(size: usize) -> Vec<(i64, i64)> {
+fn da_pid_factors(size: usize) -> Vec<(i64, i64)> {
     let mut rng = StdRng::seed_from_u64(10902);
     (0usize..size)
         .map(|_| {
@@ -15,7 +15,7 @@ pub fn naive_optimisation(
     iterations: usize,
     avg_window: u32,
 ) -> (SimulationResults, (i64, i64, u32)) {
-    da_pid_comp(iterations)
+    da_pid_factors(iterations)
         .iter()
         .map(|(p, d)| (run_simulation(*p, *d, avg_window), (*p, *d, avg_window)))
         .min_by_key(|(results, _)| {
