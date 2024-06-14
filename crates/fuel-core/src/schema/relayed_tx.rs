@@ -2,6 +2,7 @@ use crate::{
     fuel_core_graphql_api::{
         database::ReadView,
         ports::DatabaseRelayedTransactions,
+        QUERY_COSTS,
     },
     schema::scalars::{
         RelayedTransactionId,
@@ -23,6 +24,7 @@ pub struct RelayedTransactionQuery {}
 
 #[Object]
 impl RelayedTransactionQuery {
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn relayed_transaction_status(
         &self,
         ctx: &Context<'_>,

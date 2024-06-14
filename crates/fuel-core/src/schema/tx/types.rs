@@ -11,6 +11,7 @@ use crate::{
         },
         database::ReadView,
         IntoApiResult,
+        QUERY_COSTS,
     },
     query::{
         SimpleBlockData,
@@ -170,6 +171,11 @@ impl SuccessStatus {
         self.tx_id.into()
     }
 
+    async fn block_height(&self) -> U32 {
+        self.block_height.into()
+    }
+
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &ReadView = ctx.data_unchecked();
         let block = query.block(&self.block_height)?;
@@ -214,6 +220,11 @@ impl FailureStatus {
         self.tx_id.into()
     }
 
+    async fn block_height(&self) -> U32 {
+        self.block_height.into()
+    }
+
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &ReadView = ctx.data_unchecked();
         let block = query.block(&self.block_height)?;
@@ -385,6 +396,7 @@ impl Transaction {
         TransactionId(self.1)
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read")]
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -626,6 +638,7 @@ impl Transaction {
         }
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn status(
         &self,
         ctx: &Context<'_>,
@@ -761,6 +774,7 @@ impl Transaction {
         }
     }
 
+    #[graphql(complexity = "QUERY_COSTS.raw_payload")]
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())

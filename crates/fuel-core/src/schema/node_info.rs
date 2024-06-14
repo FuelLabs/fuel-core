@@ -2,7 +2,10 @@ use super::scalars::{
     U32,
     U64,
 };
-use crate::fuel_core_graphql_api::Config as GraphQLConfig;
+use crate::fuel_core_graphql_api::{
+    Config as GraphQLConfig,
+    QUERY_COSTS,
+};
 use async_graphql::{
     Context,
     Object,
@@ -39,6 +42,7 @@ impl NodeInfo {
         self.node_version.to_owned()
     }
 
+    #[graphql(complexity = "QUERY_COSTS.get_peers + child_complexity")]
     async fn peers(&self, _ctx: &Context<'_>) -> async_graphql::Result<Vec<PeerInfo>> {
         #[cfg(feature = "p2p")]
         {
@@ -62,6 +66,7 @@ pub struct NodeQuery {}
 
 #[Object]
 impl NodeQuery {
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
@@ -71,7 +76,7 @@ impl NodeQuery {
             utxo_validation: config.utxo_validation,
             vm_backtrace: config.vm_backtrace,
             max_tx: (config.max_tx as u64).into(),
-            max_depth: (config.max_depth as u64).into(),
+            max_depth: (config.max_txpool_depth as u64).into(),
             node_version: VERSION.to_owned(),
         })
     }

@@ -126,7 +126,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 submitted_at: s.time.0,
             },
             SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
-                block_height: s.block.height.into(),
+                block_height: s.block_height.into(),
                 time: s.time.0,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
                 receipts: s
@@ -138,7 +138,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_fee: s.total_fee.0,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
-                block_height: s.block.height.into(),
+                block_height: s.block_height.into(),
                 time: s.time.0,
                 reason: s.reason,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,

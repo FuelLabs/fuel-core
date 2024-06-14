@@ -5,6 +5,7 @@ use crate::{
         default_db_path,
         run::{
             consensus::PoATriggerArgs,
+            graphql::GraphQLArgs,
             tx_pool::TxPoolArgs,
         },
         ShutdownListener,
@@ -19,6 +20,7 @@ use fuel_core::{
         CombinedDatabase,
         CombinedDatabaseConfig,
     },
+    fuel_core_graphql_api::ServiceConfig as GraphQLConfig,
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -73,6 +75,7 @@ pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 mod p2p;
 
 mod consensus;
+mod graphql;
 mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
@@ -81,12 +84,6 @@ mod tx_pool;
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
-    #[clap(long = "ip", default_value = "127.0.0.1", value_parser, env)]
-    pub ip: net::IpAddr,
-
-    #[clap(long = "port", default_value = "4000", env)]
-    pub port: u16,
-
     /// Vanity name for node, used in telemetry
     #[clap(long = "service-name", default_value = "fuel-core", value_parser, env)]
     pub service_name: String,
@@ -169,6 +166,10 @@ pub struct Command {
     #[clap(flatten)]
     pub tx_pool: TxPoolArgs,
 
+    /// The cli arguments supported by the GraphQL API service.
+    #[clap(flatten)]
+    pub graphql: GraphQLArgs,
+
     #[cfg_attr(feature = "relayer", clap(flatten))]
     #[cfg(feature = "relayer")]
     pub relayer_args: relayer::RelayerArgs,
@@ -198,14 +199,6 @@ pub struct Command {
     #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
 
-    /// Time to wait after submitting a query before debug info will be logged about query.
-    #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
-    pub query_log_threshold_time: humantime::Duration,
-
-    /// Timeout before drop the request.
-    #[clap(long = "api-request-timeout", default_value = "30m", env)]
-    pub api_request_timeout: humantime::Duration,
-
     /// The size of the memory pool in number of `MemoryInstance`s.
     #[clap(long = "memory-pool-size", default_value = "32", env)]
     pub memory_pool_size: usize,
@@ -217,8 +210,6 @@ pub struct Command {
 impl Command {
     pub fn get_config(self) -> anyhow::Result<Config> {
         let Command {
-            ip,
-            port,
             service_name: name,
             max_database_cache_size,
             database_path,
@@ -243,15 +234,14 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool,
+            graphql,
             min_connected_reserved_peers,
             time_until_synced,
-            query_log_threshold_time,
-            api_request_timeout,
             memory_pool_size,
             profiling: _,
         } = self;
 
-        let addr = net::SocketAddr::new(ip, port);
+        let addr = net::SocketAddr::new(graphql.ip, graphql.port);
 
         let snapshot_reader = match snapshot.as_ref() {
             None => crate::cli::local_testnet_reader(),
@@ -335,8 +325,14 @@ impl Command {
         );
 
         let config = Config {
-            addr,
-            api_request_timeout: api_request_timeout.into(),
+            graphql_config: GraphQLConfig {
+                addr,
+                max_queries_depth: graphql.graphql_max_depth,
+                max_queries_complexity: graphql.graphql_max_complexity,
+                max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
+                api_request_timeout: graphql.api_request_timeout.into(),
+                query_log_threshold_time: graphql.query_log_threshold_time.into(),
+            },
             combined_db_config,
             snapshot_reader,
             debug,
@@ -372,7 +368,6 @@ impl Command {
             relayer_consensus_config: verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
-            query_log_threshold_time: query_log_threshold_time.into(),
             memory_pool_size,
         };
         Ok(config)

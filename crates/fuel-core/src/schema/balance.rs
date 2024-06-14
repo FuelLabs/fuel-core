@@ -2,6 +2,7 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusProvider,
         database::ReadView,
+        QUERY_COSTS,
     },
     query::BalanceQueryData,
     schema::scalars::{
@@ -50,6 +51,7 @@ pub struct BalanceQuery;
 
 #[Object]
 impl BalanceQuery {
+    #[graphql(complexity = "QUERY_COSTS.balance_query")]
     async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -65,13 +67,9 @@ impl BalanceQuery {
         Ok(balance)
     }
 
-    // TODO: We can't paginate over `AssetId` because it is not unique.
-    //  It should be replaced with `UtxoId`.
-    //  This API should be migrated to the indexer for better support and
+    // TODO: This API should be migrated to the indexer for better support and
     //  discontinued within fuel-core.
-    #[graphql(
-        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
-    )]
+    #[graphql(complexity = "QUERY_COSTS.balance_query")]
     async fn balances(
         &self,
         ctx: &Context<'_>,
