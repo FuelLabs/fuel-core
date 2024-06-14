@@ -16,6 +16,53 @@ pub enum Error {
     CouldNotCalculateCostPerByte { bytes: u64, cost: u64 },
 }
 
+/// An algorithm for calculating the gas price for the next block
+///
+/// The algorithm breaks up the gas price into two components:
+/// - The execution gas price, which is used to cover the cost of executing the next block
+/// - The data availability (DA) gas price, which is used to cover the cost of recording the block on the DA chain
+///
+/// The execution gas price is calculated eagerly based on the fullness of the last received l2 block. Each
+/// block has a capacity threshold, and if the block is above this threshold, the gas price is increased, and if
+/// it is below, the gas price is decreased. The gas price can only change by a fixed amount each block.
+///
+/// The DA gas price is calculated based on the profit of previous blocks. The profit is the
+/// difference between the rewards from the DA portion of the gas price and the cost of recording the blocks on the DA chain.
+/// The algorithm uses a naive PID controller to calculate the change in the DA gas price. The "P" portion
+/// of the new gas price is "proportional" to the profit, either negative or positive. The "D" portion is derived
+/// from the slope or change in the profits since the last block.
+///
+/// if p > 0 and dp/db > 0, decrease
+/// if p > 0 and dp/db < 0, hold/moderate
+/// if p < 0 and dp/db < 0, increase
+/// if p < 0 and dp/db > 0, hold/moderate
+///
+/// The DA portion also uses a moving average of the profits over the last `avg_window` blocks
+/// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
+/// moving average.
+pub struct AlgorithmV1 {
+    /// The gas price for to cover the execution of the next block
+    new_exec_price: u64,
+    /// The gas price for the DA portion of the last block. This can be used to calculate
+    last_da_price: u64,
+    /// The maximum percentage that the DA portion of the gas price can change in a single block
+    max_change_percent: u8,
+    /// The latest known cost per byte for recording blocks on the DA chain
+    latest_da_cost_per_byte: u64,
+    /// The cumulative reward from the DA portion of the gas price
+    total_rewards: u64,
+    /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
+    total_costs: u64,
+    /// The P component of the PID control for the DA gas price
+    da_p_factor: i64,
+    /// The D component of the PID control for the DA gas price
+    da_d_factor: i64,
+    /// The average profit over the last `avg_window` blocks
+    avg_profit: i64,
+    /// The number of blocks to consider when calculating the average profit
+    avg_window: u32,
+}
+
 impl AlgorithmV1 {
     pub fn calculate(&self, block_bytes: u64) -> u64 {
         let projected_profit_avg = self.calculate_avg_profit(block_bytes);
@@ -36,13 +83,13 @@ impl AlgorithmV1 {
     }
 
     fn p(&self, projected_profit_avg: i64) -> i64 {
-        let checked_p = projected_profit_avg.checked_div(self.da_p_component);
+        let checked_p = projected_profit_avg.checked_div(self.da_p_factor);
         -checked_p.unwrap_or(0)
     }
 
     fn d(&self, projected_profit_avg: i64) -> i64 {
         let slope = projected_profit_avg - self.avg_profit;
-        let checked_d = slope.checked_div(self.da_d_component);
+        let checked_d = slope.checked_div(self.da_d_factor);
         -checked_d.unwrap_or(0)
     }
 
@@ -104,30 +151,6 @@ pub struct AlgorithmUpdaterV1 {
     pub latest_da_cost_per_byte: u64,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: Vec<BlockBytes>,
-}
-
-/// An algorithm for calculating the gas price for the next block
-pub struct AlgorithmV1 {
-    /// The gas price for to cover the execution of the next block
-    new_exec_price: u64,
-    /// The gas price for the DA portion of the last block. This can be used to calculate
-    last_da_price: u64,
-    /// The maximum percentage that the DA portion of the gas price can change in a single block
-    max_change_percent: u8,
-    /// The latest known cost per byte for recording blocks on the DA chain
-    latest_da_cost_per_byte: u64,
-    /// The cumulative reward from the DA portion of the gas price
-    total_rewards: u64,
-    /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    total_costs: u64,
-    /// The P component of the PID control for the DA gas price
-    da_p_component: i64,
-    /// The D component of the PID control for the DA gas price
-    da_d_component: i64,
-    /// The average profit over the last `avg_window` blocks
-    avg_profit: i64,
-    /// The number of blocks to consider when calculating the average profit
-    avg_window: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -256,8 +279,8 @@ impl AlgorithmUpdaterV1 {
             total_rewards: self.total_da_rewards,
             total_costs: self.projected_total_da_cost,
             avg_profit: self.profit_avg,
-            da_p_component: self.da_p_component,
-            da_d_component: self.da_d_component,
+            da_p_factor: self.da_p_component,
+            da_d_factor: self.da_d_component,
             avg_window: self.avg_window,
         }
     }
