@@ -7,6 +7,9 @@ pub fn draw_gas_prices(
     da_gas_prices: &[u64],
     title: &str,
 ) {
+    const GAS_PRICE_COLOR: RGBColor = BLACK;
+    const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
+    const DA_GAS_PRICE_COLOR: RGBColor = BLUE;
     let min = 0;
     let max = *gas_prices.iter().max().unwrap();
 
@@ -29,31 +32,33 @@ pub fn draw_gas_prices(
     chart
         .draw_series(LineSeries::new(
             gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            BLACK,
+            GAS_PRICE_COLOR,
         ))
         .unwrap()
         .label("Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], GAS_PRICE_COLOR));
 
     // Draw the exec gas prices
     chart
         .draw_series(LineSeries::new(
             exec_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            RED,
+            EXEC_GAS_PRICE_COLOR,
         ))
         .unwrap()
         .label("Exec Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
+        .legend(|(x, y)| {
+            PathElement::new(vec![(x, y), (x + 20, y)], EXEC_GAS_PRICE_COLOR)
+        });
 
     // Draw the da gas prices
     chart
         .draw_series(LineSeries::new(
             da_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            BLUE,
+            DA_GAS_PRICE_COLOR,
         ))
         .unwrap()
         .label("DA Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], DA_GAS_PRICE_COLOR));
 
     chart
         .configure_series_labels()
@@ -68,6 +73,8 @@ pub fn draw_fullness(
     fullness: &Vec<(u64, u64)>,
     title: &str,
 ) {
+    const FULLNESS_COLOR: RGBColor = BLACK;
+
     let min = 0;
     let max = 100;
 
@@ -94,9 +101,11 @@ pub fn draw_fullness(
                 .map(|(x, y)| (*x as f64 / *y as f64) * 100.)
                 .map(|x| x as i32)
                 .enumerate(),
-            BLACK,
+            FULLNESS_COLOR,
         ))
-        .unwrap();
+        .unwrap()
+        .label("Fullness")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], FULLNESS_COLOR));
 
     chart
         .configure_series_labels()
@@ -113,6 +122,9 @@ pub fn draw_profit(
     pessimistic_block_costs: &[u64],
     title: &str,
 ) {
+    const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
+    const PROJECTED_PROFIT_COLOR: RGBColor = RED;
+    const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
     let min = *actual_profit.iter().min().unwrap();
     let max = *actual_profit.iter().max().unwrap();
     println!("min: {}, max: {}", min, max);
@@ -136,20 +148,24 @@ pub fn draw_profit(
     chart
         .draw_series(LineSeries::new(
             actual_profit.iter().enumerate().map(|(x, y)| (x, *y)),
-            BLACK,
+            ACTUAL_PROFIT_COLOR,
         ))
         .unwrap()
         .label("Actual Profit")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
+        .legend(|(x, y)| {
+            PathElement::new(vec![(x, y), (x + 20, y)], ACTUAL_PROFIT_COLOR)
+        });
 
     chart
         .draw_series(LineSeries::new(
             projected_profit.iter().enumerate().map(|(x, y)| (x, *y)),
-            RED,
+            PROJECTED_PROFIT_COLOR,
         ))
         .unwrap()
         .label("Projected Profit")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
+        .legend(|(x, y)| {
+            PathElement::new(vec![(x, y), (x + 20, y)], PROJECTED_PROFIT_COLOR)
+        });
 
     // draw the block bytes
     chart
@@ -158,11 +174,13 @@ pub fn draw_profit(
                 .iter()
                 .enumerate()
                 .map(|(x, y)| (x, *y as i64)),
-            &BLUE,
+            PESSIMISTIC_BLOCK_COST_COLOR,
         ))
         .unwrap()
         .label("Pessimistic Block Costs")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
+        .legend(|(x, y)| {
+            PathElement::new(vec![(x, y), (x + 20, y)], PESSIMISTIC_BLOCK_COST_COLOR)
+        });
 
     chart
         .configure_series_labels()
