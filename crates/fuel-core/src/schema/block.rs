@@ -124,7 +124,7 @@ impl Block {
         Ok(query.consensus(height)?.try_into()?)
     }
 
-    async fn transactions_ids(&self) -> Vec<TransactionId> {
+    async fn transaction_ids(&self) -> Vec<TransactionId> {
         self.0
             .transactions()
             .iter()

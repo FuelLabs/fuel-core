@@ -145,7 +145,7 @@ impl TryFrom<schema::block::Block> for Block {
                 let header = value.header.try_into()?;
                 let consensus = value.consensus.into();
                 let transactions = value
-                    .transactions_ids
+                    .transaction_ids
                     .into_iter()
                     .map(Into::into)
                     .collect::<Vec<TransactionId>>();

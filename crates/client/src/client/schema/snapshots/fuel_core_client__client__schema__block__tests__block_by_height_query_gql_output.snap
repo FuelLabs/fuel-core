@@ -35,6 +35,6 @@ query($height: U32) {
         signature
       }
     }
-    transactionsIds
+    transactionIds
   }
 }

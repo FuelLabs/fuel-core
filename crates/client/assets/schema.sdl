@@ -50,7 +50,7 @@ type Block {
 	height: U32!
 	header: Header!
 	consensus: Consensus!
-	transactionsIds: [TransactionId!]!
+	transactionIds: [TransactionId!]!
 	transactions: [Transaction!]!
 }
 

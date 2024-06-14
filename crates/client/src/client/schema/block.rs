@@ -87,7 +87,7 @@ pub struct Block {
     pub id: BlockId,
     pub header: Header,
     pub consensus: Consensus,
-    pub transactions_ids: Vec<TransactionId>,
+    pub transaction_ids: Vec<TransactionId>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

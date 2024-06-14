@@ -38,7 +38,7 @@ query {
           signature
         }
       }
-      transactionsIds
+      transactionIds
     }
     consensusParameters {
       version
