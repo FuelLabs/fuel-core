@@ -2,11 +2,11 @@
 use super::*;
 
 #[cfg(test)]
-mod update_l2_block_data_tests;
+mod algorithm_v1_tests;
 #[cfg(test)]
 mod update_da_record_data_tests;
 #[cfg(test)]
-mod algorithm_v1_tests;
+mod update_l2_block_data_tests;
 
 struct UpdaterBuilder {
     starting_exec_gas_price: u64,
@@ -161,7 +161,6 @@ impl UpdaterBuilder {
         }
     }
 }
-
 
 #[ignore]
 #[test]
