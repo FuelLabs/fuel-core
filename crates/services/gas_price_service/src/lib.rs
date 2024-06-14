@@ -68,7 +68,7 @@ pub trait UpdateAlgorithm {
     fn start(&self, for_block: BlockHeight) -> Self::Algorithm;
 
     /// Wait for the next algorithm to be available
-    async fn next(&mut self) -> Self::Algorithm;
+    async fn next(&mut self) -> anyhow::Result<Self::Algorithm>;
 }
 
 pub trait GasPriceAlgorithm {
@@ -165,6 +165,7 @@ where
                 should_continue = false;
             }
             new_algo = self.update_algorithm.next() => {
+                let new_algo = new_algo?;
                 tracing::debug!("Updating gas price algorithm");
                 self.update(new_algo).await;
                 should_continue = true;
@@ -228,9 +229,9 @@ mod tests {
             self.start.clone()
         }
 
-        async fn next(&mut self) -> Self::Algorithm {
+        async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
             let price = self.price_source.recv().await.unwrap();
-            TestAlgorithm { price }
+            Ok(TestAlgorithm { price })
         }
     }
     #[tokio::test]

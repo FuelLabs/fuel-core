@@ -3078,6 +3078,7 @@ dependencies = [
  "fuel-core-types",
  "futures",
  "gas-price-algorithm",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
