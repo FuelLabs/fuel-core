@@ -982,7 +982,7 @@ async fn sorted_out_tx_by_creation_instant() {
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
-    
+
     let (_, gas_coin) = context.setup_coin();
     let tx4 = TransactionBuilder::script(vec![], vec![])
         .tip(4)
@@ -1025,7 +1025,6 @@ async fn sorted_out_tx_by_creation_instant() {
     assert_eq!(txs[1].id(), tx3_id, "Second should be tx3");
     assert_eq!(txs[2].id(), tx2_id, "Third should be tx2");
     assert_eq!(txs[3].id(), tx1_id, "Fourth should be tx1");
-
 }
 
 #[tokio::test]
