@@ -7,10 +7,7 @@ use fuel_core_types::{
     },
     secrecy::Secret,
 };
-use std::{
-    net::SocketAddr,
-    time::Duration,
-};
+use std::time::Duration;
 use strum_macros::{
     Display,
     EnumString,
@@ -125,7 +122,10 @@ impl Config {
 
         Self {
             graphql_config: GraphQLConfig {
-                addr: SocketAddr::new(std::net::Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+                addr: std::net::SocketAddr::new(
+                    std::net::Ipv4Addr::new(127, 0, 0, 1).into(),
+                    0,
+                ),
                 max_queries_depth: 16,
                 max_queries_complexity: 20000,
                 max_queries_recursive_depth: 10,
