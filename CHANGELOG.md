@@ -6,10 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Breaking
+- [#1951](https://github.com/FuelLabs/fuel-core/pull/1951): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
+
 ## [Version 0.29.0]
 
 ### Added
 - [#1889](https://github.com/FuelLabs/fuel-core/pull/1889): Add new `FuelGasPriceProvider` that receives the gas price algorithm from a `GasPriceService`
+
 
 ### Changed
 - [#1942](https://github.com/FuelLabs/fuel-core/pull/1942): Sequential relayer's commits.
