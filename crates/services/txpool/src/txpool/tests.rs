@@ -956,6 +956,78 @@ async fn sorted_out_tx_profitable_ratios() {
 }
 
 #[tokio::test]
+async fn sorted_out_tx_by_creation_instant() {
+    let mut context = TextContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx4 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+    let tx4_id = tx4.id(&ChainId::default());
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx4 = check_unwrap_tx(tx4, &txpool.config).await;
+
+    txpool
+        .insert_single(tx1)
+        .expect("Tx1 should be Ok, got Err");
+    txpool
+        .insert_single(tx2)
+        .expect("Tx2 should be Ok, got Err");
+    txpool
+        .insert_single(tx3)
+        .expect("Tx4 should be Ok, got Err");
+    txpool
+        .insert_single(tx4)
+        .expect("Tx4 should be Ok, got Err");
+
+    let txs = txpool.sorted_includable().collect::<Vec<_>>();
+
+    // This order doesn't match the lexicographical order of the tx ids
+    // and so it verifies that the txs are sorted by creation instant
+    // The newest tx should be first
+    assert_eq!(txs.len(), 4, "Should have 4 txs");
+    assert_eq!(txs[0].id(), tx1_id, "First should be tx1");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx3_id, "Third should be tx3");
+    assert_eq!(txs[3].id(), tx4_id, "Fourth should be tx4");
+}
+
+#[tokio::test]
 async fn find_dependent_tx1_tx2() {
     let mut context = TextContext::default();
 
