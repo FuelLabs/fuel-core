@@ -1,7 +1,7 @@
 use super::*;
-use fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV2;
+use fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV3;
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValuesV2 {
+    GasCostsValuesV3 {
         add: 2,
         addi: 2,
         and: 2,
@@ -11,7 +11,6 @@ pub fn default_gas_costs() -> GasCostsValues {
         bhsh: 2,
         burn: 20502,
         cb: 2,
-        cfei: 2,
         cfsi: 2,
         div: 2,
         divi: 2,
@@ -93,6 +92,14 @@ pub fn default_gas_costs() -> GasCostsValues {
         xor: 2,
         xori: 2,
         aloc: DependentCost::LightOperation {
+            base: 2,
+            units_per_gas: 15,
+        },
+        cfe: DependentCost::LightOperation {
+            base: 2,
+            units_per_gas: 15,
+        },
+        cfei: DependentCost::LightOperation {
             base: 2,
             units_per_gas: 15,
         },

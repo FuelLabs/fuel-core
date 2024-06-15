@@ -44,7 +44,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V2": {
+        "V3": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -54,7 +54,6 @@ expression: json
           "bhsh": 1,
           "burn": 132,
           "cb": 1,
-          "cfei": 1,
           "cfsi": 1,
           "div": 1,
           "divi": 1,
@@ -133,6 +132,18 @@ expression: json
           "xor": 1,
           "xori": 1,
           "aloc": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
+          "cfe": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
+          "cfei": {
             "LightOperation": {
               "base": 2,
               "units_per_gas": 214

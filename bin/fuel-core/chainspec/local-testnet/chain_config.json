@@ -40,7 +40,7 @@
       },
       "chain_id": 0,
       "gas_costs": {
-        "V2": {
+        "V3": {
           "add": 2,
           "addi": 2,
           "and": 2,
@@ -50,7 +50,6 @@
           "bhsh": 2,
           "burn": 20502,
           "cb": 2,
-          "cfei": 2,
           "cfsi": 2,
           "div": 2,
           "divi": 2,
@@ -129,6 +128,18 @@
           "xor": 2,
           "xori": 2,
           "aloc": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 15
+            }
+          },
+          "cfe": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 15
+            }
+          },
+          "cfei": {
             "LightOperation": {
               "base": 2,
               "units_per_gas": 15
