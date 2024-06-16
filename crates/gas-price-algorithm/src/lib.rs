@@ -1,3 +1,8 @@
+#![deny(clippy::arithmetic_side_effects)]
+// #![deny(clippy::cast_possible_truncation)]
+// #![deny(unused_crate_dependencies)]
+#![deny(warnings)]
+
 use std::cmp::{
     max,
     min,
@@ -77,40 +82,47 @@ impl AlgorithmV1 {
     }
 
     fn calculate_avg_profit(&self, block_bytes: u64) -> i64 {
-        let extra_for_this_block = block_bytes * self.latest_da_cost_per_byte;
-        let pessimistic_cost = self.total_costs + extra_for_this_block;
-        let projected_profit = self.total_rewards as i64 - pessimistic_cost as i64;
-        (projected_profit + (self.avg_profit * (self.avg_window as i64 - 1)))
-            / self.avg_window as i64
+        let extra_for_this_block =
+            block_bytes.saturating_mul(self.latest_da_cost_per_byte);
+        let pessimistic_cost = self.total_costs.saturating_add(extra_for_this_block);
+        let projected_profit =
+            (self.total_rewards as i64).saturating_sub(pessimistic_cost as i64);
+        projected_profit
+            .saturating_add(
+                self.avg_profit
+                    .saturating_mul((self.avg_window as i64).saturating_sub(1)),
+            )
+            .checked_div(self.avg_window as i64)
+            .unwrap_or(self.avg_profit)
     }
 
     fn p(&self, projected_profit_avg: i64) -> i64 {
         let checked_p = projected_profit_avg.checked_div(self.da_p_factor);
-        -checked_p.unwrap_or(0)
+        checked_p.unwrap_or(0).saturating_mul(-1)
     }
 
     fn d(&self, projected_profit_avg: i64) -> i64 {
-        let slope = projected_profit_avg - self.avg_profit;
+        let slope = projected_profit_avg.saturating_sub(self.avg_profit);
         let checked_d = slope.checked_div(self.da_d_factor);
-        -checked_d.unwrap_or(0)
+        checked_d.unwrap_or(0).saturating_mul(-1)
     }
 
     fn change(&self, p: i64, d: i64) -> i64 {
-        let pd_change = p + d;
+        let pd_change = p.saturating_add(d);
         let max_change =
             (self.new_exec_price as f64 * self.max_change_percent as f64 / 100.0) as i64;
         let sign = pd_change.signum();
         let signless_da_change = min(max_change, pd_change.abs());
-        sign * signless_da_change
+        sign.saturating_mul(signless_da_change)
     }
 
     fn assemble_price(&self, change: i64) -> u64 {
         let mut new_da_gas_price = self.last_da_price as i64;
-        new_da_gas_price += change;
+        new_da_gas_price = new_da_gas_price.saturating_add(change);
         // TODO: This should be parameterised
         const MIN: i64 = 0;
         let new_da_gas_price = max(new_da_gas_price, MIN);
-        self.new_exec_price + new_da_gas_price as u64
+        self.new_exec_price.saturating_add(new_da_gas_price as u64)
     }
 }
 
@@ -203,29 +215,40 @@ impl AlgorithmUpdaterV1 {
             })
         } else {
             self.l2_block_height = height;
-            let last_profit =
-                self.total_da_rewards as i64 - self.projected_total_da_cost as i64;
+            let last_profit = (self.total_da_rewards as i64)
+                .saturating_sub(self.projected_total_da_cost as i64);
             self.update_profit_avg(last_profit);
-            self.projected_total_da_cost += block_bytes * self.latest_da_cost_per_byte;
+            let new_projected_total_da_cost =
+                block_bytes.saturating_mul(self.latest_da_cost_per_byte);
+            self.projected_total_da_cost = new_projected_total_da_cost;
             // implicitly deduce what our da gas price was for the l2 block
             self.last_da_price = gas_price.saturating_sub(self.new_exec_price);
             self.update_exec_gas_price(fullness.0, fullness.1);
-            let da_reward = fullness.0 * self.last_da_price;
-            self.total_da_rewards += da_reward;
+            let da_reward = fullness.0.saturating_mul(self.last_da_price);
+            let new_da_reward = self.total_da_rewards.saturating_add(da_reward);
+            self.total_da_rewards = new_da_reward;
             Ok(())
         }
     }
 
     fn update_profit_avg(&mut self, new_profit: i64) {
         let old_avg = self.profit_avg;
-        let new_avg = (old_avg * (self.avg_window as i64 - 1) + new_profit)
-            / self.avg_window as i64;
+        let new_avg = old_avg
+            .saturating_mul((self.avg_window as i64).saturating_sub(1))
+            .saturating_add(new_profit)
+            .checked_div(self.avg_window as i64)
+            .unwrap_or(old_avg);
         self.profit_avg = new_avg;
     }
 
     fn update_exec_gas_price(&mut self, used: u64, capacity: u64) {
         let mut exec_gas_price = self.new_exec_price;
-        let fullness_percent = used * 100 / capacity;
+        // TODO: Do we want to capture this error? I feel like we should assume capacity isn't
+        let fullness_percent = used
+            .saturating_mul(100)
+            .checked_div(capacity)
+            .unwrap_or(self.l2_block_fullness_threshold_percent);
+
         match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {
             std::cmp::Ordering::Greater => {
                 exec_gas_price =
@@ -260,7 +283,9 @@ impl AlgorithmUpdaterV1 {
                 },
             )?;
             self.da_recorded_block_height = height;
-            self.latest_known_total_da_cost += block_cost;
+            let new_block_cost =
+                self.latest_known_total_da_cost.saturating_add(block_cost);
+            self.latest_known_total_da_cost = new_block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
         }
@@ -274,10 +299,15 @@ impl AlgorithmUpdaterV1 {
         let projection_portion: u64 = self
             .unrecorded_blocks
             .iter()
-            .map(|block| block.block_bytes * self.latest_da_cost_per_byte)
+            .map(|block| {
+                block
+                    .block_bytes
+                    .saturating_mul(self.latest_da_cost_per_byte)
+            })
             .sum();
-        self.projected_total_da_cost =
-            self.latest_known_total_da_cost + projection_portion;
+        self.projected_total_da_cost = self
+            .latest_known_total_da_cost
+            .saturating_add(projection_portion);
     }
 
     pub fn algorithm(&self) -> AlgorithmV1 {
