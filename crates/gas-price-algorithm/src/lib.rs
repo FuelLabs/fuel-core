@@ -1,6 +1,5 @@
 #![deny(clippy::arithmetic_side_effects)]
-// #![deny(clippy::cast_possible_truncation)]
-// #![deny(unused_crate_dependencies)]
+#![deny(clippy::cast_possible_truncation)]
 #![deny(warnings)]
 
 use std::cmp::{
@@ -110,7 +109,7 @@ impl AlgorithmV1 {
     fn change(&self, p: i64, d: i64) -> i64 {
         let pd_change = p.saturating_add(d);
         let max_change =
-            (self.new_exec_price as f64 * self.max_change_percent as f64 / 100.0) as i64;
+            self.new_exec_price.saturating_mul(self.max_change_percent as u64).saturating_div(100) as i64;
         let sign = pd_change.signum();
         let signless_da_change = min(max_change, pd_change.abs());
         sign.saturating_mul(signless_da_change)
