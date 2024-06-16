@@ -22,7 +22,10 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        ReferenceBytesKey,
+    },
     Result as StorageResult,
 };
 use std::{
@@ -36,7 +39,7 @@ pub struct MemoryStore<Description = OnChain>
 where
     Description: DatabaseDescription,
 {
-    inner: Vec<Mutex<BTreeMap<Vec<u8>, Value>>>,
+    inner: Vec<Mutex<BTreeMap<ReferenceBytesKey, Value>>>,
     _marker: core::marker::PhantomData<Description>,
 }
 
@@ -68,12 +71,8 @@ where
     ) -> impl Iterator<Item = KVItem> {
         let lock = self.inner[column.as_usize()].lock().expect("poisoned");
 
-        fn clone<K: Clone, V: Clone>(kv: (&K, &V)) -> (K, V) {
-            (kv.0.clone(), kv.1.clone())
-        }
-
         let collection: Vec<_> = iterator(&lock, prefix, start, direction)
-            .map(clone)
+            .map(|(key, value)| (key.clone().into(), value.clone()))
             .collect();
 
         collection.into_iter().map(Ok)
@@ -90,7 +89,7 @@ where
         Ok(self.inner[column.as_usize()]
             .lock()
             .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?
-            .get(&key.to_vec())
+            .get(key)
             .cloned())
     }
 }

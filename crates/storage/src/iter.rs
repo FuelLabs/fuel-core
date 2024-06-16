@@ -12,6 +12,7 @@ use crate::{
         KeyValueInspect,
     },
     structured_storage::TableWithBlueprint,
+    transactional::ReferenceBytesKey,
 };
 use fuel_vm_private::fuel_storage::Mappable;
 use std::{
@@ -200,11 +201,11 @@ impl<S> IteratorOverTable for S {}
 
 /// Returns an iterator over the values in the `BTreeMap`.
 pub fn iterator<'a, V>(
-    tree: &'a BTreeMap<Vec<u8>, V>,
+    tree: &'a BTreeMap<ReferenceBytesKey, V>,
     prefix: Option<&[u8]>,
     start: Option<&[u8]>,
     direction: IterDirection,
-) -> impl Iterator<Item = (&'a Vec<u8>, &'a V)> + 'a {
+) -> impl Iterator<Item = (&'a ReferenceBytesKey, &'a V)> + 'a {
     match (prefix, start) {
         (None, None) => {
             if direction == IterDirection::Forward {
