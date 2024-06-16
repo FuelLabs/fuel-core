@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Added `DependentCost` benchmarks for the `cfe` and `cfei` opcodes.
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Added `DependentCost` for the `cfe` opcode to the `GasCosts` endpoint.
 - [#1974](https://github.com/FuelLabs/fuel-core/pull/1974): Optimized the work of `InMemoryTransaction` for lookups and empty insertion.
 
 ### Changed
 - [#1973](https://github.com/FuelLabs/fuel-core/pull/1973): Updated VM initialization benchmark to include many inputs and outputs.
+
+#### Breaking
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Updated gas prices according to new release.
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Changed `GasCosts` endpoint to return `DependentCost` for the `cfei` opcode via `cfeiDependentCost`.
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Use `fuel-vm 0.54.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.54.0).
 
 ## [Version 0.29.0]
 
