@@ -47,6 +47,8 @@ pub enum Error {
 /// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
 /// moving average.
 pub struct AlgorithmV1 {
+    /// The lowest the algorithm allows the gas price to go
+    min_gas_price: u64,
     /// The gas price for to cover the execution of the next block
     new_exec_price: u64,
     /// The gas price for the DA portion of the last block. This can be used to calculate
@@ -108,8 +110,10 @@ impl AlgorithmV1 {
 
     fn change(&self, p: i64, d: i64) -> i64 {
         let pd_change = p.saturating_add(d);
-        let max_change =
-            self.new_exec_price.saturating_mul(self.max_change_percent as u64).saturating_div(100) as i64;
+        let max_change = self
+            .new_exec_price
+            .saturating_mul(self.max_change_percent as u64)
+            .saturating_div(100) as i64;
         let sign = pd_change.signum();
         let signless_da_change = min(max_change, pd_change.abs());
         sign.saturating_mul(signless_da_change)
@@ -118,10 +122,9 @@ impl AlgorithmV1 {
     fn assemble_price(&self, change: i64) -> u64 {
         let mut new_da_gas_price = self.last_da_price as i64;
         new_da_gas_price = new_da_gas_price.saturating_add(change);
-        // TODO: This should be parameterised
-        const MIN: i64 = 0;
-        let new_da_gas_price = max(new_da_gas_price, MIN);
-        self.new_exec_price.saturating_add(new_da_gas_price as u64)
+        let min = self.min_gas_price;
+        let new_price = self.new_exec_price.saturating_add(new_da_gas_price as u64);
+        max(new_price, min)
     }
 }
 
@@ -136,6 +139,8 @@ impl AlgorithmV1 {
 /// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
 pub struct AlgorithmUpdaterV1 {
+    /// The lowest the algorithm allows the gas price to go
+    pub min_gas_price: u64,
     /// The gas price for to cover the execution of the next block
     pub new_exec_price: u64,
     /// The gas price for the DA portion of the last block. This can be used to calculate
@@ -311,6 +316,7 @@ impl AlgorithmUpdaterV1 {
 
     pub fn algorithm(&self) -> AlgorithmV1 {
         AlgorithmV1 {
+            min_gas_price: self.min_gas_price,
             new_exec_price: self.new_exec_price,
             last_da_price: self.last_da_price,
             max_change_percent: self.max_da_gas_price_change_percent,
