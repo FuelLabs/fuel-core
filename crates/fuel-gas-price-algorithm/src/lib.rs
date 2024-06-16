@@ -46,6 +46,7 @@ pub enum Error {
 /// The DA portion also uses a moving average of the profits over the last `avg_window` blocks
 /// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
 /// moving average.
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
     /// The lowest the algorithm allows the gas price to go
     min_gas_price: u64,
