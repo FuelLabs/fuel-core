@@ -78,7 +78,7 @@ where
         Ok(self
             .changes
             .get(&column.id())
-            .and_then(|tree| tree.get(&key.to_vec()))
+            .and_then(|tree| tree.get(key))
             .and_then(|operation| match operation {
                 WriteOperation::Insert(value) => Some(value.clone()),
                 WriteOperation::Remove => None,
@@ -100,7 +100,9 @@ where
         if let Some(tree) = self.changes.get(&column.id()) {
             fuel_core_storage::iter::iterator(tree, prefix, start, direction)
                 .filter_map(|(key, value)| match value {
-                    WriteOperation::Insert(value) => Some((key.clone(), value.clone())),
+                    WriteOperation::Insert(value) => {
+                        Some((key.clone().into(), value.clone()))
+                    }
                     WriteOperation::Remove => None,
                 })
                 .map(Ok)
