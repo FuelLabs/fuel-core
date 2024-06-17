@@ -39,7 +39,10 @@ where
                             .from_block(page.oldest())
                             .to_block(page.latest())
                             .address(ValueOrArray::Array(contracts))
-                            .topic0(*crate::config::ETH_LOG_MESSAGE);
+                            .topic0(ValueOrArray::Array(vec![
+                                *crate::config::ETH_LOG_MESSAGE,
+                                *crate::config::ETH_FORCED_TX,
+                            ]));
 
                         tracing::info!(
                             "Downloading logs for block range: {}..={}",
