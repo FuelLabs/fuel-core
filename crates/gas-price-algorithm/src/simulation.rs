@@ -62,7 +62,7 @@ pub fn run_simulation(
         last_da_price: 200,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 50,
-        exec_gas_price_increase_amount: 10,
+        exec_gas_price_change_percent: 10,
         max_da_gas_price_change_percent: 10,
         total_da_rewards: 0,
         da_recorded_block_height: 0,

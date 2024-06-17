@@ -148,7 +148,7 @@ pub struct AlgorithmUpdaterV1 {
     pub last_da_price: u64,
     // Execution
     /// How much the gas price can change in a single block, either increase or decrease
-    pub exec_gas_price_increase_amount: u64,
+    pub exec_gas_price_change_percent: u64,
     /// The height of the next L2 block
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
@@ -255,16 +255,22 @@ impl AlgorithmUpdaterV1 {
 
         match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {
             std::cmp::Ordering::Greater => {
-                exec_gas_price =
-                    exec_gas_price.saturating_add(self.exec_gas_price_increase_amount);
+                let change_amount = self.change_amount(exec_gas_price);
+                exec_gas_price = exec_gas_price.saturating_add(change_amount);
             }
             std::cmp::Ordering::Less => {
-                exec_gas_price =
-                    exec_gas_price.saturating_sub(self.exec_gas_price_increase_amount);
+                let change_amount = self.change_amount(exec_gas_price);
+                exec_gas_price = exec_gas_price.saturating_sub(change_amount);
             }
             std::cmp::Ordering::Equal => {}
         }
         self.new_exec_price = exec_gas_price;
+    }
+
+    fn change_amount(&self, principle: u64) -> u64 {
+        principle
+            .saturating_mul(self.exec_gas_price_change_percent)
+            .saturating_div(100)
     }
 
     fn da_block_update(

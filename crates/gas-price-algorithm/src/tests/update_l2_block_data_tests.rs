@@ -107,8 +107,10 @@ fn update_l2_block_data__updates_the_total_reward_value() {
 fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
     // given
     let starting_gas_price = 100;
+    let unused_percent = 11;
     let mut updater = UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_gas_price)
+        .with_exec_gas_price_change_percent(unused_percent)
         .build();
 
     let height = 1;
@@ -130,12 +132,12 @@ fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
 #[test]
 fn update_l2_block_data__below_threshold_will_decrease_exec_gas_price() {
     // given
-    let starting_exec_gas_price = 100;
-    let exec_gas_price_increase_amount = 10;
+    let starting_exec_gas_price = 222;
+    let exec_gas_price_decrease_percent = 10;
     let threshold = 50;
     let mut updater = UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_exec_gas_price_increase_amount(exec_gas_price_increase_amount)
+        .with_exec_gas_price_change_percent(exec_gas_price_decrease_percent)
         .with_l2_block_capacity_threshold(threshold)
         .build();
 
@@ -150,20 +152,22 @@ fn update_l2_block_data__below_threshold_will_decrease_exec_gas_price() {
         .unwrap();
 
     // then
-    let expected = starting_exec_gas_price - exec_gas_price_increase_amount;
+    let expected_change_amount =
+        starting_exec_gas_price * exec_gas_price_decrease_percent / 100;
+    let expected = starting_exec_gas_price - expected_change_amount;
     let actual = updater.new_exec_price;
-    assert_eq!(actual, expected);
+    assert_eq!(expected, actual);
 }
 
 #[test]
 fn update_l2_block_data__above_threshold_will_increase_exec_gas_price() {
     // given
-    let starting_exec_gas_price = 100;
-    let exec_gas_price_increase_amount = 10;
+    let starting_exec_gas_price = 222;
+    let exec_gas_price_increase_percent = 10;
     let threshold = 50;
     let mut updater = UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_exec_gas_price_increase_amount(exec_gas_price_increase_amount)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
         .with_l2_block_capacity_threshold(threshold)
         .build();
 
@@ -178,7 +182,8 @@ fn update_l2_block_data__above_threshold_will_increase_exec_gas_price() {
         .unwrap();
 
     // then
-    let expected = starting_exec_gas_price + exec_gas_price_increase_amount;
+    let expected_change = starting_exec_gas_price * exec_gas_price_increase_percent / 100;
+    let expected = starting_exec_gas_price + expected_change;
     let actual = updater.new_exec_price;
     assert_eq!(actual, expected);
 }
