@@ -9,7 +9,10 @@ use std::{
 };
 
 use crate::{
-    abi::bridge::{MessageSentFilter, TransactionFilter},
+    abi::bridge::{
+        MessageSentFilter,
+        TransactionFilter,
+    },
     service::state::EthSyncGap,
     test_helpers::{
         middleware::{
