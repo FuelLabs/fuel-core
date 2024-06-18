@@ -1,5 +1,5 @@
 [package]
-name = "gas-price-algorithm"
+name = "fuel-gas-price-algorithm"
 authors = { workspace = true }
 categories = { workspace = true }
 edition = { workspace = true }
@@ -10,7 +10,7 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [lib]
-name = "gas_price_algorithm"
+name = "fuel_gas_price_algorithm"
 path = "src/lib.rs"
 
 [dependencies]

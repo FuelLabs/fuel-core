@@ -1,3 +1,4 @@
+#![allow(clippy::cast_possible_truncation)]
 use super::*;
 
 #[test]
@@ -213,7 +214,7 @@ fn calculate__the_price_will_not_go_below_min() {
     let avg_window = 10;
     let max_change_percent = 5;
     let arb_value = 1000;
-    let max_change = starting_exec_gas_price as u64 * max_change_percent as u64 / 100;
+    let max_change = starting_exec_gas_price * max_change_percent as u64 / 100;
     let min_gas_price = starting_exec_gas_price + last_da_gas_price - max_change + 1;
     let larger_starting_reward =
         starting_cost + block_bytes * latest_gas_per_byte + arb_value;

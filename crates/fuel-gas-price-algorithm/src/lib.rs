@@ -124,8 +124,7 @@ impl AlgorithmV1 {
         new_da_gas_price = new_da_gas_price.saturating_add(change);
         let min = self.min_gas_price as i64;
         let new_price = (self.new_exec_price as i64).saturating_add(new_da_gas_price);
-        let price = max(new_price, min).try_into().unwrap_or(0);
-        price
+        max(new_price, min).try_into().unwrap_or(0)
     }
 }
 

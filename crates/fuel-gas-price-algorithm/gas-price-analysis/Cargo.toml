@@ -1,11 +1,10 @@
 [package]
-name = "gas-price-analysis"
+name = "fuel-gas-price-analysis"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [workspace]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 gas-price-algorithm = { path = ".." }
