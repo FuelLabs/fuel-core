@@ -268,7 +268,7 @@ impl AlgorithmUpdaterV1 {
             }
             std::cmp::Ordering::Equal => {}
         }
-        self.new_exec_price = exec_gas_price;
+        self.new_exec_price = max(self.min_gas_price, exec_gas_price);
     }
 
     fn change_amount(&self, principle: u64) -> u64 {
