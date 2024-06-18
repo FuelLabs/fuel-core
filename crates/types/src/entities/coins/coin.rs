@@ -49,7 +49,7 @@ impl Coin {
 /// The compressed version of the `Coin` with minimum fields required for
 /// the proper work of the blockchain.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CompressedCoin {
     /// CompressedCoin Version 1
@@ -65,7 +65,7 @@ impl Default for CompressedCoin {
 
 /// CompressedCoin Version 1
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CompressedCoinV1 {
     /// The address with permission to spend this coin
     pub owner: Address,

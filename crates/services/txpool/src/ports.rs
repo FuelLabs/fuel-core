@@ -9,6 +9,7 @@ use fuel_core_types::{
     fuel_tx::{
         ConsensusParameters,
         Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::{
@@ -54,6 +55,8 @@ pub trait BlockImporter: Send + Sync {
 }
 
 pub trait TxPoolDb: Send + Sync {
+    fn contains_tx(&self, tx_id: &TxId) -> StorageResult<bool>;
+
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;

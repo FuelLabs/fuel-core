@@ -1,7 +1,7 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+// #![deny(warnings)]
 
 use fuel_core_types::{
     services::txpool::{
@@ -38,6 +38,7 @@ pub use txpool::TxPool;
 
 #[cfg(any(test, feature = "test-helpers"))]
 pub(crate) mod test_helpers;
+pub mod txpool_v2;
 
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();

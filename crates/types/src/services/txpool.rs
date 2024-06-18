@@ -298,6 +298,10 @@ pub enum Error {
     #[error("Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,
     #[error(
+        "Transaction is not inserted because collided transactions are more profitable."
+    )]
+    NotInsertedBecauseCollidedTransactionsMoreProfitable,
+    #[error(
         "Transaction is not inserted. More priced tx {0:#x} already spend this UTXO output: {1:#x}"
     )]
     NotInsertedCollision(TxId, UtxoId),
