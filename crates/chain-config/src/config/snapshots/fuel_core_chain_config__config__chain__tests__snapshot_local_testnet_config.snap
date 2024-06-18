@@ -44,7 +44,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V2": {
+        "V3": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -54,7 +54,6 @@ expression: json
           "bhsh": 1,
           "burn": 132,
           "cb": 1,
-          "cfei": 1,
           "cfsi": 1,
           "div": 1,
           "divi": 1,
@@ -133,6 +132,18 @@ expression: json
           "xor": 1,
           "xori": 1,
           "aloc": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
+          "cfe": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
+          "cfei": {
             "LightOperation": {
               "base": 2,
               "units_per_gas": 214
@@ -272,7 +283,7 @@ expression: json
       "privileged_address": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
-  "genesis_state_transition_version": 3,
+  "genesis_state_transition_version": 4,
   "consensus": {
     "PoA": {
       "signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb"
