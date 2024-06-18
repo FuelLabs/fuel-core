@@ -136,7 +136,7 @@ impl AlgorithmV1 {
 /// being recorded on the DA chain, the updater needs to make "projections" about the cost of
 /// recording any given block to the DA chain. This is done by tracking the cost per byte of recording
 /// for the most recent blocks, and using the known bytes of the unrecorded blocks to estimate
-/// the cost for that block. Every time the DA recording is updated, that the projections are recalculated.
+/// the cost for that block. Every time the DA recording is updated, the projections are recalculated.
 ///
 /// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
