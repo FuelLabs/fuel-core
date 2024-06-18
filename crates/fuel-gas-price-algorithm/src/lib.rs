@@ -147,7 +147,8 @@ pub struct AlgorithmUpdaterV1 {
     /// the DA portion of the next block
     pub last_da_gas_price: u64,
     // Execution
-    /// How much the gas price can change in a single block, either increase or decrease
+    /// The Percentage the execution gas price will change in a single block, either increase or decrease
+    /// based on the fullness of the last L2 block
     pub exec_gas_price_change_percent: u64,
     /// The height of the next L2 block
     pub l2_block_height: u32,
