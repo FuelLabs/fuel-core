@@ -141,7 +141,7 @@ impl AlgorithmV1 {
 /// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
 pub struct AlgorithmUpdaterV1 {
-    /// The gas price for to cover the execution of the next block
+    /// The gas price to cover the execution of the next block
     pub new_exec_price: u64,
     /// The gas price for the DA portion of the last block. This can be used to calculate
     /// the DA portion of the next block
