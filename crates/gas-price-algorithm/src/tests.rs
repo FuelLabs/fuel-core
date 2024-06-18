@@ -145,7 +145,7 @@ impl UpdaterBuilder {
         AlgorithmUpdaterV1 {
             min_gas_price: self.min_gas_price,
             new_exec_price: self.starting_exec_gas_price,
-            last_da_price: self.starting_da_gas_price,
+            last_da_gas_price: self.starting_da_gas_price,
             exec_gas_price_change_percent: self.exec_gas_price_change_percent,
             max_da_gas_price_change_percent: self.max_change_percent,
 

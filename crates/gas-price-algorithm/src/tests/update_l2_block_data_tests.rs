@@ -209,7 +209,7 @@ fn update_l2_block_data__updates_last_da_gas_price() {
 
     // then
     let expected = new_gas_price - starting_exec_gas_price;
-    let actual = updater.last_da_price;
+    let actual = updater.last_da_gas_price;
     assert_eq!(actual, expected);
 }
 

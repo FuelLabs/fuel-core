@@ -58,11 +58,12 @@ pub fn run_simulation(
     let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
 
     let mut updater = AlgorithmUpdaterV1 {
+        min_gas_price: 10,
         new_exec_price: 800,
-        last_da_price: 200,
+        last_da_gas_price: 200,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 50,
-        exec_gas_price_change_percent: 10,
+        exec_gas_price_change_percent: 2,
         max_da_gas_price_change_percent: 10,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
@@ -79,20 +80,16 @@ pub fn run_simulation(
     let mut gas_prices = vec![];
     let mut exec_gas_prices = vec![];
     let mut da_gas_prices = vec![];
-    let mut actual_rewards = vec![];
-    let mut projected_costs = vec![];
+    let mut actual_reward_totals = vec![];
+    let mut projected_cost_totals = vec![];
     let mut actual_costs = vec![];
     let mut pessimistic_costs = vec![];
-    for (index, (l2_block, da_block)) in blocks {
+    for (index, ((fullness, bytes), da_block)) in blocks {
         let height = index as u32 + 1;
+        exec_gas_prices.push(updater.new_exec_price);
         let gas_price = updater.algorithm().calculate(max_block_bytes);
         gas_prices.push(gas_price);
-        let (fullness, bytes) = l2_block;
-        exec_gas_prices.push(updater.new_exec_price);
-        updater
-            .update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price)
-            .unwrap();
-        da_gas_prices.push(updater.last_da_price);
+        // Update DA blocks
         if let Some(da_blocks) = da_block {
             let mut total_costs = updater.latest_known_total_da_cost;
             for block in da_blocks {
@@ -100,10 +97,21 @@ pub fn run_simulation(
                 actual_costs.push(total_costs);
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
+            assert_eq!(total_costs, updater.projected_total_da_cost);
+            assert_eq!(total_costs, updater.latest_known_total_da_cost);
         }
+        // Update L2 block
+        updater
+            .update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price)
+            .unwrap();
+        da_gas_prices.push(updater.last_da_gas_price);
         pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
-        actual_rewards.push(updater.total_da_rewards);
-        projected_costs.push(updater.projected_total_da_cost);
+        actual_reward_totals.push(updater.total_da_rewards);
+        // println!("Actual rewards:  {}", updater.total_da_rewards);
+        projected_cost_totals.push(updater.projected_total_da_cost);
+        // println!("Projected costs: {}", updater.projected_total_da_cost);
+        let profit =
+            updater.total_da_rewards as i64 - updater.projected_total_da_cost as i64;
     }
 
     let fullness = fullness_and_bytes
@@ -113,13 +121,13 @@ pub fn run_simulation(
 
     let actual_profit: Vec<i64> = actual_costs
         .iter()
-        .zip(actual_rewards.iter())
+        .zip(actual_reward_totals.iter())
         .map(|(cost, reward)| *reward as i64 - *cost as i64)
         .collect();
 
-    let projected_profit: Vec<i64> = projected_costs
+    let projected_profit: Vec<i64> = projected_cost_totals
         .iter()
-        .zip(actual_rewards.iter())
+        .zip(actual_reward_totals.iter())
         .map(|(cost, reward)| *reward as i64 - *cost as i64)
         .collect();
 

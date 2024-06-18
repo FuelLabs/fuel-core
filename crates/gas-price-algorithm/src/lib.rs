@@ -111,7 +111,7 @@ impl AlgorithmV1 {
     fn change(&self, p: i64, d: i64) -> i64 {
         let pd_change = p.saturating_add(d);
         let max_change = self
-            .new_exec_price
+            .last_da_price
             .saturating_mul(self.max_change_percent as u64)
             .saturating_div(100) as i64;
         let sign = pd_change.signum();
@@ -122,9 +122,10 @@ impl AlgorithmV1 {
     fn assemble_price(&self, change: i64) -> u64 {
         let mut new_da_gas_price = self.last_da_price as i64;
         new_da_gas_price = new_da_gas_price.saturating_add(change);
-        let min = self.min_gas_price;
-        let new_price = self.new_exec_price.saturating_add(new_da_gas_price as u64);
-        max(new_price, min)
+        let min = self.min_gas_price as i64;
+        let new_price = (self.new_exec_price as i64).saturating_add(new_da_gas_price);
+        let price = max(new_price, min).try_into().unwrap_or(0);
+        price
     }
 }
 
@@ -145,7 +146,7 @@ pub struct AlgorithmUpdaterV1 {
     pub new_exec_price: u64,
     /// The gas price for the DA portion of the last block. This can be used to calculate
     /// the DA portion of the next block
-    pub last_da_price: u64,
+    pub last_da_gas_price: u64,
     // Execution
     /// How much the gas price can change in a single block, either increase or decrease
     pub exec_gas_price_change_percent: u64,
@@ -204,6 +205,7 @@ impl AlgorithmUpdaterV1 {
         self.recalculate_projected_cost();
         Ok(())
     }
+
     pub fn update_l2_block_data(
         &mut self,
         height: u32,
@@ -219,18 +221,20 @@ impl AlgorithmUpdaterV1 {
             })
         } else {
             self.l2_block_height = height;
+            let last_exec_price = self.new_exec_price;
             let last_profit = (self.total_da_rewards as i64)
                 .saturating_sub(self.projected_total_da_cost as i64);
             self.update_profit_avg(last_profit);
-            let new_projected_total_da_cost =
+            let new_projected_da_cost =
                 block_bytes.saturating_mul(self.latest_da_cost_per_byte);
-            self.projected_total_da_cost = new_projected_total_da_cost;
+            self.projected_total_da_cost = self
+                .projected_total_da_cost
+                .saturating_add(new_projected_da_cost);
             // implicitly deduce what our da gas price was for the l2 block
-            self.last_da_price = gas_price.saturating_sub(self.new_exec_price);
+            self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
             self.update_exec_gas_price(fullness.0, fullness.1);
-            let da_reward = fullness.0.saturating_mul(self.last_da_price);
-            let new_da_reward = self.total_da_rewards.saturating_add(da_reward);
-            self.total_da_rewards = new_da_reward;
+            let da_reward = fullness.0.saturating_mul(self.last_da_gas_price);
+            self.total_da_rewards = self.total_da_rewards.saturating_add(da_reward);
             Ok(())
         }
     }
@@ -247,7 +251,7 @@ impl AlgorithmUpdaterV1 {
 
     fn update_exec_gas_price(&mut self, used: u64, capacity: u64) {
         let mut exec_gas_price = self.new_exec_price;
-        // TODO: Do we want to capture this error? I feel like we should assume capacity isn't
+        // TODO: Do we want to capture this error? I feel like we should assume capacity isn't 0
         let fullness_percent = used
             .saturating_mul(100)
             .checked_div(capacity)
@@ -324,7 +328,7 @@ impl AlgorithmUpdaterV1 {
         AlgorithmV1 {
             min_gas_price: self.min_gas_price,
             new_exec_price: self.new_exec_price,
-            last_da_price: self.last_da_price,
+            last_da_price: self.last_da_gas_price,
             max_change_percent: self.max_da_gas_price_change_percent,
 
             latest_da_cost_per_byte: self.latest_da_cost_per_byte,
