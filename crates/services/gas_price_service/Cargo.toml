@@ -14,7 +14,7 @@ async-trait = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true }
 futures = { workspace = true }
-gas-price-algorithm = { workspace = true }
+fuel-gas-price-algorithm = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
