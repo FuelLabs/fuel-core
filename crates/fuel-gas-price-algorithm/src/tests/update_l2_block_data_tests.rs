@@ -196,7 +196,7 @@ fn update_l2_block_data__exec_price_will_not_go_below_min() {
     let threshold = 50;
     let mut updater = UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_min_gas_price(min_exec_gas_price)
+        .with_min_exec_gas_price(min_exec_gas_price)
         .with_exec_gas_price_change_percent(exec_gas_price_decrease_percent)
         .with_l2_block_capacity_threshold(threshold)
         .build();

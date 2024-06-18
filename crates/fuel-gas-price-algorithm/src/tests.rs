@@ -9,7 +9,8 @@ mod update_da_record_data_tests;
 mod update_l2_block_data_tests;
 
 struct UpdaterBuilder {
-    min_gas_price: u64,
+    min_exec_gas_price: u64,
+    min_da_gas_price: u64,
     starting_exec_gas_price: u64,
     starting_da_gas_price: u64,
     exec_gas_price_change_percent: u64,
@@ -34,7 +35,8 @@ struct UpdaterBuilder {
 impl UpdaterBuilder {
     fn new() -> Self {
         Self {
-            min_gas_price: 0,
+            min_exec_gas_price: 0,
+            min_da_gas_price: 0,
             starting_exec_gas_price: 0,
             starting_da_gas_price: 0,
             exec_gas_price_change_percent: 0,
@@ -57,8 +59,13 @@ impl UpdaterBuilder {
         }
     }
 
-    fn with_min_gas_price(mut self, min_price: u64) -> Self {
-        self.min_gas_price = min_price;
+    fn with_min_exec_gas_price(mut self, min_price: u64) -> Self {
+        self.min_exec_gas_price = min_price;
+        self
+    }
+
+    fn with_min_da_gas_price(mut self, min_price: u64) -> Self {
+        self.min_da_gas_price = min_price;
         self
     }
 
@@ -143,7 +150,7 @@ impl UpdaterBuilder {
 
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
-            min_gas_price: self.min_gas_price,
+            min_exec_gas_price: self.min_exec_gas_price,
             new_exec_price: self.starting_exec_gas_price,
             last_da_gas_price: self.starting_da_gas_price,
             exec_gas_price_change_percent: self.exec_gas_price_change_percent,
@@ -163,6 +170,7 @@ impl UpdaterBuilder {
             unrecorded_blocks: self.unrecorded_blocks,
             profit_avg: self.profit_avg,
             avg_window: self.avg_window,
+            min_da_gas_price: self.min_da_gas_price,
         }
     }
 }
