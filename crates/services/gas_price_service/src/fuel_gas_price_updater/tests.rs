@@ -32,9 +32,9 @@ fn arb_inner_updater() -> AlgorithmUpdaterV1 {
     AlgorithmUpdaterV1 {
         exec_gas_price_change_percent: 10,
         //
-        min_gas_price: 10,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 0,
+        min_da_gas_price: 0,
         max_da_gas_price_change_percent: 0,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
@@ -48,6 +48,7 @@ fn arb_inner_updater() -> AlgorithmUpdaterV1 {
         new_exec_price: 100,
         last_da_gas_price: 0,
         unrecorded_blocks: vec![],
+        min_exec_gas_price: 0,
     }
 }
 
