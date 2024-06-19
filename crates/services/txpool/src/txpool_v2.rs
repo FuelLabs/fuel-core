@@ -11,7 +11,10 @@ use crate::{
             RemovedTransaction,
             RemovedTransactions,
         },
-        resolution_queue::ResolutionQueue,
+        resolution_queue::{
+            ResolutionInput,
+            ResolutionQueue,
+        },
     },
     Config,
 };
@@ -64,7 +67,7 @@ pub struct TxPool<D> {
 
 pub struct InsertionResult {
     tx_id: TxId,
-    removed_transaction: RemovedTransactions,
+    removed_transaction: Option<RemovedTransactions>,
     resolved_new_transactions: Vec<ArcPoolTx>,
 }
 
@@ -96,19 +99,28 @@ where
             return Err(Error::NotInsertedTxKnown)
         }
 
-        if is_executable(&tx, &view)? {
-            self.insert_executable(tx)?;
-        } else if is_depdendent(&tx, &view) {
-            self.insert_depdendent()?;
-        } else {
-            self.insert_into_resolution_queue()?;
+        let stage = transaction_stage(
+            tx,
+            &view,
+            &self.executable_transactions,
+            &self.dependent_transactions,
+        )?;
 
-            Ok(InsertionResult {
-                tx_id: tx.id(),
-                removed_transaction: vec![],
-                resolved_new_transactions: vec![],
-            })
-        }
+        match stage {
+            TransactionStage::Executable(tx) => self.insert_executable(tx)?,
+            TransactionStage::Dependent(tx, parents) => {
+                self.insert_dependent(tx, parents)
+            }
+            TransactionStage::Unresolved(tx, inputs) => {
+                self.insert_unresolved(tx, inputs)
+            }
+        };
+
+        Ok(InsertionResult {
+            tx_id: tx.id(),
+            removed_transaction: vec![],
+            resolved_new_transactions: vec![],
+        })
     }
 
     fn contains(&self, tx_id: &TxId, view: &View) -> Result<bool, Error> {
@@ -118,20 +130,46 @@ where
             || self.resolution_queue.contains(tx_id))
     }
 
-    fn insert_executable(&mut self, tx: ArcPoolTx) -> Result<(), Error> {
+    fn insert_executable(&mut self, tx: ArcPoolTx) -> Result<InsertionResult, Error> {
+        let tx_id = tx.id();
         let result = self.executable_transactions.insert(tx)?;
 
-        let new_coins = match result {
-            ExecutableInsertionResult::Successfully(coins) => coins,
+        // Below this point, the transaction must be inserted -> no errors.
+
+        let (added_coins, removed_transaction) = match result {
+            ExecutableInsertionResult::Successfully(coins) => (coins, None),
             ExecutableInsertionResult::SuccessfullyWithRemovedTransactions {
                 upcoming_coins,
                 removed_transaction,
-            } => upcoming_coins,
+            } => (upcoming_coins, Some(removed_transaction)),
         };
 
-        let resolved_transactions = self.resolution_queue.resolve(new_coins);
+        let removed_transaction =
+            if let Some(mut removed_transaction) = removed_transaction {
+                let removed_coins = removed_transaction
+                    .iter()
+                    .map(|tx| tx.removed_coins.iter())
+                    .flatten()
+                    .map(|utxo_id| *utxo_id)
+                    .collect::<Vec<_>>();
 
-        Ok(())
+                let removed_dependent_transactions = self
+                    .dependent_transactions
+                    .process_removed_coins(removed_coins);
+                removed_transaction.extend(removed_dependent_transactions);
+
+                Some(removed_transaction)
+            } else {
+                None
+            };
+
+        let resolved_transactions = self.resolution_queue.resolve(added_coins);
+
+        Ok(InsertionResult {
+            tx_id,
+            removed_transaction,
+            resolved_new_transactions: resolved_transactions,
+        })
     }
 
     fn check_blacklisting(&self, tx: &PoolTransaction) -> Result<(), Error> {
@@ -196,13 +234,40 @@ where
     }
 }
 
-fn is_executable(tx: &ArcPoolTx, view: &impl TxPoolDb) -> Result<bool, Error> {
+enum TransactionStage {
+    /// Transaction is ready to be executed.
+    Executable(ArcPoolTx),
+    /// Transaction is not ready to be executed until all of its parents are executed.
+    /// It can be promoted to the `Executable` when all parents are included.
+    Dependent(ArcPoolTx, Vec<UtxoId>),
+    /// The transaction uses not existing state. It can be promoted
+    /// to the `Executable` or `Dependent` stage when new inputs arrive.
+    Unresolved(ArcPoolTx, Vec<ResolutionInput>),
+}
+
+fn transaction_stage<D>(
+    tx: ArcPoolTx,
+    view: &impl TxPoolDb,
+    executable_transactions: &ExecutableTransactions,
+    dependent_transaction: &ExecutableTransactions,
+) -> Result<TransactionStage, Error> {
+    let mut dependent_coins = vec![];
+    let mut unresolved_inputs = vec![];
     for input in tx.inputs() {
         match input {
             Input::CoinSigned(CoinSigned { utxo_id, .. })
             | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                let Some(coin) = view.utxo(utxo_id)? else {
-                    return Ok(false)
+                let coin = if let Some(coin) = &view.utxo(utxo_id)? {
+                    coin
+                } else if let Some(coin) = executable_transactions.get_coin(utxo_id) {
+                    dependent_coins.push(*utxo_id);
+                    coin
+                } else if let Some(coin) = dependent_transaction.get_coin(utxo_id) {
+                    dependent_coins.push(*utxo_id);
+                    coin
+                } else {
+                    unresolved_inputs.push(ResolutionInput::Coin(*utxo_id));
+                    continue
                 };
 
                 let comparison_result = coin
@@ -215,7 +280,8 @@ fn is_executable(tx: &ArcPoolTx, view: &impl TxPoolDb) -> Result<bool, Error> {
             }
             Input::Contract(contract) => {
                 if !view.contract_exist(&contract.contract_id)? {
-                    return Ok(false)
+                    unresolved_inputs
+                        .push(ResolutionInput::Contract(contract.contract_id));
                 }
             }
             Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
@@ -223,7 +289,8 @@ fn is_executable(tx: &ArcPoolTx, view: &impl TxPoolDb) -> Result<bool, Error> {
             | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
             | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                 let Some(message) = view.message(nonce)? else {
-                    return Ok(false)
+                    unresolved_inputs.push(ResolutionInput::Message(*nonce));
+                    continue
                 };
 
                 let comparison_result = message
@@ -237,7 +304,15 @@ fn is_executable(tx: &ArcPoolTx, view: &impl TxPoolDb) -> Result<bool, Error> {
         }
     }
 
-    Ok(true)
+    let stage = if !unresolved_inputs.is_empty() {
+        TransactionStage::Unresolved(tx, unresolved_inputs)
+    } else if !dependent_coins.is_empty() {
+        TransactionStage::Dependent(tx, dependent_coins)
+    } else {
+        TransactionStage::Executable(tx)
+    };
+
+    Ok(stage)
 }
 
 pub trait CoinMessage {

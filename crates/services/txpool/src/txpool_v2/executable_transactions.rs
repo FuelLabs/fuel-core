@@ -73,11 +73,31 @@ impl ExecutableTransactions {
     }
 
     pub fn insert(&mut self, tx: ArcPoolTx) -> Result<InsertionResult, Error> {
+        let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
+        let target_gas = self.max_pool_gas.saturating_sub(tx.max_gas());
         let info = TxInfo::new(tx);
+
+        if self.current_pool_gas > target_gas {
+            let Some((_, tx)) = self.sort.lowest() else {
+                unreachable!(
+                    "The `current_pool_gas` is non zero, \
+                    so there should be at least one transaction in the pool"
+                );
+            };
+            let lowest_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
+
+            if lowest_tx_ratio >= new_tx_ratio {
+                return Err(Error::NotInsertedLimitHit);
+            }
+        }
 
         let removed_txs_because_of_collision =
             self.remove_collided_transactions(&info.tx)?;
-        let removed_txs_because_of_limit = self.crowd_out_transactions(&info.tx)?;
+
+        // Below this point, the transaction must be inserted
+        // because we removed already collided transactions.
+
+        let removed_txs_because_of_limit = self.crowd_out_transactions(&info.tx);
 
         let mut total_removed_txs = removed_txs_because_of_collision;
         total_removed_txs.extend(removed_txs_because_of_limit);
@@ -133,18 +153,9 @@ impl ExecutableTransactions {
         })
     }
 
-    /// Verifies that one of the executable transactions produced a coin.
-    ///
-    /// Returns `None`, if the `input` is not a coin.
-    /// Otherwise, returns the finding.
-    pub fn contains_coin(&self, input: &Input) -> Option<bool> {
-        let Some(utxo_id) = input.coin() else {
-            return None;
-        };
-        let Some(coin) = self.upcoming_inputs.get(utxo_id) else {
-            return Some(false);
-        };
-        coin.matches_input(input)
+    /// Gets the upcoming coin.
+    pub fn get_coin(&self, utxo_id: &UtxoId) -> Option<&CompressedCoin> {
+        self.upcoming_inputs.get(utxo_id)
     }
 
     fn remove_collided_transactions(
@@ -185,11 +196,7 @@ impl ExecutableTransactions {
         Ok(result)
     }
 
-    fn crowd_out_transactions(
-        &mut self,
-        new_tx: &ArcPoolTx,
-    ) -> Result<RemovedTransactions, Error> {
-        let new_tx_ratio = Ratio::new(new_tx.tip(), new_tx.max_gas());
+    fn crowd_out_transactions(&mut self, new_tx: &ArcPoolTx) -> RemovedTransactions {
         let target_gas = self.max_pool_gas.saturating_sub(new_tx.max_gas());
         let mut removed_txs = vec![];
         while self.current_pool_gas > target_gas {
@@ -199,11 +206,6 @@ impl ExecutableTransactions {
                     so there should be at least one transaction in the pool"
                 );
             };
-            let lowest_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
-
-            if lowest_tx_ratio >= new_tx_ratio {
-                return Err(Error::NotInsertedLimitHit);
-            }
 
             if let Some(removed) = self.remove(
                 &tx.id(),
@@ -212,7 +214,7 @@ impl ExecutableTransactions {
                 removed_txs.push(removed);
             }
         }
-        Ok(removed_txs)
+        removed_txs
     }
 }
 

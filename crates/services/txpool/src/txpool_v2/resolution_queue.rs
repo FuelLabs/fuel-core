@@ -7,7 +7,7 @@ use fuel_core_types::{
     fuel_types::Nonce,
 };
 
-enum ResolutionInput {
+pub enum ResolutionInput {
     Coin(UtxoId),
     Contract(ContractId),
     Message(Nonce),
@@ -17,7 +17,6 @@ enum ResolutionInput {
 /// We don't want to spend a lot of resources on these transactions until their inputs become
 /// valid. The resolution queue stores transactions like this for a short period.
 /// If the transaction is not resolved for this short period of time, it is discarded.
-/// Transactions are verified for basic validity without signatures or predicates.
 pub struct ResolutionQueue {}
 
 impl ResolutionQueue {
