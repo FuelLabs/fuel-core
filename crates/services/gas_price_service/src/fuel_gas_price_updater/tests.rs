@@ -28,15 +28,6 @@ impl L2BlockSource for PendingL2BlockSource {
     }
 }
 
-struct PendingDARecordSource;
-
-#[async_trait::async_trait]
-impl DARecordSource for PendingDARecordSource {
-    async fn get_da_record(&self) -> Result<Vec<RecordedBlock>> {
-        futures::future::pending().await
-    }
-}
-
 struct FakeMetadata {
     inner: Arc<Mutex<Option<UpdaterMetadata>>>,
 }
@@ -124,16 +115,11 @@ async fn next__fetches_l2_block() {
     };
     let metadata_storage = FakeMetadata::empty();
 
-    let da_record_source = PendingDARecordSource;
     let inner = arb_inner_updater();
-    let mut updater = FuelGasPriceUpdater::init(
-        inner.into(),
-        l2_block_source,
-        da_record_source,
-        metadata_storage,
-    )
-    .await
-    .unwrap();
+    let mut updater =
+        FuelGasPriceUpdater::init(inner.into(), l2_block_source, metadata_storage)
+            .await
+            .unwrap();
 
     let start = updater.start(0.into());
     // when
@@ -156,14 +142,12 @@ async fn init__if_exists_already_reload() {
         inner: metadata_inner,
     };
     let l2_block_source = PendingL2BlockSource;
-    let da_record_source = PendingDARecordSource;
 
     // when
     let different_metadata = different_inner_updater();
     let updater = FuelGasPriceUpdater::init(
         different_metadata.into(),
         l2_block_source,
-        da_record_source,
         metadata_storage,
     )
     .await
@@ -180,18 +164,13 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
     // given
     let metadata_storage = FakeMetadata::empty();
     let l2_block_source = PendingL2BlockSource;
-    let da_record_source = PendingDARecordSource;
 
     // when
     let metadata = different_inner_updater();
-    let updater = FuelGasPriceUpdater::init(
-        metadata.into(),
-        l2_block_source,
-        da_record_source,
-        metadata_storage,
-    )
-    .await
-    .unwrap();
+    let updater =
+        FuelGasPriceUpdater::init(metadata.into(), l2_block_source, metadata_storage)
+            .await
+            .unwrap();
 
     // then
     let expected = different_inner_updater();
@@ -217,12 +196,10 @@ async fn next__new_l2_block_updates_metadata() {
         inner: metadata_inner.clone(),
     };
 
-    let da_record_source = PendingDARecordSource;
     let mut inner = arb_inner_updater();
     let mut updater = FuelGasPriceUpdater::init(
         inner.clone().into(),
         l2_block_source,
-        da_record_source,
         metadata_storage,
     )
     .await

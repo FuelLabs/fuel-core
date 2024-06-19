@@ -9,10 +9,9 @@ use fuel_gas_price_algorithm::{
 #[cfg(test)]
 mod tests;
 
-pub struct FuelGasPriceUpdater<L2, DA, Metadata> {
+pub struct FuelGasPriceUpdater<L2, Metadata> {
     inner: AlgorithmUpdaterV1,
     l2_block_source: L2,
-    da_record_source: DA,
     _metadata_storage: Metadata,
 }
 
@@ -71,14 +70,13 @@ pub trait MetadataStorage: Send + Sync {
     async fn set_metadata(&self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
-impl<L2, DA, Metadata> FuelGasPriceUpdater<L2, DA, Metadata>
+impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata>
 where
     Metadata: MetadataStorage,
 {
     pub async fn init(
         init_metadata: UpdaterMetadata,
         l2_block_source: L2,
-        da_record_source: DA,
         metadata_storage: Metadata,
     ) -> Result<Self> {
         let inner = metadata_storage
@@ -89,7 +87,7 @@ where
         let updater = Self {
             inner,
             l2_block_source,
-            da_record_source,
+            // da_record_source,
             _metadata_storage: metadata_storage,
         };
         Ok(updater)
@@ -97,10 +95,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L2, DA, Metadata> UpdateAlgorithm for FuelGasPriceUpdater<L2, DA, Metadata>
+impl<L2, Metadata> UpdateAlgorithm for FuelGasPriceUpdater<L2, Metadata>
 where
     L2: L2BlockSource,
-    DA: DARecordSource,
     Metadata: MetadataStorage + Send + Sync,
 {
     type Algorithm = AlgorithmV1;
@@ -129,12 +126,6 @@ where
                 self._metadata_storage
                     .set_metadata(self.inner.clone().into())
                     .await?;
-                Ok(self.inner.algorithm())
-            }
-            da_record = self.da_record_source.get_da_record() => {
-                tracing::info!("Received DA record: {:?}", da_record);
-                let da_record = da_record?;
-                self.inner.update_da_record_data(da_record)?;
                 Ok(self.inner.algorithm())
             }
         }
