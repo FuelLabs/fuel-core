@@ -141,6 +141,7 @@ impl AlgorithmV1 {
 ///
 /// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmUpdaterV1 {
     /// The gas price to cover the execution of the next block
     pub new_exec_price: u64,
@@ -193,7 +194,7 @@ pub struct RecordedBlock {
     pub block_cost: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BlockBytes {
     pub height: u32,
     pub block_bytes: u64,

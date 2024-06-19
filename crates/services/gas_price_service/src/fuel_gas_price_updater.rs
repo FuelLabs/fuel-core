@@ -9,10 +9,11 @@ use fuel_gas_price_algorithm::{
 #[cfg(test)]
 mod tests;
 
-pub struct FuelGasPriceUpdater<L2, DA> {
+pub struct FuelGasPriceUpdater<L2, DA, Metadata> {
     inner: AlgorithmUpdaterV1,
     l2_block_source: L2,
     da_record_source: DA,
+    _metadata_storage: Metadata,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -44,23 +45,59 @@ pub trait DARecordSource: Send + Sync {
     async fn get_da_record(&self) -> Result<Vec<RecordedBlock>>;
 }
 
-impl<L2, DA> FuelGasPriceUpdater<L2, DA> {
-    pub fn new(
-        inner: AlgorithmUpdaterV1,
-        l2_block_source: L2,
-        da_record_source: DA,
-    ) -> Self {
-        Self {
-            inner,
-            l2_block_source,
-            da_record_source,
+#[derive(Debug, Clone)]
+pub enum UpdaterMetadata {
+    V1(AlgorithmUpdaterV1),
+}
+
+impl From<UpdaterMetadata> for AlgorithmUpdaterV1 {
+    fn from(metadata: UpdaterMetadata) -> Self {
+        match metadata {
+            UpdaterMetadata::V1(v1) => v1.into(),
         }
     }
 }
 
+impl From<AlgorithmUpdaterV1> for UpdaterMetadata {
+    fn from(v1: AlgorithmUpdaterV1) -> Self {
+        UpdaterMetadata::V1(v1)
+    }
+}
+
 #[async_trait::async_trait]
-impl<L2: L2BlockSource, DA: DARecordSource> UpdateAlgorithm
-    for FuelGasPriceUpdater<L2, DA>
+pub trait MetadataStorage: Send + Sync {
+    async fn get_metadata(&self) -> Result<Option<UpdaterMetadata>>;
+    async fn set_metadata(&self, metadata: UpdaterMetadata) -> Result<()>;
+}
+
+impl<L2, DA, Metadata> FuelGasPriceUpdater<L2, DA, Metadata>
+where
+    Metadata: MetadataStorage,
+{
+    pub async fn init(
+        init_metadata: UpdaterMetadata,
+        l2_block_source: L2,
+        da_record_source: DA,
+        metadata_storage: Metadata,
+    ) -> Result<Self> {
+        let inner = metadata_storage
+            .get_metadata()
+            .await?
+            .unwrap_or(init_metadata)
+            .into();
+        let updater = Self {
+            inner,
+            l2_block_source,
+            da_record_source,
+            _metadata_storage: metadata_storage,
+        };
+        Ok(updater)
+    }
+}
+
+#[async_trait::async_trait]
+impl<L2: L2BlockSource, DA: DARecordSource, Metadata: Send + Sync> UpdateAlgorithm
+    for FuelGasPriceUpdater<L2, DA, Metadata>
 {
     type Algorithm = AlgorithmV1;
 
