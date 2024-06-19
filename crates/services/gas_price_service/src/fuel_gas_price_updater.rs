@@ -29,6 +29,7 @@ pub enum Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Debug, Clone)]
 pub struct BlockInfo {
     pub height: u32,
     pub fullness: (u64, u64),
@@ -96,8 +97,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L2: L2BlockSource, DA: DARecordSource, Metadata: Send + Sync> UpdateAlgorithm
-    for FuelGasPriceUpdater<L2, DA, Metadata>
+impl<L2, DA, Metadata> UpdateAlgorithm for FuelGasPriceUpdater<L2, DA, Metadata>
+where
+    L2: L2BlockSource,
+    DA: DARecordSource,
+    Metadata: MetadataStorage + Send + Sync,
 {
     type Algorithm = AlgorithmV1;
 
@@ -108,6 +112,7 @@ impl<L2: L2BlockSource, DA: DARecordSource, Metadata: Send + Sync> UpdateAlgorit
     async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
         tokio::select! {
             l2_block = self.l2_block_source.get_l2_block(self.inner.l2_block_height.into()) => {
+                tracing::info!("Received L2 block: {:?}", l2_block);
                 let l2_block = l2_block?;
                 let BlockInfo {
                     height,
@@ -121,9 +126,13 @@ impl<L2: L2BlockSource, DA: DARecordSource, Metadata: Send + Sync> UpdateAlgorit
                     block_bytes,
                     gas_price,
                 )?;
+                self._metadata_storage
+                    .set_metadata(self.inner.clone().into())
+                    .await?;
                 Ok(self.inner.algorithm())
             }
             da_record = self.da_record_source.get_da_record() => {
+                tracing::info!("Received DA record: {:?}", da_record);
                 let da_record = da_record?;
                 self.inner.update_da_record_data(da_record)?;
                 Ok(self.inner.algorithm())

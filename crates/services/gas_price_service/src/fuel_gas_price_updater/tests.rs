@@ -38,16 +38,25 @@ impl DARecordSource for PendingDARecordSource {
 }
 
 struct FakeMetadata {
-    inner: Option<UpdaterMetadata>,
+    inner: Arc<Mutex<Option<UpdaterMetadata>>>,
+}
+
+impl FakeMetadata {
+    fn empty() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(None)),
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl MetadataStorage for FakeMetadata {
     async fn get_metadata(&self) -> Result<Option<UpdaterMetadata>> {
-        Ok(self.inner.clone())
+        Ok(self.inner.lock().await.clone())
     }
 
-    async fn set_metadata(&self, _metadata: UpdaterMetadata) -> Result<()> {
+    async fn set_metadata(&self, metadata: UpdaterMetadata) -> Result<()> {
+        let _ = self.inner.lock().await.replace(metadata);
         Ok(())
     }
 }
@@ -113,7 +122,7 @@ async fn next__fetches_l2_block() {
     let l2_block_source = FakeL2BlockSource {
         l2_block: Arc::new(Mutex::new(l2_block_receiver)),
     };
-    let metadata_storage = FakeMetadata { inner: None };
+    let metadata_storage = FakeMetadata::empty();
 
     let da_record_source = PendingDARecordSource;
     let inner = arb_inner_updater();
@@ -142,8 +151,9 @@ async fn next__fetches_l2_block() {
 async fn init__if_exists_already_reload() {
     // given
     let metadata = arb_inner_updater();
+    let metadata_inner = Arc::new(Mutex::new(Some(metadata.into())));
     let metadata_storage = FakeMetadata {
-        inner: Some(metadata.into()),
+        inner: metadata_inner,
     };
     let l2_block_source = PendingL2BlockSource;
     let da_record_source = PendingDARecordSource;
@@ -168,7 +178,7 @@ async fn init__if_exists_already_reload() {
 #[tokio::test]
 async fn init__if_it_does_not_exist_create_with_provided_values() {
     // given
-    let metadata_storage = FakeMetadata { inner: None };
+    let metadata_storage = FakeMetadata::empty();
     let l2_block_source = PendingL2BlockSource;
     let da_record_source = PendingDARecordSource;
 
@@ -186,5 +196,54 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
     // then
     let expected = different_inner_updater();
     let actual = updater.inner;
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn next__new_l2_block_updates_metadata() {
+    // given
+    let l2_block = BlockInfo {
+        height: 1,
+        fullness: (60, 100),
+        block_bytes: 1000,
+        gas_price: 200,
+    };
+    let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
+    let l2_block_source = FakeL2BlockSource {
+        l2_block: Arc::new(Mutex::new(l2_block_receiver)),
+    };
+    let metadata_inner = Arc::new(Mutex::new(None));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner.clone(),
+    };
+
+    let da_record_source = PendingDARecordSource;
+    let mut inner = arb_inner_updater();
+    let mut updater = FuelGasPriceUpdater::init(
+        inner.clone().into(),
+        l2_block_source,
+        da_record_source,
+        metadata_storage,
+    )
+    .await
+    .unwrap();
+
+    // when
+    let next = tokio::spawn(async move { updater.next().await });
+
+    l2_block_sender.send(l2_block.clone()).await.unwrap();
+    let _ = next.await.unwrap().unwrap();
+
+    // then
+    inner
+        .update_l2_block_data(
+            l2_block.height,
+            l2_block.fullness,
+            l2_block.block_bytes,
+            l2_block.gas_price,
+        )
+        .unwrap();
+    let expected = inner;
+    let actual = metadata_inner.lock().await.clone().unwrap().into();
     assert_eq!(expected, actual);
 }
