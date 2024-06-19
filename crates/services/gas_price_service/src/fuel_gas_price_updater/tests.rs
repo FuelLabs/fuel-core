@@ -19,12 +19,12 @@ impl L2BlockSource for FakeL2BlockSource {
     }
 }
 
-struct FakeDARecordSource;
+struct PendingDARecordSource;
 
 #[async_trait::async_trait]
-impl DARecordSource for FakeDARecordSource {
+impl DARecordSource for PendingDARecordSource {
     async fn get_da_record(&self) -> Result<Vec<RecordedBlock>> {
-        Ok(vec![])
+        futures::future::pending().await
     }
 }
 
@@ -65,7 +65,7 @@ async fn next__fetches_l2_block() {
         l2_block: Arc::new(Mutex::new(l2_block_receiver)),
     };
 
-    let da_record_source = FakeDARecordSource;
+    let da_record_source = PendingDARecordSource;
     let inner = arb_inner_updater();
     let mut updater = FuelGasPriceUpdater::new(inner, l2_block_source, da_record_source);
 
