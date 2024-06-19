@@ -49,7 +49,7 @@ pub enum Error {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
     /// The lowest the algorithm allows the gas price to go
-    min_gas_price: u64,
+    min_da_gas_price: u64,
     /// The gas price for to cover the execution of the next block
     new_exec_price: u64,
     /// The gas price for the DA portion of the last block. This can be used to calculate
@@ -121,11 +121,13 @@ impl AlgorithmV1 {
     }
 
     fn assemble_price(&self, change: i64) -> u64 {
-        let mut new_da_gas_price = self.last_da_price as i64;
-        new_da_gas_price = new_da_gas_price.saturating_add(change);
-        let min = self.min_gas_price as i64;
-        let new_price = (self.new_exec_price as i64).saturating_add(new_da_gas_price);
-        max(new_price, min).try_into().unwrap_or(0)
+        let last_da_gas_price = self.last_da_price as i64;
+        let maybe_new_da_gas_price = last_da_gas_price
+            .saturating_add(change)
+            .try_into()
+            .unwrap_or(self.min_da_gas_price);
+        let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
+        self.new_exec_price.saturating_add(new_da_gas_price)
     }
 }
 
@@ -135,19 +137,19 @@ impl AlgorithmV1 {
 /// being recorded on the DA chain, the updater needs to make "projections" about the cost of
 /// recording any given block to the DA chain. This is done by tracking the cost per byte of recording
 /// for the most recent blocks, and using the known bytes of the unrecorded blocks to estimate
-/// the cost for that block. Every time the DA recording is updated, that the projections are recalculated.
+/// the cost for that block. Every time the DA recording is updated, the projections are recalculated.
 ///
 /// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
 pub struct AlgorithmUpdaterV1 {
-    /// The lowest the algorithm allows the gas price to go
-    pub min_gas_price: u64,
-    /// The gas price for to cover the execution of the next block
+    /// The gas price to cover the execution of the next block
     pub new_exec_price: u64,
     /// The gas price for the DA portion of the last block. This can be used to calculate
     /// the DA portion of the next block
     pub last_da_gas_price: u64,
     // Execution
+    /// The lowest the algorithm allows the exec gas price to go
+    pub min_exec_gas_price: u64,
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
     /// based on the fullness of the last L2 block
     pub exec_gas_price_change_percent: u64,
@@ -157,6 +159,8 @@ pub struct AlgorithmUpdaterV1 {
     /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: u64,
     // DA
+    /// The lowest the algorithm allows the da gas price to go
+    pub min_da_gas_price: u64,
     /// The maximum percentage that the DA portion of the gas price can change in a single block
     pub max_da_gas_price_change_percent: u8,
     /// The cumulative reward from the DA portion of the gas price
@@ -269,7 +273,7 @@ impl AlgorithmUpdaterV1 {
             }
             std::cmp::Ordering::Equal => {}
         }
-        self.new_exec_price = exec_gas_price;
+        self.new_exec_price = max(self.min_exec_gas_price, exec_gas_price);
     }
 
     fn change_amount(&self, principle: u64) -> u64 {
@@ -327,7 +331,7 @@ impl AlgorithmUpdaterV1 {
 
     pub fn algorithm(&self) -> AlgorithmV1 {
         AlgorithmV1 {
-            min_gas_price: self.min_gas_price,
+            min_da_gas_price: self.min_da_gas_price,
             new_exec_price: self.new_exec_price,
             last_da_price: self.last_da_gas_price,
             max_change_percent: self.max_da_gas_price_change_percent,

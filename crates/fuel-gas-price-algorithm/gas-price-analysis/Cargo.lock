@@ -293,17 +293,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "gas-price-algorithm"
-version = "0.29.0"
+name = "fuel-gas-price-algorithm"
+version = "0.30.0"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
-name = "gas-price-analysis"
+name = "fuel-gas-price-analysis"
 version = "0.1.0"
 dependencies = [
- "gas-price-algorithm",
+ "fuel-gas-price-algorithm",
  "plotters",
  "rand",
  "rand_distr",

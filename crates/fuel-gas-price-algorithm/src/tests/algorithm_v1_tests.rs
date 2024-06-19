@@ -201,10 +201,11 @@ fn calculate__price_does_not_increase_more_than_max_percent() {
 }
 
 #[test]
-fn calculate__the_price_will_not_go_below_min() {
+fn calculate__da_gas_price_never_drops_below_minimum() {
     // given
     let starting_exec_gas_price = 100;
     let last_da_gas_price = 100;
+    let min_da_gas_price = 99;
     let starting_cost = 500;
     let latest_gas_per_byte = 10;
     let da_p_component = 100;
@@ -212,10 +213,7 @@ fn calculate__the_price_will_not_go_below_min() {
     let block_bytes = 500;
     let profit_avg = 100;
     let avg_window = 10;
-    let max_change_percent = 5;
     let arb_value = 1000;
-    let max_change = starting_exec_gas_price * max_change_percent as u64 / 100;
-    let min_gas_price = starting_exec_gas_price + last_da_gas_price - max_change + 1;
     let larger_starting_reward =
         starting_cost + block_bytes * latest_gas_per_byte + arb_value;
     let updater = UpdaterBuilder::new()
@@ -228,8 +226,7 @@ fn calculate__the_price_will_not_go_below_min() {
         .with_projected_total_cost(starting_cost)
         .with_da_cost_per_byte(latest_gas_per_byte)
         .with_profit_avg(profit_avg, avg_window)
-        .with_max_change_percent(max_change_percent)
-        .with_min_gas_price(min_gas_price)
+        .with_min_da_gas_price(min_da_gas_price)
         .build();
 
     // when
@@ -237,5 +234,6 @@ fn calculate__the_price_will_not_go_below_min() {
     let actual = algo.calculate(block_bytes);
 
     // then
-    assert_eq!(min_gas_price, actual);
+    let expected = min_da_gas_price + starting_exec_gas_price;
+    assert_eq!(expected, actual);
 }
