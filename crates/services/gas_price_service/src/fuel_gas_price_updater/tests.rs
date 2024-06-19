@@ -160,10 +160,31 @@ async fn init__if_exists_already_reload() {
     .unwrap();
 
     // then
-    assert_eq!(updater.inner.exec_gas_price_change_percent, 10);
+    let expected = arb_inner_updater();
+    let actual = updater.inner;
+    assert_eq!(expected, actual);
 }
 
-// #[tokio::test]
-// async fn init__if_it_does_not_exist_create_with_provided_values() {
-//    todo!()
-// }
+#[tokio::test]
+async fn init__if_it_does_not_exist_create_with_provided_values() {
+    // given
+    let metadata_storage = FakeMetadata { inner: None };
+    let l2_block_source = PendingL2BlockSource;
+    let da_record_source = PendingDARecordSource;
+
+    // when
+    let metadata = different_inner_updater();
+    let updater = FuelGasPriceUpdater::init(
+        metadata.into(),
+        l2_block_source,
+        da_record_source,
+        metadata_storage,
+    )
+    .await
+    .unwrap();
+
+    // then
+    let expected = different_inner_updater();
+    let actual = updater.inner;
+    assert_eq!(expected, actual);
+}
