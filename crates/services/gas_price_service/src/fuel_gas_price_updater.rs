@@ -12,7 +12,7 @@ mod tests;
 pub struct FuelGasPriceUpdater<L2, Metadata> {
     inner: AlgorithmUpdaterV1,
     l2_block_source: L2,
-    _metadata_storage: Metadata,
+    metadata_storage: Metadata,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -53,7 +53,7 @@ pub enum UpdaterMetadata {
 impl From<UpdaterMetadata> for AlgorithmUpdaterV1 {
     fn from(metadata: UpdaterMetadata) -> Self {
         match metadata {
-            UpdaterMetadata::V1(v1) => v1.into(),
+            UpdaterMetadata::V1(v1) => v1,
         }
     }
 }
@@ -87,8 +87,7 @@ where
         let updater = Self {
             inner,
             l2_block_source,
-            // da_record_source,
-            _metadata_storage: metadata_storage,
+            metadata_storage,
         };
         Ok(updater)
     }
@@ -123,7 +122,7 @@ where
                     block_bytes,
                     gas_price,
                 )?;
-                self._metadata_storage
+                self.metadata_storage
                     .set_metadata(self.inner.clone().into())
                     .await?;
                 Ok(self.inner.algorithm())
