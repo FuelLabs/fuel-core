@@ -10,6 +10,7 @@ members = [
   "crates/client",
   "crates/database",
   "crates/fuel-core",
+  "crates/fuel-gas-price-algorithm",
   "crates/keygen",
   "crates/metrics",
   "crates/services",
@@ -81,6 +82,7 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-upgradable-executor = { version = "0.30.0", path = "./crates/services/upgradable-executor" }
 fuel-core-wasm-executor = { version = "0.30.0", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
+fuel-gas-price-algorithm = { version = "0.30.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
 fuel-vm-private = { version = "0.54.1", package = "fuel-vm", default-features = false }

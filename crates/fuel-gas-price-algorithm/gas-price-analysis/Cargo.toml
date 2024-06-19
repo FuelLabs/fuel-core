@@ -1,0 +1,13 @@
+[package]
+name = "fuel-gas-price-analysis"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+fuel-gas-price-algorithm = { path = ".." }
+plotters = "0.3.5"
+rand = "0.8.5"
+rand_distr = "0.4.3"

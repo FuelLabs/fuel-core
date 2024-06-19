@@ -3451,6 +3451,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-gas-price-algorithm"
+version = "0.30.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "fuel-merkle"
 version = "0.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
