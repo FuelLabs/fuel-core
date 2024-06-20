@@ -9,6 +9,8 @@ use fuel_gas_price_algorithm::{
 #[cfg(test)]
 mod tests;
 
+pub mod fuel_l2_block_source;
+
 pub struct FuelGasPriceUpdater<L2, Metadata> {
     inner: AlgorithmUpdaterV1,
     l2_block_source: L2,

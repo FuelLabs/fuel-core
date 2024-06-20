@@ -3075,6 +3075,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-services",
+ "fuel-core-storage",
  "fuel-core-types",
  "fuel-gas-price-algorithm",
  "futures",
