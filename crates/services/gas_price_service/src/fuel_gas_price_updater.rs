@@ -26,7 +26,7 @@ pub enum Error {
     CouldNotFetchDARecord(anyhow::Error),
 }
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone)]
 pub struct BlockInfo {
