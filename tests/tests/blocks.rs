@@ -322,7 +322,7 @@ async fn block_connection_5(
     };
 }
 
-pub mod full_block {
+mod full_block {
     use super::*;
     use cynic::QueryBuilder;
     use fuel_core_client::client::{
