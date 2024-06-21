@@ -15,9 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
   CARGO_TERM_COLOR: always
   RUST_VERSION: 1.75.0
-  NIGHTLY_RUST_VERSION: nightly-2023-10-29
+  RUST_VERSION_FMT: nightly-2023-10-29
+  RUST_VERSION_COV: nightly-2024-06-05
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
@@ -39,11 +41,11 @@ jobs:
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.NIGHTLY_RUST_VERSION }}
+          toolchain: ${{ env.RUST_VERSION_FMT }}
           components: rustfmt
 
       - name: Rustfmt check
-        run: cargo +${{ env.NIGHTLY_RUST_VERSION }} fmt --all -- --check
+        run: cargo +${{ env.RUST_VERSION_FMT }} fmt --all -- --check
 
   lint-toml-files:
     runs-on: buildjet-4vcpu-ubuntu-2204
@@ -193,6 +195,48 @@ jobs:
           check-repo: false
           ignore-unpublished-changes: true
 
+  publish-codecov:
+    name: Publish code coverage report on GitHub pages branch
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    needs:
+      - cargo-verifications
+    permissions: # Write access to push changes to pages
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install latest Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION_COV }}
+          targets: wasm32-unknown-unknown
+
+      - name: Install cargo-llvm-codecov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Code coverage report
+        run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
+
+      - name: Checkout the repo again for pushing pages revision
+        uses: actions/checkout@v3
+        with:
+          ref: 'codecov-pages'
+          path: 'pages-branch'
+
+      - name: Push codecov report to pages branch
+        working-directory: ./pages-branch
+        run: |
+          export BRANCH_B64=$(echo -n "${{ env.GIT_BRANCH }}" | basenc --base64url)
+          git config user.email "2204863+Dentosal@users.noreply.github.com"
+          git config user.name "Dentosal"
+          cp -r ../target/llvm-cov/html "$BRANCH_B64"
+          python3 ../.github/workflows/scripts/generate_pages_index.py > index.html
+          git add .
+          git commit -m "Update codecov for ${{ env.GIT_BRANCH }}"
+          git push
+          export PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/$BRANCH_B64/index.html"
+          echo "$PAGES_URL"
+          echo "Codecov report $PAGES_URL" >> $GITHUB_STEP_SUMMARY          
+        
   verifications-complete:
     needs:
       - cargo-verifications

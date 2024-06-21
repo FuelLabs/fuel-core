@@ -214,7 +214,13 @@ impl KeypairArg {
         }
         let path = PathBuf::from_str(s);
         if let Ok(pathbuf) = path {
-            return Ok(KeypairArg::Path(pathbuf))
+            if pathbuf.exists() {
+                return Ok(KeypairArg::Path(pathbuf))
+            } else {
+                return Err(anyhow!(
+                    "path `{pathbuf:?}` does not exist for keypair argument"
+                ))
+            }
         }
         Err(anyhow!(
             "invalid keypair argument, neither a valid key or path"
@@ -327,5 +333,24 @@ impl P2PArgs {
             state: NotInitialized,
         };
         Ok(Some(config))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invalid_path() {
+        // Given
+        let invalid_path = "/invalid/path/to/keypair";
+        // When
+        let keypair = KeypairArg::try_from_string(invalid_path);
+
+        // Then
+        let err = keypair.expect_err("The path is incorrect it should fail");
+        assert!(err
+            .to_string()
+            .contains("does not exist for keypair argument"));
     }
 }

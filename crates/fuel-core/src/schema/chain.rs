@@ -335,7 +335,9 @@ impl FeeParameters {
 impl GasCosts {
     async fn version(&self) -> GasCostsVersion {
         match self.0.deref() {
-            GasCostsValues::V1(_) | GasCostsValues::V2(_) => GasCostsVersion::V1,
+            GasCostsValues::V1(_) | GasCostsValues::V2(_) | GasCostsValues::V3(_) => {
+                GasCostsVersion::V1
+            }
         }
     }
 
@@ -380,7 +382,7 @@ impl GasCosts {
     }
 
     async fn cfei(&self) -> U64 {
-        self.0.cfei().into()
+        self.0.cfei().base().into()
     }
 
     async fn cfsi(&self) -> U64 {
@@ -693,6 +695,14 @@ impl GasCosts {
 
     async fn aloc_dependent_cost(&self) -> DependentCost {
         self.0.aloc().into()
+    }
+
+    async fn cfe(&self) -> DependentCost {
+        self.0.cfe().into()
+    }
+
+    async fn cfei_dependent_cost(&self) -> DependentCost {
+        self.0.cfei().into()
     }
 
     async fn call(&self) -> DependentCost {

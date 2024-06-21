@@ -13,8 +13,10 @@ use crate::{
     Result as StorageResult,
 };
 use std::{
+    borrow::Borrow,
     collections::{
         btree_map::Entry,
+        hash_map,
         BTreeMap,
         HashMap,
     },
@@ -117,8 +119,73 @@ pub trait Modifiable {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()>;
 }
 
+/// The wrapper around the `Vec<u8>` that supports `Borrow<[u8]>`.
+/// It allows the use of bytes slices to do lookups in the collections.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct ReferenceBytesKey(Vec<u8>);
+
+impl From<Vec<u8>> for ReferenceBytesKey {
+    fn from(value: Vec<u8>) -> Self {
+        ReferenceBytesKey(value)
+    }
+}
+
+impl From<ReferenceBytesKey> for Vec<u8> {
+    fn from(value: ReferenceBytesKey) -> Self {
+        value.0
+    }
+}
+
+impl Borrow<[u8]> for ReferenceBytesKey {
+    fn borrow(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+}
+
+impl Borrow<Vec<u8>> for ReferenceBytesKey {
+    fn borrow(&self) -> &Vec<u8> {
+        &self.0
+    }
+}
+
+impl AsRef<[u8]> for ReferenceBytesKey {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+}
+
+impl AsMut<[u8]> for ReferenceBytesKey {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
+    }
+}
+
+impl core::ops::Deref for ReferenceBytesKey {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::ops::DerefMut for ReferenceBytesKey {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 /// The type describing the list of changes to the storage.
-pub type Changes = HashMap<u32, BTreeMap<Vec<u8>, WriteOperation>>;
+pub type Changes = HashMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
 
 impl<Storage> From<StorageTransaction<Storage>> for Changes {
     fn from(transaction: StorageTransaction<Storage>) -> Self {
@@ -198,7 +265,14 @@ where
 impl<Storage> Modifiable for InMemoryTransaction<Storage> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         for (column, value) in changes.into_iter() {
-            let btree = self.changes.entry(column).or_default();
+            let btree = match self.changes.entry(column) {
+                hash_map::Entry::Vacant(vacant) => {
+                    vacant.insert(value);
+                    continue
+                }
+                hash_map::Entry::Occupied(occupied) => occupied.into_mut(),
+            };
+
             for (k, v) in value {
                 match &self.policy {
                     ConflictPolicy::Fail => {
@@ -233,10 +307,9 @@ where
     S: KeyValueInspect<Column = Column>,
 {
     fn get_from_changes(&self, key: &[u8], column: Column) -> Option<&WriteOperation> {
-        let k = key.to_vec();
         self.changes
             .get(&column.id())
-            .and_then(|btree| btree.get(&k))
+            .and_then(|btree| btree.get(key))
     }
 }
 
@@ -321,7 +394,7 @@ where
         column: Self::Column,
         value: Value,
     ) -> StorageResult<()> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         self.changes
             .entry(column.id())
             .or_default()
@@ -335,7 +408,7 @@ where
         column: Self::Column,
         value: Value,
     ) -> StorageResult<Option<Value>> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
@@ -360,7 +433,7 @@ where
         column: Self::Column,
         buf: &[u8],
     ) -> StorageResult<usize> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         self.changes
             .entry(column.id())
             .or_default()
@@ -369,7 +442,7 @@ where
     }
 
     fn take(&mut self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
@@ -389,7 +462,7 @@ where
     }
 
     fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         self.changes
             .entry(column.id())
             .or_default()
@@ -409,7 +482,7 @@ where
     {
         let btree = self.changes.entry(column.id()).or_default();
         entries.for_each(|(key, operation)| {
-            btree.insert(key, operation);
+            btree.insert(key.into(), operation);
         });
         Ok(())
     }
@@ -455,10 +528,10 @@ mod test {
                 for (key, value) in value {
                     match value {
                         WriteOperation::Insert(value) => {
-                            self.storage.insert((column, key), value);
+                            self.storage.insert((column, key.into()), value);
                         }
                         WriteOperation::Remove => {
-                            self.storage.remove(&(column, key));
+                            self.storage.remove(&(column, key.into()));
                         }
                     }
                 }

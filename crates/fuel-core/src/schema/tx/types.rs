@@ -90,6 +90,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use std::vec::IntoIter;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -429,20 +430,20 @@ impl Transaction {
 
     async fn input_contracts(&self) -> Option<Vec<ContractId>> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => {
-                Some(script.input_contracts().map(|v| (*v).into()).collect())
+            fuel_tx::Transaction::Script(tx) => {
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
-            fuel_tx::Transaction::Create(create) => {
-                Some(create.input_contracts().map(|v| (*v).into()).collect())
+            fuel_tx::Transaction::Create(tx) => {
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
             fuel_tx::Transaction::Mint(mint) => {
                 Some(vec![mint.input_contract().contract_id.into()])
             }
             fuel_tx::Transaction::Upgrade(tx) => {
-                Some(tx.input_contracts().map(|v| (*v).into()).collect())
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
             fuel_tx::Transaction::Upload(tx) => {
-                Some(tx.input_contracts().map(|v| (*v).into()).collect())
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
         }
     }
@@ -814,6 +815,26 @@ impl DryRunTransactionStatus {
             }),
         }
     }
+}
+
+fn input_contracts<Tx>(tx: &Tx) -> IntoIter<&fuel_core_types::fuel_types::ContractId>
+where
+    Tx: Inputs,
+{
+    let mut inputs: Vec<_> = tx
+        .inputs()
+        .iter()
+        .filter_map(|input| match input {
+            fuel_tx::Input::Contract(fuel_tx::input::contract::Contract {
+                contract_id,
+                ..
+            }) => Some(contract_id),
+            _ => None,
+        })
+        .collect();
+    inputs.sort();
+    inputs.dedup();
+    inputs.into_iter()
 }
 
 #[derive(Debug)]

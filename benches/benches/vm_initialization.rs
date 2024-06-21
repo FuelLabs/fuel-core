@@ -16,6 +16,7 @@ use fuel_core_types::{
         Output,
         Script,
         Transaction,
+        TxParameters,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
@@ -39,7 +40,7 @@ fn transaction<R: Rng>(
     script_data: Vec<u8>,
     consensus_params: &ConsensusParameters,
 ) -> Checked<Script> {
-    let inputs = (0..1)
+    let mut inputs = (0..1)
         .map(|_| {
             Input::coin_predicate(
                 rng.gen(),
@@ -52,13 +53,33 @@ fn transaction<R: Rng>(
                 vec![255; 1],
             )
         })
-        .collect();
+        .collect::<Vec<_>>();
 
-    let outputs = (0..1)
+    const CONTRACTS_NUMBER: u16 = 254;
+
+    for i in 0..CONTRACTS_NUMBER {
+        inputs.push(Input::contract(
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            [i as u8; 32].into(),
+        ));
+    }
+
+    let mut outputs = (0..1)
         .map(|_| {
             Output::variable(Default::default(), Default::default(), Default::default())
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    for i in 0..CONTRACTS_NUMBER {
+        outputs.push(Output::contract(
+            i + 1,
+            Default::default(),
+            Default::default(),
+        ));
+    }
 
     Transaction::script(
         1_000_000,
@@ -75,12 +96,13 @@ fn transaction<R: Rng>(
 
 pub fn vm_initialization(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(8586);
-    let consensus_params = ConsensusParameters::default();
+    let mut consensus_params = ConsensusParameters::default();
+    consensus_params.set_tx_params(TxParameters::default().with_max_size(256 * 1024));
     let mut group = c.benchmark_group("vm_initialization");
 
     // Increase the size of the script to measure the performance of the VM initialization
     // with a large script. THe largest allowed script is 64 KB = 8 * 2^13 bytes.
-    const TX_SIZE_POWER_OF_TWO: usize = 12;
+    const TX_SIZE_POWER_OF_TWO: usize = 13;
 
     for i in 5..=TX_SIZE_POWER_OF_TWO {
         let size = 8 * (1 << i);

@@ -1,4 +1,5 @@
 use num_rational::Ratio;
+use tokio::time::Instant;
 
 use crate::{
     containers::sort::{
@@ -19,6 +20,7 @@ pub type RatioGasTip = Ratio<Word>;
 #[derive(Clone, Debug)]
 pub struct RatioGasTipSortKey {
     tip_per_gas: RatioGasTip,
+    creation_instant: Instant,
     tx_id: TxId,
 }
 
@@ -28,6 +30,7 @@ impl SortableKey for RatioGasTipSortKey {
     fn new(info: &TxInfo) -> Self {
         Self {
             tip_per_gas: Ratio::new(info.tx().tip(), info.tx().max_gas()),
+            creation_instant: info.created(),
             tx_id: info.tx().id(),
         }
     }
@@ -55,8 +58,14 @@ impl Ord for RatioGasTipSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         let cmp = self.tip_per_gas.cmp(&other.tip_per_gas);
         if cmp == cmp::Ordering::Equal {
-            return self.tx_id.cmp(&other.tx_id);
+            let instant_cmp = other.creation_instant.cmp(&self.creation_instant);
+            if instant_cmp == cmp::Ordering::Equal {
+                self.tx_id.cmp(&other.tx_id)
+            } else {
+                instant_cmp
+            }
+        } else {
+            cmp
         }
-        cmp
     }
 }

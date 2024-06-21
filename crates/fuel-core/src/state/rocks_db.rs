@@ -770,7 +770,7 @@ mod tests {
         let ops = vec![(
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(
-                key.clone(),
+                key.clone().into(),
                 WriteOperation::Insert(value.clone()),
             )]),
         )];
@@ -789,7 +789,7 @@ mod tests {
 
         let ops = vec![(
             Column::Metadata.id(),
-            BTreeMap::from_iter(vec![(key.clone(), WriteOperation::Remove)]),
+            BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
         db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
 
