@@ -7,9 +7,11 @@ use crate::{
         field::{
             Inputs,
             Outputs,
+            Policies,
             ScriptGasLimit,
             Tip,
         },
+        policies::PolicyType,=
         Cacheable,
         Chargeable,
         Create,
@@ -84,6 +86,59 @@ impl PoolTransaction {
             PoolTransaction::Create(tx) => tx.id(),
             PoolTransaction::Upgrade(tx) => tx.id(),
             PoolTransaction::Upload(tx) => tx.id(),
+        }
+    }
+
+    /// Returns the maximum fee that transaction can spend.
+    pub fn max_fee(&self) -> Word {
+        let (max_fee, available_base_asset_id) = match self {
+            PoolTransaction::Script(tx) => {
+                let max_fee = tx.transaction().policies().get(PolicyType::MaxFee);
+                let base_asset_id = &tx.metadata().base_asset_id;
+                let available_base_asset_id = tx
+                    .metadata()
+                    .non_retryable_balances
+                    .get(base_asset_id)
+                    .copied();
+
+                (max_fee, available_base_asset_id)
+            }
+            PoolTransaction::Create(tx) => {
+                let max_fee = tx.transaction().policies().get(PolicyType::MaxFee);
+                let base_asset_id = &tx.metadata().base_asset_id;
+                let available_base_asset_id =
+                    tx.metadata().free_balances.get(base_asset_id).copied();
+
+                (max_fee, available_base_asset_id)
+            }
+            PoolTransaction::Upgrade(tx) => {
+                let max_fee = tx.transaction().policies().get(PolicyType::MaxFee);
+                let base_asset_id = &tx.metadata().base_asset_id;
+                let available_base_asset_id =
+                    tx.metadata().free_balances.get(base_asset_id).copied();
+
+                (max_fee, available_base_asset_id)
+            }
+            PoolTransaction::Upload(tx) => {
+                let max_fee = tx.transaction().policies().get(PolicyType::MaxFee);
+                let base_asset_id = &tx.metadata().base_asset_id;
+                let available_base_asset_id =
+                    tx.metadata().free_balances.get(base_asset_id).copied();
+
+                (max_fee, available_base_asset_id)
+            }
+        };
+
+        // max_fee = gas_price * max_gas
+        // max_gas = available_balance / gas_price
+        //            |
+        //           \|/
+        //            V
+        // max_fee = available_balance
+        if let Some(max_fee) = max_fee {
+            max_fee
+        } else {
+            available_base_asset_id.unwrap_or_default()
         }
     }
 
@@ -169,18 +224,6 @@ impl From<&PoolTransaction> for CheckedTransaction {
             PoolTransaction::Upgrade(tx) => CheckedTransaction::Upgrade(tx.clone()),
             PoolTransaction::Upload(tx) => CheckedTransaction::Upload(tx.clone()),
         }
-    }
-}
-
-impl From<Checked<Script>> for PoolTransaction {
-    fn from(checked: Checked<Script>) -> Self {
-        Self::Script(checked)
-    }
-}
-
-impl From<Checked<Create>> for PoolTransaction {
-    fn from(checked: Checked<Create>) -> Self {
-        Self::Create(checked)
     }
 }
 

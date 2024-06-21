@@ -44,10 +44,16 @@ impl<'a> Collision<'a> {
     }
 
     pub fn iter_collided_transactions(&self) -> impl Iterator<Item = &ArcPoolTx> {
-        self.collided_transactions.iter().map(|(tx_id, _)| {
+        let set: HashSet<TxId> = self
+            .collided_transactions
+            .iter()
+            .map(|(tx_id, _)| *tx_id)
+            .collect();
+
+        set.into_iter().map(|tx_id| {
             self.collision_detector
                 .tx_id_to_tx
-                .get(tx_id)
+                .get(&tx_id)
                 .expect(
                     "`Collision` has the write ownership over `CollisionDetector`\
                     and was created from the existing `tx_id`. The corresponding `ArcPoolTx` \
@@ -142,7 +148,7 @@ impl CollisionDetector {
     }
 }
 
-fn collision_reasons<'a>(
+pub fn collision_reasons<'a>(
     tx: &'a ArcPoolTx,
 ) -> impl Iterator<Item = CollisionReason> + 'a {
     tx.inputs()

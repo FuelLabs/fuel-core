@@ -24,13 +24,18 @@ use std::collections::HashMap;
 
 pub type RemovedCoins = Vec<UtxoId>;
 
+#[derive(Clone, Debug)]
 pub enum RemoveReason {
+    ParentTransactionIsRemoved {
+        parent_tx_id: TxId,
+        remove_reason: Box<RemoveReason>,
+    },
     UpcomingTxIsMoreProfitable(TxId),
     UpcomingTxCrowdOutLowestTx(TxId),
 }
 
 pub struct RemovedTransaction {
-    pub tx_id: TxId,
+    pub info: TxInfo,
     pub removed_coins: RemovedCoins,
     pub reason: RemoveReason,
 }
@@ -47,8 +52,6 @@ pub enum InsertionResult {
 }
 
 pub struct ExecutableTransactions {
-    max_pool_gas: u64,
-    current_pool_gas: u64,
     tx_info: HashMap<TxId, TxInfo>,
     collision_detector: CollisionDetector,
     // TODO: Add sorting by the maximum gas price as well. Maybe use `Treap` data structure.
@@ -59,8 +62,6 @@ pub struct ExecutableTransactions {
 impl ExecutableTransactions {
     pub fn new(max_pool_gas: u64) -> Self {
         Self {
-            max_pool_gas,
-            current_pool_gas: 0,
             tx_info: HashMap::default(),
             collision_detector: CollisionDetector::default(),
             sort: RatioGasTipSort::default(),
@@ -72,44 +73,17 @@ impl ExecutableTransactions {
         self.tx_info.contains_key(tx_id)
     }
 
-    pub fn insert(&mut self, tx: ArcPoolTx) -> Result<InsertionResult, Error> {
-        let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
-        let target_gas = self.max_pool_gas.saturating_sub(tx.max_gas());
-        let info = TxInfo::new(tx);
-
-        if self.current_pool_gas > target_gas {
-            let Some((_, tx)) = self.sort.lowest() else {
-                unreachable!(
-                    "The `current_pool_gas` is non zero, \
-                    so there should be at least one transaction in the pool"
-                );
-            };
-            let lowest_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
-
-            if lowest_tx_ratio >= new_tx_ratio {
-                return Err(Error::NotInsertedLimitHit);
-            }
-        }
-
-        let removed_txs_because_of_collision =
-            self.remove_collided_transactions(&info.tx)?;
-
-        // Below this point, the transaction must be inserted
-        // because we removed already collided transactions.
-
-        let removed_txs_because_of_limit = self.crowd_out_transactions(&info.tx);
-
-        let mut total_removed_txs = removed_txs_because_of_collision;
-        total_removed_txs.extend(removed_txs_because_of_limit);
+    pub fn insert(&mut self, info: TxInfo) -> Result<InsertionResult, Error> {
+        let removed_transaction = self.remove_collided_transactions(&info.tx)?;
 
         let upcoming_coins = self.insert_tx(info);
 
-        if total_removed_txs.is_empty() {
+        if removed_transaction.is_empty() {
             Ok(InsertionResult::Successfully(upcoming_coins))
         } else {
             Ok(InsertionResult::SuccessfullyWithRemovedTransactions {
                 upcoming_coins,
-                removed_transaction: total_removed_txs,
+                removed_transaction,
             })
         }
     }
@@ -123,7 +97,6 @@ impl ExecutableTransactions {
             self.upcoming_inputs.insert(*utxo_id, *coin);
         }
 
-        self.current_pool_gas = self.current_pool_gas.saturating_add(info.tx.max_gas());
         self.tx_info.insert(info.tx.id(), info);
         upcoming_coins
     }
@@ -137,7 +110,6 @@ impl ExecutableTransactions {
 
         let Some(info) = info else { return None };
         self.sort.remove(&info);
-        self.current_pool_gas = self.current_pool_gas.saturating_sub(info.tx.max_gas());
 
         let removed_inputs = upcoming_coins(info.tx())
             .map(|(utxo_id, _)| utxo_id)
@@ -147,7 +119,7 @@ impl ExecutableTransactions {
         }
         self.collision_detector.remove(tx_id);
         Some(RemovedTransaction {
-            tx_id: *tx_id,
+            info,
             removed_coins: removed_inputs,
             reason,
         })
@@ -194,27 +166,6 @@ impl ExecutableTransactions {
         };
 
         Ok(result)
-    }
-
-    fn crowd_out_transactions(&mut self, new_tx: &ArcPoolTx) -> RemovedTransactions {
-        let target_gas = self.max_pool_gas.saturating_sub(new_tx.max_gas());
-        let mut removed_txs = vec![];
-        while self.current_pool_gas > target_gas {
-            let Some((_, tx)) = self.sort.lowest() else {
-                unreachable!(
-                    "The `current_pool_gas` is non zero, \
-                    so there should be at least one transaction in the pool"
-                );
-            };
-
-            if let Some(removed) = self.remove(
-                &tx.id(),
-                RemoveReason::UpcomingTxCrowdOutLowestTx(new_tx.id()),
-            ) {
-                removed_txs.push(removed);
-            }
-        }
-        removed_txs
     }
 }
 

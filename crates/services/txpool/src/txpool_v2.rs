@@ -1,13 +1,24 @@
 mod collision_detector;
+mod dependent_transactions;
 mod executable_transactions;
 mod resolution_queue;
 
 use crate::{
+    containers::{
+        max_fee_per_gas_sort::{
+            RatioMaxGasPriceSort,
+            RatioMaxGasPriceSortKey,
+        },
+        sort::SortableKey,
+    },
     ports::TxPoolDb,
+    service::TxStatusChange,
     txpool_v2::{
+        dependent_transactions::DependentTransactions,
         executable_transactions::{
             ExecutableTransactions,
             InsertionResult as ExecutableInsertionResult,
+            RemoveReason,
             RemovedTransaction,
             RemovedTransactions,
         },
@@ -17,6 +28,7 @@ use crate::{
         },
     },
     Config,
+    TxInfo,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -48,7 +60,9 @@ use fuel_core_types::{
         Error,
         PoolTransaction,
     },
+    tai64::Tai64,
 };
+use num_rational::Ratio;
 use std::sync::Arc;
 
 /// Dependent transaction is not ready to be executed until all of its parents are executed.
@@ -58,10 +72,14 @@ pub struct DependentTransaction {
 }
 
 pub struct TxPool<D> {
+    max_pool_gas: u64,
+    current_pool_gas: u64,
     database: D,
+    max_gas_price_sort: RatioMaxGasPriceSort,
+    tx_status_change: TxStatusChange,
     config: Config,
     executable_transactions: ExecutableTransactions,
-    dependent_transactions: ExecutableTransactions,
+    dependent_transactions: DependentTransactions,
     resolution_queue: ResolutionQueue,
 }
 
@@ -76,7 +94,7 @@ where
     D: AtomicView<View = View>,
     View: TxPoolDb,
 {
-    pub fn insert(&mut self, tx: Checked<Transaction>) -> Result<InsertionResult, Error> {
+    pub fn insert(&mut self, tx: Checked<Transaction>) -> Result<(), Error> {
         let view = self.database.latest_view();
 
         let tx: CheckedTransaction = tx.into();
@@ -99,28 +117,56 @@ where
             return Err(Error::NotInsertedTxKnown)
         }
 
+        self.insert_inner(tx, &view)
+    }
+
+    fn insert_inner(&mut self, tx: ArcPoolTx, view: &View) -> Result<(), Error> {
+        let info = TxInfo::new(tx);
+
+        // The function will remove transactions with the lowest gas price,
+        // even if, at the end, a new transaction will be rejected.
+        // It opens space for the next upcoming transaction.
+        // It will happen only when the TxPool gas limit is reached.
+        // It is acceptable since we already have a lot of transactions to execute.
+        self.crowd_out_transactions(&info)?;
+
         let stage = transaction_stage(
-            tx,
+            info.clone(),
             &view,
             &self.executable_transactions,
             &self.dependent_transactions,
         )?;
 
-        match stage {
-            TransactionStage::Executable(tx) => self.insert_executable(tx)?,
+        let resolved_transactions = match stage {
+            TransactionStage::Executable(tx) => Some(self.insert_executable(tx)?),
             TransactionStage::Dependent(tx, parents) => {
-                self.insert_dependent(tx, parents)
+                Some(self.insert_dependent(tx, parents)?)
             }
             TransactionStage::Unresolved(tx, inputs) => {
-                self.insert_unresolved(tx, inputs)
+                self.insert_unresolved(tx, inputs);
+                None
             }
         };
 
-        Ok(InsertionResult {
-            tx_id: tx.id(),
-            removed_transaction: vec![],
-            resolved_new_transactions: vec![],
-        })
+        self.current_pool_gas = self.current_pool_gas.saturating_add(info.tx.max_gas());
+        self.max_gas_price_sort.insert(&info);
+        self.tx_status_change.send_submitted(
+            tx.id(),
+            Tai64::from_unix(info.submitted_time.as_secs() as i64),
+        );
+
+        if let Some(resolved_transactions) = resolved_transactions {
+            for resolved_transaction in resolved_transactions {
+                let tx_id = resolved_transaction.id();
+                let result = self.insert_inner(resolved_transaction, view);
+
+                if let Err(error) = result {
+                    self.tx_status_change.send_squeezed_out(tx_id, error);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn contains(&self, tx_id: &TxId, view: &View) -> Result<bool, Error> {
@@ -130,13 +176,12 @@ where
             || self.resolution_queue.contains(tx_id))
     }
 
-    fn insert_executable(&mut self, tx: ArcPoolTx) -> Result<InsertionResult, Error> {
-        let tx_id = tx.id();
-        let result = self.executable_transactions.insert(tx)?;
+    fn insert_executable(&mut self, info: TxInfo) -> Result<Vec<ArcPoolTx>, Error> {
+        let result = self.executable_transactions.insert(info)?;
 
         // Below this point, the transaction must be inserted -> no errors.
 
-        let (added_coins, removed_transaction) = match result {
+        let (added_coins, removed_transactions) = match result {
             ExecutableInsertionResult::Successfully(coins) => (coins, None),
             ExecutableInsertionResult::SuccessfullyWithRemovedTransactions {
                 upcoming_coins,
@@ -144,32 +189,39 @@ where
             } => (upcoming_coins, Some(removed_transaction)),
         };
 
-        let removed_transaction =
-            if let Some(mut removed_transaction) = removed_transaction {
-                let removed_coins = removed_transaction
-                    .iter()
-                    .map(|tx| tx.removed_coins.iter())
-                    .flatten()
-                    .map(|utxo_id| *utxo_id)
-                    .collect::<Vec<_>>();
-
-                let removed_dependent_transactions = self
-                    .dependent_transactions
-                    .process_removed_coins(removed_coins);
-                removed_transaction.extend(removed_dependent_transactions);
-
-                Some(removed_transaction)
-            } else {
-                None
-            };
+        if let Some(removed_transactions) = removed_transactions {
+            for removed_transaction in removed_transactions {
+                self.process_removed_transaction(removed_transaction);
+            }
+        }
 
         let resolved_transactions = self.resolution_queue.resolve(added_coins);
 
-        Ok(InsertionResult {
-            tx_id,
-            removed_transaction,
-            resolved_new_transactions: resolved_transactions,
-        })
+        Ok(resolved_transactions)
+    }
+
+    fn insert_dependent(&mut self, info: TxInfo) -> Result<Vec<ArcPoolTx>, Error> {
+        let result = self.dependent_transactions.insert(info)?;
+
+        // Below this point, the transaction must be inserted -> no errors.
+
+        let (added_coins, removed_transactions) = match result {
+            ExecutableInsertionResult::Successfully(coins) => (coins, None),
+            ExecutableInsertionResult::SuccessfullyWithRemovedTransactions {
+                upcoming_coins,
+                removed_transaction,
+            } => (upcoming_coins, Some(removed_transaction)),
+        };
+
+        if let Some(removed_transactions) = removed_transactions {
+            for removed_transaction in removed_transactions {
+                self.process_removed_transaction(removed_transaction);
+            }
+        }
+
+        let resolved_transactions = self.resolution_queue.resolve(added_coins);
+
+        Ok(resolved_transactions)
     }
 
     fn check_blacklisting(&self, tx: &PoolTransaction) -> Result<(), Error> {
@@ -232,28 +284,96 @@ where
 
         Ok(())
     }
+
+    fn crowd_out_transactions(&mut self, info: &TxInfo) -> Result<(), Error> {
+        let new_tx_id = info.tx().id();
+        let new_tx_key = RatioMaxGasPriceSortKey::new(info);
+        let target_gas = self.max_pool_gas.saturating_sub(info.tx.max_gas());
+
+        while self.current_pool_gas > target_gas {
+            let Some((key, tx_to_remove)) = self.max_gas_price_sort.lowest() else {
+                unreachable!(
+                    "The `current_pool_gas` is non zero, \
+                    so there should be at least one transaction in the pool"
+                );
+            };
+
+            if key >= &new_tx_key {
+                return Err(Error::NotInsertedLimitHit);
+            }
+
+            let tx_id = tx_to_remove.id();
+
+            self.remove(&tx_id, RemoveReason::UpcomingTxCrowdOutLowestTx(new_tx_id));
+        }
+
+        Ok(())
+    }
+
+    fn remove(&mut self, tx_id: &TxId, reason: RemoveReason) {
+        if let Some(removed_transaction) =
+            self.executable_transactions.remove(tx_id, reason.clone())
+        {
+            self.process_removed_transaction(removed_transaction)
+        }
+        if let Some(removed_transaction) =
+            self.dependent_transactions.remove(tx_id, reason.clone())
+        {
+            self.process_removed_transaction(removed_transaction)
+        }
+        if let Some(removed_transaction) = self.resolution_queue.remove(tx_id, reason) {
+            self.process_removed_transaction(removed_transaction)
+        }
+    }
+
+    fn process_removed_transaction(&mut self, removed_transaction: RemovedTransaction) {
+        let RemovedTransaction {
+            info,
+            removed_coins,
+            reason,
+        } = removed_transaction;
+        self.current_pool_gas = self.current_pool_gas.saturating_sub(info.tx.max_gas());
+        self.max_gas_price_sort.remove(&info);
+        self.tx_status_change
+            .send_squeezed_out(info.tx.id(), Error::SqueezedOut(reason.to_string()));
+
+        let removed_dependent_transactions =
+            self.dependent_transactions.remove_dependent(
+                removed_coins.iter(),
+                RemoveReason::ParentTransactionIsRemoved {
+                    parent_tx_id: info.tx.id(),
+                    remove_reason: Box::new(reason.clone()),
+                },
+            );
+
+        self.resolution_queue.unresolve(removed_coins.iter());
+
+        for removed_transaction in removed_dependent_transactions {
+            self.process_removed_transaction(removed_transaction);
+        }
+    }
 }
 
 enum TransactionStage {
     /// Transaction is ready to be executed.
-    Executable(ArcPoolTx),
+    Executable(TxInfo),
     /// Transaction is not ready to be executed until all of its parents are executed.
     /// It can be promoted to the `Executable` when all parents are included.
-    Dependent(ArcPoolTx, Vec<UtxoId>),
+    Dependent(TxInfo, Vec<UtxoId>),
     /// The transaction uses not existing state. It can be promoted
     /// to the `Executable` or `Dependent` stage when new inputs arrive.
-    Unresolved(ArcPoolTx, Vec<ResolutionInput>),
+    Unresolved(TxInfo, Vec<ResolutionInput>),
 }
 
 fn transaction_stage<D>(
-    tx: ArcPoolTx,
+    info: TxInfo,
     view: &impl TxPoolDb,
     executable_transactions: &ExecutableTransactions,
-    dependent_transaction: &ExecutableTransactions,
+    dependent_transaction: &DependentTransactions,
 ) -> Result<TransactionStage, Error> {
     let mut dependent_coins = vec![];
     let mut unresolved_inputs = vec![];
-    for input in tx.inputs() {
+    for input in info.tx.inputs() {
         match input {
             Input::CoinSigned(CoinSigned { utxo_id, .. })
             | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
@@ -305,11 +425,11 @@ fn transaction_stage<D>(
     }
 
     let stage = if !unresolved_inputs.is_empty() {
-        TransactionStage::Unresolved(tx, unresolved_inputs)
+        TransactionStage::Unresolved(info, unresolved_inputs)
     } else if !dependent_coins.is_empty() {
-        TransactionStage::Dependent(tx, dependent_coins)
+        TransactionStage::Dependent(info, dependent_coins)
     } else {
-        TransactionStage::Executable(tx)
+        TransactionStage::Executable(info)
     };
 
     Ok(stage)
