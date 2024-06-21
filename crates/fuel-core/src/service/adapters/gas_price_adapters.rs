@@ -8,6 +8,9 @@ use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::time::Duration;
 
+#[cfg(test)]
+mod tests;
+
 pub struct FuelL2BlockSource<Onchain> {
     frequency: Duration,
 }
@@ -35,7 +38,7 @@ where
     async fn get_l2_block(&self, height: BlockHeight) -> GasPriceResult<BlockInfo> {
         loop {
             let latest_block = self.on_chain().latest_block()?;
-            if latest_block.header().height() >= height {
+            if latest_block.header().height() < height {
                 tokio::time::sleep(self.frequency).await;
             } else {
                 let block = self.on_chain().block(height)?;

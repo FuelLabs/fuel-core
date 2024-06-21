@@ -29,7 +29,7 @@ pub mod block_importer;
 pub mod consensus_module;
 pub mod consensus_parameters_provider;
 pub mod executor;
-pub mod gas_price;
+pub mod gas_price_adapters;
 pub mod graphql_api;
 #[cfg(feature = "p2p")]
 pub mod p2p;
