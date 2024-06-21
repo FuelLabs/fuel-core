@@ -21,7 +21,7 @@ pub struct GraphQLArgs {
     pub graphql_max_complexity: usize,
 
     /// The max recursive depth of GraphQL queries.
-    #[clap(long = "graphql-max-recursive-depth", default_value = "10", env)]
+    #[clap(long = "graphql-max-recursive-depth", default_value = "16", env)]
     pub graphql_max_recursive_depth: usize,
 
     /// Time to wait after submitting a query before debug info will be logged about query.

@@ -128,7 +128,7 @@ impl Config {
                 ),
                 max_queries_depth: 16,
                 max_queries_complexity: 20000,
-                max_queries_recursive_depth: 10,
+                max_queries_recursive_depth: 16,
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
             },
