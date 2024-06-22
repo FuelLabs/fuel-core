@@ -12,7 +12,7 @@ use futures::future::{
 fn l2_source(database: Database) -> FuelL2BlockSource<Database> {
     FuelL2BlockSource {
         frequency: Duration::from_millis(10),
-        on_chain: database,
+        database,
     }
 }
 
@@ -22,7 +22,7 @@ fn l2_source_with_frequency(
 ) -> FuelL2BlockSource<Database> {
     FuelL2BlockSource {
         frequency,
-        on_chain: database,
+        database,
     }
 }
 

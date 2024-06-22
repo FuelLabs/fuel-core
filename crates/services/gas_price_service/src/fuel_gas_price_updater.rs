@@ -3,7 +3,6 @@ use fuel_core_types::fuel_types::BlockHeight;
 use fuel_gas_price_algorithm::{
     AlgorithmUpdaterV1,
     AlgorithmV1,
-    RecordedBlock,
 };
 
 #[cfg(test)]
@@ -40,11 +39,6 @@ pub trait L2BlockSource: Send + Sync {
     async fn get_l2_block(&self, height: BlockHeight) -> Result<BlockInfo>;
 }
 
-#[async_trait::async_trait]
-pub trait DARecordSource: Send + Sync {
-    async fn get_da_record(&self) -> Result<Vec<RecordedBlock>>;
-}
-
 #[derive(Debug, Clone)]
 pub enum UpdaterMetadata {
     V1(AlgorithmUpdaterV1),
@@ -67,7 +61,7 @@ impl From<AlgorithmUpdaterV1> for UpdaterMetadata {
 #[async_trait::async_trait]
 pub trait MetadataStorage: Send + Sync {
     async fn get_metadata(&self) -> Result<Option<UpdaterMetadata>>;
-    async fn set_metadata(&self, metadata: UpdaterMetadata) -> Result<()>;
+    async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
 impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata>
