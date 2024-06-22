@@ -43,6 +43,7 @@ where
     <Onchain::View as StorageInspect<FuelBlocks>>::Error: Into<anyhow::Error>,
 {
     async fn get_l2_block(&self, height: BlockHeight) -> GasPriceResult<BlockInfo> {
+        // TODO: Add an escape route for loop
         loop {
             let latest_height = self.on_chain.latest_height().unwrap_or(0.into());
             if latest_height < height {
