@@ -28,7 +28,7 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BlockInfo {
     pub height: u32,
     pub fullness: (u64, u64),

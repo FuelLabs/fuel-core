@@ -12,7 +12,6 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-services = { workspace = true }
-fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
 fuel-gas-price-algorithm = { workspace = true }
 futures = { workspace = true }
