@@ -63,6 +63,9 @@ pub enum Column {
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
     GenesisMetadata = 20,
+
+    /// See [`GasPriceMetadata`](crate::tables::GasPriceMetadata)
+    GasPriceMetadata = 21,
 }
 
 impl Column {

@@ -1,6 +1,6 @@
 use crate::UpdateAlgorithm;
 use fuel_core_types::fuel_types::BlockHeight;
-use fuel_gas_price_algorithm::{
+pub use fuel_gas_price_algorithm::{
     AlgorithmUpdaterV1,
     AlgorithmV1,
 };
@@ -39,7 +39,7 @@ pub trait L2BlockSource: Send + Sync {
     async fn get_l2_block(&self, height: BlockHeight) -> Result<BlockInfo>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UpdaterMetadata {
     V1(AlgorithmUpdaterV1),
 }

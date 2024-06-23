@@ -134,6 +134,16 @@ impl Mappable for StateTransitionBytecodeVersions {
     type OwnedValue = Bytes32;
 }
 
+/// The storage table for metadata of the gas price algorithm updater
+pub struct GasPriceMetadata;
+
+impl Mappable for GasPriceMetadata {
+    type Key = Self::OwnedKey;
+    type OwnedKey = BlockHeight;
+    type Value = Self::OwnedValue;
+    type OwnedValue = u64;
+}
+
 /// The module contains definition of merkle-related tables.
 pub mod merkle {
     use crate::{
