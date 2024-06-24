@@ -5,12 +5,17 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::AlgorithmUpdaterV1;
 use fuel_core_storage::StorageAsMut;
 
 fn arb_metadata() -> UpdaterMetadata {
+    let height = 111231u32.into();
+    arb_metadata_with_l2_height(height)
+}
+
+fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
     AlgorithmUpdaterV1 {
         new_exec_price: 100,
         last_da_gas_price: 34,
         min_exec_gas_price: 12,
         exec_gas_price_change_percent: 2,
-        l2_block_height: 0,
+        l2_block_height: l2_height.into(),
         l2_block_fullness_threshold_percent: 0,
         min_da_gas_price: 0,
         max_da_gas_price_change_percent: 0,
@@ -60,5 +65,27 @@ async fn get_metadata__returns_none_if_does_not_exist() {
 
     // then
     let expected = None;
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn set_metadata__can_set_metadata() {
+    // given
+    let database: Database = Database::default();
+    let block_height: BlockHeight = 1u32.into();
+    let metadata = arb_metadata_with_l2_height(block_height);
+    let mut metadata_storage = FuelGasPriceMetadataStorage { database };
+
+    // when
+    let actual = metadata_storage.get_metadata(&block_height).await.unwrap();
+    assert_eq!(None, actual);
+    metadata_storage
+        .set_metadata(metadata.clone())
+        .await
+        .unwrap();
+    let actual = metadata_storage.get_metadata(&block_height).await.unwrap();
+
+    // then
+    let expected = Some(metadata);
     assert_eq!(expected, actual);
 }

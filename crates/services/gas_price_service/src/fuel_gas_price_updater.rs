@@ -28,6 +28,13 @@ pub enum Error {
         block_height: BlockHeight,
         source_error: anyhow::Error,
     },
+    #[error(
+        "Failed to set updater metadata at height {block_height:?}: {source_error:?}"
+    )]
+    CouldNotSetMetadata {
+        block_height: BlockHeight,
+        source_error: anyhow::Error,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
