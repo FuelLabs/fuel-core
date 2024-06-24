@@ -25,6 +25,7 @@ pub struct FuelL2BlockSource<Database> {
     database: Database,
 }
 
+// TODO: use real values for all the fields
 fn get_block_info(block: &CompressedBlock) -> BlockInfo {
     BlockInfo {
         height: (*block.header().height()).into(),

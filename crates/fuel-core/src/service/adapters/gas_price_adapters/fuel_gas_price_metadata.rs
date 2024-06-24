@@ -16,7 +16,7 @@ use fuel_core_types::fuel_types::BlockHeight;
 mod tests;
 
 pub struct FuelGasPriceMetadataStorage<Database> {
-    _database: Database,
+    database: Database,
 }
 
 #[async_trait::async_trait]
@@ -31,7 +31,7 @@ where
         &self,
         block_height: &BlockHeight,
     ) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let view = self._database.latest_view();
+        let view = self.database.latest_view();
         let metadata = view
             .storage::<GasPriceMetadata>()
             .get(block_height)
