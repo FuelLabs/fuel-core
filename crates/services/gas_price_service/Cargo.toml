@@ -15,6 +15,7 @@ fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true }
 fuel-gas-price-algorithm = { workspace = true }
 futures = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

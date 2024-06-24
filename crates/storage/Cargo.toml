@@ -23,6 +23,7 @@ enum-iterator = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
+fuel-core-gas-price-service = { workspace = true }
 fuel-vm-private = { workspace = true, default-features = false }
 impl-tools = "0.10"
 itertools = { workspace = true, features = ["use_alloc"] }

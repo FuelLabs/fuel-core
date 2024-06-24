@@ -3078,6 +3078,7 @@ dependencies = [
  "fuel-core-types",
  "fuel-gas-price-algorithm",
  "futures",
+ "serde",
  "thiserror",
  "tokio",
  "tracing",
@@ -3264,6 +3265,7 @@ dependencies = [
  "anyhow",
  "derive_more",
  "enum-iterator",
+ "fuel-core-gas-price-service",
  "fuel-core-storage",
  "fuel-core-types",
  "fuel-vm",
@@ -3456,6 +3458,7 @@ dependencies = [
 name = "fuel-gas-price-algorithm"
 version = "0.30.0"
 dependencies = [
+ "serde",
  "thiserror",
 ]
 

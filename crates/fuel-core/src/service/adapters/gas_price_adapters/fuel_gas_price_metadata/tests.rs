@@ -2,11 +2,13 @@
 use super::*;
 use fuel_core::database::Database;
 use fuel_core_gas_price_service::fuel_gas_price_updater::AlgorithmUpdaterV1;
+use fuel_core_storage::StorageAsMut;
 
 #[tokio::test]
 async fn get_metadata__can_get_most_recent_version() {
     // given
-    let database: Database = Database::default();
+    let mut database: Database = Database::default();
+    let block_height: BlockHeight = 1u32.into();
     let metadata = AlgorithmUpdaterV1 {
         new_exec_price: 0,
         last_da_gas_price: 0,
@@ -28,12 +30,16 @@ async fn get_metadata__can_get_most_recent_version() {
         unrecorded_blocks: vec![],
     }
     .into();
+    database
+        .storage_as_mut::<GasPriceMetadata>()
+        .insert(&block_height, &metadata)
+        .unwrap();
     let metadata_storage = FuelGasPriceMetadataStorage {
         _database: database,
     };
 
     // when
-    let actual = metadata_storage.get_metadata().await.unwrap();
+    let actual = metadata_storage.get_metadata(&block_height).await.unwrap();
 
     // then
     let expected = Some(metadata);

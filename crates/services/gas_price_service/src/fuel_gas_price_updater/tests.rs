@@ -46,7 +46,7 @@ impl MetadataStorage for FakeMetadata {
         Ok(self.inner.lock().await.clone())
     }
 
-    async fn set_metadata(&self, metadata: UpdaterMetadata) -> Result<()> {
+    async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()> {
         let _ = self.inner.lock().await.replace(metadata);
         Ok(())
     }

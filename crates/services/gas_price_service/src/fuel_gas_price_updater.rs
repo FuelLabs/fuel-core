@@ -23,6 +23,11 @@ pub enum Error {
     },
     #[error("Failed to find DA records: {0:?}")]
     CouldNotFetchDARecord(anyhow::Error),
+    #[error("Failed to retrieve updater metadata at height {block_height:?}: {source_error:?}")]
+    CouldNotFetchMetadata {
+        block_height: BlockHeight,
+        source_error: anyhow::Error,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -39,9 +44,17 @@ pub trait L2BlockSource: Send + Sync {
     async fn get_l2_block(&self, height: BlockHeight) -> Result<BlockInfo>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum UpdaterMetadata {
     V1(AlgorithmUpdaterV1),
+}
+
+impl UpdaterMetadata {
+    pub fn l2_block_height(&self) -> BlockHeight {
+        match self {
+            UpdaterMetadata::V1(v1) => v1.l2_block_height.into(),
+        }
+    }
 }
 
 impl From<UpdaterMetadata> for AlgorithmUpdaterV1 {
@@ -60,7 +73,10 @@ impl From<AlgorithmUpdaterV1> for UpdaterMetadata {
 
 #[async_trait::async_trait]
 pub trait MetadataStorage: Send + Sync {
-    async fn get_metadata(&self) -> Result<Option<UpdaterMetadata>>;
+    async fn get_metadata(
+        &self,
+        block_height: &BlockHeight,
+    ) -> Result<Option<UpdaterMetadata>>;
     async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
@@ -73,8 +89,9 @@ where
         l2_block_source: L2,
         metadata_storage: Metadata,
     ) -> Result<Self> {
+        let target_block_height = init_metadata.l2_block_height();
         let inner = metadata_storage
-            .get_metadata()
+            .get_metadata(&target_block_height)
             .await?
             .unwrap_or(init_metadata)
             .into();
