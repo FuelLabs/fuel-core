@@ -189,7 +189,7 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
       - name: Publish crate check
-        uses: xgreenx/publish-crates@v1
+        uses: FuelLabs/publish-crates@v1
         with:
           dry-run: true
           check-repo: false
@@ -236,7 +236,7 @@ jobs:
           export PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/$BRANCH_B64/index.html"
           echo "$PAGES_URL"
           echo "Codecov report $PAGES_URL" >> $GITHUB_STEP_SUMMARY          
-        
+
   verifications-complete:
     needs:
       - cargo-verifications
@@ -280,7 +280,7 @@ jobs:
           targets: "wasm32-unknown-unknown"
 
       - name: Publish crate
-        uses: xgreenx/publish-crates@v1
+        uses: FuelLabs/publish-crates@v1
         with:
           publish-delay: 60000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
