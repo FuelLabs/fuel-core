@@ -31,7 +31,7 @@ async fn get_l2_block__gets_expected_value() {
     // given
     let block = CompressedBlock::default();
     let block_height = 1u32.into();
-    let block_info = get_block_info(&block);
+    let block_info = get_block_info(&block.clone().uncompress(vec![]));
     let mut database = Database::default();
     database
         .storage_as_mut::<FuelBlocks>()
@@ -73,6 +73,35 @@ async fn get_l2_block__waits_for_block() {
 
     // then
     let actual = fut_l2_block.await.unwrap();
-    let expected = get_block_info(&block);
+    let expected = get_block_info(&block.uncompress(vec![]));
     assert_eq!(expected, actual);
 }
+
+// fn build_block() -> CompressedBlock {
+//     todo!()
+// }
+
+#[tokio::test]
+async fn get_l2_block__calculates_fullness_correctly() {
+    // // given
+    // let block_height = 1u32.into();
+    // let block = build_block();
+    //
+    // // when
+    // let actual =
+    //
+    // // then
+    // let expected = BlockInfo {
+    //     height: 0,
+    //     fullness: (0, 0),
+    //     block_bytes: 0,
+    //     gas_price: 0,
+    // };
+    //
+}
+
+#[tokio::test]
+async fn get_l2_block__calculates_block_bytes_correctly() {}
+
+#[tokio::test]
+async fn get_l2_block__retrieves_gas_price_correctly() {}
