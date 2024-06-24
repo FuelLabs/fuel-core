@@ -7,6 +7,7 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
 };
 use fuel_core_storage::{
     tables::{
+        ConsensusParametersVersions,
         FuelBlocks,
         Transactions,
     },
@@ -30,7 +31,7 @@ pub struct FuelL2BlockSource<Database> {
 }
 
 // TODO: use real values for all the fields
-fn get_block_info(block: &Block<Transaction>) -> BlockInfo {
+fn get_block_info(block: &Block<Transaction>, _block_gas_limit: u64) -> BlockInfo {
     BlockInfo {
         height: (*block.header().height()).into(),
         fullness: (0, 0),
@@ -92,8 +93,11 @@ where
     Database::View: StorageAsRef,
     Database::View: StorageInspect<FuelBlocks>,
     Database::View: StorageInspect<Transactions>,
+    Database::View: StorageInspect<ConsensusParametersVersions>,
     <Database::View as StorageInspect<FuelBlocks>>::Error: Into<anyhow::Error>,
     <Database::View as StorageInspect<Transactions>>::Error: Into<anyhow::Error>,
+    <Database::View as StorageInspect<ConsensusParametersVersions>>::Error:
+        Into<anyhow::Error>,
 {
     async fn get_l2_block(&self, height: BlockHeight) -> GasPriceResult<BlockInfo> {
         // TODO: Add an escape route for loop
@@ -103,7 +107,20 @@ where
                 tokio::time::sleep(self.frequency).await;
             } else {
                 let block = self.get_full_block(height)?;
-                return Ok(get_block_info(&block));
+                let view = self.database.latest_view();
+                let param_version = block.header().consensus_parameters_version;
+                let consensus_params = view.storage::<ConsensusParametersVersions>().get(&param_version).map_err(
+                    |source_error| GasPriceError::CouldNotFetchL2Block {
+                        block_height: latest_height,
+                        source_error: source_error.into(),
+                    },
+                )?.ok_or(GasPriceError::CouldNotFetchL2Block {
+                    block_height: latest_height,
+                    source_error: anyhow!("Consensus parameters not found in storage: {latest_height:?}",),
+                })?;
+                let block_gas_limit = consensus_params.block_gas_limit();
+                let block_info = get_block_info(&block, block_gas_limit);
+                return Ok(block_info);
             }
         }
     }

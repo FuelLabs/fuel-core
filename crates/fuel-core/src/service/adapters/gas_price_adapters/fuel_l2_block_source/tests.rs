@@ -3,7 +3,10 @@
 use super::*;
 use fuel_core::database::Database;
 use fuel_core_storage::StorageAsMut;
-use fuel_core_types::blockchain::block::CompressedBlock;
+use fuel_core_types::{
+    blockchain::block::CompressedBlock,
+    fuel_tx::ConsensusParameters,
+};
 use futures::future::{
     maybe_done,
     MaybeDone,
@@ -26,17 +29,29 @@ fn l2_source_with_frequency(
     }
 }
 
+fn params() -> ConsensusParameters {
+    ConsensusParameters::default()
+}
+
 #[tokio::test]
 async fn get_l2_block__gets_expected_value() {
     // given
     let block = CompressedBlock::default();
     let block_height = 1u32.into();
-    let block_info = get_block_info(&block.clone().uncompress(vec![]));
+    let block_gas_limit = 100;
+    let block_info = get_block_info(&block.clone().uncompress(vec![]), block_gas_limit);
     let mut database = Database::default();
+    let params = params();
+    let version = block.header().consensus_parameters_version;
+    database
+        .storage_as_mut::<ConsensusParametersVersions>()
+        .insert(&version, &params)
+        .unwrap();
     database
         .storage_as_mut::<FuelBlocks>()
         .insert(&block_height, &block)
         .unwrap();
+
     let source = l2_source(database);
 
     // when
@@ -53,8 +68,14 @@ async fn get_l2_block__waits_for_block() {
     let block = CompressedBlock::default();
     let mut database = Database::default();
     let frequency = Duration::from_millis(10);
+    let block_gas_limit = 100;
     let source = l2_source_with_frequency(database.clone(), frequency);
-
+    let params = params();
+    let version = block.header().consensus_parameters_version;
+    database
+        .storage_as_mut::<ConsensusParametersVersions>()
+        .insert(&version, &params)
+        .unwrap();
     // when
     let mut fut_l2_block = source.get_l2_block(block_height);
     for _ in 0..10 {
@@ -73,7 +94,8 @@ async fn get_l2_block__waits_for_block() {
 
     // then
     let actual = fut_l2_block.await.unwrap();
-    let expected = get_block_info(&block.uncompress(vec![]));
+    let uncompressed_block = block.uncompress(vec![]);
+    let expected = get_block_info(&uncompressed_block, block_gas_limit);
     assert_eq!(expected, actual);
 }
 
