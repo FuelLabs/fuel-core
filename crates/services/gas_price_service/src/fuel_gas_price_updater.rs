@@ -28,11 +28,16 @@ pub enum Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
+// Info required about the l2 block for the gas price algorithm
 #[derive(Debug, Clone)]
 pub struct BlockInfo {
+    // Block height
     pub height: u32,
+    // Fullness of block gas usage vs max block gas
     pub fullness: (u64, u64),
+    // Block size in bytes
     pub block_bytes: u64,
+    // Gas price of the block
     pub gas_price: u64,
 }
 #[async_trait::async_trait]
