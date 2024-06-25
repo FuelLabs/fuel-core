@@ -5,7 +5,17 @@ use fuel_core::database::Database;
 use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    fuel_tx::ConsensusParameters,
+    fuel_tx::{
+        consensus_parameters::{
+            ConsensusParametersV1,
+            FeeParameters,
+            FeeParametersV1,
+        },
+        ConsensusParameters,
+        Mint,
+        UniqueIdentifier,
+    },
+    fuel_types::ChainId,
 };
 use futures::future::{
     maybe_done,
@@ -30,7 +40,11 @@ fn l2_source_with_frequency(
 }
 
 fn params() -> ConsensusParameters {
-    ConsensusParameters::default()
+    let mut params = ConsensusParametersV1::default();
+    let mut fee_params = FeeParametersV1::default();
+    fee_params.gas_price_factor = 100u64.into();
+    params.fee_params = FeeParameters::V1(fee_params);
+    ConsensusParameters::V1(params)
 }
 
 #[tokio::test]
@@ -39,8 +53,7 @@ async fn get_l2_block__gets_expected_value() {
     let block = CompressedBlock::default();
     let block_height = 1u32.into();
     let params = params();
-    let block_gas_limit = params.block_gas_limit();
-    let block_info = get_block_info(&block.clone().uncompress(vec![]), block_gas_limit);
+    let block_info = get_block_info(&block.clone().uncompress(vec![]), &params);
     let mut database = Database::default();
     let version = block.header().consensus_parameters_version;
     database
@@ -95,26 +108,37 @@ async fn get_l2_block__waits_for_block() {
     // then
     let actual = fut_l2_block.await.unwrap();
     let uncompressed_block = block.uncompress(vec![]);
-    let block_gas_limit = params.block_gas_limit();
-    let expected = get_block_info(&uncompressed_block, block_gas_limit);
+    let expected = get_block_info(&uncompressed_block, &params);
     assert_eq!(expected, actual);
 }
 
-// fn build_block() -> CompressedBlock {
-//     todo!()
-// }
+fn build_block(chain_id: &ChainId) -> (CompressedBlock, Transaction) {
+    let mut inner_mint = Mint::default();
+    *inner_mint.gas_price_mut() = 500;
+    *inner_mint.mint_amount_mut() = 1000;
+
+    let tx = Transaction::Mint(inner_mint);
+    let tx_id = tx.id(&chain_id);
+    let mut block = CompressedBlock::default();
+    block.transactions_mut().push(tx_id);
+    (block, tx)
+}
 
 #[tokio::test]
 async fn get_l2_block__calculates_fullness_correctly() {
     // given
-    let block = CompressedBlock::default();
+    let params = params();
+    let (block, mint) = build_block(&params.chain_id());
     let block_height = 1u32.into();
     let mut database = Database::default();
-    let params = params();
     let version = block.header().consensus_parameters_version;
     database
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(&version, &params)
+        .unwrap();
+    database
+        .storage_as_mut::<Transactions>()
+        .insert(&mint.id(&params.chain_id()), &mint)
         .unwrap();
     database
         .storage_as_mut::<FuelBlocks>()
@@ -129,7 +153,16 @@ async fn get_l2_block__calculates_fullness_correctly() {
     // then
     let actual = result.fullness;
     let block_gas_limit = params.block_gas_limit();
-    let used = 1_000;
+    let gas_price_factor = params.fee_params().gas_price_factor();
+    let (fee, gas_price) = if let Transaction::Mint(inner_mint) = &mint {
+        let fee = inner_mint.mint_amount();
+        let gas_price = inner_mint.gas_price();
+        (fee, gas_price)
+    } else {
+        panic!("Expected mint transaction")
+    };
+
+    let used = fee * gas_price_factor / gas_price;
     let expected = (used, block_gas_limit);
     assert_eq!(expected, actual);
 }
