@@ -42,7 +42,10 @@ impl FakeMetadata {
 
 #[async_trait::async_trait]
 impl MetadataStorage for FakeMetadata {
-    async fn get_metadata(&self) -> Result<Option<UpdaterMetadata>> {
+    async fn get_metadata(
+        &self,
+        _block_height: &BlockHeight,
+    ) -> Result<Option<UpdaterMetadata>> {
         Ok(self.inner.lock().await.clone())
     }
 

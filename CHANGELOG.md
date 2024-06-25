@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [1972](https://github.com/FuelLabs/fuel-core/pull/1972): Implement `AlgorithmUpdater` for `GasPriceService`
 - [#1948](https://github.com/FuelLabs/fuel-core/pull/1948): Add new `AlgorithmV1` and `AlgorithmUpdaterV1` for the gas price. Include tools for analysis
 
+### Breaking
+- [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
+
 ## [Version 0.30.0]
 
 ### Added
