@@ -30,14 +30,22 @@ pub struct FuelL2BlockSource<Database> {
     database: Database,
 }
 
-// TODO: use real values for all the fields
-fn get_block_info(block: &Block<Transaction>, _block_gas_limit: u64) -> BlockInfo {
+fn get_block_info(block: &Block<Transaction>, block_gas_limit: u64) -> BlockInfo {
+    let used_gas = block
+        .transactions()
+        .iter()
+        .map(|tx| transaction_max_gas(tx))
+        .sum();
     BlockInfo {
         height: (*block.header().height()).into(),
-        fullness: (0, 0),
+        fullness: (used_gas, block_gas_limit),
         block_bytes: 0,
         gas_price: 0,
     }
+}
+
+fn transaction_max_gas(_tx: &Transaction) -> u64 {
+    todo!()
 }
 
 impl<Database> FuelL2BlockSource<Database>

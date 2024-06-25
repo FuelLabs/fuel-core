@@ -38,10 +38,10 @@ async fn get_l2_block__gets_expected_value() {
     // given
     let block = CompressedBlock::default();
     let block_height = 1u32.into();
-    let block_gas_limit = 100;
+    let params = params();
+    let block_gas_limit = params.block_gas_limit();
     let block_info = get_block_info(&block.clone().uncompress(vec![]), block_gas_limit);
     let mut database = Database::default();
-    let params = params();
     let version = block.header().consensus_parameters_version;
     database
         .storage_as_mut::<ConsensusParametersVersions>()
@@ -68,7 +68,6 @@ async fn get_l2_block__waits_for_block() {
     let block = CompressedBlock::default();
     let mut database = Database::default();
     let frequency = Duration::from_millis(10);
-    let block_gas_limit = 100;
     let source = l2_source_with_frequency(database.clone(), frequency);
     let params = params();
     let version = block.header().consensus_parameters_version;
@@ -76,6 +75,7 @@ async fn get_l2_block__waits_for_block() {
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(&version, &params)
         .unwrap();
+
     // when
     let mut fut_l2_block = source.get_l2_block(block_height);
     for _ in 0..10 {
@@ -95,6 +95,7 @@ async fn get_l2_block__waits_for_block() {
     // then
     let actual = fut_l2_block.await.unwrap();
     let uncompressed_block = block.uncompress(vec![]);
+    let block_gas_limit = params.block_gas_limit();
     let expected = get_block_info(&uncompressed_block, block_gas_limit);
     assert_eq!(expected, actual);
 }
@@ -105,21 +106,32 @@ async fn get_l2_block__waits_for_block() {
 
 #[tokio::test]
 async fn get_l2_block__calculates_fullness_correctly() {
-    // // given
-    // let block_height = 1u32.into();
-    // let block = build_block();
-    //
-    // // when
-    // let actual =
-    //
-    // // then
-    // let expected = BlockInfo {
-    //     height: 0,
-    //     fullness: (0, 0),
-    //     block_bytes: 0,
-    //     gas_price: 0,
-    // };
-    //
+    // given
+    let block = CompressedBlock::default();
+    let block_height = 1u32.into();
+    let mut database = Database::default();
+    let params = params();
+    let version = block.header().consensus_parameters_version;
+    database
+        .storage_as_mut::<ConsensusParametersVersions>()
+        .insert(&version, &params)
+        .unwrap();
+    database
+        .storage_as_mut::<FuelBlocks>()
+        .insert(&block_height, &block)
+        .unwrap();
+
+    let source = l2_source(database);
+
+    // when
+    let result = source.get_l2_block(block_height).await.unwrap();
+
+    // then
+    let actual = result.fullness;
+    let block_gas_limit = params.block_gas_limit();
+    let used = 1_000;
+    let expected = (used, block_gas_limit);
+    assert_eq!(expected, actual);
 }
 
 #[tokio::test]
