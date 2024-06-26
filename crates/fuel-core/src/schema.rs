@@ -213,9 +213,9 @@ impl<'a> ReadViewProvider for Context<'a> {
     fn read_view(&self) -> StorageResult<Cow<'a, ReadView>> {
         let operation_type = self.query_env.operation.node.ty;
 
-        // Sometimes, during mutable queries the resolvers
+        // Sometimes, during mutable queries or subscription the resolvers
         // need access to an updated view of the database.
-        if operation_type == OperationType::Mutation {
+        if operation_type != OperationType::Query {
             let database: &ReadDatabase = self.data_unchecked();
             database.view().map(Cow::Owned)
         } else {

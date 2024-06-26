@@ -348,7 +348,6 @@ impl BlockMutation {
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
-        let query = ctx.read_view()?;
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
@@ -362,7 +361,7 @@ impl BlockMutation {
             .manually_produce_blocks(start_time, blocks_to_produce)
             .await?;
 
-        query
+        ctx.read_view()?
             .latest_block_height()
             .map(Into::into)
             .map_err(Into::into)

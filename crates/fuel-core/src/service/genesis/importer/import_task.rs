@@ -205,6 +205,7 @@ mod tests {
         },
         state::{
             in_memory::memory_store::MemoryStore,
+            IterableView,
             TransactableStorage,
         },
     };
@@ -559,6 +560,10 @@ mod tests {
             _: Option<BlockHeight>,
             _: Changes,
         ) -> StorageResult<()> {
+            Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
+        fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }

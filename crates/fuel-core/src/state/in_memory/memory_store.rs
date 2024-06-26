@@ -4,7 +4,10 @@ use crate::{
         DatabaseDescription,
     },
     state::{
+        in_memory::memory_view::MemoryView,
+        iterable_view::IterableViewWrapper,
         IterDirection,
+        IterableView,
         TransactableStorage,
     },
 };
@@ -31,7 +34,11 @@ use fuel_core_storage::{
 use std::{
     collections::BTreeMap,
     fmt::Debug,
-    sync::Mutex,
+    ops::Deref,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 #[derive(Debug)]
@@ -62,6 +69,23 @@ impl<Description> MemoryStore<Description>
 where
     Description: DatabaseDescription,
 {
+    fn create_view(&self) -> MemoryView<Description> {
+        // Lock all tables at the same time to have consistent view.
+        let locks = self
+            .inner
+            .iter()
+            .map(|lock| lock.lock().expect("Poisoned lock"))
+            .collect::<Vec<_>>();
+        let inner = locks
+            .iter()
+            .map(|btree| btree.deref().clone())
+            .collect::<Vec<_>>();
+        MemoryView {
+            inner,
+            _marker: Default::default(),
+        }
+    }
+
     pub fn iter_all(
         &self,
         column: Description::Column,
@@ -135,6 +159,13 @@ where
             }
         }
         Ok(())
+    }
+
+    fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
+        let view = self.create_view();
+        Ok(IterableView::from_storage(IterableViewWrapper::new(
+            Arc::new(view),
+        )))
     }
 }
 
