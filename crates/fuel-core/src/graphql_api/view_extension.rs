@@ -40,11 +40,12 @@ impl Extension for ViewExtension {
     ) -> ServerResult<Request> {
         let database: &ReadDatabase = ctx.data_unchecked();
         let view = database.view().map_err(|e| {
+            let (line, column) = (line!(), column!());
             ServerError::new(
                 e.to_string(),
                 Some(Pos {
-                    line: line!() as usize,
-                    column: column!() as usize,
+                    line: line as usize,
+                    column: column as usize,
                 }),
             )
         })?;
