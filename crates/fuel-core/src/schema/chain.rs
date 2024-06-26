@@ -325,9 +325,10 @@ impl FeeParameters {
 impl GasCosts {
     async fn version(&self) -> GasCostsVersion {
         match self.0.deref() {
-            GasCostsValues::V1(_) | GasCostsValues::V2(_) | GasCostsValues::V3(_) => {
-                GasCostsVersion::V1
-            }
+            GasCostsValues::V1(_)
+            | GasCostsValues::V2(_)
+            | GasCostsValues::V3(_)
+            | GasCostsValues::V4(_) => GasCostsVersion::V1,
         }
     }
 

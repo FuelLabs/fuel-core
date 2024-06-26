@@ -6,6 +6,7 @@ use crate::client::schema::{
     },
     Address,
     AssetId,
+    BlobId,
     Bytes32,
     ConnectionArgs,
     ContractId,
@@ -26,12 +27,13 @@ use core::convert::{
     TryInto,
 };
 use fuel_core_types::{
-    fuel_tx,
     fuel_tx::{
+        self,
         field::ReceiptsRoot,
         input,
         output,
         policies::PolicyType,
+        BlobBody,
         StorageSlot,
         UploadBody,
     },
@@ -127,6 +129,11 @@ pub struct Transaction {
     /// The result of a `is_upload()` helper function is stored here.
     /// It is not an original field of the `Transaction`.
     pub is_upload: bool,
+    /// It is `true` for `Transaction::Blob`.
+    ///
+    /// The result of a `is_blob()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
+    pub is_blob: bool,
     /// The field of the `Transaction` type.
     pub outputs: Vec<Output>,
     /// The field of the `Transaction::Mint`.
@@ -165,6 +172,8 @@ pub struct Transaction {
     pub proof_set: Option<Vec<Bytes32>>,
     /// The field of the `Transaction::Upgrade`.
     pub upgrade_purpose: Option<UpgradePurpose>,
+    /// The field of the `Transaction::Blob`.
+    pub blob_id: Option<BlobId>,
 }
 
 impl TryFrom<Transaction> for fuel_tx::Transaction {
@@ -387,6 +396,43 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .collect(),
             );
             tx.into()
+        } else if tx.is_blob {
+            let tx = fuel_tx::Transaction::blob(
+                BlobBody {
+                    id: tx
+                        .blob_id
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("blob_id".to_string())
+                        })?
+                        .into(),
+                    witness_index: tx
+                        .bytecode_witness_index
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("witness_index".to_string())
+                        })?
+                        .into(),
+                },
+                tx.policies
+                    .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
+                    .into(),
+                tx.inputs
+                    .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                tx.outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                tx.witnesses
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("witnesses".to_string())
+                    })?
+                    .into_iter()
+                    .map(|w| w.0 .0.into())
+                    .collect(),
+            );
+            tx.into()
         } else {
             return Err(ConversionError::UnknownVariant("Transaction"));
         };
@@ -401,6 +447,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
             fuel_tx::Transaction::Mint(_) => {}
             fuel_tx::Transaction::Upgrade(_) => {}
             fuel_tx::Transaction::Upload(_) => {}
+            fuel_tx::Transaction::Blob(_) => {}
         };
 
         Ok(tx)
