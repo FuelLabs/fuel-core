@@ -25,10 +25,7 @@ use fuel_core_storage::tables::{
     ContractsState,
     Messages,
 };
-use fuel_core_storage::{
-    transactional::AtomicView,
-    Result as StorageResult,
-};
+use fuel_core_storage::Result as StorageResult;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -159,6 +156,7 @@ impl CombinedDatabase {
     pub fn read_state_config(&self) -> StorageResult<StateConfig> {
         use fuel_core_chain_config::AddTable;
         use fuel_core_producer::ports::BlockProducerDatabase;
+        use fuel_core_storage::transactional::AtomicView;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
 
