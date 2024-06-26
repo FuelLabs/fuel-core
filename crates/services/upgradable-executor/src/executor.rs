@@ -27,7 +27,6 @@ use fuel_core_types::{
             StateTransitionBytecodeVersion,
             LATEST_STATE_TRANSITION_VERSION,
         },
-        primitives::DaBlockHeight,
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -212,7 +211,7 @@ where
     S: HistoricalView<Height = BlockHeight> + Modifiable,
     S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
     S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
-    R: AtomicView<Height = DaBlockHeight>,
+    R: AtomicView,
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     #[cfg(any(test, feature = "test-helpers"))]
@@ -245,7 +244,7 @@ where
     S: HistoricalView<Height = BlockHeight>,
     S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
     S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
-    R: AtomicView<Height = DaBlockHeight>,
+    R: AtomicView,
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Executes the block and returns the result of the execution with storage changes.
@@ -293,7 +292,7 @@ where
     S: HistoricalView<Height = BlockHeight>,
     S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
     S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
-    R: AtomicView<Height = DaBlockHeight>,
+    R: AtomicView,
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
@@ -666,7 +665,10 @@ mod test {
                 PartialBlockHeader,
                 StateTransitionBytecodeVersion,
             },
-            primitives::Empty,
+            primitives::{
+                DaBlockHeight,
+                Empty,
+            },
         },
         fuel_tx::{
             AssetId,
@@ -686,11 +688,6 @@ mod test {
 
     impl AtomicView for Storage {
         type LatestView = InMemoryStorage<Column>;
-        type Height = BlockHeight;
-
-        fn latest_height(&self) -> Option<Self::Height> {
-            None
-        }
 
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(self.0.clone())
@@ -698,7 +695,12 @@ mod test {
     }
 
     impl HistoricalView for Storage {
+        type Height = BlockHeight;
         type ViewAtHeight = Self::LatestView;
+
+        fn latest_height(&self) -> Option<Self::Height> {
+            None
+        }
 
         fn view_at(&self, _: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
             self.latest_view()
@@ -734,11 +736,6 @@ mod test {
 
     impl AtomicView for DisabledRelayer {
         type LatestView = Self;
-        type Height = DaBlockHeight;
-
-        fn latest_height(&self) -> Option<Self::Height> {
-            None
-        }
 
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(*self)

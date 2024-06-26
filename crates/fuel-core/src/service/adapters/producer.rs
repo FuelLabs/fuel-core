@@ -195,9 +195,12 @@ fn get_gas_cost_for_height(
     Ok(cost)
 }
 
-impl fuel_core_producer::ports::BlockProducerDatabase
-    for IterableView<ColumnType<OnChain>>
-{
+impl fuel_core_producer::ports::BlockProducerDatabase for IterableView<ColumnType<OnChain>> {
+    fn latest_height(&self) -> Option<BlockHeight> {
+        use fuel_core_storage::transactional::HistoricalView;
+        HistoricalView::latest_height(self)
+    }
+
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         self.storage::<FuelBlocks>()
             .get(height)?

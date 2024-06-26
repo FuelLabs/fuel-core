@@ -29,6 +29,9 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Send + Sync {
+    /// Returns the latest block height.
+    fn latest_height(&self) -> Option<BlockHeight>;
+
     /// Gets the committed block at the `height`.
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
 

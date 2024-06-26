@@ -246,12 +246,6 @@ where
 {
     type LatestView = IterableView<ColumnType<Description>>;
 
-    type Height = Description::Height;
-
-    fn latest_height(&self) -> Option<Self::Height> {
-        *self.stage.height.lock()
-    }
-
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
         Ok(
@@ -265,7 +259,12 @@ impl<Description> HistoricalView for Database<Description>
 where
     Description: DatabaseDescription,
 {
+    type Height = Description::Height;
     type ViewAtHeight = KeyValueView<ColumnType<Description>>;
+
+    fn latest_height(&self) -> Option<Self::Height> {
+        *self.stage.height.lock()
+    }
 
     fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
         let lock = self.stage.height.lock();
@@ -525,7 +524,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(AtomicView::latest_height(&database), None);
+            assert_eq!(HistoricalView::latest_height(&database), None);
         }
 
         #[test]
@@ -685,7 +684,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(AtomicView::latest_height(&database), None);
+            assert_eq!(HistoricalView::latest_height(&database), None);
         }
 
         #[test]
@@ -851,7 +850,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(AtomicView::latest_height(&database), None);
+            assert_eq!(HistoricalView::latest_height(&database), None);
         }
 
         #[test]

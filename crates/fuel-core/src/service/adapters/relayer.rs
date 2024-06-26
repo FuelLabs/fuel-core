@@ -4,7 +4,7 @@ use crate::database::{
 };
 use fuel_core_relayer::ports::Transactional;
 use fuel_core_storage::transactional::{
-    AtomicView,
+    HistoricalView,
     IntoTransaction,
     StorageTransaction,
 };
@@ -18,6 +18,6 @@ impl Transactional for Database<Relayer> {
     }
 
     fn latest_da_height(&self) -> Option<DaBlockHeight> {
-        AtomicView::latest_height(self)
+        HistoricalView::latest_height(self)
     }
 }
