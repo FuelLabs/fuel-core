@@ -1,5 +1,5 @@
 use crate::{
-    database::database_description::on_chain::OnChain,
+    database::OnChainIterableView,
     service::{
         adapters::{
             BlockProducerAdapter,
@@ -11,10 +11,6 @@ use crate::{
             TxPoolAdapter,
         },
         sub_services::BlockProducerService,
-    },
-    state::{
-        ColumnType,
-        IterableView,
     },
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
@@ -195,10 +191,9 @@ fn get_gas_cost_for_height(
     Ok(cost)
 }
 
-impl fuel_core_producer::ports::BlockProducerDatabase for IterableView<ColumnType<OnChain>> {
+impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableView {
     fn latest_height(&self) -> Option<BlockHeight> {
-        use fuel_core_storage::transactional::HistoricalView;
-        HistoricalView::latest_height(self)
+        self.latest_height().ok()
     }
 
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {

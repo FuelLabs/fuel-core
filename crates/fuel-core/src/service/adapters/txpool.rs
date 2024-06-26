@@ -1,5 +1,5 @@
 use crate::{
-    database::database_description::on_chain::OnChain,
+    database::OnChainIterableView,
     service::{
         adapters::{
             BlockImporterAdapter,
@@ -9,10 +9,6 @@ use crate::{
             StaticGasPrice,
         },
         vm_pool::MemoryFromPool,
-    },
-    state::{
-        ColumnType,
-        IterableView,
     },
 };
 use fuel_core_services::stream::BoxStream;
@@ -127,7 +123,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 }
 
-impl fuel_core_txpool::ports::TxPoolDb for IterableView<ColumnType<OnChain>> {
+impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableView {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)

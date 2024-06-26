@@ -37,7 +37,6 @@ use fuel_core_storage::{
         IteratorOverTable,
     },
     not_found,
-    structured_storage::StructuredStorage,
     tables::FuelBlocks,
     transactional::{
         AtomicView,
@@ -112,10 +111,13 @@ where
 
 pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
     GenericDatabase<DataSource<Description, Stage>>;
+pub type OnChainIterableView = IterableView<ColumnType<OnChain>>;
+pub type OffChainIterableView = IterableView<ColumnType<OffChain>>;
+pub type ReyalerIterableView = IterableView<ColumnType<Relayer>>;
 
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
-impl IterableView<ColumnType<OnChain>> {
+impl OnChainIterableView {
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
         self.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
             .next()
@@ -155,7 +157,7 @@ where
     Description: DatabaseDescription,
 {
     pub fn new(data_source: DataSourceType<Description>) -> Self {
-        StructuredStorage::new(DataSource::new(data_source, GenesisStage)).into()
+        GenesisDatabase::from_storage(DataSource::new(data_source, GenesisStage))
     }
 }
 
@@ -166,13 +168,12 @@ where
         StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
     pub fn new(data_source: DataSourceType<Description>) -> Self {
-        let mut database: Self = StructuredStorage::new(DataSource::new(
+        let mut database = Self::from_storage(DataSource::new(
             data_source,
             RegularStage {
                 height: SharedMutex::new(None),
             },
-        ))
-        .into();
+        ));
         let height = database
             .latest_height()
             .expect("Failed to get latest height during creation of the database");
@@ -209,14 +210,14 @@ where
 {
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
-        StructuredStorage::new(DataSource::new(data, Stage::default())).into()
+        Self::from_storage(DataSource::new(data, Stage::default()))
     }
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp() -> Self {
         let db = RocksDb::<Description>::default_open_temp(None).unwrap();
         let data = Arc::new(db);
-        StructuredStorage::new(DataSource::new(data, Stage::default())).into()
+        Self::from_storage(DataSource::new(data, Stage::default()))
     }
 }
 
@@ -248,10 +249,9 @@ where
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        Ok(
-            StructuredStorage::new(IterableViewWrapper::new(Arc::new(self.clone())))
-                .into(),
-        )
+        Ok(IterableView::from_storage(IterableViewWrapper::new(
+            Arc::new(self.clone()),
+        )))
     }
 }
 
@@ -275,10 +275,9 @@ where
             }
         }
         // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
-        Ok(
-            StructuredStorage::new(KeyValueViewWrapper::new(Arc::new(self.clone())))
-                .into(),
-        )
+        Ok(KeyValueView::from_storage(KeyValueViewWrapper::new(
+            Arc::new(self.clone()),
+        )))
     }
 }
 

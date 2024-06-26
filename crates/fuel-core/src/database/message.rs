@@ -1,16 +1,12 @@
 use crate::{
-    database::database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
+    database::{
+        OffChainIterableView,
+        OnChainIterableView,
     },
     fuel_core_graphql_api::storage::messages::{
         OwnedMessageIds,
         OwnedMessageKey,
         SpentMessages,
-    },
-    state::{
-        ColumnType,
-        IterableView,
     },
 };
 use fuel_core_chain_config::TableEntry;
@@ -31,7 +27,7 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-impl IterableView<ColumnType<OffChain>> {
+impl OffChainIterableView {
     pub fn owned_message_ids(
         &self,
         owner: &Address,
@@ -53,7 +49,7 @@ impl IterableView<ColumnType<OffChain>> {
     }
 }
 
-impl IterableView<ColumnType<OnChain>> {
+impl OnChainIterableView {
     pub fn all_messages(
         &self,
         start: Option<Nonce>,

@@ -5,7 +5,7 @@ use super::{
     StaticGasPrice,
 };
 use crate::{
-    database::database_description::on_chain::OnChain,
+    database::OnChainIterableView,
     fuel_core_graphql_api::ports::{
         worker,
         BlockProducerPort,
@@ -18,10 +18,6 @@ use crate::{
     service::adapters::{
         P2PAdapter,
         TxPoolAdapter,
-    },
-    state::{
-        ColumnType,
-        IterableView,
     },
 };
 use async_trait::async_trait;
@@ -92,7 +88,7 @@ impl TxPoolPort for TxPoolAdapter {
     }
 }
 
-impl DatabaseMessageProof for IterableView<ColumnType<OnChain>> {
+impl DatabaseMessageProof for OnChainIterableView {
     fn block_history_proof(
         &self,
         message_block_height: &BlockHeight,

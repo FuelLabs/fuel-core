@@ -1,14 +1,10 @@
 use crate::{
-    database::database_description::off_chain::OffChain,
+    database::OffChainIterableView,
     fuel_core_graphql_api::storage::transactions::{
         OwnedTransactionIndexCursor,
         OwnedTransactionIndexKey,
         OwnedTransactions,
         TransactionStatuses,
-    },
-    state::{
-        ColumnType,
-        IterableView,
     },
 };
 use fuel_core_storage::{
@@ -42,7 +38,7 @@ impl crate::database::Database {
     }
 }
 
-impl IterableView<ColumnType<OffChain>> {
+impl OffChainIterableView {
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
     /// allows for efficient lookup of transaction ids associated with an address, sorted by
     /// block age and ordering within a block. The cursor tracks the `[block height + tx idx]` for

@@ -28,14 +28,14 @@ pub struct GenericDatabase<Storage> {
 }
 
 impl<Storage> GenericDatabase<Storage> {
+    pub fn from_storage(storage: Storage) -> Self {
+        Self {
+            storage: StructuredStorage::new(storage),
+        }
+    }
+
     pub fn into_inner(self) -> Storage {
         self.storage.into_inner()
-    }
-}
-
-impl<Storage> From<StructuredStorage<Storage>> for GenericDatabase<Storage> {
-    fn from(value: StructuredStorage<Storage>) -> Self {
-        Self { storage: value }
     }
 }
 

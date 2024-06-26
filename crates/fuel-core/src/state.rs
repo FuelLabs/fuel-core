@@ -20,7 +20,6 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    structured_storage::StructuredStorage,
     transactional::Changes,
     Result as StorageResult,
 };
@@ -52,7 +51,8 @@ where
     /// Downgrades the `IterableView` into the `KeyValueView`.
     pub fn into_key_value_view(self) -> KeyValueView<Column> {
         let iterable = self.into_inner();
-        StructuredStorage::new(KeyValueViewWrapper::new(Arc::new(iterable))).into()
+        let storage = KeyValueViewWrapper::new(Arc::new(iterable));
+        KeyValueView::from_storage(storage)
     }
 }
 

@@ -1,10 +1,6 @@
 use crate::{
-    database::database_description::relayer::Relayer,
+    database::ReyalerIterableView,
     service::adapters::TransactionsSource,
-    state::{
-        ColumnType,
-        IterableView,
-    },
 };
 use fuel_core_executor::ports::MaybeCheckedTransaction;
 use fuel_core_types::{
@@ -22,7 +18,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     }
 }
 
-impl fuel_core_executor::ports::RelayerPort for IterableView<ColumnType<Relayer>> {
+impl fuel_core_executor::ports::RelayerPort for ReyalerIterableView {
     fn enabled(&self) -> bool {
         #[cfg(feature = "relayer")]
         {

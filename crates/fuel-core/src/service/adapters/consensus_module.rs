@@ -1,15 +1,11 @@
 use crate::{
     database::{
-        database_description::on_chain::OnChain,
         Database,
+        OnChainIterableView,
     },
     service::adapters::{
         MaybeRelayerAdapter,
         VerifierAdapter,
-    },
-    state::{
-        ColumnType,
-        IterableView,
     },
 };
 use fuel_core_chain_config::ConsensusConfig;
@@ -52,7 +48,7 @@ impl VerifierAdapter {
     }
 }
 
-impl fuel_core_poa::ports::Database for IterableView<ColumnType<OnChain>> {
+impl fuel_core_poa::ports::Database for OnChainIterableView {
     fn block_header(&self, height: &BlockHeight) -> StorageResult<BlockHeader> {
         Ok(self.get_block(height)?.header().clone())
     }
