@@ -2,7 +2,13 @@ use self::adapters::BlockImporterAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
-    service::adapters::PoAAdapter,
+    service::{
+        adapters::{
+            ExecutorAdapter,
+            PoAAdapter,
+        },
+        sub_services::TxPoolSharedState,
+    },
 };
 use fuel_core_poa::ports::BlockImporter;
 use fuel_core_services::{
@@ -12,13 +18,12 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use fuel_core_storage::transactional::AtomicView;
+use fuel_core_storage::{
+    transactional::AtomicView,
+    IsNotFound,
+};
 use std::net::SocketAddr;
 
-use crate::service::{
-    adapters::ExecutorAdapter,
-    sub_services::TxPoolSharedState,
-};
 pub use config::{
     Config,
     DbType,
@@ -26,7 +31,6 @@ pub use config::{
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
-use fuel_core_storage::IsNotFound;
 
 pub mod adapters;
 pub mod config;

@@ -83,6 +83,7 @@ pub mod message;
 pub mod metadata;
 pub mod sealed_block;
 pub mod state;
+#[cfg(feature = "test-helpers")]
 pub mod storage;
 pub mod transactions;
 
