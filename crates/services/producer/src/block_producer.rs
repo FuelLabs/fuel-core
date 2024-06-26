@@ -91,8 +91,8 @@ pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusP
 impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
-    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
-    ViewProvider::View: BlockProducerDatabase,
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
 {
@@ -165,8 +165,8 @@ where
 impl<ViewProvider, TxPool, Executor, TxSource, GasPriceProvider, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
-    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
-    ViewProvider::View: BlockProducerDatabase,
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::BlockProducer<TxSource> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
@@ -188,8 +188,8 @@ where
 impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
-    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
-    ViewProvider::View: BlockProducerDatabase,
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
     Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
@@ -209,8 +209,8 @@ where
 impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
-    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
-    ViewProvider::View: BlockProducerDatabase,
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
     Executor: ports::DryRunner + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
@@ -226,9 +226,9 @@ where
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+        let view = self.view_provider.latest_view()?;
         let height = height.unwrap_or_else(|| {
-            self.view_provider
-                .latest_height()
+            view.latest_height()
                 .unwrap_or_default()
                 .succ()
                 .expect("It is impossible to overflow the current block height")
@@ -283,8 +283,8 @@ pub const NO_NEW_DA_HEIGHT_FOUND: &str = "No new da_height found";
 impl<ViewProvider, TxPool, Executor, GP, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GP, ConsensusProvider>
 where
-    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
-    ViewProvider::View: BlockProducerDatabase,
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Create the header for a new block at the provided height
@@ -356,7 +356,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let view = self.view_provider.latest_view();
+        let view = self.view_provider.latest_view()?;
         let previous_block_info = self.previous_block_info(height, &view)?;
         let consensus_parameters_version = view.latest_consensus_parameters_version()?;
         let state_transition_bytecode_version =
@@ -381,10 +381,11 @@ where
     fn previous_block_info(
         &self,
         height: BlockHeight,
-        view: &ViewProvider::View,
+        view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PreviousBlockInfo> {
         let latest_height = self
             .view_provider
+            .latest_view()?
             .latest_height()
             .ok_or(Error::NoGenesisBlock)?;
         // block 0 is reserved for genesis

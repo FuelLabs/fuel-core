@@ -1,16 +1,18 @@
 use crate::{
     fuel_core_graphql_api::{
-        database::ReadView,
         IntoApiResult,
         QUERY_COSTS,
     },
     query::ContractQueryData,
-    schema::scalars::{
-        AssetId,
-        ContractId,
-        HexString,
-        Salt,
-        U64,
+    schema::{
+        scalars::{
+            AssetId,
+            ContractId,
+            HexString,
+            Salt,
+            U64,
+        },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -43,7 +45,7 @@ impl Contract {
 
     #[graphql(complexity = "QUERY_COSTS.bytecode_read")]
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query
             .contract_bytecode(self.0)
             .map(HexString)
@@ -52,7 +54,7 @@ impl Contract {
 
     #[graphql(complexity = "QUERY_COSTS.storage_read")]
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query
             .contract_salt(self.0)
             .map(Into::into)
@@ -71,7 +73,7 @@ impl ContractQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query.contract_id(id.0).into_api_result()
     }
 }
@@ -113,7 +115,7 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<ContractBalance> {
         let contract_id = contract.into();
         let asset_id = asset.into();
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query
             .contract_balance(contract_id, asset_id)
             .into_api_result()
@@ -145,7 +147,7 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
 
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let balances = query

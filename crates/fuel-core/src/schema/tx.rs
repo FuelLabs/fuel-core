@@ -5,7 +5,6 @@ use crate::{
             ConsensusProvider,
             TxPool,
         },
-        database::ReadView,
         ports::OffChainDatabase,
         IntoApiResult,
         QUERY_COSTS,
@@ -25,6 +24,7 @@ use crate::{
             TxPointer,
         },
         tx::types::TransactionStatus,
+        ReadViewProvider,
     },
     service::adapters::SharedMemoryPool,
 };
@@ -94,7 +94,7 @@ impl TxQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
@@ -123,7 +123,7 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(
             after,
             before,
@@ -189,7 +189,7 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
@@ -349,13 +349,13 @@ impl TxStatusSubscription {
     #[graphql(complexity = "QUERY_COSTS.status_change + child_complexity")]
     async fn status_change<'a>(
         &self,
-        ctx: &Context<'a>,
+        ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
         let txpool = ctx.data_unchecked::<TxPool>();
-        let query: &ReadView = ctx.data_unchecked();
         let rx = txpool.tx_update_subscribe(id.into())?;
+        let query = ctx.read_view()?;
 
         Ok(transaction_status_change(
             move |id| match query.tx_status(&id) {

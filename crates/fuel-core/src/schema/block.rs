@@ -26,6 +26,7 @@ use crate::{
             U64,
         },
         tx::types::Transaction,
+        ReadViewProvider,
     },
 };
 use anyhow::anyhow;
@@ -119,7 +120,7 @@ impl Block {
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let height = self.0.header().height();
         Ok(query.consensus(height)?.try_into()?)
     }
@@ -139,7 +140,7 @@ impl Block {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         self.0
             .transactions()
             .iter()
@@ -252,7 +253,7 @@ impl BlockQuery {
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Block>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let height = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
@@ -287,9 +288,13 @@ impl BlockQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<U32, Block, EmptyFields, EmptyFields>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(query, start.map(Into::into), direction))
+            Ok(blocks_query(
+                query.as_ref(),
+                start.map(Into::into),
+                direction,
+            ))
         })
         .await
     }
@@ -326,9 +331,13 @@ impl HeaderQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<U32, Header, EmptyFields, EmptyFields>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(query, start.map(Into::into), direction))
+            Ok(blocks_query(
+                query.as_ref(),
+                start.map(Into::into),
+                direction,
+            ))
         })
         .await
     }
@@ -365,7 +374,7 @@ impl BlockMutation {
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 

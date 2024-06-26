@@ -8,10 +8,10 @@ use super::{
         TransactionId,
         U64,
     },
+    ReadViewProvider,
 };
 use crate::{
     fuel_core_graphql_api::{
-        database::ReadView,
         ports::OffChainDatabase,
         QUERY_COSTS,
     },
@@ -74,7 +74,7 @@ impl MessageQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The Nonce of the message")] nonce: Nonce,
     ) -> async_graphql::Result<Option<Message>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let nonce = nonce.0;
         query.message(&nonce).into_api_result()
     }
@@ -94,7 +94,7 @@ impl MessageQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<HexString, Message, EmptyFields, EmptyFields>>
     {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(
             after,
             before,
@@ -135,7 +135,7 @@ impl MessageQuery {
         commit_block_id: Option<BlockId>,
         commit_block_height: Option<U32>,
     ) -> async_graphql::Result<Option<MessageProof>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let height = match (commit_block_id, commit_block_height) {
             (Some(commit_block_id), None) => {
                 query.block_height(&commit_block_id.0.into())?
@@ -149,7 +149,7 @@ impl MessageQuery {
         };
 
         Ok(crate::query::message_proof(
-            query,
+            query.as_ref(),
             transaction_id.into(),
             nonce.into(),
             height,
@@ -163,8 +163,8 @@ impl MessageQuery {
         ctx: &Context<'_>,
         nonce: Nonce,
     ) -> async_graphql::Result<MessageStatus> {
-        let query: &ReadView = ctx.data_unchecked();
-        let status = crate::query::message_status(query, nonce.into())?;
+        let query = ctx.read_view()?;
+        let status = crate::query::message_status(query.as_ref(), nonce.into())?;
         Ok(status.into())
     }
 }

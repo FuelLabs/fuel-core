@@ -187,10 +187,10 @@ pub fn new_service<OnChain, OffChain>(
     memory_pool: SharedMemoryPool,
 ) -> anyhow::Result<Service>
 where
-    OnChain: AtomicView<Height = BlockHeight> + 'static,
-    OffChain: AtomicView<Height = BlockHeight> + 'static,
-    OnChain::View: OnChainDatabase,
-    OffChain::View: OffChainDatabase,
+    OnChain: AtomicView + 'static,
+    OffChain: AtomicView + 'static,
+    OnChain::LatestView: OnChainDatabase,
+    OffChain::LatestView: OffChainDatabase,
 {
     let network_addr = config.config.addr;
     let combined_read_database =

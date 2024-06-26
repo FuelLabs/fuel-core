@@ -37,6 +37,7 @@ use crate::{
             output,
             upgrade_purpose::UpgradePurpose,
         },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -178,7 +179,7 @@ impl SuccessStatus {
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
@@ -227,7 +228,7 @@ impl FailureStatus {
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
@@ -645,9 +646,9 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query, txpool).map_err(Into::into)
+        get_tx_status(id, query.as_ref(), txpool).map_err(Into::into)
     }
 
     async fn script(&self) -> Option<HexString> {
