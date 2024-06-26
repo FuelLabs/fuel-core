@@ -3,23 +3,23 @@ use crate::{
         random_improve,
         SpendQuery,
     },
-    fuel_core_graphql_api::{
-        database::ReadView,
-        IntoApiResult,
-    },
+    fuel_core_graphql_api::IntoApiResult,
     graphql_api::api_service::ConsensusProvider,
     query::{
         asset_query::AssetSpendTarget,
         CoinQueryData,
     },
-    schema::scalars::{
-        Address,
-        AssetId,
-        Nonce,
-        UtxoId,
-        U16,
-        U32,
-        U64,
+    schema::{
+        scalars::{
+            Address,
+            AssetId,
+            Nonce,
+            UtxoId,
+            U16,
+            U32,
+            U64,
+        },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -152,7 +152,7 @@ impl CoinQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query.coin(utxo_id.0).into_api_result()
     }
 
@@ -166,7 +166,7 @@ impl CoinQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let owner: fuel_tx::Address = filter.owner.into();
             let coins = query
@@ -242,9 +242,9 @@ impl CoinQuery {
         let spend_query =
             SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
 
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
 
-        let coins = random_improve(query, &spend_query)?
+        let coins = random_improve(query.as_ref(), &spend_query)?
             .into_iter()
             .map(|coins| {
                 coins

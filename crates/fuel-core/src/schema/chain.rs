@@ -1,8 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::{
-        api_service::ConsensusProvider,
-        database::ReadView,
-    },
+    fuel_core_graphql_api::api_service::ConsensusProvider,
     graphql_api::Config,
     query::{
         BlockQueryData,
@@ -17,6 +14,7 @@ use crate::{
             U32,
             U64,
         },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -816,20 +814,18 @@ impl ChainInfo {
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
 
         let latest_block = query.latest_block()?.into();
         Ok(latest_block)
     }
 
     async fn da_height(&self, ctx: &Context<'_>) -> U64 {
-        let query: &ReadView = ctx.data_unchecked();
+        let Ok(query) = ctx.read_view() else {
+            return 0.into();
+        };
 
-        let height = query
-            .da_height()
-            .expect("The blockchain always should have genesis block");
-
-        height.0.into()
+        query.da_height().unwrap_or_default().0.into()
     }
 
     async fn consensus_parameters(

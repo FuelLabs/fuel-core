@@ -125,6 +125,7 @@ impl ReadDatabase {
     }
 }
 
+#[derive(Clone)]
 pub struct ReadView {
     genesis_height: BlockHeight,
     on_chain: OnChainView,
