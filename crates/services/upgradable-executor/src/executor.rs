@@ -16,14 +16,17 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Changes,
+        HistoricalView,
         Modifiable,
     },
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        header::StateTransitionBytecodeVersion,
-        primitives::DaBlockHeight,
+        header::{
+            StateTransitionBytecodeVersion,
+            LATEST_STATE_TRANSITION_VERSION,
+        },
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -34,6 +37,7 @@ use fuel_core_types::{
             ExecutionResult,
             Result as ExecutorResult,
             TransactionExecutionStatus,
+            ValidationResult,
         },
         Uncommitted,
     },
@@ -54,10 +58,6 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
-use fuel_core_types::{
-    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
-    services::executor::ValidationResult,
-};
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -206,12 +206,13 @@ impl<S, R> Executor<S, R> {
     }
 }
 
-impl<D, R> Executor<D, R>
+impl<S, R> Executor<S, R>
 where
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort + Send + Sync + 'static,
-    D: AtomicView<Height = BlockHeight> + Modifiable,
-    D::View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S: HistoricalView<Height = BlockHeight> + Modifiable,
+    S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    R: AtomicView,
+    R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
@@ -240,10 +241,11 @@ where
 #[cfg(any(test, feature = "test-helpers"))]
 impl<S, R> Executor<S, R>
 where
-    S: AtomicView<Height = BlockHeight>,
-    S::View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort + Send + Sync + 'static,
+    S: HistoricalView<Height = BlockHeight>,
+    S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    R: AtomicView,
+    R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Executes the block and returns the result of the execution with storage changes.
     pub fn produce_without_commit(
@@ -287,10 +289,11 @@ where
 
 impl<S, R> Executor<S, R>
 where
-    S: AtomicView,
-    S::View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort + Send + Sync + 'static,
+    S: HistoricalView<Height = BlockHeight>,
+    S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    R: AtomicView,
+    R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
     pub fn produce_without_commit_with_source<TxSource>(
@@ -479,13 +482,24 @@ where
             gas_price,
         };
 
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
+        let previous_block_height = block.header_to_produce.height().pred();
 
-        let instance_without_input = crate::instance::Instance::new(&self.engine)
-            .add_source(source)?
-            .add_storage(storage)?
-            .add_relayer(relayer)?;
+        let instance_without_input =
+            crate::instance::Instance::new(&self.engine).add_source(source)?;
+
+        let instance_without_input = if let Some(previous_block_height) =
+            previous_block_height
+        {
+            let storage = self.storage_view_provider.view_at(&previous_block_height)?;
+            instance_without_input.add_storage(storage)?
+        } else {
+            let storage = self.storage_view_provider.latest_view()?;
+            instance_without_input.add_storage(storage)?
+        };
+
+        let relayer = self.relayer_view_provider.latest_view()?;
+        let instance_without_input = instance_without_input.add_relayer(relayer)?;
+
         let instance = if dry_run {
             instance_without_input.add_dry_run_input_data(block, options)?
         } else {
@@ -509,12 +523,20 @@ where
         self.trace_block_version_warning(
             block.header().state_transition_bytecode_version,
         );
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
+        let previous_block_height = block.header().height().pred();
 
-        let instance = crate::instance::Instance::new(&self.engine)
-            .no_source()?
-            .add_storage(storage)?
+        let instance = crate::instance::Instance::new(&self.engine).no_source()?;
+
+        let instance = if let Some(previous_block_height) = previous_block_height {
+            let storage = self.storage_view_provider.view_at(&previous_block_height)?;
+            instance.add_storage(storage)?
+        } else {
+            let storage = self.storage_view_provider.latest_view()?;
+            instance.add_storage(storage)?
+        };
+
+        let relayer = self.relayer_view_provider.latest_view()?;
+        let instance = instance
             .add_relayer(relayer)?
             .add_validation_input_data(block, options)?;
 
@@ -536,8 +558,18 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let instance = self.new_native_executor_instance(options);
-        instance.produce_without_commit(block, dry_run)
+        let previous_block_height = block.header_to_produce.height().pred();
+        let relayer = self.relayer_view_provider.latest_view()?;
+
+        if let Some(previous_block_height) = previous_block_height {
+            let database = self.storage_view_provider.view_at(&previous_block_height)?;
+            ExecutionInstance::new(relayer, database, options)
+                .produce_without_commit(block, dry_run)
+        } else {
+            let database = self.storage_view_provider.latest_view()?;
+            ExecutionInstance::new(relayer, database, options)
+                .produce_without_commit(block, dry_run)
+        }
     }
 
     fn native_validate_inner(
@@ -545,21 +577,17 @@ where
         block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
-        let instance = self.new_native_executor_instance(options);
-        instance.validate_without_commit(block)
-    }
+        let previous_block_height = block.header().height().pred();
+        let relayer = self.relayer_view_provider.latest_view()?;
 
-    fn new_native_executor_instance(
-        &self,
-        options: ExecutionOptions,
-    ) -> ExecutionInstance<<R as AtomicView>::View, <S as AtomicView>::View> {
-        let relayer = self.relayer_view_provider.latest_view();
-        let storage = self.storage_view_provider.latest_view();
-
-        ExecutionInstance {
-            relayer,
-            database: storage,
-            options,
+        if let Some(previous_block_height) = previous_block_height {
+            let database = self.storage_view_provider.view_at(&previous_block_height)?;
+            ExecutionInstance::new(relayer, database, options)
+                .validate_without_commit(block)
+        } else {
+            let database = self.storage_view_provider.latest_view()?;
+            ExecutionInstance::new(relayer, database, options)
+                .validate_without_commit(block)
         }
     }
 
@@ -578,7 +606,7 @@ where
         }
         drop(guard);
 
-        let view = StructuredStorage::new(self.storage_view_provider.latest_view());
+        let view = StructuredStorage::new(self.storage_view_provider.latest_view()?);
         let bytecode_root = *view
             .storage::<StateTransitionBytecodeVersions>()
             .get(&version)?
@@ -637,7 +665,10 @@ mod test {
                 PartialBlockHeader,
                 StateTransitionBytecodeVersion,
             },
-            primitives::Empty,
+            primitives::{
+                DaBlockHeight,
+                Empty,
+            },
         },
         fuel_tx::{
             AssetId,
@@ -656,19 +687,23 @@ mod test {
     struct Storage(InMemoryStorage<Column>);
 
     impl AtomicView for Storage {
-        type View = InMemoryStorage<Column>;
+        type LatestView = InMemoryStorage<Column>;
+
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.0.clone())
+        }
+    }
+
+    impl HistoricalView for Storage {
         type Height = BlockHeight;
+        type ViewAtHeight = Self::LatestView;
 
         fn latest_height(&self) -> Option<Self::Height> {
             None
         }
 
-        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            self.0.clone()
+        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
+            self.latest_view()
         }
     }
 
@@ -700,19 +735,10 @@ mod test {
     }
 
     impl AtomicView for DisabledRelayer {
-        type View = Self;
-        type Height = DaBlockHeight;
+        type LatestView = Self;
 
-        fn latest_height(&self) -> Option<Self::Height> {
-            None
-        }
-
-        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            *self
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(*self)
         }
     }
 

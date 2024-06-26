@@ -84,6 +84,11 @@ impl<S> StructuredStorage<S> {
     pub fn new(storage: S) -> Self {
         Self { inner: storage }
     }
+
+    /// Returns the inner storage.
+    pub fn into_inner(self) -> S {
+        self.inner
+    }
 }
 
 impl<S> AsRef<S> for StructuredStorage<S> {

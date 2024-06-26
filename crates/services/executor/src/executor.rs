@@ -229,6 +229,14 @@ where
     R: RelayerPort,
     D: KeyValueInspect<Column = Column>,
 {
+    pub fn new(relayer: R, database: D, options: ExecutionOptions) -> Self {
+        Self {
+            relayer,
+            database,
+            options,
+        }
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn produce_without_commit<TxSource>(
         self,
