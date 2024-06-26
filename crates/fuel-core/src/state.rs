@@ -1,4 +1,11 @@
-use crate::database::database_description::DatabaseDescription;
+use crate::{
+    database::database_description::DatabaseDescription,
+    state::{
+        generic_database::GenericDatabase,
+        iterable_view::IterableViewWrapper,
+        key_value_view::KeyValueViewWrapper,
+    },
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -13,6 +20,7 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
+    structured_storage::StructuredStorage,
     transactional::Changes,
     Result as StorageResult,
 };
@@ -21,15 +29,32 @@ use std::{
     sync::Arc,
 };
 
+pub mod data_source;
+pub mod generic_database;
 pub mod in_memory;
+pub mod iterable_view;
+pub mod key_value_view;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
 
-#[allow(type_alias_bounds)]
-pub type DataSource<Description>
+pub type ColumnType<Description> = <Description as DatabaseDescription>::Column;
+
+/// A type extends the `KeyValueView`, allowing iteration over the storage.
+pub type IterableView<Column> = GenericDatabase<IterableViewWrapper<Column>>;
+
+/// The basic view available for the key value storage.
+pub type KeyValueView<Column> = GenericDatabase<KeyValueViewWrapper<Column>>;
+
+impl<Column> IterableView<Column>
 where
-    Description: DatabaseDescription,
-= Arc<dyn TransactableStorage<Description::Height, Column = Description::Column>>;
+    Column: StorageColumn + 'static,
+{
+    /// Downgrades the `IterableView` into the `KeyValueView`.
+    pub fn into_key_value_view(self) -> KeyValueView<Column> {
+        let iterable = self.into_inner();
+        StructuredStorage::new(KeyValueViewWrapper::new(Arc::new(iterable))).into()
+    }
+}
 
 pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
     /// Commits the changes into the storage.

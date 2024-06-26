@@ -1,14 +1,17 @@
 use crate::{
-    database::{
-        database_description::off_chain::OffChain,
-        Database,
+    database::database_description::{
+        off_chain::OffChain,
+        on_chain::OnChain,
     },
     fuel_core_graphql_api::storage::coins::{
         owner_coin_id_key,
         OwnedCoins,
     },
+    state::{
+        ColumnType,
+        IterableView,
+    },
 };
-use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     iter::{
         IterDirection,
@@ -27,9 +30,8 @@ use fuel_core_types::{
         UtxoId,
     },
 };
-use itertools::Itertools;
 
-impl Database<OffChain> {
+impl IterableView<ColumnType<OffChain>> {
     pub fn owned_coins_ids(
         &self,
         owner: &Address,
@@ -55,7 +57,7 @@ impl Database<OffChain> {
     }
 }
 
-impl Database {
+impl IterableView<ColumnType<OnChain>> {
     pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
         let coin = self
             .storage_as_ref::<Coins>()
@@ -64,12 +66,5 @@ impl Database {
             .into_owned();
 
         Ok(coin)
-    }
-
-    pub fn iter_coins(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<TableEntry<Coins>>> + '_ {
-        self.iter_all::<Coins>(None)
-            .map_ok(|(key, value)| TableEntry { key, value })
     }
 }

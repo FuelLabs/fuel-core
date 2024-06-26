@@ -8,6 +8,10 @@ use crate::{
         U32,
         U64,
     },
+    state::{
+        ColumnType,
+        IterableView,
+    },
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -76,7 +80,7 @@ pub struct Config {
     debug_enabled: bool,
 }
 
-type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
+type FrozenDatabase = VmStorage<StorageTransaction<IterableView<ColumnType<OnChain>>>>;
 
 #[derive(Default, Debug)]
 pub struct ConcreteStorage {

@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    database::database_description::on_chain::OnChain,
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
         DatabaseChain,
@@ -7,8 +7,11 @@ use crate::{
         DatabaseMessages,
         OnChainDatabase,
     },
+    state::{
+        ColumnType,
+        IterableView,
+    },
 };
-use fuel_core_importer::ports::ImporterDatabase;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -49,7 +52,7 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-impl DatabaseBlocks for Database {
+impl DatabaseBlocks for IterableView<ColumnType<OnChain>> {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         Ok(self
             .storage::<Transactions>()
@@ -79,9 +82,7 @@ impl DatabaseBlocks for Database {
     }
 
     fn latest_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_block_height()
-            .transpose()
-            .ok_or(not_found!("BlockHeight"))?
+        self.latest_height()
     }
 
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
@@ -92,7 +93,7 @@ impl DatabaseBlocks for Database {
     }
 }
 
-impl DatabaseMessages for Database {
+impl DatabaseMessages for IterableView<ColumnType<OnChain>> {
     fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
@@ -108,7 +109,7 @@ impl DatabaseMessages for Database {
     }
 }
 
-impl DatabaseContracts for Database {
+impl DatabaseContracts for IterableView<ColumnType<OnChain>> {
     fn contract_balances(
         &self,
         contract: ContractId,
@@ -126,7 +127,7 @@ impl DatabaseContracts for Database {
     }
 }
 
-impl DatabaseChain for Database {
+impl DatabaseChain for IterableView<ColumnType<OnChain>> {
     fn da_height(&self) -> StorageResult<DaBlockHeight> {
         self.latest_compressed_block()?
             .map(|block| block.header().da_height)
@@ -134,4 +135,4 @@ impl DatabaseChain for Database {
     }
 }
 
-impl OnChainDatabase for Database {}
+impl OnChainDatabase for IterableView<ColumnType<OnChain>> {}

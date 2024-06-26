@@ -19,6 +19,10 @@ use crate::{
         OldFuelBlocks,
         OldTransactions,
     },
+    state::{
+        ColumnType,
+        IterableView,
+    },
 };
 use fuel_core_storage::{
     iter::{
@@ -62,7 +66,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-impl OffChainDatabase for Database<OffChain> {
+impl OffChainDatabase for IterableView<ColumnType<OffChain>> {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
         self.get_block_height(id)
             .and_then(|height| height.ok_or(not_found!("BlockHeight")))

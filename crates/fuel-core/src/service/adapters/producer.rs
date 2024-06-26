@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    database::database_description::on_chain::OnChain,
     service::{
         adapters::{
             BlockProducerAdapter,
@@ -11,6 +11,10 @@ use crate::{
             TxPoolAdapter,
         },
         sub_services::BlockProducerService,
+    },
+    state::{
+        ColumnType,
+        IterableView,
     },
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
@@ -175,7 +179,9 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
 fn get_gas_cost_for_height(
     height: u64,
     sync: &fuel_core_relayer::SharedState<
-        Database<crate::database::database_description::relayer::Relayer>,
+        crate::database::Database<
+            crate::database::database_description::relayer::Relayer,
+        >,
     >,
 ) -> anyhow::Result<u64> {
     let da_height = DaBlockHeight(height);
@@ -189,7 +195,9 @@ fn get_gas_cost_for_height(
     Ok(cost)
 }
 
-impl fuel_core_producer::ports::BlockProducerDatabase for Database {
+impl fuel_core_producer::ports::BlockProducerDatabase
+    for IterableView<ColumnType<OnChain>>
+{
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         self.storage::<FuelBlocks>()
             .get(height)?

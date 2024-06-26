@@ -27,6 +27,7 @@ use fuel_core_poa::{
 };
 use fuel_core_storage::{
     tables::Transactions,
+    transactional::AtomicView,
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -431,7 +432,7 @@ async fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Conf
         .unwrap();
     bootstrap_config
         .unwrap()
-        .init(db.on_chain().get_genesis().unwrap())
+        .init(db.on_chain().latest_view().unwrap().get_genesis().unwrap())
         .unwrap()
 }
 

@@ -1,47 +1,48 @@
 use crate::{
-    database::{
-        database_description::off_chain::OffChain,
-        Database,
-    },
+    database::database_description::off_chain::OffChain,
     fuel_core_graphql_api::storage::transactions::{
         OwnedTransactionIndexCursor,
         OwnedTransactionIndexKey,
         OwnedTransactions,
         TransactionStatuses,
     },
+    state::{
+        ColumnType,
+        IterableView,
+    },
 };
-
 use fuel_core_storage::{
     iter::{
         IterDirection,
         IteratorOverTable,
     },
-    tables::Transactions,
     Result as StorageResult,
 };
 use fuel_core_types::{
     self,
     fuel_tx::{
         Bytes32,
-        Transaction,
         TxPointer,
     },
     fuel_types::Address,
     services::txpool::TransactionStatus,
 };
 
-impl Database {
+#[cfg(feature = "test-helpers")]
+impl crate::database::Database {
     pub fn all_transactions(
         &self,
         start: Option<&Bytes32>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<Transaction>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<fuel_core_types::fuel_tx::Transaction>> + '_
+    {
+        use fuel_core_storage::tables::Transactions;
         self.iter_all_by_start::<Transactions>(start, direction)
             .map(|res| res.map(|(_, tx)| tx))
     }
 }
 
-impl Database<OffChain> {
+impl IterableView<ColumnType<OffChain>> {
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
     /// allows for efficient lookup of transaction ids associated with an address, sorted by
     /// block age and ordering within a block. The cursor tracks the `[block height + tx idx]` for
