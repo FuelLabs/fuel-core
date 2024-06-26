@@ -5,6 +5,7 @@ use crate::{
             on_chain::OnChain,
             relayer::Relayer,
             DatabaseDescription,
+            DatabaseHeight,
             DatabaseMetadata,
         },
         metadata::MetadataTable,
@@ -12,48 +13,47 @@ use crate::{
     },
     graphql_api::storage::blocks::FuelBlockIdsToHeights,
     state::{
+        data_source::{
+            DataSource,
+            DataSourceType,
+        },
+        generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
         ChangesIterator,
-        DataSource,
+        ColumnType,
+        IterableView,
+        KeyValueView,
     },
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
-    blueprint::BlueprintInspect,
     iter::{
-        BoxedIter,
         IterDirection,
-        IterableStore,
+        IterableTable,
         IteratorOverTable,
     },
-    kv_store::{
-        KVItem,
-        KeyValueInspect,
-        Value,
-    },
     not_found,
-    structured_storage::TableWithBlueprint,
+    structured_storage::StructuredStorage,
     tables::FuelBlocks,
     transactional::{
         AtomicView,
         Changes,
         ConflictPolicy,
+        HistoricalView,
         Modifiable,
         StorageTransaction,
     },
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
     StorageAsMut,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        primitives::DaBlockHeight,
-    },
+    blockchain::block::CompressedBlock,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
@@ -67,7 +67,13 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
-use crate::state::rocks_db::RocksDb;
+use crate::state::{
+    historical_rocksdb::{
+        HistoricalRocksDB,
+        StateRewindPolicy,
+    },
+    rocks_db::RocksDb,
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 
@@ -82,6 +88,7 @@ pub mod message;
 pub mod metadata;
 pub mod sealed_block;
 pub mod state;
+#[cfg(feature = "test-helpers")]
 pub mod storage;
 pub mod transactions;
 
@@ -108,18 +115,19 @@ where
     }
 }
 
+pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
+    GenericDatabase<DataSource<Description, Stage>>;
+
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
-#[derive(Clone, Debug)]
-pub struct Database<Description = OnChain, Stage = RegularStage<Description>>
-where
-    Description: DatabaseDescription,
-{
-    data: DataSource<Description>,
-    stage: Stage,
-}
+impl IterableView<ColumnType<OnChain>> {
+    pub fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .ok_or(not_found!("BlockHeight"))?
+            .map(|(height, _)| height)
+    }
 
-impl Database<OnChain> {
     pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
         self.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
             .next()
@@ -139,8 +147,8 @@ where
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
     where
-        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column> + 'a,
-        T::Blueprint: BlueprintInspect<T, Self>,
+        T: Mappable + 'a,
+        Self: IterableTable<T>,
     {
         self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
             .map_ok(|(key, value)| TableEntry { key, value })
@@ -151,11 +159,8 @@ impl<Description> GenesisDatabase<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn new(data_source: DataSource<Description>) -> Self {
-        Self {
-            stage: GenesisStage,
-            data: data_source,
-        }
+    pub fn new(data_source: DataSourceType<Description>) -> Self {
+        StructuredStorage::new(DataSource::new(data_source, GenesisStage)).into()
     }
 }
 
@@ -165,13 +170,14 @@ where
     Database<Description>:
         StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
-    pub fn new(data_source: DataSource<Description>) -> Self {
-        let mut database = Self {
-            stage: RegularStage {
+    pub fn new(data_source: DataSourceType<Description>) -> Self {
+        let mut database: Self = StructuredStorage::new(DataSource::new(
+            data_source,
+            RegularStage {
                 height: SharedMutex::new(None),
             },
-            data: data_source,
-        };
+        ))
+        .into();
         let height = database
             .latest_height()
             .expect("Failed to get latest height during creation of the database");
@@ -182,11 +188,25 @@ where
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open_rocksdb(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
+    pub fn open_rocksdb(
+        path: &Path,
+        capacity: impl Into<Option<usize>>,
+        state_rewind_policy: StateRewindPolicy,
+    ) -> Result<Self> {
         use anyhow::Context;
-        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).with_context(|| format!("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db e.g. `rm -rf {path:?}`"))?;
+        let db = RocksDb::<Description>::default_open(path, capacity.into())
+            .map_err(Into::<anyhow::Error>::into)
+            .with_context(|| {
+                format!(
+                    "Failed to open rocksdb, you may need to wipe a \
+                pre-existing incompatible db e.g. `rm -rf {path:?}`"
+                )
+            })?;
 
-        Ok(Self::new(Arc::new(db)))
+        Ok(Self::new(Arc::new(HistoricalRocksDB::new(
+            db,
+            state_rewind_policy,
+        )?)))
     }
 
     /// Converts to an unchecked database.
@@ -197,7 +217,7 @@ where
             "Height is already set for `{}`",
             Description::name()
         );
-        GenesisDatabase::new(self.data)
+        GenesisDatabase::new(self.into_inner().data)
     }
 }
 
@@ -208,69 +228,14 @@ where
 {
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
-        Self {
-            data,
-            stage: Stage::default(),
-        }
+        StructuredStorage::new(DataSource::new(data, Stage::default())).into()
     }
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp() -> Self {
-        let data =
-            Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
-        Self {
-            data,
-            stage: Stage::default(),
-        }
-    }
-}
-
-impl<Description, Stage> KeyValueInspect for Database<Description, Stage>
-where
-    Description: DatabaseDescription,
-{
-    type Column = Description::Column;
-
-    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
-        self.data.as_ref().exists(key, column)
-    }
-
-    fn size_of_value(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-    ) -> StorageResult<Option<usize>> {
-        self.data.as_ref().size_of_value(key, column)
-    }
-
-    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        self.data.as_ref().get(key, column)
-    }
-
-    fn read(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
-        self.data.as_ref().read(key, column, buf)
-    }
-}
-
-impl<Description, Stage> IterableStore for Database<Description, Stage>
-where
-    Description: DatabaseDescription,
-{
-    fn iter_store(
-        &self,
-        column: Self::Column,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
-        direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
-        self.data
-            .as_ref()
-            .iter_store(column, prefix, start, direction)
+        let db = RocksDb::<Description>::default_open_temp(None).unwrap();
+        let data = Arc::new(HistoricalRocksDB::new(db, Default::default()).unwrap());
+        StructuredStorage::new(DataSource::new(data, Stage::default())).into()
     }
 }
 
@@ -294,60 +259,38 @@ where
     }
 }
 
-impl AtomicView for Database<OnChain> {
-    type View = Self;
+impl<Description> AtomicView for Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    type LatestView = IterableView<ColumnType<Description>>;
 
-    type Height = BlockHeight;
+    type Height = Description::Height;
 
     fn latest_height(&self) -> Option<Self::Height> {
         *self.stage.height.lock()
     }
 
-    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        self.clone()
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        self.data.latest_view()
     }
 }
 
-impl AtomicView for Database<OffChain> {
-    type View = Self;
+impl<Description> HistoricalView for Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    type ViewAtHeight = KeyValueView<ColumnType<Description>>;
 
-    type Height = BlockHeight;
+    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
+        let lock = self.stage.height.lock();
 
-    fn latest_height(&self) -> Option<Self::Height> {
-        *self.stage.height.lock()
-    }
-
-    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        self.clone()
-    }
-}
-
-impl AtomicView for Database<Relayer> {
-    type View = Self;
-    type Height = DaBlockHeight;
-
-    fn latest_height(&self) -> Option<Self::Height> {
-        *self.stage.height.lock()
-    }
-
-    fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        self.clone()
+        if let Some(current_height) = *lock {
+            if &current_height == height {
+                return self.latest_view().map(|view| view.into_key_value_view());
+            }
+        }
+        self.data.view_at_height(height)
     }
 }
 
@@ -406,33 +349,6 @@ impl Modifiable for GenesisDatabase<OffChain> {
 impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
-    }
-}
-
-trait DatabaseHeight: Sized {
-    fn as_u64(&self) -> u64;
-
-    fn advance_height(&self) -> Option<Self>;
-}
-
-impl DatabaseHeight for BlockHeight {
-    fn as_u64(&self) -> u64 {
-        let height: u32 = (*self).into();
-        height as u64
-    }
-
-    fn advance_height(&self) -> Option<Self> {
-        self.succ()
-    }
-}
-
-impl DatabaseHeight for DaBlockHeight {
-    fn as_u64(&self) -> u64 {
-        self.0
-    }
-
-    fn advance_height(&self) -> Option<Self> {
-        self.0.checked_add(1).map(Into::into)
     }
 }
 
@@ -1101,8 +1017,12 @@ mod tests {
         // in memory passes
         test(db);
 
-        let db = Database::<OnChain>::open_rocksdb(temp_dir.path(), 1024 * 1024 * 1024)
-            .unwrap();
+        let db = Database::<OnChain>::open_rocksdb(
+            temp_dir.path(),
+            1024 * 1024 * 1024,
+            Default::default(),
+        )
+        .unwrap();
         // rocks db fails
         test(db);
     }

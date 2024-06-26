@@ -343,7 +343,7 @@ mod tests {
                         asset,
                         base_asset_id,
                         None,
-                        &db.view(),
+                        &db.test_view(),
                     ))
                     .map(|coins| {
                         coins
@@ -503,7 +503,7 @@ mod tests {
             db: &ServiceDatabase,
         ) -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
             let coins = random_improve(
-                &db.view(),
+                &db.test_view(),
                 &SpendQuery::new(owner, &query_per_asset, None, base_asset_id)?,
             );
 
@@ -701,7 +701,8 @@ mod tests {
                     Some(excluded_ids),
                     base_asset_id,
                 )?;
-                let coins = random_improve(&db.service_database().view(), &spend_query);
+                let coins =
+                    random_improve(&db.service_database().test_view(), &spend_query);
 
                 // Transform result for convenience
                 coins.map(|coins| {
@@ -859,7 +860,7 @@ mod tests {
         }
 
         let coins = random_improve(
-            &db.service_database().view(),
+            &db.service_database().test_view(),
             &SpendQuery::new(
                 owner,
                 &[AssetSpendTarget {
@@ -1008,7 +1009,7 @@ mod tests {
         pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
             use crate::query::CoinQueryData;
             let query = self.service_database();
-            let query = query.view();
+            let query = query.test_view();
             query
                 .owned_coins_ids(owner, None, IterDirection::Forward)
                 .map(|res| res.map(|id| query.coin(id).unwrap()))
@@ -1019,7 +1020,7 @@ mod tests {
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
             use crate::query::MessageQueryData;
             let query = self.service_database();
-            let query = query.view();
+            let query = query.test_view();
             query
                 .owned_message_ids(owner, None, IterDirection::Forward)
                 .map(|res| res.map(|id| query.message(&id).unwrap()))

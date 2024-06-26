@@ -11,6 +11,3 @@ clap = { workspace = true, features = ["env", "derive"] }
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "test-helpers",
 ] }
-
-[features]
-default = ["fuel-core/default"]

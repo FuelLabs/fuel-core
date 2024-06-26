@@ -28,6 +28,7 @@ use crate::{
     },
 };
 use fuel_core_poa::Trigger;
+use fuel_core_storage::transactional::AtomicView;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -69,13 +70,12 @@ pub fn init_sub_services(
     let chain_config = config.snapshot_reader.chain_config();
     let chain_id = chain_config.consensus_parameters.chain_id();
     let chain_name = chain_config.chain_name.clone();
+    let on_chain_view = database.on_chain().latest_view()?;
 
-    let genesis_block = database
-        .on_chain()
+    let genesis_block = on_chain_view
         .genesis_block()?
         .unwrap_or(create_genesis_block(config).compress(&chain_id));
-    let last_block_header = database
-        .on_chain()
+    let last_block_header = on_chain_view
         .get_current_block()?
         .map(|block| block.header().clone())
         .unwrap_or(genesis_block.header().clone());
@@ -189,7 +189,7 @@ pub fn init_sub_services(
         config: config.block_producer.clone(),
         view_provider: database.on_chain().clone(),
         txpool: tx_pool_adapter.clone(),
-        executor: Arc::new(executor),
+        executor: Arc::new(executor.clone()),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
         gas_price_provider: gas_price_provider.clone(),
@@ -277,6 +277,7 @@ pub fn init_sub_services(
         graph_ql: graph_ql.shared.clone(),
         database,
         block_importer: importer_adapter,
+        executor,
         config: config.clone(),
     };
 

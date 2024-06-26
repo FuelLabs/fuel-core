@@ -17,6 +17,7 @@ mod health;
 mod helpers;
 mod messages;
 mod metrics;
+mod node;
 mod node_info;
 mod poa;
 mod regenesis;

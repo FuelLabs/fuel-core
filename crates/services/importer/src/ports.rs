@@ -62,7 +62,7 @@ pub trait Transactional {
 }
 
 /// The alias port used by the block importer.
-pub trait ImporterDatabase: Transactional + Send + Sync {
+pub trait ImporterDatabase: Send + Sync {
     /// Returns the latest block height.
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
 

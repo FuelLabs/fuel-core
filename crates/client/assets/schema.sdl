@@ -317,6 +317,7 @@ input ExcludeInput {
 
 type FailureStatus {
 	transactionId: TransactionId!
+	blockHeight: U32!
 	block: Block!
 	time: Tai64Timestamp!
 	reason: String!
@@ -1036,6 +1037,7 @@ type Subscription {
 
 type SuccessStatus {
 	transactionId: TransactionId!
+	blockHeight: U32!
 	block: Block!
 	time: Tai64Timestamp!
 	programState: ProgramState

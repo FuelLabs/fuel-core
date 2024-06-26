@@ -1,5 +1,11 @@
 use super::BlockImporterAdapter;
-use crate::database::Database;
+use crate::{
+    database::database_description::on_chain::OnChain,
+    state::{
+        ColumnType,
+        IterableView,
+    },
+};
 use fuel_core_p2p::ports::{
     BlockHeightImporter,
     P2pDb,
@@ -16,7 +22,7 @@ use fuel_core_types::{
 };
 use std::ops::Range;
 
-impl P2pDb for Database {
+impl P2pDb for IterableView<ColumnType<OnChain>> {
     fn get_sealed_headers(
         &self,
         block_height_range: Range<u32>,

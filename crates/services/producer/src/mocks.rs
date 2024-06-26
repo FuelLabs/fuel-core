@@ -213,7 +213,7 @@ pub struct MockDb {
 }
 
 impl AtomicView for MockDb {
-    type View = Self;
+    type LatestView = Self;
 
     type Height = BlockHeight;
 
@@ -223,12 +223,8 @@ impl AtomicView for MockDb {
         blocks.keys().max().cloned()
     }
 
-    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        self.clone()
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(self.clone())
     }
 }
 

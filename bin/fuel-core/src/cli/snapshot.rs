@@ -181,9 +181,13 @@ fn load_chain_config_or_use_testnet(path: Option<&Path>) -> anyhow::Result<Chain
 }
 
 fn open_db(path: &Path, capacity: Option<usize>) -> anyhow::Result<CombinedDatabase> {
-    CombinedDatabase::open(path, capacity.unwrap_or(1024 * 1024 * 1024))
-        .map_err(Into::<anyhow::Error>::into)
-        .context(format!("failed to open combined database at path {path:?}",))
+    CombinedDatabase::open(
+        path,
+        capacity.unwrap_or(1024 * 1024 * 1024),
+        Default::default(),
+    )
+    .map_err(Into::<anyhow::Error>::into)
+    .context(format!("failed to open combined database at path {path:?}",))
 }
 
 #[cfg(test)]
@@ -221,6 +225,7 @@ mod tests {
             Messages,
             Transactions,
         },
+        transactional::AtomicView,
         ContractsAssetKey,
         ContractsStateKey,
         StorageAsMut,
@@ -772,6 +777,8 @@ mod tests {
         latest_block.blocks_root = db
             .db
             .on_chain()
+            .latest_view()
+            .unwrap()
             .block_header_merkle_root(&latest_block.block_height)
             .unwrap();
         db.flush();

@@ -44,7 +44,7 @@ impl<V> Verifier<V> {
 impl<V> Verifier<V>
 where
     V: AtomicView,
-    V::View: PoAVerifierDatabase,
+    V::LatestView: PoAVerifierDatabase,
 {
     /// Verifies **all** fields of the block based on used consensus to produce a block.
     ///
@@ -65,7 +65,7 @@ where
                 )
             }
             Consensus::PoA(_) => {
-                let view = self.view_provider.latest_view();
+                let view = self.view_provider.latest_view()?;
                 fuel_core_poa::verifier::verify_block_fields(&view, block)
             }
             _ => Err(anyhow::anyhow!("Unsupported consensus: {:?}", consensus)),

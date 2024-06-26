@@ -12,10 +12,13 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use fuel_core_storage::IsNotFound;
+use fuel_core_storage::transactional::AtomicView;
 use std::net::SocketAddr;
 
-use crate::service::sub_services::TxPoolSharedState;
+use crate::service::{
+    adapters::ExecutorAdapter,
+    sub_services::TxPoolSharedState,
+};
 pub use config::{
     Config,
     DbType,
@@ -23,6 +26,7 @@ pub use config::{
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
+use fuel_core_storage::IsNotFound;
 
 pub mod adapters;
 pub mod config;
@@ -54,6 +58,8 @@ pub struct SharedState {
     pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    /// The executor to validate blocks.
+    pub executor: ExecutorAdapter,
     /// The config of the service.
     pub config: Config,
 }
@@ -229,7 +235,7 @@ impl RunnableService for Task {
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         // check if chain is initialized
-        if let Err(err) = self.shared.database.on_chain().get_genesis() {
+        if let Err(err) = self.shared.database.on_chain().latest_view()?.get_genesis() {
             if err.is_not_found() {
                 let result = genesis::execute_genesis_block(
                     watcher.clone(),

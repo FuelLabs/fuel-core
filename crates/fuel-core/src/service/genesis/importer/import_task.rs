@@ -205,7 +205,9 @@ mod tests {
         },
         state::{
             in_memory::memory_store::MemoryStore,
-            TransactableStorage,
+            IterableView,
+            KeyValueView,
+            TransactableHistoricalStorage,
         },
     };
 
@@ -553,13 +555,24 @@ mod tests {
         }
     }
 
-    impl TransactableStorage<BlockHeight> for BrokenTransactions {
+    impl TransactableHistoricalStorage<BlockHeight> for BrokenTransactions {
         fn commit_changes(
             &self,
             _: Option<BlockHeight>,
             _: Changes,
         ) -> StorageResult<()> {
             Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
+        fn view_at_height(
+            &self,
+            _: &BlockHeight,
+        ) -> StorageResult<KeyValueView<Self::Column>> {
+            unimplemented!()
+        }
+
+        fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
+            unimplemented!()
         }
     }
 

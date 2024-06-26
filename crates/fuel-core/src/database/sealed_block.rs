@@ -1,4 +1,10 @@
-use crate::database::Database;
+use crate::{
+    database::database_description::on_chain::OnChain,
+    state::{
+        ColumnType,
+        IterableView,
+    },
+};
 use fuel_core_storage::{
     iter::{
         IterDirection,
@@ -28,7 +34,7 @@ use fuel_core_types::{
 };
 use std::ops::Range;
 
-impl Database {
+impl IterableView<ColumnType<OnChain>> {
     /// Returns `SealedBlock` by `height`.
     /// Reusable across different trait implementations
     pub fn get_sealed_block_by_height(

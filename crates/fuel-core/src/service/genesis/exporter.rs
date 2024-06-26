@@ -29,8 +29,10 @@ use fuel_core_chain_config::{
 };
 use fuel_core_poa::ports::Database as DatabaseTrait;
 use fuel_core_storage::{
-    blueprint::BlueprintInspect,
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IterableTable,
+    },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
@@ -49,6 +51,7 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
+    transactional::AtomicView,
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
@@ -152,11 +155,10 @@ where
 
     async fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
         let writer = self.create_writer()?;
-        let latest_block = self.db.on_chain().latest_block()?;
-        let blocks_root = self
-            .db
-            .on_chain()
-            .block_header_merkle_root(latest_block.header().height())?;
+        let view = self.db.on_chain().latest_view()?;
+        let latest_block = view.latest_block()?;
+        let blocks_root =
+            view.block_header_merkle_root(latest_block.header().height())?;
         let latest_block =
             LastBlockConfig::from_header(latest_block.header(), blocks_root);
 
@@ -182,11 +184,10 @@ where
     ) -> anyhow::Result<()>
     where
         T: TableWithBlueprint + 'static + Send + Sync,
-        T::Blueprint: BlueprintInspect<T, Database<DbDesc>>,
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
-        DbDesc: DatabaseDescription<Column = T::Column>,
-        DbDesc::Height: Send + Sync,
+        DbDesc: DatabaseDescription,
+        Database<DbDesc>: IterableTable<T>,
     {
         let mut writer = self.create_writer()?;
         let group_size = self.group_size;

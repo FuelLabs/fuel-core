@@ -1,4 +1,10 @@
-use crate::database::Database;
+use crate::{
+    database::database_description::on_chain::OnChain,
+    state::{
+        ColumnType,
+        IterableView,
+    },
+};
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     iter::{
@@ -22,7 +28,7 @@ use fuel_core_types::fuel_types::{
 };
 use itertools::Itertools;
 
-impl Database {
+impl IterableView<ColumnType<OnChain>> {
     pub fn iter_contract_state(
         &self,
     ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsState>>> + '_ {
@@ -97,7 +103,10 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::database_description::on_chain::OnChain;
+    use crate::database::{
+        database_description::on_chain::OnChain,
+        Database,
+    };
     use fuel_core_storage::StorageAsMut;
     use fuel_core_types::fuel_tx::Contract;
     use rand::{

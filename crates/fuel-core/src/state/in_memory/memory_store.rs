@@ -4,8 +4,13 @@ use crate::{
         DatabaseDescription,
     },
     state::{
+        in_memory::memory_view::MemoryView,
+        iterable_view::IterableViewWrapper,
+        key_value_view::KeyValueViewWrapper,
         IterDirection,
-        TransactableStorage,
+        IterableView,
+        KeyValueView,
+        TransactableHistoricalStorage,
     },
 };
 use fuel_core_storage::{
@@ -23,15 +28,20 @@ use fuel_core_storage::{
         WriteOperation,
     },
     transactional::{
-        Changes,
         ReferenceBytesKey,
     },
+    structured_storage::StructuredStorage,
+    transactional::Changes,
     Result as StorageResult,
 };
 use std::{
     collections::BTreeMap,
     fmt::Debug,
-    sync::Mutex,
+    ops::Deref,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 #[derive(Debug)]
@@ -62,6 +72,23 @@ impl<Description> MemoryStore<Description>
 where
     Description: DatabaseDescription,
 {
+    fn create_view(&self) -> MemoryView<Description> {
+        // Lock all tables at the same time to have consistent view.
+        let locks = self
+            .inner
+            .iter()
+            .map(|lock| lock.lock().expect("Poisoned lock"))
+            .collect::<Vec<_>>();
+        let inner = locks
+            .iter()
+            .map(|btree| btree.deref().clone())
+            .collect::<Vec<_>>();
+        MemoryView {
+            inner,
+            _marker: Default::default(),
+        }
+    }
+
     pub fn iter_all(
         &self,
         column: Description::Column,
@@ -109,7 +136,8 @@ where
     }
 }
 
-impl<Description> TransactableStorage<Description::Height> for MemoryStore<Description>
+impl<Description> TransactableHistoricalStorage<Description::Height>
+    for MemoryStore<Description>
 where
     Description: DatabaseDescription,
 {
@@ -135,6 +163,20 @@ where
             }
         }
         Ok(())
+    }
+
+    fn view_at_height(
+        &self,
+        _: &Description::Height,
+    ) -> StorageResult<KeyValueView<Self::Column>> {
+        // TODO: Implement historical view instead of returning the latest view.
+        let view = self.create_view();
+        Ok(StructuredStorage::new(KeyValueViewWrapper::new(Arc::new(view))).into())
+    }
+
+    fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
+        let view = self.create_view();
+        Ok(StructuredStorage::new(IterableViewWrapper::new(Arc::new(view))).into())
     }
 }
 
