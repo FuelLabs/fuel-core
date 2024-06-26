@@ -303,6 +303,7 @@ where
     }
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
         Ok(self.clone())
     }
 }
@@ -314,6 +315,7 @@ where
     type ViewAtHeight = Self;
 
     fn view_at(&self, _: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
+        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
         Ok(self.clone())
     }
 }

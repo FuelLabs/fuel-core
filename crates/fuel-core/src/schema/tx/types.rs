@@ -7,7 +7,6 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::{
             ConsensusProvider,
-            ReadDatabase,
             TxPool,
         },
         database::ReadView,
@@ -172,13 +171,8 @@ impl SuccessStatus {
         self.tx_id.into()
     }
 
-    async fn block_height(&self) -> U32 {
-        self.block_height.into()
-    }
-
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let database: &ReadDatabase = ctx.data_unchecked();
-        let query = database.view()?;
+        let query: &ReadView = ctx.data_unchecked();
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
@@ -221,13 +215,8 @@ impl FailureStatus {
         self.tx_id.into()
     }
 
-    async fn block_height(&self) -> U32 {
-        self.block_height.into()
-    }
-
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let database: &ReadDatabase = ctx.data_unchecked();
-        let query = database.view()?;
+        let query: &ReadView = ctx.data_unchecked();
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
