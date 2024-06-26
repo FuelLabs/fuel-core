@@ -10,6 +10,7 @@ use crate::{
         Config as GraphQLConfig,
         IntoApiResult,
     },
+    graphql_api::database::ReadDatabase,
     query::{
         BlockQueryData,
         SimpleBlockData,
@@ -339,7 +340,6 @@ impl BlockMutation {
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
-        let query: &ReadView = ctx.data_unchecked();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
@@ -353,7 +353,9 @@ impl BlockMutation {
             .manually_produce_blocks(start_time, blocks_to_produce)
             .await?;
 
-        query
+        let database: &ReadDatabase = ctx.data_unchecked();
+        database
+            .view()?
             .latest_block_height()
             .map(Into::into)
             .map_err(Into::into)

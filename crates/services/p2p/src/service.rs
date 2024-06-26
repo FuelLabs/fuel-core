@@ -411,7 +411,7 @@ fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
 impl<V> RunnableService for UninitializedTask<V, SharedState>
 where
     V: AtomicView + 'static,
-    V::View: P2pDb,
+    V::LatestView: P2pDb,
 {
     const NAME: &'static str = "P2P";
 
@@ -437,7 +437,7 @@ where
             config,
         } = self;
 
-        let view = view_provider.latest_view();
+        let view = view_provider.latest_view()?;
         let genesis = view.get_genesis()?;
         let config = config.init(genesis)?;
         let Config {
@@ -492,7 +492,7 @@ impl<P, V, B> RunnableTask for Task<P, V, B>
 where
     P: TaskP2PService + 'static,
     V: AtomicView + 'static,
-    V::View: P2pDb,
+    V::LatestView: P2pDb,
     B: Broadcast + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
@@ -578,7 +578,7 @@ where
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Transactions(range) => {
-                                let view = self.view_provider.latest_view();
+                                let view = self.view_provider.latest_view()?;
                                 match view.get_transactions(range.clone()) {
                                     Ok(response) => {
                                         let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
@@ -599,7 +599,7 @@ where
                                     let response = None;
                                     let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
                                 } else {
-                                    let view = self.view_provider.latest_view();
+                                    let view = self.view_provider.latest_view()?;
                                     match view.get_sealed_headers(range.clone()) {
                                         Ok(headers) => {
                                             let response = Some(headers);
@@ -801,7 +801,7 @@ pub fn new_service<V, B>(
 ) -> Service<V>
 where
     V: AtomicView + 'static,
-    V::View: P2pDb,
+    V::LatestView: P2pDb,
     B: BlockHeightImporter,
 {
     let task =
@@ -867,7 +867,7 @@ pub mod tests {
     struct FakeDb;
 
     impl AtomicView for FakeDb {
-        type View = Self;
+        type LatestView = Self;
 
         type Height = BlockHeight;
 
@@ -875,12 +875,8 @@ pub mod tests {
             Some(BlockHeight::default())
         }
 
-        fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            self.clone()
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.clone())
         }
     }
 
@@ -992,7 +988,7 @@ pub mod tests {
     struct FakeDB;
 
     impl AtomicView for FakeDB {
-        type View = Self;
+        type LatestView = Self;
 
         type Height = BlockHeight;
 
@@ -1000,12 +996,8 @@ pub mod tests {
             Some(BlockHeight::default())
         }
 
-        fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            self.clone()
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.clone())
         }
     }
 

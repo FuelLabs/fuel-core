@@ -3,6 +3,7 @@ use crate::{
         BlockVerifier,
         DatabaseTransaction,
         ImporterDatabase,
+        Transactional,
         Validator,
     },
     Config,
@@ -177,7 +178,7 @@ impl<D, E, V> Importer<D, E, V> {
 
 impl<D, E, V> Importer<D, E, V>
 where
-    D: ImporterDatabase,
+    D: ImporterDatabase + Transactional,
 {
     /// The method commits the result of the block execution attaching the consensus data.
     /// It expects that the `UncommittedResult` contains the result of the block
@@ -434,7 +435,7 @@ where
 
 impl<IDatabase, E, V> Importer<IDatabase, E, V>
 where
-    IDatabase: ImporterDatabase + 'static,
+    IDatabase: ImporterDatabase + Transactional + 'static,
     E: Validator + 'static,
     V: BlockVerifier + 'static,
 {

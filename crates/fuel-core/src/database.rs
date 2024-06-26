@@ -49,13 +49,7 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
-use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        primitives::DaBlockHeight,
-    },
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::blockchain::block::CompressedBlock;
 use itertools::Itertools;
 use std::{
     fmt::Debug,
@@ -66,8 +60,10 @@ pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
+use crate::database::database_description::DatabaseHeight;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_storage::transactional::HistoricalView;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 
@@ -294,60 +290,31 @@ where
     }
 }
 
-impl AtomicView for Database<OnChain> {
-    type View = Self;
+impl<Description> AtomicView for Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    type LatestView = Self;
 
-    type Height = BlockHeight;
+    type Height = Description::Height;
 
     fn latest_height(&self) -> Option<Self::Height> {
         *self.stage.height.lock()
     }
 
-    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        self.clone()
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(self.clone())
     }
 }
 
-impl AtomicView for Database<OffChain> {
-    type View = Self;
+impl<Description> HistoricalView for Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    type ViewAtHeight = Self;
 
-    type Height = BlockHeight;
-
-    fn latest_height(&self) -> Option<Self::Height> {
-        *self.stage.height.lock()
-    }
-
-    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        self.clone()
-    }
-}
-
-impl AtomicView for Database<Relayer> {
-    type View = Self;
-    type Height = DaBlockHeight;
-
-    fn latest_height(&self) -> Option<Self::Height> {
-        *self.stage.height.lock()
-    }
-
-    fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        self.clone()
+    fn view_at(&self, _: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
+        Ok(self.clone())
     }
 }
 
@@ -406,33 +373,6 @@ impl Modifiable for GenesisDatabase<OffChain> {
 impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
-    }
-}
-
-trait DatabaseHeight: Sized {
-    fn as_u64(&self) -> u64;
-
-    fn advance_height(&self) -> Option<Self>;
-}
-
-impl DatabaseHeight for BlockHeight {
-    fn as_u64(&self) -> u64 {
-        let height: u32 = (*self).into();
-        height as u64
-    }
-
-    fn advance_height(&self) -> Option<Self> {
-        self.succ()
-    }
-}
-
-impl DatabaseHeight for DaBlockHeight {
-    fn as_u64(&self) -> u64 {
-        self.0
-    }
-
-    fn advance_height(&self) -> Option<Self> {
-        self.0.checked_add(1).map(Into::into)
     }
 }
 
@@ -903,6 +843,7 @@ mod tests {
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::transactional::WriteTransaction;
+        use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
         #[test]
         fn column_keys_not_exceed_count_test() {

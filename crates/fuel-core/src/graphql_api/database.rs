@@ -82,9 +82,9 @@ pub struct ReadDatabase {
     /// The height of the genesis block.
     genesis_height: BlockHeight,
     /// The on-chain database view provider.
-    on_chain: Box<dyn AtomicView<View = OnChainView, Height = BlockHeight>>,
+    on_chain: Box<dyn AtomicView<LatestView = OnChainView, Height = BlockHeight>>,
     /// The off-chain database view provider.
-    off_chain: Box<dyn AtomicView<View = OffChainView, Height = BlockHeight>>,
+    off_chain: Box<dyn AtomicView<LatestView = OffChainView, Height = BlockHeight>>,
 }
 
 impl ReadDatabase {
@@ -97,8 +97,8 @@ impl ReadDatabase {
     where
         OnChain: AtomicView<Height = BlockHeight> + 'static,
         OffChain: AtomicView<Height = BlockHeight> + 'static,
-        OnChain::View: OnChainDatabase,
-        OffChain::View: OffChainDatabase,
+        OnChain::LatestView: OnChainDatabase,
+        OffChain::LatestView: OffChainDatabase,
     {
         Self {
             genesis_height,
@@ -108,15 +108,20 @@ impl ReadDatabase {
     }
 
     /// Creates a consistent view of the database.
-    pub fn view(&self) -> ReadView {
+    pub fn view(&self) -> StorageResult<ReadView> {
         // TODO: Use the same height for both views to guarantee consistency.
         //  It is not possible to implement until `view_at` is implemented for the `AtomicView`.
         //  https://github.com/FuelLabs/fuel-core/issues/1582
-        ReadView {
+        Ok(ReadView {
             genesis_height: self.genesis_height,
-            on_chain: self.on_chain.latest_view(),
-            off_chain: self.off_chain.latest_view(),
-        }
+            on_chain: self.on_chain.latest_view()?,
+            off_chain: self.off_chain.latest_view()?,
+        })
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn test_view(&self) -> ReadView {
+        self.view().expect("The latest view always should exist")
     }
 }
 

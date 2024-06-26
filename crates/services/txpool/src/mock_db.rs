@@ -89,7 +89,7 @@ impl TxPoolDb for MockDb {
 pub struct MockDBProvider(pub MockDb);
 
 impl AtomicView for MockDBProvider {
-    type View = MockDb;
+    type LatestView = MockDb;
 
     type Height = BlockHeight;
 
@@ -97,11 +97,7 @@ impl AtomicView for MockDBProvider {
         Some(BlockHeight::default())
     }
 
-    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        self.0.clone()
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(self.0.clone())
     }
 }

@@ -192,8 +192,8 @@ pub fn new_service<OnChain, OffChain>(
 where
     OnChain: AtomicView<Height = BlockHeight> + 'static,
     OffChain: AtomicView<Height = BlockHeight> + 'static,
-    OnChain::View: OnChainDatabase,
-    OffChain::View: OffChainDatabase,
+    OnChain::LatestView: OnChainDatabase,
+    OffChain::LatestView: OffChainDatabase,
 {
     let network_addr = config.addr;
     let combined_read_database =

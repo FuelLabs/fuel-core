@@ -334,7 +334,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
 impl<ViewProvider, View> TxPool<ViewProvider>
 where
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
 {
     #[cfg(test)]
@@ -342,7 +342,7 @@ where
         &mut self,
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {
-        let view = self.database.latest_view();
+        let view = self.database.latest_view().unwrap();
         self.insert_inner(tx, &view)
     }
 
@@ -432,7 +432,10 @@ where
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
-        let view = self.database.latest_view();
+        let view = match self.database.latest_view() {
+            Ok(view) => view,
+            Err(e) => return vec![Err(Error::Other(e.to_string()))],
+        };
 
         for tx in txs.into_iter() {
             res.push(self.insert_inner(tx, &view));
