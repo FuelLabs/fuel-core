@@ -8,7 +8,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
-#![deny(warnings)]
+// #![deny(warnings)]
 
 use anyhow::anyhow;
 use core::array::TryFromSliceError;

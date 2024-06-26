@@ -243,6 +243,10 @@ where
                 inputs = tx.inputs().as_slice();
                 outputs = tx.outputs().as_slice();
             }
+            Transaction::Blob(tx) => {
+                inputs = tx.inputs().as_slice();
+                outputs = tx.outputs().as_slice();
+            }
         }
         persist_owners_index(
             block_height,
@@ -344,7 +348,8 @@ where
             Transaction::Script(_)
             | Transaction::Mint(_)
             | Transaction::Upgrade(_)
-            | Transaction::Upload(_) => {
+            | Transaction::Upload(_)
+            | Transaction::Blob(_) => {
                 // Do nothing
             }
         }

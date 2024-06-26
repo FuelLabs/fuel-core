@@ -51,6 +51,7 @@ use fuel_core_types::{
 use fuel_vm_private::{
     fuel_storage::StorageWrite,
     storage::{
+        BlobData,
         ContractsStateData,
         UploadedBytecodes,
     },
@@ -229,6 +230,9 @@ where
         + StorageMutate<ConsensusParametersVersions, Error = StorageError>
         + StorageMutate<StateTransitionBytecodeVersions, Error = StorageError>
         + StorageMutate<UploadedBytecodes, Error = StorageError>
+        + StorageWrite<BlobData, Error = StorageError>
+        + StorageSize<BlobData, Error = StorageError>
+        + StorageRead<BlobData, Error = StorageError>
         + VmStorageRequirements<Error = StorageError>,
 {
     type DataError = StorageError;

@@ -10,6 +10,7 @@ use crate::{
             ScriptGasLimit,
             Tip,
         },
+        Blob,
         Cacheable,
         Chargeable,
         Create,
@@ -64,6 +65,8 @@ pub enum PoolTransaction {
     Upgrade(Checked<Upgrade>),
     /// Upload
     Upload(Checked<Upload>),
+    /// Blob
+    Blob(Checked<Blob>),
 }
 
 impl PoolTransaction {
@@ -74,6 +77,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upgrade(tx) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upload(tx) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Blob(tx) => tx.transaction().metered_bytes_size(),
         }
     }
 
@@ -84,6 +88,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx) => tx.id(),
             PoolTransaction::Upgrade(tx) => tx.id(),
             PoolTransaction::Upload(tx) => tx.id(),
+            PoolTransaction::Blob(tx) => tx.id(),
         }
     }
 
@@ -94,6 +99,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx) => tx.metadata().max_gas,
             PoolTransaction::Upgrade(tx) => tx.metadata().max_gas,
             PoolTransaction::Upload(tx) => tx.metadata().max_gas,
+            PoolTransaction::Blob(tx) => tx.metadata().max_gas,
         }
     }
 }
@@ -108,6 +114,7 @@ impl PoolTransaction {
             PoolTransaction::Create(_) => None,
             PoolTransaction::Upgrade(_) => None,
             PoolTransaction::Upload(_) => None,
+            PoolTransaction::Blob(_) => None,
         }
     }
 
@@ -117,6 +124,7 @@ impl PoolTransaction {
             Self::Create(tx) => tx.transaction().tip(),
             Self::Upload(tx) => tx.transaction().tip(),
             Self::Upgrade(tx) => tx.transaction().tip(),
+            Self::Blob(tx) => tx.transaction().tip(),
         }
     }
 
@@ -126,6 +134,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx) => tx.transaction().is_computed(),
             PoolTransaction::Upgrade(tx) => tx.transaction().is_computed(),
             PoolTransaction::Upload(tx) => tx.transaction().is_computed(),
+            PoolTransaction::Blob(tx) => tx.transaction().is_computed(),
         }
     }
 
@@ -135,6 +144,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx) => tx.transaction().inputs(),
             PoolTransaction::Upgrade(tx) => tx.transaction().inputs(),
             PoolTransaction::Upload(tx) => tx.transaction().inputs(),
+            PoolTransaction::Blob(tx) => tx.transaction().inputs(),
         }
     }
 
@@ -144,6 +154,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx) => tx.transaction().outputs(),
             PoolTransaction::Upgrade(tx) => tx.transaction().outputs(),
             PoolTransaction::Upload(tx) => tx.transaction().outputs(),
+            PoolTransaction::Blob(tx) => tx.transaction().outputs(),
         }
     }
 }
@@ -157,6 +168,7 @@ impl From<&PoolTransaction> for Transaction {
                 Transaction::Upgrade(tx.transaction().clone())
             }
             PoolTransaction::Upload(tx) => Transaction::Upload(tx.transaction().clone()),
+            PoolTransaction::Blob(tx) => Transaction::Blob(tx.transaction().clone()),
         }
     }
 }
@@ -168,6 +180,7 @@ impl From<&PoolTransaction> for CheckedTransaction {
             PoolTransaction::Create(tx) => CheckedTransaction::Create(tx.clone()),
             PoolTransaction::Upgrade(tx) => CheckedTransaction::Upgrade(tx.clone()),
             PoolTransaction::Upload(tx) => CheckedTransaction::Upload(tx.clone()),
+            PoolTransaction::Blob(tx) => CheckedTransaction::Blob(tx.clone()),
         }
     }
 }

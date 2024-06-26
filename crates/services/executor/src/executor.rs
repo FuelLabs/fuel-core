@@ -904,7 +904,8 @@ where
             Transaction::Script(_)
             | Transaction::Create(_)
             | Transaction::Upgrade(_)
-            | Transaction::Upload(_) => Ok(()),
+            | Transaction::Upload(_)
+            | Transaction::Blob(_) => Ok(()),
         }
     }
 
@@ -924,6 +925,7 @@ where
             }
             Transaction::Upgrade(tx) => tx.max_gas(gas_costs, fee_params),
             Transaction::Upload(tx) => tx.max_gas(gas_costs, fee_params),
+            Transaction::Blob(tx) => tx.max_gas(gas_costs, fee_params),
         };
         if actual_max_gas > claimed_max_gas {
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
@@ -990,6 +992,15 @@ where
                 memory,
             ),
             CheckedTransaction::Upload(tx) => self.execute_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                storage_tx,
+                memory,
+            ),
+            CheckedTransaction::Blob(tx) => self.execute_chargeable_transaction(
                 tx,
                 header,
                 coinbase_contract_id,

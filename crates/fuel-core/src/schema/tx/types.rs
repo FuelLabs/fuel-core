@@ -20,6 +20,7 @@ use crate::{
         block::Block,
         scalars::{
             AssetId,
+            BlobId,
             Bytes32,
             ContractId,
             HexString,
@@ -51,6 +52,7 @@ use fuel_core_types::{
         field::{
             BytecodeRoot,
             BytecodeWitnessIndex,
+            ChargeableBody,
             InputContract,
             Inputs,
             Maturity,
@@ -84,8 +86,10 @@ use fuel_core_types::{
             TransactionExecutionResult,
             TransactionExecutionStatus,
         },
-        txpool,
-        txpool::TransactionStatus as TxStatus,
+        txpool::{
+            self,
+            TransactionStatus as TxStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -413,6 +417,11 @@ impl Transaction {
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
+            fuel_tx::Transaction::Blob(tx) => Some(
+                tx.input_asset_ids(base_asset_id)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
         }
     }
 
@@ -433,6 +442,9 @@ impl Transaction {
             fuel_tx::Transaction::Upload(tx) => {
                 Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
+            fuel_tx::Transaction::Blob(tx) => {
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
+            }
         }
     }
 
@@ -441,7 +453,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.input_contract().into()),
         }
     }
@@ -453,6 +466,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(tx) => Some((*tx.policies()).into()),
             fuel_tx::Transaction::Upload(tx) => Some((*tx.policies()).into()),
+            fuel_tx::Transaction::Blob(tx) => Some((*tx.policies()).into()),
         }
     }
 
@@ -464,7 +478,8 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -475,6 +490,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(tx) => Some(tx.maturity().into()),
             fuel_tx::Transaction::Upload(tx) => Some(tx.maturity().into()),
+            fuel_tx::Transaction::Blob(tx) => Some(tx.maturity().into()),
         }
     }
 
@@ -483,7 +499,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_amount()).into()),
         }
     }
@@ -493,7 +510,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_asset_id()).into()),
         }
     }
@@ -503,7 +521,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.gas_price()).into()),
         }
     }
@@ -514,7 +533,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.tx_pointer()).into()),
         }
     }
@@ -539,6 +559,10 @@ impl Transaction {
         self.0.is_upload()
     }
 
+    async fn is_blob(&self) -> bool {
+        self.0.is_blob()
+    }
+
     async fn inputs(&self) -> Option<Vec<Input>> {
         match &self.0 {
             fuel_tx::Transaction::Script(tx) => {
@@ -552,6 +576,9 @@ impl Transaction {
                 Some(tx.inputs().iter().map(Into::into).collect())
             }
             fuel_tx::Transaction::Upload(tx) => {
+                Some(tx.inputs().iter().map(Into::into).collect())
+            }
+            fuel_tx::Transaction::Blob(tx) => {
                 Some(tx.inputs().iter().map(Into::into).collect())
             }
         }
@@ -572,6 +599,9 @@ impl Transaction {
             fuel_tx::Transaction::Upload(tx) => {
                 tx.outputs().iter().map(Into::into).collect()
             }
+            fuel_tx::Transaction::Blob(tx) => {
+                tx.outputs().iter().map(Into::into).collect()
+            }
         }
     }
 
@@ -580,7 +610,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.output_contract().into()),
         }
     }
@@ -612,6 +643,12 @@ impl Transaction {
                     .map(|w| HexString(w.clone().into_inner()))
                     .collect(),
             ),
+            fuel_tx::Transaction::Blob(tx) => Some(
+                tx.witnesses()
+                    .iter()
+                    .map(|w| HexString(w.clone().into_inner()))
+                    .collect(),
+            ),
         }
     }
 
@@ -623,7 +660,8 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -645,7 +683,8 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -657,7 +696,8 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -672,6 +712,14 @@ impl Transaction {
             fuel_tx::Transaction::Upload(tx) => {
                 Some((*tx.bytecode_witness_index()).into())
             }
+            fuel_tx::Transaction::Blob(tx) => Some((*tx.bytecode_witness_index()).into()),
+        }
+    }
+
+    async fn blob_id(&self) -> Option<BlobId> {
+        match &self.0 {
+            fuel_tx::Transaction::Blob(blob) => Some(blob.body().id.into()),
+            _ => None,
         }
     }
 
@@ -682,6 +730,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(_) => None,
             fuel_tx::Transaction::Upload(_) => None,
+            fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -707,6 +756,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(_) => None,
             fuel_tx::Transaction::Upload(_) => None,
+            fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -715,7 +765,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.bytecode_root()).into()),
         }
     }
@@ -725,7 +776,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.subsection_index()).into()),
         }
     }
@@ -735,7 +787,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.subsections_number()).into()),
         }
     }
@@ -745,7 +798,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => {
                 Some(tx.proof_set().iter().map(|proof| (*proof).into()).collect())
             }
@@ -759,6 +813,7 @@ impl Transaction {
             | fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(tx) => Some((*tx.upgrade_purpose()).into()),
             fuel_tx::Transaction::Upload(_) => None,
+            fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
