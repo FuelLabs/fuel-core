@@ -163,11 +163,6 @@ mod tests {
 
     impl AtomicView for DisabledRelayer {
         type LatestView = Self;
-        type Height = DaBlockHeight;
-
-        fn latest_height(&self) -> Option<Self::Height> {
-            Some(0u64.into())
-        }
 
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(self.clone())

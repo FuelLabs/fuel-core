@@ -16,10 +16,7 @@ use fuel_core_types::{
         ContractId,
         UtxoId,
     },
-    fuel_types::{
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::Nonce,
 };
 use std::{
     collections::{
@@ -90,12 +87,6 @@ pub struct MockDBProvider(pub MockDb);
 
 impl AtomicView for MockDBProvider {
     type LatestView = MockDb;
-
-    type Height = BlockHeight;
-
-    fn latest_height(&self) -> Option<Self::Height> {
-        Some(BlockHeight::default())
-    }
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         Ok(self.0.clone())
