@@ -1,6 +1,7 @@
 use super::scalars::{
     Bytes32,
     Tai64Timestamp,
+    TransactionId,
 };
 use crate::{
     fuel_core_graphql_api::{
@@ -9,6 +10,7 @@ use crate::{
         ports::OffChainDatabase,
         Config as GraphQLConfig,
         IntoApiResult,
+        QUERY_COSTS,
     },
     query::{
         BlockQueryData,
@@ -24,6 +26,7 @@ use crate::{
             U64,
         },
         tx::types::Transaction,
+        ReadViewProvider,
     },
 };
 use anyhow::anyhow;
@@ -115,17 +118,29 @@ impl Block {
         self.0.header().clone().into()
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let height = self.0.header().height();
         Ok(query.consensus(height)?.try_into()?)
     }
 
+    async fn transaction_ids(&self) -> Vec<TransactionId> {
+        self.0
+            .transactions()
+            .iter()
+            .map(|tx_id| (*tx_id).into())
+            .collect()
+    }
+
+    // Assume that in average we have 32 transactions per block.
+    #[graphql(complexity = "QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + child_complexity) * 32")]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         self.0
             .transactions()
             .iter()
@@ -231,13 +246,14 @@ pub struct BlockQuery;
 
 #[Object]
 impl BlockQuery {
+    #[graphql(complexity = "2 * QUERY_COSTS.storage_read + child_complexity")]
     async fn block(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Block>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let height = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
@@ -259,6 +275,11 @@ impl BlockQuery {
             .into_api_result()
     }
 
+    #[graphql(complexity = "{\
+        QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn blocks(
         &self,
         ctx: &Context<'_>,
@@ -267,9 +288,13 @@ impl BlockQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<U32, Block, EmptyFields, EmptyFields>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(query, start.map(Into::into), direction))
+            Ok(blocks_query(
+                query.as_ref(),
+                start.map(Into::into),
+                direction,
+            ))
         })
         .await
     }
@@ -280,18 +305,24 @@ pub struct HeaderQuery;
 
 #[Object]
 impl HeaderQuery {
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn header(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Header>> {
-        Ok(BlockQuery {}
+        Ok(BlockQuery
             .block(ctx, id, height)
             .await?
             .map(|b| b.0.header().clone().into()))
     }
 
+    #[graphql(complexity = "{\
+        QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn headers(
         &self,
         ctx: &Context<'_>,
@@ -300,9 +331,13 @@ impl HeaderQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<U32, Header, EmptyFields, EmptyFields>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(query, start.map(Into::into), direction))
+            Ok(blocks_query(
+                query.as_ref(),
+                start.map(Into::into),
+                direction,
+            ))
         })
         .await
     }
@@ -339,7 +374,7 @@ impl BlockMutation {
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 

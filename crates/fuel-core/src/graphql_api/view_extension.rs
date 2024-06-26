@@ -6,7 +6,9 @@ use async_graphql::{
         ExtensionFactory,
         NextPrepareRequest,
     },
+    Pos,
     Request,
+    ServerError,
     ServerResult,
 };
 use std::sync::Arc;
@@ -37,7 +39,16 @@ impl Extension for ViewExtension {
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
         let database: &ReadDatabase = ctx.data_unchecked();
-        let view = database.view();
+        let view = database.view().map_err(|e| {
+            let (line, column) = (line!(), column!());
+            ServerError::new(
+                e.to_string(),
+                Some(Pos {
+                    line: line as usize,
+                    column: column as usize,
+                }),
+            )
+        })?;
         let request = request.data(view);
         next.run(ctx, request).await
     }

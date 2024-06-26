@@ -3,12 +3,15 @@ use super::scalars::{
     U64,
 };
 use crate::{
-    fuel_core_graphql_api::database::ReadView,
-    graphql_api::api_service::GasPriceProvider,
+    graphql_api::{
+        api_service::GasPriceProvider,
+        QUERY_COSTS,
+    },
     query::{
         BlockQueryData,
         SimpleTransactionData,
     },
+    schema::ReadViewProvider,
 };
 use async_graphql::{
     Context,
@@ -43,11 +46,12 @@ pub struct LatestGasPriceQuery {}
 
 #[Object]
 impl LatestGasPriceQuery {
+    #[graphql(complexity = "2 * QUERY_COSTS.storage_read")]
     async fn latest_gas_price(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<LatestGasPrice> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
 
         let latest_block: Block<_> = query.latest_block()?;
         let block_height: u32 = (*latest_block.header().height()).into();
@@ -80,6 +84,7 @@ pub struct EstimateGasPriceQuery {}
 
 #[Object]
 impl EstimateGasPriceQuery {
+    #[graphql(complexity = "2 * QUERY_COSTS.storage_read")]
     async fn estimate_gas_price(
         &self,
         ctx: &Context<'_>,
@@ -88,7 +93,7 @@ impl EstimateGasPriceQuery {
         )]
         block_horizon: Option<U32>,
     ) -> async_graphql::Result<EstimateGasPrice> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
 
         let latest_block_height: u32 = query.latest_block_height()?.into();
         let target_block = block_horizon

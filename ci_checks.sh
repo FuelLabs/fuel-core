@@ -9,6 +9,8 @@
 # - Rust `1.75.0`
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
+# - `cargo install cargo-make`
+# - `cargo install cargo-insta`
 # - `npm install prettier prettier-plugin-toml`
 
 npx prettier --check "**/Cargo.toml" &&

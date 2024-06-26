@@ -73,7 +73,6 @@ use std::{
         TcpListener,
     },
     pin::Pin,
-    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower_http::{
@@ -186,20 +185,25 @@ pub fn new_service<OnChain, OffChain>(
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
     memory_pool: SharedMemoryPool,
-    log_threshold_ms: Duration,
-    request_timeout: Duration,
 ) -> anyhow::Result<Service>
 where
-    OnChain: AtomicView<Height = BlockHeight> + 'static,
-    OffChain: AtomicView<Height = BlockHeight> + 'static,
-    OnChain::View: OnChainDatabase,
-    OffChain::View: OffChainDatabase,
+    OnChain: AtomicView + 'static,
+    OffChain: AtomicView + 'static,
+    OnChain::LatestView: OnChainDatabase,
+    OffChain::LatestView: OffChainDatabase,
 {
-    let network_addr = config.addr;
+    let network_addr = config.config.addr;
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
+    let request_timeout = config.config.api_request_timeout;
 
     let schema = schema
+        .limit_complexity(config.config.max_queries_complexity)
+        .limit_depth(config.config.max_queries_depth)
+        .limit_recursive_depth(config.config.max_queries_recursive_depth)
+        .extension(MetricsExtension::new(
+            config.config.query_log_threshold_time,
+        ))
         .data(config)
         .data(combined_read_database)
         .data(txpool)
@@ -210,7 +214,6 @@ where
         .data(consensus_parameters_provider)
         .data(memory_pool)
         .extension(async_graphql::extensions::Tracing)
-        .extension(MetricsExtension::new(log_threshold_ms))
         .extension(ViewExtension::new())
         .finish();
 
