@@ -380,7 +380,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strum 0.26.2",
- "syn 2.0.66",
+ "syn 2.0.67",
  "thiserror",
 ]
 

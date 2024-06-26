@@ -1,5 +1,8 @@
 use crate::{
-    fuel_core_graphql_api::{ports::DatabaseRelayedTransactions, QUERY_COSTS,}
+    fuel_core_graphql_api::{
+        ports::DatabaseRelayedTransactions,
+        QUERY_COSTS,
+    },
     schema::{
         scalars::{
             RelayedTransactionId,
