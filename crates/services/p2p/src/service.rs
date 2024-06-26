@@ -869,12 +869,6 @@ pub mod tests {
     impl AtomicView for FakeDb {
         type LatestView = Self;
 
-        type Height = BlockHeight;
-
-        fn latest_height(&self) -> Option<Self::Height> {
-            Some(BlockHeight::default())
-        }
-
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(self.clone())
         }
@@ -989,12 +983,6 @@ pub mod tests {
 
     impl AtomicView for FakeDB {
         type LatestView = Self;
-
-        type Height = BlockHeight;
-
-        fn latest_height(&self) -> Option<Self::Height> {
-            Some(BlockHeight::default())
-        }
 
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(self.clone())

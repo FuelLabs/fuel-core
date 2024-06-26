@@ -215,20 +215,18 @@ pub struct MockDb {
 impl AtomicView for MockDb {
     type LatestView = Self;
 
-    type Height = BlockHeight;
-
-    fn latest_height(&self) -> Option<BlockHeight> {
-        let blocks = self.blocks.lock().unwrap();
-
-        blocks.keys().max().cloned()
-    }
-
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         Ok(self.clone())
     }
 }
 
 impl BlockProducerDatabase for MockDb {
+    fn latest_height(&self) -> Option<BlockHeight> {
+        let blocks = self.blocks.lock().unwrap();
+
+        blocks.keys().max().cloned()
+    }
+
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         let blocks = self.blocks.lock().unwrap();
         blocks

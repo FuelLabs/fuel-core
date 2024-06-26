@@ -82,9 +82,9 @@ pub struct ReadDatabase {
     /// The height of the genesis block.
     genesis_height: BlockHeight,
     /// The on-chain database view provider.
-    on_chain: Box<dyn AtomicView<LatestView = OnChainView, Height = BlockHeight>>,
+    on_chain: Box<dyn AtomicView<LatestView = OnChainView>>,
     /// The off-chain database view provider.
-    off_chain: Box<dyn AtomicView<LatestView = OffChainView, Height = BlockHeight>>,
+    off_chain: Box<dyn AtomicView<LatestView = OffChainView>>,
 }
 
 impl ReadDatabase {
@@ -95,8 +95,8 @@ impl ReadDatabase {
         off_chain: OffChain,
     ) -> Self
     where
-        OnChain: AtomicView<Height = BlockHeight> + 'static,
-        OffChain: AtomicView<Height = BlockHeight> + 'static,
+        OnChain: AtomicView + 'static,
+        OffChain: AtomicView + 'static,
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
     {
