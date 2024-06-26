@@ -1,13 +1,13 @@
 use crate::{
-    fuel_core_graphql_api::{
-        api_service::ConsensusProvider,
-        database::ReadView,
-    },
+    fuel_core_graphql_api::api_service::ConsensusProvider,
     query::BalanceQueryData,
-    schema::scalars::{
-        Address,
-        AssetId,
-        U64,
+    schema::{
+        scalars::{
+            Address,
+            AssetId,
+            U64,
+        },
+        ReadViewProvider,
     },
 };
 use anyhow::anyhow;
@@ -56,7 +56,7 @@ impl BalanceQuery {
         #[graphql(desc = "address of the owner")] owner: Address,
         #[graphql(desc = "asset_id of the coin")] asset_id: AssetId,
     ) -> async_graphql::Result<Balance> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let base_asset_id = *ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params()
@@ -82,7 +82,7 @@ impl BalanceQuery {
         if before.is_some() || after.is_some() {
             return Err(anyhow!("pagination is not yet supported").into())
         }
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
             let owner = filter.owner.into();
             let base_asset_id = *ctx
