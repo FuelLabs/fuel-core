@@ -5,7 +5,7 @@ use crate::{
     },
     state::{
         in_memory::memory_view::MemoryView,
-        iterable_view::IterableViewWrapper,
+        iterable_key_value_view::IterableKeyValueViewWrapper,
         IterDirection,
         IterableView,
         KeyValueView,
