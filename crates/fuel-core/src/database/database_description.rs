@@ -37,7 +37,7 @@ impl DatabaseHeight for DaBlockHeight {
 }
 
 /// The description of the database that makes it unique.
-pub trait DatabaseDescription: 'static + Clone + Debug + Send + Sync {
+pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
     /// The type of the column used by the database.
     type Column: StorageColumn + strum::EnumCount + enum_iterator::Sequence;
     /// The type of the height of the database used to track commits.

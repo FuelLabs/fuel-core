@@ -19,7 +19,6 @@ use crate::{
         },
         generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
-        key_value_view::KeyValueViewWrapper,
         ChangesIterator,
         ColumnType,
         IterableView,
@@ -67,7 +66,13 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
-use crate::state::rocks_db::RocksDb;
+use crate::state::{
+    historical_rocksdb::{
+        HistoricalRocksDB,
+        StateRewindPolicy,
+    },
+    rocks_db::RocksDb,
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 
@@ -184,11 +189,25 @@ where
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open_rocksdb(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
+    pub fn open_rocksdb(
+        path: &Path,
+        capacity: impl Into<Option<usize>>,
+        state_rewind_policy: StateRewindPolicy,
+    ) -> Result<Self> {
         use anyhow::Context;
-        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).with_context(|| format!("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db e.g. `rm -rf {path:?}`"))?;
+        let db = RocksDb::<Description>::default_open(path, capacity.into())
+            .map_err(Into::<anyhow::Error>::into)
+            .with_context(|| {
+                format!(
+                    "Failed to open rocksdb, you may need to wipe a \
+                pre-existing incompatible db e.g. `rm -rf {path:?}`"
+                )
+            })?;
 
-        Ok(Self::new(Arc::new(db)))
+        Ok(Self::new(Arc::new(HistoricalRocksDB::new(
+            db,
+            state_rewind_policy,
+        )?)))
     }
 
     /// Converts to an unchecked database.
@@ -216,7 +235,9 @@ where
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp() -> Self {
         let db = RocksDb::<Description>::default_open_temp(None).unwrap();
-        let data = Arc::new(db);
+        let historical_db =
+            HistoricalRocksDB::new(db, StateRewindPolicy::NoRewind).unwrap();
+        let data = Arc::new(historical_db);
         Self::from_storage(DataSource::new(data, Stage::default()))
     }
 }
@@ -271,10 +292,7 @@ where
                 return self.latest_view().map(|view| view.into_key_value_view());
             }
         }
-        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
-        Ok(KeyValueView::from_storage(KeyValueViewWrapper::new(
-            self.clone(),
-        )))
+        self.data.view_at_height(height)
     }
 }
 
@@ -1002,8 +1020,12 @@ mod tests {
         // in memory passes
         test(db);
 
-        let db = Database::<OnChain>::open_rocksdb(temp_dir.path(), 1024 * 1024 * 1024)
-            .unwrap();
+        let db = Database::<OnChain>::open_rocksdb(
+            temp_dir.path(),
+            1024 * 1024 * 1024,
+            Default::default(),
+        )
+        .unwrap();
         // rocks db fails
         test(db);
     }

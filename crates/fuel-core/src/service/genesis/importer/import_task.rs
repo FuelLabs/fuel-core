@@ -206,6 +206,7 @@ mod tests {
         state::{
             in_memory::memory_store::MemoryStore,
             IterableView,
+            KeyValueView,
             TransactableStorage,
         },
     };
@@ -560,6 +561,13 @@ mod tests {
             _: Option<BlockHeight>,
             _: Changes,
         ) -> StorageResult<()> {
+            Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
+        fn view_at_height(
+            &self,
+            _: &BlockHeight,
+        ) -> StorageResult<KeyValueView<Self::Column>> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 

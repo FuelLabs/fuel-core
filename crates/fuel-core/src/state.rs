@@ -27,6 +27,8 @@ use std::fmt::Debug;
 
 pub mod data_source;
 pub mod generic_database;
+#[cfg(feature = "rocksdb")]
+pub mod historical_rocksdb;
 pub mod in_memory;
 pub mod iterable_view;
 pub mod key_value_view;
@@ -61,6 +63,11 @@ pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
         changes: Changes,
     ) -> StorageResult<()>;
 
+    fn view_at_height(
+        &self,
+        height: &Height,
+    ) -> StorageResult<KeyValueView<Self::Column>>;
+
     fn latest_view(&self) -> StorageResult<IterableView<Self::Column>>;
 }
 
@@ -72,6 +79,10 @@ where
     S: IterableStore + Debug + Send + Sync,
 {
     fn commit_changes(&self, _: Option<Height>, _: Changes) -> StorageResult<()> {
+        unimplemented!()
+    }
+
+    fn view_at_height(&self, _: &Height) -> StorageResult<KeyValueView<Self::Column>> {
         unimplemented!()
     }
 

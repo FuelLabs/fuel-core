@@ -4,7 +4,7 @@ use crate::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct OffChain;
 
 impl DatabaseDescription for OffChain {

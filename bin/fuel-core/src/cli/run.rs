@@ -67,6 +67,9 @@ use tracing::{
     warn,
 };
 
+#[cfg(feature = "rocksdb")]
+use fuel_core::state::historical_rocksdb::StateRewindPolicy;
+
 use super::DEFAULT_DATABASE_CACHE_SIZE;
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
@@ -113,6 +116,18 @@ pub struct Command {
         env
     )]
     pub database_type: DbType,
+
+    #[cfg(feature = "rocksdb")]
+    /// Defined the state rewind policy for the database when RocksDB is enabled.
+    ///
+    /// The size defines how many blocks back have a checkpoint.
+    ///
+    /// If the size is not specified, the default value is `2`.
+    /// This means only two checkpoints are created: for the current and previous heights.
+    ///
+    /// If the size is `-1`, checkpoints will be created for each block height.
+    #[clap(long = "state-rewind-policy", env)]
+    pub state_rewind_policy: Option<i64>,
 
     /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
     #[arg(name = "SNAPSHOT", long = "snapshot", env)]
@@ -214,6 +229,8 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_policy,
             db_prune,
             snapshot,
             vm_backtrace,
@@ -297,10 +314,29 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        #[cfg(feature = "rocksdb")]
+        let state_rewind_policy = {
+            if database_type != DbType::RocksDb {
+                tracing::warn!("State rewind policy is only supported with RocksDB");
+            }
+
+            if let Some(size) = state_rewind_policy {
+                if size < 0 {
+                    StateRewindPolicy::RewindFullRange
+                } else {
+                    StateRewindPolicy::RewindRange { size: size as u64 }
+                }
+            } else {
+                StateRewindPolicy::RewindRange { size: 2 }
+            }
+        };
+
         let combined_db_config = CombinedDatabaseConfig {
             database_path,
             database_type,
             max_database_cache_size,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_policy,
         };
 
         let block_importer =

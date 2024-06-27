@@ -5,11 +5,7 @@ use crate::{
         Error as DatabaseError,
         Result as DatabaseResult,
     },
-    state::{
-        iterable_view::IterableViewWrapper,
-        IterDirection,
-        IterableView,
-    },
+    state::IterDirection,
 };
 use fuel_core_metrics::core_metrics::database_metrics;
 use fuel_core_storage::{
@@ -128,6 +124,7 @@ pub struct RocksDb<Description> {
     read_options: ReadOptions,
     db: Arc<DB>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
+    path: PathBuf,
     // used for RAII
     _drop: Arc<DropResources>,
     _marker: core::marker::PhantomData<Description>,
@@ -260,7 +257,8 @@ where
         ) -> Result<DB, rocksdb::Error>,
         P: AsRef<Path>,
     {
-        let path = path.as_ref().join(Description::name());
+        let original_path = path.as_ref().to_path_buf();
+        let path = original_path.join(Description::name());
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
@@ -351,6 +349,7 @@ where
             read_options: Self::generate_read_options(&None),
             snapshot: None,
             db,
+            path: original_path,
             _drop: Default::default(),
             _marker: Default::default(),
         };
@@ -374,6 +373,7 @@ where
 
     pub fn create_snapshot(&self) -> Self {
         let db = self.db.clone();
+        let path = self.path.clone();
         let _drop = self._drop.clone();
 
         // Safety: We are transmuting the snapshot to 'static lifetime, but it's safe
@@ -390,9 +390,14 @@ where
             read_options: Self::generate_read_options(&snapshot),
             snapshot,
             db,
+            path,
             _drop,
             _marker: Default::default(),
         }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
@@ -699,27 +704,6 @@ where
         self.db
             .write(batch)
             .map_err(|e| DatabaseError::Other(e.into()).into())
-    }
-}
-
-impl<Description> crate::state::TransactableStorage<Description::Height>
-    for RocksDb<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn commit_changes(
-        &self,
-        _: Option<Description::Height>,
-        changes: Changes,
-    ) -> StorageResult<()> {
-        self.commit_changes(&changes)
-    }
-
-    fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
-        let db_view = self.create_snapshot();
-        Ok(IterableView::from_storage(IterableViewWrapper::new(
-            Arc::new(db_view),
-        )))
     }
 }
 

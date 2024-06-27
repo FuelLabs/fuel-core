@@ -28,7 +28,7 @@ impl StorageColumn for DummyColumn {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Relayer;
 
 impl DatabaseDescription for Relayer {
