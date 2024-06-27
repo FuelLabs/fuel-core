@@ -7,11 +7,11 @@ use crate::{
         Result as DatabaseResult,
     },
     state::{
-        iterable_view::IterableViewWrapper,
+        iterable_key_value_view::IterableKeyValueViewWrapper,
         key_value_view::KeyValueViewWrapper,
         rocks_db::RocksDb,
         ColumnType,
-        IterableView,
+        IterableKeyValueView,
         KeyValueView,
         TransactableStorage,
     },
@@ -364,8 +364,8 @@ where
         .into_iter()
         .map(|(column, column_changes)| {
             let historical_column_changes = column_changes
-                .into_iter()
-                .map(|(key, _)| {
+                .into_keys()
+                .map(|key| {
                     let height_key = height_key(&key, old_height).into();
                     let operation = WriteOperation::Remove;
                     (height_key, operation)
@@ -458,9 +458,13 @@ where
         Ok(KeyValueView::from_storage(KeyValueViewWrapper::new(view)))
     }
 
-    fn latest_view(&self) -> StorageResult<IterableView<ColumnType<Description>>> {
+    fn latest_view(
+        &self,
+    ) -> StorageResult<IterableKeyValueView<ColumnType<Description>>> {
         let view = self.latest_view()?;
-        Ok(IterableView::from_storage(IterableViewWrapper::new(view)))
+        Ok(IterableKeyValueView::from_storage(
+            IterableKeyValueViewWrapper::new(view),
+        ))
     }
 }
 
@@ -507,7 +511,7 @@ where
 }
 
 pub fn height_key(key: &[u8], height: &u64) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(key.len() + 8);
+    let mut bytes = Vec::with_capacity(key.len().saturating_add(8));
     let height_bytes = height.to_be_bytes();
     bytes.extend_from_slice(key);
     bytes.extend_from_slice(&height_bytes);

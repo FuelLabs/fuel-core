@@ -2,7 +2,7 @@ use crate::{
     database::database_description::DatabaseDescription,
     state::{
         generic_database::GenericDatabase,
-        iterable_view::IterableViewWrapper,
+        iterable_key_value_view::IterableKeyValueViewWrapper,
         key_value_view::KeyValueViewWrapper,
     },
 };
@@ -30,7 +30,7 @@ pub mod generic_database;
 #[cfg(feature = "rocksdb")]
 pub mod historical_rocksdb;
 pub mod in_memory;
-pub mod iterable_view;
+pub mod iterable_key_value_view;
 pub mod key_value_view;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
@@ -38,16 +38,17 @@ pub mod rocks_db;
 pub type ColumnType<Description> = <Description as DatabaseDescription>::Column;
 
 /// A type extends the `KeyValueView`, allowing iteration over the storage.
-pub type IterableView<Column> = GenericDatabase<IterableViewWrapper<Column>>;
+pub type IterableKeyValueView<Column> =
+    GenericDatabase<IterableKeyValueViewWrapper<Column>>;
 
 /// The basic view available for the key value storage.
 pub type KeyValueView<Column> = GenericDatabase<KeyValueViewWrapper<Column>>;
 
-impl<Column> IterableView<Column>
+impl<Column> IterableKeyValueView<Column>
 where
     Column: StorageColumn + 'static,
 {
-    /// Downgrades the `IterableView` into the `KeyValueView`.
+    /// Downgrades the `IterableKeyValueView` into the `KeyValueView`.
     pub fn into_key_value_view(self) -> KeyValueView<Column> {
         let iterable = self.into_inner();
         let storage = KeyValueViewWrapper::new(iterable);
@@ -68,7 +69,7 @@ pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
         height: &Height,
     ) -> StorageResult<KeyValueView<Self::Column>>;
 
-    fn latest_view(&self) -> StorageResult<IterableView<Self::Column>>;
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>>;
 }
 
 // It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
@@ -86,7 +87,7 @@ where
         unimplemented!()
     }
 
-    fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
         unimplemented!()
     }
 }

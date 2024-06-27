@@ -7,7 +7,7 @@ use crate::{
         in_memory::memory_view::MemoryView,
         iterable_key_value_view::IterableKeyValueViewWrapper,
         IterDirection,
-        IterableView,
+        IterableKeyValueView,
         KeyValueView,
         TransactableStorage,
     },
@@ -167,9 +167,11 @@ where
         unimplemented!("The historical view is not implemented for `MemoryStore`")
     }
 
-    fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
         let view = self.create_view();
-        Ok(IterableView::from_storage(IterableViewWrapper::new(view)))
+        Ok(IterableKeyValueView::from_storage(
+            IterableKeyValueViewWrapper::new(view),
+        ))
     }
 }
 

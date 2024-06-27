@@ -58,6 +58,10 @@ use pyroscope_pprofrs::{
 use std::{
     env,
     net,
+    num::{
+        NonZeroI64,
+        NonZeroU64,
+    },
     path::PathBuf,
     str::FromStr,
 };
@@ -127,7 +131,7 @@ pub struct Command {
     ///
     /// If the size is `-1`, checkpoints will be created for each block height.
     #[clap(long = "state-rewind-policy", env)]
-    pub state_rewind_policy: Option<i64>,
+    pub state_rewind_policy: Option<NonZeroI64>,
 
     /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
     #[arg(name = "SNAPSHOT", long = "snapshot", env)]
@@ -321,13 +325,19 @@ impl Command {
             }
 
             if let Some(size) = state_rewind_policy {
+                let size = size.get();
                 if size < 0 {
                     StateRewindPolicy::RewindFullRange
                 } else {
-                    StateRewindPolicy::RewindRange { size: size as u64 }
+                    StateRewindPolicy::RewindRange {
+                        size: NonZeroU64::new(size as u64)
+                            .expect("The value is not zero above"),
+                    }
                 }
             } else {
-                StateRewindPolicy::RewindRange { size: 2 }
+                StateRewindPolicy::RewindRange {
+                    size: NonZeroU64::new(2).expect("The value is not zero"),
+                }
             }
         };
 
