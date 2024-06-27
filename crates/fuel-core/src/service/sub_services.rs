@@ -241,12 +241,12 @@ pub fn init_sub_services(
     );
 
     let graphql_config = GraphQLConfig {
-        addr: config.addr,
+        config: config.graphql_config.clone(),
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.max_tx,
-        max_depth: config.txpool.max_depth,
+        max_txpool_depth: config.txpool.max_depth,
         chain_name,
     };
 
@@ -263,8 +263,6 @@ pub fn init_sub_services(
         Box::new(gas_price_provider),
         Box::new(consensus_parameters_provider),
         SharedMemoryPool::new(config.memory_pool_size),
-        config.query_log_threshold_time,
-        config.api_request_timeout,
     )?;
 
     let shared = SharedState {

@@ -1,6 +1,7 @@
 use super::scalars::{
     Bytes32,
     Tai64Timestamp,
+    TransactionId,
 };
 use crate::{
     fuel_core_graphql_api::{
@@ -9,6 +10,7 @@ use crate::{
         ports::OffChainDatabase,
         Config as GraphQLConfig,
         IntoApiResult,
+        QUERY_COSTS,
     },
     query::{
         BlockQueryData,
@@ -116,12 +118,24 @@ impl Block {
         self.0.header().clone().into()
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query = ctx.read_view()?;
         let height = self.0.header().height();
         Ok(query.consensus(height)?.try_into()?)
     }
 
+    async fn transaction_ids(&self) -> Vec<TransactionId> {
+        self.0
+            .transactions()
+            .iter()
+            .map(|tx_id| (*tx_id).into())
+            .collect()
+    }
+
+    // Assume that in average we have 32 transactions per block.
+    #[graphql(complexity = "QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + child_complexity) * 32")]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -232,6 +246,7 @@ pub struct BlockQuery;
 
 #[Object]
 impl BlockQuery {
+    #[graphql(complexity = "2 * QUERY_COSTS.storage_read + child_complexity")]
     async fn block(
         &self,
         ctx: &Context<'_>,
@@ -260,6 +275,11 @@ impl BlockQuery {
             .into_api_result()
     }
 
+    #[graphql(complexity = "{\
+        QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn blocks(
         &self,
         ctx: &Context<'_>,
@@ -285,18 +305,24 @@ pub struct HeaderQuery;
 
 #[Object]
 impl HeaderQuery {
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn header(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Header>> {
-        Ok(BlockQuery {}
+        Ok(BlockQuery
             .block(ctx, id, height)
             .await?
             .map(|b| b.0.header().clone().into()))
     }
 
+    #[graphql(complexity = "{\
+        QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn headers(
         &self,
         ctx: &Context<'_>,

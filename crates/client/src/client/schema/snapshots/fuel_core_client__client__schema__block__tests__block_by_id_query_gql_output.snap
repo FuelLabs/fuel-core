@@ -35,8 +35,6 @@ query($id: BlockId) {
         signature
       }
     }
-    transactions {
-      id
-    }
+    transactionIds
   }
 }
