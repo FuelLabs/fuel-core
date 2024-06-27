@@ -2,7 +2,7 @@ use crate::{
     database::{
         database_description::off_chain::OffChain,
         Database,
-        OffChainIterableView,
+        OffChainIterableKeyValueView,
     },
     fuel_core_graphql_api::{
         ports::{
@@ -63,7 +63,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-impl OffChainDatabase for OffChainIterableView {
+impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
         self.get_block_height(id)
             .and_then(|height| height.ok_or(not_found!("BlockHeight")))

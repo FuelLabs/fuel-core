@@ -1,5 +1,5 @@
 use crate::{
-    database::OnChainIterableView,
+    database::OnChainIterableKeyValueView,
     service::{
         adapters::{
             BlockProducerAdapter,
@@ -191,7 +191,7 @@ fn get_gas_cost_for_height(
     Ok(cost)
 }
 
-impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableView {
+impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValueView {
     fn latest_height(&self) -> Option<BlockHeight> {
         self.latest_height().ok()
     }

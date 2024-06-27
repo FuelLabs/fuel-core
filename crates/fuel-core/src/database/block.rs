@@ -1,7 +1,7 @@
 use crate::{
     database::{
-        OffChainIterableView,
-        OnChainIterableView,
+        OffChainIterableKeyValueView,
+        OnChainIterableKeyValueView,
     },
     fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
@@ -39,7 +39,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::borrow::Cow;
 
-impl OffChainIterableView {
+impl OffChainIterableKeyValueView {
     pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
         self.storage::<FuelBlockIdsToHeights>()
             .get(id)
@@ -47,7 +47,7 @@ impl OffChainIterableView {
     }
 }
 
-impl OnChainIterableView {
+impl OnChainIterableKeyValueView {
     pub fn latest_compressed_block(&self) -> StorageResult<Option<CompressedBlock>> {
         let pair = self
             .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
@@ -88,7 +88,7 @@ impl OnChainIterableView {
     }
 }
 
-impl OnChainIterableView {
+impl OnChainIterableKeyValueView {
     pub fn block_history_proof(
         &self,
         message_block_height: &BlockHeight,

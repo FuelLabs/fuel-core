@@ -19,11 +19,11 @@ use crate::{
         },
         generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
-        iterable_view::IterableViewWrapper,
+        iterable_key_value_view::IterableKeyValueViewWrapper,
         key_value_view::KeyValueViewWrapper,
         ChangesIterator,
         ColumnType,
-        IterableView,
+        IterableKeyValueView,
         KeyValueView,
     },
 };
@@ -112,13 +112,13 @@ where
 
 pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
     GenericDatabase<DataSource<Description, Stage>>;
-pub type OnChainIterableView = IterableView<ColumnType<OnChain>>;
-pub type OffChainIterableView = IterableView<ColumnType<OffChain>>;
-pub type ReyalerIterableView = IterableView<ColumnType<Relayer>>;
+pub type OnChainIterableKeyValueView = IterableKeyValueView<ColumnType<OnChain>>;
+pub type OffChainIterableKeyValueView = IterableKeyValueView<ColumnType<OffChain>>;
+pub type ReyalerIterableKeyValueView = IterableKeyValueView<ColumnType<Relayer>>;
 
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
-impl OnChainIterableView {
+impl OnChainIterableKeyValueView {
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
         self.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
             .next()
@@ -246,13 +246,13 @@ impl<Description> AtomicView for Database<Description>
 where
     Description: DatabaseDescription,
 {
-    type LatestView = IterableView<ColumnType<Description>>;
+    type LatestView = IterableKeyValueView<ColumnType<Description>>;
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        Ok(IterableView::from_storage(IterableViewWrapper::new(
-            self.clone(),
-        )))
+        Ok(IterableKeyValueView::from_storage(
+            IterableKeyValueViewWrapper::new(self.clone()),
+        ))
     }
 }
 

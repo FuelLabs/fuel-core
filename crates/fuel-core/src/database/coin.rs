@@ -1,7 +1,7 @@
 use crate::{
     database::{
-        OffChainIterableView,
-        OnChainIterableView,
+        OffChainIterableKeyValueView,
+        OnChainIterableKeyValueView,
     },
     fuel_core_graphql_api::storage::coins::{
         owner_coin_id_key,
@@ -27,7 +27,7 @@ use fuel_core_types::{
     },
 };
 
-impl OffChainIterableView {
+impl OffChainIterableKeyValueView {
     pub fn owned_coins_ids(
         &self,
         owner: &Address,
@@ -53,7 +53,7 @@ impl OffChainIterableView {
     }
 }
 
-impl OnChainIterableView {
+impl OnChainIterableKeyValueView {
     pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
         let coin = self
             .storage_as_ref::<Coins>()

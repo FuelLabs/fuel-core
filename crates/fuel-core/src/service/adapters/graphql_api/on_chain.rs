@@ -1,5 +1,5 @@
 use crate::{
-    database::OnChainIterableView,
+    database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
         DatabaseChain,
@@ -48,7 +48,7 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-impl DatabaseBlocks for OnChainIterableView {
+impl DatabaseBlocks for OnChainIterableKeyValueView {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         Ok(self
             .storage::<Transactions>()
@@ -89,7 +89,7 @@ impl DatabaseBlocks for OnChainIterableView {
     }
 }
 
-impl DatabaseMessages for OnChainIterableView {
+impl DatabaseMessages for OnChainIterableKeyValueView {
     fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
@@ -105,7 +105,7 @@ impl DatabaseMessages for OnChainIterableView {
     }
 }
 
-impl DatabaseContracts for OnChainIterableView {
+impl DatabaseContracts for OnChainIterableKeyValueView {
     fn contract_balances(
         &self,
         contract: ContractId,
@@ -123,7 +123,7 @@ impl DatabaseContracts for OnChainIterableView {
     }
 }
 
-impl DatabaseChain for OnChainIterableView {
+impl DatabaseChain for OnChainIterableKeyValueView {
     fn da_height(&self) -> StorageResult<DaBlockHeight> {
         self.latest_compressed_block()?
             .map(|block| block.header().da_height)
@@ -131,4 +131,4 @@ impl DatabaseChain for OnChainIterableView {
     }
 }
 
-impl OnChainDatabase for OnChainIterableView {}
+impl OnChainDatabase for OnChainIterableKeyValueView {}
