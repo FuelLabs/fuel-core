@@ -24,17 +24,23 @@ pub struct FuelGasPriceMetadataStorage<Database> {
 #[async_trait::async_trait]
 impl<Database> MetadataStorage for FuelGasPriceMetadataStorage<Database>
 where
-    Database: AtomicView<Height = BlockHeight>,
-    Database::View: StorageAsRef,
-    Database::View: StorageInspect<GasPriceMetadata>,
-    Database::View: StorageMutate<GasPriceMetadata>,
-    <Database::View as StorageInspect<GasPriceMetadata>>::Error: Into<anyhow::Error>,
+    Database: AtomicView,
+    Database::LatestView: StorageAsRef,
+    Database::LatestView: StorageInspect<GasPriceMetadata>,
+    Database::LatestView: StorageMutate<GasPriceMetadata>,
+    <Database::LatestView as StorageInspect<GasPriceMetadata>>::Error:
+        Into<anyhow::Error>,
 {
     async fn get_metadata(
         &self,
         block_height: &BlockHeight,
     ) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let view = self.database.latest_view();
+        let view = self.database.latest_view().map_err(|err| {
+            GasPriceError::CouldNotFetchMetadata {
+                block_height: *block_height,
+                source_error: err.into(),
+            }
+        })?;
         let metadata = view
             .storage::<GasPriceMetadata>()
             .get(block_height)
@@ -47,7 +53,12 @@ where
 
     async fn set_metadata(&mut self, _metadata: UpdaterMetadata) -> GasPriceResult<()> {
         let block_height = _metadata.l2_block_height();
-        let mut view = self.database.latest_view();
+        let mut view = self.database.latest_view().map_err(|err| {
+            GasPriceError::CouldNotSetMetadata {
+                block_height,
+                source_error: err.into(),
+            }
+        })?;
         view.storage_as_mut::<GasPriceMetadata>()
             .insert(&block_height, &_metadata)
             .map_err(|err| GasPriceError::CouldNotSetMetadata {

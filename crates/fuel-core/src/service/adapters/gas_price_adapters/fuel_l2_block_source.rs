@@ -11,7 +11,10 @@ use fuel_core_storage::{
         FuelBlocks,
         Transactions,
     },
-    transactional::AtomicView,
+    transactional::{
+        AtomicView,
+        HistoricalView,
+    },
     StorageAsRef,
     StorageInspect,
 };
@@ -65,16 +68,21 @@ fn block_used_gas(block: &Block<Transaction>, gas_price_factor: u64) -> u64 {
 
 impl<Database> FuelL2BlockSource<Database>
 where
-    Database: AtomicView<Height = BlockHeight>,
-    Database::View: StorageAsRef,
-    Database::View: StorageInspect<FuelBlocks>,
-    Database::View: StorageInspect<Transactions>,
-    <Database::View as StorageInspect<FuelBlocks>>::Error: Into<anyhow::Error>,
-    <Database::View as StorageInspect<Transactions>>::Error: Into<anyhow::Error>,
+    Database: AtomicView,
+    Database::LatestView: StorageAsRef,
+    Database::LatestView: StorageInspect<FuelBlocks>,
+    Database::LatestView: StorageInspect<Transactions>,
+    <Database::LatestView as StorageInspect<FuelBlocks>>::Error: Into<anyhow::Error>,
+    <Database::LatestView as StorageInspect<Transactions>>::Error: Into<anyhow::Error>,
 {
     // TODO: Use refs instead of owned values?
     fn get_full_block(&self, height: BlockHeight) -> GasPriceResult<Block<Transaction>> {
-        let view = self.database.latest_view();
+        let view = self.database.latest_view().map_err(|source_error| {
+            GasPriceError::CouldNotFetchL2Block {
+                block_height: height,
+                source_error: source_error.into(),
+            }
+        })?;
         let block = view
             .storage::<FuelBlocks>()
             .get(&height)
@@ -112,14 +120,14 @@ where
 #[async_trait::async_trait]
 impl<Database> L2BlockSource for FuelL2BlockSource<Database>
 where
-    Database: AtomicView<Height = BlockHeight>,
-    Database::View: StorageAsRef,
-    Database::View: StorageInspect<FuelBlocks>,
-    Database::View: StorageInspect<Transactions>,
-    Database::View: StorageInspect<ConsensusParametersVersions>,
-    <Database::View as StorageInspect<FuelBlocks>>::Error: Into<anyhow::Error>,
-    <Database::View as StorageInspect<Transactions>>::Error: Into<anyhow::Error>,
-    <Database::View as StorageInspect<ConsensusParametersVersions>>::Error:
+    Database: HistoricalView<Height = BlockHeight>,
+    Database::LatestView: StorageAsRef,
+    Database::LatestView: StorageInspect<FuelBlocks>,
+    Database::LatestView: StorageInspect<Transactions>,
+    Database::LatestView: StorageInspect<ConsensusParametersVersions>,
+    <Database::LatestView as StorageInspect<FuelBlocks>>::Error: Into<anyhow::Error>,
+    <Database::LatestView as StorageInspect<Transactions>>::Error: Into<anyhow::Error>,
+    <Database::LatestView as StorageInspect<ConsensusParametersVersions>>::Error:
         Into<anyhow::Error>,
 {
     async fn get_l2_block(&self, height: BlockHeight) -> GasPriceResult<BlockInfo> {
@@ -130,7 +138,12 @@ where
                 tokio::time::sleep(self.frequency).await;
             } else {
                 let block = self.get_full_block(height)?;
-                let view = self.database.latest_view();
+                let view = self.database.latest_view().map_err(|source_error| {
+                    GasPriceError::CouldNotFetchL2Block {
+                        block_height: latest_height,
+                        source_error: source_error.into(),
+                    }
+                })?;
                 let param_version = block.header().consensus_parameters_version;
                 let consensus_params = view.storage::<ConsensusParametersVersions>().get(&param_version).map_err(
                     |source_error| GasPriceError::CouldNotFetchL2Block {
