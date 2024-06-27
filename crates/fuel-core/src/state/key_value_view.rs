@@ -20,8 +20,11 @@ impl<Column> std::fmt::Debug for KeyValueViewWrapper<Column> {
 }
 
 impl<Column> KeyValueViewWrapper<Column> {
-    pub fn new(storage: Arc<dyn KeyValueInspect<Column = Column> + Sync + Send>) -> Self {
-        Self(storage)
+    pub fn new<S>(storage: S) -> Self
+    where
+        S: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    {
+        Self(Arc::new(storage))
     }
 }
 

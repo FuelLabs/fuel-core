@@ -32,8 +32,11 @@ impl<Column> std::fmt::Debug for IterableViewWrapper<Column> {
 }
 
 impl<Column> IterableViewWrapper<Column> {
-    pub fn new(storage: Arc<dyn IterableStore<Column = Column> + Sync + Send>) -> Self {
-        Self(storage)
+    pub fn new<S>(storage: S) -> Self
+    where
+        S: IterableStore<Column = Column> + Send + Sync + 'static,
+    {
+        Self(Arc::new(storage))
     }
 }
 

@@ -273,7 +273,7 @@ where
         }
         // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
         Ok(KeyValueView::from_storage(KeyValueViewWrapper::new(
-            Arc::new(self.clone()),
+            self.clone(),
         )))
     }
 }
