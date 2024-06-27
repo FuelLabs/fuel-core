@@ -7,10 +7,7 @@ use fuel_core_types::{
     },
     secrecy::Secret,
 };
-use std::{
-    net::SocketAddr,
-    time::Duration,
-};
+use std::time::Duration;
 use strum_macros::{
     Display,
     EnumString,
@@ -36,12 +33,14 @@ pub use fuel_core_consensus_module::RelayerConsensusConfig;
 pub use fuel_core_importer;
 pub use fuel_core_poa::Trigger;
 
-use crate::combined_database::CombinedDatabaseConfig;
+use crate::{
+    combined_database::CombinedDatabaseConfig,
+    graphql_api::ServiceConfig as GraphQLConfig,
+};
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub addr: SocketAddr,
-    pub api_request_timeout: Duration,
+    pub graphql_config: GraphQLConfig,
     pub combined_db_config: CombinedDatabaseConfig,
     pub snapshot_reader: SnapshotReader,
     /// When `true`:
@@ -71,8 +70,6 @@ pub struct Config {
     pub min_connected_reserved_peers: usize,
     /// Time to wait after receiving the latest block before considered to be Synced.
     pub time_until_synced: Duration,
-    /// Time to wait after submitting a query before debug info will be logged about query.
-    pub query_log_threshold_time: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
 }
@@ -124,8 +121,17 @@ impl Config {
         };
 
         Self {
-            addr: SocketAddr::new(std::net::Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            api_request_timeout: Duration::from_secs(60),
+            graphql_config: GraphQLConfig {
+                addr: std::net::SocketAddr::new(
+                    std::net::Ipv4Addr::new(127, 0, 0, 1).into(),
+                    0,
+                ),
+                max_queries_depth: 16,
+                max_queries_complexity: 20000,
+                max_queries_recursive_depth: 16,
+                query_log_threshold_time: Duration::from_secs(2),
+                api_request_timeout: Duration::from_secs(60),
+            },
             combined_db_config,
             debug: true,
             utxo_validation,
@@ -156,7 +162,6 @@ impl Config {
             relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
-            query_log_threshold_time: Duration::from_secs(2),
             memory_pool_size: 4,
         }
     }

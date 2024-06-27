@@ -33,23 +33,30 @@ use crate::{
     kv_store::KVItem,
 };
 
-/// Provides a view of the storage at the given height.
-/// It guarantees to be atomic, meaning the view is immutable to outside modifications.
+/// Provides an atomic view of the storage at the latest height at
+/// the moment of view instantiation. All modifications to the storage
+/// after this point will not affect the view.
 pub trait AtomicView: Send + Sync {
-    /// The type of the storage view.
-    type View;
+    /// The type of the latest storage view.
+    type LatestView;
 
+    /// Returns current the view of the storage.
+    fn latest_view(&self) -> StorageResult<Self::LatestView>;
+}
+
+/// Provides an atomic view of the storage at the given height.
+/// The view is guaranteed to be unmodifiable for the given height.
+pub trait HistoricalView: AtomicView {
     /// The type used by the storage to track the commitments at a specific height.
     type Height;
+    /// The type of the storage view at `Self::Height`.
+    type ViewAtHeight;
 
-    /// Returns the latest block height.
+    /// Returns the latest height.
     fn latest_height(&self) -> Option<Self::Height>;
 
     /// Returns the view of the storage at the given `height`.
-    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::View>;
-
-    /// Returns the view of the storage for the latest block height.
-    fn latest_view(&self) -> Self::View;
+    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight>;
 }
 
 /// Storage transaction on top of the storage.

@@ -50,7 +50,7 @@ impl UpdateAlgorithm for StaticAlgorithmUpdater {
         StaticAlgorithm::new(self.static_price)
     }
 
-    async fn next(&mut self) -> Self::Algorithm {
+    async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
         futures::future::pending().await
     }
 }

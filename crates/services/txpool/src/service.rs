@@ -161,7 +161,7 @@ impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider, MP> RunnableS
     for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, MP>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider + Send + Sync,
@@ -193,7 +193,7 @@ impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider, MP> RunnableT
     for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, MP>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider + Send + Sync,
@@ -387,7 +387,7 @@ impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, View, MP>
     SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, MP>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider,
@@ -503,7 +503,7 @@ where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
     ViewProvider: AtomicView,
-    ViewProvider::View: TxPoolDb,
+    ViewProvider::LatestView: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider + Send + Sync,
     MP: MemoryPool + Send + Sync,

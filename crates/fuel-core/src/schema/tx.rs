@@ -5,9 +5,9 @@ use crate::{
             ConsensusProvider,
             TxPool,
         },
-        database::ReadView,
         ports::OffChainDatabase,
         IntoApiResult,
+        QUERY_COSTS,
     },
     query::{
         transaction_status_change,
@@ -24,6 +24,7 @@ use crate::{
             TxPointer,
         },
         tx::types::TransactionStatus,
+        ReadViewProvider,
     },
     service::adapters::SharedMemoryPool,
 };
@@ -87,12 +88,13 @@ pub struct TxQuery;
 
 #[Object]
 impl TxQuery {
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn transaction(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
@@ -106,6 +108,11 @@ impl TxQuery {
         }
     }
 
+    #[graphql(complexity = "{\
+        QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -116,7 +123,7 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         crate::schema::query_pagination(
             after,
             before,
@@ -167,6 +174,11 @@ impl TxQuery {
         .await
     }
 
+    #[graphql(complexity = "{\
+        QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn transactions_by_owner(
         &self,
         ctx: &Context<'_>,
@@ -177,7 +189,7 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
@@ -206,6 +218,7 @@ impl TxQuery {
     }
 
     /// Estimate the predicate gas for the provided transaction
+    #[graphql(complexity = "QUERY_COSTS.estimate_predicates + child_complexity")]
     async fn estimate_predicates(
         &self,
         ctx: &Context<'_>,
@@ -247,6 +260,9 @@ pub struct TxMutation;
 #[Object]
 impl TxMutation {
     /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
+    #[graphql(
+        complexity = "QUERY_COSTS.dry_run * txs.len() + child_complexity * txs.len()"
+    )]
     async fn dry_run(
         &self,
         ctx: &Context<'_>,
@@ -289,6 +305,7 @@ impl TxMutation {
     /// Submits transaction to the `TxPool`.
     ///
     /// Returns submitted transaction if the transaction is included in the `TxPool` without problems.
+    #[graphql(complexity = "QUERY_COSTS.submit + child_complexity")]
     async fn submit(
         &self,
         ctx: &Context<'_>,
@@ -329,15 +346,16 @@ impl TxStatusSubscription {
     /// then the updates arrive. In such a case the stream will close without
     /// a status. If this occurs the stream can simply be restarted to return
     /// the latest status.
+    #[graphql(complexity = "QUERY_COSTS.status_change + child_complexity")]
     async fn status_change<'a>(
         &self,
-        ctx: &Context<'a>,
+        ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
         let txpool = ctx.data_unchecked::<TxPool>();
-        let query: &ReadView = ctx.data_unchecked();
         let rx = txpool.tx_update_subscribe(id.into())?;
+        let query = ctx.read_view()?;
 
         Ok(transaction_status_change(
             move |id| match query.tx_status(&id) {
@@ -354,6 +372,7 @@ impl TxStatusSubscription {
     }
 
     /// Submits transaction to the `TxPool` and await either confirmation or failure.
+    #[graphql(complexity = "QUERY_COSTS.submit_and_await + child_complexity")]
     async fn submit_and_await<'a>(
         &self,
         ctx: &Context<'a>,
