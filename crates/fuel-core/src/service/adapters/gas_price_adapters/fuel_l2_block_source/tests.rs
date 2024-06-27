@@ -21,22 +21,14 @@ use futures::future::{
     maybe_done,
     MaybeDone,
 };
+use std::time::Duration;
 
 fn l2_source(database: Database) -> FuelL2BlockSource<Database> {
-    FuelL2BlockSource {
-        frequency: Duration::from_millis(10),
-        database,
-    }
+    FuelL2BlockSource { database }
 }
 
-fn l2_source_with_frequency(
-    database: Database,
-    frequency: Duration,
-) -> FuelL2BlockSource<Database> {
-    FuelL2BlockSource {
-        frequency,
-        database,
-    }
+fn l2_source_with_frequency(database: Database) -> FuelL2BlockSource<Database> {
+    FuelL2BlockSource { database }
 }
 
 fn params() -> ConsensusParameters {
@@ -80,8 +72,7 @@ async fn get_l2_block__waits_for_block() {
     let block_height = 1u32.into();
     let block = CompressedBlock::default();
     let mut database = Database::default();
-    let frequency = Duration::from_millis(10);
-    let source = l2_source_with_frequency(database.clone(), frequency);
+    let source = l2_source_with_frequency(database.clone());
     let params = params();
     let version = block.header().consensus_parameters_version;
     database
@@ -94,7 +85,8 @@ async fn get_l2_block__waits_for_block() {
     for _ in 0..10 {
         fut_l2_block = match maybe_done(fut_l2_block) {
             MaybeDone::Future(fut) => {
-                tokio::time::sleep(frequency).await;
+                const ARB_DURATION: u64 = 10;
+                tokio::time::sleep(Duration::from_millis(ARB_DURATION)).await;
                 fut
             }
             _ => panic!("Shouldn't be done yet"),

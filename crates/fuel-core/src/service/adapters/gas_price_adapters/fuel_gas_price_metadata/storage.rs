@@ -1,3 +1,4 @@
+use crate::database::database_description::DatabaseDescription;
 use fuel_core_gas_price_service::fuel_gas_price_updater::UpdaterMetadata;
 use fuel_core_storage::{
     blueprint::plain::Plain,
@@ -24,11 +25,12 @@ use fuel_core_types::fuel_types::BlockHeight;
     Hash,
     num_enum::TryFromPrimitive,
 )]
-pub enum Column {
-    GasPriceMetadata = 0,
+pub enum GasPriceColumn {
+    Metadata = 0,
+    State = 1,
 }
 
-impl Column {
+impl GasPriceColumn {
     /// The total count of variants in the enum.
     pub const COUNT: usize = <Self as strum::EnumCount>::COUNT;
 
@@ -38,7 +40,31 @@ impl Column {
     }
 }
 
-impl StorageColumn for Column {
+#[derive(Clone, Debug)]
+pub struct GasPrice;
+
+impl DatabaseDescription for GasPrice {
+    type Column = GasPriceColumn;
+    type Height = BlockHeight;
+
+    fn version() -> u32 {
+        0
+    }
+
+    fn name() -> &'static str {
+        "gas_price_service_storage"
+    }
+
+    fn metadata_column() -> Self::Column {
+        GasPriceColumn::Metadata
+    }
+
+    fn prefix(_column: &Self::Column) -> Option<usize> {
+        None
+    }
+}
+
+impl StorageColumn for GasPriceColumn {
     fn name(&self) -> &'static str {
         self.into()
     }
@@ -60,9 +86,9 @@ impl Mappable for GasPriceMetadata {
 
 impl TableWithBlueprint for GasPriceMetadata {
     type Blueprint = Plain<Primitive<4>, Postcard>;
-    type Column = Column;
+    type Column = GasPriceColumn;
 
     fn column() -> Self::Column {
-        Column::GasPriceMetadata
+        GasPriceColumn::State
     }
 }

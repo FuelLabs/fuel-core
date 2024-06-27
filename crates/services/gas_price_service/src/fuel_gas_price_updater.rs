@@ -54,7 +54,7 @@ pub struct BlockInfo {
 }
 #[async_trait::async_trait]
 pub trait L2BlockSource: Send + Sync {
-    async fn get_l2_block(&self, height: BlockHeight) -> Result<BlockInfo>;
+    async fn get_l2_block(&mut self, height: BlockHeight) -> Result<BlockInfo>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]

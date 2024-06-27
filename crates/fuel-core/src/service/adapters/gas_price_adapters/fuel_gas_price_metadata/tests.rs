@@ -1,6 +1,13 @@
 #![allow(non_snake_case)]
-use super::*;
-use fuel_core::database::Database;
+use super::{
+    storage::GasPrice,
+    *,
+};
+use crate::database::RegularStage;
+use fuel_core::database::{
+    // database_description::DatabaseDescription,
+    Database,
+};
 use fuel_core_gas_price_service::fuel_gas_price_updater::AlgorithmUpdaterV1;
 use fuel_core_storage::StorageAsMut;
 
@@ -33,10 +40,14 @@ fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
     .into()
 }
 
+fn database() -> Database<GasPrice, RegularStage<GasPrice>> {
+    Database::default()
+}
+
 #[tokio::test]
 async fn get_metadata__can_get_most_recent_version() {
     // given
-    let mut database: Database = Database::default();
+    let mut database = database();
     let block_height: BlockHeight = 1u32.into();
     let metadata = arb_metadata();
     database
