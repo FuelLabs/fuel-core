@@ -2,6 +2,7 @@
 
 use super::*;
 use fuel_core::database::Database;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
@@ -23,12 +24,14 @@ use futures::future::{
 };
 use std::time::Duration;
 
-fn l2_source(database: Database) -> FuelL2BlockSource<Database> {
-    FuelL2BlockSource { database }
-}
-
-fn l2_source_with_frequency(database: Database) -> FuelL2BlockSource<Database> {
-    FuelL2BlockSource { database }
+fn l2_source(
+    database: Database,
+    committed_block_stream: BoxStream<SharedImportResult>,
+) -> FuelL2BlockSource<Database> {
+    FuelL2BlockSource {
+        database,
+        committed_block_stream,
+    }
 }
 
 fn params() -> ConsensusParameters {
@@ -56,8 +59,9 @@ async fn get_l2_block__gets_expected_value() {
         .storage_as_mut::<FuelBlocks>()
         .insert(&block_height, &block)
         .unwrap();
+    let block_stream = Box::pin(tokio_stream::pending());
 
-    let source = l2_source(database);
+    let mut source = l2_source(database, block_stream);
 
     // when
     let result = source.get_l2_block(block_height).await.unwrap();
@@ -72,7 +76,8 @@ async fn get_l2_block__waits_for_block() {
     let block_height = 1u32.into();
     let block = CompressedBlock::default();
     let mut database = Database::default();
-    let source = l2_source_with_frequency(database.clone());
+    let block_stream = Box::pin(tokio_stream::pending());
+    let mut source = l2_source(database.clone(), block_stream);
     let params = params();
     let version = block.header().consensus_parameters_version;
     database
@@ -137,7 +142,8 @@ async fn get_l2_block__calculates_fullness_correctly() {
         .insert(&block_height, &block)
         .unwrap();
 
-    let source = l2_source(database);
+    let block_stream = Box::pin(tokio_stream::pending());
+    let mut source = l2_source(database, block_stream);
 
     // when
     let result = source.get_l2_block(block_height).await.unwrap();

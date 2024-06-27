@@ -6,7 +6,6 @@ use super::{
 use crate::database::Database;
 use fuel_core_gas_price_service::fuel_gas_price_updater::AlgorithmUpdaterV1;
 use fuel_core_storage::StorageAsMut;
-
 fn arb_metadata() -> UpdaterMetadata {
     let height = 111231u32.into();
     arb_metadata_with_l2_height(height)
@@ -63,7 +62,7 @@ async fn get_metadata__can_get_most_recent_version() {
 #[tokio::test]
 async fn get_metadata__returns_none_if_does_not_exist() {
     // given
-    let database: Database = Database::default();
+    let database = database();
     let block_height: BlockHeight = 1u32.into();
     let metadata_storage = FuelGasPriceMetadataStorage { database };
 
@@ -78,7 +77,7 @@ async fn get_metadata__returns_none_if_does_not_exist() {
 #[tokio::test]
 async fn set_metadata__can_set_metadata() {
     // given
-    let database: Database = Database::default();
+    let database = database();
     let block_height: BlockHeight = 1u32.into();
     let metadata = arb_metadata_with_l2_height(block_height);
     let mut metadata_storage = FuelGasPriceMetadataStorage { database };

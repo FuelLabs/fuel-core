@@ -1,4 +1,7 @@
-use crate::database::database_description::DatabaseDescription;
+use crate::database::{
+    database_description::DatabaseDescription,
+    Database,
+};
 use fuel_core_gas_price_service::fuel_gas_price_updater::UpdaterMetadata;
 use fuel_core_storage::{
     blueprint::plain::Plain,
@@ -8,7 +11,12 @@ use fuel_core_storage::{
     },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
+    transactional::{
+        Changes,
+        Modifiable,
+    },
     Mappable,
+    Result as StorageResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
@@ -90,5 +98,11 @@ impl TableWithBlueprint for GasPriceMetadata {
 
     fn column() -> Self::Column {
         GasPriceColumn::State
+    }
+}
+
+impl Modifiable for Database<GasPrice> {
+    fn commit_changes(&mut self, _changes: Changes) -> StorageResult<()> {
+        todo!()
     }
 }
