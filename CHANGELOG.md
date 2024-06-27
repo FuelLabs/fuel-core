@@ -35,13 +35,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Version 0.29.0]
 
 ### Added
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): Added new CLI arguments:
+  - `graphql-max-depth`
+  - `graphql-max-complexity`
+  - `graphql-max-recursive-depth`
 - [#1889](https://github.com/FuelLabs/fuel-core/pull/1889): Add new `FuelGasPriceProvider` that receives the gas price algorithm from a `GasPriceService`
 
 ### Changed
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): Changed default value for `api-request-timeout` to be `30s`.
 - [#1942](https://github.com/FuelLabs/fuel-core/pull/1942): Sequential relayer's commits.
 - [#1952](https://github.com/FuelLabs/fuel-core/pull/1952): Change tip sorting to ratio between tip and max gas sorting in txpool
 - [#1960](https://github.com/FuelLabs/fuel-core/pull/1960): Update fuel-vm to v0.53.0.
 - [#1964](https://github.com/FuelLabs/fuel-core/pull/1964): Add `creation_instant` as second sort key in tx pool
+
+#### Breaking
+
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): Now, GraphQL API has complexity and depth limitations on the queries. The default complexity limit is `20000`. It is ~50 blocks per request with transaction IDs and ~2-5 full blocks.
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): New `fuel-core-client` is incompatible with the old `fuel-core` because of two requested new fields.
 
 ### Fixed
 - [#1962](https://github.com/FuelLabs/fuel-core/pull/1962): Fixes the error message for incorrect keypair's path.

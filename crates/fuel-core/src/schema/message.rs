@@ -11,7 +11,10 @@ use super::{
     ReadViewProvider,
 };
 use crate::{
-    fuel_core_graphql_api::ports::OffChainDatabase,
+    fuel_core_graphql_api::{
+        ports::OffChainDatabase,
+        QUERY_COSTS,
+    },
     graphql_api::IntoApiResult,
     query::MessageQueryData,
     schema::scalars::{
@@ -65,6 +68,7 @@ pub struct MessageQuery {}
 
 #[Object]
 impl MessageQuery {
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn message(
         &self,
         ctx: &Context<'_>,
@@ -75,6 +79,11 @@ impl MessageQuery {
         query.message(&nonce).into_api_result()
     }
 
+    #[graphql(complexity = "{\
+        QUERY_COSTS.storage_iterator\
+        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn messages(
         &self,
         ctx: &Context<'_>,
@@ -116,6 +125,8 @@ impl MessageQuery {
         .await
     }
 
+    // 256 * QUERY_COSTS.storage_read because the depth of the Merkle tree in the worst case is 256
+    #[graphql(complexity = "256 * QUERY_COSTS.storage_read + child_complexity")]
     async fn message_proof(
         &self,
         ctx: &Context<'_>,
@@ -146,6 +157,7 @@ impl MessageQuery {
         .map(MessageProof))
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn message_status(
         &self,
         ctx: &Context<'_>,

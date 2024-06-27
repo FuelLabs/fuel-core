@@ -46,7 +46,7 @@ async fn poa_never_trigger_doesnt_produce_blocks() {
         let resp = client
             .blocks(PaginationRequest {
                 cursor: None,
-                results: 1024,
+                results: 20,
                 direction: PageDirection::Forward,
             })
             .await

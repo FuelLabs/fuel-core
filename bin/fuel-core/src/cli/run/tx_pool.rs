@@ -1,4 +1,4 @@
-//! Clap configuration related to consensus parameters
+//! Clap configuration related to TxPool service.
 
 use fuel_core::txpool::types::ContractId;
 use fuel_core_types::{

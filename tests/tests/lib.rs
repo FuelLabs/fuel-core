@@ -9,6 +9,7 @@ mod coins;
 mod contract;
 mod dap;
 mod debugger;
+mod dos;
 mod fee_collection_contract;
 mod local_node;
 
