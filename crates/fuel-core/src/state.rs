@@ -23,10 +23,7 @@ use fuel_core_storage::{
     transactional::Changes,
     Result as StorageResult,
 };
-use std::{
-    fmt::Debug,
-    sync::Arc,
-};
+use std::fmt::Debug;
 
 pub mod data_source;
 pub mod generic_database;
@@ -51,7 +48,7 @@ where
     /// Downgrades the `IterableView` into the `KeyValueView`.
     pub fn into_key_value_view(self) -> KeyValueView<Column> {
         let iterable = self.into_inner();
-        let storage = KeyValueViewWrapper::new(Arc::new(iterable));
+        let storage = KeyValueViewWrapper::new(iterable);
         KeyValueView::from_storage(storage)
     }
 }

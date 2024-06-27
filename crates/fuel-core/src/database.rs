@@ -251,7 +251,7 @@ where
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
         Ok(IterableView::from_storage(IterableViewWrapper::new(
-            Arc::new(self.clone()),
+            self.clone(),
         )))
     }
 }
@@ -277,7 +277,7 @@ where
         }
         // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
         Ok(KeyValueView::from_storage(KeyValueViewWrapper::new(
-            Arc::new(self.clone()),
+            self.clone(),
         )))
     }
 }
