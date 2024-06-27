@@ -3,11 +3,7 @@ use super::{
     storage::GasPrice,
     *,
 };
-use crate::database::RegularStage;
-use fuel_core::database::{
-    // database_description::DatabaseDescription,
-    Database,
-};
+use crate::database::Database;
 use fuel_core_gas_price_service::fuel_gas_price_updater::AlgorithmUpdaterV1;
 use fuel_core_storage::StorageAsMut;
 
@@ -40,7 +36,7 @@ fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
     .into()
 }
 
-fn database() -> Database<GasPrice, RegularStage<GasPrice>> {
+fn database() -> Database<GasPrice> {
     Database::default()
 }
 
