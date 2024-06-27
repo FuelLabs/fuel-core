@@ -53,7 +53,6 @@ pub mod blocks;
 pub mod coins;
 pub mod contracts;
 
-pub mod gas_price_metadata;
 pub mod merkle_data;
 pub mod messages;
 pub mod sealed_block;

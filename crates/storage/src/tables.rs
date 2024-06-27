@@ -2,8 +2,6 @@
 //! services.
 
 use crate::Mappable;
-// use fuel_core_gas_price_service::fuel_gas_price_updater::UpdaterMetadata;
-use fuel_core_gas_price_service::fuel_gas_price_updater::UpdaterMetadata;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -134,16 +132,6 @@ impl Mappable for StateTransitionBytecodeVersions {
     type Value = Self::OwnedValue;
     /// The Merkle root of the bytecode from the [`UploadedBytecodes`].
     type OwnedValue = Bytes32;
-}
-
-/// The storage table for metadata of the gas price algorithm updater
-pub struct GasPriceMetadata;
-
-impl Mappable for GasPriceMetadata {
-    type Key = Self::OwnedKey;
-    type OwnedKey = BlockHeight;
-    type Value = Self::OwnedValue;
-    type OwnedValue = UpdaterMetadata;
 }
 
 /// The module contains definition of merkle-related tables.

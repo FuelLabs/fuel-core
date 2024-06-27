@@ -1,3 +1,4 @@
+use crate::service::adapters::gas_price_adapters::fuel_gas_price_metadata::storage::GasPriceMetadata;
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
     Error as GasPriceError,
     MetadataStorage,
@@ -5,7 +6,6 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     UpdaterMetadata,
 };
 use fuel_core_storage::{
-    tables::GasPriceMetadata,
     transactional::AtomicView,
     StorageAsMut,
     StorageAsRef,
@@ -16,6 +16,8 @@ use fuel_core_types::fuel_types::BlockHeight;
 
 #[cfg(test)]
 mod tests;
+
+pub mod storage;
 
 pub struct FuelGasPriceMetadataStorage<Database> {
     database: Database,
