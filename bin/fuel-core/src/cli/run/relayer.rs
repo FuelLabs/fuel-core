@@ -28,7 +28,7 @@ pub struct RelayerArgs {
     pub relayer: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
-    #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, env)]
+    #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, value_delimiter = ',', env)]
     pub eth_v2_listening_contracts: Vec<H160>,
 
     /// Number of da block that the contract is deployed at.
