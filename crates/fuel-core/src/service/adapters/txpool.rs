@@ -1,5 +1,5 @@
 use crate::{
-    database::OnChainIterableView,
+    database::OnChainIterableKeyValueView,
     service::{
         adapters::{
             BlockImporterAdapter,
@@ -123,7 +123,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 }
 
-impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableView {
+impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)

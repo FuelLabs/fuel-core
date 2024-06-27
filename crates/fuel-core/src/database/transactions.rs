@@ -1,5 +1,5 @@
 use crate::{
-    database::OffChainIterableView,
+    database::OffChainIterableKeyValueView,
     fuel_core_graphql_api::storage::transactions::{
         OwnedTransactionIndexCursor,
         OwnedTransactionIndexKey,
@@ -38,7 +38,7 @@ impl crate::database::Database {
     }
 }
 
-impl OffChainIterableView {
+impl OffChainIterableKeyValueView {
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
     /// allows for efficient lookup of transaction ids associated with an address, sorted by
     /// block age and ordering within a block. The cursor tracks the `[block height + tx idx]` for

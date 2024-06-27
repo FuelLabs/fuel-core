@@ -205,7 +205,7 @@ mod tests {
         },
         state::{
             in_memory::memory_store::MemoryStore,
-            IterableView,
+            IterableKeyValueView,
             TransactableStorage,
         },
     };
@@ -563,7 +563,7 @@ mod tests {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
-        fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
+        fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }

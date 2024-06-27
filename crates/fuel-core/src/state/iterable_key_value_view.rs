@@ -15,23 +15,23 @@ use fuel_core_storage::{
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct IterableViewWrapper<Column>(
+pub struct IterableKeyValueViewWrapper<Column>(
     Arc<dyn IterableStore<Column = Column> + Sync + Send>,
 );
 
-impl<Column> IterableViewWrapper<Column> {
+impl<Column> IterableKeyValueViewWrapper<Column> {
     pub fn into_inner(self) -> Arc<dyn IterableStore<Column = Column> + Sync + Send> {
         self.0
     }
 }
 
-impl<Column> std::fmt::Debug for IterableViewWrapper<Column> {
+impl<Column> std::fmt::Debug for IterableKeyValueViewWrapper<Column> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("IterableViewWrapper").finish()
+        f.debug_struct("IterableKeyValueViewWrapper").finish()
     }
 }
 
-impl<Column> IterableViewWrapper<Column> {
+impl<Column> IterableKeyValueViewWrapper<Column> {
     pub fn new<S>(storage: S) -> Self
     where
         S: IterableStore<Column = Column> + Send + Sync + 'static,
@@ -40,7 +40,7 @@ impl<Column> IterableViewWrapper<Column> {
     }
 }
 
-impl<Column> KeyValueInspect for IterableViewWrapper<Column>
+impl<Column> KeyValueInspect for IterableKeyValueViewWrapper<Column>
 where
     Column: StorageColumn,
 {
@@ -72,7 +72,7 @@ where
     }
 }
 
-impl<Column> IterableStore for IterableViewWrapper<Column>
+impl<Column> IterableStore for IterableKeyValueViewWrapper<Column>
 where
     Column: StorageColumn,
 {

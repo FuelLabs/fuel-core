@@ -2,7 +2,7 @@ use crate::{
     database::{
         database_description::on_chain::OnChain,
         Database,
-        OnChainIterableView,
+        OnChainIterableKeyValueView,
     },
     fuel_core_graphql_api::api_service::ConsensusProvider,
     schema::scalars::{
@@ -77,7 +77,7 @@ pub struct Config {
     debug_enabled: bool,
 }
 
-type FrozenDatabase = VmStorage<StorageTransaction<OnChainIterableView>>;
+type FrozenDatabase = VmStorage<StorageTransaction<OnChainIterableKeyValueView>>;
 
 #[derive(Default, Debug)]
 pub struct ConcreteStorage {

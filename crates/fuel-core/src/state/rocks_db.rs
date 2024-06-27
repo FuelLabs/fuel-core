@@ -6,9 +6,9 @@ use crate::{
         Result as DatabaseResult,
     },
     state::{
-        iterable_view::IterableViewWrapper,
+        iterable_key_value_view::IterableKeyValueViewWrapper,
         IterDirection,
-        IterableView,
+        IterableKeyValueView,
     },
 };
 use fuel_core_metrics::core_metrics::database_metrics;
@@ -715,11 +715,11 @@ where
         self.commit_changes(&changes)
     }
 
-    fn latest_view(&self) -> StorageResult<IterableView<Self::Column>> {
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
         let db_view = self.create_snapshot();
-        Ok(IterableView::from_storage(IterableViewWrapper::new(
-            Arc::new(db_view),
-        )))
+        Ok(IterableKeyValueView::from_storage(
+            IterableKeyValueViewWrapper::new(Arc::new(db_view)),
+        ))
     }
 }
 

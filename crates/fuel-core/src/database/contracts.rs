@@ -1,4 +1,4 @@
-use crate::database::OnChainIterableView;
+use crate::database::OnChainIterableKeyValueView;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     iter::{
@@ -22,7 +22,7 @@ use fuel_core_types::fuel_types::{
 };
 use itertools::Itertools;
 
-impl OnChainIterableView {
+impl OnChainIterableKeyValueView {
     pub fn iter_contract_state(
         &self,
     ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsState>>> + '_ {
