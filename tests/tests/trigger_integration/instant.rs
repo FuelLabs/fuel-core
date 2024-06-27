@@ -52,7 +52,7 @@ async fn poa_instant_trigger_is_produces_instantly() {
         let count = client
             .blocks(PaginationRequest {
                 cursor: None,
-                results: 1024,
+                results: 20,
                 direction: PageDirection::Forward,
             })
             .await

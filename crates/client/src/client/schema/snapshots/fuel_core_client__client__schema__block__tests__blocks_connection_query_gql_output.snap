@@ -38,9 +38,7 @@ query($after: String, $before: String, $first: Int, $last: Int) {
             signature
           }
         }
-        transactions {
-          id
-        }
+        transactionIds
       }
     }
     pageInfo {
