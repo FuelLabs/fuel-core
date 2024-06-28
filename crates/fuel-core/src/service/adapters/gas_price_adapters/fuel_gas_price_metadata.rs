@@ -34,13 +34,12 @@ where
     Database: AtomicView,
     Database::LatestView: StorageAsRef,
     Database::LatestView: StorageInspect<GasPriceMetadata>,
+    <Database::LatestView as StorageInspect<GasPriceMetadata>>::Error:
+        Into<anyhow::Error>,
     Database: Modifiable,
-    Database: StorageInspect<GasPriceMetadata>,
     Database: WriteTransaction,
     for<'a> StorageTransaction<&'a mut Database>: StorageMutate<GasPriceMetadata>,
     for<'a> <StorageTransaction<&'a mut Database> as StorageInspect<GasPriceMetadata>>::Error:
-        Into<anyhow::Error>,
-    <Database::LatestView as StorageInspect<GasPriceMetadata>>::Error:
         Into<anyhow::Error>,
 {
     async fn get_metadata(
