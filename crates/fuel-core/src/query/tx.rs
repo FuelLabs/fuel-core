@@ -1,8 +1,3 @@
-use crate::fuel_core_graphql_api::ports::{
-    DatabaseBlocks,
-    OffChainDatabase,
-    OnChainDatabase,
-};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -22,6 +17,12 @@ use fuel_core_types::{
     },
     fuel_types::Address,
     services::txpool::TransactionStatus,
+};
+
+use crate::fuel_core_graphql_api::ports::{
+    DatabaseBlocks,
+    OffChainDatabase,
+    OnChainDatabase,
 };
 
 pub trait SimpleTransactionData: Send + Sync {

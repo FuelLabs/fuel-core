@@ -48,8 +48,10 @@ fn l2_source(
 
 fn params() -> ConsensusParameters {
     let mut params = ConsensusParametersV1::default();
-    let mut fee_params = FeeParametersV1::default();
-    fee_params.gas_price_factor = 100u64.into();
+    let fee_params = FeeParametersV1 {
+        gas_price_factor: 100u64,
+        ..Default::default()
+    };
     params.fee_params = FeeParameters::V1(fee_params);
     ConsensusParameters::V1(params)
 }
@@ -140,7 +142,7 @@ fn build_block(chain_id: &ChainId) -> (Block, Transaction) {
     *inner_mint.mint_amount_mut() = 1000;
 
     let tx = Transaction::Mint(inner_mint);
-    let tx_id = tx.id(&chain_id);
+    let tx_id = tx.id(chain_id);
     let mut block = CompressedBlock::default();
     block.transactions_mut().push(tx_id);
     let new = block.uncompress(vec![tx.clone()]);

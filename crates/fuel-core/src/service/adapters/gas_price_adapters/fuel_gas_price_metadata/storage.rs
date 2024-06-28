@@ -1,4 +1,5 @@
 use crate::database::{
+    commit_changes_with_height_update,
     database_description::DatabaseDescription,
     Database,
 };
@@ -8,6 +9,10 @@ use fuel_core_storage::{
     codec::{
         postcard::Postcard,
         primitive::Primitive,
+    },
+    iter::{
+        IterDirection,
+        IteratorOverTable,
     },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
@@ -19,6 +24,7 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use itertools::Itertools;
 
 #[repr(u32)]
 #[derive(
@@ -102,7 +108,11 @@ impl TableWithBlueprint for GasPriceMetadata {
 }
 
 impl Modifiable for Database<GasPrice> {
-    fn commit_changes(&mut self, _changes: Changes) -> StorageResult<()> {
-        todo!()
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all::<GasPriceMetadata>(Some(IterDirection::Reverse))
+                .map(|result| result.map(|(height, _)| height))
+                .try_collect()
+        })
     }
 }

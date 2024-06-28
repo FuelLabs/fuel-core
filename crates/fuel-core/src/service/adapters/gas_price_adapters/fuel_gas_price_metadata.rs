@@ -6,7 +6,12 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     UpdaterMetadata,
 };
 use fuel_core_storage::{
-    transactional::AtomicView,
+    transactional::{
+        AtomicView,
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
     StorageAsMut,
     StorageAsRef,
     StorageInspect,
@@ -29,7 +34,10 @@ where
     Database: AtomicView,
     Database::LatestView: StorageAsRef,
     Database::LatestView: StorageInspect<GasPriceMetadata>,
-    Database::LatestView: StorageMutate<GasPriceMetadata>,
+    Database: Modifiable,
+    Database: StorageInspect<GasPriceMetadata>,
+    Database: WriteTransaction,
+    for<'a> StorageTransaction<&'a mut Database>: StorageMutate<GasPriceMetadata>,
     <Database::LatestView as StorageInspect<GasPriceMetadata>>::Error:
         Into<anyhow::Error>,
 {
@@ -55,18 +63,21 @@ where
 
     async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> GasPriceResult<()> {
         let block_height = metadata.l2_block_height();
-        let mut view = self.database.latest_view().map_err(|err| {
-            GasPriceError::CouldNotSetMetadata {
-                block_height,
-                source_error: err.into(),
-            }
-        })?;
-        view.storage_as_mut::<GasPriceMetadata>()
-            .insert(&block_height, &metadata)
-            .map_err(|err| GasPriceError::CouldNotSetMetadata {
-                block_height,
-                source_error: err.into(),
-            })?;
+        // let mut view = self.database.latest_view().map_err(|err| {
+        //     GasPriceError::CouldNotSetMetadata {
+        //         block_height,
+        //         source_error: err.into(),
+        //     }
+        // })?;
+        let mut tx = self.database.write_transaction();
+        let _ = tx
+            .storage_as_mut::<GasPriceMetadata>()
+            .insert(&block_height, &metadata);
+        let _ = tx.commit();
+        // .map_err(|err| GasPriceError::CouldNotSetMetadata {
+        //     block_height,
+        //     source_error: err.into(),
+        // })?;
         Ok(())
     }
 }
