@@ -14,5 +14,5 @@ name = "fuel_gas_price_algorithm"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { workspace = true, features = ["derive"], default-features = false }
+serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
