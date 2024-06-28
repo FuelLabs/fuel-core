@@ -2,10 +2,16 @@
 
 use super::*;
 use fuel_core::database::Database;
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{
+    BoxStream,
+    IntoBoxStream,
+};
 use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
-    blockchain::block::CompressedBlock,
+    blockchain::{
+        block::CompressedBlock,
+        SealedBlock,
+    },
     fuel_tx::{
         consensus_parameters::{
             ConsensusParametersV1,
@@ -17,12 +23,18 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::ChainId,
+    services::block_importer::ImportResult,
 };
 use futures::future::{
     maybe_done,
     MaybeDone,
 };
-use std::time::Duration;
+use std::{
+    ops::Deref,
+    sync::Arc,
+    time::Duration,
+};
+use tokio_stream::wrappers::ReceiverStream;
 
 fn l2_source(
     database: Database,
@@ -42,24 +54,37 @@ fn params() -> ConsensusParameters {
     ConsensusParameters::V1(params)
 }
 
+fn block_to_import_result(block: Block) -> Arc<ImportResult> {
+    let sealed_block = SealedBlock {
+        entity: block,
+        consensus: Default::default(),
+    };
+    let result = ImportResult {
+        sealed_block,
+        tx_status: vec![],
+        events: vec![],
+        source: Default::default(),
+    };
+    Arc::new(result)
+}
+
 #[tokio::test]
 async fn get_l2_block__gets_expected_value() {
     // given
-    let block = CompressedBlock::default();
-    let block_height = 1u32.into();
     let params = params();
-    let block_info = get_block_info(&block.clone().uncompress(vec![]), &params);
+    let (block, _mint) = build_block(&params.chain_id());
+    let block_height = 1u32.into();
+    let block_info = get_block_info(&block, &params);
     let mut database = Database::default();
     let version = block.header().consensus_parameters_version;
     database
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(&version, &params)
         .unwrap();
-    database
-        .storage_as_mut::<FuelBlocks>()
-        .insert(&block_height, &block)
-        .unwrap();
-    let block_stream = Box::pin(tokio_stream::pending());
+    let import_result = block_to_import_result(block.clone());
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
+        vec![import_result];
+    let block_stream = tokio_stream::iter(blocks).into_boxed();
 
     let mut source = l2_source(database, block_stream);
 
@@ -74,11 +99,13 @@ async fn get_l2_block__gets_expected_value() {
 async fn get_l2_block__waits_for_block() {
     // given
     let block_height = 1u32.into();
-    let block = CompressedBlock::default();
-    let mut database = Database::default();
-    let block_stream = Box::pin(tokio_stream::pending());
-    let mut source = l2_source(database.clone(), block_stream);
     let params = params();
+    let (block, _mint) = build_block(&params.chain_id());
+    let mut database = Database::default();
+    let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+    let stream = ReceiverStream::new(receiver);
+    let block_stream = Box::pin(stream);
+    let mut source = l2_source(database.clone(), block_stream);
     let version = block.header().consensus_parameters_version;
     database
         .storage_as_mut::<ConsensusParametersVersions>()
@@ -97,19 +124,17 @@ async fn get_l2_block__waits_for_block() {
             _ => panic!("Shouldn't be done yet"),
         };
     }
-    database
-        .storage_as_mut::<FuelBlocks>()
-        .insert(&block_height, &block)
-        .unwrap();
+
+    let import_result = block_to_import_result(block.clone());
+    _sender.send(import_result).await.unwrap();
 
     // then
     let actual = fut_l2_block.await.unwrap();
-    let uncompressed_block = block.uncompress(vec![]);
-    let expected = get_block_info(&uncompressed_block, &params);
+    let expected = get_block_info(&block, &params);
     assert_eq!(expected, actual);
 }
 
-fn build_block(chain_id: &ChainId) -> (CompressedBlock, Transaction) {
+fn build_block(chain_id: &ChainId) -> (Block, Transaction) {
     let mut inner_mint = Mint::default();
     *inner_mint.gas_price_mut() = 500;
     *inner_mint.mint_amount_mut() = 1000;
@@ -118,7 +143,8 @@ fn build_block(chain_id: &ChainId) -> (CompressedBlock, Transaction) {
     let tx_id = tx.id(&chain_id);
     let mut block = CompressedBlock::default();
     block.transactions_mut().push(tx_id);
-    (block, tx)
+    let new = block.uncompress(vec![tx.clone()]);
+    (new, tx)
 }
 
 #[tokio::test]
@@ -133,16 +159,12 @@ async fn get_l2_block__calculates_fullness_correctly() {
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(&version, &params)
         .unwrap();
-    database
-        .storage_as_mut::<Transactions>()
-        .insert(&mint.id(&params.chain_id()), &mint)
-        .unwrap();
-    database
-        .storage_as_mut::<FuelBlocks>()
-        .insert(&block_height, &block)
-        .unwrap();
 
-    let block_stream = Box::pin(tokio_stream::pending());
+    let import_result = block_to_import_result(block.clone());
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
+        vec![import_result];
+    let block_stream = tokio_stream::iter(blocks).into_boxed();
+
     let mut source = l2_source(database, block_stream);
 
     // when
