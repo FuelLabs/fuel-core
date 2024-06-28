@@ -173,6 +173,11 @@ where
             IterableKeyValueViewWrapper::new(view),
         ))
     }
+
+    fn rollback_last_block(&self) -> StorageResult<()> {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
+        unimplemented!("The historical view is not implemented for `MemoryStore`")
+    }
 }
 
 #[cfg(test)]

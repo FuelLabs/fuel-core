@@ -70,6 +70,8 @@ pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
     ) -> StorageResult<KeyValueView<Self::Column>>;
 
     fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>>;
+
+    fn rollback_last_block(&self) -> StorageResult<()>;
 }
 
 // It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
@@ -88,6 +90,10 @@ where
     }
 
     fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+        unimplemented!()
+    }
+
+    fn rollback_last_block(&self) -> StorageResult<()> {
         unimplemented!()
     }
 }
