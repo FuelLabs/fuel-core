@@ -53,8 +53,8 @@ where
         Ok(metadata.map(|inner| inner.into_owned()))
     }
 
-    async fn set_metadata(&mut self, _metadata: UpdaterMetadata) -> GasPriceResult<()> {
-        let block_height = _metadata.l2_block_height();
+    async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> GasPriceResult<()> {
+        let block_height = metadata.l2_block_height();
         let mut view = self.database.latest_view().map_err(|err| {
             GasPriceError::CouldNotSetMetadata {
                 block_height,
@@ -62,7 +62,7 @@ where
             }
         })?;
         view.storage_as_mut::<GasPriceMetadata>()
-            .insert(&block_height, &_metadata)
+            .insert(&block_height, &metadata)
             .map_err(|err| GasPriceError::CouldNotSetMetadata {
                 block_height,
                 source_error: err.into(),

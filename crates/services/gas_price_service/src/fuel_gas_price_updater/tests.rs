@@ -13,7 +13,7 @@ struct FakeL2BlockSource {
 
 #[async_trait::async_trait]
 impl L2BlockSource for FakeL2BlockSource {
-    async fn get_l2_block(&self, _height: BlockHeight) -> Result<BlockInfo> {
+    async fn get_l2_block(&mut self, _height: BlockHeight) -> Result<BlockInfo> {
         let block = self.l2_block.lock().await.recv().await.unwrap();
         Ok(block)
     }
@@ -23,7 +23,7 @@ struct PendingL2BlockSource;
 
 #[async_trait::async_trait]
 impl L2BlockSource for PendingL2BlockSource {
-    async fn get_l2_block(&self, _height: BlockHeight) -> Result<BlockInfo> {
+    async fn get_l2_block(&mut self, _height: BlockHeight) -> Result<BlockInfo> {
         futures::future::pending().await
     }
 }

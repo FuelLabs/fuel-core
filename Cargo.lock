@@ -3230,7 +3230,6 @@ dependencies = [
  "anyhow",
  "derive_more",
  "enum-iterator",
- "fuel-core-gas-price-service",
  "fuel-core-storage",
  "fuel-core-types",
  "fuel-vm",

@@ -74,7 +74,7 @@ async fn get_l2_block__gets_expected_value() {
     let params = params();
     let (block, _mint) = build_block(&params.chain_id());
     let block_height = 1u32.into();
-    let block_info = get_block_info(&block, &params);
+    let expected = get_block_info(&block, &params).unwrap();
     let mut database = Database::default();
     let version = block.header().consensus_parameters_version;
     database
@@ -89,10 +89,10 @@ async fn get_l2_block__gets_expected_value() {
     let mut source = l2_source(database, block_stream);
 
     // when
-    let result = source.get_l2_block(block_height).await.unwrap();
+    let actual = source.get_l2_block(block_height).await.unwrap();
 
     // then
-    assert_eq!(result, block_info);
+    assert_eq!(expected, actual);
 }
 
 #[tokio::test]
@@ -130,7 +130,7 @@ async fn get_l2_block__waits_for_block() {
 
     // then
     let actual = fut_l2_block.await.unwrap();
-    let expected = get_block_info(&block, &params);
+    let expected = get_block_info(&block, &params).unwrap();
     assert_eq!(expected, actual);
 }
 

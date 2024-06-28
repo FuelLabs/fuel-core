@@ -15,6 +15,20 @@ pub struct FuelGasPriceUpdater<L2, Metadata> {
     metadata_storage: Metadata,
 }
 
+impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata> {
+    pub fn new(
+        inner: AlgorithmUpdaterV1,
+        l2_block_source: L2,
+        metadata_storage: Metadata,
+    ) -> Self {
+        Self {
+            inner,
+            l2_block_source,
+            metadata_storage,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to find L2 block at height {block_height:?}: {source_error:?}")]

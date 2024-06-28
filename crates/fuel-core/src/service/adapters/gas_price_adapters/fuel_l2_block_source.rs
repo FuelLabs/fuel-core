@@ -42,27 +42,46 @@ pub struct FuelL2BlockSource<Database> {
 fn get_block_info(
     block: &Block<Transaction>,
     consensus_params: &ConsensusParameters,
-) -> BlockInfo {
+) -> GasPriceResult<BlockInfo> {
     let gas_price_factor = consensus_params.fee_params().gas_price_factor();
-    let used_gas = block_used_gas(block, gas_price_factor);
+    let used_gas = block_used_gas(block, gas_price_factor)?;
     let block_gas_limit = consensus_params.block_gas_limit();
-    BlockInfo {
+    let info = BlockInfo {
         height: (*block.header().height()).into(),
         fullness: (used_gas, block_gas_limit),
         block_bytes: 0,
         gas_price: 0,
-    }
+    };
+    Ok(info)
 }
 
-fn block_used_gas(block: &Block<Transaction>, gas_price_factor: u64) -> u64 {
-    if let Some(Transaction::Mint(mint)) = block.transactions().last() {
-        let fee = mint.mint_amount();
-        let scaled_fee = fee * gas_price_factor;
-        let gas_used = scaled_fee / mint.gas_price();
-        gas_used
-    } else {
-        0
-    }
+fn block_used_gas(
+    block: &Block<Transaction>,
+    gas_price_factor: u64,
+) -> GasPriceResult<u64> {
+    let mint = block
+        .transactions()
+        .last()
+        .and_then(|tx| tx.as_mint())
+        .ok_or(GasPriceError::CouldNotFetchL2Block {
+            block_height: *block.header().height(),
+            source_error: anyhow!("Block has no mint transaction"),
+        })?;
+    let fee = mint.mint_amount();
+    let scaled_fee =
+        fee.checked_mul(gas_price_factor)
+            .ok_or(GasPriceError::CouldNotFetchL2Block {
+                block_height: *block.header().height(),
+                source_error: anyhow!(
+                    "Failed to scale fee by gas price factor, overflow"
+                ),
+            })?;
+    scaled_fee
+        .checked_div(*mint.gas_price())
+        .ok_or(GasPriceError::CouldNotFetchL2Block {
+            block_height: *block.header().height(),
+            source_error: anyhow!("Failed to calculate gas used, division by zero"),
+        })
 }
 
 #[async_trait::async_trait]
@@ -112,7 +131,6 @@ where
                     "Consensus parameters not found in storage: {height:?}",
                 ),
             })?;
-        let block_info = get_block_info(block, &consensus_params);
-        return Ok(block_info);
+        get_block_info(block, &consensus_params)
     }
 }
