@@ -28,6 +28,10 @@ pub struct GenericDatabase<Storage> {
 }
 
 impl<Storage> GenericDatabase<Storage> {
+    pub fn inner_storage(&self) -> &Storage {
+        self.storage.as_ref()
+    }
+
     pub fn from_storage(storage: Storage) -> Self {
         Self {
             storage: StructuredStorage::new(storage),

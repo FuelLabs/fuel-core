@@ -248,7 +248,7 @@ where
     type LatestView = IterableKeyValueView<ColumnType<Description>>;
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
-        self.data.latest_view()
+        self.inner_storage().data.latest_view()
     }
 }
 
