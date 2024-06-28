@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        database_description::relayer::Relayer,
-        Database,
-    },
+    database::ReyalerIterableKeyValueView,
     service::adapters::TransactionsSource,
 };
 use fuel_core_executor::ports::MaybeCheckedTransaction;
@@ -21,7 +18,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     }
 }
 
-impl fuel_core_executor::ports::RelayerPort for Database<Relayer> {
+impl fuel_core_executor::ports::RelayerPort for ReyalerIterableKeyValueView {
     fn enabled(&self) -> bool {
         #[cfg(feature = "relayer")]
         {

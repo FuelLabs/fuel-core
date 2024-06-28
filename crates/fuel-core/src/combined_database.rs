@@ -156,6 +156,7 @@ impl CombinedDatabase {
     pub fn read_state_config(&self) -> StorageResult<StateConfig> {
         use fuel_core_chain_config::AddTable;
         use fuel_core_producer::ports::BlockProducerDatabase;
+        use fuel_core_storage::transactional::AtomicView;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
 
@@ -180,10 +181,10 @@ impl CombinedDatabase {
             ContractsLatestUtxo
         );
 
-        let latest_block = self.on_chain().latest_block()?;
-        let blocks_root = self
-            .on_chain()
-            .block_header_merkle_root(latest_block.header().height())?;
+        let view = self.on_chain().latest_view()?;
+        let latest_block = view.latest_block()?;
+        let blocks_root =
+            view.block_header_merkle_root(latest_block.header().height())?;
         let state_config =
             builder.build(Some(fuel_core_chain_config::LastBlockConfig::from_header(
                 latest_block.header(),

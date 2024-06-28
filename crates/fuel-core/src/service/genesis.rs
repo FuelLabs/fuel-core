@@ -276,6 +276,7 @@ mod tests {
             ContractsAssets,
             ContractsState,
         },
+        transactional::AtomicView,
         StorageAsRef,
     };
     use fuel_core_types::{
@@ -612,6 +613,8 @@ mod tests {
 
     fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
         db.off_chain()
+            .latest_view()
+            .unwrap()
             .owned_coins_ids(owner, None, None)
             .map(|r| {
                 let coin_id = r.unwrap();
@@ -649,15 +652,14 @@ mod tests {
         let actual_state = db.read_state_config().unwrap();
         let mut expected_state = initial_state;
         let mut last_block = LastBlockConfig::default();
-        last_block.block_height = db.on_chain().latest_height().unwrap().unwrap();
-        last_block.state_transition_version = db
-            .on_chain()
+        let view = db.on_chain().latest_view().unwrap();
+        last_block.block_height = view.latest_height().unwrap();
+        last_block.state_transition_version = view
             .latest_block()
             .unwrap()
             .header()
             .state_transition_bytecode_version;
-        last_block.blocks_root = db
-            .on_chain()
+        last_block.blocks_root = view
             .block_header_merkle_root(&last_block.block_height)
             .unwrap();
         expected_state.last_block = Some(last_block);

@@ -2,7 +2,13 @@ use self::adapters::BlockImporterAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
-    service::adapters::PoAAdapter,
+    service::{
+        adapters::{
+            ExecutorAdapter,
+            PoAAdapter,
+        },
+        sub_services::TxPoolSharedState,
+    },
 };
 use fuel_core_poa::ports::BlockImporter;
 use fuel_core_services::{
@@ -12,10 +18,12 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use fuel_core_storage::IsNotFound;
+use fuel_core_storage::{
+    transactional::AtomicView,
+    IsNotFound,
+};
 use std::net::SocketAddr;
 
-use crate::service::sub_services::TxPoolSharedState;
 pub use config::{
     Config,
     DbType,
@@ -54,6 +62,8 @@ pub struct SharedState {
     pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    /// The executor to validate blocks.
+    pub executor: ExecutorAdapter,
     /// The config of the service.
     pub config: Config,
 }
@@ -229,7 +239,7 @@ impl RunnableService for Task {
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         // check if chain is initialized
-        if let Err(err) = self.shared.database.on_chain().get_genesis() {
+        if let Err(err) = self.shared.database.on_chain().latest_view()?.get_genesis() {
             if err.is_not_found() {
                 let result = genesis::execute_genesis_block(
                     watcher.clone(),

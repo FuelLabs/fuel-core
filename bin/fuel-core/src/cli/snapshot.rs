@@ -221,6 +221,7 @@ mod tests {
             Messages,
             Transactions,
         },
+        transactional::AtomicView,
         ContractsAssetKey,
         ContractsStateKey,
         StorageAsMut,
@@ -772,6 +773,8 @@ mod tests {
         latest_block.blocks_root = db
             .db
             .on_chain()
+            .latest_view()
+            .unwrap()
             .block_header_merkle_root(&latest_block.block_height)
             .unwrap();
         db.flush();
