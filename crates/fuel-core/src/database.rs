@@ -19,7 +19,6 @@ use crate::{
         },
         generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
-        iterable_key_value_view::IterableKeyValueViewWrapper,
         key_value_view::KeyValueViewWrapper,
         ChangesIterator,
         ColumnType,
@@ -249,10 +248,7 @@ where
     type LatestView = IterableKeyValueView<ColumnType<Description>>;
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        Ok(IterableKeyValueView::from_storage(
-            IterableKeyValueViewWrapper::new(self.clone()),
-        ))
+        self.inner_storage().data.latest_view()
     }
 }
 
