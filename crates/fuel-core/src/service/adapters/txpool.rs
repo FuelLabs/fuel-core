@@ -55,7 +55,7 @@ use std::sync::Arc;
 
 impl BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
-        self.events()
+        self.events_shared_result()
     }
 }
 

@@ -3301,6 +3301,7 @@ dependencies = [
  "test-case",
  "test-helpers",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -58,10 +58,7 @@ use pyroscope_pprofrs::{
 use std::{
     env,
     net,
-    num::{
-        NonZeroI64,
-        NonZeroU64,
-    },
+    num::NonZeroU64,
     path::PathBuf,
     str::FromStr,
 };
@@ -124,14 +121,16 @@ pub struct Command {
     #[cfg(feature = "rocksdb")]
     /// Defined the state rewind policy for the database when RocksDB is enabled.
     ///
-    /// The size defines how many blocks back have a checkpoint.
+    /// The duration defines how many blocks back the rewind feature works.
+    /// Assuming each block requires one second to produce.
     ///
-    /// If the size is not specified, the default value is `2`.
-    /// This means only two checkpoints are created: for the current and previous heights.
+    /// The default value is 7 days = 604800 blocks.
     ///
-    /// If the size is `-1`, checkpoints will be created for each block height.
-    #[clap(long = "state-rewind-policy", env)]
-    pub state_rewind_policy: Option<NonZeroI64>,
+    /// The `BlockHeight` is `u32`, meaning the maximum possible number of blocks
+    /// is less than 137 years. `2^32 / 24 / 60 / 60/ 365` = `136.1925195332` years.
+    /// If the value is 136 years or more, the rewind feature is enabled for all blocks.
+    #[clap(long = "state-rewind-duration", default_value = "7d", env)]
+    pub state_rewind_duration: humantime::Duration,
 
     /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
     #[arg(name = "SNAPSHOT", long = "snapshot", env)]
@@ -234,7 +233,7 @@ impl Command {
             database_path,
             database_type,
             #[cfg(feature = "rocksdb")]
-            state_rewind_policy,
+            state_rewind_duration,
             db_prune,
             snapshot,
             vm_backtrace,
@@ -324,19 +323,20 @@ impl Command {
                 tracing::warn!("State rewind policy is only supported with RocksDB");
             }
 
-            if let Some(size) = state_rewind_policy {
-                let size = size.get();
-                if size < 0 {
+            let blocks = state_rewind_duration.as_secs();
+
+            if blocks == 0 {
+                StateRewindPolicy::NoRewind
+            } else {
+                let maximum_blocks: humantime::Duration = "136y".parse()?;
+
+                if blocks >= maximum_blocks.as_secs() {
                     StateRewindPolicy::RewindFullRange
                 } else {
                     StateRewindPolicy::RewindRange {
-                        size: NonZeroU64::new(size as u64)
+                        size: NonZeroU64::new(blocks)
                             .expect("The value is not zero above"),
                     }
-                }
-            } else {
-                StateRewindPolicy::RewindRange {
-                    size: NonZeroU64::new(2).expect("The value is not zero"),
                 }
             }
         };
@@ -421,7 +421,7 @@ impl Command {
 }
 
 pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
-    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+    #[cfg(feature = "rocksdb")]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }

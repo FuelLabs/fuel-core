@@ -6,10 +6,10 @@ use clap::{
 };
 use fuel_core::{
     combined_database::CombinedDatabase,
+    state::historical_rocksdb::StateRewindPolicy,
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::ChainConfig;
-
 use std::path::{
     Path,
     PathBuf,
@@ -112,7 +112,7 @@ pub enum SubCommands {
     },
 }
 
-#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+#[cfg(feature = "rocksdb")]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use fuel_core::service::genesis::Exporter;
     use fuel_core_chain_config::{
@@ -184,7 +184,7 @@ fn open_db(path: &Path, capacity: Option<usize>) -> anyhow::Result<CombinedDatab
     CombinedDatabase::open(
         path,
         capacity.unwrap_or(1024 * 1024 * 1024),
-        Default::default(),
+        StateRewindPolicy::NoRewind,
     )
     .map_err(Into::<anyhow::Error>::into)
     .context(format!("failed to open combined database at path {path:?}",))

@@ -24,7 +24,7 @@ where
     fn name(&self) -> &'static str {
         match self {
             Column::UnderlyingDatabase(c) => c.name(),
-            Column::HistoryColumn => "history",
+            Column::HistoryColumn => "modifications_history",
         }
     }
 

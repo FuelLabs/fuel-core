@@ -59,6 +59,6 @@ p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]
-rocksdb-production = ["fuel-core/rocksdb-production"]
+rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]
 # features to enable in production, but increase build times
 production = ["env", "relayer", "rocksdb-production", "p2p", "parquet"]

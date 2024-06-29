@@ -262,6 +262,26 @@ where
     }
 }
 
+impl<Description> Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    pub fn rollback_last_block(&self) -> StorageResult<()> {
+        let mut lock = self.stage.height.lock();
+        let height = *lock;
+
+        let Some(height) = height else {
+            return Err(
+                anyhow::anyhow!("Database doesn't have a height to rollback").into(),
+            );
+        };
+        self.data.rollback_last_block()?;
+        *lock = height.rollback_height();
+
+        Ok(())
+    }
+}
+
 impl<Description> AtomicView for Database<Description>
 where
     Description: DatabaseDescription,
@@ -287,11 +307,14 @@ where
     fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
         let lock = self.stage.height.lock();
 
-        if let Some(current_height) = *lock {
-            if &current_height == height {
-                return self.latest_view().map(|view| view.into_key_value_view());
+        match *lock {
+            None => return self.latest_view().map(|view| view.into_key_value_view()),
+            Some(current_height) if &current_height == height => {
+                return self.latest_view().map(|view| view.into_key_value_view())
             }
-        }
+            _ => {}
+        };
+
         self.data.view_at_height(height)
     }
 }
