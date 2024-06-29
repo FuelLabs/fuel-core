@@ -27,6 +27,10 @@ use crate::{
         SubServices,
     },
 };
+use fuel_core_gas_price_service::fuel_gas_price_updater::{
+    AlgorithmUpdaterV1,
+    FuelGasPriceUpdater,
+};
 use fuel_core_poa::Trigger;
 use fuel_core_storage::transactional::AtomicView;
 use std::sync::Arc;
@@ -45,6 +49,8 @@ use fuel_core_gas_price_service::static_updater::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use crate::service::adapters::gas_price_adapters::fuel_gas_price_metadata::FuelGasPriceMetadataStorage;
+use crate::service::adapters::gas_price_adapters::fuel_l2_block_source::FuelL2BlockSource;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
@@ -173,7 +179,31 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
+    // let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
+    let inner_updater = AlgorithmUpdaterV1 {
+        new_exec_price: 0,
+        last_da_gas_price: 0,
+        min_exec_gas_price: 0,
+        exec_gas_price_change_percent: 0,
+        l2_block_height: 0,
+        l2_block_fullness_threshold_percent: 0,
+        min_da_gas_price: 0,
+        max_da_gas_price_change_percent: 0,
+        total_da_rewards: 0,
+        da_recorded_block_height: 0,
+        latest_known_total_da_cost: 0,
+        projected_total_da_cost: 0,
+        da_p_component: 0,
+        da_d_component: 0,
+        profit_avg: 0,
+        avg_window: 0,
+        latest_da_cost_per_byte: 0,
+        unrecorded_blocks: vec![],
+    };
+    let l2_block_source = FuelL2BlockSource::new(database.on_chain().clone());
+    let metadata_storage = FuelGasPriceMetadataStorage::new()
+    let update_algo =
+        FuelGasPriceUpdater::new(inner_updater, l2_block_source, metadata_storage);
     let gas_price_service =
         fuel_core_gas_price_service::new_service(last_height, update_algo)?;
     let next_algo = gas_price_service.shared.clone();

@@ -9,7 +9,10 @@ use crate::{
         GenesisDatabase,
         Result as DatabaseResult,
     },
-    service::DbType,
+    service::{
+        adapters::gas_price_adapters::fuel_gas_price_metadata::storage::GasPrice,
+        DbType,
+    },
 };
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
@@ -46,6 +49,7 @@ pub struct CombinedDatabase {
     on_chain: Database<OnChain>,
     off_chain: Database<OffChain>,
     relayer: Database<Relayer>,
+    gas_price: Database<GasPrice>,
 }
 
 impl CombinedDatabase {
@@ -53,11 +57,13 @@ impl CombinedDatabase {
         on_chain: Database<OnChain>,
         off_chain: Database<OffChain>,
         relayer: Database<Relayer>,
+        gas_price: Database<GasPrice>,
     ) -> Self {
         Self {
             on_chain,
             off_chain,
             relayer,
+            gas_price,
         }
     }
 
@@ -66,6 +72,7 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<OnChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<GasPrice>::prune(path)?;
         Ok(())
     }
 
@@ -80,10 +87,12 @@ impl CombinedDatabase {
         let off_chain = Database::open_rocksdb(path, capacity, state_rewind_policy)?;
         let relayer =
             Database::open_rocksdb(path, capacity, StateRewindPolicy::NoRewind)?;
+        let gas_price = Database::open_rocksdb(path, capacity, state_rewind_policy)?;
         Ok(Self {
             on_chain,
             off_chain,
             relayer,
+            gas_price,
         })
     }
 
