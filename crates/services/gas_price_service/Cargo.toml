@@ -11,15 +11,21 @@ repository = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+enum-iterator = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true }
 fuel-gas-price-algorithm = { workspace = true }
 futures = { workspace = true }
+num_enum = { workspace = true }
 serde = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
+fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 tracing-subscriber = { workspace = true }
