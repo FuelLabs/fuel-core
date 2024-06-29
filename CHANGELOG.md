@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [#1994](https://github.com/FuelLabs/fuel-core/pull/1994): Added the actual implementation for the `AtomicView::latest_view`.
 - [#1972](https://github.com/FuelLabs/fuel-core/pull/1972): Implement `AlgorithmUpdater` for `GasPriceService`
 - [#1948](https://github.com/FuelLabs/fuel-core/pull/1948): Add new `AlgorithmV1` and `AlgorithmUpdaterV1` for the gas price. Include tools for analysis
 
