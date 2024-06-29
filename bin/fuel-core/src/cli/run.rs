@@ -119,7 +119,7 @@ pub struct Command {
     pub database_type: DbType,
 
     #[cfg(feature = "rocksdb")]
-    /// Defined the state rewind policy for the database when RocksDB is enabled.
+    /// Defines the state rewind policy for the database when RocksDB is enabled.
     ///
     /// The duration defines how many blocks back the rewind feature works.
     /// Assuming each block requires one second to produce.

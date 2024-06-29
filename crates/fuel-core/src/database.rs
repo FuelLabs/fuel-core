@@ -267,7 +267,7 @@ where
     Description: DatabaseDescription,
 {
     pub fn rollback_last_block(&self) -> StorageResult<()> {
-        let mut lock = self.stage.height.lock();
+        let mut lock = self.inner_storage().stage.height.lock();
         let height = *lock;
 
         let Some(height) = height else {
@@ -275,7 +275,7 @@ where
                 anyhow::anyhow!("Database doesn't have a height to rollback").into(),
             );
         };
-        self.data.rollback_last_block()?;
+        self.inner_storage().data.rollback_last_block()?;
         *lock = height.rollback_height();
 
         Ok(())
@@ -301,11 +301,11 @@ where
     type ViewAtHeight = KeyValueView<ColumnType<Description>>;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.stage.height.lock()
+        *self.inner_storage().stage.height.lock()
     }
 
     fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
-        let lock = self.stage.height.lock();
+        let lock = self.inner_storage().stage.height.lock();
 
         match *lock {
             None => return self.latest_view().map(|view| view.into_key_value_view()),
@@ -315,7 +315,7 @@ where
             _ => {}
         };
 
-        self.data.view_at_height(height)
+        self.inner_storage().data.view_at_height(height)
     }
 }
 
