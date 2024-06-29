@@ -1,26 +1,23 @@
 use crate::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::database::GasPriceMetadata,
+    fuel_core_storage_adapter::database::{
+        GasPriceColumn,
+        GasPriceMetadata,
+    },
     Error,
     MetadataStorage,
     UpdaterMetadata,
 };
 use fuel_core_storage::{
+    kv_store::KeyValueInspect,
+    structured_storage::StructuredStorage,
     transactional::{
-        AtomicView,
         Modifiable,
-        StorageTransaction,
         WriteTransaction,
     },
     StorageAsMut,
     StorageAsRef,
 };
-use fuel_core_types::{
-    fuel_merkle::storage::{
-        StorageInspect,
-        StorageMutate,
-    },
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::fuel_types::BlockHeight;
 
 #[cfg(test)]
 mod tests {
@@ -30,6 +27,10 @@ mod tests {
     use crate::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
     use fuel_core_storage::{
         structured_storage::test::InMemoryStorage,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+        },
         StorageAsMut,
     };
     use fuel_gas_price_algorithm::AlgorithmUpdaterV1;
@@ -63,8 +64,8 @@ mod tests {
         .into()
     }
 
-    fn database() -> InMemoryStorage<GasPriceColumn> {
-        InMemoryStorage::default()
+    fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
+        InMemoryStorage::default().into_transaction()
     }
 
     #[tokio::test]
@@ -122,30 +123,16 @@ mod tests {
 pub mod database;
 
 #[async_trait::async_trait]
-impl<Database> MetadataStorage for Database
+impl<Database> MetadataStorage for StructuredStorage<Database>
 where
-    Database: AtomicView,
-    Database::LatestView: StorageAsRef,
-    Database::LatestView: StorageInspect<GasPriceMetadata>,
-    <Database::LatestView as StorageInspect<GasPriceMetadata>>::Error:
-        Into<anyhow::Error>,
-    Database: Modifiable,
-    Database: WriteTransaction,
-    for<'a> StorageTransaction<&'a mut Database>: StorageMutate<GasPriceMetadata>,
-    for<'a> <StorageTransaction<&'a mut Database> as StorageInspect<GasPriceMetadata>>::Error:
-        Into<anyhow::Error>,
+    Database: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
+    Database: Send + Sync,
 {
     async fn get_metadata(
         &self,
         block_height: &BlockHeight,
     ) -> crate::fuel_gas_price_updater::Result<Option<UpdaterMetadata>> {
-        let view = self
-            .latest_view()
-            .map_err(|err| Error::CouldNotFetchMetadata {
-                block_height: *block_height,
-                source_error: err.into(),
-            })?;
-        let metadata = view
+        let metadata = self
             .storage::<GasPriceMetadata>()
             .get(block_height)
             .map_err(|err| Error::CouldNotFetchMetadata {
