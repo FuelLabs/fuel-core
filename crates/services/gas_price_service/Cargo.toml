@@ -29,3 +29,4 @@ tracing = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 tracing-subscriber = { workspace = true }
+fuel-core-types = { path = "./../../types", features = ["test-helpers"] }

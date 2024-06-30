@@ -1,11 +1,18 @@
 #![allow(non_snake_case)]
-use super::{
-    storage::GasPrice,
-    *,
+
+use super::*;
+
+use crate::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
+use fuel_core_storage::{
+    structured_storage::test::InMemoryStorage,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
+    StorageAsMut,
 };
-use crate::database::Database;
-use fuel_core_gas_price_service::fuel_gas_price_updater::AlgorithmUpdaterV1;
-use fuel_core_storage::StorageAsMut;
+use fuel_gas_price_algorithm::AlgorithmUpdaterV1;
+
 fn arb_metadata() -> UpdaterMetadata {
     let height = 111231u32.into();
     arb_metadata_with_l2_height(height)
@@ -35,8 +42,8 @@ fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
     .into()
 }
 
-fn database() -> Database<GasPrice> {
-    Database::default()
+fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
+    InMemoryStorage::default().into_transaction()
 }
 
 #[tokio::test]
@@ -49,10 +56,9 @@ async fn get_metadata__can_get_most_recent_version() {
         .storage_as_mut::<GasPriceMetadata>()
         .insert(&block_height, &metadata)
         .unwrap();
-    let metadata_storage = FuelGasPriceMetadataStorage { database };
 
     // when
-    let actual = metadata_storage.get_metadata(&block_height).await.unwrap();
+    let actual = database.get_metadata(&block_height).await.unwrap();
 
     // then
     let expected = Some(metadata);
@@ -64,10 +70,9 @@ async fn get_metadata__returns_none_if_does_not_exist() {
     // given
     let database = database();
     let block_height: BlockHeight = 1u32.into();
-    let metadata_storage = FuelGasPriceMetadataStorage { database };
 
     // when
-    let actual = metadata_storage.get_metadata(&block_height).await.unwrap();
+    let actual = database.get_metadata(&block_height).await.unwrap();
 
     // then
     let expected = None;
@@ -77,19 +82,15 @@ async fn get_metadata__returns_none_if_does_not_exist() {
 #[tokio::test]
 async fn set_metadata__can_set_metadata() {
     // given
-    let database = database();
+    let mut database = database();
     let block_height: BlockHeight = 1u32.into();
     let metadata = arb_metadata_with_l2_height(block_height);
-    let mut metadata_storage = FuelGasPriceMetadataStorage { database };
 
     // when
-    let actual = metadata_storage.get_metadata(&block_height).await.unwrap();
+    let actual = database.get_metadata(&block_height).await.unwrap();
     assert_eq!(None, actual);
-    metadata_storage
-        .set_metadata(metadata.clone())
-        .await
-        .unwrap();
-    let actual = metadata_storage.get_metadata(&block_height).await.unwrap();
+    database.set_metadata(metadata.clone()).await.unwrap();
+    let actual = database.get_metadata(&block_height).await.unwrap();
 
     // then
     let expected = Some(metadata);
