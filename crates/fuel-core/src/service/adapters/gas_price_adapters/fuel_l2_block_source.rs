@@ -7,12 +7,7 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    tables::{
-        ConsensusParametersVersions,
-        FuelBlocks,
-        Transactions,
-    },
-    transactional::AtomicView,
+    tables::ConsensusParametersVersions,
     StorageAsRef,
     StorageInspect,
 };
@@ -87,15 +82,9 @@ fn block_used_gas(
 #[async_trait::async_trait]
 impl<Database> L2BlockSource for FuelL2BlockSource<Database>
 where
-    Database: AtomicView,
-    Database::LatestView: StorageAsRef,
-    Database::LatestView: StorageInspect<FuelBlocks>,
-    Database::LatestView: StorageInspect<Transactions>,
-    Database::LatestView: StorageInspect<ConsensusParametersVersions>,
-    <Database::LatestView as StorageInspect<FuelBlocks>>::Error: Into<anyhow::Error>,
-    <Database::LatestView as StorageInspect<Transactions>>::Error: Into<anyhow::Error>,
-    <Database::LatestView as StorageInspect<ConsensusParametersVersions>>::Error:
-        Into<anyhow::Error>,
+    Database: StorageInspect<ConsensusParametersVersions>,
+    <Database as StorageInspect<ConsensusParametersVersions>>::Error: Into<anyhow::Error>,
+    Database: Send + Sync,
 {
     async fn get_l2_block(&mut self, height: BlockHeight) -> GasPriceResult<BlockInfo> {
         let block = &self
@@ -111,14 +100,9 @@ where
             .sealed_block
             .entity;
 
-        let view = self.database.latest_view().map_err(|source_error| {
-            GasPriceError::CouldNotFetchL2Block {
-                block_height: height,
-                source_error: source_error.into(),
-            }
-        })?;
         let param_version = block.header().consensus_parameters_version;
-        let consensus_params = view
+        let consensus_params = self
+            .database
             .storage::<ConsensusParametersVersions>()
             .get(&param_version)
             .map_err(|source_error| GasPriceError::CouldNotFetchL2Block {
