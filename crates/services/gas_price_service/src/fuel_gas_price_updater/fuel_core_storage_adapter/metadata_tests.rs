@@ -1,8 +1,5 @@
 #![allow(non_snake_case)]
 
-use super::*;
-
-use crate::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
     transactional::{
@@ -12,6 +9,10 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_gas_price_algorithm::AlgorithmUpdaterV1;
+
+use crate::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
+
+use super::*;
 
 fn arb_metadata() -> UpdaterMetadata {
     let height = 111231u32.into();

@@ -336,7 +336,7 @@ impl Modifiable for GenesisDatabase<Relayer> {
     }
 }
 
-pub fn commit_changes_with_height_update<Description>(
+fn commit_changes_with_height_update<Description>(
     database: &mut Database<Description>,
     changes: Changes,
     heights_lookup: impl Fn(
