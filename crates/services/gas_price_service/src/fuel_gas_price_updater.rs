@@ -40,11 +40,8 @@ pub enum Error {
     },
     #[error("Failed to find DA records: {0:?}")]
     CouldNotFetchDARecord(anyhow::Error),
-    #[error("Failed to retrieve updater metadata at height {block_height:?}: {source_error:?}")]
-    CouldNotFetchMetadata {
-        block_height: BlockHeight,
-        source_error: anyhow::Error,
-    },
+    #[error("Failed to retrieve updater metadata: {source_error:?}")]
+    CouldNotFetchMetadata { source_error: anyhow::Error },
     #[error(
         "Failed to set updater metadata at height {block_height:?}: {source_error:?}"
     )]

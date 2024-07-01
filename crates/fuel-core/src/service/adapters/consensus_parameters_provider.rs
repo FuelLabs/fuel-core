@@ -33,10 +33,11 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct SharedState {
-    latest_consensus_parameters_version: SharedMutex<ConsensusParametersVersion>,
-    consensus_parameters:
+    pub(crate) latest_consensus_parameters_version:
+        SharedMutex<ConsensusParametersVersion>,
+    pub(crate) consensus_parameters:
         SharedMutex<HashMap<ConsensusParametersVersion, Arc<ConsensusParameters>>>,
-    database: Database,
+    pub(crate) database: Database,
 }
 
 pub struct Task {

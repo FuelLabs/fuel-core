@@ -1,3 +1,18 @@
+use std::sync::Arc;
+
+use fuel_core_consensus_module::{
+    block_verifier::Verifier,
+    RelayerConsensusConfig,
+};
+use fuel_core_services::stream::BoxStream;
+#[cfg(feature = "p2p")]
+use fuel_core_types::services::p2p::peer_reputation::AppScore;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::block_importer::SharedImportResult,
+};
+use fuel_core_upgradable_executor::executor::Executor;
+
 use crate::{
     database::{
         database_description::relayer::Relayer,
@@ -11,19 +26,6 @@ use crate::{
         vm_pool::MemoryPool,
     },
 };
-use fuel_core_consensus_module::{
-    block_verifier::Verifier,
-    RelayerConsensusConfig,
-};
-use fuel_core_services::stream::BoxStream;
-#[cfg(feature = "p2p")]
-use fuel_core_types::services::p2p::peer_reputation::AppScore;
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::block_importer::SharedImportResult,
-};
-use fuel_core_upgradable_executor::executor::Executor;
-use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;

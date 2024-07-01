@@ -39,7 +39,6 @@ where
             .storage::<GasPriceMetadata>()
             .get(block_height)
             .map_err(|err| Error::CouldNotFetchMetadata {
-                block_height: *block_height,
                 source_error: err.into(),
             })?;
         Ok(metadata.map(|inner| inner.into_owned()))
@@ -96,9 +95,10 @@ pub struct FuelL2BlockSource<Settings> {
     committed_block_stream: BoxStream<SharedImportResult>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct GasPriceSettings {
-    gas_price_factor: u64,
-    block_gas_limit: u64,
+    pub gas_price_factor: u64,
+    pub block_gas_limit: u64,
 }
 pub trait GasPriceSettingsProvider {
     fn settings(
