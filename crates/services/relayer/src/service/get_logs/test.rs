@@ -70,12 +70,12 @@ fn transactions(
 }
 
 fn transaction(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> Log {
-    let message = TransactionFilter {
+    let transaction = TransactionFilter {
         nonce: U256::from_dec_str(nonce.to_string().as_str())
             .expect("Should convert into U256"),
         ..Default::default()
     };
-    let mut log = message.into_log();
+    let mut log = transaction.into_log();
     log.address = u32_to_contract(contract_address);
     log.block_number = Some(block_number.into());
     log.log_index = Some(index.into());
