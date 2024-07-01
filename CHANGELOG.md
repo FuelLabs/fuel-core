@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [#1994](https://github.com/FuelLabs/fuel-core/pull/1994): Added the actual implementation for the `AtomicView::latest_view`.
 - [#1972](https://github.com/FuelLabs/fuel-core/pull/1972): Implement `AlgorithmUpdater` for `GasPriceService`
 - [#1948](https://github.com/FuelLabs/fuel-core/pull/1948): Add new `AlgorithmV1` and `AlgorithmUpdaterV1` for the gas price. Include tools for analysis
 
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1980](https://github.com/FuelLabs/fuel-core/pull/1980): Add `Transaction` to relayer 's event filter
 
 #### Breaking
+- [#1991](https://github.com/FuelLabs/fuel-core/pull/1991): Prepare the database to use different types than `Database` for atomic view.
 - [#1989](https://github.com/FuelLabs/fuel-core/pull/1989): Extract `HistoricalView` trait from the `AtomicView`.
 
 ## [Version 0.30.0]

@@ -14,6 +14,7 @@ use fuel_core_services::{
 use fuel_core_storage::{
     not_found,
     tables::ConsensusParametersVersions,
+    transactional::AtomicView,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -163,6 +164,7 @@ impl RunnableService for Task {
         let latest_consensus_parameters_version = self
             .shared_state
             .database
+            .latest_view()?
             .latest_consensus_parameters_version()?;
         self.shared_state
             .cache_consensus_parameters(latest_consensus_parameters_version)?;

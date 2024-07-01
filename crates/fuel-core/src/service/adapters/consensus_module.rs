@@ -1,5 +1,8 @@
 use crate::{
-    database::Database,
+    database::{
+        Database,
+        OnChainIterableKeyValueView,
+    },
     service::adapters::{
         MaybeRelayerAdapter,
         VerifierAdapter,
@@ -45,7 +48,7 @@ impl VerifierAdapter {
     }
 }
 
-impl fuel_core_poa::ports::Database for Database {
+impl fuel_core_poa::ports::Database for OnChainIterableKeyValueView {
     fn block_header(&self, height: &BlockHeight) -> StorageResult<BlockHeader> {
         Ok(self.get_block(height)?.header().clone())
     }

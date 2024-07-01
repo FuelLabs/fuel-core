@@ -83,7 +83,7 @@ impl FuelService {
         id: Bytes32,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
         let txpool = self.shared.txpool_shared_state.clone();
-        let db = self.shared.database.off_chain().clone();
+        let db = self.shared.database.off_chain().latest_view()?;
         let rx = txpool.tx_update_subscribe(id)?;
         Ok(transaction_status_change(
             move |id| match db.get_tx_status(&id)? {
