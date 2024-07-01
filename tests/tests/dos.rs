@@ -140,7 +140,7 @@ async fn body_limit_prevents_from_huge_queries() {
         .post(url)
         .header("Content-Type", "application/json")
         .header("Content-Length", "18446744073709551613")
-        .body(vec![123; 1_000_000])
+        .body(vec![123; 10 * 1024 * 1024])
         .send()
         .await;
 

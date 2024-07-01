@@ -25,7 +25,7 @@ pub struct GraphQLArgs {
     pub graphql_max_recursive_depth: usize,
 
     /// The max body limit of the GraphQL query.
-    #[clap(long = "graphql-max-queries-body-limit", default_value = "16384", env)]
+    #[clap(long = "graphql-max-queries-body-limit", default_value = "262144", env)]
     pub graphql_max_queries_body_limit: usize,
 
     /// Time to wait after submitting a query before debug info will be logged about query.
