@@ -3050,6 +3050,7 @@ dependencies = [
  "strum_macros 0.25.3",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
 ]
