@@ -9,6 +9,8 @@ pub mod off_chain;
 pub mod on_chain;
 pub mod relayer;
 
+pub mod gas_price;
+
 pub trait DatabaseHeight: PartialEq + Default + Copy + Send + Sync {
     fn as_u64(&self) -> u64;
 

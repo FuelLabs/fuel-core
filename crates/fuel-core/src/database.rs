@@ -70,7 +70,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::database::{GasPriceColumn, GasPriceMetadata};
+use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::database::{ GasPriceMetadata};
+use crate::database::database_description::gas_price::GasPriceDatabase;
 
 // Storages implementation
 pub mod balances;
@@ -296,30 +297,6 @@ impl Modifiable for Database<OffChain> {
                 .map(|result| result.map(|(_, height)| height))
                 .try_collect()
         })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct GasPriceDatabase;
-
-impl DatabaseDescription for GasPriceDatabase {
-    type Column = GasPriceColumn;
-    type Height = BlockHeight;
-
-    fn version() -> u32 {
-        0
-    }
-
-    fn name() -> &'static str {
-        "gas_price_service_storage"
-    }
-
-    fn metadata_column() -> Self::Column {
-        GasPriceColumn::Metadata
-    }
-
-    fn prefix(_column: &Self::Column) -> Option<usize> {
-        None
     }
 }
 
