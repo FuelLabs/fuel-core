@@ -8188,6 +8188,7 @@ dependencies = [
  "fuel-core-types",
  "itertools 0.12.1",
  "rand",
+ "reqwest",
  "tempfile",
 ]
 
