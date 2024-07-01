@@ -196,6 +196,7 @@ where
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
     let request_timeout = config.config.api_request_timeout;
+    let body_limit = config.config.max_queries_body_limit;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -242,7 +243,7 @@ where
             ACCESS_CONTROL_ALLOW_HEADERS,
             HeaderValue::from_static("*"),
         ))
-        .layer(DefaultBodyLimit::disable());
+        .layer(DefaultBodyLimit::max(body_limit));
 
     let listener = TcpListener::bind(network_addr)?;
     let bound_address = listener.local_addr()?;

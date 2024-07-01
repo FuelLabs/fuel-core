@@ -3,6 +3,7 @@
 use fuel_core::service::{
     Config,
     FuelService,
+    ServiceTrait,
 };
 
 async fn send_query(url: &str, query: &str) -> String {
@@ -125,4 +126,25 @@ async fn complex_queries__50_block__query_to_complex() {
 
     let result = send_query(&url, query).await;
     assert!(result.contains("Query is too complex."));
+}
+
+#[tokio::test]
+async fn body_limit_prevents_from_huge_queries() {
+    // Given
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+    let client = reqwest::Client::new();
+
+    // When
+    let response = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .header("Content-Length", "18446744073709551613")
+        .body(vec![123; 1_000_000])
+        .send()
+        .await;
+
+    // Then
+    let result = response.unwrap();
+    assert_eq!(result.status(), 413);
 }
