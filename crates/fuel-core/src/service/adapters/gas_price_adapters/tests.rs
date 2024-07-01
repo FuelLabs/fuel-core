@@ -18,9 +18,9 @@ fn settings__can_retrieve_settings() {
     let params =
         fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV1::default();
     let mut hash_map = HashMap::new();
-    hash_map.insert(param_version.clone(), Arc::new(params.clone().into()));
+    hash_map.insert(param_version, Arc::new(params.clone().into()));
     let shared_state = consensus_parameters_provider::SharedState {
-        latest_consensus_parameters_version: SharedMutex::new(param_version.clone()),
+        latest_consensus_parameters_version: SharedMutex::new(param_version),
         consensus_parameters: SharedMutex::new(hash_map),
         database: Default::default(),
     };

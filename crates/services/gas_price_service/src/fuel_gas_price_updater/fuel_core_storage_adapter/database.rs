@@ -38,30 +38,6 @@ impl GasPriceColumn {
     }
 }
 
-// #[derive(Clone, Debug)]
-// pub struct GasPrice;
-
-// impl DatabaseDescription for GasPrice {
-//     type Column = GasPriceColumn;
-//     type Height = BlockHeight;
-//
-//     fn version() -> u32 {
-//         0
-//     }
-//
-//     fn name() -> &'static str {
-//         "gas_price_service_storage"
-//     }
-//
-//     fn metadata_column() -> Self::Column {
-//         GasPriceColumn::Metadata
-//     }
-//
-//     fn prefix(_column: &Self::Column) -> Option<usize> {
-//         None
-//     }
-// }
-
 impl StorageColumn for GasPriceColumn {
     fn name(&self) -> &'static str {
         self.into()
