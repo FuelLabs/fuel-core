@@ -497,7 +497,7 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         tracing::debug!("P2P task is running");
-        let should_continue;
+        let mut should_continue;
 
         tokio::select! {
             biased;
@@ -549,7 +549,8 @@ where
                         let _ = channel.send(peers);
                     }
                     None => {
-                        unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
+                        tracing::error!("The P2P `Task` should be holder of the `Sender`");
+                        should_continue = false;
                     }
                 }
             }
