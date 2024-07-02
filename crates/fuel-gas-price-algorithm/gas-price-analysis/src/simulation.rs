@@ -1,4 +1,8 @@
 use super::*;
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    RecordedBlock,
+};
 
 pub struct SimulationResults {
     pub gas_prices: Vec<u64>,

@@ -19,10 +19,6 @@ use crate::{
         SimulationResults,
     },
 };
-use fuel_gas_price_algorithm::{
-    AlgorithmUpdaterV1,
-    RecordedBlock,
-};
 
 mod optimisation;
 mod simulation;
