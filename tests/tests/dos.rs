@@ -4,7 +4,7 @@ use fuel_core::service::{
     Config,
     FuelService,
 };
-use test_helpers::send_graphq_ql_query;
+use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
 async fn complex_queries__recursion() {
@@ -73,7 +73,7 @@ async fn complex_queries__recursion() {
     let node = FuelService::new_node(config).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
-    let result = send_graphq_ql_query(&url, query).await;
+    let result = send_graph_ql_query(&url, query).await;
     assert!(result.contains("The recursion depth of the query cannot be greater than"));
 }
 
@@ -94,7 +94,7 @@ async fn complex_queries__10_blocks__works() {
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
-    let result = send_graphq_ql_query(&url, query).await;
+    let result = send_graph_ql_query(&url, query).await;
     assert!(result.contains("transactions"));
 }
 
@@ -115,6 +115,6 @@ async fn complex_queries__50_block__query_to_complex() {
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
-    let result = send_graphq_ql_query(&url, query).await;
+    let result = send_graph_ql_query(&url, query).await;
     assert!(result.contains("Query is too complex."));
 }
