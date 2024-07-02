@@ -2,6 +2,7 @@ use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
     ConsensusParametersProvider,
+    ImportResultProviderAdapter,
     StaticGasPrice,
 };
 use crate::{
@@ -15,14 +16,20 @@ use crate::{
         P2pPort,
         TxPoolPort,
     },
+    graphql_api::ports::worker::ImportResultProvider,
     service::adapters::{
         P2PAdapter,
         TxPoolAdapter,
     },
 };
 use async_trait::async_trait;
+use fuel_core_importer::ports::Validator;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    not_found,
+    transactional::AtomicView,
+    Result as StorageResult,
+};
 use fuel_core_txpool::{
     service::TxStatusMessage,
     types::TxId,
@@ -36,8 +43,14 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     services::{
-        block_importer::SharedImportResult,
-        executor::TransactionExecutionStatus,
+        block_importer::{
+            ImportResult,
+            SharedImportResult,
+        },
+        executor::{
+            TransactionExecutionStatus,
+            ValidationResult,
+        },
         p2p::PeerInfo,
         txpool::{
             InsertionResult,
@@ -178,5 +191,44 @@ impl GasPriceEstimate for StaticGasPrice {
 impl ConsensusProvider for ConsensusParametersProvider {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
+    }
+}
+
+impl ImportResultProvider for ImportResultProviderAdapter {
+    fn result_at_height(
+        &self,
+        height: Option<BlockHeight>,
+    ) -> anyhow::Result<SharedImportResult> {
+        if let Some(height) = height {
+            let sealed_block = self
+                .on_chain_database
+                .latest_view()?
+                .get_sealed_block_by_height(&height)?
+                .ok_or(not_found!("SealedBlock"))?;
+
+            let ValidationResult { tx_status, events } = self
+                .executor_adapter
+                .validate(&sealed_block.entity)?
+                .into_result();
+            let result = ImportResult::new_from_local(sealed_block, tx_status, events);
+            Ok(Arc::new(result))
+        } else {
+            let genesis_height = self
+                .on_chain_database
+                .latest_view()?
+                .genesis_height()?
+                .ok_or(not_found!("Genesis height"))?;
+            let sealed_block = self
+                .on_chain_database
+                .latest_view()?
+                .get_sealed_block_by_height(&genesis_height)?
+                .ok_or(not_found!("SealedBlock"))?;
+
+            Ok(Arc::new(ImportResult::new_from_local(
+                sealed_block,
+                vec![],
+                vec![],
+            )))
+        }
     }
 }

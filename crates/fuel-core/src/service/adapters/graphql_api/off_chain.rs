@@ -6,7 +6,7 @@ use crate::{
     },
     fuel_core_graphql_api::{
         ports::{
-            worker::Transactional,
+            worker,
             OffChainDatabase,
         },
         storage::{
@@ -173,8 +173,12 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     }
 }
 
-impl Transactional for Database<OffChain> {
+impl worker::OffChainDatabase for Database<OffChain> {
     type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+
+    fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
+        self.latest_height()
+    }
 
     fn transaction(&mut self) -> Self::Transaction<'_> {
         self.into_transaction()
