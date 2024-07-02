@@ -2,13 +2,10 @@
 
 use super::*;
 use std::sync::Arc;
-use tokio::sync::{
-    mpsc::Receiver,
-    Mutex,
-};
+use tokio::sync::mpsc::Receiver;
 
 struct FakeL2BlockSource {
-    l2_block: Arc<Mutex<Receiver<BlockInfo>>>,
+    l2_block: Arc<tokio::sync::Mutex<Receiver<BlockInfo>>>,
 }
 
 #[async_trait::async_trait]
@@ -29,28 +26,27 @@ impl L2BlockSource for PendingL2BlockSource {
 }
 
 struct FakeMetadata {
-    inner: Arc<Mutex<Option<UpdaterMetadata>>>,
+    inner: Arc<std::sync::Mutex<Option<UpdaterMetadata>>>,
 }
 
 impl FakeMetadata {
     fn empty() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(None)),
+            inner: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 }
 
-#[async_trait::async_trait]
 impl MetadataStorage for FakeMetadata {
-    async fn get_metadata(
+    fn get_metadata(
         &self,
         _block_height: &BlockHeight,
     ) -> Result<Option<UpdaterMetadata>> {
-        Ok(self.inner.lock().await.clone())
+        Ok(self.inner.lock().unwrap().clone())
     }
 
-    async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()> {
-        let _ = self.inner.lock().await.replace(metadata);
+    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()> {
+        let _ = self.inner.lock().unwrap().replace(metadata);
         Ok(())
     }
 }
@@ -89,7 +85,7 @@ async fn next__fetches_l2_block() {
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
-        l2_block: Arc::new(Mutex::new(l2_block_receiver)),
+        l2_block: Arc::new(tokio::sync::Mutex::new(l2_block_receiver)),
     };
     let metadata_storage = FakeMetadata::empty();
 
@@ -114,7 +110,7 @@ async fn next__fetches_l2_block() {
 async fn init__if_exists_already_reload() {
     // given
     let metadata = arb_metadata();
-    let metadata_inner = Arc::new(Mutex::new(Some(metadata.clone())));
+    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(metadata.clone())));
     let metadata_storage = FakeMetadata {
         inner: metadata_inner,
     };
@@ -162,9 +158,9 @@ async fn next__new_l2_block_updates_metadata() {
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
-        l2_block: Arc::new(Mutex::new(l2_block_receiver)),
+        l2_block: Arc::new(tokio::sync::Mutex::new(l2_block_receiver)),
     };
-    let metadata_inner = Arc::new(Mutex::new(None));
+    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
     let metadata_storage = FakeMetadata {
         inner: metadata_inner.clone(),
     };
@@ -191,6 +187,6 @@ async fn next__new_l2_block_updates_metadata() {
         )
         .unwrap();
     let expected: UpdaterMetadata = updater.into();
-    let actual = metadata_inner.lock().await.clone().unwrap();
+    let actual = metadata_inner.lock().unwrap().clone().unwrap();
     assert_eq!(expected, actual);
 }

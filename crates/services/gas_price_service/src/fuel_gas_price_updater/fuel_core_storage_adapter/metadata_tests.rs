@@ -46,7 +46,7 @@ async fn get_metadata__can_get_most_recent_version() {
         .unwrap();
 
     // when
-    let actual = database.get_metadata(&block_height).await.unwrap();
+    let actual = database.get_metadata(&block_height).unwrap();
 
     // then
     let expected = Some(metadata);
@@ -60,7 +60,7 @@ async fn get_metadata__returns_none_if_does_not_exist() {
     let block_height: BlockHeight = 1u32.into();
 
     // when
-    let actual = database.get_metadata(&block_height).await.unwrap();
+    let actual = database.get_metadata(&block_height).unwrap();
 
     // then
     let expected = None;
@@ -75,10 +75,10 @@ async fn set_metadata__can_set_metadata() {
     let metadata = arb_metadata_with_l2_height(block_height);
 
     // when
-    let actual = database.get_metadata(&block_height).await.unwrap();
+    let actual = database.get_metadata(&block_height).unwrap();
     assert_eq!(None, actual);
-    database.set_metadata(metadata.clone()).await.unwrap();
-    let actual = database.get_metadata(&block_height).await.unwrap();
+    database.set_metadata(metadata.clone()).unwrap();
+    let actual = database.get_metadata(&block_height).unwrap();
 
     // then
     let expected = Some(metadata);

@@ -143,13 +143,10 @@ impl From<AlgorithmUpdaterV0> for UpdaterMetadata {
     }
 }
 
-#[async_trait::async_trait]
 pub trait MetadataStorage: Send + Sync {
-    async fn get_metadata(
-        &self,
-        block_height: &BlockHeight,
-    ) -> Result<Option<UpdaterMetadata>>;
-    async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
+    fn get_metadata(&self, block_height: &BlockHeight)
+        -> Result<Option<UpdaterMetadata>>;
+    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
 impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata>
@@ -163,8 +160,7 @@ where
     ) -> Result<Self> {
         let target_block_height = init_metadata.l2_block_height();
         let inner = metadata_storage
-            .get_metadata(&target_block_height)
-            .await?
+            .get_metadata(&target_block_height)?
             .unwrap_or(init_metadata)
             .try_into()
             .map_err(Error::CouldNotInitUpdater)?;
@@ -203,8 +199,7 @@ where
                     anyhow::anyhow!("Block gas capacity must be non-zero")
                 })?;
                 self.metadata_storage
-                    .set_metadata(self.inner.clone().into())
-                    .await?;
+                    .set_metadata(self.inner.clone().into())?;
                 self.inner.update_l2_block_data(
                     height,
                     gas_used,

@@ -51,13 +51,12 @@ mod l2_source_tests;
 
 pub mod storage;
 
-#[async_trait::async_trait]
 impl<Storage> MetadataStorage for StructuredStorage<Storage>
 where
     Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
     Storage: Send + Sync,
 {
-    async fn get_metadata(
+    fn get_metadata(
         &self,
         block_height: &BlockHeight,
     ) -> Result<Option<UpdaterMetadata>> {
@@ -70,7 +69,7 @@ where
         Ok(metadata.map(|inner| inner.into_owned()))
     }
 
-    async fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()> {
+    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()> {
         let block_height = metadata.l2_block_height();
         let mut tx = self.write_transaction();
         tx.storage_as_mut::<GasPriceMetadata>()
