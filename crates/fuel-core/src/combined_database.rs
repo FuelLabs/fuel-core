@@ -28,11 +28,16 @@ use fuel_core_storage::tables::{
 use fuel_core_storage::Result as StorageResult;
 use std::path::PathBuf;
 
+#[cfg(feature = "rocksdb")]
+use crate::state::historical_rocksdb::StateRewindPolicy;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CombinedDatabaseConfig {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub max_database_cache_size: usize,
+    #[cfg(feature = "rocksdb")]
+    pub state_rewind_policy: StateRewindPolicy,
 }
 
 /// A database that combines the on-chain, off-chain and relayer databases into one entity.
@@ -68,11 +73,13 @@ impl CombinedDatabase {
     pub fn open(
         path: &std::path::Path,
         capacity: usize,
+        state_rewind_policy: StateRewindPolicy,
     ) -> crate::database::Result<Self> {
         // TODO: Use different cache sizes for different databases
-        let on_chain = Database::open_rocksdb(path, capacity)?;
-        let off_chain = Database::open_rocksdb(path, capacity)?;
-        let relayer = Database::open_rocksdb(path, capacity)?;
+        let on_chain = Database::open_rocksdb(path, capacity, state_rewind_policy)?;
+        let off_chain = Database::open_rocksdb(path, capacity, state_rewind_policy)?;
+        let relayer =
+            Database::open_rocksdb(path, capacity, StateRewindPolicy::NoRewind)?;
         Ok(Self {
             on_chain,
             off_chain,
@@ -92,13 +99,15 @@ impl CombinedDatabase {
                     CombinedDatabase::default()
                 } else {
                     tracing::info!(
-                        "Opening database {:?} with cache size \"{}\"",
+                        "Opening database {:?} with cache size \"{}\" and state rewind policy \"{:?}\"",
                         config.database_path,
-                        config.max_database_cache_size
+                        config.max_database_cache_size,
+                        config.state_rewind_policy,
                     );
                     CombinedDatabase::open(
                         &config.database_path,
                         config.max_database_cache_size,
+                        config.state_rewind_policy,
                     )?
                 }
             }

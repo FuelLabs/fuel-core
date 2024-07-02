@@ -65,6 +65,7 @@ tokio = { workspace = true, features = [
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+tracing = { workspace = true }
 
 [features]
 default = ["fuel-core/default", "relayer"]

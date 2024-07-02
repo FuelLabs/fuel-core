@@ -17,6 +17,7 @@ use fuel_core_types::services::executor::Error as ExecutorError;
 /// The error occurred during work with any of databases.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 #[non_exhaustive]
+#[allow(missing_docs)]
 pub enum Error {
     /// Error occurred during serialization or deserialization of the entity.
     #[display(fmt = "error performing serialization or deserialization")]
@@ -58,6 +59,18 @@ pub enum Error {
         /// The old height known by the database.
         prev_height: u64,
     },
+    #[display(fmt = "The historical database doesn't have any history yet")]
+    NoHistoryIsAvailable,
+    #[display(
+        fmt = "The historical database doesn't have history for the requested height {requested_height:#x}, \
+            the oldest available height is {oldest_available_height:#x}"
+    )]
+    NoHistoryForRequestedHeight {
+        requested_height: u64,
+        oldest_available_height: u64,
+    },
+    #[display(fmt = "Reached the end of the history")]
+    ReachedEndOfHistory,
 
     /// Not related to database error.
     #[from]

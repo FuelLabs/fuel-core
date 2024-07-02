@@ -26,9 +26,12 @@ pub fn default_db_path() -> PathBuf {
 }
 
 pub mod fee_contract;
+#[cfg(feature = "rocksdb")]
+pub mod rollback;
 pub mod run;
-#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+#[cfg(feature = "rocksdb")]
 pub mod snapshot;
+
 // Default database cache is 1 GB
 pub const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
@@ -48,8 +51,10 @@ pub struct Opt {
 #[derive(Debug, Parser)]
 pub enum Fuel {
     Run(run::Command),
-    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+    #[cfg(feature = "rocksdb")]
     Snapshot(snapshot::Command),
+    #[cfg(feature = "rocksdb")]
+    Rollback(rollback::Command),
     GenerateFeeContract(fee_contract::Command),
 }
 
@@ -128,9 +133,10 @@ pub async fn run_cli() -> anyhow::Result<()> {
     match opt {
         Ok(opt) => match opt.command {
             Fuel::Run(command) => run::exec(command).await,
-            #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+            #[cfg(feature = "rocksdb")]
             Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
+            Fuel::Rollback(command) => rollback::exec(command).await,
         },
         Err(e) => {
             // Prints the error and exits.
@@ -213,7 +219,7 @@ impl NotifyCancel for ShutdownListener {
     }
 }
 
-#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+#[cfg(feature = "rocksdb")]
 #[cfg(test)]
 mod tests {
     use anyhow::anyhow;

@@ -206,6 +206,7 @@ mod tests {
         state::{
             in_memory::memory_store::MemoryStore,
             IterableKeyValueView,
+            KeyValueView,
             TransactableStorage,
         },
     };
@@ -563,7 +564,18 @@ mod tests {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
+        fn view_at_height(
+            &self,
+            _: &BlockHeight,
+        ) -> StorageResult<KeyValueView<Self::Column>> {
+            Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
         fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+            Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
+        fn rollback_last_block(&self) -> StorageResult<()> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }

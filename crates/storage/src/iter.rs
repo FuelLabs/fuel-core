@@ -84,6 +84,16 @@ pub trait IterableTable<M>
 where
     M: Mappable,
 {
+    /// Returns an iterator over the all keys in the table with a prefix after a specific start key.
+    fn iter_table_keys<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        P: AsRef<[u8]>;
+
     /// Returns an iterator over the all entries in the table with a prefix after a specific start key.
     fn iter_table<P>(
         &self,
@@ -101,6 +111,42 @@ where
     M::Blueprint: BlueprintInspect<M, S>,
     S: IterableStore<Column = Column>,
 {
+    fn iter_table_keys<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<crate::Result<M::OwnedKey>>
+    where
+        P: AsRef<[u8]>,
+    {
+        let encoder = start.map(|start| {
+            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
+        });
+
+        let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
+
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1997
+        //  We need to add `iter_store_keys` method and use it here to avoid allocation of values.
+        IterableStore::iter_store(
+            self,
+            M::column(),
+            prefix.as_ref().map(|p| p.as_ref()),
+            start.as_ref().map(|cow| cow.as_ref()),
+            direction.unwrap_or_default(),
+        )
+        .map(|val| {
+            val.and_then(|(key, _)| {
+                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
+                    key.as_slice(),
+                )
+                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                Ok(key)
+            })
+        })
+        .into_boxed()
+    }
+
     fn iter_table<P>(
         &self,
         prefix: Option<P>,
@@ -143,6 +189,59 @@ where
 
 /// A helper trait to provide a user-friendly API over table iteration.
 pub trait IteratorOverTable {
+    /// Returns an iterator over the all keys in the table.
+    fn iter_all_keys<M>(
+        &self,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        Self: IterableTable<M>,
+    {
+        self.iter_all_filtered_keys::<M, [u8; 0]>(None, None, direction)
+    }
+
+    /// Returns an iterator over the all keys in the table with the specified prefix.
+    fn iter_all_by_prefix_keys<M, P>(
+        &self,
+        prefix: Option<P>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTable<M>,
+    {
+        self.iter_all_filtered_keys::<M, P>(prefix, None, None)
+    }
+
+    /// Returns an iterator over the all keys in the table after a specific start key.
+    fn iter_all_by_start_keys<M>(
+        &self,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        Self: IterableTable<M>,
+    {
+        self.iter_all_filtered_keys::<M, [u8; 0]>(None, start, direction)
+    }
+
+    /// Returns an iterator over the all keys in the table with a prefix after a specific start key.
+    fn iter_all_filtered_keys<M, P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTable<M>,
+    {
+        self.iter_table_keys(prefix, start, direction)
+    }
+
     /// Returns an iterator over the all entries in the table.
     fn iter_all<M>(
         &self,

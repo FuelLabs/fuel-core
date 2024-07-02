@@ -24,3 +24,9 @@ fuel-core-trace = { path = "./../../trace" }
 fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 test-case = { workspace = true }
+
+[features]
+test-helpers = [
+  "fuel-core-types/test-helpers",
+  "fuel-core-storage/test-helpers",
+]

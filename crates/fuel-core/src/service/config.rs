@@ -118,6 +118,8 @@ impl Config {
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_policy: Default::default(),
         };
 
         Self {

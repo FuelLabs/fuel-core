@@ -44,6 +44,7 @@ hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
+postcard = { workspace = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
   "lz4",
@@ -91,6 +92,7 @@ test-helpers = [
   "fuel-core-chain-config/test-helpers",
   "fuel-core-txpool/test-helpers",
   "fuel-core-services/test-helpers",
+  "fuel-core-importer/test-helpers",
 ]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]

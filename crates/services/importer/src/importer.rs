@@ -7,6 +7,7 @@ use crate::{
         Validator,
     },
     Config,
+    ImporterResult,
 };
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
@@ -31,7 +32,6 @@ use fuel_core_types::{
     services::{
         block_importer::{
             ImportResult,
-            SharedImportResult,
             UncommittedResult,
         },
         executor,
@@ -117,7 +117,7 @@ pub struct Importer<D, E, V> {
     executor: Arc<E>,
     verifier: Arc<V>,
     chain_id: ChainId,
-    broadcast: broadcast::Sender<SharedImportResult>,
+    broadcast: broadcast::Sender<ImporterResult>,
     /// The channel to notify about the end of the processing of the previous block by all listeners.
     /// It is used to await until all receivers of the notification process the `SharedImportResult`
     /// before starting committing a new block.
@@ -157,7 +157,7 @@ impl<D, E, V> Importer<D, E, V> {
         )
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<SharedImportResult> {
+    pub fn subscribe(&self) -> broadcast::Receiver<ImporterResult> {
         self.broadcast.subscribe()
     }
 
@@ -296,6 +296,8 @@ where
         // execution without block itself.
         let expected_block_root = database.latest_block_root()?;
 
+        #[cfg(feature = "test-helpers")]
+        let changes_clone = changes.clone();
         let mut db_after_execution = database.storage_transaction(changes);
         let actual_block_root = db_after_execution.latest_block_root()?;
         if actual_block_root != expected_block_root {
@@ -328,7 +330,12 @@ where
         // The `tokio::sync::oneshot::Sender` is used to notify about the end
         // of the processing of a new block by all listeners.
         let (sender, receiver) = oneshot::channel();
-        let _ = self.broadcast.send(Arc::new(Awaiter::new(result, sender)));
+        let result = ImporterResult {
+            shared_result: Arc::new(Awaiter::new(result, sender)),
+            #[cfg(feature = "test-helpers")]
+            changes: Arc::new(changes_clone),
+        };
+        let _ = self.broadcast.send(result);
         *self.prev_block_process_result.lock().expect("poisoned") = Some(receiver);
 
         Ok(())
