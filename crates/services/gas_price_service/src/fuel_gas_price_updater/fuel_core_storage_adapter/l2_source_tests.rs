@@ -80,7 +80,7 @@ fn params() -> ConsensusParameters {
     ConsensusParameters::V1(params)
 }
 
-fn block_to_import_result(block: Block) -> Arc<ImportResult> {
+fn block_to_import_result(block: Block) -> SharedImportResult {
     let sealed_block = SealedBlock {
         entity: block,
         consensus: Default::default(),
@@ -169,7 +169,7 @@ fn build_block(chain_id: &ChainId) -> (Block, Transaction) {
 }
 
 #[tokio::test]
-async fn get_l2_block__calculates_fullness_correctly() {
+async fn get_l2_block__calculates_gas_used_correctly() {
     // given
     let chain_id = ChainId::default();
     let (block, mint) = build_block(&chain_id);
@@ -190,7 +190,7 @@ async fn get_l2_block__calculates_fullness_correctly() {
     let result = source.get_l2_block(block_height).await.unwrap();
 
     // then
-    let actual = result.fullness;
+    let actual = result.gas_used;
     let (fee, gas_price) = if let Transaction::Mint(inner_mint) = &mint {
         let fee = inner_mint.mint_amount();
         let gas_price = inner_mint.gas_price();
@@ -200,6 +200,32 @@ async fn get_l2_block__calculates_fullness_correctly() {
     };
 
     let used = fee * gas_price_factor / gas_price;
-    let expected = (used, block_gas_limit);
+    let expected = used;
+    assert_eq!(expected, actual);
+}
+#[tokio::test]
+async fn get_l2_block__calculates_block_gas_capacity_correctly() {
+    // given
+    let chain_id = ChainId::default();
+    let (block, _mint) = build_block(&chain_id);
+    let block_height = 1u32.into();
+
+    let gas_price_factor = 100;
+    let block_gas_limit = 1000;
+    let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
+
+    let import_result = block_to_import_result(block.clone());
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
+        vec![import_result];
+    let block_stream = tokio_stream::iter(blocks).into_boxed();
+
+    let mut source = l2_source(settings, block_stream);
+
+    // when
+    let result = source.get_l2_block(block_height).await.unwrap();
+
+    // then
+    let actual = result.block_gas_capacity;
+    let expected = block_gas_limit;
     assert_eq!(expected, actual);
 }

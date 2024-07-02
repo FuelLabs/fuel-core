@@ -70,7 +70,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::database::{ GasPriceMetadata};
+use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::storage::{ GasPriceMetadata};
 use crate::database::database_description::gas_price::GasPriceDatabase;
 
 // Storages implementation

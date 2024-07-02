@@ -13,13 +13,14 @@ fn update_l2_block_data__updates_l2_block() {
         .build();
 
     let height = 1;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 100;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     //  then
@@ -37,13 +38,14 @@ fn update_l2_block_data__skipped_block_height_throws_error() {
         .build();
 
     let height = 2;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 100;
 
     // when
     let actual_error = updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap_err();
 
     // then
@@ -63,13 +65,14 @@ fn update_l2_block_data__updates_projected_cost() {
         .build();
 
     let height = 1;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 100;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     // then
@@ -90,13 +93,13 @@ fn update_l2_block_data__updates_the_total_reward_value() {
 
     let height = 1;
     let gas_used = 50;
-    let fullness = (gas_used, 100);
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 200;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, gas_used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     // then
@@ -117,13 +120,14 @@ fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
         .build();
 
     let height = 1;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 200;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     // then
@@ -145,13 +149,14 @@ fn update_l2_block_data__below_threshold_will_decrease_exec_gas_price() {
         .build();
 
     let height = 1;
-    let fullness = (40, 100);
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 200;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     // then
@@ -175,13 +180,14 @@ fn update_l2_block_data__above_threshold_will_increase_exec_gas_price() {
         .build();
 
     let height = 1;
-    let fullness = (60, 100);
+    let used = 60;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 200;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     // then
@@ -205,13 +211,14 @@ fn update_l2_block_data__exec_price_will_not_go_below_min() {
         .build();
 
     let height = 1;
-    let fullness = (40, 100);
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 200;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     // then
@@ -230,13 +237,14 @@ fn update_l2_block_data__updates_last_da_gas_price() {
         .build();
 
     let height = 1;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 200;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     // then
@@ -259,13 +267,14 @@ fn update_l2_block_data__updates_profit_avg() {
         .build();
 
     let height = 1;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
     let new_gas_price = 100;
 
     // when
     updater
-        .update_l2_block_data(height, fullness, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
         .unwrap();
 
     //  then

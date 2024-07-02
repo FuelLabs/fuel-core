@@ -84,7 +84,8 @@ async fn next__fetches_l2_block() {
     // given
     let l2_block = BlockInfo {
         height: 1,
-        fullness: (60, 100),
+        gas_used: 60,
+        block_gas_capacity: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -156,7 +157,8 @@ async fn next__new_l2_block_updates_metadata() {
     // given
     let l2_block = BlockInfo {
         height: 1,
-        fullness: (60, 100),
+        gas_used: 60,
+        block_gas_capacity: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -182,7 +184,11 @@ async fn next__new_l2_block_updates_metadata() {
     // then
     let mut updater = AlgorithmUpdaterV0::try_from(inner).unwrap();
     updater
-        .update_l2_block_data(l2_block.height, l2_block.fullness)
+        .update_l2_block_data(
+            l2_block.height,
+            l2_block.gas_used,
+            l2_block.block_gas_capacity.try_into().unwrap(),
+        )
         .unwrap();
     let expected: UpdaterMetadata = updater.into();
     let actual = metadata_inner.lock().await.clone().unwrap();

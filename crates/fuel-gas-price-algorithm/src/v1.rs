@@ -1,6 +1,9 @@
-use std::cmp::{
-    max,
-    min,
+use std::{
+    cmp::{
+        max,
+        min,
+    },
+    num::NonZeroU64,
 };
 
 #[cfg(test)]
@@ -211,7 +214,8 @@ impl AlgorithmUpdaterV1 {
     pub fn update_l2_block_data(
         &mut self,
         height: u32,
-        fullness: (u64, u64),
+        used: u64,
+        capacity: NonZeroU64,
         block_bytes: u64,
         gas_price: u64,
     ) -> Result<(), Error> {
@@ -234,8 +238,8 @@ impl AlgorithmUpdaterV1 {
                 .saturating_add(new_projected_da_cost);
             // implicitly deduce what our da gas price was for the l2 block
             self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
-            self.update_exec_gas_price(fullness.0, fullness.1);
-            let da_reward = fullness.0.saturating_mul(self.last_da_gas_price);
+            self.update_exec_gas_price(used, capacity);
+            let da_reward = used.saturating_mul(self.last_da_gas_price);
             self.total_da_rewards = self.total_da_rewards.saturating_add(da_reward);
             Ok(())
         }
@@ -251,12 +255,11 @@ impl AlgorithmUpdaterV1 {
         self.profit_avg = new_avg;
     }
 
-    fn update_exec_gas_price(&mut self, used: u64, capacity: u64) {
+    fn update_exec_gas_price(&mut self, used: u64, capacity: NonZeroU64) {
         let mut exec_gas_price = self.new_exec_price;
-        // TODO: Do we want to capture this error? I feel like we should assume capacity isn't 0
         let fullness_percent = used
             .saturating_mul(100)
-            .checked_div(capacity)
+            .checked_div(capacity.into())
             .unwrap_or(self.l2_block_fullness_threshold_percent);
 
         match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {

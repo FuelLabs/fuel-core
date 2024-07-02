@@ -10,7 +10,7 @@ use fuel_core_storage::{
 };
 use fuel_gas_price_algorithm::v1_no_da::AlgorithmUpdaterV0;
 
-use crate::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
+use crate::fuel_gas_price_updater::fuel_core_storage_adapter::storage::GasPriceColumn;
 
 use super::*;
 

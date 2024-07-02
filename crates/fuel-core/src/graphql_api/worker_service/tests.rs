@@ -66,7 +66,7 @@ fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
         events: vec![event],
         source: Default::default(),
     });
-    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> = vec![block];
+    let blocks: Vec<SharedImportResult> = vec![block];
     tokio_stream::iter(blocks).into_boxed()
 }
 

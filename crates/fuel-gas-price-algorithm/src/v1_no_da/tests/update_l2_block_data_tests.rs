@@ -13,10 +13,13 @@ fn update_l2_block_data__updates_l2_block() {
         .build();
 
     let height = 1;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
 
     // when
-    updater.update_l2_block_data(height, fullness).unwrap();
+    updater
+        .update_l2_block_data(height, used, capacity)
+        .unwrap();
 
     //  then
     let expected = starting_block + 1;
@@ -33,10 +36,13 @@ fn update_l2_block_data__skipped_block_height_throws_error() {
         .build();
 
     let height = 2;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
 
     // when
-    let actual_error = updater.update_l2_block_data(height, fullness).unwrap_err();
+    let actual_error = updater
+        .update_l2_block_data(height, used, capacity)
+        .unwrap_err();
 
     // then
     let expected_error = Error::SkippedL2Block {
@@ -57,10 +63,13 @@ fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
         .build();
 
     let height = 1;
-    let fullness = (50, 100);
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
 
     // when
-    updater.update_l2_block_data(height, fullness).unwrap();
+    updater
+        .update_l2_block_data(height, used, capacity)
+        .unwrap();
 
     // then
     let expected = starting_gas_price;
@@ -81,10 +90,13 @@ fn update_l2_block_data__below_threshold_will_decrease_exec_gas_price() {
         .build();
 
     let height = 1;
-    let fullness = (40, 100);
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
 
     // when
-    updater.update_l2_block_data(height, fullness).unwrap();
+    updater
+        .update_l2_block_data(height, used, capacity)
+        .unwrap();
 
     // then
     let expected_change_amount =
@@ -107,10 +119,13 @@ fn update_l2_block_data__above_threshold_will_increase_exec_gas_price() {
         .build();
 
     let height = 1;
-    let fullness = (60, 100);
+    let used = 60;
+    let capacity = 100.try_into().unwrap();
 
     // when
-    updater.update_l2_block_data(height, fullness).unwrap();
+    updater
+        .update_l2_block_data(height, used, capacity)
+        .unwrap();
 
     // then
     let expected_change = starting_exec_gas_price * exec_gas_price_increase_percent / 100;
@@ -133,10 +148,13 @@ fn update_l2_block_data__exec_price_will_not_go_below_min() {
         .build();
 
     let height = 1;
-    let fullness = (40, 100);
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
 
     // when
-    updater.update_l2_block_data(height, fullness).unwrap();
+    updater
+        .update_l2_block_data(height, used, capacity)
+        .unwrap();
 
     // then
     let expected = min_exec_gas_price;

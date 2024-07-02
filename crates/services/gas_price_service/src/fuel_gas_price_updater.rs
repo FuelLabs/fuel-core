@@ -9,6 +9,7 @@ use fuel_gas_price_algorithm::v1_no_da::{
     AlgorithmUpdaterV0,
     AlgorithmV0,
 };
+use std::num::NonZeroU64;
 
 #[cfg(test)]
 mod tests;
@@ -64,8 +65,10 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 pub struct BlockInfo {
     // Block height
     pub height: u32,
-    // Fullness of block gas usage vs max block gas
-    pub fullness: (u64, u64),
+    // Gas used in the block
+    pub gas_used: u64,
+    // Total gas capacity of the block
+    pub block_gas_capacity: u64,
 }
 #[async_trait::async_trait]
 pub trait L2BlockSource: Send + Sync {
@@ -164,7 +167,7 @@ where
             .await?
             .unwrap_or(init_metadata)
             .try_into()
-            .map_err(Error::CouldNotInitUpdater)?; // <-- Error here
+            .map_err(Error::CouldNotInitUpdater)?;
         let updater = Self {
             inner,
             l2_block_source,
@@ -193,15 +196,20 @@ where
                 let l2_block = l2_block?;
                 let BlockInfo {
                     height,
-                    fullness,
+                    gas_used,
+                    block_gas_capacity,
                 } = l2_block;
-                self.inner.update_l2_block_data(
-                    height,
-                    fullness,
-                )?;
+                let capacity = NonZeroU64::new(block_gas_capacity).ok_or_else(|| {
+                    anyhow::anyhow!("Block gas capacity must be non-zero")
+                })?;
                 self.metadata_storage
                     .set_metadata(self.inner.clone().into())
                     .await?;
+                self.inner.update_l2_block_data(
+                    height,
+                    gas_used,
+                    capacity,
+                )?;
                 Ok(self.inner.algorithm())
             }
         }

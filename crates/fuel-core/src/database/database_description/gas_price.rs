@@ -1,4 +1,4 @@
-use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
+use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::storage::GasPriceColumn;
 use fuel_core_types::fuel_types::BlockHeight;
 use crate::database::database_description::DatabaseDescription;
 
@@ -14,7 +14,7 @@ impl DatabaseDescription for GasPriceDatabase {
     }
 
     fn name() -> &'static str {
-        "gas_price_service_storage"
+        "gas_price"
     }
 
     fn metadata_column() -> Self::Column {

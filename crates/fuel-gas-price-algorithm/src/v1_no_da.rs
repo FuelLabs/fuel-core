@@ -1,4 +1,7 @@
-use std::cmp::max;
+use std::{
+    cmp::max,
+    num::NonZeroU64,
+};
 
 #[cfg(test)]
 mod tests;
@@ -7,10 +10,6 @@ mod tests;
 pub enum Error {
     #[error("Skipped L2 block update: expected {expected:?}, got {got:?}")]
     SkippedL2Block { expected: u32, got: u32 },
-    #[error("Skipped DA block update: expected {expected:?}, got {got:?}")]
-    SkippedDABlock { expected: u32, got: u32 },
-    #[error("Could not calculate cost per byte: {bytes:?} bytes, {cost:?} cost")]
-    CouldNotCalculateCostPerByte { bytes: u64, cost: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,7 +61,8 @@ impl AlgorithmUpdaterV0 {
     pub fn update_l2_block_data(
         &mut self,
         height: u32,
-        fullness: (u64, u64),
+        used: u64,
+        capacity: NonZeroU64,
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
@@ -72,17 +72,16 @@ impl AlgorithmUpdaterV0 {
             })
         } else {
             self.l2_block_height = height;
-            self.update_exec_gas_price(fullness.0, fullness.1);
+            self.update_exec_gas_price(used, capacity);
             Ok(())
         }
     }
 
-    fn update_exec_gas_price(&mut self, used: u64, capacity: u64) {
+    fn update_exec_gas_price(&mut self, used: u64, capacity: NonZeroU64) {
         let mut exec_gas_price = self.new_exec_price;
-        // TODO: Do we want to capture this error? I feel like we should assume capacity isn't 0
         let fullness_percent = used
             .saturating_mul(100)
-            .checked_div(capacity)
+            .checked_div(capacity.into())
             .unwrap_or(self.l2_block_fullness_threshold_percent);
 
         match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {

@@ -1,5 +1,5 @@
 use crate::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::database::{
+    fuel_core_storage_adapter::storage::{
         GasPriceColumn,
         GasPriceMetadata,
     },
@@ -49,13 +49,13 @@ mod metadata_tests;
 #[cfg(test)]
 mod l2_source_tests;
 
-pub mod database;
+pub mod storage;
 
 #[async_trait::async_trait]
-impl<Database> MetadataStorage for StructuredStorage<Database>
+impl<Storage> MetadataStorage for StructuredStorage<Storage>
 where
-    Database: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
-    Database: Send + Sync,
+    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
+    Storage: Send + Sync,
 {
     async fn get_metadata(
         &self,
@@ -115,7 +115,8 @@ fn get_block_info(
     let used_gas = min(calculated_used_gas, block_gas_limit);
     let info = BlockInfo {
         height: (*block.header().height()).into(),
-        fullness: (used_gas, block_gas_limit),
+        gas_used: used_gas,
+        block_gas_capacity: block_gas_limit,
     };
     Ok(info)
 }
