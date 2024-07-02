@@ -84,14 +84,16 @@ use fuel_core_types::{
     },
     services::block_importer::SharedImportResult,
 };
+use serde::Serialize;
 use std::cmp::min;
 use tokio_stream::StreamExt;
 
 #[cfg(test)]
 mod l2_source_tests;
 
-pub struct FuelL2BlockSource<Settings> {
+pub struct FuelL2BlockSource<Settings, Serializer> {
     gas_price_settings: Settings,
+    serializer: Serializer,
     committed_block_stream: BoxStream<SharedImportResult>,
 }
 
@@ -107,7 +109,12 @@ pub trait GasPriceSettingsProvider {
     ) -> Result<GasPriceSettings>;
 }
 
-fn get_block_info(
+pub trait SerializeBytes {
+    fn serialize_bytes<B: Serialize>(&self, block: B) -> u64;
+}
+
+fn get_block_info<Serializer: SerializeBytes>(
+    serializer: &Serializer,
     block: &Block<Transaction>,
     gas_price_factor: u64,
     block_gas_limit: u64,
@@ -116,10 +123,11 @@ fn get_block_info(
     let height = *block.header().height();
     let calculated_used_gas = block_used_gas(height, fee, gas_price, gas_price_factor)?;
     let used_gas = min(calculated_used_gas, block_gas_limit);
+    let block_bytes = serializer.serialize_bytes(block);
     let info = BlockInfo {
         height: (*block.header().height()).into(),
         fullness: (used_gas, block_gas_limit),
-        block_bytes: 0,
+        block_bytes,
         gas_price,
     };
     Ok(info)
@@ -159,9 +167,10 @@ fn block_used_gas(
 }
 
 #[async_trait::async_trait]
-impl<Settings> L2BlockSource for FuelL2BlockSource<Settings>
+impl<Settings, Serializer> L2BlockSource for FuelL2BlockSource<Settings, Serializer>
 where
     Settings: GasPriceSettingsProvider + Send + Sync,
+    Serializer: SerializeBytes + Send + Sync,
 {
     async fn get_l2_block(&mut self, height: BlockHeight) -> GasPriceResult<BlockInfo> {
         let block = &self
@@ -183,6 +192,6 @@ where
             gas_price_factor,
             block_gas_limit,
         } = self.gas_price_settings.settings(&param_version)?;
-        get_block_info(block, gas_price_factor, block_gas_limit)
+        get_block_info(&self.serializer, block, gas_price_factor, block_gas_limit)
     }
 }

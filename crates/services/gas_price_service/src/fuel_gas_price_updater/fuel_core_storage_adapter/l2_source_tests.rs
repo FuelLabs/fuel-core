@@ -60,12 +60,30 @@ impl GasPriceSettingsProvider for FakeSettings {
     }
 }
 
-fn l2_source<T: GasPriceSettingsProvider>(
+#[derive(Debug, Clone, Default)]
+struct FakeSerializer {
+    bytes_count: u64,
+}
+impl FakeSerializer {
+    fn new(bytes_count: u64) -> Self {
+        Self { bytes_count }
+    }
+}
+
+impl SerializeBytes for FakeSerializer {
+    fn serialize_bytes<B: Serialize>(&self, _block: B) -> u64 {
+        self.bytes_count
+    }
+}
+
+fn l2_source<T, S>(
     gas_price_settings: T,
+    serializer: S,
     committed_block_stream: BoxStream<SharedImportResult>,
-) -> FuelL2BlockSource<T> {
+) -> FuelL2BlockSource<T, S> {
     FuelL2BlockSource {
         gas_price_settings,
+        serializer,
         committed_block_stream,
     }
 }
@@ -102,14 +120,16 @@ async fn get_l2_block__gets_expected_value() {
     let block_height = 1u32.into();
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
-    let expected = get_block_info(&block, gas_price_factor, block_gas_limit).unwrap();
+    let serializer = FakeSerializer::default();
+    let expected =
+        get_block_info(&serializer, &block, gas_price_factor, block_gas_limit).unwrap();
     let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
     let import_result = block_to_import_result(block.clone());
     let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
         vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
 
-    let mut source = l2_source(settings, block_stream);
+    let mut source = l2_source(settings, serializer, block_stream);
 
     // when
     let actual = source.get_l2_block(block_height).await.unwrap();
@@ -131,7 +151,8 @@ async fn get_l2_block__waits_for_block() {
     let (_sender, receiver) = tokio::sync::mpsc::channel(1);
     let stream = ReceiverStream::new(receiver);
     let block_stream = Box::pin(stream);
-    let mut source = l2_source(settings, block_stream);
+    let serializer = FakeSerializer::default();
+    let mut source = l2_source(settings, serializer.clone(), block_stream);
 
     // when
     let mut fut_l2_block = source.get_l2_block(block_height);
@@ -151,7 +172,8 @@ async fn get_l2_block__waits_for_block() {
 
     // then
     let actual = fut_l2_block.await.unwrap();
-    let expected = get_block_info(&block, gas_price_factor, block_gas_limit).unwrap();
+    let expected =
+        get_block_info(&serializer, &block, gas_price_factor, block_gas_limit).unwrap();
     assert_eq!(expected, actual);
 }
 
@@ -178,13 +200,14 @@ async fn get_l2_block__calculates_fullness_correctly() {
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
     let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
+    let serializer = FakeSerializer::default();
 
     let import_result = block_to_import_result(block.clone());
     let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
         vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
 
-    let mut source = l2_source(settings, block_stream);
+    let mut source = l2_source(settings, serializer, block_stream);
 
     // when
     let result = source.get_l2_block(block_height).await.unwrap();
@@ -205,7 +228,32 @@ async fn get_l2_block__calculates_fullness_correctly() {
 }
 
 #[tokio::test]
-async fn get_l2_block__calculates_block_bytes_correctly() {}
+async fn get_l2_block__calculates_block_bytes_correctly() {
+    // given
+    let chain_id = ChainId::default();
+    let (block, _mint) = build_block(&chain_id);
+    let block_height = 1u32.into();
+
+    let gas_price_factor = 100;
+    let block_gas_limit = 1000;
+    let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
+    let expected_bytes = 1000;
+    let serializer = FakeSerializer::new(expected_bytes);
+
+    let import_result = block_to_import_result(block.clone());
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
+        vec![import_result];
+    let block_stream = tokio_stream::iter(blocks).into_boxed();
+
+    let mut source = l2_source(settings, serializer, block_stream);
+
+    // when
+    let result = source.get_l2_block(block_height).await.unwrap();
+
+    // then
+    let actual = result.block_bytes;
+    assert_eq!(expected_bytes, actual);
+}
 
 #[tokio::test]
 async fn get_l2_block__retrieves_gas_price_correctly() {
@@ -217,13 +265,14 @@ async fn get_l2_block__retrieves_gas_price_correctly() {
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
     let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
+    let serializer = FakeSerializer::default();
 
     let import_result = block_to_import_result(block.clone());
     let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
         vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
 
-    let mut source = l2_source(settings, block_stream);
+    let mut source = l2_source(settings, serializer, block_stream);
 
     // when
     let result = source.get_l2_block(block_height).await.unwrap();
