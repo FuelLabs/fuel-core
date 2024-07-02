@@ -339,14 +339,12 @@ pub mod worker {
         fn commit(self) -> StorageResult<()>;
     }
 
-    pub trait BlockImporter {
+    pub trait BlockImporter: Send + Sync {
         /// Returns a stream of imported block.
         fn block_events(&self) -> BoxStream<SharedImportResult>;
-    }
 
-    pub trait ImportResultProvider: Send + Sync {
         /// Return the import result at the given height.
-        fn result_at_height(
+        fn block_event_at_height(
             &self,
             height: Option<BlockHeight>,
         ) -> anyhow::Result<SharedImportResult>;

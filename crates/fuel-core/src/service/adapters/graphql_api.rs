@@ -2,7 +2,6 @@ use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
     ConsensusParametersProvider,
-    ImportResultProviderAdapter,
     StaticGasPrice,
 };
 use crate::{
@@ -16,20 +15,15 @@ use crate::{
         P2pPort,
         TxPoolPort,
     },
-    graphql_api::ports::worker::ImportResultProvider,
     service::adapters::{
+        import_result_provider::ImportResultProvider,
         P2PAdapter,
         TxPoolAdapter,
     },
 };
 use async_trait::async_trait;
-use fuel_core_importer::ports::Validator;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::{
-    not_found,
-    transactional::AtomicView,
-    Result as StorageResult,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::{
     service::TxStatusMessage,
     types::TxId,
@@ -43,14 +37,8 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     services::{
-        block_importer::{
-            ImportResult,
-            SharedImportResult,
-        },
-        executor::{
-            TransactionExecutionStatus,
-            ValidationResult,
-        },
+        block_importer::SharedImportResult,
+        executor::TransactionExecutionStatus,
         p2p::PeerInfo,
         txpool::{
             InsertionResult,
@@ -164,12 +152,6 @@ impl P2pPort for P2PAdapter {
     }
 }
 
-impl worker::BlockImporter for BlockImporterAdapter {
-    fn block_events(&self) -> BoxStream<SharedImportResult> {
-        self.events_shared_result()
-    }
-}
-
 impl worker::TxPool for TxPoolAdapter {
     fn send_complete(
         &self,
@@ -194,41 +176,33 @@ impl ConsensusProvider for ConsensusParametersProvider {
     }
 }
 
-impl ImportResultProvider for ImportResultProviderAdapter {
-    fn result_at_height(
+#[derive(Clone)]
+pub struct GraphQLBlockImporter {
+    block_importer_adapter: BlockImporterAdapter,
+    import_result_provider_adapter: ImportResultProvider,
+}
+
+impl GraphQLBlockImporter {
+    pub fn new(
+        block_importer_adapter: BlockImporterAdapter,
+        import_result_provider_adapter: ImportResultProvider,
+    ) -> Self {
+        Self {
+            block_importer_adapter,
+            import_result_provider_adapter,
+        }
+    }
+}
+
+impl worker::BlockImporter for GraphQLBlockImporter {
+    fn block_events(&self) -> BoxStream<SharedImportResult> {
+        self.block_importer_adapter.events_shared_result()
+    }
+
+    fn block_event_at_height(
         &self,
         height: Option<BlockHeight>,
     ) -> anyhow::Result<SharedImportResult> {
-        if let Some(height) = height {
-            let sealed_block = self
-                .on_chain_database
-                .latest_view()?
-                .get_sealed_block_by_height(&height)?
-                .ok_or(not_found!("SealedBlock"))?;
-
-            let ValidationResult { tx_status, events } = self
-                .executor_adapter
-                .validate(&sealed_block.entity)?
-                .into_result();
-            let result = ImportResult::new_from_local(sealed_block, tx_status, events);
-            Ok(Arc::new(result))
-        } else {
-            let genesis_height = self
-                .on_chain_database
-                .latest_view()?
-                .genesis_height()?
-                .ok_or(not_found!("Genesis height"))?;
-            let sealed_block = self
-                .on_chain_database
-                .latest_view()?
-                .get_sealed_block_by_height(&genesis_height)?
-                .ok_or(not_found!("SealedBlock"))?;
-
-            Ok(Arc::new(ImportResult::new_from_local(
-                sealed_block,
-                vec![],
-                vec![],
-            )))
-        }
+        self.import_result_provider_adapter.result_at_height(height)
     }
 }

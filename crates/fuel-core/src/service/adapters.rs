@@ -30,7 +30,9 @@ pub mod block_importer;
 pub mod consensus_module;
 pub mod consensus_parameters_provider;
 pub mod executor;
+pub mod fuel_gas_price_provider;
 pub mod graphql_api;
+pub mod import_result_provider;
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
@@ -39,8 +41,6 @@ pub mod relayer;
 #[cfg(feature = "p2p")]
 pub mod sync;
 pub mod txpool;
-
-pub mod fuel_gas_price_provider;
 
 #[derive(Debug, Clone)]
 pub struct ConsensusParametersProvider {
@@ -227,20 +227,6 @@ impl SharedMemoryPool {
     pub fn new(number_of_instances: usize) -> Self {
         Self {
             memory_pool: MemoryPool::new(number_of_instances),
-        }
-    }
-}
-
-pub struct ImportResultProviderAdapter {
-    on_chain_database: Database,
-    executor_adapter: ExecutorAdapter,
-}
-
-impl ImportResultProviderAdapter {
-    pub fn new(on_chain_database: Database, executor_adapter: ExecutorAdapter) -> Self {
-        Self {
-            on_chain_database,
-            executor_adapter,
         }
     }
 }

@@ -94,14 +94,13 @@ use std::{
 mod tests;
 
 /// The initialization task recovers the state of the GraphQL service database on startup.
-pub struct InitializeTask<TxPool, OnChain, OffChain, ImportResultProvider> {
+pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     chain_id: ChainId,
     continue_on_error: bool,
-    block_importer: BoxStream<SharedImportResult>,
     tx_pool: TxPool,
+    block_importer: BlockImporter,
     on_chain_database: OnChain,
     off_chain_database: OffChain,
-    import_result_provider: ImportResultProvider,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -420,13 +419,13 @@ where
 }
 
 #[async_trait::async_trait]
-impl<TxPool, OnChain, OffChain, ImportResultProvider> RunnableService
-    for InitializeTask<TxPool, OnChain, OffChain, ImportResultProvider>
+impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
+    for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
 where
     TxPool: ports::worker::TxPool,
+    BlockImporter: ports::worker::BlockImporter,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
-    ImportResultProvider: ports::worker::ImportResultProvider,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
     type SharedData = EmptyShared;
@@ -450,51 +449,71 @@ where
 
         let InitializeTask {
             chain_id,
-            block_importer,
             tx_pool,
+            block_importer,
             on_chain_database,
             off_chain_database,
-            import_result_provider,
             continue_on_error,
         } = self;
 
         let mut task = Task {
             tx_pool,
-            block_importer,
+            block_importer: block_importer.block_events(),
             database: off_chain_database,
             chain_id,
             continue_on_error,
         };
 
+        // Process all blocks that were imported before the service started.
+        // The block importer may produce some blocks on start-up during the
+        // genesis stage or the recovery process. In this case, we need to
+        // process these blocks because, without them,
+        // our block height will be less than on the chain database.
         while let Some(Some(block)) = task.block_importer.next().now_or_never() {
             task.process_block(block)?;
         }
 
-        loop {
-            let on_chain_height = on_chain_database.latest_height()?;
-            let off_chain_height = task.database.latest_height()?;
-
-            if on_chain_height < off_chain_height {
-                return Err(anyhow::anyhow!(
-                    "The on-chain database height is lower than the off-chain database height"
-                ));
-            }
-
-            if on_chain_height == off_chain_height {
-                break;
-            }
-
-            let next_block_height =
-                off_chain_height.map(|height| BlockHeight::new(height.saturating_add(1)));
-
-            let import_result =
-                import_result_provider.result_at_height(next_block_height)?;
-
-            task.process_block(import_result)?
-        }
+        sync_databases(&mut task, &on_chain_database, &block_importer)?;
 
         Ok(task)
     }
+}
+
+fn sync_databases<TxPool, BlockImporter, OnChain, OffChain>(
+    task: &mut Task<TxPool, OffChain>,
+    on_chain_database: &OnChain,
+    import_result_provider: &BlockImporter,
+) -> anyhow::Result<()>
+where
+    TxPool: ports::worker::TxPool,
+    BlockImporter: ports::worker::BlockImporter,
+    OnChain: ports::worker::OnChainDatabase,
+    OffChain: ports::worker::OffChainDatabase,
+{
+    loop {
+        let on_chain_height = on_chain_database.latest_height()?;
+        let off_chain_height = task.database.latest_height()?;
+
+        if on_chain_height < off_chain_height {
+            return Err(anyhow::anyhow!(
+                    "The on-chain database height is lower than the off-chain database height"
+                ));
+        }
+
+        if on_chain_height == off_chain_height {
+            break;
+        }
+
+        let next_block_height =
+            off_chain_height.map(|height| BlockHeight::new(height.saturating_add(1)));
+
+        let import_result =
+            import_result_provider.block_event_at_height(next_block_height)?;
+
+        task.process_block(import_result)?
+    }
+
+    Ok(())
 }
 
 #[async_trait::async_trait]
@@ -547,29 +566,25 @@ where
     }
 }
 
-pub fn new_service<TxPool, I, OnChain, OffChain, ImportResultProvider>(
+pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
     tx_pool: TxPool,
-    block_importer: I,
+    block_importer: BlockImporter,
     on_chain_database: OnChain,
     off_chain_database: OffChain,
-    import_result_provider: ImportResultProvider,
     chain_id: ChainId,
     continue_on_error: bool,
-) -> ServiceRunner<InitializeTask<TxPool, OnChain, OffChain, ImportResultProvider>>
+) -> ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>
 where
     TxPool: ports::worker::TxPool,
-    I: ports::worker::BlockImporter,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
-    ImportResultProvider: ports::worker::ImportResultProvider,
+    BlockImporter: ports::worker::BlockImporter,
 {
-    let block_importer = block_importer.block_events();
     ServiceRunner::new(InitializeTask {
         tx_pool,
         block_importer,
         on_chain_database,
         off_chain_database,
-        import_result_provider,
         chain_id,
         continue_on_error,
     })
