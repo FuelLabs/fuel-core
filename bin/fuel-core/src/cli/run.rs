@@ -141,9 +141,9 @@ pub struct Command {
     #[arg(name = "DB_PRUNE", long = "db-prune", env, default_value = "false")]
     pub db_prune: bool,
 
-    /// The stops the services on internal error.
-    #[clap(long = "stop-on-error", default_value = "true", env)]
-    pub stop_on_error: bool,
+    /// The determines whether to continue the services on internal error or not.
+    #[clap(long = "continue-services-on-error", default_value = "false", env)]
+    pub continue_on_error: bool,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -240,7 +240,7 @@ impl Command {
             state_rewind_duration,
             db_prune,
             snapshot,
-            stop_on_error,
+            continue_on_error,
             vm_backtrace,
             debug,
             utxo_validation,
@@ -388,7 +388,7 @@ impl Command {
             snapshot_reader,
             debug,
             native_executor_version,
-            stop_on_error,
+            continue_on_error,
             utxo_validation,
             block_production: trigger,
             vm: VMConfig {

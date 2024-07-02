@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [#2004](https://github.com/FuelLabs/fuel-core/pull/2004): Added new CLI argument `continue-services-on-error` to control internal flow of services.
 - [#2004](https://github.com/FuelLabs/fuel-core/pull/2004): Added handling of incorrect shutdown of the off-chain GraphQL worker by using state rewind feature.
 - [#1996](https://github.com/FuelLabs/fuel-core/pull/1996): Added support for rollback command when state rewind feature is enabled. The command allows the rollback of the state of the blockchain several blocks behind until the end of the historical window. The default historical window it 7 days.
 - [#1996](https://github.com/FuelLabs/fuel-core/pull/1996): Added support for the state rewind feature. The feature allows the execution of the blocks in the past and the same execution results to be received. Together with forkless upgrades, execution of any block from the past is possible if historical data exist for the target block height.

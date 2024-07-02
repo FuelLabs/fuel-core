@@ -81,6 +81,6 @@ fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
         block_importer,
         database,
         chain_id,
-        stop_on_error: true,
+        continue_on_error: true,
     }
 }
