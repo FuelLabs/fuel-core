@@ -1,4 +1,9 @@
-use super::*;
+use crate::v1::{
+    tests::UpdaterBuilder,
+    BlockBytes,
+    Error,
+    RecordedBlock,
+};
 
 #[test]
 fn update_da_record_data__increases_block() {

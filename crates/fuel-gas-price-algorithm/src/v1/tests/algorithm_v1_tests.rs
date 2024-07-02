@@ -1,5 +1,4 @@
-#![allow(clippy::cast_possible_truncation)]
-use super::*;
+use crate::v1::tests::UpdaterBuilder;
 
 #[test]
 fn calculate__even_profit_maintains_price() {
