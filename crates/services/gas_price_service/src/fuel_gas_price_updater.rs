@@ -1,13 +1,13 @@
 use crate::UpdateAlgorithm;
 use fuel_core_types::fuel_types::BlockHeight;
+use fuel_gas_price_algorithm::v0::{
+    AlgorithmUpdaterV0,
+    AlgorithmV0,
+};
 pub use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     AlgorithmV1,
     RecordedBlock,
-};
-use fuel_gas_price_algorithm::v0::{
-    AlgorithmUpdaterV0,
-    AlgorithmV0,
 };
 use std::num::NonZeroU64;
 
