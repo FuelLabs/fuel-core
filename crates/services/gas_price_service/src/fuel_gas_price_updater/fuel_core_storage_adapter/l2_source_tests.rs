@@ -208,4 +208,28 @@ async fn get_l2_block__calculates_fullness_correctly() {
 async fn get_l2_block__calculates_block_bytes_correctly() {}
 
 #[tokio::test]
-async fn get_l2_block__retrieves_gas_price_correctly() {}
+async fn get_l2_block__retrieves_gas_price_correctly() {
+    // given
+    let chain_id = ChainId::default();
+    let (block, mint) = build_block(&chain_id);
+    let block_height = 1u32.into();
+
+    let gas_price_factor = 100;
+    let block_gas_limit = 1000;
+    let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
+
+    let import_result = block_to_import_result(block.clone());
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
+        vec![import_result];
+    let block_stream = tokio_stream::iter(blocks).into_boxed();
+
+    let mut source = l2_source(settings, block_stream);
+
+    // when
+    let result = source.get_l2_block(block_height).await.unwrap();
+
+    // then
+    let actual = result.gas_price;
+    let expected = mint.as_mint().unwrap().gas_price();
+    assert_eq!(*expected, actual);
+}

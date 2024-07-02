@@ -112,21 +112,20 @@ fn get_block_info(
     gas_price_factor: u64,
     block_gas_limit: u64,
 ) -> GasPriceResult<BlockInfo> {
-    let calculated_used_gas = block_used_gas(block, gas_price_factor)?;
+    let (fee, gas_price) = mint_values(block)?;
+    let height = *block.header().height();
+    let calculated_used_gas = block_used_gas(height, fee, gas_price, gas_price_factor)?;
     let used_gas = min(calculated_used_gas, block_gas_limit);
     let info = BlockInfo {
         height: (*block.header().height()).into(),
         fullness: (used_gas, block_gas_limit),
         block_bytes: 0,
-        gas_price: 0,
+        gas_price,
     };
     Ok(info)
 }
 
-fn block_used_gas(
-    block: &Block<Transaction>,
-    gas_price_factor: u64,
-) -> GasPriceResult<u64> {
+fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
     let mint = block
         .transactions()
         .last()
@@ -135,19 +134,26 @@ fn block_used_gas(
             block_height: *block.header().height(),
             source_error: anyhow!("Block has no mint transaction"),
         })?;
-    let fee = mint.mint_amount();
+    Ok((*mint.mint_amount(), *mint.gas_price()))
+}
+fn block_used_gas(
+    block_height: BlockHeight,
+    fee: u64,
+    gas_price: u64,
+    gas_price_factor: u64,
+) -> GasPriceResult<u64> {
     let scaled_fee =
         fee.checked_mul(gas_price_factor)
             .ok_or(GasPriceError::CouldNotFetchL2Block {
-                block_height: *block.header().height(),
+                block_height,
                 source_error: anyhow!(
                     "Failed to scale fee by gas price factor, overflow"
                 ),
             })?;
     scaled_fee
-        .checked_div(*mint.gas_price())
+        .checked_div(gas_price)
         .ok_or(GasPriceError::CouldNotFetchL2Block {
-            block_height: *block.header().height(),
+            block_height,
             source_error: anyhow!("Failed to calculate gas used, division by zero"),
         })
 }
