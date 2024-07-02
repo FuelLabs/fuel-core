@@ -95,7 +95,7 @@ impl<'a> AssetsQuery<'a> {
                     let id = if let CoinId::Utxo(id) = id {
                         id
                     } else {
-                        unreachable!("We've checked it above")
+                        return Err(anyhow::anyhow!("The coin is not UTXO").into());
                     };
                     let coin = self.database.coin(id)?;
 
@@ -127,7 +127,7 @@ impl<'a> AssetsQuery<'a> {
                     let id = if let CoinId::Message(id) = id {
                         id
                     } else {
-                        unreachable!("We've checked it above")
+                        return Err(anyhow::anyhow!("The coin is not a message").into());
                     };
                     let message = self.database.message(&id)?;
                     Ok(message)
