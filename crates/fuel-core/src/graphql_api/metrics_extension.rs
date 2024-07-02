@@ -9,7 +9,6 @@ use async_graphql::{
         ResolveInfo,
     },
     parser::types::ExecutableDocument,
-    QueryPathSegment,
     Response,
     ServerResult,
     Value,
@@ -85,8 +84,8 @@ impl Extension for MetricsExtInner {
         info: ResolveInfo<'_>,
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
-        let field_name = match (info.path_node.parent, info.path_node.segment) {
-            (None, QueryPathSegment::Name(field_name)) => Some(field_name),
+        let field_name = match (info.path_node.parent, info.name) {
+            (None, field_name) => Some(field_name),
             _ => None,
         };
 
