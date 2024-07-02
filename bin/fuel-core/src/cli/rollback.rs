@@ -8,7 +8,7 @@ use fuel_core::{
 };
 use std::path::PathBuf;
 
-/// Print a snapshot of blockchain state to stdout.
+/// Rollbacks the state of the blockchain to a specific block height.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
     /// The path to the database.
