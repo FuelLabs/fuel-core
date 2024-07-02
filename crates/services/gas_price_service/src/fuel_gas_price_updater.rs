@@ -66,10 +66,6 @@ pub struct BlockInfo {
     pub height: u32,
     // Fullness of block gas usage vs max block gas
     pub fullness: (u64, u64),
-    // Block size in bytes
-    pub block_bytes: u64,
-    // Gas price of the block
-    pub gas_price: u64,
 }
 #[async_trait::async_trait]
 pub trait L2BlockSource: Send + Sync {
@@ -198,8 +194,6 @@ where
                 let BlockInfo {
                     height,
                     fullness,
-                    block_bytes: _,
-                    gas_price: _,
                 } = l2_block;
                 self.inner.update_l2_block_data(
                     height,

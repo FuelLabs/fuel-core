@@ -85,8 +85,6 @@ async fn next__fetches_l2_block() {
     let l2_block = BlockInfo {
         height: 1,
         fullness: (60, 100),
-        block_bytes: 1000,
-        gas_price: 200,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -159,8 +157,6 @@ async fn next__new_l2_block_updates_metadata() {
     let l2_block = BlockInfo {
         height: 1,
         fullness: (60, 100),
-        block_bytes: 1000,
-        gas_price: 200,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
