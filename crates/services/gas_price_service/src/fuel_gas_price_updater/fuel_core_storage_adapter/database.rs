@@ -66,13 +66,3 @@ impl TableWithBlueprint for GasPriceMetadata {
         GasPriceColumn::State
     }
 }
-
-// impl Modifiable for Database<GasPrice> {
-//     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-//         commit_changes_with_height_update(self, changes, |iter| {
-//             iter.iter_all::<GasPriceMetadata>(Some(IterDirection::Reverse))
-//                 .map(|result| result.map(|(height, _)| height))
-//                 .try_collect()
-//         })
-//     }
-// }
