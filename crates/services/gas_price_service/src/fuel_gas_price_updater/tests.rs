@@ -183,7 +183,7 @@ async fn next__new_l2_block_saves_old_metadata() {
     let _ = next.await.unwrap().unwrap();
 
     // then
-    let expected: UpdaterMetadata = starting_metadata.into();
+    let expected = starting_metadata;
     let actual = metadata_inner.lock().unwrap().clone().unwrap();
     assert_eq!(expected, actual);
 }
