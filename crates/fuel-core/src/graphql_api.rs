@@ -21,7 +21,7 @@ pub struct ServiceConfig {
     pub max_queries_depth: usize,
     pub max_queries_complexity: usize,
     pub max_queries_recursive_depth: usize,
-    pub max_queries_body_limit: usize,
+    pub request_body_bytes_limit: usize,
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,

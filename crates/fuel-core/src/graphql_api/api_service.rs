@@ -196,7 +196,7 @@ where
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
     let request_timeout = config.config.api_request_timeout;
-    let body_limit = config.config.max_queries_body_limit;
+    let body_limit = config.config.request_body_bytes_limit;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)

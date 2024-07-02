@@ -26,11 +26,11 @@ pub struct GraphQLArgs {
 
     /// The max body limit of the GraphQL query.
     #[clap(
-        long = "graphql-max-queries-body-limit",
+        long = "graphql-request-body-bytes-limit",
         default_value = "1048576",
         env
     )]
-    pub graphql_max_queries_body_limit: usize,
+    pub graphql_request_body_bytes_limit: usize,
 
     /// Time to wait after submitting a query before debug info will be logged about query.
     #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
