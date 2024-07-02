@@ -6,8 +6,8 @@ pub use fuel_gas_price_algorithm::v1::{
     RecordedBlock,
 };
 use fuel_gas_price_algorithm::v1_no_da::{
-    AlgorithmUpdaterV1NoDA,
-    AlgorithmV1NoDA,
+    AlgorithmUpdaterV0,
+    AlgorithmV0,
 };
 
 #[cfg(test)]
@@ -16,14 +16,14 @@ mod tests;
 pub mod fuel_core_storage_adapter;
 
 pub struct FuelGasPriceUpdater<L2, Metadata> {
-    inner: AlgorithmUpdaterV1NoDA,
+    inner: AlgorithmUpdaterV0,
     l2_block_source: L2,
     metadata_storage: Metadata,
 }
 
 impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata> {
     pub fn new(
-        inner: AlgorithmUpdaterV1NoDA,
+        inner: AlgorithmUpdaterV0,
         l2_block_source: L2,
         metadata_storage: Metadata,
     ) -> Self {
@@ -78,30 +78,30 @@ pub trait L2BlockSource: Send + Sync {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum UpdaterMetadata {
-    V1NoDA(V1NoDAMetadata),
+    V0(V0Metadata),
 }
 
 impl UpdaterMetadata {
     pub fn l2_block_height(&self) -> BlockHeight {
         match self {
-            UpdaterMetadata::V1NoDA(v1) => v1.l2_block_height.into(),
+            UpdaterMetadata::V0(v1) => v1.l2_block_height.into(),
         }
     }
 }
 
-impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV1NoDA {
+impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV0 {
     type Error = anyhow::Error;
     fn try_from(metadata: UpdaterMetadata) -> Result<Self, Self::Error> {
         match metadata {
-            UpdaterMetadata::V1NoDA(v1_no_da) => {
-                let V1NoDAMetadata {
+            UpdaterMetadata::V0(v1_no_da) => {
+                let V0Metadata {
                     new_exec_price,
                     min_exec_gas_price,
                     exec_gas_price_change_percent,
                     l2_block_height,
                     l2_block_fullness_threshold_percent,
                 } = v1_no_da;
-                let updater = AlgorithmUpdaterV1NoDA {
+                let updater = AlgorithmUpdaterV0 {
                     new_exec_price,
                     min_exec_gas_price,
                     exec_gas_price_change_percent,
@@ -115,7 +115,7 @@ impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV1NoDA {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct V1NoDAMetadata {
+pub struct V0Metadata {
     /// The gas price to cover the execution of the next block
     pub new_exec_price: u64,
     // Execution
@@ -131,16 +131,16 @@ pub struct V1NoDAMetadata {
     pub l2_block_fullness_threshold_percent: u64,
 }
 
-impl From<AlgorithmUpdaterV1NoDA> for UpdaterMetadata {
-    fn from(v1: AlgorithmUpdaterV1NoDA) -> Self {
-        let v1_no_da = V1NoDAMetadata {
+impl From<AlgorithmUpdaterV0> for UpdaterMetadata {
+    fn from(v1: AlgorithmUpdaterV0) -> Self {
+        let v0 = V0Metadata {
             new_exec_price: v1.new_exec_price,
             min_exec_gas_price: v1.min_exec_gas_price,
             exec_gas_price_change_percent: v1.exec_gas_price_change_percent,
             l2_block_height: v1.l2_block_height,
             l2_block_fullness_threshold_percent: v1.l2_block_fullness_threshold_percent,
         };
-        UpdaterMetadata::V1NoDA(v1_no_da)
+        UpdaterMetadata::V0(v0)
     }
 }
 
@@ -184,7 +184,7 @@ where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
 {
-    type Algorithm = AlgorithmV1NoDA;
+    type Algorithm = AlgorithmV0;
 
     fn start(&self, _for_block: BlockHeight) -> Self::Algorithm {
         self.inner.algorithm()

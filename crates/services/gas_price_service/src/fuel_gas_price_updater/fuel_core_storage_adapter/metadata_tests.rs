@@ -8,7 +8,7 @@ use fuel_core_storage::{
     },
     StorageAsMut,
 };
-use fuel_gas_price_algorithm::v1_no_da::AlgorithmUpdaterV1NoDA;
+use fuel_gas_price_algorithm::v1_no_da::AlgorithmUpdaterV0;
 
 use crate::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
 
@@ -20,7 +20,7 @@ fn arb_metadata() -> UpdaterMetadata {
 }
 
 fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
-    AlgorithmUpdaterV1NoDA {
+    AlgorithmUpdaterV0 {
         new_exec_price: 100,
         min_exec_gas_price: 12,
         exec_gas_price_change_percent: 2,

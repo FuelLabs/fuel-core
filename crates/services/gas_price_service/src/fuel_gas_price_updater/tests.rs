@@ -56,7 +56,7 @@ impl MetadataStorage for FakeMetadata {
 }
 
 fn arb_metadata() -> UpdaterMetadata {
-    UpdaterMetadata::V1NoDA(V1NoDAMetadata {
+    UpdaterMetadata::V0(V0Metadata {
         // set values
         exec_gas_price_change_percent: 10,
         new_exec_price: 100,
@@ -68,7 +68,7 @@ fn arb_metadata() -> UpdaterMetadata {
 }
 
 fn different_arb_metadata() -> UpdaterMetadata {
-    UpdaterMetadata::V1NoDA(V1NoDAMetadata {
+    UpdaterMetadata::V0(V0Metadata {
         // set values
         exec_gas_price_change_percent: 20,
         new_exec_price: 100,
@@ -129,7 +129,7 @@ async fn init__if_exists_already_reload() {
             .unwrap();
 
     // then
-    let expected: AlgorithmUpdaterV1NoDA = metadata.try_into().unwrap();
+    let expected: AlgorithmUpdaterV0 = metadata.try_into().unwrap();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
@@ -148,7 +148,7 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
             .unwrap();
 
     // then
-    let expected: AlgorithmUpdaterV1NoDA = metadata.try_into().unwrap();
+    let expected: AlgorithmUpdaterV0 = metadata.try_into().unwrap();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
@@ -184,7 +184,7 @@ async fn next__new_l2_block_updates_metadata() {
     let _ = next.await.unwrap().unwrap();
 
     // then
-    let mut updater = AlgorithmUpdaterV1NoDA::try_from(inner).unwrap();
+    let mut updater = AlgorithmUpdaterV0::try_from(inner).unwrap();
     updater
         .update_l2_block_data(l2_block.height, l2_block.fullness)
         .unwrap();

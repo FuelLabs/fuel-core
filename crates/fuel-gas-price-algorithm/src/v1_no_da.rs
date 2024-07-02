@@ -14,12 +14,12 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AlgorithmV1NoDA {
+pub struct AlgorithmV0 {
     /// The gas price for to cover the execution of the next block
     new_exec_price: u64,
 }
 
-impl AlgorithmV1NoDA {
+impl AlgorithmV0 {
     pub fn calculate(&self) -> u64 {
         self.new_exec_price
     }
@@ -36,7 +36,7 @@ impl AlgorithmV1NoDA {
 /// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct AlgorithmUpdaterV1NoDA {
+pub struct AlgorithmUpdaterV0 {
     /// The gas price to cover the execution of the next block
     pub new_exec_price: u64,
     // Execution
@@ -58,7 +58,7 @@ pub struct BlockBytes {
     pub block_bytes: u64,
 }
 
-impl AlgorithmUpdaterV1NoDA {
+impl AlgorithmUpdaterV0 {
     pub fn update_l2_block_data(
         &mut self,
         height: u32,
@@ -105,8 +105,8 @@ impl AlgorithmUpdaterV1NoDA {
             .saturating_div(100)
     }
 
-    pub fn algorithm(&self) -> AlgorithmV1NoDA {
-        AlgorithmV1NoDA {
+    pub fn algorithm(&self) -> AlgorithmV0 {
+        AlgorithmV0 {
             new_exec_price: self.new_exec_price,
         }
     }

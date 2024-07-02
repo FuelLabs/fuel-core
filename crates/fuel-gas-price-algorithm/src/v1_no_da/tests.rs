@@ -2,7 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::cast_possible_truncation)]
 
-use super::AlgorithmUpdaterV1NoDA;
+use super::AlgorithmUpdaterV0;
 
 #[cfg(test)]
 mod algorithm_v1_tests;
@@ -56,8 +56,8 @@ impl UpdaterBuilder {
         self
     }
 
-    fn build(self) -> AlgorithmUpdaterV1NoDA {
-        AlgorithmUpdaterV1NoDA {
+    fn build(self) -> AlgorithmUpdaterV0 {
+        AlgorithmUpdaterV0 {
             min_exec_gas_price: self.min_exec_gas_price,
             new_exec_price: self.starting_exec_gas_price,
             exec_gas_price_change_percent: self.exec_gas_price_change_percent,
