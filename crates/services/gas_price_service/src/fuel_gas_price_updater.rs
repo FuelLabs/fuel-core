@@ -5,7 +5,7 @@ pub use fuel_gas_price_algorithm::v1::{
     AlgorithmV1,
     RecordedBlock,
 };
-use fuel_gas_price_algorithm::v1_no_da::{
+use fuel_gas_price_algorithm::v0::{
     AlgorithmUpdaterV0,
     AlgorithmV0,
 };

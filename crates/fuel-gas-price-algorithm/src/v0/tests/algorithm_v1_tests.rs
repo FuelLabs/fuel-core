@@ -1,4 +1,4 @@
-use crate::v1_no_da::AlgorithmV0;
+use crate::v0::AlgorithmV0;
 
 #[test]
 fn calculate__gives_static_value() {
