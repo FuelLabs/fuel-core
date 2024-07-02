@@ -1,9 +1,13 @@
 use crate::UpdateAlgorithm;
 use fuel_core_types::fuel_types::BlockHeight;
-pub use fuel_gas_price_algorithm::{
+pub use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     AlgorithmV1,
     RecordedBlock,
+};
+use fuel_gas_price_algorithm::v1_no_da::{
+    AlgorithmUpdaterV1NoDA,
+    AlgorithmV1NoDA,
 };
 
 #[cfg(test)]
@@ -12,14 +16,14 @@ mod tests;
 pub mod fuel_core_storage_adapter;
 
 pub struct FuelGasPriceUpdater<L2, Metadata> {
-    inner: AlgorithmUpdaterV1,
+    inner: AlgorithmUpdaterV1NoDA,
     l2_block_source: L2,
     metadata_storage: Metadata,
 }
 
 impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata> {
     pub fn new(
-        inner: AlgorithmUpdaterV1,
+        inner: AlgorithmUpdaterV1NoDA,
         l2_block_source: L2,
         metadata_storage: Metadata,
     ) -> Self {
@@ -85,7 +89,7 @@ impl UpdaterMetadata {
     }
 }
 
-impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV1 {
+impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV1NoDA {
     type Error = anyhow::Error;
     fn try_from(metadata: UpdaterMetadata) -> Result<Self, Self::Error> {
         match metadata {
@@ -97,25 +101,12 @@ impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV1 {
                     l2_block_height,
                     l2_block_fullness_threshold_percent,
                 } = v1_no_da;
-                let updater = AlgorithmUpdaterV1 {
+                let updater = AlgorithmUpdaterV1NoDA {
                     new_exec_price,
-                    last_da_gas_price: 0,
                     min_exec_gas_price,
                     exec_gas_price_change_percent,
                     l2_block_height,
                     l2_block_fullness_threshold_percent,
-                    min_da_gas_price: 0,
-                    max_da_gas_price_change_percent: 0,
-                    total_da_rewards: 0,
-                    da_recorded_block_height: 0,
-                    latest_known_total_da_cost: 0,
-                    projected_total_da_cost: 0,
-                    da_p_component: 0,
-                    da_d_component: 0,
-                    profit_avg: 0,
-                    avg_window: 0,
-                    latest_da_cost_per_byte: 0,
-                    unrecorded_blocks: vec![],
                 };
                 Ok(updater)
             }
@@ -140,8 +131,8 @@ pub struct V1NoDAMetadata {
     pub l2_block_fullness_threshold_percent: u64,
 }
 
-impl From<AlgorithmUpdaterV1> for UpdaterMetadata {
-    fn from(v1: AlgorithmUpdaterV1) -> Self {
+impl From<AlgorithmUpdaterV1NoDA> for UpdaterMetadata {
+    fn from(v1: AlgorithmUpdaterV1NoDA) -> Self {
         let v1_no_da = V1NoDAMetadata {
             new_exec_price: v1.new_exec_price,
             min_exec_gas_price: v1.min_exec_gas_price,
@@ -193,7 +184,7 @@ where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
 {
-    type Algorithm = AlgorithmV1;
+    type Algorithm = AlgorithmV1NoDA;
 
     fn start(&self, _for_block: BlockHeight) -> Self::Algorithm {
         self.inner.algorithm()
@@ -207,14 +198,12 @@ where
                 let BlockInfo {
                     height,
                     fullness,
-                    block_bytes,
-                    gas_price,
+                    block_bytes: _,
+                    gas_price: _,
                 } = l2_block;
                 self.inner.update_l2_block_data(
                     height,
                     fullness,
-                    block_bytes,
-                    gas_price,
                 )?;
                 self.metadata_storage
                     .set_metadata(self.inner.clone().into())

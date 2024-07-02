@@ -8,7 +8,7 @@ use fuel_core_storage::{
     },
     StorageAsMut,
 };
-use fuel_gas_price_algorithm::AlgorithmUpdaterV1;
+use fuel_gas_price_algorithm::v1_no_da::AlgorithmUpdaterV1NoDA;
 
 use crate::fuel_gas_price_updater::fuel_core_storage_adapter::database::GasPriceColumn;
 
@@ -20,25 +20,12 @@ fn arb_metadata() -> UpdaterMetadata {
 }
 
 fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
-    AlgorithmUpdaterV1 {
+    AlgorithmUpdaterV1NoDA {
         new_exec_price: 100,
-        last_da_gas_price: 34,
         min_exec_gas_price: 12,
         exec_gas_price_change_percent: 2,
         l2_block_height: l2_height.into(),
         l2_block_fullness_threshold_percent: 0,
-        min_da_gas_price: 0,
-        max_da_gas_price_change_percent: 0,
-        total_da_rewards: 0,
-        da_recorded_block_height: 0,
-        latest_known_total_da_cost: 0,
-        projected_total_da_cost: 0,
-        da_p_component: 0,
-        da_d_component: 0,
-        profit_avg: 0,
-        avg_window: 0,
-        latest_da_cost_per_byte: 0,
-        unrecorded_blocks: vec![],
     }
     .into()
 }

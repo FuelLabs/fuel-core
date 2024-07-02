@@ -59,7 +59,7 @@ fn arb_metadata() -> UpdaterMetadata {
     UpdaterMetadata::V1NoDA(V1NoDAMetadata {
         // set values
         exec_gas_price_change_percent: 10,
-        new_exec_price: 0,
+        new_exec_price: 100,
         // unset values
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 0,
@@ -71,7 +71,7 @@ fn different_arb_metadata() -> UpdaterMetadata {
     UpdaterMetadata::V1NoDA(V1NoDAMetadata {
         // set values
         exec_gas_price_change_percent: 20,
-        new_exec_price: 0,
+        new_exec_price: 100,
         // unset values
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 0,
@@ -108,7 +108,6 @@ async fn next__fetches_l2_block() {
     let new = next.await.unwrap().unwrap();
 
     // then
-    dbg!(&start, &new);
     assert_ne!(start, new);
 }
 
@@ -124,16 +123,13 @@ async fn init__if_exists_already_reload() {
 
     // when
     let different_metadata = different_arb_metadata();
-    let updater = FuelGasPriceUpdater::init(
-        different_metadata.into(),
-        l2_block_source,
-        metadata_storage,
-    )
-    .await
-    .unwrap();
+    let updater =
+        FuelGasPriceUpdater::init(different_metadata, l2_block_source, metadata_storage)
+            .await
+            .unwrap();
 
     // then
-    let expected: AlgorithmUpdaterV1 = metadata.try_into().unwrap();
+    let expected: AlgorithmUpdaterV1NoDA = metadata.try_into().unwrap();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
@@ -152,7 +148,7 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
             .unwrap();
 
     // then
-    let expected: AlgorithmUpdaterV1 = metadata.try_into().unwrap();
+    let expected: AlgorithmUpdaterV1NoDA = metadata.try_into().unwrap();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
@@ -176,13 +172,10 @@ async fn next__new_l2_block_updates_metadata() {
     };
 
     let inner = arb_metadata();
-    let mut updater = FuelGasPriceUpdater::init(
-        inner.clone().into(),
-        l2_block_source,
-        metadata_storage,
-    )
-    .await
-    .unwrap();
+    let mut updater =
+        FuelGasPriceUpdater::init(inner.clone(), l2_block_source, metadata_storage)
+            .await
+            .unwrap();
 
     // when
     let next = tokio::spawn(async move { updater.next().await });
@@ -191,22 +184,11 @@ async fn next__new_l2_block_updates_metadata() {
     let _ = next.await.unwrap().unwrap();
 
     // then
-    let mut updater = AlgorithmUpdaterV1::try_from(inner).unwrap();
+    let mut updater = AlgorithmUpdaterV1NoDA::try_from(inner).unwrap();
     updater
-        .update_l2_block_data(
-            l2_block.height,
-            l2_block.fullness,
-            l2_block.block_bytes,
-            l2_block.gas_price,
-        )
+        .update_l2_block_data(l2_block.height, l2_block.fullness)
         .unwrap();
     let expected: UpdaterMetadata = updater.into();
-    let actual = metadata_inner
-        .lock()
-        .await
-        .clone()
-        .unwrap()
-        .try_into()
-        .unwrap();
+    let actual = metadata_inner.lock().await.clone().unwrap();
     assert_eq!(expected, actual);
 }
