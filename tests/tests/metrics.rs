@@ -10,7 +10,7 @@ use fuel_core_types::{
     fuel_tx::*,
 };
 use tempfile::TempDir;
-use test_helpers::send_graphq_ql_query;
+use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
 async fn test_metrics_endpoint() {
@@ -84,7 +84,7 @@ async fn metrics_include_real_query_name_instead_of_alias() {
     "#;
 
     // When
-    send_graphq_ql_query(&url, query).await;
+    send_graph_ql_query(&url, query).await;
 
     // Then
     let resp = reqwest::get(format!("http://{}/v1/metrics", node.bound_address))
