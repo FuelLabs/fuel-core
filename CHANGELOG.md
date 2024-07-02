@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1948](https://github.com/FuelLabs/fuel-core/pull/1948): Add new `AlgorithmV1` and `AlgorithmUpdaterV1` for the gas price. Include tools for analysis
 
 ### Changed
+- [#1999](https://github.com/FuelLabs/fuel-core/pull/1999): Minimize the number of panics in the codebase.
 - [#1990](https://github.com/FuelLabs/fuel-core/pull/1990): Use latest view for mutate GraphQL queries after modification of the node.
 - [#1992](https://github.com/FuelLabs/fuel-core/pull/1992): Parse multiple relayer contracts, `RELAYER-V2-LISTENING-CONTRACTS` env variable using a `,` delimiter.
 
