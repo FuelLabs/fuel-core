@@ -245,6 +245,7 @@ pub fn init_sub_services(
         database.off_chain().clone(),
         import_result_provider,
         chain_id,
+        config.stop_on_error,
     );
 
     let graphql_config = GraphQLConfig {

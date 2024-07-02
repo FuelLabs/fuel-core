@@ -43,6 +43,7 @@ pub struct Config {
     pub graphql_config: GraphQLConfig,
     pub combined_db_config: CombinedDatabaseConfig,
     pub snapshot_reader: SnapshotReader,
+    pub stop_on_error: bool,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -135,6 +136,7 @@ impl Config {
                 api_request_timeout: Duration::from_secs(60),
             },
             combined_db_config,
+            stop_on_error: true,
             debug: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),

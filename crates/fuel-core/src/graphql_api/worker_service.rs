@@ -96,6 +96,7 @@ mod tests;
 /// The initialization task recovers the state of the GraphQL service database on startup.
 pub struct InitializeTask<TxPool, OnChain, OffChain, ImportResultProvider> {
     chain_id: ChainId,
+    stop_on_error: bool,
     block_importer: BoxStream<SharedImportResult>,
     tx_pool: TxPool,
     on_chain_database: OnChain,
@@ -110,6 +111,7 @@ pub struct Task<TxPool, D> {
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
+    stop_on_error: bool,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -453,6 +455,7 @@ where
             on_chain_database,
             off_chain_database,
             import_result_provider,
+            stop_on_error,
         } = self;
 
         let mut task = Task {
@@ -460,7 +463,12 @@ where
             block_importer,
             database: off_chain_database,
             chain_id,
+            stop_on_error,
         };
+
+        while let Some(Some(block)) = task.block_importer.next().now_or_never() {
+            task.process_block(block)?;
+        }
 
         loop {
             let on_chain_height = on_chain_database.latest_height()?;
@@ -506,9 +514,16 @@ where
 
             result = self.block_importer.next() => {
                 if let Some(block) = result {
-                    self.process_block(block)?;
+                    let result = self.process_block(block);
 
-                    should_continue = true
+                    // In the case of an error, shut down the service to avoid a huge
+                    // de-synchronization between on-chain and off-chain databases..
+                    if let Err(e) = result {
+                        tracing::error!("Error processing block: {:?}", e);
+                        should_continue = self.stop_on_error;
+                    } else {
+                        should_continue = true
+                    }
                 } else {
                     should_continue = false
                 }
@@ -539,6 +554,7 @@ pub fn new_service<TxPool, I, OnChain, OffChain, ImportResultProvider>(
     off_chain_database: OffChain,
     import_result_provider: ImportResultProvider,
     chain_id: ChainId,
+    stop_on_error: bool,
 ) -> ServiceRunner<InitializeTask<TxPool, OnChain, OffChain, ImportResultProvider>>
 where
     TxPool: ports::worker::TxPool,
@@ -555,5 +571,6 @@ where
         off_chain_database,
         import_result_provider,
         chain_id,
+        stop_on_error,
     })
 }
