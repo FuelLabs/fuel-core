@@ -95,9 +95,16 @@ impl SharedState {
     }
 
     pub fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
+        self.latest_consensus_parameters_with_version().1
+    }
+
+    pub fn latest_consensus_parameters_with_version(
+        &self,
+    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
         let version = *self.latest_consensus_parameters_version.lock();
-        self.get_consensus_parameters(&version)
-            .expect("The latest consensus parameters always are available unless this function was called before regenesis.")
+        let params = self.get_consensus_parameters(&version)
+            .expect("The latest consensus parameters always are available unless this function was called before regenesis.");
+        (version, params)
     }
 }
 

@@ -179,7 +179,7 @@ impl Instance<Created> {
                 .next(gas_limit)
                 .into_iter()
                 .map(|tx| match tx {
-                    MaybeCheckedTransaction::CheckedTransaction(checked) => {
+                    MaybeCheckedTransaction::CheckedTransaction(checked, _) => {
                         let checked: Checked<Transaction> = checked.into();
                         let (tx, _) = checked.into();
                         tx

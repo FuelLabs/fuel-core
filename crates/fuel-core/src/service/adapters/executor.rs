@@ -13,7 +13,12 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         self.txpool
             .select_transactions(gas_limit)
             .into_iter()
-            .map(|tx| MaybeCheckedTransaction::CheckedTransaction(tx.as_ref().into()))
+            .map(|tx| {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    tx.as_ref().into(),
+                    tx.used_consensus_parameters_version(),
+                )
+            })
             .collect()
     }
 }

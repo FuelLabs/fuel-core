@@ -265,7 +265,7 @@ impl TestContextBuilder {
             MockConsensusParametersProvider::default();
         consensus_parameters_provider
             .expect_latest_consensus_parameters()
-            .returning(|| Arc::new(Default::default()));
+            .returning(|| (0, Arc::new(Default::default())));
 
         let service = new_service(
             config,

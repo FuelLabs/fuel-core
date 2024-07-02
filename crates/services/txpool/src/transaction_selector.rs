@@ -43,6 +43,7 @@ pub fn select_transactions(
 mod tests {
     use fuel_core_txpool as _;
     use fuel_core_types::{
+        blockchain::header::ConsensusParametersVersion,
         fuel_asm::{
             op,
             RegId,
@@ -61,6 +62,7 @@ mod tests {
             checked_transaction::builder::TransactionBuilderExt,
             SecretKey,
         },
+        services::txpool::PoolTransaction,
     };
     use itertools::Itertools;
     use std::sync::Arc;
@@ -85,7 +87,7 @@ mod tests {
         let mut txs = txs
             .iter()
             .map(|tx_gas| {
-                TransactionBuilder::script(
+                let script = TransactionBuilder::script(
                     vec![op::ret(RegId::ONE)].into_iter().collect(),
                     vec![],
                 )
@@ -107,7 +109,9 @@ mod tests {
                 .with_gas_costs(GasCosts::free())
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
-                .finalize_checked_basic(Default::default()).into()
+                .finalize_checked_basic(Default::default());
+
+                PoolTransaction::Script(script, ConsensusParametersVersion::MIN)
             })
             .map(Arc::new)
             .collect::<Vec<ArcPoolTx>>();

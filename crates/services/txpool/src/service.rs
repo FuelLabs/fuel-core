@@ -240,7 +240,7 @@ where
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let current_height = *self.tx_pool_shared_state.current_height.lock();
-                    let params = self
+                    let (version, params) = self
                         .tx_pool_shared_state
                         .consensus_parameters_provider
                         .latest_consensus_parameters();
@@ -265,6 +265,7 @@ where
                                 .in_scope(|| {
                                     self.tx_pool_shared_state.txpool.lock().insert(
                                         &self.tx_pool_shared_state.tx_status_sender,
+                                        version,
                                         txs
                                     )
                                 });
@@ -400,7 +401,7 @@ where
     ) -> Vec<Result<InsertionResult, Error>> {
         // verify txs
         let current_height = *self.current_height.lock();
-        let params = self
+        let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
 
@@ -428,7 +429,11 @@ where
             .collect();
 
         // insert txs
-        let insertion = { self.txpool.lock().insert(&self.tx_status_sender, valid_txs) };
+        let insertion = {
+            self.txpool
+                .lock()
+                .insert(&self.tx_status_sender, version, valid_txs)
+        };
 
         for (ret, tx) in insertion.iter().zip(txs.into_iter()) {
             match ret {
