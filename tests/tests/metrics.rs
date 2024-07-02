@@ -10,6 +10,7 @@ use fuel_core_types::{
     fuel_tx::*,
 };
 use tempfile::TempDir;
+use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
 async fn test_metrics_endpoint() {
@@ -61,4 +62,36 @@ async fn test_metrics_endpoint() {
 
     // Gt check exists because testing can be weird with multiple instances running
     assert!(categories.len() >= 16);
+}
+
+#[tokio::test]
+async fn metrics_include_real_query_name_instead_of_alias() {
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    // Given
+    const ALIAS: &str = "bbbbblooooocks";
+    let query = r#"
+        query {
+          bbbbblooooocks: blocks(first: 1) {
+            nodes {
+              transactions {
+                id
+              }
+            }
+          }
+        }
+    "#;
+
+    // When
+    send_graph_ql_query(&url, query).await;
+
+    // Then
+    let resp = reqwest::get(format!("http://{}/v1/metrics", node.bound_address))
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!resp.contains(ALIAS))
 }
