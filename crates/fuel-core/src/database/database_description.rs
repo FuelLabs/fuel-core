@@ -9,7 +9,7 @@ pub mod off_chain;
 pub mod on_chain;
 pub mod relayer;
 
-pub trait DatabaseHeight: PartialEq + Default + Copy + Send + Sync {
+pub trait DatabaseHeight: PartialEq + Default + Debug + Copy + Send + Sync {
     fn as_u64(&self) -> u64;
 
     fn advance_height(&self) -> Option<Self>;

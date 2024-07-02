@@ -230,3 +230,17 @@ impl SharedMemoryPool {
         }
     }
 }
+
+pub struct ImportResultProviderAdapter {
+    on_chain_database: Database,
+    executor_adapter: ExecutorAdapter,
+}
+
+impl ImportResultProviderAdapter {
+    pub fn new(on_chain_database: Database, executor_adapter: ExecutorAdapter) -> Self {
+        Self {
+            on_chain_database,
+            executor_adapter,
+        }
+    }
+}

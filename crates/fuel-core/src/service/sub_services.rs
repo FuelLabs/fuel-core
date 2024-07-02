@@ -34,7 +34,10 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::fuel_gas_price_provider::FuelGasPriceProvider;
+use crate::service::adapters::{
+    fuel_gas_price_provider::FuelGasPriceProvider,
+    ImportResultProviderAdapter,
+};
 use fuel_core_gas_price_service::static_updater::{
     StaticAlgorithm,
     StaticAlgorithmUpdater,
@@ -91,6 +94,8 @@ pub fn init_sub_services(
             native_executor_version: config.native_executor_version,
         },
     );
+    let import_result_provider =
+        ImportResultProviderAdapter::new(database.on_chain().clone(), executor.clone());
 
     let verifier = VerifierAdapter::new(
         &genesis_block,
@@ -236,7 +241,9 @@ pub fn init_sub_services(
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
         tx_pool_adapter.clone(),
         importer_adapter.clone(),
+        database.on_chain().clone(),
         database.off_chain().clone(),
+        import_result_provider,
         chain_id,
     );
 

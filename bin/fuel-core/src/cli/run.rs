@@ -127,7 +127,7 @@ pub struct Command {
     /// The default value is 7 days = 604800 blocks.
     ///
     /// The `BlockHeight` is `u32`, meaning the maximum possible number of blocks
-    /// is less than 137 years. `2^32 / 24 / 60 / 60/ 365` = `136.1925195332` years.
+    /// is less than 137 years. `2^32 / 24 / 60 / 60 / 365` = `136.1925195332` years.
     /// If the value is 136 years or more, the rewind feature is enabled for all blocks.
     #[clap(long = "state-rewind-duration", default_value = "7d", env)]
     pub state_rewind_duration: humantime::Duration,

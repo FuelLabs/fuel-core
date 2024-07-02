@@ -70,7 +70,7 @@ fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
     tokio_stream::iter(blocks).into_boxed()
 }
 
-fn worker_task_with_block_importer_and_db<D: ports::worker::Transactional>(
+fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
     block_importer: BoxStream<SharedImportResult>,
     database: D,
 ) -> Task<MockTxPool, D> {
