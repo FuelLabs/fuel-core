@@ -149,7 +149,8 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
 }
 
 #[tokio::test]
-async fn next__new_l2_block_updates_metadata() {
+async fn next__new_l2_block_saves_old_metadata() {
+    let _ = tracing_subscriber::fmt::try_init();
     // given
     let l2_block = BlockInfo {
         height: 1,
@@ -165,28 +166,24 @@ async fn next__new_l2_block_updates_metadata() {
         inner: metadata_inner.clone(),
     };
 
-    let inner = arb_metadata();
-    let mut updater =
-        FuelGasPriceUpdater::init(inner.clone(), l2_block_source, metadata_storage)
-            .await
-            .unwrap();
+    let starting_metadata = arb_metadata();
+    let mut updater = FuelGasPriceUpdater::init(
+        starting_metadata.clone(),
+        l2_block_source,
+        metadata_storage,
+    )
+    .await
+    .unwrap();
 
     // when
     let next = tokio::spawn(async move { updater.next().await });
-
+    let actual = metadata_inner.lock().unwrap().clone();
+    assert_eq!(None, actual);
     l2_block_sender.send(l2_block.clone()).await.unwrap();
     let _ = next.await.unwrap().unwrap();
 
     // then
-    let mut updater = AlgorithmUpdaterV0::try_from(inner).unwrap();
-    updater
-        .update_l2_block_data(
-            l2_block.height,
-            l2_block.gas_used,
-            l2_block.block_gas_capacity.try_into().unwrap(),
-        )
-        .unwrap();
-    let expected: UpdaterMetadata = updater.into();
+    let expected: UpdaterMetadata = starting_metadata.into();
     let actual = metadata_inner.lock().unwrap().clone().unwrap();
     assert_eq!(expected, actual);
 }
