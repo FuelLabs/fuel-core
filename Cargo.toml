@@ -40,7 +40,7 @@ exclude = ["version-compatibility"]
 [profile.release]
 codegen-units = 1
 lto = "fat"
-panic = "abort"
+panic = "unwind"
 
 [workspace.package]
 authors = ["Fuel Labs <contact@fuel.sh>"]

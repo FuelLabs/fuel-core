@@ -1312,10 +1312,14 @@ where
             storage_tx,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
-            unreachable!()
+            return Err(ExecutorError::Other(
+                "Input of the `Mint` transaction is not a contract".to_string(),
+            ))
         };
         let Output::Contract(output) = outputs[0] else {
-            unreachable!()
+            return Err(ExecutorError::Other(
+                "The output of the `Mint` transaction is not a contract".to_string(),
+            ))
         };
         Ok((input, output))
     }
@@ -1552,10 +1556,7 @@ where
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        if !coin
-                            .matches_input(input)
-                            .expect("The input is a coin above")
-                        {
+                        if !coin.matches_input(input).unwrap_or_default() {
                             return Err(
                                 TransactionValidityError::CoinMismatch(*utxo_id).into()
                             )
@@ -1589,10 +1590,7 @@ where
                             .into())
                         }
 
-                        if !message
-                            .matches_input(input)
-                            .expect("The input is message above")
-                        {
+                        if !message.matches_input(input).unwrap_or_default() {
                             return Err(
                                 TransactionValidityError::MessageMismatch(*nonce).into()
                             )
@@ -1713,9 +1711,7 @@ where
         // if there's no script result (i.e. create) then fee == base amount
         Ok((
             total_used_gas,
-            max_fee
-                .checked_sub(fee)
-                .expect("Refunded fee can't be more than `max_fee`."),
+            max_fee.checked_sub(fee).ok_or(ExecutorError::FeeOverflow)?,
         ))
     }
 
@@ -1889,8 +1885,8 @@ where
     {
         let tx_idx = execution_data.tx_count;
         for (output_index, output) in outputs.iter().enumerate() {
-            let index = u16::try_from(output_index)
-                .expect("Transaction can have only up to `u16::MAX` outputs");
+            let index =
+                u16::try_from(output_index).map_err(|_| ExecutorError::TooManyOutputs)?;
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin {
