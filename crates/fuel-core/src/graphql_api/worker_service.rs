@@ -28,6 +28,7 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
 };
@@ -46,11 +47,13 @@ use fuel_core_types::{
             Inputs,
             Outputs,
             Salt,
+            StorageSlots,
         },
         input::coin::{
             CoinPredicate,
             CoinSigned,
         },
+        Contract,
         Input,
         Output,
         Transaction,
@@ -328,15 +331,31 @@ where
 {
     for tx in transactions {
         match tx {
-            Transaction::Create(create) => {
-                let contract_id = create
+            Transaction::Create(tx) => {
+                let contract_id = tx
                     .outputs()
                     .iter()
                     .filter_map(|output| output.contract_id().cloned())
                     .next()
-                    .expect("Committed `Create` transaction should have a contract id");
+                    .map(Ok::<_, StorageError>)
+                    .unwrap_or_else(|| {
+                        // TODO: Reuse `CreateMetadata` when it will be exported
+                        //  from the `fuel-tx` crate.
+                        let salt = tx.salt();
+                        let storage_slots = tx.storage_slots();
+                        let contract = Contract::try_from(tx)
+                            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                        let contract_root = contract.root();
+                        let state_root =
+                            Contract::initial_state_root(storage_slots.iter());
+                        Ok::<_, StorageError>(contract.id(
+                            salt,
+                            &contract_root,
+                            &state_root,
+                        ))
+                    })?;
 
-                let salt = *create.salt();
+                let salt = *tx.salt();
 
                 db.storage::<ContractsInfo>()
                     .insert(&contract_id, &(salt.into()))?;

@@ -45,6 +45,7 @@ use std::{
     ops::Deref,
     time::Duration,
 };
+use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
 async fn block() {
@@ -320,6 +321,23 @@ async fn block_connection_5(
             );
         }
     };
+}
+
+#[tokio::test]
+async fn missing_first_and_last_parameters_returns_an_error() {
+    let query = r#"
+        query {
+          transactions(before: "00000000#0x00"){
+            __typename
+          }
+        }
+    "#;
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, query).await;
+    assert!(result.contains("The queries for the whole range is not supported"));
 }
 
 mod full_block {

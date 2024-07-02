@@ -279,7 +279,7 @@ async fn graphql_subscription_handler(
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
     let stream = schema
         .execute_stream(req.0)
-        .map(|r| Ok(Event::default().json_data(r).unwrap()));
+        .map(|r| Event::default().json_data(r));
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
 }
