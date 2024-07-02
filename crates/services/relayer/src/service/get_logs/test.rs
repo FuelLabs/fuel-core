@@ -9,7 +9,10 @@ use std::{
 };
 
 use crate::{
-    abi::bridge::MessageSentFilter,
+    abi::bridge::{
+        MessageSentFilter,
+        TransactionFilter,
+    },
     service::state::EthSyncGap,
     test_helpers::{
         middleware::{
@@ -47,6 +50,32 @@ fn message(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> 
         ..Default::default()
     };
     let mut log = message.into_log();
+    log.address = u32_to_contract(contract_address);
+    log.block_number = Some(block_number.into());
+    log.log_index = Some(index.into());
+    log
+}
+
+fn transactions(
+    nonce: RangeInclusive<u64>,
+    block_number: RangeInclusive<u64>,
+    contracts: RangeInclusive<u32>,
+) -> Vec<Log> {
+    let contracts = contracts.cycle();
+    nonce
+        .zip(block_number)
+        .zip(contracts)
+        .map(|((n, b), c)| transaction(n, b, c, 0))
+        .collect()
+}
+
+fn transaction(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> Log {
+    let transaction = TransactionFilter {
+        nonce: U256::from_dec_str(nonce.to_string().as_str())
+            .expect("Should convert into U256"),
+        ..Default::default()
+    };
+    let mut log = transaction.into_log();
     log.address = u32_to_contract(contract_address);
     log.block_number = Some(block_number.into());
     log.log_index = Some(index.into());
@@ -109,6 +138,28 @@ const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
     }
     => Expected{ num_get_logs_calls: 2, m: messages(0..=10, 5..=10, 0..=0) }
     ; "Get messages from blocks 5..=10"
+)]
+#[test_case(
+    Input {
+        eth_gap: 0..=1,
+        c: contracts(&[0]),
+        m: {
+            let mut logs = messages(0..=0, 1..=1, 0..=0);
+            let txs = transactions(0..=0, 1..=1, 0..=0);
+            logs.extend(txs);
+            logs
+        },
+    }
+    => Expected{
+        num_get_logs_calls: 1,
+        m: {
+            let mut logs = messages(0..=0, 1..=1, 0..=0);
+            let txs = transactions(0..=0, 1..=1, 0..=0);
+            logs.extend(txs);
+            logs
+        }
+    }
+    ; "Filters MessageSent and Transaction events"
 )]
 #[tokio::test]
 async fn can_paginate_logs(input: Input) -> Expected {

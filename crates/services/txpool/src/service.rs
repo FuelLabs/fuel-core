@@ -452,9 +452,9 @@ where
             .into_iter()
             .map(|check_result| match check_result {
                 None => insertion.next().unwrap_or_else(|| {
-                    unreachable!(
-                        "the number of inserted txs matches the number of `None` results"
-                    )
+                    Err(Error::Other(
+                        anyhow::anyhow!("Insertion result is missing").to_string(),
+                    ))
                 }),
                 Some(err) => Err(err),
             })

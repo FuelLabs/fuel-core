@@ -115,7 +115,7 @@ where
             )
             .into())
         }
-        (None, None, None, None) => {
+        (_, _, None, None) => {
             return Err(anyhow!("The queries for the whole range is not supported").into())
         }
         (_, _, _, _) => { /* Other combinations are allowed */ }
@@ -132,8 +132,7 @@ where
             } else if let Some(last) = last {
                 (last, IterDirection::Reverse)
             } else {
-                // Unreachable because of the check `(None, None, None, None)` above
-                unreachable!()
+                return Err(anyhow!("Either `first` or `last` should be provided"))
             };
 
             let start;

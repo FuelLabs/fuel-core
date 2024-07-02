@@ -505,7 +505,8 @@ where
                     }
                     should_continue = true;
                 } else {
-                    unreachable!("The task is the holder of the `Sender` too")
+                    tracing::error!("The PoA task should be the holder of the `Sender`");
+                    should_continue = false;
                 }
             }
             // TODO: This should likely be refactored to use something like tokio::sync::Notify.
