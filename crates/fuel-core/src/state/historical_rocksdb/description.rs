@@ -52,8 +52,8 @@ where
         Description::version()
     }
 
-    fn name() -> &'static str {
-        Description::name()
+    fn name() -> String {
+        format!("{}_history", Description::name())
     }
 
     fn metadata_column() -> Self::Column {

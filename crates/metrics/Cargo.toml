@@ -11,8 +11,7 @@ repository = { workspace = true }
 description = "Fuel metrics"
 
 [dependencies]
-axum = { workspace = true }
-once_cell = { workspace = true }
+parking_lot = { workspace = true }
 pin-project-lite = { workspace = true }
 prometheus-client = { workspace = true }
 regex = "1"

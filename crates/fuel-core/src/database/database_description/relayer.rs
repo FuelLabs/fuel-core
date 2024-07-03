@@ -44,8 +44,8 @@ impl DatabaseDescription for Relayer {
         0
     }
 
-    fn name() -> &'static str {
-        "relayer"
+    fn name() -> String {
+        "relayer".to_string()
     }
 
     fn metadata_column() -> Self::Column {
