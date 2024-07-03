@@ -7,7 +7,10 @@ mod tests {
     use fuel_core::database::Database;
     use fuel_core_executor::{
         executor::OnceTransactionsSource,
-        ports::RelayerPort,
+        ports::{
+            MaybeCheckedTransaction,
+            RelayerPort,
+        },
         refs::ContractRef,
     };
     use fuel_core_storage::{
@@ -32,6 +35,7 @@ mod tests {
                 PartialFuelBlock,
             },
             header::{
+                ApplicationHeader,
                 ConsensusHeader,
                 PartialBlockHeader,
             },
@@ -52,6 +56,7 @@ mod tests {
         fuel_crypto::SecretKey,
         fuel_merkle::sparse,
         fuel_tx::{
+            consensus_parameters::gas::GasCostsValuesV1,
             field::{
                 InputContract,
                 Inputs,
@@ -76,8 +81,10 @@ mod tests {
             Cacheable,
             ConsensusParameters,
             Create,
+            DependentCost,
             FeeParameters,
             Finalizable,
+            GasCostsValues,
             Output,
             Receipt,
             Script,
@@ -104,6 +111,7 @@ mod tests {
             checked_transaction::{
                 CheckError,
                 EstimatePredicates,
+                IntoChecked,
             },
             interpreter::{
                 ExecutableTransaction,
@@ -2728,6 +2736,90 @@ mod tests {
         let validator = create_executor(db.clone(), config);
         let result = validator.validate(&block);
         assert!(result.is_ok(), "{result:?}")
+    }
+
+    #[test]
+    fn verifying_during_production_consensus_parameters_version_works() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let predicate: Vec<u8> = vec![op::ret(RegId::ONE)].into_iter().collect();
+        let owner = Input::predicate_owner(&predicate);
+        let amount = 1000;
+        let cheap_consensus_parameters = ConsensusParameters::default();
+
+        let mut tx = TransactionBuilder::script(vec![], vec![])
+            .max_fee_limit(amount)
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                amount,
+                AssetId::BASE,
+                rng.gen(),
+                0,
+                predicate,
+                vec![],
+            ))
+            .finalize();
+        tx.estimate_predicates(
+            &cheap_consensus_parameters.clone().into(),
+            MemoryInstance::new(),
+        )
+        .unwrap();
+
+        // Given
+        let gas_costs: GasCostsValues = GasCostsValuesV1 {
+            vm_initialization: DependentCost::HeavyOperation {
+                base: u32::MAX as u64,
+                gas_per_unit: 0,
+            },
+            ..GasCostsValuesV1::free()
+        }
+        .into();
+        let expensive_consensus_parameters_version = 0;
+        let mut expensive_consensus_parameters = ConsensusParameters::default();
+        expensive_consensus_parameters.set_gas_costs(gas_costs.into());
+        let config = Config {
+            consensus_parameters: expensive_consensus_parameters.clone(),
+            ..Default::default()
+        };
+        let producer = create_executor(Database::default(), config.clone());
+
+        let cheap_consensus_parameters_version = 1;
+        let cheaply_checked_tx = MaybeCheckedTransaction::CheckedTransaction(
+            tx.into_checked_basic(0u32.into(), &cheap_consensus_parameters)
+                .unwrap()
+                .into(),
+            cheap_consensus_parameters_version,
+        );
+
+        // When
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = producer
+            .produce_without_commit_with_source(Components {
+                header_to_produce: PartialBlockHeader {
+                    application: ApplicationHeader {
+                        consensus_parameters_version:
+                            expensive_consensus_parameters_version,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                transactions_source: OnceTransactionsSource::new_maybe_checked(vec![
+                    cheaply_checked_tx,
+                ]),
+                coinbase_recipient: Default::default(),
+                gas_price: 1,
+            })
+            .unwrap()
+            .into_result();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert!(matches!(
+            skipped_transactions[0].1,
+            ExecutorError::InvalidTransaction(_)
+        ));
     }
 
     #[cfg(feature = "relayer")]
