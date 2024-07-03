@@ -28,6 +28,7 @@ use fuel_core_txpool::ports::{
     MemoryPool,
 };
 use fuel_core_types::{
+    blockchain::header::ConsensusParametersVersion,
     entities::{
         coins::coin::CompressedCoin,
         relayer::message::Message,
@@ -149,8 +150,10 @@ impl GasPriceProvider for StaticGasPrice {
 }
 
 impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
-    fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
-        self.shared_state.latest_consensus_parameters()
+    fn latest_consensus_parameters(
+        &self,
+    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
+        self.shared_state.latest_consensus_parameters_with_version()
     }
 }
 
