@@ -125,7 +125,6 @@ pub struct RocksDb<Description> {
     db: Arc<DB>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
     path: PathBuf,
-    capacity: usize,
     metrics: Arc<DatabaseMetrics>,
     // used for RAII
     _drop: Arc<DropResources>,
@@ -273,9 +272,7 @@ where
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
 
-        let capacity = capacity.unwrap_or(0);
-
-        if capacity != 0 {
+        if let Some(capacity) = capacity {
             // Set cache size 1/3 of the capacity as recommended by
             // https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
             let block_cache_size = capacity / 3;
@@ -289,8 +286,7 @@ where
         } else {
             block_opts.disable_cache();
         }
-        block_opts.set_bloom_filter(16.0, true);
-        block_opts.set_block_size(16 * 1024);
+        block_opts.set_bloom_filter(10.0, true);
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -300,13 +296,8 @@ where
         let cpu_number =
             i32::try_from(num_cpus::get()).expect("The number of CPU can't exceed `i32`");
         opts.increase_parallelism(cmp::max(1, cpu_number / 2));
-        opts.set_max_background_jobs(6);
-        opts.set_bytes_per_sync(1048576);
 
-        #[cfg(feature = "test-helpers")]
-        opts.set_max_open_files(512);
-
-        if capacity != 0 {
+        if let Some(capacity) = capacity {
             // Set cache size 1/3 of the capacity. Another 1/3 is
             // used by block cache and the last 1 / 3 remains for other purposes:
             //
@@ -341,7 +332,9 @@ where
                 Ok(db)
             },
             Err(err) => {
-                tracing::error!("Couldn't open the database with an error: {}. \nTrying to open second time", err);
+                tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
+                DB::repair(&opts, &path)
+                    .map_err(|e| DatabaseError::Other(e.into()))?;
 
                 let iterator = cf_descriptors_to_open
                     .clone()
@@ -367,7 +360,6 @@ where
             snapshot: None,
             db,
             path: original_path,
-            capacity,
             metrics,
             _drop: Default::default(),
             _marker: Default::default(),
@@ -393,7 +385,6 @@ where
     pub fn create_snapshot(&self) -> Self {
         let db = self.db.clone();
         let path = self.path.clone();
-        let capacity = self.capacity;
         let metrics = self.metrics.clone();
         let _drop = self._drop.clone();
 
@@ -412,7 +403,6 @@ where
             snapshot,
             db,
             path,
-            capacity,
             metrics,
             _drop,
             _marker: Default::default(),
@@ -421,10 +411,6 @@ where
 
     pub fn path(&self) -> &Path {
         &self.path
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.capacity
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
