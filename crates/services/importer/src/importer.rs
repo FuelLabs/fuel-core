@@ -39,15 +39,13 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
+use parking_lot::Mutex;
 use std::{
     ops::{
         Deref,
         DerefMut,
     },
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
     time::{
         Instant,
         SystemTime,
@@ -56,7 +54,7 @@ use std::{
 };
 use tokio::sync::{
     broadcast,
-    oneshot,
+    mpsc,
     TryAcquireError,
 };
 
@@ -112,17 +110,21 @@ impl PartialEq for Error {
     }
 }
 
+type ResultReceiver = Arc<Mutex<mpsc::Receiver<()>>>;
+
 pub struct Importer<D, E, V> {
     database: Mutex<D>,
     executor: Arc<E>,
     verifier: Arc<V>,
     chain_id: ChainId,
     broadcast: broadcast::Sender<ImporterResult>,
-    /// The channel to notify about the end of the processing of the previous block by all listeners.
-    /// It is used to await until all receivers of the notification process the `SharedImportResult`
-    /// before starting committing a new block.
-    prev_block_process_result: Mutex<Option<oneshot::Receiver<()>>>,
     guard: tokio::sync::Semaphore,
+    /// The `mpsc` channel is used to notify about the end of the processing of
+    /// the previous `SharedImportResult`. The importer waits until all receivers
+    /// of the notification process  the `SharedImportResult` before starting
+    /// committing a new block.
+    prev_block_process_result_sender: mpsc::Sender<()>,
+    prev_block_process_result_receiver: ResultReceiver,
 }
 
 impl<D, E, V> Importer<D, E, V> {
@@ -134,6 +136,11 @@ impl<D, E, V> Importer<D, E, V> {
         verifier: V,
     ) -> Self {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
+        let (prev_block_process_result_sender, prev_block_process_result_receiver) =
+            mpsc::channel(config.max_block_notify_buffer);
+
+        let prev_block_process_result_receiver =
+            Arc::new(Mutex::new(prev_block_process_result_receiver));
 
         Self {
             database: Mutex::new(database),
@@ -141,7 +148,8 @@ impl<D, E, V> Importer<D, E, V> {
             verifier: Arc::new(verifier),
             chain_id,
             broadcast,
-            prev_block_process_result: Default::default(),
+            prev_block_process_result_sender,
+            prev_block_process_result_receiver,
             guard: tokio::sync::Semaphore::new(1),
         }
     }
@@ -198,28 +206,23 @@ where
         result: UncommittedResult<Changes>,
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
-        // It is safe to unwrap the channel because we have the `_guard`.
-        let previous_block_result = self
-            .prev_block_process_result
-            .lock()
-            .expect("poisoned")
-            .take();
 
         // Await until all receivers of the notification process the result.
-        if let Some(channel) = previous_block_result {
-            const TIMEOUT: u64 = 20;
-            let result =
-                tokio::time::timeout(tokio::time::Duration::from_secs(TIMEOUT), channel)
-                    .await;
+        const TIMEOUT: u64 = 20;
+        let await_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(TIMEOUT),
+            self.prev_block_process_result_sender.send(()),
+        )
+        .await;
 
-            if result.is_err() {
-                tracing::error!(
-                    "The previous block processing \
+        if await_result.is_err() {
+            tracing::error!(
+                "The previous block processing \
                     was not finished for {TIMEOUT} seconds."
-                );
-                return Err(Error::PreviousBlockProcessingNotFinished)
-            }
+            );
+            return Err(Error::PreviousBlockProcessingNotFinished)
         }
+
         let mut guard = self
             .database
             .try_lock()
@@ -329,14 +332,13 @@ where
 
         // The `tokio::sync::oneshot::Sender` is used to notify about the end
         // of the processing of a new block by all listeners.
-        let (sender, receiver) = oneshot::channel();
+        let receiver = self.prev_block_process_result_receiver.clone();
         let result = ImporterResult {
-            shared_result: Arc::new(Awaiter::new(result, sender)),
+            shared_result: Arc::new(Awaiter::new(result, receiver)),
             #[cfg(feature = "test-helpers")]
             changes: Arc::new(changes_clone),
         };
         let _ = self.broadcast.send(result);
-        *self.prev_block_process_result.lock().expect("poisoned") = Some(receiver);
 
         Ok(())
     }
@@ -467,27 +469,20 @@ where
 
         let result = result?;
 
-        // It is safe to unwrap the channel because we have the `_guard`.
-        let previous_block_result = self
-            .prev_block_process_result
-            .lock()
-            .expect("poisoned")
-            .take();
-
         // Await until all receivers of the notification process the result.
-        if let Some(channel) = previous_block_result {
-            const TIMEOUT: u64 = 20;
-            let result =
-                tokio::time::timeout(tokio::time::Duration::from_secs(TIMEOUT), channel)
-                    .await;
+        const TIMEOUT: u64 = 20;
+        let await_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(TIMEOUT),
+            self.prev_block_process_result_sender.send(()),
+        )
+        .await;
 
-            if result.is_err() {
-                tracing::error!(
-                    "The previous block processing \
+        if await_result.is_err() {
+            tracing::error!(
+                "The previous block processing \
                      was not finished for {TIMEOUT} seconds."
-                );
-                return Err(Error::PreviousBlockProcessingNotFinished)
-            }
+            );
+            return Err(Error::PreviousBlockProcessingNotFinished)
         }
 
         let start = Instant::now();
@@ -509,14 +504,12 @@ where
 /// The wrapper around `ImportResult` to notify about the end of the processing of a new block.
 struct Awaiter {
     result: ImportResult,
-    release_channel: Option<oneshot::Sender<()>>,
+    receiver: ResultReceiver,
 }
 
 impl Drop for Awaiter {
     fn drop(&mut self) {
-        if let Some(release_channel) = core::mem::take(&mut self.release_channel) {
-            let _ = release_channel.send(());
-        }
+        let _ = self.receiver.lock().try_recv();
     }
 }
 
@@ -529,10 +522,7 @@ impl Deref for Awaiter {
 }
 
 impl Awaiter {
-    fn new(result: ImportResult, channel: oneshot::Sender<()>) -> Self {
-        Self {
-            result,
-            release_channel: Some(channel),
-        }
+    fn new(result: ImportResult, receiver: ResultReceiver) -> Self {
+        Self { result, receiver }
     }
 }
