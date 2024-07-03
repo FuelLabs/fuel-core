@@ -20,10 +20,8 @@ jobs:
         id: set_env_var
         run: |
           echo "NAMESPACE=$(echo ${{ github.head_ref }} | cut -c 9-)"  >> $GITHUB_ENV
-          
           echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-     
-      - name: Delete Ephemeral Test Environment
+     - name: Delete Ephemeral Test Environment
         id: delete_eph_env
         run: |
           curl \
