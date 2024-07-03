@@ -92,7 +92,6 @@ async fn next__fetches_l2_block() {
     let starting_metadata = arb_metadata();
     let mut updater =
         FuelGasPriceUpdater::init(starting_metadata, l2_block_source, metadata_storage)
-            .await
             .unwrap();
 
     let start = updater.start(0.into());
@@ -120,7 +119,6 @@ async fn init__if_exists_already_reload() {
     let different_metadata = different_arb_metadata();
     let updater =
         FuelGasPriceUpdater::init(different_metadata, l2_block_source, metadata_storage)
-            .await
             .unwrap();
 
     // then
@@ -139,7 +137,6 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
     let metadata = different_arb_metadata();
     let updater =
         FuelGasPriceUpdater::init(metadata.clone(), l2_block_source, metadata_storage)
-            .await
             .unwrap();
 
     // then
@@ -172,7 +169,6 @@ async fn next__new_l2_block_saves_old_metadata() {
         l2_block_source,
         metadata_storage,
     )
-    .await
     .unwrap();
 
     // when

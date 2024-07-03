@@ -153,7 +153,7 @@ impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata>
 where
     Metadata: MetadataStorage,
 {
-    pub async fn init(
+    pub fn init(
         init_metadata: UpdaterMetadata,
         l2_block_source: L2,
         metadata_storage: Metadata,
