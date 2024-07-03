@@ -1,4 +1,5 @@
 use crate::{
+    cached_storage::CachedStorage,
     ports::{
         MaybeCheckedTransaction,
         RelayerPort,
@@ -321,9 +322,8 @@ where
     fn into_executor(
         self,
         consensus_params_version: ConsensusParametersVersion,
-    ) -> ExecutorResult<(BlockExecutor<R>, StorageTransaction<D>)> {
-        let storage_tx = self
-            .database
+    ) -> ExecutorResult<(BlockExecutor<R>, StorageTransaction<CachedStorage<D>>)> {
+        let storage_tx = CachedStorage::new(self.database)
             .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
         let consensus_params = storage_tx
@@ -338,7 +338,7 @@ where
     }
 }
 
-type BlockStorageTransaction<T> = StorageTransaction<T>;
+type BlockStorageTransaction<T> = StorageTransaction<CachedStorage<T>>;
 type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
 
 #[derive(Clone, Debug)]
@@ -529,7 +529,7 @@ where
         &mut self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
@@ -627,7 +627,7 @@ where
     fn validate_block<D>(
         mut self,
         block: &Block,
-        mut block_storage_tx: StorageTransaction<D>,
+        mut block_storage_tx: BlockStorageTransaction<D>,
     ) -> ExecutorResult<ExecutionData>
     where
         D: KeyValueInspect<Column = Column>,

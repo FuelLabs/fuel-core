@@ -3,6 +3,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+pub mod cached_storage;
 pub mod executor;
 pub mod ports;
 pub mod refs;
