@@ -1,7 +1,10 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::block::Block,
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -57,43 +60,53 @@ pub type ArcPoolTx = Arc<PoolTransaction>;
 #[derive(Debug, Eq, PartialEq)]
 pub enum PoolTransaction {
     /// Script
-    Script(Checked<Script>),
+    Script(Checked<Script>, ConsensusParametersVersion),
     /// Create
-    Create(Checked<Create>),
+    Create(Checked<Create>, ConsensusParametersVersion),
     /// Upgrade
-    Upgrade(Checked<Upgrade>),
+    Upgrade(Checked<Upgrade>, ConsensusParametersVersion),
     /// Upload
-    Upload(Checked<Upload>),
+    Upload(Checked<Upload>, ConsensusParametersVersion),
 }
 
 impl PoolTransaction {
+    /// Returns the version of the consensus parameters used to create `Checked` transaction.
+    pub fn used_consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        match self {
+            PoolTransaction::Script(_, version)
+            | PoolTransaction::Create(_, version)
+            | PoolTransaction::Upgrade(_, version)
+            | PoolTransaction::Upload(_, version) => *version,
+        }
+    }
+
     /// Used for accounting purposes when charging byte based fees.
     pub fn metered_bytes_size(&self) -> usize {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Create(tx) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Upload(tx) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Script(tx, _) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Create(tx, _) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
         }
     }
 
     /// Returns the transaction ID
     pub fn id(&self) -> TxId {
         match self {
-            PoolTransaction::Script(tx) => tx.id(),
-            PoolTransaction::Create(tx) => tx.id(),
-            PoolTransaction::Upgrade(tx) => tx.id(),
-            PoolTransaction::Upload(tx) => tx.id(),
+            PoolTransaction::Script(tx, _) => tx.id(),
+            PoolTransaction::Create(tx, _) => tx.id(),
+            PoolTransaction::Upgrade(tx, _) => tx.id(),
+            PoolTransaction::Upload(tx, _) => tx.id(),
         }
     }
 
     /// Returns the maximum amount of gas that the transaction can consume.
     pub fn max_gas(&self) -> Word {
         match self {
-            PoolTransaction::Script(tx) => tx.metadata().max_gas,
-            PoolTransaction::Create(tx) => tx.metadata().max_gas,
-            PoolTransaction::Upgrade(tx) => tx.metadata().max_gas,
-            PoolTransaction::Upload(tx) => tx.metadata().max_gas,
+            PoolTransaction::Script(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Create(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
         }
     }
 }
@@ -102,48 +115,48 @@ impl PoolTransaction {
 impl PoolTransaction {
     pub fn script_gas_limit(&self) -> Option<Word> {
         match self {
-            PoolTransaction::Script(script) => {
+            PoolTransaction::Script(script, _) => {
                 Some(*script.transaction().script_gas_limit())
             }
-            PoolTransaction::Create(_) => None,
-            PoolTransaction::Upgrade(_) => None,
-            PoolTransaction::Upload(_) => None,
+            PoolTransaction::Create(_, _) => None,
+            PoolTransaction::Upgrade(_, _) => None,
+            PoolTransaction::Upload(_, _) => None,
         }
     }
 
     pub fn tip(&self) -> Word {
         match self {
-            Self::Script(tx) => tx.transaction().tip(),
-            Self::Create(tx) => tx.transaction().tip(),
-            Self::Upload(tx) => tx.transaction().tip(),
-            Self::Upgrade(tx) => tx.transaction().tip(),
+            Self::Script(tx, _) => tx.transaction().tip(),
+            Self::Create(tx, _) => tx.transaction().tip(),
+            Self::Upload(tx, _) => tx.transaction().tip(),
+            Self::Upgrade(tx, _) => tx.transaction().tip(),
         }
     }
 
     pub fn is_computed(&self) -> bool {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().is_computed(),
-            PoolTransaction::Create(tx) => tx.transaction().is_computed(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().is_computed(),
-            PoolTransaction::Upload(tx) => tx.transaction().is_computed(),
+            PoolTransaction::Script(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Create(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().is_computed(),
         }
     }
 
     pub fn inputs(&self) -> &Vec<Input> {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().inputs(),
-            PoolTransaction::Create(tx) => tx.transaction().inputs(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().inputs(),
-            PoolTransaction::Upload(tx) => tx.transaction().inputs(),
+            PoolTransaction::Script(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Create(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().inputs(),
         }
     }
 
     pub fn outputs(&self) -> &Vec<Output> {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().outputs(),
-            PoolTransaction::Create(tx) => tx.transaction().outputs(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().outputs(),
-            PoolTransaction::Upload(tx) => tx.transaction().outputs(),
+            PoolTransaction::Script(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Create(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().outputs(),
         }
     }
 }
@@ -151,12 +164,18 @@ impl PoolTransaction {
 impl From<&PoolTransaction> for Transaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {
-            PoolTransaction::Script(tx) => Transaction::Script(tx.transaction().clone()),
-            PoolTransaction::Create(tx) => Transaction::Create(tx.transaction().clone()),
-            PoolTransaction::Upgrade(tx) => {
+            PoolTransaction::Script(tx, _) => {
+                Transaction::Script(tx.transaction().clone())
+            }
+            PoolTransaction::Create(tx, _) => {
+                Transaction::Create(tx.transaction().clone())
+            }
+            PoolTransaction::Upgrade(tx, _) => {
                 Transaction::Upgrade(tx.transaction().clone())
             }
-            PoolTransaction::Upload(tx) => Transaction::Upload(tx.transaction().clone()),
+            PoolTransaction::Upload(tx, _) => {
+                Transaction::Upload(tx.transaction().clone())
+            }
         }
     }
 }
@@ -164,23 +183,11 @@ impl From<&PoolTransaction> for Transaction {
 impl From<&PoolTransaction> for CheckedTransaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {
-            PoolTransaction::Script(tx) => CheckedTransaction::Script(tx.clone()),
-            PoolTransaction::Create(tx) => CheckedTransaction::Create(tx.clone()),
-            PoolTransaction::Upgrade(tx) => CheckedTransaction::Upgrade(tx.clone()),
-            PoolTransaction::Upload(tx) => CheckedTransaction::Upload(tx.clone()),
+            PoolTransaction::Script(tx, _) => CheckedTransaction::Script(tx.clone()),
+            PoolTransaction::Create(tx, _) => CheckedTransaction::Create(tx.clone()),
+            PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx.clone()),
+            PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx.clone()),
         }
-    }
-}
-
-impl From<Checked<Script>> for PoolTransaction {
-    fn from(checked: Checked<Script>) -> Self {
-        Self::Script(checked)
-    }
-}
-
-impl From<Checked<Create>> for PoolTransaction {
-    fn from(checked: Checked<Create>) -> Self {
-        Self::Create(checked)
     }
 }
 
