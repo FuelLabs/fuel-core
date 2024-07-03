@@ -1,5 +1,8 @@
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        header::ConsensusParametersVersion,
+        primitives::DaBlockHeight,
+    },
     fuel_tx,
     fuel_tx::{
         TxId,
@@ -12,28 +15,33 @@ use fuel_core_types::{
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 pub enum MaybeCheckedTransaction {
-    CheckedTransaction(CheckedTransaction),
+    CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
     Transaction(fuel_tx::Transaction),
 }
 
 impl MaybeCheckedTransaction {
     pub fn id(&self, chain_id: &ChainId) -> TxId {
         match self {
-            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Script(
-                tx,
-            )) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Create(
-                tx,
-            )) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Mint(tx)) => {
-                tx.id()
-            }
-            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Upgrade(
-                tx,
-            )) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Upload(
-                tx,
-            )) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Script(tx),
+                _,
+            ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Create(tx),
+                _,
+            ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Mint(tx),
+                _,
+            ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Upgrade(tx),
+                _,
+            ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Upload(tx),
+                _,
+            ) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
         }
     }

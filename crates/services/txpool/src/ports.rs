@@ -2,6 +2,7 @@ use crate::types::GasPrice;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
+    blockchain::header::ConsensusParametersVersion,
     entities::{
         coins::coin::CompressedCoin,
         relayer::message::Message,
@@ -81,7 +82,9 @@ pub trait MemoryPool {
 #[cfg_attr(feature = "test-helpers", mockall::automock)]
 pub trait ConsensusParametersProvider {
     /// Get latest consensus parameters.
-    fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters>;
+    fn latest_consensus_parameters(
+        &self,
+    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>);
 }
 
 #[async_trait::async_trait]
