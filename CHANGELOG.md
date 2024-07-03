@@ -13,12 +13,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1948](https://github.com/FuelLabs/fuel-core/pull/1948): Add new `AlgorithmV1` and `AlgorithmUpdaterV1` for the gas price. Include tools for analysis
 
 ### Changed
+- [#2002](https://github.com/FuelLabs/fuel-core/pull/2002): Adapted the block producer to react to checked transactions that were using another version of consensus parameters during validation in the TxPool. After an upgrade of the consensus parameters of the network, TxPool could store invalid `Checked` transactions. This change fixes that by tracking the version that was used to validate the transactions.
 - [#1999](https://github.com/FuelLabs/fuel-core/pull/1999): Minimize the number of panics in the codebase.
 - [#1990](https://github.com/FuelLabs/fuel-core/pull/1990): Use latest view for mutate GraphQL queries after modification of the node.
 - [#1992](https://github.com/FuelLabs/fuel-core/pull/1992): Parse multiple relayer contracts, `RELAYER-V2-LISTENING-CONTRACTS` env variable using a `,` delimiter.
 - [#1980](https://github.com/FuelLabs/fuel-core/pull/1980): Add `Transaction` to relayer 's event filter
 
 #### Breaking
+- [#2001](https://github.com/FuelLabs/fuel-core/pull/2001): Prevent GraphQL query body to be huge and cause OOM. The default body size is `1MB`. The limit can be changed by the `graphql-request-body-bytes-limit` CLI argument.
 - [#1991](https://github.com/FuelLabs/fuel-core/pull/1991): Prepare the database to use different types than `Database` for atomic view.
 - [#1989](https://github.com/FuelLabs/fuel-core/pull/1989): Extract `HistoricalView` trait from the `AtomicView`.
 
