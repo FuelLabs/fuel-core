@@ -9,7 +9,11 @@ use crate::{
     },
     state::{
         historical_rocksdb::{
-            description::Historical,
+            description::{
+                historical_duplicate_column_id,
+                Column,
+                Historical,
+            },
             modifications_history::ModificationsHistory,
             view_at_height::ViewAtHeight,
         },
@@ -51,7 +55,10 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use std::num::NonZeroU64;
+use std::{
+    num::NonZeroU64,
+    path::Path,
+};
 
 pub mod description;
 pub mod modifications_history;
@@ -73,8 +80,7 @@ pub enum StateRewindPolicy {
 #[derive(Debug)]
 pub struct HistoricalRocksDB<Description> {
     state_rewind_policy: StateRewindPolicy,
-    db: RocksDb<Description>,
-    history: RocksDb<Historical<Description>>,
+    db: RocksDb<Historical<Description>>,
 }
 
 impl<Description> HistoricalRocksDB<Description>
@@ -82,15 +88,24 @@ where
     Description: DatabaseDescription,
 {
     pub fn new(
-        db: RocksDb<Description>,
+        db: RocksDb<Historical<Description>>,
         state_rewind_policy: StateRewindPolicy,
     ) -> DatabaseResult<Self> {
-        let path = db.path().join("history");
-        let history = RocksDb::default_open(path, None)?;
         Ok(Self {
             state_rewind_policy,
             db,
-            history,
+        })
+    }
+
+    pub fn default_open<P: AsRef<Path>>(
+        path: P,
+        capacity: Option<usize>,
+        state_rewind_policy: StateRewindPolicy,
+    ) -> DatabaseResult<Self> {
+        let db = RocksDb::<Historical<Description>>::default_open(path, capacity)?;
+        Ok(Self {
+            state_rewind_policy,
+            db,
         })
     }
 
@@ -134,16 +149,15 @@ where
         Ok(reverse_changes)
     }
 
-    pub fn latest_view(&self) -> StorageResult<RocksDb<Description>> {
-        let db_view = self.db.create_snapshot();
-        Ok(db_view)
+    pub fn latest_view(&self) -> RocksDb<Description> {
+        self.db.create_snapshot_generic()
     }
 
     pub fn create_view_at(
         &self,
         height: &Description::Height,
     ) -> StorageResult<ViewAtHeight<Description>> {
-        let latest_view = self.latest_view()?;
+        let latest_view = self.db.create_snapshot_generic::<Historical<Description>>();
 
         // Each height stores reverse modification caused by the corresponding
         // block at the same height. Applying reverse changes at height `X`
@@ -163,46 +177,37 @@ where
             .into());
         }
 
-        let history_view = self.history.create_snapshot();
-
-        Ok(ViewAtHeight::new(
-            rollback_height,
-            latest_view,
-            history_view,
-        ))
+        Ok(ViewAtHeight::new(rollback_height, latest_view))
     }
 
     fn store_modifications_history(
         &self,
+        storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
         height: &Description::Height,
-        changes: &Changes,
     ) -> StorageResult<()> {
         if self.state_rewind_policy == StateRewindPolicy::NoRewind {
             return Ok(());
         }
-
         let height_u64 = height.as_u64();
-        let mut storage_transaction = self.history.read_transaction();
 
-        cleanup_old_changes(
-            &height_u64,
-            &mut storage_transaction,
-            &self.state_rewind_policy,
-        )?;
+        let reverse_changes =
+            self.reverse_history_changes(storage_transaction.changes())?;
 
-        let reverse_changes = self.reverse_history_changes(changes)?;
+        cleanup_old_changes(&height_u64, storage_transaction, &self.state_rewind_policy)?;
+
         let old_changes = storage_transaction
             .storage_as_mut::<ModificationsHistory<Description>>()
             .insert(&height_u64, &reverse_changes)?;
 
-        // The existence of old changes at the current height means we
-        // try to override the current height(maybe because of crash).
-        // So, we need to remove all historical modifications from the past.
         if let Some(old_changes) = old_changes {
+            tracing::warn!(
+                "Historical database committed twice the same height: {:?}",
+                height
+            );
             remove_historical_modifications(
                 &height_u64,
-                &mut storage_transaction,
-                old_changes,
+                storage_transaction,
+                &old_changes,
             )?;
         }
 
@@ -220,26 +225,29 @@ where
                         Ok::<_, StorageError>((height_key, operation))
                     })
                     .try_collect()?;
-                Ok::<_, StorageError>((column, historical_column_changes))
+
+                let historical_duplicate_column = historical_duplicate_column_id(column);
+                Ok::<_, StorageError>((
+                    historical_duplicate_column,
+                    historical_column_changes,
+                ))
             })
             .try_collect()?;
 
         // Combine removed old changes, all modifications for
         // the current height and historical changes.
         StorageTransaction::transaction(
-            &mut storage_transaction,
+            storage_transaction,
             ConflictPolicy::Overwrite,
             historical_changes,
         )
         .commit()?;
-
-        let changes = storage_transaction.into_changes();
-        self.history.commit_changes(&changes)
+        Ok(())
     }
 
     fn oldest_changes_height(&self) -> StorageResult<Option<u64>> {
         let oldest_height = self
-            .history
+            .db
             .iter_all_keys::<ModificationsHistory<Description>>(Some(
                 IterDirection::Forward,
             ))
@@ -250,29 +258,34 @@ where
 
     fn rollback_last_block(&self) -> StorageResult<()> {
         let latest_height = self
-            .history
+            .db
             .iter_all_keys::<ModificationsHistory<Description>>(Some(
                 IterDirection::Reverse,
             ))
             .next()
             .ok_or(DatabaseError::ReachedEndOfHistory)??;
 
-        let mut storage_transaction = self.history.read_transaction();
+        let mut storage_transaction = self.db.read_transaction();
 
         let last_changes = storage_transaction
             .storage_as_mut::<ModificationsHistory<Description>>()
             .remove(&latest_height)?
             .ok_or(not_found!(ModificationsHistory<Description>))?;
 
-        self.db.commit_changes(&last_changes)?;
-
         remove_historical_modifications(
             &latest_height,
             &mut storage_transaction,
-            last_changes,
+            &last_changes,
         )?;
 
-        self.history
+        StorageTransaction::transaction(
+            &mut storage_transaction,
+            ConflictPolicy::Overwrite,
+            last_changes,
+        )
+        .commit()?;
+
+        self.db
             .commit_changes(&storage_transaction.into_changes())?;
 
         Ok(())
@@ -305,7 +318,7 @@ where
                 remove_historical_modifications(
                     &old_height,
                     storage_transaction,
-                    old_changes,
+                    &old_changes,
                 )?;
             }
         }
@@ -316,23 +329,24 @@ where
 fn remove_historical_modifications<Description>(
     old_height: &u64,
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
-    reverse_changes: Changes,
+    reverse_changes: &Changes,
 ) -> StorageResult<()>
 where
     Description: DatabaseDescription,
 {
     let changes = reverse_changes
-        .into_iter()
+        .iter()
         .map(|(column, column_changes)| {
             let historical_column_changes = column_changes
-                .into_keys()
+                .keys()
                 .map(|key| {
-                    let height_key = height_key(&key, old_height).into();
+                    let height_key = height_key(key, old_height).into();
                     let operation = WriteOperation::Remove;
                     (height_key, operation)
                 })
                 .collect();
-            (column, historical_column_changes)
+            let historical_duplicate_column = historical_duplicate_column_id(*column);
+            (historical_duplicate_column, historical_column_changes)
         })
         .collect();
 
@@ -353,7 +367,7 @@ where
     type Column = Description::Column;
 
     fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
-        self.db.exists(key, column)
+        self.db.exists(key, Column::OriginalColumn(column))
     }
 
     fn size_of_value(
@@ -361,11 +375,11 @@ where
         key: &[u8],
         column: Self::Column,
     ) -> StorageResult<Option<usize>> {
-        self.db.size_of_value(key, column)
+        self.db.size_of_value(key, Column::OriginalColumn(column))
     }
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        self.db.get(key, column)
+        self.db.get(key, Column::OriginalColumn(column))
     }
 
     fn read(
@@ -374,7 +388,7 @@ where
         column: Self::Column,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.db.read(key, column, buf)
+        self.db.read(key, Column::OriginalColumn(column), buf)
     }
 }
 
@@ -389,7 +403,8 @@ where
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        self.db.iter_store(column, prefix, start, direction)
+        self.db
+            .iter_store(Column::OriginalColumn(column), prefix, start, direction)
     }
 }
 
@@ -403,11 +418,14 @@ where
         height: Option<Description::Height>,
         changes: Changes,
     ) -> StorageResult<()> {
+        let mut storage_transaction =
+            StorageTransaction::transaction(&self.db, ConflictPolicy::Overwrite, changes);
         if let Some(height) = height {
-            self.store_modifications_history(&height, &changes)?;
+            self.store_modifications_history(&mut storage_transaction, &height)?;
         }
 
-        self.db.commit_changes(&changes)?;
+        self.db
+            .commit_changes(&storage_transaction.into_changes())?;
         Ok(())
     }
 
@@ -422,7 +440,7 @@ where
     fn latest_view(
         &self,
     ) -> StorageResult<IterableKeyValueView<ColumnType<Description>>> {
-        let view = self.latest_view()?;
+        let view = self.latest_view();
         Ok(IterableKeyValueView::from_storage(
             IterableKeyValueViewWrapper::new(view),
         ))
@@ -489,7 +507,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_read_original_database_works() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
@@ -529,7 +547,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_read_latest_view_works() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
@@ -554,10 +572,7 @@ mod tests {
             .unwrap();
 
         // When
-        let latest_view = historical_rocks_db
-            .latest_view()
-            .unwrap()
-            .into_transaction();
+        let latest_view = historical_rocks_db.latest_view().into_transaction();
         let latest_balance = latest_view
             .storage_as_ref::<ContractsAssets>()
             .get(&key())
@@ -572,7 +587,7 @@ mod tests {
     #[test]
     fn state_rewind_policy__no_rewind__create_view_at__fails() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::NoRewind).unwrap();
 
@@ -599,7 +614,7 @@ mod tests {
     #[test]
     fn state_rewind_policy__no_rewind__rollback__fails() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::NoRewind).unwrap();
 
@@ -622,7 +637,7 @@ mod tests {
     #[test]
     fn state_rewind_policy__rewind_range_1__cleanup_in_range_works() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db = HistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindRange {
@@ -669,7 +684,7 @@ mod tests {
     #[test]
     fn state_rewind_policy__rewind_range_1__rollback_works() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db = HistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindRange {
@@ -687,7 +702,7 @@ mod tests {
             .commit_changes(Some(1u32.into()), transaction.into_changes())
             .unwrap();
         let entries = historical_rocks_db
-            .history
+            .db
             .iter_all::<ModificationsHistory<OnChain>>(None)
             .collect::<Vec<_>>();
         assert_eq!(entries.len(), 1);
@@ -698,7 +713,7 @@ mod tests {
         // Then
         assert_eq!(result, Ok(()));
         let entries = historical_rocks_db
-            .history
+            .db
             .iter_all::<ModificationsHistory<OnChain>>(None)
             .collect::<Vec<_>>();
         assert_eq!(entries.len(), 0);
@@ -707,7 +722,7 @@ mod tests {
     #[test]
     fn state_rewind_policy__rewind_range_1__second_rollback_fails() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db = HistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindRange {
@@ -737,7 +752,7 @@ mod tests {
     fn state_rewind_policy__rewind_range_10__rollbacks_work() {
         const ITERATIONS: usize = 10;
 
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db = HistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindRange {
@@ -767,7 +782,7 @@ mod tests {
         for height in (1..=ITERATIONS).rev() {
             // Given
             let entries = historical_rocks_db
-                .history
+                .db
                 .iter_all::<ModificationsHistory<OnChain>>(None)
                 .collect::<Vec<_>>();
             assert_eq!(entries.len(), height);
@@ -778,7 +793,7 @@ mod tests {
             // Then
             assert_eq!(result, Ok(()));
             let entries = historical_rocks_db
-                .history
+                .db
                 .iter_all::<ModificationsHistory<OnChain>>(None)
                 .collect::<Vec<_>>();
             assert_eq!(entries.len(), height - 1);
