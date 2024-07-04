@@ -22,10 +22,7 @@ use fuel_core::{
     service::Config,
     state::{
         historical_rocksdb::HistoricalRocksDB,
-        rocks_db::{
-            RocksDb,
-            ShallowTempDir,
-        },
+        rocks_db::ShallowTempDir,
     },
 };
 use fuel_core_benches::*;
@@ -77,8 +74,13 @@ impl BenchDb {
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
 
-        let db = RocksDb::<OnChain>::default_open(tmp_dir.path(), None).unwrap();
-        let db = Arc::new(HistoricalRocksDB::new(db, Default::default()).unwrap());
+        let db = HistoricalRocksDB::<OnChain>::default_open(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+        )
+        .unwrap();
+        let db = Arc::new(db);
         let mut storage_key = primitive_types::U256::zero();
         let mut key_bytes = Bytes32::zeroed();
 

@@ -68,6 +68,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
+        description::Historical,
         HistoricalRocksDB,
         StateRewindPolicy,
     },
@@ -195,19 +196,20 @@ where
         state_rewind_policy: StateRewindPolicy,
     ) -> Result<Self> {
         use anyhow::Context;
-        let db = RocksDb::<Description>::default_open(path, capacity.into())
-            .map_err(Into::<anyhow::Error>::into)
-            .with_context(|| {
-                format!(
-                    "Failed to open rocksdb, you may need to wipe a \
-                pre-existing incompatible db e.g. `rm -rf {path:?}`"
-                )
-            })?;
-
-        Ok(Self::new(Arc::new(HistoricalRocksDB::new(
-            db,
+        let db = HistoricalRocksDB::<Description>::default_open(
+            path,
+            capacity.into(),
             state_rewind_policy,
-        )?)))
+        )
+        .map_err(Into::<anyhow::Error>::into)
+        .with_context(|| {
+            format!(
+                "Failed to open rocksdb, you may need to wipe a \
+                pre-existing incompatible db e.g. `rm -rf {path:?}`"
+            )
+        })?;
+
+        Ok(Self::new(Arc::new(db)))
     }
 
     /// Converts to an unchecked database.
@@ -234,7 +236,7 @@ where
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp() -> Self {
-        let db = RocksDb::<Description>::default_open_temp(None).unwrap();
+        let db = RocksDb::<Historical<Description>>::default_open_temp(None).unwrap();
         let historical_db =
             HistoricalRocksDB::new(db, StateRewindPolicy::NoRewind).unwrap();
         let data = Arc::new(historical_db);
