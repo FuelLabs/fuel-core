@@ -312,7 +312,7 @@ pub mod worker {
             block_height: BlockHeight,
             tx_idx: u16,
             tx_id: &Bytes32,
-        ) -> StorageResult<Option<Bytes32>>;
+        ) -> StorageResult<()>;
 
         fn update_tx_status(
             &mut self,

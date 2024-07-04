@@ -174,12 +174,12 @@ where
         let key_encoder = KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
         let encoded_value = ValueCodec::encode_as_value(value);
-        let prev = storage
-            .replace(key_bytes.as_ref(), column, encoded_value)?
-            .map(|value| {
-                ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
-            })
-            .transpose()?;
+        let prev =
+            KeyValueMutate::replace(storage, key_bytes.as_ref(), column, encoded_value)?
+                .map(|value| {
+                    ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
+                })
+                .transpose()?;
 
         if prev.is_some() {
             Self::remove(storage, key_bytes.as_ref(), column)?;
@@ -198,8 +198,7 @@ where
         let key_encoder = KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
         Self::remove(storage, key_bytes.as_ref(), column)?;
-        let prev = storage
-            .take(key_bytes.as_ref(), column)?
+        let prev = KeyValueMutate::take(storage, key_bytes.as_ref(), column)?
             .map(|value| {
                 ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
             })
