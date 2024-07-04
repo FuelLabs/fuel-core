@@ -54,7 +54,8 @@ use std::{
 };
 use tokio::sync::{
     broadcast,
-    mpsc,
+    OwnedSemaphorePermit,
+    Semaphore,
     TryAcquireError,
 };
 
@@ -95,6 +96,7 @@ pub enum Error {
     #[from]
     StorageError(StorageError),
     UnsupportedConsensusVariant(String),
+    ActiveBlockResultsSemaphoreClosed(tokio::sync::AcquireError),
 }
 
 impl From<Error> for anyhow::Error {
@@ -110,21 +112,18 @@ impl PartialEq for Error {
     }
 }
 
-type ResultReceiver = Arc<Mutex<mpsc::Receiver<()>>>;
-
 pub struct Importer<D, E, V> {
     database: Mutex<D>,
     executor: Arc<E>,
     verifier: Arc<V>,
     chain_id: ChainId,
     broadcast: broadcast::Sender<ImporterResult>,
-    guard: tokio::sync::Semaphore,
-    /// The `mpsc` channel is used to notify about the end of the processing of
-    /// the previous `SharedImportResult`. The importer waits until all receivers
-    /// of the notification process  the `SharedImportResult` before starting
-    /// committing a new block.
-    prev_block_process_result_sender: mpsc::Sender<()>,
-    prev_block_process_result_receiver: ResultReceiver,
+    guard: Semaphore,
+    /// The semaphore tracks the number of unprocessed `SharedImportResult`.
+    /// If the number of unprocessed results is more than the threshold,
+    /// the block importer stops committing new blocks and waits for
+    /// the resolution of the previous one.
+    active_import_results: Arc<Semaphore>,
 }
 
 impl<D, E, V> Importer<D, E, V> {
@@ -135,12 +134,11 @@ impl<D, E, V> Importer<D, E, V> {
         executor: E,
         verifier: V,
     ) -> Self {
-        let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
-        let (prev_block_process_result_sender, prev_block_process_result_receiver) =
-            mpsc::channel(config.max_block_notify_buffer);
-
-        let prev_block_process_result_receiver =
-            Arc::new(Mutex::new(prev_block_process_result_receiver));
+        // We use semaphore as a back pressure mechanism instead of a `broadcast`
+        // channel because we want to prevent committing to the database results
+        // that will not be processed.
+        let max_block_notify_buffer = config.max_block_notify_buffer;
+        let (broadcast, _) = broadcast::channel(max_block_notify_buffer);
 
         Self {
             database: Mutex::new(database),
@@ -148,9 +146,8 @@ impl<D, E, V> Importer<D, E, V> {
             verifier: Arc::new(verifier),
             chain_id,
             broadcast,
-            prev_block_process_result_sender,
-            prev_block_process_result_receiver,
-            guard: tokio::sync::Semaphore::new(1),
+            active_import_results: Arc::new(Semaphore::new(max_block_notify_buffer)),
+            guard: Semaphore::new(1),
         }
     }
 
@@ -211,17 +208,18 @@ where
         const TIMEOUT: u64 = 20;
         let await_result = tokio::time::timeout(
             tokio::time::Duration::from_secs(TIMEOUT),
-            self.prev_block_process_result_sender.send(()),
+            self.active_import_results.clone().acquire_owned(),
         )
         .await;
 
-        if await_result.is_err() {
+        let Ok(permit) = await_result else {
             tracing::error!(
                 "The previous block processing \
                     was not finished for {TIMEOUT} seconds."
             );
             return Err(Error::PreviousBlockProcessingNotFinished)
-        }
+        };
+        let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
         let mut guard = self
             .database
@@ -229,7 +227,7 @@ where
             .expect("Semaphore prevents concurrent access to the database");
         let database = guard.deref_mut();
 
-        self._commit_result(result, database)
+        self._commit_result(result, permit, database)
     }
 
     /// The method commits the result of the block execution and notifies about a new imported block.
@@ -245,6 +243,7 @@ where
     fn _commit_result(
         &self,
         result: UncommittedResult<Changes>,
+        permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
         let (result, changes) = result.into();
@@ -330,11 +329,8 @@ where
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
 
-        // The `tokio::sync::oneshot::Sender` is used to notify about the end
-        // of the processing of a new block by all listeners.
-        let receiver = self.prev_block_process_result_receiver.clone();
         let result = ImporterResult {
-            shared_result: Arc::new(Awaiter::new(result, receiver)),
+            shared_result: Arc::new(Awaiter::new(result, permit)),
             #[cfg(feature = "test-helpers")]
             changes: Arc::new(changes_clone),
         };
@@ -473,17 +469,18 @@ where
         const TIMEOUT: u64 = 20;
         let await_result = tokio::time::timeout(
             tokio::time::Duration::from_secs(TIMEOUT),
-            self.prev_block_process_result_sender.send(()),
+            self.active_import_results.clone().acquire_owned(),
         )
         .await;
 
-        if await_result.is_err() {
+        let Ok(permit) = await_result else {
             tracing::error!(
                 "The previous block processing \
                      was not finished for {TIMEOUT} seconds."
             );
             return Err(Error::PreviousBlockProcessingNotFinished)
-        }
+        };
+        let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
         let start = Instant::now();
 
@@ -492,7 +489,7 @@ where
             .try_lock()
             .expect("Semaphore prevents concurrent access to the database");
         let database = guard.deref_mut();
-        let commit_result = self._commit_result(result, database);
+        let commit_result = self._commit_result(result, permit, database);
         let commit_time = start.elapsed().as_secs_f64();
         let time = execute_time + commit_time;
         importer_metrics().execute_and_commit_duration.observe(time);
@@ -504,13 +501,7 @@ where
 /// The wrapper around `ImportResult` to notify about the end of the processing of a new block.
 struct Awaiter {
     result: ImportResult,
-    receiver: ResultReceiver,
-}
-
-impl Drop for Awaiter {
-    fn drop(&mut self) {
-        let _ = self.receiver.lock().try_recv();
-    }
+    _permit: OwnedSemaphorePermit,
 }
 
 impl Deref for Awaiter {
@@ -522,7 +513,10 @@ impl Deref for Awaiter {
 }
 
 impl Awaiter {
-    fn new(result: ImportResult, receiver: ResultReceiver) -> Self {
-        Self { result, receiver }
+    fn new(result: ImportResult, permit: OwnedSemaphorePermit) -> Self {
+        Self {
+            result,
+            _permit: permit,
+        }
     }
 }
