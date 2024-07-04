@@ -514,8 +514,8 @@ mod tests {
             .unwrap();
 
         // When
-        let latest_view = historical_rocks_db.read_transaction();
-        let latest_balance = latest_view
+        let read_view = historical_rocks_db.read_transaction();
+        let latest_balance = read_view
             .storage_as_ref::<ContractsAssets>()
             .get(&key())
             .unwrap()
