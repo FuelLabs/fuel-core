@@ -317,7 +317,7 @@ pub struct Task<P, V, B> {
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct HeartbeatPeerReputationConfig {
     old_heartbeat_penalty: AppScore,
     low_heartbeat_frequency_penalty: AppScore,
@@ -504,8 +504,15 @@ where
 
             _ = watcher.while_started() => {
                 should_continue = false;
-            }
-
+            },
+            latest_block_height = self.next_block_height.next() => {
+                if let Some(latest_block_height) = latest_block_height {
+                    let _ = self.p2p_service.update_block_height(latest_block_height);
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            },
             next_service_request = self.request_receiver.recv() => {
                 should_continue = true;
                 match next_service_request {
@@ -630,14 +637,6 @@ where
                     }
                 }
                 self.next_check_time += self.heartbeat_check_interval;
-            },
-            latest_block_height = self.next_block_height.next() => {
-                if let Some(latest_block_height) = latest_block_height {
-                    let _ = self.p2p_service.update_block_height(latest_block_height);
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
             }
         }
 
@@ -918,6 +917,7 @@ pub mod tests {
 
     struct FakeP2PService {
         peer_info: Vec<(PeerId, PeerInfo)>,
+        next_event_stream: BoxStream<FuelP2PEvent>,
     }
 
     impl TaskP2PService for FakeP2PService {
@@ -930,7 +930,7 @@ pub mod tests {
         }
 
         fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>> {
-            std::future::pending().boxed()
+            self.next_event_stream.next().boxed()
         }
 
         fn publish_message(
@@ -975,7 +975,7 @@ pub mod tests {
         }
 
         fn update_block_height(&mut self, _height: BlockHeight) -> anyhow::Result<()> {
-            todo!()
+            Ok(())
         }
     }
 
@@ -1067,7 +1067,10 @@ pub mod tests {
             score: 100.0,
         };
         let peer_info = vec![(peer_id, peer_info)];
-        let p2p_service = FakeP2PService { peer_info };
+        let p2p_service = FakeP2PService {
+            peer_info,
+            next_event_stream: Box::pin(futures::stream::pending()),
+        };
         let (_request_sender, request_receiver) = mpsc::channel(100);
 
         let (report_sender, mut report_receiver) = mpsc::channel(100);
@@ -1148,7 +1151,10 @@ pub mod tests {
             score: 100.0,
         };
         let peer_info = vec![(peer_id, peer_info)];
-        let p2p_service = FakeP2PService { peer_info };
+        let p2p_service = FakeP2PService {
+            peer_info,
+            next_event_stream: Box::pin(futures::stream::pending()),
+        };
         let (_request_sender, request_receiver) = mpsc::channel(100);
 
         let (report_sender, mut report_receiver) = mpsc::channel(100);
@@ -1202,5 +1208,52 @@ pub mod tests {
             heartbeat_peer_reputation_config.old_heartbeat_penalty
         );
         assert_eq!(reporting_service, "p2p");
+    }
+
+    #[tokio::test]
+    async fn should_process_all_imported_block_under_infinite_events_from_p2p() {
+        // Given
+        let (blocks_processed_sender, mut block_processed_receiver) = mpsc::channel(1);
+        let next_block_height = Box::pin(futures::stream::repeat_with(move || {
+            blocks_processed_sender.try_send(()).unwrap();
+            BlockHeight::from(0)
+        }));
+        let infinite_event_stream = Box::pin(futures::stream::empty());
+        let p2p_service = FakeP2PService {
+            peer_info: vec![],
+            next_event_stream: infinite_event_stream,
+        };
+
+        // Initialization
+        let (_request_sender, request_receiver) = mpsc::channel(100);
+        let broadcast = FakeBroadcast {
+            peer_reports: mpsc::channel(100).0,
+        };
+        let mut task = Task {
+            chain_id: Default::default(),
+            p2p_service,
+            view_provider: FakeDB,
+            next_block_height,
+            request_receiver,
+            broadcast,
+            max_headers_per_request: 0,
+            heartbeat_check_interval: Duration::from_secs(0),
+            heartbeat_max_avg_interval: Default::default(),
+            heartbeat_max_time_since_last: Default::default(),
+            next_check_time: Instant::now(),
+            heartbeat_peer_reputation_config: Default::default(),
+        };
+        let mut watcher = StateWatcher::started();
+        // End of initialization
+
+        for _ in 0..100 {
+            // When
+            task.run(&mut watcher).await.unwrap();
+
+            // Then
+            block_processed_receiver
+                .try_recv()
+                .expect("Should process the block height even under p2p pressure");
+        }
     }
 }
