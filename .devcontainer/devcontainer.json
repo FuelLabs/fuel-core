@@ -1,0 +1,52 @@
+{"features": {
+    "ghcr.io/devcontainers/features/common-utils:1": {},
+    "ghcr.io/FuelLabs/devcontainer-features/fuelup:1.0.1": {},
+}
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+  }
+}"customizations": {
+    "vscode": {
+        "extensions": [
+            "fuellabs.sway-vscode-plugin"
+        ]
+    }
+}{
+    "image": "mcr.microsoft.com/devcontainers/universal:2",
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:1": {},
+        "ghcr.io/FuelLabs/devcontainer-features/fuelup:1.0.1": {},
+        "ghcr.io/devcontainers/features/rust:1": {},
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "fuellabs.sway-vscode-plugin",
+                "rust-lang.rust-analyzer"
+            ]
+        }
+    }
+}{
+    "image": "mcr.microsoft.com/devcontainers/universal:2",
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:1": {},
+        "ghcr.io/FuelLabs/devcontainer-features/fuelup:1.0.2": {
+            "toolchain": "beta-5"
+        },
+        "ghcr.io/devcontainers-contrib/features/typescript:2": {},
+        "ghcr.io/devcontainers/features/rust:1": {},
+        "ghcr.io/devcontainers/features/node:1": {}
+    },
+    "customizations": {
+        "codespaces": {
+            "openFiles": ["README.md"]
+        },
+        "vscode": {
+            "extensions": [
+                "fuellabs.sway-vscode-plugin",
+                "ms-vscode.vscode-typescript-next",
+                "rust-lang.rust-analyzer"
+            ]
+        }
+    }
+}
