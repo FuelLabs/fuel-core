@@ -124,7 +124,6 @@ pub struct RocksDb<Description> {
     read_options: ReadOptions,
     db: Arc<DB>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
-    path: PathBuf,
     // used for RAII
     _drop: Arc<DropResources>,
     _marker: core::marker::PhantomData<Description>,
@@ -349,7 +348,6 @@ where
             read_options: Self::generate_read_options(&None),
             snapshot: None,
             db,
-            path: original_path,
             _drop: Default::default(),
             _marker: Default::default(),
         };
@@ -372,8 +370,13 @@ where
     }
 
     pub fn create_snapshot(&self) -> Self {
+        self.create_snapshot_generic()
+    }
+
+    pub fn create_snapshot_generic<TargetDescription>(
+        &self,
+    ) -> RocksDb<TargetDescription> {
         let db = self.db.clone();
-        let path = self.path.clone();
         let _drop = self._drop.clone();
 
         // Safety: We are transmuting the snapshot to 'static lifetime, but it's safe
@@ -386,18 +389,13 @@ where
         };
         let snapshot = Some(snapshot);
 
-        Self {
+        RocksDb {
             read_options: Self::generate_read_options(&snapshot),
             snapshot,
             db,
-            path,
             _drop,
             _marker: Default::default(),
         }
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {

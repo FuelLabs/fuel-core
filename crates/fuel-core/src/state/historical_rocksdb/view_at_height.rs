@@ -27,24 +27,15 @@ use rocksdb::{
 
 pub struct ViewAtHeight<Description> {
     height: u64,
-    read_db: RocksDb<Description>,
-    history: RocksDb<Historical<Description>>,
+    read_db: RocksDb<Historical<Description>>,
 }
 
 impl<Description> ViewAtHeight<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn new(
-        height: u64,
-        read_db: RocksDb<Description>,
-        history: RocksDb<Historical<Description>>,
-    ) -> Self {
-        Self {
-            height,
-            read_db,
-            history,
-        }
+    pub fn new(height: u64, read_db: RocksDb<Historical<Description>>) -> Self {
+        Self { height, read_db }
     }
 }
 
@@ -55,12 +46,12 @@ where
     type Column = Description::Column;
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        let read_history = &self.history;
+        let read_history = &self.read_db;
         let height_key = height_key(key, &self.height);
         let options = ReadOptions::default();
         let nearest_modification = read_history
             ._iter_all(
-                Column::UnderlyingDatabase(column),
+                Column::HistoricalDuplicateColumn(column),
                 options,
                 IteratorMode::From(&height_key, rocksdb::Direction::Forward),
             )
@@ -80,7 +71,7 @@ where
             }
         }
 
-        self.read_db.get(key, column)
+        self.read_db.get(key, Column::OriginalColumn(column))
     }
 }
 
@@ -115,7 +106,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_view_at_each_height_works() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
@@ -189,7 +180,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_view_at_each_height_works_when_multiple_modifications() {
         // Given
-        let rocks_db = RocksDb::<OnChain>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
