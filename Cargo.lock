@@ -2821,6 +2821,7 @@ dependencies = [
  "itertools 0.12.1",
  "mockall",
  "num_cpus",
+ "postcard",
  "proptest",
  "rand",
  "rocksdb",
@@ -3300,6 +3301,7 @@ dependencies = [
  "test-case",
  "test-helpers",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

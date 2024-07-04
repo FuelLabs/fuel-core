@@ -189,7 +189,8 @@ async fn test_tx_gossiping_invalid_txs(
     // Give some time to receive all invalid transactions.
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    let mut authority_blocks = authority.node.shared.block_importer.events();
+    let mut authority_blocks =
+        authority.node.shared.block_importer.events_shared_result();
 
     // Submit a valid transaction from banned sentry to an authority node.
     let valid_transaction = authority.test_transactions()[0].clone();

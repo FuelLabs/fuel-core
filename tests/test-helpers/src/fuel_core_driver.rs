@@ -17,9 +17,13 @@ pub struct FuelCoreDriver {
 }
 impl FuelCoreDriver {
     pub async fn spawn(extra_args: &[&str]) -> anyhow::Result<Self> {
-        // Generate temp params
-        let db_dir = tempdir()?;
+        Self::spawn_with_directory(tempdir()?, extra_args).await
+    }
 
+    pub async fn spawn_with_directory(
+        db_dir: TempDir,
+        extra_args: &[&str],
+    ) -> anyhow::Result<Self> {
         let mut args = vec![
             "_IGNORED_",
             "--db-path",

@@ -24,6 +24,7 @@ mod regenesis;
 #[cfg(feature = "relayer")]
 mod relayer;
 mod snapshot;
+mod state_rewind;
 #[cfg(feature = "p2p")]
 mod sync;
 mod trigger_integration;

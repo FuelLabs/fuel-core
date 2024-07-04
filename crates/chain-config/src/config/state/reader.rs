@@ -253,7 +253,7 @@ impl SnapshotReader {
                 use anyhow::Context;
                 use fuel_core_storage::kv_store::StorageColumn;
                 let name = T::column().name();
-                let Some(path) = tables.get(name) else {
+                let Some(path) = tables.get(name.as_str()) else {
                     return Ok(Groups {
                         iter: GroupIter::InMemory {
                             groups: vec![].into_iter(),

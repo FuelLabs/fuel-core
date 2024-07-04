@@ -153,7 +153,7 @@ impl P2pPort for P2PAdapter {
 
 impl worker::BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
-        self.events()
+        self.events_shared_result()
     }
 }
 
