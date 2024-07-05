@@ -15,8 +15,8 @@ impl DatabaseDescription for OffChain {
         0
     }
 
-    fn name() -> &'static str {
-        "off_chain"
+    fn name() -> String {
+        "off_chain".to_string()
     }
 
     fn metadata_column() -> Self::Column {
