@@ -2,7 +2,7 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapt
 use fuel_core_types::fuel_types::BlockHeight;
 use crate::database::database_description::DatabaseDescription;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct GasPriceDatabase;
 
 impl DatabaseDescription for GasPriceDatabase {
@@ -13,8 +13,8 @@ impl DatabaseDescription for GasPriceDatabase {
         0
     }
 
-    fn name() -> &'static str {
-        "gas_price"
+    fn name() -> String {
+        "gas_price".to_string()
     }
 
     fn metadata_column() -> Self::Column {

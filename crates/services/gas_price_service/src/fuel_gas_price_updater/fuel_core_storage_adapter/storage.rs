@@ -39,8 +39,9 @@ impl GasPriceColumn {
 }
 
 impl StorageColumn for GasPriceColumn {
-    fn name(&self) -> &'static str {
-        self.into()
+    fn name(&self) -> String {
+        let str: &str = self.into();
+        str.to_string()
     }
 
     fn id(&self) -> u32 {
