@@ -3061,9 +3061,9 @@ dependencies = [
  "fuel-core-types",
  "mockall",
  "parking_lot",
+ "rayon",
  "test-case",
  "tokio",
- "tokio-rayon",
  "tracing",
 ]
 

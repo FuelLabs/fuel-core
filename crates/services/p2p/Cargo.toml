@@ -42,7 +42,7 @@ prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
 rand = { workspace = true }
-rayon = "1.10.0"
+rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 sha2 = "0.10"

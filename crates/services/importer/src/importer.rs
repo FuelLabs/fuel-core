@@ -97,6 +97,7 @@ pub enum Error {
     StorageError(StorageError),
     UnsupportedConsensusVariant(String),
     ActiveBlockResultsSemaphoreClosed(tokio::sync::AcquireError),
+    RayonTaskWasCanceled,
 }
 
 impl From<Error> for anyhow::Error {
@@ -124,6 +125,7 @@ pub struct Importer<D, E, V> {
     /// the block importer stops committing new blocks and waits for
     /// the resolution of the previous one.
     active_import_results: Arc<Semaphore>,
+    process_thread: rayon::ThreadPool,
 }
 
 impl<D, E, V> Importer<D, E, V> {
@@ -139,6 +141,10 @@ impl<D, E, V> Importer<D, E, V> {
         // that will not be processed.
         let max_block_notify_buffer = config.max_block_notify_buffer;
         let (broadcast, _) = broadcast::channel(max_block_notify_buffer);
+        let process_thread = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .expect("Failed to create a thread pool for the block processing");
 
         Self {
             database: Mutex::new(database),
@@ -148,6 +154,7 @@ impl<D, E, V> Importer<D, E, V> {
             broadcast,
             active_import_results: Arc::new(Semaphore::new(max_block_notify_buffer)),
             guard: Semaphore::new(1),
+            process_thread,
         }
     }
 
@@ -179,11 +186,28 @@ impl<D, E, V> Importer<D, E, V> {
             }
         }
     }
+
+    async fn async_run<OP, Output>(&self, op: OP) -> Result<Output, Error>
+    where
+        OP: FnOnce() -> Output,
+        OP: Send,
+        Output: Send,
+    {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.process_thread.scope_fifo(|_| {
+            let result = op();
+            let _ = sender.send(result);
+        });
+        let result = receiver.await.map_err(|_| Error::RayonTaskWasCanceled)?;
+        Ok(result)
+    }
 }
 
 impl<D, E, V> Importer<D, E, V>
 where
     D: ImporterDatabase + Transactional,
+    E: Send + Sync,
+    V: Send + Sync,
 {
     /// The method commits the result of the block execution attaching the consensus data.
     /// It expects that the `UncommittedResult` contains the result of the block
@@ -221,13 +245,15 @@ where
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
-        let mut guard = self
-            .database
-            .try_lock()
-            .expect("Semaphore prevents concurrent access to the database");
-        let database = guard.deref_mut();
-
-        self._commit_result(result, permit, database)
+        self.async_run(move || {
+            let mut guard = self
+                .database
+                .try_lock()
+                .expect("Semaphore prevents concurrent access to the database");
+            let database = guard.deref_mut();
+            self._commit_result(result, permit, database)
+        })
+        .await?
     }
 
     /// The method commits the result of the block execution and notifies about a new imported block.
@@ -454,14 +480,18 @@ where
 
         let executor = self.executor.clone();
         let verifier = self.verifier.clone();
-        let (result, execute_time) = tokio_rayon::spawn_fifo(|| {
-            let start = Instant::now();
-            let result =
-                Self::verify_and_execute_block_inner(executor, verifier, sealed_block);
-            let execute_time = start.elapsed().as_secs_f64();
-            (result, execute_time)
-        })
-        .await;
+        let (result, execute_time) = self
+            .async_run(|| {
+                let start = Instant::now();
+                let result = Self::verify_and_execute_block_inner(
+                    executor,
+                    verifier,
+                    sealed_block,
+                );
+                let execute_time = start.elapsed().as_secs_f64();
+                (result, execute_time)
+            })
+            .await?;
 
         let result = result?;
 
@@ -482,19 +512,29 @@ where
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
-        let start = Instant::now();
+        let commit_result = self
+            .async_run(move || {
+                let mut guard = self
+                    .database
+                    .try_lock()
+                    .expect("Semaphore prevents concurrent access to the database");
+                let database = guard.deref_mut();
 
-        let mut guard = self
-            .database
-            .try_lock()
-            .expect("Semaphore prevents concurrent access to the database");
-        let database = guard.deref_mut();
-        let commit_result = self._commit_result(result, permit, database);
-        let commit_time = start.elapsed().as_secs_f64();
-        let time = execute_time + commit_time;
+                let start = Instant::now();
+                self._commit_result(result, permit, database).map(|_| start)
+            })
+            .await?;
+
+        let time = if let Ok(start_instant) = commit_result {
+            let commit_time = start_instant.elapsed().as_secs_f64();
+            execute_time + commit_time
+        } else {
+            execute_time
+        };
+
         importer_metrics().execute_and_commit_duration.observe(time);
         // return execution result
-        commit_result
+        commit_result.map(|_| ())
     }
 }
 
