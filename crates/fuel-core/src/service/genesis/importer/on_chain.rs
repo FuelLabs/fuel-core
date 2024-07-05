@@ -220,7 +220,7 @@ fn init_coin(
 
     if transaction
         .storage::<Coins>()
-        .insert(&utxo_id, &compressed_coin)?
+        .replace(&utxo_id, &compressed_coin)?
         .is_some()
     {
         return Err(anyhow!("Coin should not exist"));
@@ -244,7 +244,7 @@ fn init_contract_latest_utxo(
 
     if transaction
         .storage::<ContractsLatestUtxo>()
-        .insert(&contract_id, &entry.value)?
+        .replace(&contract_id, &entry.value)?
         .is_some()
     {
         return Err(anyhow!("Contract utxo should not exist"));
@@ -263,7 +263,7 @@ fn init_contract_raw_code(
     // insert contract code
     if transaction
         .storage::<ContractsRawCode>()
-        .insert(&contract_id, contract)?
+        .replace(&contract_id, contract)?
         .is_some()
     {
         return Err(anyhow!("Contract code should not exist"));
@@ -287,7 +287,7 @@ fn init_da_message(
 
     if transaction
         .storage::<Messages>()
-        .insert(message.id(), &message)?
+        .replace(message.id(), &message)?
         .is_some()
     {
         return Err(anyhow!("Message should not exist"));

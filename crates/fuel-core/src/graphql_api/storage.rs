@@ -129,7 +129,7 @@ where
         block_height: BlockHeight,
         tx_idx: u16,
         tx_id: &Bytes32,
-    ) -> StorageResult<Option<Bytes32>> {
+    ) -> StorageResult<()> {
         self.storage::<OwnedTransactions>().insert(
             &OwnedTransactionIndexKey::new(owner, block_height, tx_idx),
             tx_id,
@@ -141,7 +141,7 @@ where
         id: &Bytes32,
         status: TransactionStatus,
     ) -> StorageResult<Option<TransactionStatus>> {
-        self.storage::<TransactionStatuses>().insert(id, &status)
+        self.storage::<TransactionStatuses>().replace(id, &status)
     }
 
     fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64> {

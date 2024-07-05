@@ -197,7 +197,7 @@ where
 
         let old_changes = storage_transaction
             .storage_as_mut::<ModificationsHistory<Description>>()
-            .insert(&height_u64, &reverse_changes)?;
+            .replace(&height_u64, &reverse_changes)?;
 
         if let Some(old_changes) = old_changes {
             tracing::warn!(
@@ -269,7 +269,7 @@ where
 
         let last_changes = storage_transaction
             .storage_as_mut::<ModificationsHistory<Description>>()
-            .remove(&latest_height)?
+            .take(&latest_height)?
             .ok_or(not_found!(ModificationsHistory<Description>))?;
 
         remove_historical_modifications(
@@ -312,7 +312,7 @@ where
 
             let old_changes = storage_transaction
                 .storage_as_mut::<ModificationsHistory<Description>>()
-                .remove(&old_height)?;
+                .take(&old_height)?;
 
             if let Some(old_changes) = old_changes {
                 remove_historical_modifications(
