@@ -438,7 +438,7 @@ where
         match request_message {
             RequestMessage::Transactions(range) => {
                 let view = self.view_provider.latest_view()?;
-                let has_capacity = self.database_processor.spawn(move || {
+                let result = self.database_processor.spawn(move || {
                     if instant.elapsed() > timeout {
                         tracing::warn!("Get transactions request timed out");
                         return;
@@ -466,7 +466,7 @@ where
                         );
                 });
 
-                if !has_capacity {
+                if result.is_err() {
                     let _ = self.p2p_service.send_response_msg(
                         request_id,
                         ResponseMessage::Transactions(None),
@@ -490,7 +490,7 @@ where
                 }
 
                 let view = self.view_provider.latest_view()?;
-                let has_capacity = self.database_processor.spawn(move || {
+                let result = self.database_processor.spawn(move || {
                     if instant.elapsed() > timeout {
                         tracing::warn!("Get headers request timed out");
                         return;
@@ -517,7 +517,7 @@ where
                         );
                 });
 
-                if !has_capacity {
+                if result.is_err() {
                     let _ = self.p2p_service.send_response_msg(
                         request_id,
                         ResponseMessage::SealedHeaders(None),

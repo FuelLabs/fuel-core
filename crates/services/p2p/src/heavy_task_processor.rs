@@ -6,6 +6,9 @@ pub struct HeavyTaskProcessor {
     semaphore: Arc<Semaphore>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct OutOfCapacity;
+
 impl HeavyTaskProcessor {
     pub fn new(
         number_of_threads: usize,
@@ -22,7 +25,7 @@ impl HeavyTaskProcessor {
         })
     }
 
-    pub fn spawn<OP>(&self, op: OP) -> bool
+    pub fn spawn<OP>(&self, op: OP) -> Result<(), OutOfCapacity>
     where
         OP: FnOnce() + Send + 'static,
     {
@@ -33,9 +36,9 @@ impl HeavyTaskProcessor {
                 let _drop = permit;
                 op();
             });
-            true
+            Ok(())
         } else {
-            false
+            Err(OutOfCapacity)
         }
     }
 }
@@ -64,7 +67,7 @@ mod tests {
         });
 
         // Then
-        assert!(result);
+        assert_eq!(result, Ok(()));
         let timeout = tokio::time::timeout(Duration::from_secs(1), receiver).await;
         timeout
             .expect("Shouldn't timeout")
@@ -80,7 +83,7 @@ mod tests {
         let first_spawn_result = heavy_task_processor.spawn(|| {
             sleep(Duration::from_secs(1));
         });
-        assert_eq!(first_spawn_result, true);
+        assert_eq!(first_spawn_result, Ok(()));
 
         // When
         let second_spawn_result = heavy_task_processor.spawn(|| {
@@ -88,7 +91,7 @@ mod tests {
         });
 
         // Then
-        assert_eq!(second_spawn_result, false);
+        assert_eq!(second_spawn_result, Err(OutOfCapacity));
     }
 
     #[tokio::test]
@@ -103,7 +106,7 @@ mod tests {
             sleep(Duration::from_secs(1));
             sender.send(()).unwrap();
         });
-        assert!(first_spawn);
+        assert_eq!(first_spawn, Ok(()));
         receiver.await.unwrap();
 
         // When
@@ -112,7 +115,7 @@ mod tests {
         });
 
         // Then
-        assert!(second_spawn);
+        assert_eq!(second_spawn, Ok(()));
     }
 
     #[tokio::test]
@@ -129,7 +132,7 @@ mod tests {
             });
 
             // Then
-            assert_eq!(result, true);
+            assert_eq!(result, Ok(()));
         }
     }
 
@@ -151,7 +154,7 @@ mod tests {
                 sleep(Duration::from_secs(1));
                 broadcast_sender.send(()).unwrap();
             });
-            assert_eq!(result, true);
+            assert_eq!(result, Ok(()));
         }
         drop(broadcast_sender);
 
@@ -178,7 +181,7 @@ mod tests {
                 sleep(Duration::from_secs(1));
                 broadcast_sender.send(()).unwrap();
             });
-            assert_eq!(result, true);
+            assert_eq!(result, Ok(()));
         }
         drop(broadcast_sender);
 
