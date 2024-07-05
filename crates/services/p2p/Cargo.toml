@@ -17,7 +17,6 @@ fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true } # TODO make this a feature
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
-fuel-core-trace = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = "0.4"

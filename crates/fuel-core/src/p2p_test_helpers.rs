@@ -401,7 +401,10 @@ pub fn make_config(name: String, mut node_config: Config) -> Config {
 
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
-    let time_limit = Duration::from_secs(4);
+    // Test coverage slows down the execution a lot, and while running all tests,
+    // it may require a lot of time to start the node. We have a
+    // timeout here to watch infinity loops, so it is okay to use 120 seconds.
+    let time_limit = Duration::from_secs(120);
     let node = tokio::time::timeout(
         time_limit,
         FuelService::from_database(db.clone(), node_config),

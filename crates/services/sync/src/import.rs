@@ -5,8 +5,8 @@
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
+    TraceErr,
 };
-use fuel_core_trace::TraceErr;
 use fuel_core_types::{
     self,
     blockchain::{

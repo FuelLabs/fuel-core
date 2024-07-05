@@ -32,9 +32,9 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TraceErr,
 };
 use fuel_core_storage::transactional::AtomicView;
-use fuel_core_trace::TraceErr;
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
     fuel_tx::{
