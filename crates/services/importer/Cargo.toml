@@ -15,6 +15,7 @@ derive_more = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+parking_lot = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }
