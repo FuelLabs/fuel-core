@@ -1251,7 +1251,7 @@ where
 
         if storage_tx
             .storage::<ProcessedTransactions>()
-            .insert(&coinbase_id, &())?
+            .replace(&coinbase_id, &())?
             .is_some()
         {
             return Err(ExecutorError::TransactionIdCollision(coinbase_id))
@@ -1637,7 +1637,7 @@ where
                     // prune utxo from db
                     let coin = db
                         .storage::<Coins>()
-                        .remove(utxo_id)
+                        .take(utxo_id)
                         .map_err(Into::into)
                         .transpose()
                         .unwrap_or_else(|| {
@@ -1666,7 +1666,7 @@ where
                     // and cleanup message contents
                     let message = db
                         .storage::<Messages>()
-                        .remove(nonce)?
+                        .take(nonce)?
                         .ok_or(ExecutorError::MessageDoesNotExist(*nonce))?;
                     execution_data
                         .events
@@ -1981,7 +1981,7 @@ where
             }
             .into();
 
-            if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+            if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
             execution_data

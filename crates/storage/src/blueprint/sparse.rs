@@ -212,12 +212,12 @@ where
         let key_encoder = KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
         let value = ValueCodec::encode_as_value(value);
-        let prev = storage
-            .replace(key_bytes.as_ref(), column, value.clone())?
-            .map(|value| {
-                ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
-            })
-            .transpose()?;
+        let prev =
+            KeyValueMutate::replace(storage, key_bytes.as_ref(), column, value.clone())?
+                .map(|value| {
+                    ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
+                })
+                .transpose()?;
 
         Self::insert_into_tree(storage, key, key_bytes.as_ref(), value.as_ref())?;
         Ok(prev)
@@ -230,8 +230,7 @@ where
     ) -> StorageResult<Option<M::OwnedValue>> {
         let key_encoder = KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
-        let prev = storage
-            .take(key_bytes.as_ref(), column)?
+        let prev = KeyValueMutate::take(storage, key_bytes.as_ref(), column)?
             .map(|value| {
                 ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
             })
@@ -641,7 +640,7 @@ macro_rules! root_storage_tests {
                 // Then
                 let result = storage_transaction
                     .storage_as_mut::<$table>()
-                    .insert(&given_key, &state_value)
+                    .replace(&given_key, &state_value)
                     .unwrap();
 
                 assert!(result.is_some());
