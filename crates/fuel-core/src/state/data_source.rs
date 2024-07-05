@@ -28,8 +28,8 @@ pub struct DataSource<Description, Stage>
 where
     Description: DatabaseDescription,
 {
-    pub data: DataSourceType<Description>,
-    pub stage: Stage,
+    pub(crate) data: DataSourceType<Description>,
+    pub(crate) stage: Stage,
 }
 
 impl<Description, Stage> DataSource<Description, Stage>

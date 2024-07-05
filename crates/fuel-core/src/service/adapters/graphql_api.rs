@@ -16,6 +16,7 @@ use crate::{
         TxPoolPort,
     },
     service::adapters::{
+        import_result_provider::ImportResultProvider,
         P2PAdapter,
         TxPoolAdapter,
     },
@@ -151,12 +152,6 @@ impl P2pPort for P2PAdapter {
     }
 }
 
-impl worker::BlockImporter for BlockImporterAdapter {
-    fn block_events(&self) -> BoxStream<SharedImportResult> {
-        self.events()
-    }
-}
-
 impl worker::TxPool for TxPoolAdapter {
     fn send_complete(
         &self,
@@ -178,5 +173,36 @@ impl GasPriceEstimate for StaticGasPrice {
 impl ConsensusProvider for ConsensusParametersProvider {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
+    }
+}
+
+#[derive(Clone)]
+pub struct GraphQLBlockImporter {
+    block_importer_adapter: BlockImporterAdapter,
+    import_result_provider_adapter: ImportResultProvider,
+}
+
+impl GraphQLBlockImporter {
+    pub fn new(
+        block_importer_adapter: BlockImporterAdapter,
+        import_result_provider_adapter: ImportResultProvider,
+    ) -> Self {
+        Self {
+            block_importer_adapter,
+            import_result_provider_adapter,
+        }
+    }
+}
+
+impl worker::BlockImporter for GraphQLBlockImporter {
+    fn block_events(&self) -> BoxStream<SharedImportResult> {
+        self.block_importer_adapter.events_shared_result()
+    }
+
+    fn block_event_at_height(
+        &self,
+        height: Option<BlockHeight>,
+    ) -> anyhow::Result<SharedImportResult> {
+        self.import_result_provider_adapter.result_at_height(height)
     }
 }

@@ -139,8 +139,12 @@ mod structured_storage_tests {
                 .root(&contract_id)
                 .expect("Unable to retrieve Merkle root");
             for key in keys.iter() {
-                <_ as StorageWrite<ContractsState>>::write(&mut structure, key, &value)
-                    .expect("Unable to write storage");
+                <_ as StorageWrite<ContractsState>>::write_bytes(
+                    &mut structure,
+                    key,
+                    &value,
+                )
+                .expect("Unable to write storage");
                 let new_merkle_root = structure
                     .storage::<ContractsState>()
                     .root(&contract_id)
@@ -196,8 +200,12 @@ mod structured_storage_tests {
                 .root(&contract_id)
                 .expect("Unable to retrieve Merkle root");
             for key in keys.iter() {
-                <_ as StorageWrite<ContractsState>>::replace(&mut structure, key, &value)
-                    .expect("Unable to write storage");
+                <_ as StorageWrite<ContractsState>>::replace_bytes(
+                    &mut structure,
+                    key,
+                    &value,
+                )
+                .expect("Unable to write storage");
                 let new_merkle_root = structure
                     .storage::<ContractsState>()
                     .root(&contract_id)
@@ -251,8 +259,12 @@ mod structured_storage_tests {
             .root(&contract_id)
             .expect("Unable to retrieve Merkle root");
         for key in keys.iter() {
-            <_ as StorageWrite<ContractsState>>::replace(&mut structure, key, &value)
-                .expect("Unable to write storage");
+            <_ as StorageWrite<ContractsState>>::replace_bytes(
+                &mut structure,
+                key,
+                &value,
+            )
+            .expect("Unable to write storage");
 
             let new_merkle_root = structure
                 .storage::<ContractsState>()
@@ -267,10 +279,14 @@ mod structured_storage_tests {
         let key = ContractsStateKey::from((&contract_id, &state_key));
 
         let merkle_root_replace = {
-            <_ as StorageWrite<ContractsState>>::write(&mut structure, &key, &value)
-                .expect("Unable to write storage");
+            <_ as StorageWrite<ContractsState>>::write_bytes(
+                &mut structure,
+                &key,
+                &value,
+            )
+            .expect("Unable to write storage");
 
-            <_ as StorageWrite<ContractsState>>::take(&mut structure, &key)
+            <_ as StorageWrite<ContractsState>>::take_bytes(&mut structure, &key)
                 .expect("Unable to take value from storage");
 
             structure
@@ -281,8 +297,12 @@ mod structured_storage_tests {
 
         // Then
         let merkle_root_remove = {
-            <_ as StorageWrite<ContractsState>>::write(&mut structure, &key, &value)
-                .expect("Unable to write storage");
+            <_ as StorageWrite<ContractsState>>::write_bytes(
+                &mut structure,
+                &key,
+                &value,
+            )
+            .expect("Unable to write storage");
 
             structure
                 .storage::<ContractsState>()

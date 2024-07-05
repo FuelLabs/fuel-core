@@ -19,7 +19,6 @@ use crate::{
         },
         generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
-        key_value_view::KeyValueViewWrapper,
         ChangesIterator,
         ColumnType,
         IterableKeyValueView,
@@ -67,7 +66,14 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
-use crate::state::rocks_db::RocksDb;
+use crate::state::{
+    historical_rocksdb::{
+        description::Historical,
+        HistoricalRocksDB,
+        StateRewindPolicy,
+    },
+    rocks_db::RocksDb,
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::storage::{ GasPriceMetadata};
@@ -186,9 +192,24 @@ where
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open_rocksdb(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
+    pub fn open_rocksdb(
+        path: &Path,
+        capacity: impl Into<Option<usize>>,
+        state_rewind_policy: StateRewindPolicy,
+    ) -> Result<Self> {
         use anyhow::Context;
-        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).with_context(|| format!("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db e.g. `rm -rf {path:?}`"))?;
+        let db = HistoricalRocksDB::<Description>::default_open(
+            path,
+            capacity.into(),
+            state_rewind_policy,
+        )
+        .map_err(Into::<anyhow::Error>::into)
+        .with_context(|| {
+            format!(
+                "Failed to open rocksdb, you may need to wipe a \
+                pre-existing incompatible db e.g. `rm -rf {path:?}`"
+            )
+        })?;
 
         Ok(Self::new(Arc::new(db)))
     }
@@ -217,8 +238,10 @@ where
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp() -> Self {
-        let db = RocksDb::<Description>::default_open_temp(None).unwrap();
-        let data = Arc::new(db);
+        let db = RocksDb::<Historical<Description>>::default_open_temp(None).unwrap();
+        let historical_db =
+            HistoricalRocksDB::new(db, StateRewindPolicy::NoRewind).unwrap();
+        let data = Arc::new(historical_db);
         Self::from_storage(DataSource::new(data, Stage::default()))
     }
 }
@@ -243,6 +266,28 @@ where
     }
 }
 
+impl<Description> Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    pub fn rollback_last_block(&self) -> StorageResult<()> {
+        let mut lock = self.inner_storage().stage.height.lock();
+        let height = *lock;
+
+        let Some(height) = height else {
+            return Err(
+                anyhow::anyhow!("Database doesn't have a height to rollback").into(),
+            );
+        };
+        self.inner_storage().data.rollback_last_block()?;
+        let new_height = height.rollback_height();
+        *lock = new_height;
+        tracing::info!("Rollback to the height {:?} was successful", new_height);
+
+        Ok(())
+    }
+}
+
 impl<Description> AtomicView for Database<Description>
 where
     Description: DatabaseDescription,
@@ -262,21 +307,21 @@ where
     type ViewAtHeight = KeyValueView<ColumnType<Description>>;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.stage.height.lock()
+        *self.inner_storage().stage.height.lock()
     }
 
     fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
-        let lock = self.stage.height.lock();
+        let lock = self.inner_storage().stage.height.lock();
 
-        if let Some(current_height) = *lock {
-            if &current_height == height {
-                return self.latest_view().map(|view| view.into_key_value_view());
+        match *lock {
+            None => return self.latest_view().map(|view| view.into_key_value_view()),
+            Some(current_height) if &current_height == height => {
+                return self.latest_view().map(|view| view.into_key_value_view())
             }
-        }
-        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
-        Ok(KeyValueView::from_storage(KeyValueViewWrapper::new(
-            self.clone(),
-        )))
+            _ => {}
+        };
+
+        self.inner_storage().data.view_at_height(height)
     }
 }
 
@@ -1014,8 +1059,12 @@ mod tests {
         // in memory passes
         test(db);
 
-        let db = Database::<OnChain>::open_rocksdb(temp_dir.path(), 1024 * 1024 * 1024)
-            .unwrap();
+        let db = Database::<OnChain>::open_rocksdb(
+            temp_dir.path(),
+            1024 * 1024 * 1024,
+            Default::default(),
+        )
+        .unwrap();
         // rocks db fails
         test(db);
     }

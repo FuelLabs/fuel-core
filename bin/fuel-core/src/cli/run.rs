@@ -58,6 +58,7 @@ use pyroscope_pprofrs::{
 use std::{
     env,
     net,
+    num::NonZeroU64,
     path::PathBuf,
     str::FromStr,
 };
@@ -66,6 +67,9 @@ use tracing::{
     trace,
     warn,
 };
+
+#[cfg(feature = "rocksdb")]
+use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
 use super::DEFAULT_DATABASE_CACHE_SIZE;
 
@@ -114,6 +118,20 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
+    #[cfg(feature = "rocksdb")]
+    /// Defines the state rewind policy for the database when RocksDB is enabled.
+    ///
+    /// The duration defines how many blocks back the rewind feature works.
+    /// Assuming each block requires one second to produce.
+    ///
+    /// The default value is 7 days = 604800 blocks.
+    ///
+    /// The `BlockHeight` is `u32`, meaning the maximum possible number of blocks
+    /// is less than 137 years. `2^32 / 24 / 60 / 60 / 365` = `136.1925195332` years.
+    /// If the value is 136 years or more, the rewind feature is enabled for all blocks.
+    #[clap(long = "state-rewind-duration", default_value = "7d", env)]
+    pub state_rewind_duration: humantime::Duration,
+
     /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
     #[arg(name = "SNAPSHOT", long = "snapshot", env)]
     pub snapshot: Option<PathBuf>,
@@ -122,6 +140,10 @@ pub struct Command {
     /// configuration.
     #[arg(name = "DB_PRUNE", long = "db-prune", env, default_value = "false")]
     pub db_prune: bool,
+
+    /// The determines whether to continue the services on internal error or not.
+    #[clap(long = "continue-services-on-error", default_value = "false", env)]
+    pub continue_on_error: bool,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -214,8 +236,11 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_duration,
             db_prune,
             snapshot,
+            continue_on_error,
             vm_backtrace,
             debug,
             utxo_validation,
@@ -297,10 +322,36 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        #[cfg(feature = "rocksdb")]
+        let state_rewind_policy = {
+            if database_type != DbType::RocksDb {
+                tracing::warn!("State rewind policy is only supported with RocksDB");
+            }
+
+            let blocks = state_rewind_duration.as_secs();
+
+            if blocks == 0 {
+                StateRewindPolicy::NoRewind
+            } else {
+                let maximum_blocks: humantime::Duration = "136y".parse()?;
+
+                if blocks >= maximum_blocks.as_secs() {
+                    StateRewindPolicy::RewindFullRange
+                } else {
+                    StateRewindPolicy::RewindRange {
+                        size: NonZeroU64::new(blocks)
+                            .expect("The value is not zero above"),
+                    }
+                }
+            }
+        };
+
         let combined_db_config = CombinedDatabaseConfig {
             database_path,
             database_type,
             max_database_cache_size,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_policy,
         };
 
         let block_importer =
@@ -338,6 +389,7 @@ impl Command {
             snapshot_reader,
             debug,
             native_executor_version,
+            continue_on_error,
             utxo_validation,
             block_production: trigger,
             vm: VMConfig {
@@ -376,7 +428,7 @@ impl Command {
 }
 
 pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
-    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+    #[cfg(feature = "rocksdb")]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }

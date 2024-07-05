@@ -34,7 +34,11 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::fuel_gas_price_provider::FuelGasPriceProvider;
+use crate::service::adapters::{
+    fuel_gas_price_provider::FuelGasPriceProvider,
+    graphql_api::GraphQLBlockImporter,
+    import_result_provider::ImportResultProvider,
+};
 use fuel_core_gas_price_service::static_updater::{
     StaticAlgorithm,
     StaticAlgorithmUpdater,
@@ -91,6 +95,8 @@ pub fn init_sub_services(
             native_executor_version: config.native_executor_version,
         },
     );
+    let import_result_provider =
+        ImportResultProvider::new(database.on_chain().clone(), executor.clone());
 
     let verifier = VerifierAdapter::new(
         &genesis_block,
@@ -233,11 +239,15 @@ pub fn init_sub_services(
     let schema = crate::schema::dap::init(build_schema(), config.debug)
         .data(database.on_chain().clone());
 
+    let graphql_block_importer =
+        GraphQLBlockImporter::new(importer_adapter.clone(), import_result_provider);
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
         tx_pool_adapter.clone(),
-        importer_adapter.clone(),
+        graphql_block_importer,
+        database.on_chain().clone(),
         database.off_chain().clone(),
         chain_id,
+        config.continue_on_error,
     );
 
     let graphql_config = GraphQLConfig {

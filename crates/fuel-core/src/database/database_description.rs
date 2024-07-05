@@ -5,16 +5,17 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
+pub mod gas_price;
 pub mod off_chain;
 pub mod on_chain;
 pub mod relayer;
 
-pub mod gas_price;
-
-pub trait DatabaseHeight: PartialEq + Default + Copy + Send + Sync {
+pub trait DatabaseHeight: PartialEq + Default + Debug + Copy + Send + Sync {
     fn as_u64(&self) -> u64;
 
     fn advance_height(&self) -> Option<Self>;
+
+    fn rollback_height(&self) -> Option<Self>;
 }
 
 impl DatabaseHeight for BlockHeight {
@@ -26,6 +27,10 @@ impl DatabaseHeight for BlockHeight {
     fn advance_height(&self) -> Option<Self> {
         self.succ()
     }
+
+    fn rollback_height(&self) -> Option<Self> {
+        self.pred()
+    }
 }
 
 impl DatabaseHeight for DaBlockHeight {
@@ -36,10 +41,14 @@ impl DatabaseHeight for DaBlockHeight {
     fn advance_height(&self) -> Option<Self> {
         self.0.checked_add(1).map(Into::into)
     }
+
+    fn rollback_height(&self) -> Option<Self> {
+        self.0.checked_sub(1).map(Into::into)
+    }
 }
 
 /// The description of the database that makes it unique.
-pub trait DatabaseDescription: 'static + Clone + Debug + Send + Sync {
+pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
     /// The type of the column used by the database.
     type Column: StorageColumn + strum::EnumCount + enum_iterator::Sequence;
     /// The type of the height of the database used to track commits.
@@ -49,7 +58,7 @@ pub trait DatabaseDescription: 'static + Clone + Debug + Send + Sync {
     fn version() -> u32;
 
     /// Returns the name of the database.
-    fn name() -> &'static str;
+    fn name() -> String;
 
     /// Returns the column used to store the metadata.
     fn metadata_column() -> Self::Column;

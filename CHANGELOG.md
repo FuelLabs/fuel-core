@@ -8,11 +8,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
+- [#2014](https://github.com/FuelLabs/fuel-core/pull/2014): Added a separate thread for the block importer.
+- [#2013](https://github.com/FuelLabs/fuel-core/pull/2013): Added a separate thread to process P2P database lookups.
+- [#2004](https://github.com/FuelLabs/fuel-core/pull/2004): Added new CLI argument `continue-services-on-error` to control internal flow of services.
+- [#2004](https://github.com/FuelLabs/fuel-core/pull/2004): Added handling of incorrect shutdown of the off-chain GraphQL worker by using state rewind feature.
+- [#2007](https://github.com/FuelLabs/fuel-core/pull/2007): Improved metrics:
+  - Added database metrics per column.
+  - Added statistic about commit time of each database.
+  - Refactored how metrics are registered: Now, we use only one register shared between all metrics. This global register is used to encode all metrics.
+- [#1996](https://github.com/FuelLabs/fuel-core/pull/1996): Added support for rollback command when state rewind feature is enabled. The command allows the rollback of the state of the blockchain several blocks behind until the end of the historical window. The default historical window it 7 days.
+- [#1996](https://github.com/FuelLabs/fuel-core/pull/1996): Added support for the state rewind feature. The feature allows the execution of the blocks in the past and the same execution results to be received. Together with forkless upgrades, execution of any block from the past is possible if historical data exist for the target block height.
 - [#1994](https://github.com/FuelLabs/fuel-core/pull/1994): Added the actual implementation for the `AtomicView::latest_view`.
 - [#1972](https://github.com/FuelLabs/fuel-core/pull/1972): Implement `AlgorithmUpdater` for `GasPriceService`
 - [#1948](https://github.com/FuelLabs/fuel-core/pull/1948): Add new `AlgorithmV1` and `AlgorithmUpdaterV1` for the gas price. Include tools for analysis
 
 ### Changed
+- [#2010](https://github.com/FuelLabs/fuel-core/pull/2010): Updated the block importer to allow more blocks to be in the queue. It improves synchronization speed and mitigate the impact of other services on synchronization speed.
+- [#2006](https://github.com/FuelLabs/fuel-core/pull/2006): Process block importer events first under P2P pressure.
 - [#2002](https://github.com/FuelLabs/fuel-core/pull/2002): Adapted the block producer to react to checked transactions that were using another version of consensus parameters during validation in the TxPool. After an upgrade of the consensus parameters of the network, TxPool could store invalid `Checked` transactions. This change fixes that by tracking the version that was used to validate the transactions.
 - [#1999](https://github.com/FuelLabs/fuel-core/pull/1999): Minimize the number of panics in the codebase.
 - [#1990](https://github.com/FuelLabs/fuel-core/pull/1990): Use latest view for mutate GraphQL queries after modification of the node.
@@ -20,6 +32,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1980](https://github.com/FuelLabs/fuel-core/pull/1980): Add `Transaction` to relayer 's event filter
 
 #### Breaking
+- [#2012](https://github.com/FuelLabs/fuel-core/pull/2012): Bumped the `fuel-vm` to `0.55.0` release. More about the change [here](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0).
 - [#2001](https://github.com/FuelLabs/fuel-core/pull/2001): Prevent GraphQL query body to be huge and cause OOM. The default body size is `1MB`. The limit can be changed by the `graphql-request-body-bytes-limit` CLI argument.
 - [#1991](https://github.com/FuelLabs/fuel-core/pull/1991): Prepare the database to use different types than `Database` for atomic view.
 - [#1989](https://github.com/FuelLabs/fuel-core/pull/1989): Extract `HistoricalView` trait from the `AtomicView`.

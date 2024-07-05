@@ -7,6 +7,7 @@ pub mod config;
 pub mod discovery;
 pub mod gossipsub;
 pub mod heartbeat;
+pub mod heavy_task_processor;
 pub mod p2p_service;
 pub mod peer_manager;
 pub mod peer_report;

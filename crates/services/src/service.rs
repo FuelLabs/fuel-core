@@ -8,10 +8,7 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_metrics::{
     future_tracker::FutureTracker,
-    services::{
-        services_metrics,
-        ServiceLifecycle,
-    },
+    services::ServicesMetrics,
 };
 use futures::FutureExt;
 use std::any::Any;
@@ -144,7 +141,7 @@ where
     /// Initializes a new `ServiceRunner` containing a `RunnableService` with parameters for underlying `Task`
     pub fn new_with_params(service: S, params: S::TaskParams) -> Self {
         let shared = service.shared_data();
-        let metric = services_metrics().register_service(S::NAME);
+        let metric = ServicesMetrics::register_service(S::NAME);
         let state = initialize_loop(service, params, metric);
         Self { shared, state }
     }
@@ -245,7 +242,7 @@ where
 fn initialize_loop<S>(
     service: S,
     params: S::TaskParams,
-    metric: ServiceLifecycle,
+    metric: ServicesMetrics,
 ) -> Shared<watch::Sender<State>>
 where
     S: RunnableService + 'static,
@@ -302,7 +299,7 @@ async fn run<S>(
     service: S,
     sender: Shared<watch::Sender<State>>,
     params: S::TaskParams,
-    metric: ServiceLifecycle,
+    metric: ServicesMetrics,
 ) where
     S: RunnableService + 'static,
 {
@@ -345,7 +342,7 @@ async fn run<S>(
 async fn run_task<S: RunnableTask>(
     task: &mut S,
     mut state: StateWatcher,
-    metric: &ServiceLifecycle,
+    metric: &ServicesMetrics,
 ) -> Option<Box<dyn Any + Send>> {
     let mut got_panic = None;
 

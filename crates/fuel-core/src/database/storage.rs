@@ -23,7 +23,7 @@ where
     StructuredStorage<Storage>: StorageInspect<M, Error = StorageError>,
     for<'a> StorageTransaction<&'a Storage>: StorageMutate<M, Error = StorageError>,
 {
-    fn insert(
+    fn replace(
         &mut self,
         key: &M::Key,
         value: &M::Value,
@@ -33,18 +33,18 @@ where
             ConflictPolicy::Overwrite,
             Default::default(),
         );
-        let prev = transaction.storage_as_mut::<M>().insert(key, value)?;
+        let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }
 
-    fn remove(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
+    fn take(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
         let mut transaction = StorageTransaction::transaction(
             self.as_ref(),
             ConflictPolicy::Overwrite,
             Default::default(),
         );
-        let prev = transaction.storage_as_mut::<M>().remove(key)?;
+        let prev = transaction.storage_as_mut::<M>().take(key)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }
@@ -57,18 +57,18 @@ where
     for<'a> StorageTransaction<&'a Storage>: StorageWrite<M, Error = StorageError>,
     Self: Modifiable,
 {
-    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
         let mut transaction = StorageTransaction::transaction(
             self.as_ref(),
             ConflictPolicy::Overwrite,
             Default::default(),
         );
-        let prev = <_ as StorageWrite<M>>::write(&mut transaction, key, buf)?;
+        let prev = <_ as StorageWrite<M>>::write_bytes(&mut transaction, key, buf)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }
 
-    fn replace(
+    fn replace_bytes(
         &mut self,
         key: &M::Key,
         buf: &[u8],
@@ -78,18 +78,18 @@ where
             ConflictPolicy::Overwrite,
             Default::default(),
         );
-        let prev = <_ as StorageWrite<M>>::replace(&mut transaction, key, buf)?;
+        let prev = <_ as StorageWrite<M>>::replace_bytes(&mut transaction, key, buf)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }
 
-    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn take_bytes(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut transaction = StorageTransaction::transaction(
             self.as_ref(),
             ConflictPolicy::Overwrite,
             Default::default(),
         );
-        let prev = <_ as StorageWrite<M>>::take(&mut transaction, key)?;
+        let prev = <_ as StorageWrite<M>>::take_bytes(&mut transaction, key)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }

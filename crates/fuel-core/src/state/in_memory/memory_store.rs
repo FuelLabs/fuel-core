@@ -8,6 +8,7 @@ use crate::{
         iterable_key_value_view::IterableKeyValueViewWrapper,
         IterDirection,
         IterableKeyValueView,
+        KeyValueView,
         TransactableStorage,
     },
 };
@@ -35,10 +36,7 @@ use std::{
     collections::BTreeMap,
     fmt::Debug,
     ops::Deref,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Mutex,
 };
 
 #[derive(Debug)]
@@ -161,11 +159,30 @@ where
         Ok(())
     }
 
+    fn view_at_height(
+        &self,
+        _: &Description::Height,
+    ) -> StorageResult<KeyValueView<Self::Column>> {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
+        Err(
+            anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
+                .into(),
+        )
+    }
+
     fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
         let view = self.create_view();
         Ok(IterableKeyValueView::from_storage(
-            IterableKeyValueViewWrapper::new(Arc::new(view)),
+            IterableKeyValueViewWrapper::new(view),
         ))
+    }
+
+    fn rollback_last_block(&self) -> StorageResult<()> {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
+        Err(
+            anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
+                .into(),
+        )
     }
 }
 
