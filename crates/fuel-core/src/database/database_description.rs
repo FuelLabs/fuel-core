@@ -57,7 +57,7 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
     fn version() -> u32;
 
     /// Returns the name of the database.
-    fn name() -> &'static str;
+    fn name() -> String;
 
     /// Returns the column used to store the metadata.
     fn metadata_column() -> Self::Column;
