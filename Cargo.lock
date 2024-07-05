@@ -3060,6 +3060,7 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types",
  "mockall",
+ "parking_lot",
  "test-case",
  "tokio",
  "tokio-rayon",

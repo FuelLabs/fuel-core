@@ -39,15 +39,13 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
+use parking_lot::Mutex;
 use std::{
     ops::{
         Deref,
         DerefMut,
     },
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
     time::{
         Instant,
         SystemTime,
@@ -56,7 +54,8 @@ use std::{
 };
 use tokio::sync::{
     broadcast,
-    oneshot,
+    OwnedSemaphorePermit,
+    Semaphore,
     TryAcquireError,
 };
 
@@ -97,6 +96,7 @@ pub enum Error {
     #[from]
     StorageError(StorageError),
     UnsupportedConsensusVariant(String),
+    ActiveBlockResultsSemaphoreClosed(tokio::sync::AcquireError),
 }
 
 impl From<Error> for anyhow::Error {
@@ -118,11 +118,12 @@ pub struct Importer<D, E, V> {
     verifier: Arc<V>,
     chain_id: ChainId,
     broadcast: broadcast::Sender<ImporterResult>,
-    /// The channel to notify about the end of the processing of the previous block by all listeners.
-    /// It is used to await until all receivers of the notification process the `SharedImportResult`
-    /// before starting committing a new block.
-    prev_block_process_result: Mutex<Option<oneshot::Receiver<()>>>,
-    guard: tokio::sync::Semaphore,
+    guard: Semaphore,
+    /// The semaphore tracks the number of unprocessed `SharedImportResult`.
+    /// If the number of unprocessed results is more than the threshold,
+    /// the block importer stops committing new blocks and waits for
+    /// the resolution of the previous one.
+    active_import_results: Arc<Semaphore>,
 }
 
 impl<D, E, V> Importer<D, E, V> {
@@ -133,7 +134,11 @@ impl<D, E, V> Importer<D, E, V> {
         executor: E,
         verifier: V,
     ) -> Self {
-        let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
+        // We use semaphore as a back pressure mechanism instead of a `broadcast`
+        // channel because we want to prevent committing to the database results
+        // that will not be processed.
+        let max_block_notify_buffer = config.max_block_notify_buffer;
+        let (broadcast, _) = broadcast::channel(max_block_notify_buffer);
 
         Self {
             database: Mutex::new(database),
@@ -141,8 +146,8 @@ impl<D, E, V> Importer<D, E, V> {
             verifier: Arc::new(verifier),
             chain_id,
             broadcast,
-            prev_block_process_result: Default::default(),
-            guard: tokio::sync::Semaphore::new(1),
+            active_import_results: Arc::new(Semaphore::new(max_block_notify_buffer)),
+            guard: Semaphore::new(1),
         }
     }
 
@@ -198,35 +203,31 @@ where
         result: UncommittedResult<Changes>,
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
-        // It is safe to unwrap the channel because we have the `_guard`.
-        let previous_block_result = self
-            .prev_block_process_result
-            .lock()
-            .expect("poisoned")
-            .take();
 
         // Await until all receivers of the notification process the result.
-        if let Some(channel) = previous_block_result {
-            const TIMEOUT: u64 = 20;
-            let result =
-                tokio::time::timeout(tokio::time::Duration::from_secs(TIMEOUT), channel)
-                    .await;
+        const TIMEOUT: u64 = 20;
+        let await_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(TIMEOUT),
+            self.active_import_results.clone().acquire_owned(),
+        )
+        .await;
 
-            if result.is_err() {
-                tracing::error!(
-                    "The previous block processing \
+        let Ok(permit) = await_result else {
+            tracing::error!(
+                "The previous block processing \
                     was not finished for {TIMEOUT} seconds."
-                );
-                return Err(Error::PreviousBlockProcessingNotFinished)
-            }
-        }
+            );
+            return Err(Error::PreviousBlockProcessingNotFinished)
+        };
+        let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
+
         let mut guard = self
             .database
             .try_lock()
             .expect("Semaphore prevents concurrent access to the database");
         let database = guard.deref_mut();
 
-        self._commit_result(result, database)
+        self._commit_result(result, permit, database)
     }
 
     /// The method commits the result of the block execution and notifies about a new imported block.
@@ -242,6 +243,7 @@ where
     fn _commit_result(
         &self,
         result: UncommittedResult<Changes>,
+        permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
         let (result, changes) = result.into();
@@ -327,16 +329,12 @@ where
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
 
-        // The `tokio::sync::oneshot::Sender` is used to notify about the end
-        // of the processing of a new block by all listeners.
-        let (sender, receiver) = oneshot::channel();
         let result = ImporterResult {
-            shared_result: Arc::new(Awaiter::new(result, sender)),
+            shared_result: Arc::new(Awaiter::new(result, permit)),
             #[cfg(feature = "test-helpers")]
             changes: Arc::new(changes_clone),
         };
         let _ = self.broadcast.send(result);
-        *self.prev_block_process_result.lock().expect("poisoned") = Some(receiver);
 
         Ok(())
     }
@@ -467,28 +465,22 @@ where
 
         let result = result?;
 
-        // It is safe to unwrap the channel because we have the `_guard`.
-        let previous_block_result = self
-            .prev_block_process_result
-            .lock()
-            .expect("poisoned")
-            .take();
-
         // Await until all receivers of the notification process the result.
-        if let Some(channel) = previous_block_result {
-            const TIMEOUT: u64 = 20;
-            let result =
-                tokio::time::timeout(tokio::time::Duration::from_secs(TIMEOUT), channel)
-                    .await;
+        const TIMEOUT: u64 = 20;
+        let await_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(TIMEOUT),
+            self.active_import_results.clone().acquire_owned(),
+        )
+        .await;
 
-            if result.is_err() {
-                tracing::error!(
-                    "The previous block processing \
+        let Ok(permit) = await_result else {
+            tracing::error!(
+                "The previous block processing \
                      was not finished for {TIMEOUT} seconds."
-                );
-                return Err(Error::PreviousBlockProcessingNotFinished)
-            }
-        }
+            );
+            return Err(Error::PreviousBlockProcessingNotFinished)
+        };
+        let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
         let start = Instant::now();
 
@@ -497,7 +489,7 @@ where
             .try_lock()
             .expect("Semaphore prevents concurrent access to the database");
         let database = guard.deref_mut();
-        let commit_result = self._commit_result(result, database);
+        let commit_result = self._commit_result(result, permit, database);
         let commit_time = start.elapsed().as_secs_f64();
         let time = execute_time + commit_time;
         importer_metrics().execute_and_commit_duration.observe(time);
@@ -509,15 +501,7 @@ where
 /// The wrapper around `ImportResult` to notify about the end of the processing of a new block.
 struct Awaiter {
     result: ImportResult,
-    release_channel: Option<oneshot::Sender<()>>,
-}
-
-impl Drop for Awaiter {
-    fn drop(&mut self) {
-        if let Some(release_channel) = core::mem::take(&mut self.release_channel) {
-            let _ = release_channel.send(());
-        }
-    }
+    _permit: OwnedSemaphorePermit,
 }
 
 impl Deref for Awaiter {
@@ -529,10 +513,10 @@ impl Deref for Awaiter {
 }
 
 impl Awaiter {
-    fn new(result: ImportResult, channel: oneshot::Sender<()>) -> Self {
+    fn new(result: ImportResult, permit: OwnedSemaphorePermit) -> Self {
         Self {
             result,
-            release_channel: Some(channel),
+            _permit: permit,
         }
     }
 }
