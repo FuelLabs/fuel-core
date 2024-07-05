@@ -15,7 +15,7 @@ pub struct DatabaseMetrics {
 }
 
 impl DatabaseMetrics {
-    pub fn new(name: &str, columns: &[(u32, &str)]) -> Self {
+    pub fn new(name: &str, columns: &[(u32, String)]) -> Self {
         let mut registry = global_registry().registry.lock();
 
         let columns_read_statistic = columns
