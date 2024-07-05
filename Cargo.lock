@@ -3094,8 +3094,7 @@ dependencies = [
 name = "fuel-core-metrics"
 version = "0.30.0"
 dependencies = [
- "axum",
- "once_cell",
+ "parking_lot",
  "pin-project-lite",
  "prometheus-client",
  "regex",

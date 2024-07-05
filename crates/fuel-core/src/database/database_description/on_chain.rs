@@ -12,8 +12,8 @@ impl DatabaseDescription for OnChain {
         0
     }
 
-    fn name() -> &'static str {
-        "on_chain"
+    fn name() -> String {
+        "on_chain".to_string()
     }
 
     fn metadata_column() -> Self::Column {

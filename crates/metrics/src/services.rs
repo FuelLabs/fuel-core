@@ -1,19 +1,13 @@
+use crate::global_registry;
 use prometheus_client::{
     encoding::text::encode,
     metrics::counter::Counter,
-    registry::Registry,
 };
-use std::{
-    ops::Deref,
-    sync::{
-        Mutex,
-        OnceLock,
-    },
-};
+use std::ops::Deref;
 
 /// The statistic of the service life cycle.
 #[derive(Default, Debug)]
-pub struct ServiceLifecycle {
+pub struct ServicesMetrics {
     /// The time spent for real actions by the service.
     ///
     /// Time is in nanoseconds.
@@ -26,25 +20,15 @@ pub struct ServiceLifecycle {
     pub idle: Counter,
 }
 
-/// The register of the metrics for each service.
-#[derive(Default)]
-pub struct ServicesMetrics {
-    // It is okay to use std mutex because we register each service only one time.
-    pub registry: Mutex<Registry>,
-}
-
 impl ServicesMetrics {
-    pub fn register_service(&self, service_name: &str) -> ServiceLifecycle {
+    pub fn register_service(service_name: &str) -> ServicesMetrics {
         let reg =
             regex::Regex::new("^[a-zA-Z_:][a-zA-Z0-9_:]*$").expect("It is a valid Regex");
         if !reg.is_match(service_name) {
             panic!("The service {} has incorrect name.", service_name);
         }
-        let lifecycle = ServiceLifecycle::default();
-        let mut lock = self
-            .registry
-            .lock()
-            .expect("The lock of the service metric is poisoned");
+        let lifecycle = ServicesMetrics::default();
+        let mut lock = global_registry().registry.lock();
 
         // Check that it is a unique service.
         let mut encoded_bytes = String::new();
@@ -72,14 +56,8 @@ impl ServicesMetrics {
     }
 }
 
-static SERVICES_METRICS: OnceLock<ServicesMetrics> = OnceLock::new();
-
-pub fn services_metrics() -> &'static ServicesMetrics {
-    SERVICES_METRICS.get_or_init(ServicesMetrics::default)
-}
-
 #[test]
 fn register_success() {
-    services_metrics().register_service("Foo");
-    services_metrics().register_service("Bar");
+    ServicesMetrics::register_service("Foo");
+    ServicesMetrics::register_service("Bar");
 }
