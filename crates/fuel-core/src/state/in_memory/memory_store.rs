@@ -164,7 +164,10 @@ where
         _: &Description::Height,
     ) -> StorageResult<KeyValueView<Self::Column>> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
-        unimplemented!("The historical view is not implemented for `MemoryStore`")
+        Err(
+            anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
+                .into(),
+        )
     }
 
     fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
@@ -176,7 +179,10 @@ where
 
     fn rollback_last_block(&self) -> StorageResult<()> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
-        unimplemented!("The historical view is not implemented for `MemoryStore`")
+        Err(
+            anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
+                .into(),
+        )
     }
 }
 
