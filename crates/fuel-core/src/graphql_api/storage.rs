@@ -9,7 +9,7 @@ use crate::{
             TransactionStatuses,
         },
     },
-    graphql_api::ports::worker::OffChainDatabase,
+    graphql_api::ports::worker::OffChainDatabaseTransaction,
 };
 use fuel_core_storage::{
     kv_store::{
@@ -116,7 +116,7 @@ impl StorageColumn for Column {
     }
 }
 
-impl<S> OffChainDatabase for StorageTransaction<S>
+impl<S> OffChainDatabaseTransaction for StorageTransaction<S>
 where
     S: KeyValueInspect<Column = Column> + Modifiable,
     StorageTransaction<S>: StorageMutate<OwnedMessageIds, Error = StorageError>

@@ -286,16 +286,24 @@ pub mod worker {
         },
     };
 
-    pub trait Transactional: Send + Sync {
-        type Transaction<'a>: OffChainDatabase
+    pub trait OnChainDatabase: Send + Sync {
+        /// Returns the latest block height.
+        fn latest_height(&self) -> StorageResult<Option<BlockHeight>>;
+    }
+
+    pub trait OffChainDatabase: Send + Sync {
+        type Transaction<'a>: OffChainDatabaseTransaction
         where
             Self: 'a;
+
+        /// Returns the latest block height.
+        fn latest_height(&self) -> StorageResult<Option<BlockHeight>>;
 
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
     }
 
-    pub trait OffChainDatabase:
+    pub trait OffChainDatabaseTransaction:
         StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
@@ -331,9 +339,15 @@ pub mod worker {
         fn commit(self) -> StorageResult<()>;
     }
 
-    pub trait BlockImporter {
+    pub trait BlockImporter: Send + Sync {
         /// Returns a stream of imported block.
         fn block_events(&self) -> BoxStream<SharedImportResult>;
+
+        /// Return the import result at the given height.
+        fn block_event_at_height(
+            &self,
+            height: Option<BlockHeight>,
+        ) -> anyhow::Result<SharedImportResult>;
     }
 
     pub trait TxPool: Send + Sync {

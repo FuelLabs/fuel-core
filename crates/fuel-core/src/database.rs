@@ -278,7 +278,9 @@ where
             );
         };
         self.inner_storage().data.rollback_last_block()?;
-        *lock = height.rollback_height();
+        let new_height = height.rollback_height();
+        *lock = new_height;
+        tracing::info!("Rollback to the height {:?} was successful", new_height);
 
         Ok(())
     }
