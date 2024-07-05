@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.31.0]
+
 ### Added
 - [#2014](https://github.com/FuelLabs/fuel-core/pull/2014): Added a separate thread for the block importer.
 - [#2013](https://github.com/FuelLabs/fuel-core/pull/2013): Added a separate thread to process P2P database lookups.
