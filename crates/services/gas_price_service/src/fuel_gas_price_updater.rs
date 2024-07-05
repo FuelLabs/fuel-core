@@ -1,13 +1,18 @@
-use crate::UpdateAlgorithm;
-use fuel_core_types::fuel_types::BlockHeight;
-use fuel_gas_price_algorithm::v0::{
-    AlgorithmUpdaterV0,
-    AlgorithmV0,
+use crate::{
+    GasPriceAlgorithm,
+    UpdateAlgorithm,
 };
-pub use fuel_gas_price_algorithm::v1::{
-    AlgorithmUpdaterV1,
-    AlgorithmV1,
-    RecordedBlock,
+use fuel_core_types::fuel_types::BlockHeight;
+pub use fuel_gas_price_algorithm::{
+    v0::{
+        AlgorithmUpdaterV0,
+        AlgorithmV0,
+    },
+    v1::{
+        AlgorithmUpdaterV1,
+        AlgorithmV1,
+        RecordedBlock,
+    },
 };
 use std::num::NonZeroU64;
 
@@ -208,5 +213,19 @@ where
                 Ok(self.inner.algorithm())
             }
         }
+    }
+}
+
+impl GasPriceAlgorithm for AlgorithmV0 {
+    fn next_gas_price(&self, _block_bytes: u64) -> u64 {
+        todo!()
+    }
+
+    fn last_gas_price(&self) -> u64 {
+        todo!()
+    }
+
+    fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
+        todo!()
     }
 }

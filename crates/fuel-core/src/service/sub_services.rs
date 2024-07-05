@@ -3,6 +3,8 @@ use super::{
     adapters::P2PAdapter,
     genesis::create_genesis_block,
 };
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -12,6 +14,9 @@ use crate::{
     service::{
         adapters::{
             consensus_parameters_provider,
+            fuel_gas_price_provider::FuelGasPriceProvider,
+            graphql_api::GraphQLBlockImporter,
+            import_result_provider::ImportResultProvider,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ConsensusParametersProvider,
@@ -28,29 +33,21 @@ use crate::{
     },
 };
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    AlgorithmUpdaterV1,
+    fuel_core_storage_adapter::FuelL2BlockSource,
+    AlgorithmV0,
     FuelGasPriceUpdater,
+    UpdaterMetadata,
+    V0Metadata,
 };
 use fuel_core_poa::Trigger;
-use fuel_core_storage::transactional::AtomicView;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::{
-    fuel_gas_price_provider::FuelGasPriceProvider,
-    graphql_api::GraphQLBlockImporter,
-    import_result_provider::ImportResultProvider,
-};
-use fuel_core_gas_price_service::static_updater::{
-    StaticAlgorithm,
-    StaticAlgorithmUpdater,
+use fuel_core_storage::{
+    structured_storage::StructuredStorage,
+    transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use crate::service::adapters::gas_price_adapters::fuel_gas_price_metadata::FuelGasPriceMetadataStorage;
-use crate::service::adapters::gas_price_adapters::fuel_l2_block_source::FuelL2BlockSource;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
@@ -59,7 +56,7 @@ pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
-    FuelGasPriceProvider<StaticAlgorithm>,
+    FuelGasPriceProvider<AlgorithmV0>,
     ConsensusParametersProvider,
     SharedMemoryPool,
 >;
@@ -67,7 +64,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    FuelGasPriceProvider<StaticAlgorithm>,
+    FuelGasPriceProvider<AlgorithmV0>,
     ConsensusParametersProvider,
 >;
 
@@ -180,30 +177,20 @@ pub fn init_sub_services(
     let p2p_adapter = P2PAdapter::new();
 
     // let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
-    let inner_updater = AlgorithmUpdaterV1 {
+    let updater_metadata = UpdaterMetadata::V0(V0Metadata {
         new_exec_price: 0,
-        last_da_gas_price: 0,
         min_exec_gas_price: 0,
         exec_gas_price_change_percent: 0,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 0,
-        min_da_gas_price: 0,
-        max_da_gas_price_change_percent: 0,
-        total_da_rewards: 0,
-        da_recorded_block_height: 0,
-        latest_known_total_da_cost: 0,
-        projected_total_da_cost: 0,
-        da_p_component: 0,
-        da_d_component: 0,
-        profit_avg: 0,
-        avg_window: 0,
-        latest_da_cost_per_byte: 0,
-        unrecorded_blocks: vec![],
-    };
-    let l2_block_source = FuelL2BlockSource::new(database.on_chain().clone());
-    let metadata_storage = FuelGasPriceMetadataStorage::new()
+    });
+    // TODO: This looks wrong, why are we getting this from an adapter for some other port?
+    let block_stream = importer_adapter.events_shared_result();
+    let settings = consensus_parameters_provider.clone();
+    let l2_block_source = FuelL2BlockSource::new(settings, block_stream);
+    let metadata_storage = StructuredStorage::new(database.gas_price().clone());
     let update_algo =
-        FuelGasPriceUpdater::new(inner_updater, l2_block_source, metadata_storage);
+        FuelGasPriceUpdater::init(updater_metadata, l2_block_source, metadata_storage)?;
     let gas_price_service =
         fuel_core_gas_price_service::new_service(last_height, update_algo)?;
     let next_algo = gas_price_service.shared.clone();

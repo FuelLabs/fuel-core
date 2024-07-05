@@ -91,6 +91,18 @@ pub struct FuelL2BlockSource<Settings> {
     committed_block_stream: BoxStream<SharedImportResult>,
 }
 
+impl<Settings> FuelL2BlockSource<Settings> {
+    pub fn new(
+        gas_price_settings: Settings,
+        committed_block_stream: BoxStream<SharedImportResult>,
+    ) -> Self {
+        Self {
+            gas_price_settings,
+            committed_block_stream,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GasPriceSettings {
     pub gas_price_factor: u64,

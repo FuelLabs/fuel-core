@@ -4,7 +4,7 @@ use fuel_core_gas_price_service::{
     SharedGasPriceAlgo,
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
-use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPricProvider;
+use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::txpool::Result as TxPoolResult,
@@ -73,7 +73,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<A> TxPoolGasPricProvider for FuelGasPriceProvider<A>
+impl<A> TxPoolGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {

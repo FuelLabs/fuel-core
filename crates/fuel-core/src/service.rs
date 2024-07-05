@@ -118,8 +118,12 @@ impl FuelService {
         database: Database,
         config: Config,
     ) -> anyhow::Result<Self> {
-        let combined_database =
-            CombinedDatabase::new(database, Default::default(), Default::default());
+        let combined_database = CombinedDatabase::new(
+            database,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        );
         Self::from_combined_database(combined_database, config).await
     }
 

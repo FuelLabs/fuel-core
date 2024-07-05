@@ -1,6 +1,9 @@
+#[cfg(feature = "rocksdb")]
+use crate::state::historical_rocksdb::StateRewindPolicy;
 use crate::{
     database::{
         database_description::{
+            gas_price::GasPriceDatabase,
             off_chain::OffChain,
             on_chain::OnChain,
             relayer::Relayer,
@@ -9,10 +12,7 @@ use crate::{
         GenesisDatabase,
         Result as DatabaseResult,
     },
-    service::{
-        adapters::gas_price_adapters::fuel_gas_price_metadata::storage::GasPrice,
-        DbType,
-    },
+    service::DbType,
 };
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
@@ -31,9 +31,6 @@ use fuel_core_storage::tables::{
 use fuel_core_storage::Result as StorageResult;
 use std::path::PathBuf;
 
-#[cfg(feature = "rocksdb")]
-use crate::state::historical_rocksdb::StateRewindPolicy;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CombinedDatabaseConfig {
     pub database_path: PathBuf,
@@ -49,7 +46,7 @@ pub struct CombinedDatabase {
     on_chain: Database<OnChain>,
     off_chain: Database<OffChain>,
     relayer: Database<Relayer>,
-    gas_price: Database<GasPrice>,
+    gas_price: Database<GasPriceDatabase>,
 }
 
 impl CombinedDatabase {
@@ -57,7 +54,7 @@ impl CombinedDatabase {
         on_chain: Database<OnChain>,
         off_chain: Database<OffChain>,
         relayer: Database<Relayer>,
-        gas_price: Database<GasPrice>,
+        gas_price: Database<GasPriceDatabase>,
     ) -> Self {
         Self {
             on_chain,
@@ -72,7 +69,7 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<OnChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
-        crate::state::rocks_db::RocksDb::<GasPrice>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::prune(path)?;
         Ok(())
     }
 
@@ -133,6 +130,7 @@ impl CombinedDatabase {
             Database::in_memory(),
             Database::in_memory(),
             Database::in_memory(),
+            Database::in_memory(),
         )
     }
 
@@ -168,6 +166,15 @@ impl CombinedDatabase {
     #[cfg(any(feature = "test-helpers", test))]
     pub fn relayer_mut(&mut self) -> &mut Database<Relayer> {
         &mut self.relayer
+    }
+
+    pub fn gas_price(&self) -> &Database<GasPriceDatabase> {
+        &self.gas_price
+    }
+
+    #[cfg(any(feature = "test-helpers", test))]
+    pub fn gas_price_mut(&mut self) -> &mut Database<GasPriceDatabase> {
+        &mut self.gas_price
     }
 
     #[cfg(feature = "test-helpers")]

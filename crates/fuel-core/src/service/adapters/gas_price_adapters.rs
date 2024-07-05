@@ -28,3 +28,16 @@ impl GasPriceSettingsProvider for ConsensusParametersProvider {
             })
     }
 }
+
+// impl MetadataStorage for Database<GasPriceDatabase, RegularStage<GasPriceDatabase>> {
+//     fn get_metadata(
+//         &self,
+//         block_height: &BlockHeight,
+//     ) -> GasPriceResult<Option<UpdaterMetadata>> {
+//         todo!()
+//     }
+//
+//     fn set_metadata(&mut self, metadata: UpdaterMetadata) -> GasPriceResult<()> {
+//         todo!()
+//     }
+// }
