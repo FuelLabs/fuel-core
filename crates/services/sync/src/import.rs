@@ -6,6 +6,7 @@ use fuel_core_services::{
     SharedMutex,
     StateWatcher,
 };
+use fuel_core_trace::TraceErr;
 use fuel_core_types::{
     self,
     blockchain::{
@@ -51,7 +52,6 @@ use crate::{
         PeerToPeerPort,
     },
     state::State,
-    tracing_helpers::TraceErr,
 };
 
 #[cfg(any(test, feature = "benchmarking"))]

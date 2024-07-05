@@ -13,6 +13,7 @@ version = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-services = { workspace = true }
+fuel-core-trace = { workspace = true }
 fuel-core-types = { workspace = true }
 futures = { workspace = true }
 mockall = { workspace = true, optional = true }

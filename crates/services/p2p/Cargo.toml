@@ -17,6 +17,7 @@ fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true } # TODO make this a feature
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
+fuel-core-trace = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = "0.4"
@@ -42,6 +43,7 @@ prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
 rand = { workspace = true }
+rayon = "1.10.0"
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 sha2 = "0.10"

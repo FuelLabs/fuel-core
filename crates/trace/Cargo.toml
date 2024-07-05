@@ -20,8 +20,6 @@ version = { workspace = true }
 
 [dependencies]
 ctor = "0.1"
+tracing = { workspace = true }
 tracing-appender = "0.2"
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-
-[dev-dependencies]
-tracing = { workspace = true }
