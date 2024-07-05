@@ -137,7 +137,7 @@ impl Config {
                 api_request_timeout: Duration::from_secs(60),
             },
             combined_db_config,
-            continue_on_error: true,
+            continue_on_error: false,
             debug: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),
