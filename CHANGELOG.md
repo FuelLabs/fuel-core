@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1980](https://github.com/FuelLabs/fuel-core/pull/1980): Add `Transaction` to relayer 's event filter
 
 #### Breaking
+- [#2012](https://github.com/FuelLabs/fuel-core/pull/2012): Bumped the `fuel-vm` to `0.55.0` release. More about the change [here](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0).
 - [#2001](https://github.com/FuelLabs/fuel-core/pull/2001): Prevent GraphQL query body to be huge and cause OOM. The default body size is `1MB`. The limit can be changed by the `graphql-request-body-bytes-limit` CLI argument.
 - [#1991](https://github.com/FuelLabs/fuel-core/pull/1991): Prepare the database to use different types than `Database` for atomic view.
 - [#1989](https://github.com/FuelLabs/fuel-core/pull/1989): Extract `HistoricalView` trait from the `AtomicView`.
