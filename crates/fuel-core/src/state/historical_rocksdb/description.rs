@@ -29,8 +29,8 @@ where
     fn name(&self) -> String {
         match self {
             Column::OriginalColumn(c) => c.name(),
-            Column::HistoricalDuplicateColumn(_) => {
-                format!("history_{}", Description::name())
+            Column::HistoricalDuplicateColumn(c) => {
+                format!("history_{}", c.name())
             }
             Column::HistoryColumn => "modifications_history".to_string(),
         }
@@ -68,7 +68,7 @@ where
     }
 
     fn name() -> String {
-        format!("{}_history", Description::name())
+        Description::name()
     }
 
     fn metadata_column() -> Self::Column {
