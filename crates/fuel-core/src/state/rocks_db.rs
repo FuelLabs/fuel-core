@@ -5,11 +5,7 @@ use crate::{
         Error as DatabaseError,
         Result as DatabaseResult,
     },
-    state::{
-        iterable_key_value_view::IterableKeyValueViewWrapper,
-        IterDirection,
-        IterableKeyValueView,
-    },
+    state::IterDirection,
 };
 use fuel_core_metrics::core_metrics::database_metrics;
 use fuel_core_storage::{
@@ -260,7 +256,8 @@ where
         ) -> Result<DB, rocksdb::Error>,
         P: AsRef<Path>,
     {
-        let path = path.as_ref().join(Description::name());
+        let original_path = path.as_ref().to_path_buf();
+        let path = original_path.join(Description::name());
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
@@ -373,6 +370,12 @@ where
     }
 
     pub fn create_snapshot(&self) -> Self {
+        self.create_snapshot_generic()
+    }
+
+    pub fn create_snapshot_generic<TargetDescription>(
+        &self,
+    ) -> RocksDb<TargetDescription> {
         let db = self.db.clone();
         let _drop = self._drop.clone();
 
@@ -386,7 +389,7 @@ where
         };
         let snapshot = Some(snapshot);
 
-        Self {
+        RocksDb {
             read_options: Self::generate_read_options(&snapshot),
             snapshot,
             db,
@@ -699,27 +702,6 @@ where
         self.db
             .write(batch)
             .map_err(|e| DatabaseError::Other(e.into()).into())
-    }
-}
-
-impl<Description> crate::state::TransactableStorage<Description::Height>
-    for RocksDb<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn commit_changes(
-        &self,
-        _: Option<Description::Height>,
-        changes: Changes,
-    ) -> StorageResult<()> {
-        self.commit_changes(&changes)
-    }
-
-    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
-        let db_view = self.create_snapshot();
-        Ok(IterableKeyValueView::from_storage(
-            IterableKeyValueViewWrapper::new(Arc::new(db_view)),
-        ))
     }
 }
 

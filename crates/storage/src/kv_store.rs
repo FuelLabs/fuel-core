@@ -14,7 +14,7 @@ pub type KVItem = StorageResult<(Vec<u8>, Value)>;
 /// A column of the storage.
 pub trait StorageColumn: Copy + core::fmt::Debug {
     /// Returns the name of the column.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
 
     /// Returns the id of the column.
     fn id(&self) -> u32;
