@@ -15,6 +15,7 @@ impl StaticAlgorithmUpdater {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct StaticAlgorithm {
     price: u64,
 }
@@ -30,11 +31,7 @@ impl StaticAlgorithm {
 }
 
 impl GasPriceAlgorithm for StaticAlgorithm {
-    fn last_gas_price(&self) -> u64 {
-        self.price()
-    }
-
-    fn next_gas_price(&self, _block_bytes: u64) -> u64 {
+    fn next_gas_price(&self) -> u64 {
         self.price()
     }
 

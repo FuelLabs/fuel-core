@@ -240,16 +240,13 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub enum Algorithm {
     V0(AlgorithmV0),
-    V1(AlgorithmV1),
 }
 
 impl GasPriceAlgorithm for Algorithm {
-    fn last_gas_price(&self) -> u64 {
-        todo!()
-    }
-
-    fn next_gas_price(&self, _block_bytes: u64) -> u64 {
-        todo!()
+    fn next_gas_price(&self) -> u64 {
+        match self {
+            Algorithm::V0(v0) => v0.calculate(),
+        }
     }
 
     fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
