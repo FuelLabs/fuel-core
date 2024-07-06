@@ -34,7 +34,7 @@ use crate::{
 };
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
     fuel_core_storage_adapter::FuelL2BlockSource,
-    AlgorithmV0,
+    Algorithm,
     FuelGasPriceUpdater,
     UpdaterMetadata,
     V0Metadata,
@@ -56,7 +56,7 @@ pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
-    FuelGasPriceProvider<AlgorithmV0>,
+    FuelGasPriceProvider<Algorithm>,
     ConsensusParametersProvider,
     SharedMemoryPool,
 >;
@@ -64,7 +64,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    FuelGasPriceProvider<AlgorithmV0>,
+    FuelGasPriceProvider<Algorithm>,
     ConsensusParametersProvider,
 >;
 

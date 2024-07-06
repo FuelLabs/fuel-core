@@ -122,7 +122,7 @@ async fn init__if_exists_already_reload() {
             .unwrap();
 
     // then
-    let expected: AlgorithmUpdaterV0 = metadata.try_into().unwrap();
+    let expected: AlgorithmUpdater = metadata.into();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
@@ -140,7 +140,7 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
             .unwrap();
 
     // then
-    let expected: AlgorithmUpdaterV0 = metadata.try_into().unwrap();
+    let expected: AlgorithmUpdater = metadata.into();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
