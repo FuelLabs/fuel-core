@@ -272,6 +272,30 @@ impl MessageProof {
     }
 }
 
+/// The result provided by the processing of a message proof.
+pub enum MessageProofEvaluation {
+    /// Successful processing.
+    Success(MessageProof),
+    /// Unavailable message proof.
+    Unavailable(MessageProofUnavailability),
+}
+
+/// Describes the reasons why a message couldn't be processed.
+pub enum MessageProofUnavailability {
+    /// Couldn't look beyond the genesis block.
+    InvalidBlockHeaderHeight,
+    /// It was not possible to assert the presence and integrity of the message data.
+    InvalidMsgData,
+    /// Message ID is not related to any receipts.
+    ReceiptMismatch,
+    /// Block header related to the commit height is not present in the database.
+    UnavailableCommitBlockHeader,
+    /// Block header related to the message is not present in the database.
+    UnavailableMsgBlockHeader,
+    /// Transaction is not ready for processing.
+    UnavailableTx,
+}
+
 /// Represents the status of a message
 pub struct MessageStatus {
     /// The message state

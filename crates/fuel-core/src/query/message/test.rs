@@ -208,14 +208,14 @@ async fn can_build_message_proof() {
 
     let data: Box<dyn MessageProofData> = Box::new(data);
 
-    let proof = message_proof(
+    let Ok(MessageProofEvaluation::Success(proof)) = message_proof(
         data.deref(),
         transaction_id,
         nonce.to_owned(),
         *commit_block.header().height(),
-    )
-    .unwrap()
-    .unwrap();
+    ) else {
+        panic!();
+    };
     assert_eq!(
         proof.message_block_header.message_outbox_root,
         message_block.header().message_outbox_root

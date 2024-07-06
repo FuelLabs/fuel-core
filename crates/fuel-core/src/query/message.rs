@@ -33,6 +33,8 @@ use fuel_core_types::{
         MerkleProof,
         Message,
         MessageProof,
+        MessageProofEvaluation,
+        MessageProofUnavailability,
         MessageStatus,
     },
     fuel_merkle::binary::in_memory::MerkleTree,
@@ -141,13 +143,12 @@ where
 }
 
 /// Generate an output proof.
-// TODO: Do we want to return `Option` here?
 pub fn message_proof<T: MessageProofData + ?Sized>(
     database: &T,
     transaction_id: Bytes32,
     desired_nonce: Nonce,
     commit_block_height: BlockHeight,
-) -> StorageResult<Option<MessageProof>> {
+) -> StorageResult<MessageProofEvaluation> {
     // Check if the receipts for this transaction actually contain this message id or exit.
     let receipt = database
         .receipts(&transaction_id)?
@@ -168,7 +169,11 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
 
     let (sender, recipient, nonce, amount, data) = match receipt {
         Some(r) => r,
-        None => return Ok(None),
+        None => {
+            return Ok(MessageProofEvaluation::Unavailable(
+                MessageProofUnavailability::ReceiptMismatch,
+            ))
+        }
     };
     let data =
         data.ok_or(anyhow::anyhow!("Output message doesn't contain any `data`"))?;
@@ -179,7 +184,11 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         .into_api_result::<TransactionStatus, StorageError>(
     )? {
         Some(TransactionStatus::Success { block_height, .. }) => block_height,
-        _ => return Ok(None),
+        _ => {
+            return Ok(MessageProofEvaluation::Unavailable(
+                MessageProofUnavailability::UnavailableTx,
+            ))
+        }
     };
 
     // Get the message fuel block header.
@@ -188,7 +197,11 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         .into_api_result::<CompressedBlock, StorageError>()?
     {
         Some(t) => t.into_inner(),
-        None => return Ok(None),
+        None => {
+            return Ok(MessageProofEvaluation::Unavailable(
+                MessageProofUnavailability::UnavailableMsgBlockHeader,
+            ))
+        }
     };
 
     let message_id = compute_message_id(&sender, &recipient, &nonce, amount, &data);
@@ -196,7 +209,11 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     let message_proof =
         match message_receipts_proof(database, message_id, &message_block_txs)? {
             Some(proof) => proof,
-            None => return Ok(None),
+            None => {
+                return Ok(MessageProofEvaluation::Unavailable(
+                    MessageProofUnavailability::InvalidMsgData,
+                ))
+            }
         };
 
     // Get the commit fuel block header.
@@ -205,13 +222,19 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         .into_api_result::<CompressedBlock, StorageError>()?
     {
         Some(t) => t.into_inner().0,
-        None => return Ok(None),
+        None => {
+            return Ok(MessageProofEvaluation::Unavailable(
+                MessageProofUnavailability::UnavailableCommitBlockHeader,
+            ))
+        }
     };
 
     let block_height = *commit_block_header.height();
     if block_height == 0u32.into() {
         // Cannot look beyond the genesis block
-        return Ok(None)
+        return Ok(MessageProofEvaluation::Unavailable(
+            MessageProofUnavailability::InvalidBlockHeaderHeight,
+        ));
     }
     let verifiable_commit_block_height =
         block_height.pred().expect("We checked the height above");
@@ -220,7 +243,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         &verifiable_commit_block_height,
     )?;
 
-    Ok(Some(MessageProof {
+    Ok(MessageProofEvaluation::Success(MessageProof {
         message_proof,
         block_proof,
         message_block_header,

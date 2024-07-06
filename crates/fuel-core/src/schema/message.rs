@@ -32,7 +32,7 @@ use async_graphql::{
     Enum,
     Object,
 };
-use fuel_core_types::entities;
+use fuel_core_types::entities::{self, relayer::message::MessageProofEvaluation};
 
 pub struct Message(pub(crate) entities::relayer::message::Message);
 
@@ -148,13 +148,15 @@ impl MessageQuery {
             ))?,
         };
 
-        Ok(crate::query::message_proof(
+        match crate::query::message_proof(
             query.as_ref(),
             transaction_id.into(),
             nonce.into(),
             height,
-        )?
-        .map(MessageProof))
+        )? {
+            MessageProofEvaluation::Success(elem) => Ok(Some(MessageProof(elem))),
+            MessageProofEvaluation::Unavailable(_) => Ok(None)
+        }
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
