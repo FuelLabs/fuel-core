@@ -20,7 +20,6 @@ fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = "0.4"
-ip_network = "0.4"
 libp2p = { version = "0.53.2", default-features = false, features = [
   "dns",
   "gossipsub",
@@ -36,7 +35,6 @@ libp2p = { version = "0.53.2", default-features = false, features = [
   "yamux",
   "websocket",
 ] }
-libp2p-mplex = "0.41.0"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"

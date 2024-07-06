@@ -25,7 +25,6 @@ itertools = { workspace = true }
 libtest-mimic = "0.6.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
-tikv-jemallocator = { workspace = true }
 tokio = { workspace = true }
 toml = { version = "0.5" }
 
@@ -37,6 +36,7 @@ e2e_client = { path = ".", features = [
 fuel-core-trace = { path = "../../crates/trace" }
 insta = { workspace = true }
 tempfile = { workspace = true }
+tikv-jemallocator = { workspace = true }
 
 [features]
 default = ["fuel-core?/default"]

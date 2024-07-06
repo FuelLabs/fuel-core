@@ -25,7 +25,6 @@ fuel-core-relayer = { path = "../../crates/services/relayer", features = [
 fuel-core-storage = { path = "../../crates/storage", features = [
   "test-helpers",
 ] }
-fuel-core-trace = { path = "../../crates/trace" }
 fuel-core-txpool = { path = "../../crates/services/txpool", features = [
   "test-helpers",
 ] }
