@@ -176,11 +176,10 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    // let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
     let updater_metadata = UpdaterMetadata::V0(V0Metadata {
-        new_exec_price: 0,
-        min_exec_gas_price: 0,
-        exec_gas_price_change_percent: 0,
+        new_exec_price: 1000,
+        min_exec_gas_price: 1000,
+        exec_gas_price_change_percent: 10,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 0,
     });
