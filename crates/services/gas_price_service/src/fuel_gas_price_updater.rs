@@ -249,7 +249,9 @@ impl GasPriceAlgorithm for Algorithm {
         }
     }
 
-    fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
-        todo!()
+    fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
+        match self {
+            Algorithm::V0(_v0) => todo!("use height: {:?}", height),
+        }
     }
 }

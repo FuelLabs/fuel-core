@@ -16,11 +16,24 @@ pub enum Error {
 pub struct AlgorithmV0 {
     /// The gas price for to cover the execution of the next block
     new_exec_price: u64,
+    /// The block height of the next L2 block
+    for_height: u32,
+    /// The change percentage per block
+    percentage: u64,
 }
 
 impl AlgorithmV0 {
     pub fn calculate(&self) -> u64 {
         self.new_exec_price
+    }
+
+    pub fn worst_case(&self, height: u32) -> u64 {
+        let mut price = self.new_exec_price;
+        for _ in self.for_height..height {
+            let change = price.saturating_mul(self.percentage).saturating_div(100);
+            price = price.saturating_add(change);
+        }
+        price
     }
 }
 
@@ -107,6 +120,8 @@ impl AlgorithmUpdaterV0 {
     pub fn algorithm(&self) -> AlgorithmV0 {
         AlgorithmV0 {
             new_exec_price: self.new_exec_price,
+            for_height: self.l2_block_height,
+            percentage: self.exec_gas_price_change_percent,
         }
     }
 }
