@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
+
 ## [Version 0.31.0]
 
 ### Added
-- [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
 - [#2014](https://github.com/FuelLabs/fuel-core/pull/2014): Added a separate thread for the block importer.
 - [#2013](https://github.com/FuelLabs/fuel-core/pull/2013): Added a separate thread to process P2P database lookups.
 - [#2004](https://github.com/FuelLabs/fuel-core/pull/2004): Added new CLI argument `continue-services-on-error` to control internal flow of services.
