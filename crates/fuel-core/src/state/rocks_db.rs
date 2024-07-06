@@ -286,6 +286,7 @@ where
             block_opts.disable_cache();
         }
         block_opts.set_bloom_filter(10.0, true);
+        block_opts.set_block_size(16 * 1024);
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -304,6 +305,11 @@ where
             let cache = Cache::new_lru_cache(row_cache_size);
             opts.set_row_cache(&cache);
         }
+        opts.set_max_background_jobs(6);
+        opts.set_bytes_per_sync(1048576);
+
+        #[cfg(feature = "test-helpers")]
+        opts.set_max_open_files(512);
 
         let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_default();
 
@@ -330,9 +336,7 @@ where
                 Ok(db)
             },
             Err(err) => {
-                tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
-                DB::repair(&opts, &path)
-                    .map_err(|e| DatabaseError::Other(e.into()))?;
+                tracing::error!("Couldn't open the database with an error: {}. \nTrying to reopen the database", err);
 
                 let iterator = cf_descriptors_to_open
                     .clone()
