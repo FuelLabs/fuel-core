@@ -198,13 +198,13 @@ where
                 let capacity = NonZeroU64::new(block_gas_capacity).ok_or_else(|| {
                     anyhow::anyhow!("Block gas capacity must be non-zero")
                 })?;
-                self.metadata_storage
-                    .set_metadata(self.inner.clone().into())?;
                 self.inner.update_l2_block_data(
                     height,
                     gas_used,
                     capacity,
                 )?;
+                self.metadata_storage
+                    .set_metadata(self.inner.clone().into())?;
                 Ok(self.inner.algorithm())
             }
         }
