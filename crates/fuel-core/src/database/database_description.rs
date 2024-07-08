@@ -5,6 +5,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
+pub mod gas_price;
 pub mod off_chain;
 pub mod on_chain;
 pub mod relayer;

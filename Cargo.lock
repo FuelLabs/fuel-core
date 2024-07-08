@@ -3039,12 +3039,19 @@ version = "0.31.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "enum-iterator",
  "fuel-core-services",
+ "fuel-core-storage",
  "fuel-core-types",
  "fuel-gas-price-algorithm",
  "futures",
+ "num_enum",
+ "serde",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
 ]
@@ -3423,6 +3430,7 @@ dependencies = [
 name = "fuel-gas-price-algorithm"
 version = "0.31.0"
 dependencies = [
+ "serde",
  "thiserror",
 ]
 

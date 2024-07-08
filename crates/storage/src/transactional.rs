@@ -251,7 +251,7 @@ pub trait WriteTransaction {
 
 impl<S> WriteTransaction for S
 where
-    S: KeyValueInspect + Modifiable,
+    S: Modifiable,
 {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(

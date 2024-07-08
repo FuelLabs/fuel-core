@@ -76,6 +76,8 @@ use crate::state::{
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
+use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::storage::{ GasPriceMetadata};
+use crate::database::database_description::gas_price::GasPriceDatabase;
 
 // Storages implementation
 pub mod balances;
@@ -338,6 +340,16 @@ impl Modifiable for Database<OffChain> {
         commit_changes_with_height_update(self, changes, |iter| {
             iter.iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
                 .map(|result| result.map(|(_, height)| height))
+                .try_collect()
+        })
+    }
+}
+
+impl Modifiable for Database<GasPriceDatabase> {
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all::<GasPriceMetadata>(Some(IterDirection::Reverse))
+                .map(|result| result.map(|(height, _)| height))
                 .try_collect()
         })
     }
