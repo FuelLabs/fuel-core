@@ -179,7 +179,15 @@ async fn next__new_l2_block_saves_old_metadata() {
     let _ = next.await.unwrap().unwrap();
 
     // then
-    let expected = starting_metadata;
+    let UpdaterMetadata::V0(old_inner) = starting_metadata;
+    let new_exec_price = old_inner.new_exec_price
+        + (old_inner.new_exec_price * old_inner.exec_gas_price_change_percent / 100);
+    let l2_block_height = old_inner.l2_block_height + 1;
+    let expected = UpdaterMetadata::V0(V0Metadata {
+        new_exec_price,
+        l2_block_height,
+        ..old_inner
+    });
     let actual = metadata_inner.lock().unwrap().clone().unwrap();
     assert_eq!(expected, actual);
 }
