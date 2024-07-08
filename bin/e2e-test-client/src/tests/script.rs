@@ -14,14 +14,10 @@ use fuel_core_types::{
         Transaction,
         UniqueIdentifier,
     },
-    fuel_types::{
-        canonical::Deserialize,
-        Salt,
-    },
+    fuel_types::Salt,
     services::executor::TransactionExecutionResult,
 };
 
-use fuel_core_types::fuel_types::canonical::Serialize;
 use libtest_mimic::Failed;
 use std::{
     path::Path,
@@ -147,9 +143,8 @@ pub async fn arbitrary_transaction(ctx: &TestContext) -> Result<(), Failed> {
 
     let dry_run_json =
         std::fs::read_to_string(JSON_PATH).expect("Should read the json transaction");
-    let mut dry_run_tx_from_json: Transaction =
-        serde_json::from_str(dry_run_json.as_ref())
-            .expect("Should be able do decode the Transaction from json representation");
+    let dry_run_tx_from_json: Transaction = serde_json::from_str(dry_run_json.as_ref())
+        .expect("Should be able do decode the Transaction from json representation");
 
     _dry_runs(ctx, &[dry_run_tx_from_json], 1000, DryRunResult::MayFail).await
 }

@@ -42,11 +42,7 @@ use fuel_core_types::{
 };
 use rand::prelude::StdRng;
 
-async fn setup_service_with_coin(
-    owner: Address,
-    amount: u64,
-    static_gas_price: u64,
-) -> (FuelService, UtxoId) {
+async fn setup_service_with_coin(owner: Address, amount: u64) -> (FuelService, UtxoId) {
     // setup config
     let tx_id = [0u8; 32];
     let output_index = 0;
@@ -64,7 +60,6 @@ async fn setup_service_with_coin(
         ..Default::default()
     };
     let config = Config {
-        static_gas_price,
         ..Config::local_node_with_state_config(state)
     };
 
@@ -86,8 +81,7 @@ async fn latest_gas_price__should_be_static() {
     let pk = secret_key.public_key();
     let owner = Input::owner(&pk);
 
-    let (srv, utxo_id) =
-        setup_service_with_coin(owner, max_fee_limit, static_gas_price).await;
+    let (srv, utxo_id) = setup_service_with_coin(owner, max_fee_limit).await;
 
     let client = FuelClient::from(srv.bound_address);
 
@@ -119,8 +113,7 @@ async fn latest_gas_price__should_be_static() {
 #[tokio::test]
 async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
     // given
-    let mut node_config = Config::local_node();
-    node_config.static_gas_price = 100;
+    let node_config = Config::local_node();
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -134,9 +127,14 @@ async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
 }
 
 #[tokio::test]
-async fn estimate_gas_price__should_be_static() {
+async fn estimate_gas_price__should_be_estimated_correctly() {
     // given
-    let node_config = Config::local_node();
+    let mut node_config = Config::local_node();
+    let starting_gas_price = 1000;
+    let percent = 10;
+    node_config.starting_gas_price = starting_gas_price;
+    node_config.gas_price_change_percent = percent;
+
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -147,7 +145,11 @@ async fn estimate_gas_price__should_be_static() {
         client.estimate_gas_price(arbitrary_horizon).await.unwrap();
 
     // then
-    let expected = node_config.static_gas_price;
+    let mut expected = starting_gas_price;
+    for _ in 0..arbitrary_horizon {
+        expected = expected + (expected * percent / 100);
+    }
+
     let actual = u64::from(gas_price);
     assert_eq!(expected, actual);
 }

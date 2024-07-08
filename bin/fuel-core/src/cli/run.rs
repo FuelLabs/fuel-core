@@ -408,7 +408,9 @@ impl Command {
                 coinbase_recipient,
                 metrics,
             },
-            static_gas_price: min_gas_price,
+            starting_gas_price: 0,
+            gas_price_change_percent: 0,
+            min_gas_price,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,

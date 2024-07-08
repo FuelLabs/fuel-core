@@ -79,7 +79,6 @@ async fn network_operates_with_non_zero_chain_id() {
     let node_config = Config {
         debug: true,
         utxo_validation: true,
-        static_gas_price: 1,
         ..Config::local_node_with_configs(chain_config, state_config)
     };
 
@@ -141,7 +140,6 @@ async fn network_operates_with_non_zero_base_asset_id() {
     let node_config = Config {
         debug: true,
         utxo_validation: true,
-        static_gas_price: 1,
         ..Config::local_node_with_configs(chain_config, state_config)
     };
 

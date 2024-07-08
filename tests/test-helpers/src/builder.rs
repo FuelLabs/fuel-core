@@ -226,7 +226,6 @@ impl TestSetupBuilder {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config::default(),
             block_production: self.trigger,
-            static_gas_price: self.min_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
 
