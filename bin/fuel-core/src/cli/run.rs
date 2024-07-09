@@ -165,8 +165,16 @@ pub struct Command {
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
+    /// The starting gas price for the network
+    #[arg(long = "starting-gas-price", default_value = "1_000", env)]
+    pub starting_gas_price: u64,
+
+    /// The percentage change in gas price per block
+    #[arg(long = "gas-price-change-percent", default_value = "10", env)]
+    pub gas_price_change_percent: u64,
+
     /// The minimum allowed gas price
-    #[arg(long = "min-gas-price", default_value = "0", env)]
+    #[arg(long = "min-gas-price", default_value = "1_000", env)]
     pub min_gas_price: u64,
 
     /// The signing key used when producing blocks.
@@ -245,6 +253,8 @@ impl Command {
             debug,
             utxo_validation,
             native_executor_version,
+            starting_gas_price,
+            gas_price_change_percent,
             min_gas_price,
             consensus_key,
             poa_trigger,
@@ -408,8 +418,8 @@ impl Command {
                 coinbase_recipient,
                 metrics,
             },
-            starting_gas_price: 0,
-            gas_price_change_percent: 0,
+            starting_gas_price,
+            gas_price_change_percent,
             min_gas_price,
             block_importer,
             #[cfg(feature = "relayer")]
