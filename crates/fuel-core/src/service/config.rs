@@ -58,6 +58,7 @@ pub struct Config {
     pub starting_gas_price: u64,
     pub gas_price_change_percent: u64,
     pub min_gas_price: u64,
+    pub gas_price_threshold_percent: u64,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -125,6 +126,7 @@ impl Config {
         let starting_gas_price = 0;
         let gas_price_change_percent = 0;
         let min_gas_price = 0;
+        let gas_price_threshold_percent = 50;
 
         Self {
             graphql_config: GraphQLConfig {
@@ -158,6 +160,7 @@ impl Config {
             starting_gas_price,
             gas_price_change_percent,
             min_gas_price,
+            gas_price_threshold_percent,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,
