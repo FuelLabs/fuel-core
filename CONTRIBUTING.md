@@ -96,24 +96,24 @@ cargo build -p fuel-core-bin --no-default-features
 
 This is a rough outline of what a contributor's workflow looks like:
 
--   Make sure what you want to contribute is already traced as an issue.
+1. Make sure what you want to contribute is already traced as an issue.
     -   We may discuss the problem and solution in the issue.
--   Create a Git branch from where you want to base your work. This is usually master.
--   Write code, add test cases, and commit your work.
--   Run tests and make sure all tests pass.
--   If the PR contains any breaking changes, add the breaking label to your PR.
--   Update `CHANGELOG.md` with a proper description of your changes.
+2. Create a Git branch from where you want to base your work. This is usually master.
+3. Write code, add test cases, and commit your work.
+4. Run tests and make sure all tests pass.
+5. If the PR contains any breaking changes, add the breaking label to your PR.
+6. Update `CHANGELOG.md` with a proper description of your changes.
     -   If the change is breaking, please include a migration guide.
--   If you are part of the FuelLabs Github org, please open a PR from the repository itself.
--   Otherwise, push your changes to a branch in your fork of the repository and submit a pull request.
+7. If you are part of the FuelLabs Github org, please open a PR from the repository itself.
+8. Otherwise, push your changes to a branch in your fork of the repository and submit a pull request.
     -   Make sure mention the issue, which is created at step 1, in the commit message.
--   Your PR will be reviewed and some changes may be requested.
+9. Your PR will be reviewed and some changes may be requested.
     -   Once you've made changes, your PR must be re-reviewed and approved.
     -   If the PR becomes out of date, you can use GitHub's 'update branch' button.
     -   If there are conflicts, you can merge and resolve them locally. Then push to your PR branch.
         Any changes to the branch will require a re-review.
--   Our CI system (Github Actions) automatically tests all authorized pull requests.
--   Use Github to merge the PR once approved.
+10. Our CI system (Github Actions) automatically tests all authorized pull requests.
+11. Use Github to merge the PR once approved.
 
 Thanks for your contributions!
 
