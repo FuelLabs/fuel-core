@@ -62,6 +62,7 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "test-util",
 ] }
+tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = "1.4"

@@ -3310,6 +3310,7 @@ dependencies = [
  "test-helpers",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

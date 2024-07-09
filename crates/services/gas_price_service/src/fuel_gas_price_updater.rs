@@ -86,13 +86,18 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 // Info required about the l2 block for the gas price algorithm
 #[derive(Debug, Clone, PartialEq)]
-pub struct BlockInfo {
-    // Block height
-    pub height: u32,
-    // Gas used in the block
-    pub gas_used: u64,
-    // Total gas capacity of the block
-    pub block_gas_capacity: u64,
+pub enum BlockInfo {
+    // The genesis block of the L2 chain
+    GenesisBlock,
+    // A normal block in the L2 chain
+    Block {
+        // Block height
+        height: u32,
+        // Gas used in the block
+        gas_used: u64,
+        // Total gas capacity of the block
+        block_gas_capacity: u64,
+    },
 }
 #[async_trait::async_trait]
 pub trait L2BlockSource: Send + Sync {
@@ -213,26 +218,30 @@ where
     }
 
     async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
-        let l2_block = self
+        let l2_block_res = self
             .l2_block_source
             .get_l2_block(self.inner.l2_block_height())
             .await;
-        tracing::info!("Received L2 block: {:?}", l2_block);
-        let l2_block = l2_block?;
-        let BlockInfo {
-            height,
-            gas_used,
-            block_gas_capacity,
-        } = l2_block;
-        let capacity = NonZeroU64::new(block_gas_capacity)
-            .ok_or_else(|| anyhow::anyhow!("Block gas capacity must be non-zero"))?;
-        match self.inner {
-            AlgorithmUpdater::V0(ref mut updater) => {
+        tracing::info!("Received L2 block result: {:?}", l2_block_res);
+        let l2_block = l2_block_res?;
+        let AlgorithmUpdater::V0(ref mut updater) = &mut self.inner;
+        match l2_block {
+            BlockInfo::GenesisBlock => {
+                // do nothing
+            }
+            BlockInfo::Block {
+                height,
+                gas_used,
+                block_gas_capacity,
+            } => {
+                let capacity = NonZeroU64::new(block_gas_capacity).ok_or_else(|| {
+                    anyhow::anyhow!("Block gas capacity must be non-zero")
+                })?;
                 updater.update_l2_block_data(height, gas_used, capacity)?;
+                self.metadata_storage
+                    .set_metadata(self.inner.clone().into())?;
             }
         }
-        self.metadata_storage
-            .set_metadata(self.inner.clone().into())?;
         Ok(self.inner.algorithm())
     }
 }

@@ -124,7 +124,7 @@ fn get_block_info(
     let height = *block.header().height();
     let calculated_used_gas = block_used_gas(height, fee, gas_price, gas_price_factor)?;
     let used_gas = min(calculated_used_gas, block_gas_limit);
-    let info = BlockInfo {
+    let info = BlockInfo::Block {
         height: (*block.header().height()).into(),
         gas_used: used_gas,
         block_gas_capacity: block_gas_limit,
@@ -184,12 +184,16 @@ where
             .sealed_block
             .entity;
 
-        let param_version = block.header().consensus_parameters_version;
+        if height == 0u32.into() {
+            Ok(BlockInfo::GenesisBlock)
+        } else {
+            let param_version = block.header().consensus_parameters_version;
 
-        let GasPriceSettings {
-            gas_price_factor,
-            block_gas_limit,
-        } = self.gas_price_settings.settings(&param_version)?;
-        get_block_info(block, gas_price_factor, block_gas_limit)
+            let GasPriceSettings {
+                gas_price_factor,
+                block_gas_limit,
+            } = self.gas_price_settings.settings(&param_version)?;
+            get_block_info(block, gas_price_factor, block_gas_limit)
+        }
     }
 }
