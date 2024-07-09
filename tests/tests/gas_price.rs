@@ -4,6 +4,7 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
+use fuel_core::database::Database;
 
 use fuel_core::service::{
     Config,
@@ -16,9 +17,21 @@ use fuel_core_client::client::{
 };
 use fuel_core_types::{
     fuel_asm::*,
-    fuel_tx::TransactionBuilder,
+    fuel_tx::{
+        Finalizable,
+        Transaction,
+        TransactionBuilder,
+    },
     services::executor::TransactionExecutionResult,
 };
+
+fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
+    TransactionBuilder::script(vec![], vec![])
+        .max_fee_limit(max_fee_limit)
+        .add_random_fee_input()
+        .finalize()
+        .into()
+}
 
 #[tokio::test]
 async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
@@ -32,6 +45,28 @@ async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
 
     // then
     let expected = 0;
+    let actual = gas_price;
+    assert_eq!(expected, actual)
+}
+
+#[tokio::test]
+async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
+    // given
+    let mut config = Config::local_node();
+    let starting_gas_price = 982;
+    config.starting_gas_price = starting_gas_price;
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // when
+    let tx = tx_for_gas_limit(1);
+    let _ = client.submit_and_await_commit(&tx).await.unwrap();
+    let LatestGasPrice { gas_price, .. } = client.latest_gas_price().await.unwrap();
+
+    // then
+    let expected = starting_gas_price;
     let actual = gas_price;
     assert_eq!(expected, actual)
 }
