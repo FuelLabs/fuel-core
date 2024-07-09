@@ -5,110 +5,20 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 
-use fuel_core::{
-    chain_config::{
-        CoinConfig,
-        StateConfig,
-    },
-    service::{
-        Config,
-        FuelService,
-    },
+use fuel_core::service::{
+    Config,
+    FuelService,
 };
 use fuel_core_client::client::{
     schema::gas_price::EstimateGasPrice,
-    types::{
-        gas_price::LatestGasPrice,
-        primitives::{
-            Address,
-            AssetId,
-        },
-    },
+    types::gas_price::LatestGasPrice,
     FuelClient,
 };
 use fuel_core_types::{
     fuel_asm::*,
-    fuel_crypto::{
-        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
-        SecretKey,
-    },
-    fuel_tx::{
-        Finalizable,
-        Input,
-        TransactionBuilder,
-        UtxoId,
-    },
+    fuel_tx::TransactionBuilder,
     services::executor::TransactionExecutionResult,
 };
-use rand::prelude::StdRng;
-
-async fn setup_service_with_coin(owner: Address, amount: u64) -> (FuelService, UtxoId) {
-    // setup config
-    let tx_id = [0u8; 32];
-    let output_index = 0;
-    let coin_config = CoinConfig {
-        tx_id: tx_id.into(),
-        output_index,
-        tx_pointer_block_height: Default::default(),
-        tx_pointer_tx_idx: 0,
-        owner,
-        amount,
-        asset_id: AssetId::BASE,
-    };
-    let state = StateConfig {
-        coins: vec![coin_config],
-        ..Default::default()
-    };
-    let config = Config {
-        ..Config::local_node_with_state_config(state)
-    };
-
-    // setup server & client
-    let srv = FuelService::new_node(config).await.unwrap();
-
-    let utxo_id = UtxoId::new(tx_id.into(), output_index);
-
-    (srv, utxo_id)
-}
-
-#[tokio::test]
-async fn latest_gas_price__should_be_static() {
-    // setup node with a block that has a non-mint transaction
-    let static_gas_price = 2;
-    let max_fee_limit = 100;
-    let mut rng = StdRng::seed_from_u64(1234);
-    let secret_key: SecretKey = SecretKey::random(&mut rng);
-    let pk = secret_key.public_key();
-    let owner = Input::owner(&pk);
-
-    let (srv, utxo_id) = setup_service_with_coin(owner, max_fee_limit).await;
-
-    let client = FuelClient::from(srv.bound_address);
-
-    let tx = TransactionBuilder::script(vec![], vec![])
-        .max_fee_limit(1)
-        .add_unsigned_coin_input(
-            secret_key,
-            utxo_id,
-            max_fee_limit,
-            AssetId::BASE,
-            Default::default(),
-        )
-        .finalize()
-        .into();
-
-    client.submit_and_await_commit(&tx).await.unwrap();
-
-    // given
-    let expected = static_gas_price;
-
-    // when
-    let LatestGasPrice { gas_price, .. } = client.latest_gas_price().await.unwrap();
-
-    // then
-    let actual = gas_price;
-    assert_eq!(expected, actual)
-}
 
 #[tokio::test]
 async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
@@ -166,7 +76,7 @@ async fn dry_run_opt_with_zero_gas_price() {
     .finalize_as_transaction();
 
     let mut test_builder = TestSetupBuilder::new(2322u64);
-    test_builder.min_gas_price = 1;
+    test_builder.starting_gas_price = 1;
     let TestContext {
         client,
         srv: _dont_drop,

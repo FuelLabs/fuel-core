@@ -116,6 +116,7 @@ async fn network_operates_with_non_zero_base_asset_id() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0xBAADF00D);
     let secret = SecretKey::random(&mut rng);
     let amount = 10000;
+    let starting_gas_price = 1;
     let owner = Input::owner(&secret.public_key());
     let utxo_id = UtxoId::new([1; 32].into(), 0);
 
@@ -140,6 +141,7 @@ async fn network_operates_with_non_zero_base_asset_id() {
     let node_config = Config {
         debug: true,
         utxo_validation: true,
+        starting_gas_price,
         ..Config::local_node_with_configs(chain_config, state_config)
     };
 
