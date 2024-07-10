@@ -209,7 +209,7 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
         .write_state_config(state_config, &ChainConfig::local_testnet())
         .unwrap();
 
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -260,7 +260,7 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
     // ------------------------- Start a node with the regenesis -------------------------
 
     // Start a new node with the snapshot
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -282,7 +282,8 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
 
     // Add some blocks
     let secret = SecretKey::random(&mut rng);
@@ -323,7 +324,7 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
     // ------------------------- Start a node with the regenesis -------------------------
 
     // Start a new node with the snapshot
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
