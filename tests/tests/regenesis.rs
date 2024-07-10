@@ -78,8 +78,8 @@ async fn take_snapshot(db_dir: &TempDir, snapshot_dir: &TempDir) -> anyhow::Resu
 async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
 
-    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
-
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
     // Add some blocks
     produce_block_with_tx(&mut rng, &core.client).await;
     produce_block_with_tx(&mut rng, &core.client).await;
@@ -108,7 +108,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     // ------------------------- Start a node with the first regenesis -------------------------
 
     // Start a new node with the snapshot
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -145,7 +145,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     // ------------------------- Start a node with the second regenesis -------------------------
 
     // Make sure the old blocks persisted through the second regenesis
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -386,7 +386,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             Default::default(),
             base_asset_id,
         ))
-        .max_fee_limit(1_000_000)
+        .max_fee_limit(12_000_000)
         .script_gas_limit(1_000_000)
         .finalize_as_transaction();
 
