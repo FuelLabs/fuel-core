@@ -24,6 +24,7 @@ use fuel_core_types::{
     },
     services::executor::TransactionExecutionResult,
 };
+use test_helpers::fuel_core_driver::FuelCoreDriver;
 
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
@@ -134,19 +135,41 @@ async fn produce_block__matches_actual_updated_gas_price() {
 
 #[tokio::test]
 async fn latest_gas_price__if_node_restarts_gets_latest_value() {
-    todo!();
-    // // given
-    // let node_config = Config::local_node();
-    // let srv = FuelService::new_node(node_config.clone()).await.unwrap();
-    // let client = FuelClient::from(srv.bound_address);
-    //
-    // // when
-    // let LatestGasPrice { gas_price, .. } = client.latest_gas_price().await.unwrap();
-    //
-    // // then
-    // let expected = 0;
-    // let actual = gas_price;
-    // assert_eq!(expected, actual)
+    // given
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--starting-gas-price",
+        "1000",
+        "--gas-price-change-percent",
+        "10",
+        "--gas-price-threshold-percent",
+        "0",
+    ];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+    let starting = driver.node.shared.config.starting_gas_price;
+    let arb_blocks_to_produce = 10;
+    for _ in 0..arb_blocks_to_produce {
+        driver.client.produce_blocks(1, None).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let latest_gas_price = driver.client.latest_gas_price().await.unwrap();
+    let LatestGasPrice { gas_price, .. } = latest_gas_price;
+    let expected = gas_price;
+
+    // when
+    let temp_dir = driver.kill().await;
+    let recovered_driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+        .await
+        .unwrap();
+
+    // then
+    let new_latest_gas_price = recovered_driver.client.latest_gas_price().await.unwrap();
+    let LatestGasPrice { gas_price, .. } = new_latest_gas_price;
+    let actual = gas_price;
+    assert_eq!(expected, actual);
+    assert_ne!(expected, starting);
 }
 
 #[tokio::test]
