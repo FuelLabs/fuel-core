@@ -5,13 +5,13 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core::database::Database;
+use std::time::Duration;
 
 use fuel_core::service::{
     Config,
     FuelService,
 };
 use fuel_core_client::client::{
-    schema::gas_price::EstimateGasPrice,
     types::gas_price::LatestGasPrice,
     FuelClient,
 };
@@ -72,7 +72,36 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 }
 
 #[tokio::test]
-async fn submit_and_await_commit__updates_gas_price() {
+async fn produce_block__updates_gas_price() {
+    let _ = tracing_subscriber::fmt::try_init();
+    // given
+    let mut node_config = Config::local_node();
+    let starting_gas_price = 1000;
+    let percent = 10;
+    node_config.starting_gas_price = starting_gas_price;
+    node_config.gas_price_change_percent = percent;
+    // Always increase
+    node_config.gas_price_threshold_percent = 0;
+
+    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // when
+    // starting gas price
+    let _ = client.produce_blocks(1, None).await.unwrap();
+    // updated gas price
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // then
+    let change = starting_gas_price * percent / 100;
+    let expected = starting_gas_price + change;
+    let latest = client.latest_gas_price().await.unwrap();
+    let actual = latest.gas_price;
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn produce_block__matches_actual_updated_gas_price() {
     let _ = tracing_subscriber::fmt::try_init();
     // given
     let mut node_config = Config::local_node();
@@ -88,49 +117,19 @@ async fn submit_and_await_commit__updates_gas_price() {
 
     // when
     let arbitrary_horizon = 10;
+
+    let estimate = client.estimate_gas_price(arbitrary_horizon).await.unwrap();
+    let _ = client.produce_blocks(1, None).await.unwrap();
     for _ in 0..arbitrary_horizon {
-        let tx = tx_for_gas_limit(1);
-        let _ = client.submit_and_await_commit(&tx).await.unwrap();
+        let _ = client.produce_blocks(1, None).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    let latest = client.latest_gas_price().await.unwrap();
-    let mut expected = starting_gas_price;
-    for _ in 0..arbitrary_horizon {
-        expected += expected * percent / 100;
-    }
-    let actual = u64::from(latest.gas_price);
-    assert_eq!(expected, actual);
-}
-
-#[tokio::test]
-async fn estimate_gas_price__matches_actual_updated_gas_price() {
-    // given
-    let mut node_config = Config::local_node();
-    let starting_gas_price = 1000;
-    let percent = 10;
-    node_config.starting_gas_price = starting_gas_price;
-    node_config.gas_price_change_percent = percent;
-    // Always increase
-    node_config.gas_price_threshold_percent = 0;
-
-    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    // when
-    let arbitrary_horizon = 10;
-
-    let EstimateGasPrice { gas_price } =
-        client.estimate_gas_price(arbitrary_horizon).await.unwrap();
 
     // then
-    // advance the blocks with arbitrary transactions
-    for _ in 0..arbitrary_horizon {
-        let tx = tx_for_gas_limit(1);
-        let _ = client.submit_and_await_commit(&tx).await.unwrap();
-    }
     let latest = client.latest_gas_price().await.unwrap();
-    let expected = u64::from(latest.gas_price);
-    let actual = u64::from(gas_price);
-    assert_eq!(expected, actual);
+    let real = latest.gas_price;
+    let estimated = u64::from(estimate.gas_price);
+    assert_eq!(estimated, real);
 }
 
 #[tokio::test]

@@ -190,7 +190,12 @@ async fn get_l2_block__calculates_gas_used_correctly() {
     let result = source.get_l2_block(block_height).await.unwrap();
 
     // then
-    let actual = result.gas_used;
+    let BlockInfo::Block {
+        gas_used: actual, ..
+    } = result
+    else {
+        panic!("Expected non-genesis");
+    };
     let (fee, gas_price) = if let Transaction::Mint(inner_mint) = &mint {
         let fee = inner_mint.mint_amount();
         let gas_price = inner_mint.gas_price();
@@ -225,7 +230,13 @@ async fn get_l2_block__calculates_block_gas_capacity_correctly() {
     let result = source.get_l2_block(block_height).await.unwrap();
 
     // then
-    let actual = result.block_gas_capacity;
+    let BlockInfo::Block {
+        block_gas_capacity: actual,
+        ..
+    } = result
+    else {
+        panic!("Expected non-genesis");
+    };
     let expected = block_gas_limit;
     assert_eq!(expected, actual);
 }

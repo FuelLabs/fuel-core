@@ -184,7 +184,8 @@ where
             .sealed_block
             .entity;
 
-        if height == 0u32.into() {
+        // TODO: Genesis isn't always 0
+        if block.header().height() == &0u32.into() {
             Ok(BlockInfo::GenesisBlock)
         } else {
             let param_version = block.header().consensus_parameters_version;

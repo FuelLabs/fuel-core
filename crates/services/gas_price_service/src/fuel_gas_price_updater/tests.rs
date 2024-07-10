@@ -78,7 +78,7 @@ fn different_arb_metadata() -> UpdaterMetadata {
 #[tokio::test]
 async fn next__fetches_l2_block() {
     // given
-    let l2_block = BlockInfo {
+    let l2_block = BlockInfo::Block {
         height: 1,
         gas_used: 60,
         block_gas_capacity: 100,
@@ -149,7 +149,7 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
 async fn next__new_l2_block_saves_old_metadata() {
     let _ = tracing_subscriber::fmt::try_init();
     // given
-    let l2_block = BlockInfo {
+    let l2_block = BlockInfo::Block {
         height: 1,
         gas_used: 60,
         block_gas_capacity: 100,

@@ -98,7 +98,7 @@ impl AlgorithmUpdaterV0 {
             .unwrap_or(self.l2_block_fullness_threshold_percent);
 
         match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {
-            std::cmp::Ordering::Greater => {
+            std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {
                 let change_amount = self.change_amount(exec_gas_price);
                 exec_gas_price = exec_gas_price.saturating_add(change_amount);
             }
@@ -106,7 +106,6 @@ impl AlgorithmUpdaterV0 {
                 let change_amount = self.change_amount(exec_gas_price);
                 exec_gas_price = exec_gas_price.saturating_sub(change_amount);
             }
-            std::cmp::Ordering::Equal => {}
         }
         self.new_exec_price = max(self.min_exec_gas_price, exec_gas_price);
     }
