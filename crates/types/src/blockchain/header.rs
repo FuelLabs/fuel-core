@@ -76,7 +76,7 @@ impl BlockHeader {
     }
 
     /// Mutable getter for consensus portion of header
-    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
         match self {
             BlockHeader::V1(v1) => &mut v1.consensus,
         }

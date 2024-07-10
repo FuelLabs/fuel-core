@@ -98,7 +98,8 @@ fn block_to_import_result(block: Block) -> SharedImportResult {
 async fn get_l2_block__gets_expected_value() {
     // given
     let params = params();
-    let (block, _mint) = build_block(&params.chain_id());
+    let height = 1u32.into();
+    let (block, _mint) = build_block(&params.chain_id(), height);
     let block_height = 1u32.into();
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
@@ -123,12 +124,12 @@ async fn get_l2_block__waits_for_block() {
     // given
     let block_height = 1u32.into();
     let params = params();
-    let (block, _mint) = build_block(&params.chain_id());
+    let (block, _mint) = build_block(&params.chain_id(), block_height);
 
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
     let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
-    let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+    let (sender, receiver) = tokio::sync::mpsc::channel(1);
     let stream = ReceiverStream::new(receiver);
     let block_stream = Box::pin(stream);
     let mut source = l2_source(settings, block_stream);
@@ -147,7 +148,7 @@ async fn get_l2_block__waits_for_block() {
     }
 
     let import_result = block_to_import_result(block.clone());
-    _sender.send(import_result).await.unwrap();
+    sender.send(import_result).await.unwrap();
 
     // then
     let actual = fut_l2_block.await.unwrap();
@@ -155,7 +156,7 @@ async fn get_l2_block__waits_for_block() {
     assert_eq!(expected, actual);
 }
 
-fn build_block(chain_id: &ChainId) -> (Block, Transaction) {
+fn build_block(chain_id: &ChainId, height: BlockHeight) -> (Block, Transaction) {
     let mut inner_mint = Mint::default();
     *inner_mint.gas_price_mut() = 500;
     *inner_mint.mint_amount_mut() = 1000;
@@ -164,6 +165,7 @@ fn build_block(chain_id: &ChainId) -> (Block, Transaction) {
     let tx_id = tx.id(chain_id);
     let mut block = CompressedBlock::default();
     block.transactions_mut().push(tx_id);
+    block.header_mut().consensus_mut().height = height;
     let new = block.uncompress(vec![tx.clone()]);
     (new, tx)
 }
@@ -172,8 +174,8 @@ fn build_block(chain_id: &ChainId) -> (Block, Transaction) {
 async fn get_l2_block__calculates_gas_used_correctly() {
     // given
     let chain_id = ChainId::default();
-    let (block, mint) = build_block(&chain_id);
     let block_height = 1u32.into();
+    let (block, mint) = build_block(&chain_id, block_height);
 
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
@@ -212,8 +214,8 @@ async fn get_l2_block__calculates_gas_used_correctly() {
 async fn get_l2_block__calculates_block_gas_capacity_correctly() {
     // given
     let chain_id = ChainId::default();
-    let (block, _mint) = build_block(&chain_id);
     let block_height = 1u32.into();
+    let (block, _mint) = build_block(&chain_id, block_height);
 
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
