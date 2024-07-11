@@ -16,6 +16,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
     fuel_asm::{
         op,
         GTFArgs,
@@ -436,12 +437,20 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
 
     // ------------------------- Start a node with the regenesis -------------------------
 
+    // Regenesis increases the version of the executor by one.
+    // We want to use native execution to produce blocks,
+    // so we override the version of the native executor.
+    let latest_state_transition_version = LATEST_STATE_TRANSITION_VERSION
+        .saturating_add(1)
+        .to_string();
     let core = FuelCoreDriver::spawn(&[
         "--debug",
         "--poa-instant",
         "true",
         "--snapshot",
         snapshot_dir.path().to_str().unwrap(),
+        "--native-executor-version",
+        latest_state_transition_version.as_str(),
     ])
     .await?;
 

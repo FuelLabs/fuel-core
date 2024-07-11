@@ -9,10 +9,12 @@
 # - Rust `1.75.0`
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
+# - `cargo install cargo-make`
+# - `cargo install cargo-insta`
 # - `npm install prettier prettier-plugin-toml`
 
-npx prettier --check "**/Cargo.toml" &&
-cargo +nightly fmt --all -- --check &&
+npx prettier --write "**/Cargo.toml" &&
+cargo +nightly fmt --all &&
 cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&
 cargo clippy -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features &&

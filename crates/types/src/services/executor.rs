@@ -297,6 +297,9 @@ pub enum Error {
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),
+    /// Number of outputs is more than `u16::MAX`.
+    #[display(fmt = "Number of outputs is more than `u16::MAX`")]
+    TooManyOutputs,
 }
 
 impl From<Error> for anyhow::Error {

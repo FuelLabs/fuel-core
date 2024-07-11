@@ -73,7 +73,6 @@ use std::{
         TcpListener,
     },
     pin::Pin,
-    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower_http::{
@@ -186,20 +185,26 @@ pub fn new_service<OnChain, OffChain>(
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
     memory_pool: SharedMemoryPool,
-    log_threshold_ms: Duration,
-    request_timeout: Duration,
 ) -> anyhow::Result<Service>
 where
-    OnChain: AtomicView<Height = BlockHeight> + 'static,
-    OffChain: AtomicView<Height = BlockHeight> + 'static,
-    OnChain::View: OnChainDatabase,
-    OffChain::View: OffChainDatabase,
+    OnChain: AtomicView + 'static,
+    OffChain: AtomicView + 'static,
+    OnChain::LatestView: OnChainDatabase,
+    OffChain::LatestView: OffChainDatabase,
 {
-    let network_addr = config.addr;
+    let network_addr = config.config.addr;
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
+    let request_timeout = config.config.api_request_timeout;
+    let body_limit = config.config.request_body_bytes_limit;
 
     let schema = schema
+        .limit_complexity(config.config.max_queries_complexity)
+        .limit_depth(config.config.max_queries_depth)
+        .limit_recursive_depth(config.config.max_queries_recursive_depth)
+        .extension(MetricsExtension::new(
+            config.config.query_log_threshold_time,
+        ))
         .data(config)
         .data(combined_read_database)
         .data(txpool)
@@ -210,7 +215,6 @@ where
         .data(consensus_parameters_provider)
         .data(memory_pool)
         .extension(async_graphql::extensions::Tracing)
-        .extension(MetricsExtension::new(log_threshold_ms))
         .extension(ViewExtension::new())
         .finish();
 
@@ -239,7 +243,7 @@ where
             ACCESS_CONTROL_ALLOW_HEADERS,
             HeaderValue::from_static("*"),
         ))
-        .layer(DefaultBodyLimit::disable());
+        .layer(DefaultBodyLimit::max(body_limit));
 
     let listener = TcpListener::bind(network_addr)?;
     let bound_address = listener.local_addr()?;
@@ -275,7 +279,7 @@ async fn graphql_subscription_handler(
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
     let stream = schema
         .execute_stream(req.0)
-        .map(|r| Ok(Event::default().json_data(r).unwrap()));
+        .map(|r| Event::default().json_data(r));
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
 }

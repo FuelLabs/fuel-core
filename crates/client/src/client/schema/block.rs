@@ -1,3 +1,4 @@
+use super::Bytes32;
 use crate::client::schema::{
     schema,
     BlockId,
@@ -5,6 +6,7 @@ use crate::client::schema::{
     PageInfo,
     Signature,
     Tai64Timestamp,
+    TransactionId,
     U16,
     U32,
     U64,
@@ -12,11 +14,6 @@ use crate::client::schema::{
 use fuel_core_types::{
     fuel_crypto,
     fuel_types::BlockHeight,
-};
-
-use super::{
-    tx::TransactionIdFragment,
-    Bytes32,
 };
 
 #[derive(cynic::QueryVariables, Debug)]
@@ -90,7 +87,7 @@ pub struct Block {
     pub id: BlockId,
     pub header: Header,
     pub consensus: Consensus,
-    pub transactions: Vec<TransactionIdFragment>,
+    pub transaction_ids: Vec<TransactionId>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

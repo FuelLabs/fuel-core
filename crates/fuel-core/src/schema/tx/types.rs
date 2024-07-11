@@ -11,6 +11,7 @@ use crate::{
         },
         database::ReadView,
         IntoApiResult,
+        QUERY_COSTS,
     },
     query::{
         SimpleBlockData,
@@ -37,6 +38,7 @@ use crate::{
             output,
             upgrade_purpose::UpgradePurpose,
         },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -175,8 +177,13 @@ impl SuccessStatus {
         self.tx_id.into()
     }
 
+    async fn block_height(&self) -> U32 {
+        self.block_height.into()
+    }
+
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
@@ -219,8 +226,13 @@ impl FailureStatus {
         self.tx_id.into()
     }
 
+    async fn block_height(&self) -> U32 {
+        self.block_height.into()
+    }
+
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
@@ -390,6 +402,7 @@ impl Transaction {
         TransactionId(self.1)
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read")]
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -665,14 +678,15 @@ impl Transaction {
         }
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn status(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query, txpool).map_err(Into::into)
+        get_tx_status(id, query.as_ref(), txpool).map_err(Into::into)
     }
 
     async fn script(&self) -> Option<HexString> {
@@ -817,6 +831,7 @@ impl Transaction {
         }
     }
 
+    #[graphql(complexity = "QUERY_COSTS.raw_payload")]
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())

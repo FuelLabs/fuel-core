@@ -2,6 +2,7 @@ use crate::{
     database::{
         database_description::on_chain::OnChain,
         Database,
+        OnChainIterableKeyValueView,
     },
     fuel_core_graphql_api::api_service::ConsensusProvider,
     schema::scalars::{
@@ -19,6 +20,7 @@ use async_graphql::{
 use fuel_core_storage::{
     not_found,
     transactional::{
+        AtomicView,
         IntoTransaction,
         StorageTransaction,
     },
@@ -75,7 +77,7 @@ pub struct Config {
     debug_enabled: bool,
 }
 
-type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
+type FrozenDatabase = VmStorage<StorageTransaction<OnChainIterableKeyValueView>>;
 
 #[derive(Default, Debug)]
 pub struct ConcreteStorage {
@@ -109,7 +111,7 @@ impl ConcreteStorage {
         &mut self,
         txs: &[Script],
         params: Arc<ConsensusParameters>,
-        storage: Database<OnChain>,
+        storage: &Database<OnChain>,
     ) -> anyhow::Result<ID> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
@@ -156,7 +158,7 @@ impl ConcreteStorage {
         &mut self,
         id: &ID,
         params: Arc<ConsensusParameters>,
-        storage: Database<OnChain>,
+        storage: &Database<OnChain>,
     ) -> anyhow::Result<()> {
         let vm_database = Self::vm_database(storage)?;
         let tx = self
@@ -202,13 +204,14 @@ impl ConcreteStorage {
             .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
-    fn vm_database(storage: Database<OnChain>) -> anyhow::Result<FrozenDatabase> {
-        let block = storage
+    fn vm_database(storage: &Database<OnChain>) -> anyhow::Result<FrozenDatabase> {
+        let view = storage.latest_view()?;
+        let block = view
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?;
 
         let vm_database = VmStorage::new(
-            storage.into_transaction(),
+            view.into_transaction(),
             block.header().consensus(),
             block.header().application(),
             // TODO: Use a real coinbase address
@@ -313,11 +316,11 @@ impl DapMutation {
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
 
-        let id = ctx.data_unchecked::<GraphStorage>().lock().await.init(
-            &[],
-            params,
-            db.clone(),
-        )?;
+        let id =
+            ctx.data_unchecked::<GraphStorage>()
+                .lock()
+                .await
+                .init(&[], params, db)?;
 
         debug!("Session {:?} initialized", id);
 
@@ -346,11 +349,10 @@ impl DapMutation {
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
 
-        ctx.data_unchecked::<GraphStorage>().lock().await.reset(
-            &id,
-            params,
-            db.clone(),
-        )?;
+        ctx.data_unchecked::<GraphStorage>()
+            .lock()
+            .await
+            .reset(&id, params, db)?;
 
         debug!("Session {:?} was reset", id);
 

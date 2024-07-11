@@ -4,7 +4,7 @@ use crate::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct OffChain;
 
 impl DatabaseDescription for OffChain {
@@ -15,8 +15,8 @@ impl DatabaseDescription for OffChain {
         0
     }
 
-    fn name() -> &'static str {
-        "off_chain"
+    fn name() -> String {
+        "off_chain".to_string()
     }
 
     fn metadata_column() -> Self::Column {

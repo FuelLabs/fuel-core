@@ -5,12 +5,9 @@ use crate::{
         Error as DatabaseError,
         Result as DatabaseResult,
     },
-    state::{
-        IterDirection,
-        TransactableStorage,
-    },
+    state::IterDirection,
 };
-use fuel_core_metrics::core_metrics::database_metrics;
+use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -27,6 +24,7 @@ use fuel_core_storage::{
     transactional::Changes,
     Result as StorageResult,
 };
+use itertools::Itertools;
 use rand::RngCore;
 use rocksdb::{
     BlockBasedOptions,
@@ -46,10 +44,7 @@ use std::{
     cmp,
     env,
     fmt,
-    fmt::{
-        Debug,
-        Formatter,
-    },
+    fmt::Formatter,
     iter,
     path::{
         Path,
@@ -125,12 +120,28 @@ impl Drop for DropResources {
     }
 }
 
-#[derive(Debug)]
 pub struct RocksDb<Description> {
-    db: DB,
+    read_options: ReadOptions,
+    db: Arc<DB>,
+    snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
+    metrics: Arc<DatabaseMetrics>,
     // used for RAII
-    _drop: DropResources,
+    _drop: Arc<DropResources>,
     _marker: core::marker::PhantomData<Description>,
+}
+
+impl<Description> Drop for RocksDb<Description> {
+    fn drop(&mut self) {
+        // Drop the snapshot before the db.
+        // Dropping the snapshot after the db will cause a sigsegv.
+        self.snapshot = None;
+    }
+}
+
+impl<Description> std::fmt::Debug for RocksDb<Description> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RocksDb").field("db", &self.db).finish()
+    }
 }
 
 impl<Description> RocksDb<Description>
@@ -147,13 +158,15 @@ where
         );
         let mut db = result?;
 
-        db._drop = {
-            move || {
-                // cleanup temp dir
-                drop(tmp_dir);
+        db._drop = Arc::new(
+            {
+                move || {
+                    // cleanup temp dir
+                    drop(tmp_dir);
+                }
             }
-        }
-        .into();
+            .into(),
+        );
 
         Ok(db)
     }
@@ -244,7 +257,16 @@ where
         ) -> Result<DB, rocksdb::Error>,
         P: AsRef<Path>,
     {
-        let path = path.as_ref().join(Description::name());
+        let original_path = path.as_ref().to_path_buf();
+        let path = original_path.join(Description::name());
+        let metric_columns = columns
+            .iter()
+            .map(|column| (column.id(), column.name()))
+            .collect::<Vec<_>>();
+        let metrics = Arc::new(DatabaseMetrics::new(
+            Description::name().as_str(),
+            &metric_columns,
+        ));
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
@@ -264,6 +286,7 @@ where
             block_opts.disable_cache();
         }
         block_opts.set_bloom_filter(10.0, true);
+        block_opts.set_block_size(16 * 1024);
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -282,6 +305,11 @@ where
             let cache = Cache::new_lru_cache(row_cache_size);
             opts.set_row_cache(&cache);
         }
+        opts.set_max_background_jobs(6);
+        opts.set_bytes_per_sync(1048576);
+
+        #[cfg(feature = "test-helpers")]
+        opts.set_max_open_files(512);
 
         let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_default();
 
@@ -308,9 +336,7 @@ where
                 Ok(db)
             },
             Err(err) => {
-                tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
-                DB::repair(&opts, &path)
-                    .map_err(|e| DatabaseError::Other(e.into()))?;
+                tracing::error!("Couldn't open the database with an error: {}. \nTrying to reopen the database", err);
 
                 let iterator = cf_descriptors_to_open
                     .clone()
@@ -318,7 +344,7 @@ where
                     .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts))
                     .collect::<Vec<_>>();
 
-                opener(&opts, path, iterator)
+                opener(&opts, path.clone(), iterator)
             },
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
@@ -329,12 +355,63 @@ where
                 .map_err(|e| DatabaseError::Other(e.into()))?;
         }
 
+        let db = Arc::new(db);
+
         let rocks_db = RocksDb {
+            read_options: Self::generate_read_options(&None),
+            snapshot: None,
             db,
+            metrics,
             _drop: Default::default(),
             _marker: Default::default(),
         };
         Ok(rocks_db)
+    }
+
+    fn generate_read_options(
+        snapshot: &Option<rocksdb::SnapshotWithThreadMode<DB>>,
+    ) -> ReadOptions {
+        let mut opts = ReadOptions::default();
+        opts.set_verify_checksums(false);
+        if let Some(snapshot) = &snapshot {
+            opts.set_snapshot(snapshot);
+        }
+        opts
+    }
+
+    fn read_options(&self) -> ReadOptions {
+        Self::generate_read_options(&self.snapshot)
+    }
+
+    pub fn create_snapshot(&self) -> Self {
+        self.create_snapshot_generic()
+    }
+
+    pub fn create_snapshot_generic<TargetDescription>(
+        &self,
+    ) -> RocksDb<TargetDescription> {
+        let db = self.db.clone();
+        let metrics = self.metrics.clone();
+        let _drop = self._drop.clone();
+
+        // Safety: We are transmuting the snapshot to 'static lifetime, but it's safe
+        // because we are not going to use it after the RocksDb is dropped.
+        // We control the lifetime of the `Self` - RocksDb, so we can guarantee that
+        // the snapshot will be dropped before the RocksDb.
+        let snapshot = unsafe {
+            let snapshot = db.snapshot();
+            core::mem::transmute(snapshot)
+        };
+        let snapshot = Some(snapshot);
+
+        RocksDb {
+            read_options: Self::generate_read_options(&snapshot),
+            snapshot,
+            db,
+            metrics,
+            _drop,
+            _marker: Default::default(),
+        }
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
@@ -396,7 +473,7 @@ where
             );
             let prefix = prefix.to_vec();
             self
-                ._iter_all(column, ReadOptions::default(), iter_mode)
+                ._iter_all(column, self.read_options(), iter_mode)
                 // Skip the element under the `next_start_key` key.
                 .skip(1)
                 .take_while(move |item| {
@@ -410,7 +487,7 @@ where
         } else {
             // No next item, so we can start backward iteration from the end.
             let prefix = prefix.to_vec();
-            self._iter_all(column, ReadOptions::default(), IteratorMode::End)
+            self._iter_all(column, self.read_options(), IteratorMode::End)
                 .take_while(move |item| {
                     if let Ok((key, _)) = item {
                         key.starts_with(prefix.as_slice())
@@ -422,28 +499,60 @@ where
         }
     }
 
-    fn _iter_all(
+    pub(crate) fn _iter_all(
         &self,
         column: Description::Column,
         opts: ReadOptions,
         iter_mode: IteratorMode,
     ) -> impl Iterator<Item = KVItem> + '_ {
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
         self.db
             .iterator_cf_opt(&self.cf(column), opts, iter_mode)
-            .map(|item| {
+            .map(move |item| {
                 item.map(|(key, value)| {
                     let value_as_vec = Vec::from(value);
                     let key_as_vec = Vec::from(key);
 
-                    database_metrics().read_meter.inc();
-                    database_metrics().bytes_read.observe(
-                        (key_as_vec.len().saturating_add(value_as_vec.len())) as f64,
+                    self.metrics.read_meter.inc();
+                    column_metrics.map(|metric| metric.inc());
+                    self.metrics.bytes_read.inc_by(
+                        key_as_vec.len().saturating_add(value_as_vec.len()) as u64,
                     );
 
                     (key_as_vec, Arc::new(value_as_vec))
                 })
                 .map_err(|e| DatabaseError::Other(e.into()).into())
             })
+    }
+
+    pub fn multi_get<K, I>(
+        &self,
+        column: u32,
+        iterator: I,
+    ) -> DatabaseResult<Vec<Option<Vec<u8>>>>
+    where
+        I: Iterator<Item = K>,
+        K: AsRef<[u8]>,
+    {
+        let column_metrics = self.metrics.columns_read_statistic.get(&column);
+        let cl = self.cf_u32(column);
+        let results = self
+            .db
+            .multi_get_cf_opt(iterator.map(|k| (&cl, k)), &self.read_options)
+            .into_iter()
+            .map(|el| {
+                self.metrics.read_meter.inc();
+                column_metrics.map(|metric| metric.inc());
+                el.map(|value| {
+                    value.map(|vec| {
+                        self.metrics.bytes_read.inc_by(vec.len() as u64);
+                        vec
+                    })
+                })
+                .map_err(|err| DatabaseError::Other(err.into()))
+            })
+            .try_collect()?;
+        Ok(results)
     }
 }
 
@@ -458,25 +567,29 @@ where
         key: &[u8],
         column: Self::Column,
     ) -> StorageResult<Option<usize>> {
-        database_metrics().read_meter.inc();
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
 
         Ok(self
             .db
-            .get_pinned_cf(&self.cf(column), key)
+            .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
             .map(|value| value.len()))
     }
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        database_metrics().read_meter.inc();
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
 
         let value = self
             .db
-            .get_cf(&self.cf(column), key)
+            .get_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?;
 
         if let Some(value) = &value {
-            database_metrics().bytes_read.observe(value.len() as f64);
+            self.metrics.bytes_read.inc_by(value.len() as u64);
         }
 
         Ok(value.map(Arc::new))
@@ -488,11 +601,13 @@ where
         column: Self::Column,
         mut buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        database_metrics().read_meter.inc();
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
 
         let r = self
             .db
-            .get_pinned_cf(&self.cf(column), key)
+            .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
             .map(|value| {
                 let read = value.len();
@@ -503,7 +618,7 @@ where
             .transpose()?;
 
         if let Some(r) = &r {
-            database_metrics().bytes_read.observe(*r as f64);
+            self.metrics.bytes_read.inc_by(*r as u64);
         }
 
         Ok(r)
@@ -530,7 +645,7 @@ where
                         // end always iterates in reverse
                         IterDirection::Reverse => IteratorMode::End,
                     };
-                self._iter_all(column, ReadOptions::default(), iter_mode)
+                self._iter_all(column, self.read_options(), iter_mode)
                     .into_boxed()
             }
             (Some(prefix), None) => {
@@ -544,7 +659,7 @@ where
                     );
 
                     // Setting prefix on the RocksDB level to optimize iteration.
-                    let mut opts = ReadOptions::default();
+                    let mut opts = self.read_options();
                     opts.set_prefix_same_as_start(true);
 
                     let prefix = prefix.to_vec();
@@ -564,7 +679,7 @@ where
                 // start iterating in a certain direction from the start key
                 let iter_mode =
                     IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self._iter_all(column, ReadOptions::default(), iter_mode)
+                self._iter_all(column, self.read_options(), iter_mode)
                     .into_boxed()
             }
             (Some(prefix), Some(start)) => {
@@ -579,7 +694,7 @@ where
                 let prefix = prefix.to_vec();
                 let iter_mode =
                     IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self._iter_all(column, ReadOptions::default(), iter_mode)
+                self._iter_all(column, self.read_options(), iter_mode)
                     .take_while(move |item| {
                         if let Ok((key, _)) = item {
                             key.starts_with(prefix.as_slice())
@@ -593,22 +708,23 @@ where
     }
 }
 
-impl<Description> TransactableStorage<Description::Height> for RocksDb<Description>
+impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn commit_changes(
-        &self,
-        _: Option<Description::Height>,
-        changes: Changes,
-    ) -> StorageResult<()> {
+    pub fn commit_changes(&self, changes: &Changes) -> StorageResult<()> {
+        let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
 
         for (column, ops) in changes {
-            let cf = self.cf_u32(column);
+            let cf = self.cf_u32(*column);
+            let column_metrics = self.metrics.columns_write_statistic.get(column);
             for (key, op) in ops {
+                self.metrics.write_meter.inc();
+                column_metrics.map(|metric| metric.inc());
                 match op {
                     WriteOperation::Insert(value) => {
+                        self.metrics.bytes_written.inc_by(value.len() as u64);
                         batch.put_cf(&cf, key, value.as_ref());
                     }
                     WriteOperation::Remove => {
@@ -618,14 +734,16 @@ where
             }
         }
 
-        database_metrics().write_meter.inc();
-        database_metrics()
-            .bytes_written
-            .observe(batch.size_in_bytes() as f64);
-
         self.db
             .write(batch)
-            .map_err(|e| DatabaseError::Other(e.into()).into())
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+        // TODO: Use `u128` when `AtomicU128` is stable.
+        self.metrics.database_commit_time.inc_by(
+            u64::try_from(instant.elapsed().as_nanos())
+                .expect("The commit shouldn't take longer than `u64`"),
+        );
+
+        Ok(())
     }
 }
 
@@ -668,7 +786,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(&changes)?;
 
             Ok(len)
         }
@@ -677,7 +795,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(&changes)?;
             Ok(())
         }
     }
@@ -775,7 +893,7 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -791,7 +909,7 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
@@ -921,5 +1039,78 @@ mod tests {
 
         // Then
         assert_eq!(Ok(()), result);
+    }
+
+    #[test]
+    fn snapshot_allows_get_entry_after_it_was_removed() {
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(vec![1, 2, 3]);
+
+        // Given
+        let key_1 = [1; 32];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        let snapshot = db.create_snapshot();
+
+        // When
+        db.delete(&key_1, Column::Metadata).unwrap();
+
+        // Then
+        let db_get = db.get(&key_1, Column::Metadata).unwrap();
+        assert!(db_get.is_none());
+
+        let snapshot_get = snapshot.get(&key_1, Column::Metadata).unwrap();
+        assert_eq!(snapshot_get, Some(value));
+    }
+
+    #[test]
+    fn snapshot_allows_correct_iteration_even_after_all_elements_where_removed() {
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(vec![1, 2, 3]);
+
+        // Given
+        let key_1 = [1; 32];
+        let key_2 = [2; 32];
+        let key_3 = [3; 32];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        let snapshot = db.create_snapshot();
+
+        // When
+        db.delete(&key_1, Column::Metadata).unwrap();
+        db.delete(&key_2, Column::Metadata).unwrap();
+        db.delete(&key_3, Column::Metadata).unwrap();
+
+        // Then
+        let db_iter = db
+            .iter_store(Column::Metadata, None, None, IterDirection::Forward)
+            .collect::<Vec<_>>();
+        assert!(db_iter.is_empty());
+
+        let snapshot_iter = snapshot
+            .iter_store(Column::Metadata, None, None, IterDirection::Forward)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            snapshot_iter,
+            vec![
+                Ok((key_1.to_vec(), value.clone())),
+                Ok((key_2.to_vec(), value.clone())),
+                Ok((key_3.to_vec(), value))
+            ]
+        );
+    }
+
+    #[test]
+    fn drop_snapshot_after_dropping_main_database_shouldn_panic() {
+        let (db, _tmp) = create_db();
+
+        // Given
+        let snapshot = db.create_snapshot();
+
+        // When
+        drop(db);
+
+        // Then
+        drop(snapshot);
     }
 }

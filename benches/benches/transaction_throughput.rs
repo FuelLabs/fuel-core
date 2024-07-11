@@ -10,6 +10,7 @@ use criterion::{
 };
 use fuel_core::service::config::Trigger;
 use fuel_core_benches::*;
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -116,6 +117,8 @@ where
                                 .shared
                                 .database
                                 .on_chain()
+                                .latest_view()
+                                .unwrap()
                                 .get_sealed_block_by_height(&1.into())
                                 .unwrap()
                                 .unwrap();

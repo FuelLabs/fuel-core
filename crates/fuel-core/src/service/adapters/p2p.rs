@@ -1,5 +1,5 @@
 use super::BlockImporterAdapter;
-use crate::database::Database;
+use crate::database::OnChainIterableKeyValueView;
 use fuel_core_p2p::ports::{
     BlockHeightImporter,
     P2pDb,
@@ -16,7 +16,7 @@ use fuel_core_types::{
 };
 use std::ops::Range;
 
-impl P2pDb for Database {
+impl P2pDb for OnChainIterableKeyValueView {
     fn get_sealed_headers(
         &self,
         block_height_range: Range<u32>,

@@ -36,6 +36,7 @@ use crate::ports::{
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
+    blockchain::header::ConsensusParametersVersion,
     fuel_tx::{
         input::{
             coin::{
@@ -334,7 +335,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
 impl<ViewProvider, View> TxPool<ViewProvider>
 where
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
 {
     #[cfg(test)]
@@ -342,8 +343,8 @@ where
         &mut self,
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {
-        let view = self.database.latest_view();
-        self.insert_inner(tx, &view)
+        let view = self.database.latest_view().unwrap();
+        self.insert_inner(tx, ConsensusParametersVersion::MIN, &view)
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(tx_id = %tx.id()), ret, err)]
@@ -351,17 +352,18 @@ where
     fn insert_inner(
         &mut self,
         tx: Checked<Transaction>,
+        version: ConsensusParametersVersion,
         view: &View,
     ) -> Result<InsertionResult, Error> {
         let tx: CheckedTransaction = tx.into();
 
         let tx = Arc::new(match tx {
-            CheckedTransaction::Script(tx) => PoolTransaction::Script(tx),
-            CheckedTransaction::Create(tx) => PoolTransaction::Create(tx),
+            CheckedTransaction::Script(tx) => PoolTransaction::Script(tx, version),
+            CheckedTransaction::Create(tx) => PoolTransaction::Create(tx, version),
             CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
-            CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx),
-            CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx),
-            CheckedTransaction::Blob(tx) => PoolTransaction::Blob(tx),
+            CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx, version),
+            CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx, version),
+            CheckedTransaction::Blob(tx) => PoolTransaction::Blob(tx, version),
         });
 
         self.check_blacklisting(tx.as_ref())?;
@@ -428,15 +430,19 @@ where
     pub fn insert(
         &mut self,
         tx_status_sender: &TxStatusChange,
+        version: ConsensusParametersVersion,
         txs: Vec<Checked<Transaction>>,
     ) -> Vec<Result<InsertionResult, Error>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
-        let view = self.database.latest_view();
+        let view = match self.database.latest_view() {
+            Ok(view) => view,
+            Err(e) => return vec![Err(Error::Other(e.to_string()))],
+        };
 
         for tx in txs.into_iter() {
-            res.push(self.insert_inner(tx, &view));
+            res.push(self.insert_inner(tx, version, &view));
         }
 
         // announce to subscribers

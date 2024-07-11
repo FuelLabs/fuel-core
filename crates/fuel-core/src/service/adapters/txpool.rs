@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    database::OnChainIterableKeyValueView,
     service::{
         adapters::{
             BlockImporterAdapter,
@@ -28,6 +28,7 @@ use fuel_core_txpool::ports::{
     MemoryPool,
 };
 use fuel_core_types::{
+    blockchain::header::ConsensusParametersVersion,
     entities::{
         coins::coin::CompressedCoin,
         relayer::message::Message,
@@ -55,7 +56,7 @@ use std::sync::Arc;
 
 impl BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
-        self.events()
+        self.events_shared_result()
     }
 }
 
@@ -123,7 +124,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 }
 
-impl fuel_core_txpool::ports::TxPoolDb for Database {
+impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)
@@ -149,8 +150,10 @@ impl GasPriceProvider for StaticGasPrice {
 }
 
 impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
-    fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
-        self.shared_state.latest_consensus_parameters()
+    fn latest_consensus_parameters(
+        &self,
+    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
+        self.shared_state.latest_consensus_parameters_with_version()
     }
 }
 

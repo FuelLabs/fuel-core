@@ -3,6 +3,7 @@ use crate::fuel_core_graphql_api::ports::{
     OffChainDatabase,
     OnChainDatabase,
 };
+
 use fuel_core_storage::{
     iter::{
         BoxedIter,

@@ -53,6 +53,7 @@ mod blobs;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
+
 pub mod merkle_data;
 pub mod messages;
 pub mod sealed_block;
@@ -84,6 +85,11 @@ impl<S> StructuredStorage<S> {
     /// Creates a new instance of the structured storage.
     pub fn new(storage: S) -> Self {
         Self { inner: storage }
+    }
+
+    /// Returns the inner storage.
+    pub fn into_inner(self) -> S {
+        self.inner
     }
 }
 
@@ -231,7 +237,11 @@ where
     M: TableWithBlueprint<Column = Column>,
     M::Blueprint: BlueprintMutate<M, StructuredStorage<S>>,
 {
-    fn insert(
+    fn insert(&mut self, key: &M::Key, value: &M::Value) -> Result<(), Self::Error> {
+        <M as TableWithBlueprint>::Blueprint::put(self, key, M::column(), value)
+    }
+
+    fn replace(
         &mut self,
         key: &M::Key,
         value: &M::Value,
@@ -239,7 +249,11 @@ where
         <M as TableWithBlueprint>::Blueprint::replace(self, key, M::column(), value)
     }
 
-    fn remove(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
+    fn remove(&mut self, key: &M::Key) -> Result<(), Self::Error> {
+        <M as TableWithBlueprint>::Blueprint::delete(self, key, M::column())
+    }
+
+    fn take(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::take(self, key, M::column())
     }
 }
@@ -344,12 +358,12 @@ where
     //  without deserialization into `OwnedValue`.
     M::OwnedValue: Into<Vec<u8>>,
 {
-    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::put(self, key, M::column(), buf)
             .map(|_| buf.len())
     }
 
-    fn replace(
+    fn replace_bytes(
         &mut self,
         key: &M::Key,
         buf: &[u8],
@@ -362,7 +376,7 @@ where
         Ok(result)
     }
 
-    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn take_bytes(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
         let take = <M as TableWithBlueprint>::Blueprint::take(self, key, M::column())?
             .map(|value| value.into());
         Ok(take)

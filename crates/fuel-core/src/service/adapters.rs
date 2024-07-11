@@ -1,3 +1,19 @@
+use std::sync::Arc;
+
+use fuel_core_consensus_module::{
+    block_verifier::Verifier,
+    RelayerConsensusConfig,
+};
+use fuel_core_importer::ImporterResult;
+use fuel_core_services::stream::BoxStream;
+#[cfg(feature = "p2p")]
+use fuel_core_types::services::p2p::peer_reputation::AppScore;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::block_importer::SharedImportResult,
+};
+use fuel_core_upgradable_executor::executor::Executor;
+
 use crate::{
     database::{
         database_description::relayer::Relayer,
@@ -11,25 +27,15 @@ use crate::{
         vm_pool::MemoryPool,
     },
 };
-use fuel_core_consensus_module::{
-    block_verifier::Verifier,
-    RelayerConsensusConfig,
-};
-use fuel_core_services::stream::BoxStream;
-#[cfg(feature = "p2p")]
-use fuel_core_types::services::p2p::peer_reputation::AppScore;
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::block_importer::SharedImportResult,
-};
-use fuel_core_upgradable_executor::executor::Executor;
-use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;
 pub mod consensus_parameters_provider;
 pub mod executor;
+pub mod fuel_gas_price_provider;
+pub mod gas_price_adapters;
 pub mod graphql_api;
+pub mod import_result_provider;
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
@@ -38,8 +44,6 @@ pub mod relayer;
 #[cfg(feature = "p2p")]
 pub mod sync;
 pub mod txpool;
-
-pub mod fuel_gas_price_provider;
 
 #[derive(Debug, Clone)]
 pub struct ConsensusParametersProvider {
@@ -158,11 +162,20 @@ pub struct BlockImporterAdapter {
 }
 
 impl BlockImporterAdapter {
-    pub fn events(&self) -> BoxStream<SharedImportResult> {
+    pub fn events(&self) -> BoxStream<ImporterResult> {
         use futures::StreamExt;
         fuel_core_services::stream::IntoBoxStream::into_boxed(
             tokio_stream::wrappers::BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|r| futures::future::ready(r.ok())),
+        )
+    }
+
+    pub fn events_shared_result(&self) -> BoxStream<SharedImportResult> {
+        use futures::StreamExt;
+        fuel_core_services::stream::IntoBoxStream::into_boxed(
+            tokio_stream::wrappers::BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|r| futures::future::ready(r.ok()))
+                .map(|r| r.shared_result),
         )
     }
 }

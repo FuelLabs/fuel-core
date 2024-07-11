@@ -161,7 +161,7 @@ impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider, MP> RunnableS
     for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, MP>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider + Send + Sync,
@@ -193,7 +193,7 @@ impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider, MP> RunnableT
     for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, MP>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider + Send + Sync,
@@ -240,7 +240,7 @@ where
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let current_height = *self.tx_pool_shared_state.current_height.lock();
-                    let params = self
+                    let (version, params) = self
                         .tx_pool_shared_state
                         .consensus_parameters_provider
                         .latest_consensus_parameters();
@@ -265,6 +265,7 @@ where
                                 .in_scope(|| {
                                     self.tx_pool_shared_state.txpool.lock().insert(
                                         &self.tx_pool_shared_state.tx_status_sender,
+                                        version,
                                         txs
                                     )
                                 });
@@ -387,7 +388,7 @@ impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, View, MP>
     SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, MP>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<View = View>,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider,
@@ -400,7 +401,7 @@ where
     ) -> Vec<Result<InsertionResult, Error>> {
         // verify txs
         let current_height = *self.current_height.lock();
-        let params = self
+        let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
 
@@ -428,7 +429,11 @@ where
             .collect();
 
         // insert txs
-        let insertion = { self.txpool.lock().insert(&self.tx_status_sender, valid_txs) };
+        let insertion = {
+            self.txpool
+                .lock()
+                .insert(&self.tx_status_sender, version, valid_txs)
+        };
 
         for (ret, tx) in insertion.iter().zip(txs.into_iter()) {
             match ret {
@@ -452,9 +457,9 @@ where
             .into_iter()
             .map(|check_result| match check_result {
                 None => insertion.next().unwrap_or_else(|| {
-                    unreachable!(
-                        "the number of inserted txs matches the number of `None` results"
-                    )
+                    Err(Error::Other(
+                        anyhow::anyhow!("Insertion result is missing").to_string(),
+                    ))
                 }),
                 Some(err) => Err(err),
             })
@@ -503,7 +508,7 @@ where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
     ViewProvider: AtomicView,
-    ViewProvider::View: TxPoolDb,
+    ViewProvider::LatestView: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
     ConsensusProvider: ConsensusParametersProvider + Send + Sync,
     MP: MemoryPool + Send + Sync,

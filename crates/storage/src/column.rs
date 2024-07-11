@@ -79,8 +79,9 @@ impl Column {
 }
 
 impl StorageColumn for Column {
-    fn name(&self) -> &'static str {
-        self.into()
+    fn name(&self) -> String {
+        let str: &str = self.into();
+        str.to_string()
     }
 
     fn id(&self) -> u32 {

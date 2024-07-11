@@ -8,6 +8,7 @@ use crate::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
     },
+    heavy_task_processor::HeavyTaskProcessor,
     p2p_service::{
         FuelP2PEvent,
         FuelP2PService,
@@ -31,6 +32,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TraceErr,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -109,6 +111,14 @@ enum TaskRequest {
         score: AppScore,
         reporting_service: &'static str,
     },
+    DatabaseTransactionsLookUp {
+        response: Option<Vec<Transactions>>,
+        request_id: InboundRequestId,
+    },
+    DatabaseHeaderLookUp {
+        response: Option<Vec<SealedBlockHeader>>,
+        request_id: InboundRequestId,
+    },
 }
 
 impl Debug for TaskRequest {
@@ -131,6 +141,12 @@ impl Debug for TaskRequest {
             }
             TaskRequest::GetAllPeerInfo { .. } => {
                 write!(f, "TaskRequest::GetPeerInfo")
+            }
+            TaskRequest::DatabaseTransactionsLookUp { .. } => {
+                write!(f, "TaskRequest::DatabaseTransactionsLookUp")
+            }
+            TaskRequest::DatabaseHeaderLookUp { .. } => {
+                write!(f, "TaskRequest::DatabaseHeaderLookUp")
             }
         }
     }
@@ -302,11 +318,14 @@ pub struct UninitializedTask<V, B> {
 /// and the top level `NetworkService`.
 pub struct Task<P, V, B> {
     chain_id: ChainId,
+    response_timeout: Duration,
     p2p_service: P,
     view_provider: V,
     next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
+    request_sender: mpsc::Sender<TaskRequest>,
+    database_processor: HeavyTaskProcessor,
     broadcast: B,
     max_headers_per_request: u32,
     // milliseconds wait time between peer heartbeat reputation checks
@@ -317,7 +336,7 @@ pub struct Task<P, V, B> {
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct HeartbeatPeerReputationConfig {
     old_heartbeat_penalty: AppScore,
     low_heartbeat_frequency_penalty: AppScore,
@@ -402,6 +421,114 @@ impl<P: TaskP2PService, V, B: Broadcast> Task<P, V, B> {
     }
 }
 
+impl<P, V, B> Task<P, V, B>
+where
+    P: TaskP2PService + 'static,
+    V: AtomicView + 'static,
+    V::LatestView: P2pDb,
+{
+    fn process_request(
+        &mut self,
+        request_message: RequestMessage,
+        request_id: InboundRequestId,
+    ) -> anyhow::Result<()> {
+        let instant = Instant::now();
+        let timeout = self.response_timeout;
+        let response_channel = self.request_sender.clone();
+        match request_message {
+            RequestMessage::Transactions(range) => {
+                let view = self.view_provider.latest_view()?;
+                let result = self.database_processor.spawn(move || {
+                    if instant.elapsed() > timeout {
+                        tracing::warn!("Get transactions request timed out");
+                        return;
+                    }
+
+                    let response = view
+                        .get_transactions(range.clone())
+                        .trace_err(
+                            format!(
+                                "Failed to get transactions for the range {:?}",
+                                range
+                            )
+                            .as_str(),
+                        )
+                        .ok()
+                        .flatten();
+
+                    let _ = response_channel
+                        .try_send(TaskRequest::DatabaseTransactionsLookUp {
+                            response,
+                            request_id,
+                        })
+                        .trace_err(
+                            "Failed to send transactions response to the request channel",
+                        );
+                });
+
+                if result.is_err() {
+                    let _ = self.p2p_service.send_response_msg(
+                        request_id,
+                        ResponseMessage::Transactions(None),
+                    );
+                }
+            }
+            RequestMessage::SealedHeaders(range) => {
+                let max_len = self
+                    .max_headers_per_request
+                    .try_into()
+                    .expect("u32 should always fit into usize");
+                if range.len() > max_len {
+                    tracing::error!("Requested range of sealed headers is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
+                    // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+                    let response = None;
+                    let _ = self.p2p_service.send_response_msg(
+                        request_id,
+                        ResponseMessage::SealedHeaders(response),
+                    );
+                    return Ok(())
+                }
+
+                let view = self.view_provider.latest_view()?;
+                let result = self.database_processor.spawn(move || {
+                    if instant.elapsed() > timeout {
+                        tracing::warn!("Get headers request timed out");
+                        return;
+                    }
+
+                    let response = view
+                        .get_sealed_headers(range.clone())
+                        .trace_err(
+                            format!(
+                                "Failed to get sealed headers for the range {:?}",
+                                range
+                            )
+                            .as_str(),
+                        )
+                        .ok();
+
+                    let _ = response_channel
+                        .try_send(TaskRequest::DatabaseHeaderLookUp {
+                            response,
+                            request_id,
+                        })
+                        .trace_err(
+                            "Failed to send headers response to the request channel",
+                        );
+                });
+
+                if result.is_err() {
+                    let _ = self.p2p_service.send_response_msg(
+                        request_id,
+                        ResponseMessage::SealedHeaders(None),
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
     let inner = Vec::from(*peer_id);
     Ok(FuelPeerId::from(inner))
@@ -411,7 +538,7 @@ fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
 impl<V> RunnableService for UninitializedTask<V, SharedState>
 where
     V: AtomicView + 'static,
-    V::View: P2pDb,
+    V::LatestView: P2pDb,
 {
     const NAME: &'static str = "P2P";
 
@@ -437,7 +564,7 @@ where
             config,
         } = self;
 
-        let view = view_provider.latest_view();
+        let view = view_provider.latest_view()?;
         let genesis = view.get_genesis()?;
         let config = config.init(genesis)?;
         let Config {
@@ -456,6 +583,7 @@ where
             low_heartbeat_frequency_penalty: -5.,
         };
 
+        let response_timeout = config.set_request_timeout;
         let mut p2p_service = FuelP2PService::new(
             broadcast.reserved_peers_broadcast.clone(),
             config,
@@ -467,14 +595,20 @@ where
             Instant::now().checked_add(heartbeat_check_interval).expect(
                 "The heartbeat check interval should be small enough to do frequently",
             );
+        let number_of_threads = 2;
+        let database_processor = HeavyTaskProcessor::new(number_of_threads, 1024 * 10)?;
+        let request_sender = broadcast.request_sender.clone();
 
         let task = Task {
             chain_id,
+            response_timeout,
             p2p_service,
             view_provider,
             request_receiver,
+            request_sender,
             next_block_height,
             broadcast,
+            database_processor,
             max_headers_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
@@ -492,20 +626,27 @@ impl<P, V, B> RunnableTask for Task<P, V, B>
 where
     P: TaskP2PService + 'static,
     V: AtomicView + 'static,
-    V::View: P2pDb,
+    V::LatestView: P2pDb,
     B: Broadcast + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         tracing::debug!("P2P task is running");
-        let should_continue;
+        let mut should_continue;
 
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
                 should_continue = false;
-            }
-
+            },
+            latest_block_height = self.next_block_height.next() => {
+                if let Some(latest_block_height) = latest_block_height {
+                    let _ = self.p2p_service.update_block_height(latest_block_height);
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            },
             next_service_request = self.request_receiver.recv() => {
                 should_continue = true;
                 match next_service_request {
@@ -548,8 +689,15 @@ where
                             .collect::<Vec<_>>();
                         let _ = channel.send(peers);
                     }
+                    Some(TaskRequest::DatabaseTransactionsLookUp { response, request_id }) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
+                    }
+                    Some(TaskRequest::DatabaseHeaderLookUp { response, request_id }) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
+                    }
                     None => {
-                        unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
+                        tracing::error!("The P2P `Task` should be holder of the `Sender`");
+                        should_continue = false;
                     }
                 }
             }
@@ -576,45 +724,7 @@ where
                         }
                     },
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
-                        match request_message {
-                            RequestMessage::Transactions(range) => {
-                                let view = self.view_provider.latest_view();
-                                match view.get_transactions(range.clone()) {
-                                    Ok(response) => {
-                                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
-                                    },
-                                    Err(e) => {
-                                        tracing::error!("Failed to get transactions for range {:?}: {:?}", range, e);
-                                        let response = None;
-                                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
-                                        return Err(e.into())
-                                    }
-                                }
-                            }
-                            RequestMessage::SealedHeaders(range) => {
-                                let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
-                                if range.len() > max_len {
-                                    tracing::error!("Requested range of sealed headers is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
-                                    // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-                                    let response = None;
-                                    let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
-                                } else {
-                                    let view = self.view_provider.latest_view();
-                                    match view.get_sealed_headers(range.clone()) {
-                                        Ok(headers) => {
-                                            let response = Some(headers);
-                                            let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
-                                        },
-                                        Err(e) => {
-                                            tracing::error!("Failed to get sealed headers for range {:?}: {:?}", range, &e);
-                                            let response = None;
-                                            let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
-                                            return Err(e.into())
-                                        }
-                                    }
-                                };
-                            }
-                        }
+                        self.process_request(request_message, request_id)?
                     },
                     _ => (),
                 }
@@ -629,14 +739,6 @@ where
                     }
                 }
                 self.next_check_time += self.heartbeat_check_interval;
-            },
-            latest_block_height = self.next_block_height.next() => {
-                if let Some(latest_block_height) = latest_block_height {
-                    let _ = self.p2p_service.update_block_height(latest_block_height);
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
             }
         }
 
@@ -801,7 +903,7 @@ pub fn new_service<V, B>(
 ) -> Service<V>
 where
     V: AtomicView + 'static,
-    V::View: P2pDb,
+    V::LatestView: P2pDb,
     B: BlockHeightImporter,
 {
     let task =
@@ -867,20 +969,10 @@ pub mod tests {
     struct FakeDb;
 
     impl AtomicView for FakeDb {
-        type View = Self;
+        type LatestView = Self;
 
-        type Height = BlockHeight;
-
-        fn latest_height(&self) -> Option<Self::Height> {
-            Some(BlockHeight::default())
-        }
-
-        fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            self.clone()
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.clone())
         }
     }
 
@@ -927,6 +1019,7 @@ pub mod tests {
 
     struct FakeP2PService {
         peer_info: Vec<(PeerId, PeerInfo)>,
+        next_event_stream: BoxStream<FuelP2PEvent>,
     }
 
     impl TaskP2PService for FakeP2PService {
@@ -939,7 +1032,7 @@ pub mod tests {
         }
 
         fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>> {
-            std::future::pending().boxed()
+            self.next_event_stream.next().boxed()
         }
 
         fn publish_message(
@@ -984,7 +1077,7 @@ pub mod tests {
         }
 
         fn update_block_height(&mut self, _height: BlockHeight) -> anyhow::Result<()> {
-            todo!()
+            Ok(())
         }
     }
 
@@ -992,20 +1085,10 @@ pub mod tests {
     struct FakeDB;
 
     impl AtomicView for FakeDB {
-        type View = Self;
+        type LatestView = Self;
 
-        type Height = BlockHeight;
-
-        fn latest_height(&self) -> Option<Self::Height> {
-            Some(BlockHeight::default())
-        }
-
-        fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            self.clone()
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.clone())
         }
     }
 
@@ -1086,8 +1169,11 @@ pub mod tests {
             score: 100.0,
         };
         let peer_info = vec![(peer_id, peer_info)];
-        let p2p_service = FakeP2PService { peer_info };
-        let (_request_sender, request_receiver) = mpsc::channel(100);
+        let p2p_service = FakeP2PService {
+            peer_info,
+            next_event_stream: Box::pin(futures::stream::pending()),
+        };
+        let (request_sender, request_receiver) = mpsc::channel(100);
 
         let (report_sender, mut report_receiver) = mpsc::channel(100);
         let broadcast = FakeBroadcast {
@@ -1107,10 +1193,13 @@ pub mod tests {
 
         let mut task = Task {
             chain_id: Default::default(),
+            response_timeout: Default::default(),
             p2p_service,
             view_provider: FakeDB,
             next_block_height: FakeBlockImporter.next_block_height(),
             request_receiver,
+            request_sender,
+            database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
@@ -1167,8 +1256,11 @@ pub mod tests {
             score: 100.0,
         };
         let peer_info = vec![(peer_id, peer_info)];
-        let p2p_service = FakeP2PService { peer_info };
-        let (_request_sender, request_receiver) = mpsc::channel(100);
+        let p2p_service = FakeP2PService {
+            peer_info,
+            next_event_stream: Box::pin(futures::stream::pending()),
+        };
+        let (request_sender, request_receiver) = mpsc::channel(100);
 
         let (report_sender, mut report_receiver) = mpsc::channel(100);
         let broadcast = FakeBroadcast {
@@ -1188,10 +1280,13 @@ pub mod tests {
 
         let mut task = Task {
             chain_id: Default::default(),
+            response_timeout: Default::default(),
             p2p_service,
             view_provider: FakeDB,
             next_block_height: FakeBlockImporter.next_block_height(),
             request_receiver,
+            request_sender,
+            database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
@@ -1221,5 +1316,55 @@ pub mod tests {
             heartbeat_peer_reputation_config.old_heartbeat_penalty
         );
         assert_eq!(reporting_service, "p2p");
+    }
+
+    #[tokio::test]
+    async fn should_process_all_imported_block_under_infinite_events_from_p2p() {
+        // Given
+        let (blocks_processed_sender, mut block_processed_receiver) = mpsc::channel(1);
+        let next_block_height = Box::pin(futures::stream::repeat_with(move || {
+            blocks_processed_sender.try_send(()).unwrap();
+            BlockHeight::from(0)
+        }));
+        let infinite_event_stream = Box::pin(futures::stream::empty());
+        let p2p_service = FakeP2PService {
+            peer_info: vec![],
+            next_event_stream: infinite_event_stream,
+        };
+
+        // Initialization
+        let (request_sender, request_receiver) = mpsc::channel(100);
+        let broadcast = FakeBroadcast {
+            peer_reports: mpsc::channel(100).0,
+        };
+        let mut task = Task {
+            chain_id: Default::default(),
+            response_timeout: Default::default(),
+            p2p_service,
+            view_provider: FakeDB,
+            next_block_height,
+            request_receiver,
+            request_sender,
+            database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
+            broadcast,
+            max_headers_per_request: 0,
+            heartbeat_check_interval: Duration::from_secs(0),
+            heartbeat_max_avg_interval: Default::default(),
+            heartbeat_max_time_since_last: Default::default(),
+            next_check_time: Instant::now(),
+            heartbeat_peer_reputation_config: Default::default(),
+        };
+        let mut watcher = StateWatcher::started();
+        // End of initialization
+
+        for _ in 0..100 {
+            // When
+            task.run(&mut watcher).await.unwrap();
+
+            // Then
+            block_processed_receiver
+                .try_recv()
+                .expect("Should process the block height even under p2p pressure");
+        }
     }
 }

@@ -140,17 +140,19 @@ impl TryFrom<schema::block::Block> for Block {
     fn try_from(value: schema::block::Block) -> Result<Self, Self::Error> {
         match value.version {
             BlockVersion::V1 => {
+                let block_producer = value.block_producer();
+                let id = value.id.into();
+                let header = value.header.try_into()?;
+                let consensus = value.consensus.into();
                 let transactions = value
-                    .transactions
-                    .iter()
-                    .map(|tx| tx.id.clone())
+                    .transaction_ids
+                    .into_iter()
                     .map(Into::into)
                     .collect::<Vec<TransactionId>>();
-                let block_producer = value.block_producer();
                 Ok(Self {
-                    id: value.id.into(),
-                    header: value.header.try_into()?,
-                    consensus: value.consensus.into(),
+                    id,
+                    header,
+                    consensus,
                     transactions,
                     block_producer,
                 })

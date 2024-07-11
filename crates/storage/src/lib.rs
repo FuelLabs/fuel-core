@@ -68,6 +68,13 @@ pub enum Error {
     Other(anyhow::Error),
 }
 
+#[cfg(feature = "test-helpers")]
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string().eq(&other.to_string())
+    }
+}
+
 impl From<Error> for anyhow::Error {
     fn from(error: Error) -> Self {
         anyhow::Error::msg(error)

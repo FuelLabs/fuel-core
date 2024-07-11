@@ -164,6 +164,12 @@ impl OnceTransactionsSource {
             ),
         }
     }
+
+    pub fn new_maybe_checked(transactions: Vec<MaybeCheckedTransaction>) -> Self {
+        Self {
+            transactions: ParkingMutex::new(transactions),
+        }
+    }
 }
 
 impl TransactionsSource for OnceTransactionsSource {
@@ -229,6 +235,14 @@ where
     R: RelayerPort,
     D: KeyValueInspect<Column = Column>,
 {
+    pub fn new(relayer: R, database: D, options: ExecutionOptions) -> Self {
+        Self {
+            relayer,
+            database,
+            options,
+        }
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn produce_without_commit<TxSource>(
         self,
@@ -689,10 +703,13 @@ where
     {
         let block_header = partial_block.header;
         let block_height = block_header.height();
+        let consensus_parameters_version = block_header.consensus_parameters_version;
         let relayed_tx_iter = forced_transactions.into_iter();
-        for transaction in relayed_tx_iter {
-            let maybe_checked_transaction =
-                MaybeCheckedTransaction::CheckedTransaction(transaction);
+        for checked in relayed_tx_iter {
+            let maybe_checked_transaction = MaybeCheckedTransaction::CheckedTransaction(
+                checked,
+                consensus_parameters_version,
+            );
             let tx_id = maybe_checked_transaction.id(&self.consensus_params.chain_id());
             match self.execute_transaction_and_commit(
                 partial_block,
@@ -1041,11 +1058,21 @@ where
         header: &PartialBlockHeader,
     ) -> ExecutorResult<CheckedTransaction> {
         let block_height = *header.height();
+        let actual_version = header.consensus_parameters_version;
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
                 .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
-            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
+            MaybeCheckedTransaction::CheckedTransaction(checked_tx, checked_version) => {
+                if actual_version == checked_version {
+                    checked_tx
+                } else {
+                    let checked_tx: Checked<Transaction> = checked_tx.into();
+                    let (tx, _) = checked_tx.into();
+                    tx.into_checked_basic(block_height, &self.consensus_params)?
+                        .into()
+                }
+            }
         };
         Ok(checked_tx)
     }
@@ -1235,7 +1262,7 @@ where
 
         if storage_tx
             .storage::<ProcessedTransactions>()
-            .insert(&coinbase_id, &())?
+            .replace(&coinbase_id, &())?
             .is_some()
         {
             return Err(ExecutorError::TransactionIdCollision(coinbase_id))
@@ -1296,10 +1323,14 @@ where
             storage_tx,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
-            unreachable!()
+            return Err(ExecutorError::Other(
+                "Input of the `Mint` transaction is not a contract".to_string(),
+            ))
         };
         let Output::Contract(output) = outputs[0] else {
-            unreachable!()
+            return Err(ExecutorError::Other(
+                "The output of the `Mint` transaction is not a contract".to_string(),
+            ))
         };
         Ok((input, output))
     }
@@ -1536,10 +1567,7 @@ where
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        if !coin
-                            .matches_input(input)
-                            .expect("The input is a coin above")
-                        {
+                        if !coin.matches_input(input).unwrap_or_default() {
                             return Err(
                                 TransactionValidityError::CoinMismatch(*utxo_id).into()
                             )
@@ -1573,10 +1601,7 @@ where
                             .into())
                         }
 
-                        if !message
-                            .matches_input(input)
-                            .expect("The input is message above")
-                        {
+                        if !message.matches_input(input).unwrap_or_default() {
                             return Err(
                                 TransactionValidityError::MessageMismatch(*nonce).into()
                             )
@@ -1623,7 +1648,7 @@ where
                     // prune utxo from db
                     let coin = db
                         .storage::<Coins>()
-                        .remove(utxo_id)
+                        .take(utxo_id)
                         .map_err(Into::into)
                         .transpose()
                         .unwrap_or_else(|| {
@@ -1652,7 +1677,7 @@ where
                     // and cleanup message contents
                     let message = db
                         .storage::<Messages>()
-                        .remove(nonce)?
+                        .take(nonce)?
                         .ok_or(ExecutorError::MessageDoesNotExist(*nonce))?;
                     execution_data
                         .events
@@ -1697,9 +1722,7 @@ where
         // if there's no script result (i.e. create) then fee == base amount
         Ok((
             total_used_gas,
-            max_fee
-                .checked_sub(fee)
-                .expect("Refunded fee can't be more than `max_fee`."),
+            max_fee.checked_sub(fee).ok_or(ExecutorError::FeeOverflow)?,
         ))
     }
 
@@ -1873,8 +1896,8 @@ where
     {
         let tx_idx = execution_data.tx_count;
         for (output_index, output) in outputs.iter().enumerate() {
-            let index = u16::try_from(output_index)
-                .expect("Transaction can have only up to `u16::MAX` outputs");
+            let index =
+                u16::try_from(output_index).map_err(|_| ExecutorError::TooManyOutputs)?;
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin {
@@ -1969,7 +1992,7 @@ where
             }
             .into();
 
-            if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+            if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
             execution_data

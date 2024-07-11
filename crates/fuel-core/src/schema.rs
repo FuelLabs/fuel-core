@@ -1,3 +1,7 @@
+use crate::fuel_core_graphql_api::{
+    api_service::ReadDatabase,
+    database::ReadView,
+};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
@@ -7,6 +11,8 @@ use async_graphql::{
         Edge,
         EmptyFields,
     },
+    parser::types::OperationType,
+    Context,
     MergedObject,
     MergedSubscription,
     OutputType,
@@ -18,6 +24,7 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use itertools::Itertools;
+use std::borrow::Cow;
 
 pub mod balance;
 pub mod block;
@@ -108,7 +115,7 @@ where
             )
             .into())
         }
-        (None, None, None, None) => {
+        (_, _, None, None) => {
             return Err(anyhow!("The queries for the whole range is not supported").into())
         }
         (_, _, _, _) => { /* Other combinations are allowed */ }
@@ -125,8 +132,7 @@ where
             } else if let Some(last) = last {
                 (last, IterDirection::Reverse)
             } else {
-                // Unreachable because of the check `(None, None, None, None)` above
-                unreachable!()
+                return Err(anyhow!("Either `first` or `last` should be provided"))
             };
 
             let start;
@@ -195,4 +201,25 @@ where
         },
     )
     .await
+}
+
+pub trait ReadViewProvider {
+    /// Returns the read view for the current operation.
+    fn read_view(&self) -> StorageResult<Cow<ReadView>>;
+}
+
+impl<'a> ReadViewProvider for Context<'a> {
+    fn read_view(&self) -> StorageResult<Cow<'a, ReadView>> {
+        let operation_type = self.query_env.operation.node.ty;
+
+        // Sometimes, during mutable queries or subscription the resolvers
+        // need access to an updated view of the database.
+        if operation_type != OperationType::Query {
+            let database: &ReadDatabase = self.data_unchecked();
+            database.view().map(Cow::Owned)
+        } else {
+            let read_view: &ReadView = self.data_unchecked();
+            Ok(Cow::Borrowed(read_view))
+        }
+    }
 }

@@ -5,6 +5,7 @@ use crate::{
         default_db_path,
         run::{
             consensus::PoATriggerArgs,
+            graphql::GraphQLArgs,
             tx_pool::TxPoolArgs,
         },
         ShutdownListener,
@@ -19,6 +20,7 @@ use fuel_core::{
         CombinedDatabase,
         CombinedDatabaseConfig,
     },
+    fuel_core_graphql_api::ServiceConfig as GraphQLConfig,
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -56,6 +58,7 @@ use pyroscope_pprofrs::{
 use std::{
     env,
     net,
+    num::NonZeroU64,
     path::PathBuf,
     str::FromStr,
 };
@@ -65,6 +68,9 @@ use tracing::{
     warn,
 };
 
+#[cfg(feature = "rocksdb")]
+use fuel_core::state::historical_rocksdb::StateRewindPolicy;
+
 use super::DEFAULT_DATABASE_CACHE_SIZE;
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
@@ -73,6 +79,7 @@ pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 mod p2p;
 
 mod consensus;
+mod graphql;
 mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
@@ -81,12 +88,6 @@ mod tx_pool;
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
-    #[clap(long = "ip", default_value = "127.0.0.1", value_parser, env)]
-    pub ip: net::IpAddr,
-
-    #[clap(long = "port", default_value = "4000", env)]
-    pub port: u16,
-
     /// Vanity name for node, used in telemetry
     #[clap(long = "service-name", default_value = "fuel-core", value_parser, env)]
     pub service_name: String,
@@ -117,6 +118,20 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
+    #[cfg(feature = "rocksdb")]
+    /// Defines the state rewind policy for the database when RocksDB is enabled.
+    ///
+    /// The duration defines how many blocks back the rewind feature works.
+    /// Assuming each block requires one second to produce.
+    ///
+    /// The default value is 7 days = 604800 blocks.
+    ///
+    /// The `BlockHeight` is `u32`, meaning the maximum possible number of blocks
+    /// is less than 137 years. `2^32 / 24 / 60 / 60 / 365` = `136.1925195332` years.
+    /// If the value is 136 years or more, the rewind feature is enabled for all blocks.
+    #[clap(long = "state-rewind-duration", default_value = "7d", env)]
+    pub state_rewind_duration: humantime::Duration,
+
     /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
     #[arg(name = "SNAPSHOT", long = "snapshot", env)]
     pub snapshot: Option<PathBuf>,
@@ -125,6 +140,10 @@ pub struct Command {
     /// configuration.
     #[arg(name = "DB_PRUNE", long = "db-prune", env, default_value = "false")]
     pub db_prune: bool,
+
+    /// The determines whether to continue the services on internal error or not.
+    #[clap(long = "continue-services-on-error", default_value = "false", env)]
+    pub continue_on_error: bool,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -169,6 +188,10 @@ pub struct Command {
     #[clap(flatten)]
     pub tx_pool: TxPoolArgs,
 
+    /// The cli arguments supported by the GraphQL API service.
+    #[clap(flatten)]
+    pub graphql: GraphQLArgs,
+
     #[cfg_attr(feature = "relayer", clap(flatten))]
     #[cfg(feature = "relayer")]
     pub relayer_args: relayer::RelayerArgs,
@@ -198,14 +221,6 @@ pub struct Command {
     #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
 
-    /// Time to wait after submitting a query before debug info will be logged about query.
-    #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
-    pub query_log_threshold_time: humantime::Duration,
-
-    /// Timeout before drop the request.
-    #[clap(long = "api-request-timeout", default_value = "30m", env)]
-    pub api_request_timeout: humantime::Duration,
-
     /// The size of the memory pool in number of `MemoryInstance`s.
     #[clap(long = "memory-pool-size", default_value = "32", env)]
     pub memory_pool_size: usize,
@@ -217,14 +232,15 @@ pub struct Command {
 impl Command {
     pub fn get_config(self) -> anyhow::Result<Config> {
         let Command {
-            ip,
-            port,
             service_name: name,
             max_database_cache_size,
             database_path,
             database_type,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_duration,
             db_prune,
             snapshot,
+            continue_on_error,
             vm_backtrace,
             debug,
             utxo_validation,
@@ -243,15 +259,14 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool,
+            graphql,
             min_connected_reserved_peers,
             time_until_synced,
-            query_log_threshold_time,
-            api_request_timeout,
             memory_pool_size,
             profiling: _,
         } = self;
 
-        let addr = net::SocketAddr::new(ip, port);
+        let addr = net::SocketAddr::new(graphql.ip, graphql.port);
 
         let snapshot_reader = match snapshot.as_ref() {
             None => crate::cli::local_testnet_reader(),
@@ -307,10 +322,36 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        #[cfg(feature = "rocksdb")]
+        let state_rewind_policy = {
+            if database_type != DbType::RocksDb {
+                tracing::warn!("State rewind policy is only supported with RocksDB");
+            }
+
+            let blocks = state_rewind_duration.as_secs();
+
+            if blocks == 0 {
+                StateRewindPolicy::NoRewind
+            } else {
+                let maximum_blocks: humantime::Duration = "136y".parse()?;
+
+                if blocks >= maximum_blocks.as_secs() {
+                    StateRewindPolicy::RewindFullRange
+                } else {
+                    StateRewindPolicy::RewindRange {
+                        size: NonZeroU64::new(blocks)
+                            .expect("The value is not zero above"),
+                    }
+                }
+            }
+        };
+
         let combined_db_config = CombinedDatabaseConfig {
             database_path,
             database_type,
             max_database_cache_size,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_policy,
         };
 
         let block_importer =
@@ -335,12 +376,20 @@ impl Command {
         );
 
         let config = Config {
-            addr,
-            api_request_timeout: api_request_timeout.into(),
+            graphql_config: GraphQLConfig {
+                addr,
+                max_queries_depth: graphql.graphql_max_depth,
+                max_queries_complexity: graphql.graphql_max_complexity,
+                max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
+                request_body_bytes_limit: graphql.graphql_request_body_bytes_limit,
+                api_request_timeout: graphql.api_request_timeout.into(),
+                query_log_threshold_time: graphql.query_log_threshold_time.into(),
+            },
             combined_db_config,
             snapshot_reader,
             debug,
             native_executor_version,
+            continue_on_error,
             utxo_validation,
             block_production: trigger,
             vm: VMConfig {
@@ -372,7 +421,6 @@ impl Command {
             relayer_consensus_config: verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
-            query_log_threshold_time: query_log_threshold_time.into(),
             memory_pool_size,
         };
         Ok(config)
@@ -380,7 +428,7 @@ impl Command {
 }
 
 pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
-    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+    #[cfg(feature = "rocksdb")]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }
