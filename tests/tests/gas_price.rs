@@ -102,7 +102,7 @@ async fn produce_block__updates_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block__matches_actual_updated_gas_price() {
+async fn estimate_gas_price__matches_actual_updated_gas_price() {
     let _ = tracing_subscriber::fmt::try_init();
     // given
     let mut node_config = Config::local_node();
