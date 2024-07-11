@@ -147,7 +147,6 @@ async fn init__if_it_does_not_exist_create_with_provided_values() {
 
 #[tokio::test]
 async fn next__new_l2_block_saves_old_metadata() {
-    let _ = tracing_subscriber::fmt::try_init();
     // given
     let l2_block = BlockInfo::Block {
         height: 1,
