@@ -122,8 +122,8 @@ fn get_block_info(
 ) -> GasPriceResult<BlockInfo> {
     let (fee, gas_price) = mint_values(block)?;
     let height = *block.header().height();
-    let calculated_used_gas = block_used_gas(height, fee, gas_price, gas_price_factor)?;
-    let used_gas = min(calculated_used_gas, block_gas_limit);
+    let used_gas =
+        block_used_gas(height, fee, gas_price, gas_price_factor, block_gas_limit)?;
     let info = BlockInfo::Block {
         height: (*block.header().height()).into(),
         gas_used: used_gas,
@@ -148,6 +148,7 @@ fn block_used_gas(
     fee: u64,
     gas_price: u64,
     gas_price_factor: u64,
+    max_used_gas: u64,
 ) -> GasPriceResult<u64> {
     let scaled_fee =
         fee.checked_mul(gas_price_factor)
@@ -157,12 +158,10 @@ fn block_used_gas(
                     "Failed to scale fee by gas price factor, overflow"
                 ),
             })?;
-    scaled_fee
-        .checked_div(gas_price)
-        .ok_or(GasPriceError::CouldNotFetchL2Block {
-            block_height,
-            source_error: anyhow!("Failed to calculate gas used, division by zero"),
-        })
+    // If gas price is zero, assume max used gas
+    let approximate = scaled_fee.checked_div(gas_price).unwrap_or(max_used_gas);
+    let used_gas = min(approximate, max_used_gas);
+    Ok(used_gas)
 }
 
 #[async_trait::async_trait]
