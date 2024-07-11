@@ -54,7 +54,6 @@ pub struct Config {
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
-    // pub static_gas_price: u64,
     pub starting_gas_price: u64,
     pub gas_price_change_percent: u64,
     pub min_gas_price: u64,

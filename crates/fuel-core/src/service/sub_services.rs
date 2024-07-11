@@ -183,7 +183,6 @@ pub fn init_sub_services(
         l2_block_height: last_height.into(),
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
-    // TODO: This looks wrong, why are we getting this from an adapter for some other port?
     let block_stream = importer_adapter.events_shared_result();
     let settings = consensus_parameters_provider.clone();
     let l2_block_source = FuelL2BlockSource::new(settings, block_stream);

@@ -121,7 +121,7 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
-        let gas_price = self.calculate_gas_price(&header).await?;
+        let gas_price = self.calculate_gas_price().await?;
 
         let component = Components {
             header_to_produce: header,
@@ -143,18 +143,7 @@ where
         Ok(result)
     }
 
-    async fn calculate_gas_price(
-        &self,
-        _header: &PartialBlockHeader,
-    ) -> anyhow::Result<u64> {
-        // let consensus_params = self
-        //     .consensus_parameters_provider
-        //     .consensus_params_at_version(&header.consensus_parameters_version)?;
-        // let gas_per_bytes = consensus_params.fee_params().gas_per_byte();
-        // let max_gas_per_block = consensus_params.block_gas_limit();
-        // let max_block_bytes = max_gas_per_block.checked_div(gas_per_bytes).ok_or(anyhow!(
-        //     "Unable to calculate max block bytes from gas limit: {max_gas_per_block}, gas per byte: {gas_per_bytes}"
-        // ))?;
+    async fn calculate_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price_provider
             .next_gas_price()
             .await
@@ -239,7 +228,7 @@ where
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.calculate_gas_price(&header).await?
+            self.calculate_gas_price().await?
         };
 
         // The dry run execution should use the state of the blockchain based on the
