@@ -79,9 +79,8 @@ impl PoolTransaction {
             PoolTransaction::Script(_, version)
             | PoolTransaction::Create(_, version)
             | PoolTransaction::Upgrade(_, version)
-            | PoolTransaction::Upload(_, version) 
-            | PoolTransaction::Blob(_, version) 
-            => *version,
+            | PoolTransaction::Upload(_, version)
+            | PoolTransaction::Blob(_, version) => *version,
         }
     }
 
