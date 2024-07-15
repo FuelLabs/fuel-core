@@ -23,7 +23,7 @@ use fuel_core_client::client::{
 };
 use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
-    blockchain::primitives::BlockHeightQuery,
+    blockchain::primitives::BlockQuery,
     fuel_asm::{
         op,
         GTFArgs,
@@ -488,7 +488,7 @@ async fn can_get_message_proof() {
                     &transaction_id,
                     nonce,
                     None,
-                    BlockHeightQuery::Specific(last_height),
+                    BlockQuery::Specific(last_height),
                 )
                 .await
                 .unwrap()

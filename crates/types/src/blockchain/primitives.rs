@@ -184,41 +184,27 @@ impl TryFrom<&'_ [u8]> for BlockId {
 
 /// Represents either the Genesis Block or a block at a specific height
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum BlockHeightQuery {
+pub enum BlockQuery {
     /// Block at a specific height
     Specific(BlockHeight),
     /// Genesis block
     Genesis,
 }
 
-impl From<BlockHeightQuery> for Option<BlockHeight> {
-    fn from(value: BlockHeightQuery) -> Self {
+impl From<BlockQuery> for Option<BlockHeight> {
+    fn from(value: BlockQuery) -> Self {
         match value {
-            BlockHeightQuery::Specific(block_height) => Some(block_height),
-            BlockHeightQuery::Genesis => None,
+            BlockQuery::Specific(block_height) => Some(block_height),
+            BlockQuery::Genesis => None,
         }
     }
 }
 
-impl From<Option<BlockHeight>> for BlockHeightQuery {
+impl From<Option<BlockHeight>> for BlockQuery {
     fn from(value: Option<BlockHeight>) -> Self {
         match value {
-            Some(block_height) => BlockHeightQuery::Specific(block_height),
-            None => BlockHeightQuery::Genesis,
+            Some(block_height) => BlockQuery::Specific(block_height),
+            None => BlockQuery::Genesis,
         }
     }
 }
-
-// impl BlockHeightQuery {
-//     /// Maps a Blockheight to an Option<U> by applying a function to the blockheight
-//     /// TODO: Option may not be the best thing to return
-//     pub fn map<U, F>(self, f: F) -> Option<U>
-//     where
-//         F: FnOnce(BlockHeight) -> U,
-//     {
-//         match self {
-//             BlockHeightQuery::Specific(x) => Some(f(x)),
-//             BlockHeightQuery::Genesis => None,
-//         }
-//     }
-// }
