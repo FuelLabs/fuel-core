@@ -52,10 +52,9 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        header::BlockHeader,
+        header::BlockHeader, primitives::BlockHeightQuery,
     },
-    fuel_types,
-    fuel_types::BlockHeight,
+    fuel_types::{self, BlockHeight},
 };
 
 pub struct Block(pub(crate) CompressedBlock);
@@ -292,7 +291,7 @@ impl BlockQuery {
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(blocks_query(
                 query.as_ref(),
-                start.map(Into::into),
+                start.map(Into::<BlockHeight>::into).into(),
                 direction,
             ))
         })
@@ -335,7 +334,7 @@ impl HeaderQuery {
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(blocks_query(
                 query.as_ref(),
-                start.map(Into::into),
+                start.map(Into::<BlockHeight>::into).into(),
                 direction,
             ))
         })
@@ -345,7 +344,7 @@ impl HeaderQuery {
 
 fn blocks_query<T>(
     query: &ReadView,
-    height: Option<BlockHeight>,
+    height: BlockHeightQuery,
     direction: IterDirection,
 ) -> BoxedIter<StorageResult<(U32, T)>>
 where

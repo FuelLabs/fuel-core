@@ -33,7 +33,7 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::DaBlockHeight,
+        primitives::{BlockHeightQuery, DaBlockHeight},
     },
     entities::relayer::message::Message,
     fuel_tx::{
@@ -69,9 +69,10 @@ impl DatabaseBlocks for OnChainIterableKeyValueView {
 
     fn blocks(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        let height: Option<BlockHeight> = height.into();
         self.iter_all_by_start::<FuelBlocks>(height.as_ref(), Some(direction))
             .map(|result| result.map(|(_, block)| block))
             .into_boxed()

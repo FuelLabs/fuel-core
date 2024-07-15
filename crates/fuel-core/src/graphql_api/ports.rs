@@ -1,62 +1,29 @@
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IterDirection,
-    },
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsRawCode,
-        Messages,
-    },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageInspect,
+    iter::{BoxedIter, IterDirection},
+    tables::{Coins, ContractsAssets, ContractsRawCode, Messages},
+    Error as StorageError, Result as StorageResult, StorageInspect,
 };
 use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::{BlockHeightQuery, BlockId, DaBlockHeight},
     },
     entities::relayer::{
-        message::{
-            MerkleProof,
-            Message,
-        },
+        message::{MerkleProof, Message},
         transaction::RelayedTransactionStatus,
     },
-    fuel_tx::{
-        Bytes32,
-        ConsensusParameters,
-        Salt,
-        Transaction,
-        TxId,
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        AssetId,
-        BlockHeight,
-        ContractId,
-        Nonce,
-    },
+    fuel_tx::{Bytes32, ConsensusParameters, Salt, Transaction, TxId, TxPointer, UtxoId},
+    fuel_types::{Address, AssetId, BlockHeight, ContractId, Nonce},
     fuel_vm::interpreter::Memory,
     services::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::{InsertionResult, TransactionStatus},
     },
     tai64::Tai64,
 };
@@ -94,7 +61,7 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn old_blocks(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
@@ -133,7 +100,7 @@ pub trait DatabaseBlocks {
 
     fn blocks(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
@@ -254,36 +221,21 @@ pub mod worker {
         fuel_core_graphql_api::storage::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
-            messages::{
-                OwnedMessageIds,
-                SpentMessages,
-            },
+            messages::{OwnedMessageIds, SpentMessages},
         },
         graphql_api::storage::{
-            old::{
-                OldFuelBlockConsensus,
-                OldFuelBlocks,
-                OldTransactions,
-            },
+            old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
             relayed_transactions::RelayedTransactionStatuses,
         },
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        Error as StorageError,
-        Result as StorageResult,
-        StorageMutate,
+        Error as StorageError, Result as StorageResult, StorageMutate,
     };
     use fuel_core_types::{
-        fuel_tx::{
-            Address,
-            Bytes32,
-        },
+        fuel_tx::{Address, Bytes32},
         fuel_types::BlockHeight,
-        services::{
-            block_importer::SharedImportResult,
-            txpool::TransactionStatus,
-        },
+        services::{block_importer::SharedImportResult, txpool::TransactionStatus},
     };
 
     pub trait Transactional: Send + Sync {
