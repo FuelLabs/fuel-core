@@ -19,7 +19,7 @@ fn calculate__gives_static_value() {
 }
 
 #[test]
-fn worst_case__gives_static_value() {
+fn worst_case__correctly_calculates_value() {
     // given
     let new_exec_price = 1000;
     let for_height = 10;

@@ -73,7 +73,7 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block__updates_gas_price() {
+async fn produce_block__raises_gas_price() {
     // given
     let mut node_config = Config::local_node();
     let starting_gas_price = 1000;
@@ -95,6 +95,31 @@ async fn produce_block__updates_gas_price() {
     // then
     let change = starting_gas_price * percent / 100;
     let expected = starting_gas_price + change;
+    let latest = client.latest_gas_price().await.unwrap();
+    let actual = latest.gas_price;
+    assert_eq!(expected, actual);
+}
+#[tokio::test]
+async fn produce_block__lowers_gas_price() {
+    // given
+    let mut node_config = Config::local_node();
+    let starting_gas_price = 2000;
+    let percent = 10;
+    node_config.starting_gas_price = starting_gas_price;
+    node_config.gas_price_change_percent = percent;
+
+    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // when
+    // starting gas price
+    let _ = client.produce_blocks(1, None).await.unwrap();
+    // updated gas price
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // then
+    let change = starting_gas_price * percent / 100;
+    let expected = starting_gas_price - change;
     let latest = client.latest_gas_price().await.unwrap();
     let actual = latest.gas_price;
     assert_eq!(expected, actual);
