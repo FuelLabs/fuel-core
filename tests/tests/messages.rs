@@ -23,6 +23,7 @@ use fuel_core_client::client::{
 };
 use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
+    blockchain::primitives::BlockHeightQuery,
     fuel_asm::{
         op,
         GTFArgs,
@@ -483,7 +484,12 @@ async fn can_get_message_proof() {
         for nonce in nonces.clone() {
             // Request the proof.
             let result = client
-                .message_proof(&transaction_id, nonce, None, Some(last_height))
+                .message_proof(
+                    &transaction_id,
+                    nonce,
+                    None,
+                    BlockHeightQuery::Specific(last_height),
+                )
                 .await
                 .unwrap()
                 .unwrap();

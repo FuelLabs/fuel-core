@@ -9,7 +9,7 @@ use crate::{
             TransactionStatuses,
         },
     },
-    graphql_api::ports::worker::OffChainDatabase,
+    graphql_api::ports::worker::OffChainDatabaseTransaction,
 };
 use fuel_core_storage::{
     kv_store::{
@@ -106,8 +106,9 @@ impl Column {
 }
 
 impl StorageColumn for Column {
-    fn name(&self) -> &'static str {
-        self.into()
+    fn name(&self) -> String {
+        let str: &str = self.into();
+        str.to_string()
     }
 
     fn id(&self) -> u32 {
@@ -115,7 +116,7 @@ impl StorageColumn for Column {
     }
 }
 
-impl<S> OffChainDatabase for StorageTransaction<S>
+impl<S> OffChainDatabaseTransaction for StorageTransaction<S>
 where
     S: KeyValueInspect<Column = Column> + Modifiable,
     StorageTransaction<S>: StorageMutate<OwnedMessageIds, Error = StorageError>
@@ -128,7 +129,7 @@ where
         block_height: BlockHeight,
         tx_idx: u16,
         tx_id: &Bytes32,
-    ) -> StorageResult<Option<Bytes32>> {
+    ) -> StorageResult<()> {
         self.storage::<OwnedTransactions>().insert(
             &OwnedTransactionIndexKey::new(owner, block_height, tx_idx),
             tx_id,
@@ -140,7 +141,7 @@ where
         id: &Bytes32,
         status: TransactionStatus,
     ) -> StorageResult<Option<TransactionStatus>> {
-        self.storage::<TransactionStatuses>().insert(id, &status)
+        self.storage::<TransactionStatuses>().replace(id, &status)
     }
 
     fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64> {

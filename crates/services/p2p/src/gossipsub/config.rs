@@ -5,7 +5,7 @@ use crate::{
     },
     TryPeerId,
 };
-use fuel_core_metrics::p2p_metrics::p2p_metrics;
+use fuel_core_metrics::global_registry;
 use libp2p::gossipsub::{
     self,
     MessageAuthenticity,
@@ -20,7 +20,10 @@ use sha2::{
     Digest,
     Sha256,
 };
-use std::time::Duration;
+use std::{
+    ops::DerefMut,
+    time::Duration,
+};
 
 use super::topics::{
     GossipTopic,
@@ -174,24 +177,17 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
 /// Given a `P2pConfig` containing `GossipsubConfig` creates a Gossipsub Behaviour
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> gossipsub::Behaviour {
     let mut gossipsub = if p2p_config.metrics {
-        // Move to Metrics related feature flag
-        let mut p2p_registry = prometheus_client::registry::Registry::default();
+        let mut registry = global_registry().registry.lock();
 
         let metrics_config = MetricsConfig::default();
 
         let mut gossipsub = gossipsub::Behaviour::new_with_metrics(
             MessageAuthenticity::Signed(p2p_config.keypair.clone()),
             p2p_config.gossipsub_config.clone(),
-            &mut p2p_registry,
+            registry.deref_mut(),
             metrics_config,
         )
         .expect("gossipsub initialized");
-
-        // This couldn't be set unless multiple p2p services are running? So it's ok to unwrap
-        p2p_metrics()
-            .gossip_sub_registry
-            .set(Box::new(p2p_registry))
-            .unwrap_or(());
 
         initialize_gossipsub(&mut gossipsub, p2p_config);
 

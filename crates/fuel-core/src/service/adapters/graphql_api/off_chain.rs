@@ -1,32 +1,68 @@
 use crate::{
     database::{
-        database_description::off_chain::OffChain, Database, OffChainIterableKeyValueView,
+        database_description::off_chain::OffChain,
+        Database,
+        OffChainIterableKeyValueView,
     },
     fuel_core_graphql_api::{
-        ports::{worker::Transactional, OffChainDatabase},
+        ports::{
+            worker,
+            OffChainDatabase,
+        },
         storage::{
-            contracts::ContractsInfo, relayed_transactions::RelayedTransactionStatuses,
+            contracts::ContractsInfo,
+            relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
+    },
 };
 use fuel_core_storage::{
-    iter::{BoxedIter, IntoBoxedIter, IterDirection, IteratorOverTable},
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
-    transactional::{IntoTransaction, StorageTransaction},
-    Error as StorageError, Result as StorageResult, StorageAsRef,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
 };
-use fuel_core_txpool::types::{ContractId, TxId};
+use fuel_core_txpool::types::{
+    ContractId,
+    TxId,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{BlockHeightQuery, BlockId},
+        primitives::{
+            BlockHeightQuery,
+            BlockId,
+        },
     },
     entities::relayer::transaction::RelayedTransactionStatus,
-    fuel_tx::{Address, Bytes32, Salt, Transaction, TxPointer, UtxoId},
-    fuel_types::{BlockHeight, Nonce},
+    fuel_tx::{
+        Address,
+        Bytes32,
+        Salt,
+        Transaction,
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     services::txpool::TransactionStatus,
 };
 
@@ -141,8 +177,12 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     }
 }
 
-impl Transactional for Database<OffChain> {
+impl worker::OffChainDatabase for Database<OffChain> {
     type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+
+    fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
+        self.latest_height()
+    }
 
     fn transaction(&mut self) -> Self::Transaction<'_> {
         self.into_transaction()

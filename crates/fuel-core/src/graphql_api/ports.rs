@@ -1,29 +1,63 @@
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    iter::{BoxedIter, IterDirection},
-    tables::{Coins, ContractsAssets, ContractsRawCode, Messages},
-    Error as StorageError, Result as StorageResult, StorageInspect,
+    iter::{
+        BoxedIter,
+        IterDirection,
+    },
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsRawCode,
+        Messages,
+    },
+    Error as StorageError,
+    Result as StorageResult,
+    StorageInspect,
 };
 use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{BlockHeightQuery, BlockId, DaBlockHeight},
+        primitives::{
+            BlockHeightQuery,
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::relayer::{
-        message::{MerkleProof, Message},
+        message::{
+            MerkleProof,
+            Message,
+        },
         transaction::RelayedTransactionStatus,
     },
-    fuel_tx::{Bytes32, ConsensusParameters, Salt, Transaction, TxId, TxPointer, UtxoId},
-    fuel_types::{Address, AssetId, BlockHeight, ContractId, Nonce},
+    fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
+        Salt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        ContractId,
+        Nonce,
+    },
     fuel_vm::interpreter::Memory,
     services::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::{InsertionResult, TransactionStatus},
+        txpool::{
+            InsertionResult,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -221,33 +255,57 @@ pub mod worker {
         fuel_core_graphql_api::storage::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
-            messages::{OwnedMessageIds, SpentMessages},
+            messages::{
+                OwnedMessageIds,
+                SpentMessages,
+            },
         },
         graphql_api::storage::{
-            old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
             relayed_transactions::RelayedTransactionStatuses,
         },
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        Error as StorageError, Result as StorageResult, StorageMutate,
+        Error as StorageError,
+        Result as StorageResult,
+        StorageMutate,
     };
     use fuel_core_types::{
-        fuel_tx::{Address, Bytes32},
+        blockchain::primitives::BlockHeightQuery,
+        fuel_tx::{
+            Address,
+            Bytes32,
+        },
         fuel_types::BlockHeight,
-        services::{block_importer::SharedImportResult, txpool::TransactionStatus},
+        services::{
+            block_importer::SharedImportResult,
+            txpool::TransactionStatus,
+        },
     };
 
-    pub trait Transactional: Send + Sync {
-        type Transaction<'a>: OffChainDatabase
+    pub trait OnChainDatabase: Send + Sync {
+        /// Returns the latest block height.
+        fn latest_height(&self) -> StorageResult<Option<BlockHeight>>;
+    }
+
+    pub trait OffChainDatabase: Send + Sync {
+        type Transaction<'a>: OffChainDatabaseTransaction
         where
             Self: 'a;
+
+        /// Returns the latest block height.
+        fn latest_height(&self) -> StorageResult<Option<BlockHeight>>;
 
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
     }
 
-    pub trait OffChainDatabase:
+    pub trait OffChainDatabaseTransaction:
         StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
@@ -264,7 +322,7 @@ pub mod worker {
             block_height: BlockHeight,
             tx_idx: u16,
             tx_id: &Bytes32,
-        ) -> StorageResult<Option<Bytes32>>;
+        ) -> StorageResult<()>;
 
         fn update_tx_status(
             &mut self,
@@ -283,9 +341,15 @@ pub mod worker {
         fn commit(self) -> StorageResult<()>;
     }
 
-    pub trait BlockImporter {
+    pub trait BlockImporter: Send + Sync {
         /// Returns a stream of imported block.
         fn block_events(&self) -> BoxStream<SharedImportResult>;
+
+        /// Return the import result at the given height.
+        fn block_event_at_height(
+            &self,
+            height: BlockHeightQuery,
+        ) -> anyhow::Result<SharedImportResult>;
     }
 
     pub trait TxPool: Send + Sync {

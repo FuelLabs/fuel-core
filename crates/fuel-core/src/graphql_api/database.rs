@@ -35,9 +35,9 @@ use fuel_core_types::{
         block::CompressedBlock,
         consensus::Consensus,
         primitives::{
+            BlockHeightQuery,
             BlockId,
             DaBlockHeight,
-            BlockHeightQuery
         },
     },
     entities::relayer::{
@@ -165,22 +165,25 @@ impl DatabaseBlocks for ReadView {
 
         if let BlockHeightQuery::Specific(height) = height {
             match (height >= self.genesis_height, direction) {
-                (true, IterDirection::Forward) => {
-                    self.on_chain.blocks(BlockHeightQuery::Specific(height), direction)
-                }
+                (true, IterDirection::Forward) => self
+                    .on_chain
+                    .blocks(BlockHeightQuery::Specific(height), direction),
                 (true, IterDirection::Reverse) => self
                     .on_chain
                     .blocks(BlockHeightQuery::Specific(height), direction)
-                    .chain(self.off_chain.old_blocks(BlockHeightQuery::Genesis, direction))
+                    .chain(
+                        self.off_chain
+                            .old_blocks(BlockHeightQuery::Genesis, direction),
+                    )
                     .into_boxed(),
                 (false, IterDirection::Forward) => self
                     .off_chain
                     .old_blocks(BlockHeightQuery::Specific(height), direction)
                     .chain(self.on_chain.blocks(BlockHeightQuery::Genesis, direction))
                     .into_boxed(),
-                (false, IterDirection::Reverse) => {
-                    self.off_chain.old_blocks(BlockHeightQuery::Specific(height), direction)
-                }
+                (false, IterDirection::Reverse) => self
+                    .off_chain
+                    .old_blocks(BlockHeightQuery::Specific(height), direction),
             }
         } else {
             match direction {
@@ -192,7 +195,10 @@ impl DatabaseBlocks for ReadView {
                 IterDirection::Reverse => self
                     .on_chain
                     .blocks(BlockHeightQuery::Genesis, direction)
-                    .chain(self.off_chain.old_blocks(BlockHeightQuery::Genesis, direction))
+                    .chain(
+                        self.off_chain
+                            .old_blocks(BlockHeightQuery::Genesis, direction),
+                    )
                     .into_boxed(),
             }
         }

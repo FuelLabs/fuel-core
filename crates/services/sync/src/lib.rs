@@ -11,7 +11,6 @@ pub mod ports;
 pub mod service;
 pub mod state;
 pub mod sync;
-mod tracing_helpers;
 
 pub use import::Config;
 

@@ -138,7 +138,7 @@ impl BlockImporter for BlockImporterAdapter {
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok())
-                .map(BlockImportInfo::from),
+                .map(|result| BlockImportInfo::from(result.shared_result)),
         )
     }
 }

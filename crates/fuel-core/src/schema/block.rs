@@ -52,9 +52,13 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        header::BlockHeader, primitives::BlockHeightQuery,
+        header::BlockHeader,
+        primitives::BlockHeightQuery,
     },
-    fuel_types::{self, BlockHeight},
+    fuel_types::{
+        self,
+        BlockHeight,
+    },
 };
 
 pub struct Block(pub(crate) CompressedBlock);

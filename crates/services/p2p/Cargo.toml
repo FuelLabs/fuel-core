@@ -42,6 +42,7 @@ prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
 rand = { workspace = true }
+rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 sha2 = "0.10"
@@ -53,6 +54,7 @@ void = "1"
 [dev-dependencies]
 ctor = "0.1"
 fuel-core-p2p = { path = ".", features = ["test-helpers"] }
+fuel-core-services = { path = "../../services", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = ["serde", "test-helpers"] }
 rand = { workspace = true }

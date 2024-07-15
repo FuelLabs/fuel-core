@@ -164,6 +164,12 @@ impl OnceTransactionsSource {
             ),
         }
     }
+
+    pub fn new_maybe_checked(transactions: Vec<MaybeCheckedTransaction>) -> Self {
+        Self {
+            transactions: ParkingMutex::new(transactions),
+        }
+    }
 }
 
 impl TransactionsSource for OnceTransactionsSource {
@@ -697,10 +703,13 @@ where
     {
         let block_header = partial_block.header;
         let block_height = block_header.height();
+        let consensus_parameters_version = block_header.consensus_parameters_version;
         let relayed_tx_iter = forced_transactions.into_iter();
-        for transaction in relayed_tx_iter {
-            let maybe_checked_transaction =
-                MaybeCheckedTransaction::CheckedTransaction(transaction);
+        for checked in relayed_tx_iter {
+            let maybe_checked_transaction = MaybeCheckedTransaction::CheckedTransaction(
+                checked,
+                consensus_parameters_version,
+            );
             let tx_id = maybe_checked_transaction.id(&self.consensus_params.chain_id());
             match self.execute_transaction_and_commit(
                 partial_block,
@@ -1038,11 +1047,21 @@ where
         header: &PartialBlockHeader,
     ) -> ExecutorResult<CheckedTransaction> {
         let block_height = *header.height();
+        let actual_version = header.consensus_parameters_version;
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
                 .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
-            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
+            MaybeCheckedTransaction::CheckedTransaction(checked_tx, checked_version) => {
+                if actual_version == checked_version {
+                    checked_tx
+                } else {
+                    let checked_tx: Checked<Transaction> = checked_tx.into();
+                    let (tx, _) = checked_tx.into();
+                    tx.into_checked_basic(block_height, &self.consensus_params)?
+                        .into()
+                }
+            }
         };
         Ok(checked_tx)
     }
@@ -1232,7 +1251,7 @@ where
 
         if storage_tx
             .storage::<ProcessedTransactions>()
-            .insert(&coinbase_id, &())?
+            .replace(&coinbase_id, &())?
             .is_some()
         {
             return Err(ExecutorError::TransactionIdCollision(coinbase_id))
@@ -1618,7 +1637,7 @@ where
                     // prune utxo from db
                     let coin = db
                         .storage::<Coins>()
-                        .remove(utxo_id)
+                        .take(utxo_id)
                         .map_err(Into::into)
                         .transpose()
                         .unwrap_or_else(|| {
@@ -1647,7 +1666,7 @@ where
                     // and cleanup message contents
                     let message = db
                         .storage::<Messages>()
-                        .remove(nonce)?
+                        .take(nonce)?
                         .ok_or(ExecutorError::MessageDoesNotExist(*nonce))?;
                     execution_data
                         .events
@@ -1962,7 +1981,7 @@ where
             }
             .into();
 
-            if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+            if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
             execution_data

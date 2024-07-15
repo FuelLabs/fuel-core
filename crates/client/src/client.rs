@@ -38,6 +38,7 @@ use cynic::{
     QueryBuilder,
 };
 use fuel_core_types::{
+    blockchain::primitives::BlockHeightQuery,
     fuel_asm::{
         Instruction,
         Word,
@@ -58,7 +59,6 @@ use fuel_core_types::{
         executor::TransactionExecutionStatus,
         p2p::PeerInfo,
     },
-    blockchain::primitives::BlockHeightQuery,
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;

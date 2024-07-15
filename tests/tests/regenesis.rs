@@ -16,7 +16,10 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
-    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+    blockchain::{
+        header::LATEST_STATE_TRANSITION_VERSION,
+        primitives::BlockHeightQuery,
+    },
     fuel_asm::{
         op,
         GTFArgs,
@@ -404,7 +407,12 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
 
     let proof = core
         .client
-        .message_proof(&tx_id, nonce, None, Some((message_block_height + 1).into()))
+        .message_proof(
+            &tx_id,
+            nonce,
+            None,
+            BlockHeightQuery::Specific((message_block_height + 1).into()),
+        )
         .await
         .expect("Unable to get message proof")
         .expect("Message proof not found");
@@ -463,7 +471,12 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     for block_height in message_block_height + 1..latest_block.header.height {
         let proof = core
             .client
-            .message_proof(&tx_id, nonce, None, Some(block_height.into()))
+            .message_proof(
+                &tx_id,
+                nonce,
+                None,
+                BlockHeightQuery::Specific(block_height.into()),
+            )
             .await
             .expect("Unable to get message proof")
             .expect("Message proof not found");

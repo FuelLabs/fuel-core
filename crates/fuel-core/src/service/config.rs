@@ -43,6 +43,7 @@ pub struct Config {
     pub graphql_config: GraphQLConfig,
     pub combined_db_config: CombinedDatabaseConfig,
     pub snapshot_reader: SnapshotReader,
+    pub continue_on_error: bool,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -118,6 +119,8 @@ impl Config {
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+            #[cfg(feature = "rocksdb")]
+            state_rewind_policy: Default::default(),
         };
 
         Self {
@@ -134,6 +137,7 @@ impl Config {
                 api_request_timeout: Duration::from_secs(60),
             },
             combined_db_config,
+            continue_on_error: false,
             debug: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),

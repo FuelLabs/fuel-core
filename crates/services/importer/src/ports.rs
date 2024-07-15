@@ -64,7 +64,7 @@ pub trait Transactional {
 /// The alias port used by the block importer.
 pub trait ImporterDatabase: Send + Sync {
     /// Returns the latest block height.
-    fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
+    fn latest_block_height(&self) -> StorageResult;
 
     /// Returns the latest block root.
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
@@ -139,18 +139,18 @@ where
         let height = block.entity.header().height();
         let mut found = storage
             .storage_as_mut::<FuelBlocks>()
-            .insert(height, &block.entity.compress(chain_id))?
+            .replace(height, &block.entity.compress(chain_id))?
             .is_some();
         found |= storage
             .storage_as_mut::<SealedBlockConsensus>()
-            .insert(height, &block.consensus)?
+            .replace(height, &block.consensus)?
             .is_some();
 
         // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
         for tx in block.entity.transactions() {
             found |= storage
                 .storage_as_mut::<Transactions>()
-                .insert(&tx.id(chain_id), tx)?
+                .replace(&tx.id(chain_id), tx)?
                 .is_some();
         }
         storage.commit()?;

@@ -12,7 +12,8 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        consensus::Consensus, primitives::BlockHeightQuery,
+        consensus::Consensus,
+        primitives::BlockHeightQuery,
     },
     fuel_types::BlockHeight,
 };

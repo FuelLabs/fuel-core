@@ -1,5 +1,9 @@
 use crate::{
-    database::OnChainIterableKeyValueView,
+    database::{
+        database_description::on_chain::OnChain,
+        Database,
+        OnChainIterableKeyValueView,
+    },
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
         DatabaseChain,
@@ -7,6 +11,7 @@ use crate::{
         DatabaseMessages,
         OnChainDatabase,
     },
+    graphql_api::ports::worker,
 };
 use fuel_core_storage::{
     iter::{
@@ -33,7 +38,10 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{BlockHeightQuery, DaBlockHeight},
+        primitives::{
+            BlockHeightQuery,
+            DaBlockHeight,
+        },
     },
     entities::relayer::message::Message,
     fuel_tx::{
@@ -133,3 +141,9 @@ impl DatabaseChain for OnChainIterableKeyValueView {
 }
 
 impl OnChainDatabase for OnChainIterableKeyValueView {}
+
+impl worker::OnChainDatabase for Database<OnChain> {
+    fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
+        self.latest_height()
+    }
+}

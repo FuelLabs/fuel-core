@@ -1,10 +1,10 @@
-use crate::timing_buckets;
-use prometheus_client::{
-    metrics::{
-        gauge::Gauge,
-        histogram::Histogram,
-    },
-    registry::Registry,
+use crate::{
+    global_registry,
+    timing_buckets,
+};
+use prometheus_client::metrics::{
+    gauge::Gauge,
+    histogram::Histogram,
 };
 use std::sync::{
     atomic::AtomicU64,
@@ -12,7 +12,6 @@ use std::sync::{
 };
 
 pub struct ImporterMetrics {
-    pub registry: Registry,
     pub block_height: Gauge,
     pub latest_block_import_timestamp: Gauge<f64, AtomicU64>,
     pub execute_and_commit_duration: Histogram,
@@ -20,13 +19,12 @@ pub struct ImporterMetrics {
 
 impl Default for ImporterMetrics {
     fn default() -> Self {
-        let mut registry = Registry::default();
-
         let block_height_gauge = Gauge::default();
         let latest_block_import_ms = Gauge::default();
         let execute_and_commit_duration =
             Histogram::new(timing_buckets().iter().cloned());
 
+        let mut registry = global_registry().registry.lock();
         registry.register(
             "importer_block_height",
             "the current height of the chain",
@@ -46,7 +44,6 @@ impl Default for ImporterMetrics {
         );
 
         Self {
-            registry,
             block_height: block_height_gauge,
             latest_block_import_timestamp: latest_block_import_ms,
             execute_and_commit_duration,

@@ -98,6 +98,11 @@ impl<S> StorageTransaction<S> {
         })
     }
 
+    /// Getter to the changes.
+    pub fn changes(&self) -> &Changes {
+        &self.inner.changes
+    }
+
     /// Returns the changes to the storage.
     pub fn into_changes(self) -> Changes {
         self.inner.changes
@@ -246,7 +251,7 @@ pub trait WriteTransaction {
 
 impl<S> WriteTransaction for S
 where
-    S: KeyValueInspect + Modifiable,
+    S: Modifiable,
 {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(

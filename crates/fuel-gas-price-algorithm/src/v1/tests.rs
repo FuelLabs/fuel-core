@@ -1,5 +1,11 @@
 #![allow(non_snake_case)]
-use super::*;
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::cast_possible_truncation)]
+
+use crate::v1::{
+    AlgorithmUpdaterV1,
+    BlockBytes,
+};
 
 #[cfg(test)]
 mod algorithm_v1_tests;
@@ -8,7 +14,7 @@ mod update_da_record_data_tests;
 #[cfg(test)]
 mod update_l2_block_data_tests;
 
-struct UpdaterBuilder {
+pub struct UpdaterBuilder {
     min_exec_gas_price: u64,
     min_da_gas_price: u64,
     starting_exec_gas_price: u64,
