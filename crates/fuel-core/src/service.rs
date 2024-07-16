@@ -252,11 +252,9 @@ impl RunnableService for Task {
             }
         }
 
-        // Concurrently start all sub-services to reduce startup time.
-        futures::future::try_join_all(
-            self.services.iter().map(|service| service.start_and_await())
-        ).await?;
-       
+        for service in &self.services {
+            service.start_and_await().await?;
+        }
         Ok(self)
     }
 }
@@ -265,30 +263,35 @@ impl RunnableService for Task {
 impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let stop_signals = self.services.iter()
-            .map(|service| service.await_stop())
-            .chain(std::iter::once(Box::pin(watcher.while_started())));
+        let mut stop_signals = vec![];
+        for service in &self.services {
+            stop_signals.push(service.await_stop())
+        }
+        stop_signals.push(Box::pin(watcher.while_started()));
 
-        if let Err(err) = futures::future::select_all(stop_signals).await.0 {
-            tracing::error!("Error during shutdown listening: {}", err);
+        let (result, _, _) = futures::future::select_all(stop_signals).await;
+
+        if let Err(err) = result {
+            tracing::error!("Got an error during listen for shutdown: {}", err);
         }
 
-        // Received stop signal, stop this service and all sub-services.
-        Ok(false)
+        // We received the stop signal from any of one source, so stop this service and
+        // all sub-services.
+        let should_continue = false;
+        Ok(should_continue)
     }
 
-    
     async fn shutdown(self) -> anyhow::Result<()> {
-        let stop_futures = self.services.into_iter().map(|service| {
-            service.stop_and_await().map(|result| {
-                if let Err(err) = result {
-                    tracing::error!("Error during service stop: {}", err);
-                }
-            })
-        });
+        for service in self.services {
+            let result = service.stop_and_await().await;
 
-        // Concurrently wait for all services to stop.
-        futures::future::join_all(stop_futures).await;
+            if let Err(err) = result {
+                tracing::error!(
+                    "Got and error during awaiting for stop of the service: {}",
+                    err
+                );
+            }
+        }
         Ok(())
     }
 }
