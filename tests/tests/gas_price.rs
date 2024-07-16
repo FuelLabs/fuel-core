@@ -4,15 +4,16 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
-use fuel_core::database::Database;
-use std::{
-    iter::repeat,
-    time::Duration,
-};
-
-use fuel_core::service::{
-    Config,
-    FuelService,
+use fuel_core::{
+    chain_config::{
+        ChainConfig,
+        StateConfig,
+    },
+    database::Database,
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     types::gas_price::LatestGasPrice,
@@ -21,12 +22,23 @@ use fuel_core_client::client::{
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::*,
+    fuel_crypto::{
+        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
+        SecretKey,
+    },
     fuel_tx::{
+        consensus_parameters::ConsensusParametersV1,
+        ConsensusParameters,
         Finalizable,
         Transaction,
         TransactionBuilder,
     },
     services::executor::TransactionExecutionResult,
+};
+use rand::Rng;
+use std::{
+    iter::repeat,
+    time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
 
@@ -38,14 +50,25 @@ fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
         .into()
 }
 
-fn arb_large_tx(max_fee_limit: Word) -> Transaction {
+fn arb_large_tx<R: Rng + rand::CryptoRng>(
+    max_fee_limit: Word,
+    rng: &mut R,
+) -> Transaction {
     let mut script: Vec<_> = repeat(op::noop()).take(10_000).collect();
     script.push(op::ret(RegId::ONE));
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
-    TransactionBuilder::script(script_bytes, vec![])
+    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
+    let asset_id = builder.get_params().base_asset_id().clone();
+    builder
         .max_fee_limit(max_fee_limit)
         .script_gas_limit(22430)
-        .add_random_fee_input()
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            rng.gen(),
+            u32::MAX as u64,
+            asset_id,
+            Default::default(),
+        )
         .finalize()
         .into()
 }
@@ -91,11 +114,65 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 #[tokio::test]
 async fn produce_block__raises_gas_price() {
     // given
-    let mut node_config = Config::local_node();
+    let block_gas_limit = 3_000_000;
+    let chain_config = ChainConfig {
+        consensus_parameters: ConsensusParameters::V1(ConsensusParametersV1 {
+            block_gas_limit,
+            ..Default::default()
+        }),
+        ..ChainConfig::local_testnet()
+    };
+    let mut node_config =
+        Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
     let starting_gas_price = 1_000_000_000;
     let percent = 10;
     let threshold = 50;
-    let min_gas_price = starting_gas_price;
+    node_config.block_producer.coinbase_recipient = Some([5; 32].into());
+    node_config.starting_gas_price = starting_gas_price;
+    node_config.gas_price_change_percent = percent;
+    node_config.gas_price_threshold_percent = threshold;
+    node_config.block_production = Trigger::Never;
+
+    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    // when
+    let arb_tx_count = 10;
+    for i in 0..arb_tx_count {
+        let tx = arb_large_tx(189028 + i as Word, &mut rng);
+        let _status = client.submit(&tx).await.unwrap();
+    }
+    // starting gas price
+    let _ = client.produce_blocks(1, None).await.unwrap();
+    // updated gas price
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // then
+    let change = starting_gas_price * percent / 100;
+    let expected = starting_gas_price + change;
+    let latest = client.latest_gas_price().await.unwrap();
+    let actual = latest.gas_price;
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn produce_block__lowers_gas_price() {
+    // given
+    let block_gas_limit = 3_000_000;
+    let chain_config = ChainConfig {
+        consensus_parameters: ConsensusParameters::V1(ConsensusParametersV1 {
+            block_gas_limit,
+            ..Default::default()
+        }),
+        ..ChainConfig::local_testnet()
+    };
+    let mut node_config =
+        Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
+    let starting_gas_price = 1_000_000_000;
+    let percent = 10;
+    let threshold = 50;
+    let min_gas_price = starting_gas_price / 2;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.starting_gas_price = starting_gas_price;
     node_config.gas_price_change_percent = percent;
@@ -105,39 +182,14 @@ async fn produce_block__raises_gas_price() {
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // when
-    // starting gas price
-    let _ = client.produce_blocks(1, None).await.unwrap();
-    // updated gas price
-    let arb_tx_count = 10;
+    let arb_tx_count = 5;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(189028 + i as Word);
+        let tx = arb_large_tx(189028 + i as Word, &mut rng);
         let _status = client.submit(&tx).await.unwrap();
     }
-    let _ = client.produce_blocks(1, None).await.unwrap();
-    // then
-    let change = starting_gas_price * percent / 100;
-    let expected = starting_gas_price + change;
-    let latest = client.latest_gas_price().await.unwrap();
-    let actual = latest.gas_price;
-    assert_eq!(expected, actual);
-}
-#[tokio::test]
-async fn produce_block__lowers_gas_price() {
-    // given
-    let mut node_config = Config::local_node();
-    let starting_gas_price = 2000;
-    let percent = 10;
-    let threshold = 50;
-    node_config.starting_gas_price = starting_gas_price;
-    node_config.gas_price_change_percent = percent;
-    node_config.gas_price_threshold_percent = threshold;
-
-    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    // when
     // starting gas price
     let _ = client.produce_blocks(1, None).await.unwrap();
     // updated gas price
