@@ -5,7 +5,10 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core::database::Database;
-use std::time::Duration;
+use std::{
+    iter::repeat,
+    time::Duration,
+};
 
 use fuel_core::service::{
     Config,
@@ -15,6 +18,7 @@ use fuel_core_client::client::{
     types::gas_price::LatestGasPrice,
     FuelClient,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
@@ -29,6 +33,18 @@ use test_helpers::fuel_core_driver::FuelCoreDriver;
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
         .max_fee_limit(max_fee_limit)
+        .add_random_fee_input()
+        .finalize()
+        .into()
+}
+
+fn arb_large_tx(max_fee_limit: Word) -> Transaction {
+    let mut script: Vec<_> = repeat(op::noop()).take(10_000).collect();
+    script.push(op::ret(RegId::ONE));
+    let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
+    TransactionBuilder::script(script_bytes, vec![])
+        .max_fee_limit(max_fee_limit)
+        .script_gas_limit(22430)
         .add_random_fee_input()
         .finalize()
         .into()
@@ -76,12 +92,16 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 async fn produce_block__raises_gas_price() {
     // given
     let mut node_config = Config::local_node();
-    let starting_gas_price = 1000;
+    let starting_gas_price = 1_000_000_000;
     let percent = 10;
+    let threshold = 50;
+    let min_gas_price = starting_gas_price;
+    node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.starting_gas_price = starting_gas_price;
     node_config.gas_price_change_percent = percent;
-    // Always increase
-    node_config.gas_price_threshold_percent = 0;
+    node_config.gas_price_threshold_percent = threshold;
+    node_config.min_gas_price = min_gas_price;
+    node_config.block_production = Trigger::Never;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -90,8 +110,12 @@ async fn produce_block__raises_gas_price() {
     // starting gas price
     let _ = client.produce_blocks(1, None).await.unwrap();
     // updated gas price
+    let arb_tx_count = 10;
+    for i in 0..arb_tx_count {
+        let tx = arb_large_tx(189028 + i as Word);
+        let _status = client.submit(&tx).await.unwrap();
+    }
     let _ = client.produce_blocks(1, None).await.unwrap();
-
     // then
     let change = starting_gas_price * percent / 100;
     let expected = starting_gas_price + change;
@@ -105,8 +129,10 @@ async fn produce_block__lowers_gas_price() {
     let mut node_config = Config::local_node();
     let starting_gas_price = 2000;
     let percent = 10;
+    let threshold = 50;
     node_config.starting_gas_price = starting_gas_price;
     node_config.gas_price_change_percent = percent;
+    node_config.gas_price_threshold_percent = threshold;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -180,6 +206,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     let latest_gas_price = driver.client.latest_gas_price().await.unwrap();
     let LatestGasPrice { gas_price, .. } = latest_gas_price;
     let expected = gas_price;
+    assert_ne!(expected, starting);
 
     // when
     let temp_dir = driver.kill().await;
@@ -192,11 +219,11 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     let LatestGasPrice { gas_price, .. } = new_latest_gas_price;
     let actual = gas_price;
     assert_eq!(expected, actual);
-    assert_ne!(expected, starting);
 }
 
 #[tokio::test]
-async fn dry_run_opt_with_zero_gas_price() {
+async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
+    // given
     let tx = TransactionBuilder::script(
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
@@ -214,6 +241,7 @@ async fn dry_run_opt_with_zero_gas_price() {
         ..
     } = test_builder.finalize().await;
 
+    // when
     let TransactionExecutionResult::Success {
         total_fee,
         total_gas,
@@ -244,6 +272,7 @@ async fn dry_run_opt_with_zero_gas_price() {
         panic!("dry run should have succeeded");
     };
 
+    // then
     assert_ne!(total_fee, total_fee_zero_gas_price);
     assert_eq!(total_fee_zero_gas_price, 0);
 
