@@ -325,35 +325,23 @@ where
     }
 }
 
-impl Modifiable for Database<OnChain> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(self, changes, |iter| {
-            iter.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
-                .map(|result| result.map(|(height, _)| height))
-                .try_collect()
-        })
-    }
+macro_rules! impl_modifiable_for_database {
+    ($db_type:ty, $table_type:ty, $height_mapper:expr) => {
+        impl Modifiable for Database<$db_type> {
+            fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+                commit_changes_with_height_update(self, changes, |iter| {
+                    iter.iter_all::<$table_type>(Some(IterDirection::Reverse))
+                        .map($height_mapper)
+                        .try_collect()
+                })
+            }
+        }
+    };
 }
 
-impl Modifiable for Database<OffChain> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(self, changes, |iter| {
-            iter.iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
-                .map(|result| result.map(|(_, height)| height))
-                .try_collect()
-        })
-    }
-}
-
-impl Modifiable for Database<GasPriceDatabase> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(self, changes, |iter| {
-            iter.iter_all::<GasPriceMetadata>(Some(IterDirection::Reverse))
-                .map(|result| result.map(|(height, _)| height))
-                .try_collect()
-        })
-    }
-}
+impl_modifiable_for_database!(OnChain, FuelBlocks, |result| result.map(|(height, _)| height));
+impl_modifiable_for_database!(OffChain, FuelBlockIdsToHeights, |result| result.map(|(_, height)| height));
+impl_modifiable_for_database!(GasPriceDatabase, GasPriceMetadata, |result| result.map(|(height, _)| height));
 
 #[cfg(feature = "relayer")]
 impl Modifiable for Database<Relayer> {
