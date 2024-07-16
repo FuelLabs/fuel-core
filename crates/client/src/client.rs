@@ -38,7 +38,6 @@ use cynic::{
     QueryBuilder,
 };
 use fuel_core_types::{
-    blockchain::primitives::BlockHeightQuery,
     fuel_asm::{
         Instruction,
         Word,
@@ -966,13 +965,12 @@ impl FuelClient {
         transaction_id: &TxId,
         nonce: &Nonce,
         commit_block_id: Option<&BlockId>,
-        commit_block_height: BlockHeightQuery,
+        commit_block_height: Option<BlockHeight>,
     ) -> io::Result<Option<types::MessageProof>> {
         let transaction_id: TransactionId = (*transaction_id).into();
         let nonce: schema::Nonce = (*nonce).into();
         let commit_block_id: Option<schema::BlockId> =
             commit_block_id.map(|commit_block_id| (*commit_block_id).into());
-        let commit_block_height: Option<BlockHeight> = commit_block_height.into();
         let commit_block_height = commit_block_height.map(Into::into);
         let query = schema::message::MessageProofQuery::build(MessageProofArgs {
             transaction_id,

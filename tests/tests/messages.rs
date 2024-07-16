@@ -488,7 +488,7 @@ async fn can_get_message_proof() {
                     &transaction_id,
                     nonce,
                     None,
-                    BlockHeightQuery::Specific(last_height),
+                    Some(last_height),
                 )
                 .await
                 .unwrap()

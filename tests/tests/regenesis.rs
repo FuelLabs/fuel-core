@@ -411,7 +411,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             &tx_id,
             nonce,
             None,
-            BlockHeightQuery::Specific((message_block_height + 1).into()),
+            Some((message_block_height + 1).into()),
         )
         .await
         .expect("Unable to get message proof")
@@ -475,7 +475,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
                 &tx_id,
                 nonce,
                 None,
-                BlockHeightQuery::Specific(block_height.into()),
+                Some(block_height.into()),
             )
             .await
             .expect("Unable to get message proof")
