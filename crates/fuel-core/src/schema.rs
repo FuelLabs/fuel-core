@@ -127,17 +127,24 @@ where
         first,
         last,
         |after: Option<SchemaKey>, before: Option<SchemaKey>, first, last| async move {
-            let (count, direction) = match (first, last) {
-                (Some(first), _) => (first, IterDirection::Forward),
-                (_, Some(last)) => (last, IterDirection::Reverse),
-                _ => return Err(anyhow!("Either first or last should be provided")),
+            let (count, direction) = if let Some(first) = first {
+                (first, IterDirection::Forward)
+            } else if let Some(last) = last {
+                (last, IterDirection::Reverse)
+            } else {
+                return Err(anyhow!("Either `first` or `last` should be provided"))
             };
 
-            let (start, end) = if direction == IterDirection::Forward {
-                (after, before)
+            let start;
+            let end;
+
+            if direction == IterDirection::Forward {
+                start = after;
+                end = before;
             } else {
-                (before, after)
-            };
+                start = before;
+                end = after;
+            }
 
             let entries = entries(&start, direction)?;
             let mut has_previous_page = false;
