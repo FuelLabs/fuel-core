@@ -58,7 +58,7 @@ fn arb_large_tx<R: Rng + rand::CryptoRng>(
     script.push(op::ret(RegId::ONE));
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
-    let asset_id = builder.get_params().base_asset_id().clone();
+    let asset_id = *builder.get_params().base_asset_id();
     builder
         .max_fee_limit(max_fee_limit)
         .script_gas_limit(22430)
