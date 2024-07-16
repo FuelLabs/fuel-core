@@ -69,7 +69,7 @@ use fuel_core_types::{
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
         self.get_block_height(id)
-            .and_then(|height| height.ok_or(not_found!("Block Not found!")))
+            .and_then(|height| height.ok_or(not_found!("BlockHeight")))
     }
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
