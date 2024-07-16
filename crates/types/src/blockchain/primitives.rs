@@ -184,27 +184,27 @@ impl TryFrom<&'_ [u8]> for BlockId {
 
 /// Represents either the Genesis Block or a block at a specific height
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum BlockQuery {
+pub enum BlockHeightQuery {
     /// Block at a specific height
     Specific(BlockHeight),
     /// Genesis block
     Genesis,
 }
 
-impl From<BlockQuery> for Option<BlockHeight> {
-    fn from(value: BlockQuery) -> Self {
+impl From<BlockHeightQuery> for Option<BlockHeight> {
+    fn from(value: BlockHeightQuery) -> Self {
         match value {
-            BlockQuery::Specific(block_height) => Some(block_height),
-            BlockQuery::Genesis => None,
+            BlockHeightQuery::Specific(block_height) => Some(block_height),
+            BlockHeightQuery::Genesis => None,
         }
     }
 }
 
-impl From<Option<BlockHeight>> for BlockQuery {
+impl From<Option<BlockHeight>> for BlockHeightQuery {
     fn from(value: Option<BlockHeight>) -> Self {
         match value {
-            Some(block_height) => BlockQuery::Specific(block_height),
-            None => BlockQuery::Genesis,
+            Some(block_height) => BlockHeightQuery::Specific(block_height),
+            None => BlockHeightQuery::Genesis,
         }
     }
 }

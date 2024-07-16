@@ -35,7 +35,7 @@ use fuel_core_types::{
         block::CompressedBlock,
         consensus::Consensus,
         primitives::{
-            BlockQuery,
+            BlockHeightQuery,
             BlockId,
             DaBlockHeight,
         },
@@ -157,47 +157,47 @@ impl DatabaseBlocks for ReadView {
 
     fn blocks(
         &self,
-        height: BlockQuery,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         // Chain together blocks from the off-chain db and the on-chain db
         // The blocks in off-chain db, if any, are from time before regenesis
 
-        if let BlockQuery::Specific(height) = height {
+        if let BlockHeightQuery::Specific(height) = height {
             match (height >= self.genesis_height, direction) {
                 (true, IterDirection::Forward) => self
                     .on_chain
-                    .blocks(BlockQuery::Specific(height), direction),
+                    .blocks(BlockHeightQuery::Specific(height), direction),
                 (true, IterDirection::Reverse) => self
                     .on_chain
-                    .blocks(BlockQuery::Specific(height), direction)
+                    .blocks(BlockHeightQuery::Specific(height), direction)
                     .chain(
                         self.off_chain
-                            .old_blocks(BlockQuery::Genesis, direction),
+                            .old_blocks(BlockHeightQuery::Genesis, direction),
                     )
                     .into_boxed(),
                 (false, IterDirection::Forward) => self
                     .off_chain
-                    .old_blocks(BlockQuery::Specific(height), direction)
-                    .chain(self.on_chain.blocks(BlockQuery::Genesis, direction))
+                    .old_blocks(BlockHeightQuery::Specific(height), direction)
+                    .chain(self.on_chain.blocks(BlockHeightQuery::Genesis, direction))
                     .into_boxed(),
                 (false, IterDirection::Reverse) => self
                     .off_chain
-                    .old_blocks(BlockQuery::Specific(height), direction),
+                    .old_blocks(BlockHeightQuery::Specific(height), direction),
             }
         } else {
             match direction {
                 IterDirection::Forward => self
                     .off_chain
-                    .old_blocks(BlockQuery::Genesis, direction)
-                    .chain(self.on_chain.blocks(BlockQuery::Genesis, direction))
+                    .old_blocks(BlockHeightQuery::Genesis, direction)
+                    .chain(self.on_chain.blocks(BlockHeightQuery::Genesis, direction))
                     .into_boxed(),
                 IterDirection::Reverse => self
                     .on_chain
-                    .blocks(BlockQuery::Genesis, direction)
+                    .blocks(BlockHeightQuery::Genesis, direction)
                     .chain(
                         self.off_chain
-                            .old_blocks(BlockQuery::Genesis, direction),
+                            .old_blocks(BlockHeightQuery::Genesis, direction),
                     )
                     .into_boxed(),
             }
@@ -336,7 +336,7 @@ impl OffChainDatabase for ReadView {
 
     fn old_blocks(
         &self,
-        height: BlockQuery,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         self.off_chain.old_blocks(height, direction)

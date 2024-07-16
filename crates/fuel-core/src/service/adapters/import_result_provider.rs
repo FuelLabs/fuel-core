@@ -8,7 +8,7 @@ use fuel_core_storage::{
     transactional::AtomicView,
 };
 use fuel_core_types::{
-    blockchain::primitives::BlockQuery,
+    blockchain::primitives::BlockHeightQuery,
     services::{
         block_importer::{
             ImportResult,
@@ -37,9 +37,9 @@ impl ImportResultProvider {
 impl ImportResultProvider {
     pub fn result_at_height(
         &self,
-        height: BlockQuery,
+        height: BlockHeightQuery,
     ) -> anyhow::Result<SharedImportResult> {
-        if let BlockQuery::Specific(height) = height {
+        if let BlockHeightQuery::Specific(height) = height {
             let sealed_block = self
                 .on_chain_database
                 .latest_view()?

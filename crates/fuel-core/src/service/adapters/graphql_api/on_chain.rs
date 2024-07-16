@@ -39,7 +39,7 @@ use fuel_core_types::{
         block::CompressedBlock,
         consensus::Consensus,
         primitives::{
-            BlockQuery,
+            BlockHeightQuery,
             DaBlockHeight,
         },
     },
@@ -77,7 +77,7 @@ impl DatabaseBlocks for OnChainIterableKeyValueView {
 
     fn blocks(
         &self,
-        height: BlockQuery,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         let height: Option<BlockHeight> = height.into();

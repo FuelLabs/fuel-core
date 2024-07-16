@@ -13,7 +13,7 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::BlockQuery,
+        primitives::BlockHeightQuery,
     },
     fuel_types::BlockHeight,
 };
@@ -38,7 +38,7 @@ pub trait BlockQueryData: Send + Sync + SimpleBlockData {
 
     fn compressed_blocks(
         &self,
-        height: BlockQuery,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<CompressedBlock>>;
 
@@ -59,7 +59,7 @@ where
 
     fn compressed_blocks(
         &self,
-        height: BlockQuery,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<CompressedBlock>> {
         self.blocks(height, direction)

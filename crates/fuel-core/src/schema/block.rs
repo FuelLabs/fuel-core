@@ -53,7 +53,7 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         header::BlockHeader,
-        primitives::BlockQuery,
+        primitives::BlockHeightQuery,
     },
     fuel_types::{
         self,
@@ -348,7 +348,7 @@ impl HeaderQuery {
 
 fn blocks_query<T>(
     query: &ReadView,
-    height: BlockQuery,
+    height: BlockHeightQuery,
     direction: IterDirection,
 ) -> BoxedIter<StorageResult<(U32, T)>>
 where
