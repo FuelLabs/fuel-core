@@ -346,7 +346,8 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
 #[tokio::test(flavor = "multi_thread")]
 async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
     let base_asset_id = *core
         .node
         .shared
@@ -387,7 +388,6 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             Default::default(),
             base_asset_id,
         ))
-        .max_fee_limit(12_000_000)
         .script_gas_limit(1_000_000)
         .finalize_as_transaction();
 

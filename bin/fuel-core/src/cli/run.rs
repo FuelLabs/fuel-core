@@ -174,7 +174,7 @@ pub struct Command {
     pub gas_price_change_percent: u64,
 
     /// The minimum allowed gas price
-    #[arg(long = "min-gas-price", default_value = "1000", env)]
+    #[arg(long = "min-gas-price", default_value = "0", env)]
     pub min_gas_price: u64,
 
     /// The percentage threshold for gas price increase

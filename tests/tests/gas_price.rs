@@ -172,12 +172,10 @@ async fn produce_block__lowers_gas_price() {
     let starting_gas_price = 1_000_000_000;
     let percent = 10;
     let threshold = 50;
-    let min_gas_price = starting_gas_price / 2;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.starting_gas_price = starting_gas_price;
     node_config.gas_price_change_percent = percent;
     node_config.gas_price_threshold_percent = threshold;
-    node_config.min_gas_price = min_gas_price;
     node_config.block_production = Trigger::Never;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();

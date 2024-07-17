@@ -129,8 +129,6 @@ fn get_block_info(
         gas_used: used_gas,
         block_gas_capacity: block_gas_limit,
     };
-    dbg!(&info);
-    dbg!(block.transactions().len());
     Ok(info)
 }
 
