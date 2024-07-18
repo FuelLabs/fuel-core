@@ -34,17 +34,14 @@ impl AlgorithmV0 {
         let percentage = self.percentage as f64;
         let percentage_as_decimal = percentage / 100.0;
         let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
-        let approx = price * multiple;
-        if approx > u64::MAX as f64 {
-            u64::MAX
-        } else {
-            let mut actual = approx.ceil() as u64;
-            // Brute force approach to deal with precision errors
-            if actual > 16948547188989277 {
-                actual += 1000;
-            }
-            actual
+        let mut approx = price * multiple;
+        const ARB_CUTOFF: f64 = 16948547188989277.0;
+        if approx > ARB_CUTOFF {
+            const ARB_ADDITION: f64 = 2000.0;
+            approx += ARB_ADDITION;
         }
+        // `f64` over `u64::MAX` are cast to `u64::MAX`
+        approx.ceil() as u64
     }
 }
 

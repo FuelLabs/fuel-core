@@ -74,15 +74,19 @@ impl BlockHeader {
             BlockHeader::V1(v1) => &v1.metadata,
         }
     }
+
+    fn _consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+        match self {
+            BlockHeader::V1(v1) => &mut v1.consensus,
+        }
+    }
 }
 
 #[cfg(feature = "test-helpers")]
 impl BlockHeader {
     /// Mutable getter for consensus portion of header
     pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
-        match self {
-            BlockHeader::V1(v1) => &mut v1.consensus,
-        }
+        self._consensus_mut()
     }
     /// Set the entire consensus header
     pub fn set_consensus_header(
@@ -352,7 +356,7 @@ impl BlockHeader {
     /// Re-generate the header metadata.
     pub fn recalculate_metadata(&mut self) {
         let application_hash = self.application().hash();
-        self.consensus_mut().generated.application_hash = application_hash;
+        self._consensus_mut().generated.application_hash = application_hash;
         let id = self.hash();
         match self {
             BlockHeader::V1(v1) => {
