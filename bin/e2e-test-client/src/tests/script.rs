@@ -158,11 +158,8 @@ pub async fn arbitrary_transaction(ctx: &TestContext) -> Result<(), Failed> {
         serde_json::from_str(dry_run_json.as_ref())
             .expect("Should be able do decode the Transaction from json representation");
 
-    let bytes = dry_run_tx_from_json.to_bytes();
-    dbg!(hex::encode(&bytes));
     if std::env::var_os("OVERRIDE_RAW_WITH_JSON").is_some() {
         let bytes = dry_run_tx_from_json.to_bytes();
-        dbg!(hex::encode(&bytes));
         std::fs::write(RAW_PATH, hex::encode(bytes))
             .expect("Should write the raw transaction");
     } else if std::env::var_os("OVERRIDE_JSON_WITH_RAW").is_some() {

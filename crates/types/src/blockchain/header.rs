@@ -74,22 +74,16 @@ impl BlockHeader {
             BlockHeader::V1(v1) => &v1.metadata,
         }
     }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    /// Mutable getter for consensus portion of header
-    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
-        self._consensus_mut()
-    }
-
-    fn _consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
-        match self {
-            BlockHeader::V1(v1) => &mut v1.consensus,
-        }
-    }
 }
 
 #[cfg(feature = "test-helpers")]
 impl BlockHeader {
+    /// Mutable getter for consensus portion of header
+    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+        match self {
+            BlockHeader::V1(v1) => &mut v1.consensus,
+        }
+    }
     /// Set the entire consensus header
     pub fn set_consensus_header(
         &mut self,
@@ -121,19 +115,19 @@ impl BlockHeader {
 
     /// Set the block height for the header
     pub fn set_block_height(&mut self, height: BlockHeight) {
-        self._consensus_mut().height = height;
+        self.consensus_mut().height = height;
         self.recalculate_metadata();
     }
 
     /// Set the previous root for the header
     pub fn set_previous_root(&mut self, root: Bytes32) {
-        self._consensus_mut().prev_root = root;
+        self.consensus_mut().prev_root = root;
         self.recalculate_metadata();
     }
 
     /// Set the time for the header
     pub fn set_time(&mut self, time: Tai64) {
-        self._consensus_mut().time = time;
+        self.consensus_mut().time = time;
         self.recalculate_metadata();
     }
 
@@ -277,8 +271,8 @@ impl BlockHeader {
     /// The method should be used only for tests.
     pub fn new_block(height: BlockHeight, time: Tai64) -> Self {
         let mut default = Self::default();
-        default._consensus_mut().height = height;
-        default._consensus_mut().time = time;
+        default.consensus_mut().height = height;
+        default.consensus_mut().time = time;
         default.recalculate_metadata();
         default
     }
@@ -358,7 +352,7 @@ impl BlockHeader {
     /// Re-generate the header metadata.
     pub fn recalculate_metadata(&mut self) {
         let application_hash = self.application().hash();
-        self._consensus_mut().generated.application_hash = application_hash;
+        self.consensus_mut().generated.application_hash = application_hash;
         let id = self.hash();
         match self {
             BlockHeader::V1(v1) => {

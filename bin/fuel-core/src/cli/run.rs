@@ -166,11 +166,11 @@ pub struct Command {
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
     /// The starting gas price for the network
-    #[arg(long = "starting-gas-price", default_value = "1000", env)]
+    #[arg(long = "starting-gas-price", default_value = "0", env)]
     pub starting_gas_price: u64,
 
     /// The percentage change in gas price per block
-    #[arg(long = "gas-price-change-percent", default_value = "10", env)]
+    #[arg(long = "gas-price-change-percent", default_value = "0", env)]
     pub gas_price_change_percent: u64,
 
     /// The minimum allowed gas price
