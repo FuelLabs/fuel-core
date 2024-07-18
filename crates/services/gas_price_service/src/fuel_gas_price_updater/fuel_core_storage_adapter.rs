@@ -186,21 +186,21 @@ where
             .sealed_block
             .entity;
 
-        if block.header().height() < &self.genesis_block_height {
-            return Err(GasPriceError::CouldNotFetchL2Block {
+        match block.header().height().cmp(&self.genesis_block_height) {
+            std::cmp::Ordering::Less => Err(GasPriceError::CouldNotFetchL2Block {
                 block_height: height,
                 source_error: anyhow!("Block precedes expected genesis block height"),
-            });
-        } else if block.header().height() == &self.genesis_block_height {
-            Ok(BlockInfo::GenesisBlock)
-        } else {
-            let param_version = block.header().consensus_parameters_version;
+            }),
+            std::cmp::Ordering::Equal => Ok(BlockInfo::GenesisBlock),
+            std::cmp::Ordering::Greater => {
+                let param_version = block.header().consensus_parameters_version;
 
-            let GasPriceSettings {
-                gas_price_factor,
-                block_gas_limit,
-            } = self.gas_price_settings.settings(&param_version)?;
-            get_block_info(block, gas_price_factor, block_gas_limit)
+                let GasPriceSettings {
+                    gas_price_factor,
+                    block_gas_limit,
+                } = self.gas_price_settings.settings(&param_version)?;
+                get_block_info(block, gas_price_factor, block_gas_limit)
+            }
         }
     }
 }
