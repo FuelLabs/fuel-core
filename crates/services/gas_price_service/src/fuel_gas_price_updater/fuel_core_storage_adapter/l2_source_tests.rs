@@ -250,7 +250,7 @@ async fn get_l2_block__calculates_block_gas_capacity_correctly() {
 }
 
 #[tokio::test]
-async fn get_l2_block__if_block_preceeds_genesis_block_throw_an_error() {
+async fn get_l2_block__if_block_precedes_genesis_block_throw_an_error() {
     // given
     let chain_id = ChainId::default();
     let block_height = 1u32.into();
