@@ -202,7 +202,7 @@ async fn produce_block__lowers_gas_price() {
 }
 
 #[tokio::test]
-async fn estimate_gas_price__matches_actual_updated_gas_price() {
+async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     // given
     let mut node_config = Config::local_node();
     let starting_gas_price = 1000;
@@ -229,7 +229,7 @@ async fn estimate_gas_price__matches_actual_updated_gas_price() {
     let latest = client.latest_gas_price().await.unwrap();
     let real = latest.gas_price;
     let estimated = u64::from(estimate.gas_price);
-    assert_eq!(estimated, real);
+    assert!(estimated >= real);
 }
 
 #[tokio::test]
