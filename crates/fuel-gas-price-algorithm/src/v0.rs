@@ -28,12 +28,10 @@ impl AlgorithmV0 {
     }
 
     pub fn worst_case(&self, height: u32) -> u64 {
-        let mut price = self.new_exec_price;
-        for _ in self.for_height..height {
-            let change = price.saturating_mul(self.percentage).saturating_div(100);
-            price = price.saturating_add(change);
-        }
-        price
+        let price = self.new_exec_price as f64;
+        let blocks = height.saturating_sub(self.for_height) as f64;
+        let approx = price * (1.0f64 + self.percentage as f64 / 100.0).powf(blocks);
+        approx.ceil() as u64
     }
 }
 
