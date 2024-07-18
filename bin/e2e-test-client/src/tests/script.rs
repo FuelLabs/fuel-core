@@ -14,10 +14,15 @@ use fuel_core_types::{
         Transaction,
         UniqueIdentifier,
     },
-    fuel_types::Salt,
+    fuel_types::{
+        canonical::{
+            Deserialize,
+            Serialize,
+        },
+        Salt,
+    },
     services::executor::TransactionExecutionResult,
 };
-
 use libtest_mimic::Failed;
 use std::{
     path::Path,
@@ -139,12 +144,36 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
 }
 
 pub async fn arbitrary_transaction(ctx: &TestContext) -> Result<(), Failed> {
+    const RAW_PATH: &str = "src/tests/test_data/arbitrary_tx.raw";
     const JSON_PATH: &str = "src/tests/test_data/arbitrary_tx.json";
-
+    let dry_run_raw =
+        std::fs::read_to_string(RAW_PATH).expect("Should read the raw transaction");
     let dry_run_json =
         std::fs::read_to_string(JSON_PATH).expect("Should read the json transaction");
-    let dry_run_tx_from_json: Transaction = serde_json::from_str(dry_run_json.as_ref())
-        .expect("Should be able do decode the Transaction from json representation");
+    let bytes = dry_run_raw.replace("0x", "");
+    let hex_tx = hex::decode(bytes).expect("Expected hex string");
+    let dry_run_tx_from_raw: Transaction = Transaction::from_bytes(hex_tx.as_ref())
+        .expect("Should be able do decode the Transaction from canonical representation");
+    let mut dry_run_tx_from_json: Transaction =
+        serde_json::from_str(dry_run_json.as_ref())
+            .expect("Should be able do decode the Transaction from json representation");
+
+    let bytes = dry_run_tx_from_json.to_bytes();
+    dbg!(hex::encode(&bytes));
+    if std::env::var_os("OVERRIDE_RAW_WITH_JSON").is_some() {
+        let bytes = dry_run_tx_from_json.to_bytes();
+        dbg!(hex::encode(&bytes));
+        std::fs::write(RAW_PATH, hex::encode(bytes))
+            .expect("Should write the raw transaction");
+    } else if std::env::var_os("OVERRIDE_JSON_WITH_RAW").is_some() {
+        let bytes = serde_json::to_string_pretty(&dry_run_tx_from_raw)
+            .expect("Should be able to encode the Transaction");
+        dry_run_tx_from_json = dry_run_tx_from_raw.clone();
+        std::fs::write(JSON_PATH, bytes.as_bytes())
+            .expect("Should write the json transaction");
+    }
+
+    assert_eq!(dry_run_tx_from_raw, dry_run_tx_from_json);
 
     _dry_runs(ctx, &[dry_run_tx_from_json], 1000, DryRunResult::MayFail).await
 }
