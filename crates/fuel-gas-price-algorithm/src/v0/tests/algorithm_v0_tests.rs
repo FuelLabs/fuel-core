@@ -42,14 +42,15 @@ fn _worst_case__correctly_calculates_value(
         let change_amount = expected.saturating_mul(percentage).saturating_div(100);
         expected = expected.saturating_add(change_amount);
     }
+    dbg!(actual, expected);
     assert!(actual >= expected);
 }
 
 proptest! {
     #[test]
     fn worst_case__correctly_calculates_value(
-        price in 0..1_000_000_000u64,
-        starting_height in 0..2_000_000_000u32,
+        price: u64,
+        starting_height: u32,
         block_horizon in 0..10_000u32,
         percentage in 0..100u64
     ) {

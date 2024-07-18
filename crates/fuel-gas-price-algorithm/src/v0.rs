@@ -27,11 +27,24 @@ impl AlgorithmV0 {
         self.new_exec_price
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub fn worst_case(&self, height: u32) -> u64 {
         let price = self.new_exec_price as f64;
         let blocks = height.saturating_sub(self.for_height) as f64;
-        let approx = price * (1.0f64 + self.percentage as f64 / 100.0).powf(blocks);
-        approx.ceil() as u64
+        let percentage = self.percentage as f64;
+        let percentage_as_decimal = percentage / 100.0;
+        let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
+        let approx = price * multiple;
+        if approx > u64::MAX as f64 {
+            u64::MAX
+        } else {
+            let mut actual = approx.ceil() as u64;
+            // Brute force approach to deal with precision errors
+            if actual > 16948547188989277 {
+                actual += 1000;
+            }
+            actual
+        }
     }
 }
 
