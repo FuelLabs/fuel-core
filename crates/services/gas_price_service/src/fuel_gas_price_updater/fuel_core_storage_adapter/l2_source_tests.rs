@@ -61,10 +61,12 @@ impl GasPriceSettingsProvider for FakeSettings {
 }
 
 fn l2_source<T>(
+    genesis_block_height: BlockHeight,
     gas_price_settings: T,
     committed_block_stream: BoxStream<SharedImportResult>,
 ) -> FuelL2BlockSource<T> {
     FuelL2BlockSource {
+        genesis_block_height,
         gas_price_settings,
         committed_block_stream,
     }
@@ -101,6 +103,7 @@ async fn get_l2_block__gets_expected_value() {
     let height = 1u32.into();
     let (block, _mint) = build_block(&params.chain_id(), height);
     let block_height = 1u32.into();
+    let genesis_block_height = 0u32.into();
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
     let expected = get_block_info(&block, gas_price_factor, block_gas_limit).unwrap();
@@ -110,7 +113,7 @@ async fn get_l2_block__gets_expected_value() {
         vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
 
-    let mut source = l2_source(settings, block_stream);
+    let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
     let actual = source.get_l2_block(block_height).await.unwrap();
@@ -126,13 +129,14 @@ async fn get_l2_block__waits_for_block() {
     let params = params();
     let (block, _mint) = build_block(&params.chain_id(), block_height);
 
+    let genesis_block_height = 0u32.into();
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
     let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
     let (sender, receiver) = tokio::sync::mpsc::channel(1);
     let stream = ReceiverStream::new(receiver);
     let block_stream = Box::pin(stream);
-    let mut source = l2_source(settings, block_stream);
+    let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
     let mut fut_l2_block = source.get_l2_block(block_height);
@@ -177,6 +181,7 @@ async fn get_l2_block__calculates_gas_used_correctly() {
     let block_height = 1u32.into();
     let (block, mint) = build_block(&chain_id, block_height);
 
+    let genesis_block_height = 0u32.into();
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
     let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
@@ -186,7 +191,7 @@ async fn get_l2_block__calculates_gas_used_correctly() {
         vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
 
-    let mut source = l2_source(settings, block_stream);
+    let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
     let result = source.get_l2_block(block_height).await.unwrap();
@@ -217,6 +222,7 @@ async fn get_l2_block__calculates_block_gas_capacity_correctly() {
     let block_height = 1u32.into();
     let (block, _mint) = build_block(&chain_id, block_height);
 
+    let genesis_block_height = 0u32.into();
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
     let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
@@ -226,7 +232,7 @@ async fn get_l2_block__calculates_block_gas_capacity_correctly() {
         vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
 
-    let mut source = l2_source(settings, block_stream);
+    let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
     let result = source.get_l2_block(block_height).await.unwrap();
@@ -241,4 +247,30 @@ async fn get_l2_block__calculates_block_gas_capacity_correctly() {
     };
     let expected = block_gas_limit;
     assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn get_l2_block__if_block_preceeds_genesis_block_throw_an_error() {
+    // given
+    let chain_id = ChainId::default();
+    let block_height = 1u32.into();
+    let (block, _mint) = build_block(&chain_id, block_height);
+
+    let genesis_block_height = 2u32.into();
+    let gas_price_factor = 100;
+    let block_gas_limit = 1000;
+    let settings = FakeSettings::new(gas_price_factor, block_gas_limit);
+
+    let import_result = block_to_import_result(block.clone());
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> =
+        vec![import_result];
+    let block_stream = tokio_stream::iter(blocks).into_boxed();
+
+    let mut source = l2_source(genesis_block_height, settings, block_stream);
+
+    // when
+    let error = source.get_l2_block(block_height).await.unwrap_err();
+
+    // then
+    assert!(matches!(error, GasPriceError::CouldNotFetchL2Block { .. }));
 }

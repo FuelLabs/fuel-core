@@ -87,16 +87,19 @@ where
 }
 
 pub struct FuelL2BlockSource<Settings> {
+    genesis_block_height: BlockHeight,
     gas_price_settings: Settings,
     committed_block_stream: BoxStream<SharedImportResult>,
 }
 
 impl<Settings> FuelL2BlockSource<Settings> {
     pub fn new(
+        genesis_block_height: BlockHeight,
         gas_price_settings: Settings,
         committed_block_stream: BoxStream<SharedImportResult>,
     ) -> Self {
         Self {
+            genesis_block_height,
             gas_price_settings,
             committed_block_stream,
         }
@@ -183,8 +186,12 @@ where
             .sealed_block
             .entity;
 
-        // TODO: Genesis isn't always 0
-        if block.header().height() == &0u32.into() {
+        if block.header().height() < &self.genesis_block_height {
+            return Err(GasPriceError::CouldNotFetchL2Block {
+                block_height: height,
+                source_error: anyhow!("Block precedes expected genesis block height"),
+            });
+        } else if block.header().height() == &self.genesis_block_height {
             Ok(BlockInfo::GenesisBlock)
         } else {
             let param_version = block.header().consensus_parameters_version;

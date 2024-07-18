@@ -183,9 +183,11 @@ pub fn init_sub_services(
         l2_block_height: last_height.into(),
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
-    let block_stream = importer_adapter.events_shared_result();
+    let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
-    let l2_block_source = FuelL2BlockSource::new(settings, block_stream);
+    let block_stream = importer_adapter.events_shared_result();
+    let l2_block_source =
+        FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
     let metadata_storage = StructuredStorage::new(database.gas_price().clone());
     let update_algo =
         FuelGasPriceUpdater::init(updater_metadata, l2_block_source, metadata_storage)?;
