@@ -11,6 +11,7 @@ use fuel_core_storage::{
         postcard::Postcard,
         raw::Raw,
     },
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -32,7 +33,12 @@ impl Mappable for RelayedTransactionStatuses {
 }
 
 impl TableWithBlueprint for RelayedTransactionStatuses {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for RelayedTransactionStatuses {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
 
     type Column = super::Column;
 

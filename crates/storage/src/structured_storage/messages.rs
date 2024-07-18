@@ -7,12 +7,19 @@ use crate::{
         raw::Raw,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::Messages,
 };
 
 impl TableWithBlueprint for Messages {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for Messages {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
+
     type Column = Column;
 
     fn column() -> Column {

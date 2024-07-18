@@ -7,6 +7,7 @@ use crate::{
         raw::Raw,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::{
         ContractsLatestUtxo,
@@ -19,7 +20,12 @@ use crate::{
 // by bytes, we don't use `serde::Deserialization` and `serde::Serialization` for `Vec`,
 // because we don't need to store the size of the contract. We store/load raw bytes.
 impl TableWithBlueprint for ContractsRawCode {
-    type Blueprint = Plain<Raw, Raw>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for ContractsRawCode {
+    type KeyCodec = Raw;
+    type ValueCodec = Raw;
     type Column = Column;
 
     fn column() -> Column {
@@ -28,7 +34,12 @@ impl TableWithBlueprint for ContractsRawCode {
 }
 
 impl TableWithBlueprint for ContractsLatestUtxo {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for ContractsLatestUtxo {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {

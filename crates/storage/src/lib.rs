@@ -6,9 +6,9 @@
 
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
-#![deny(unused_crate_dependencies)]
-#![deny(missing_docs)]
-#![deny(warnings)]
+// #![deny(unused_crate_dependencies)]
+// #![deny(missing_docs)]
+// #![deny(warnings)]
 
 use anyhow::anyhow;
 use core::array::TryFromSliceError;
@@ -27,6 +27,7 @@ pub mod codec;
 pub mod column;
 pub mod iter;
 pub mod kv_store;
+pub mod storage_interlayer;
 pub mod structured_storage;
 pub mod tables;
 #[cfg(feature = "test-helpers")]

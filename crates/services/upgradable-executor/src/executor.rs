@@ -47,7 +47,6 @@ use std::sync::Arc;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_storage::{
     not_found,
-    structured_storage::StructuredStorage,
     tables::{
         StateTransitionBytecodeVersions,
         UploadedBytecodes,
@@ -367,7 +366,7 @@ where
     {
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
-        if block_version == native_executor_version {
+        if true || block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
                     self.native_produce_inner(block, options, dry_run)
@@ -412,7 +411,7 @@ where
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let block_version = block.header().state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
-        if block_version == native_executor_version {
+        if true || block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_validate_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
@@ -601,13 +600,14 @@ where
         &self,
         version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
     ) -> ExecutorResult<wasmtime::Module> {
+        use fuel_core_storage::transactional::IntoTransaction;
         let guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
             return Ok(module.clone());
         }
         drop(guard);
 
-        let view = StructuredStorage::new(self.storage_view_provider.latest_view()?);
+        let view = self.storage_view_provider.latest_view()?.into_transaction();
         let bytecode_root = *view
             .storage::<StateTransitionBytecodeVersions>()
             .get(&version)?

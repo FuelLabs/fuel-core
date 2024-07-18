@@ -17,7 +17,6 @@ use crate::{
     MerkleRoot,
     MerkleRootStorage,
     StorageAsMut,
-    StorageBatchMutate,
     StorageInspect,
     StorageMutate,
     StorageRead,
@@ -431,7 +430,7 @@ pub trait VmStorageRequirements {
 impl<T> VmStorageRequirements for T
 where
     T: StorageInspect<FuelBlocks, Error = StorageError>,
-    T: StorageBatchMutate<ContractsState, Error = StorageError>,
+    T: StorageMutate<ContractsState, Error = StorageError>,
 {
     type Error = StorageError;
 
@@ -461,6 +460,10 @@ where
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
-        self.init_storage(slots.iter().map(|kv| (&kv.0, kv.1.as_ref())))
+
+        for (key, value) in slots.iter() {
+            self.insert(key, value.as_ref())?;
+        }
+        Ok(())
     }
 }

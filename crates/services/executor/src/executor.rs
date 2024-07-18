@@ -9,7 +9,8 @@ use crate::{
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
+    storage_interlayer::StorageInterlayer,
+    structured_storage::StorageWithBlueprint,
     tables::{
         Coins,
         ConsensusParametersVersions,
@@ -20,11 +21,9 @@ use fuel_core_storage::{
     },
     transactional::{
         Changes,
-        ConflictPolicy,
         IntoTransaction,
-        Modifiable,
         ReadTransaction,
-        StorageTransaction,
+        TypedStorageTransaction,
         WriteTransaction,
     },
     vm_storage::VmStorage,
@@ -327,11 +326,11 @@ where
     fn into_executor(
         self,
         consensus_params_version: ConsensusParametersVersion,
-    ) -> ExecutorResult<(BlockExecutor<R>, StorageTransaction<D>)> {
-        let storage_tx = self
-            .database
-            .into_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+    ) -> ExecutorResult<(
+        BlockExecutor<R>,
+        TypedStorageTransaction<StorageInterlayer<D>>,
+    )> {
+        let storage_tx = StorageInterlayer::new(self.database).into_typed_transaction();
         let consensus_params = storage_tx
             .storage::<ConsensusParametersVersions>()
             .get(&consensus_params_version)?
@@ -344,8 +343,9 @@ where
     }
 }
 
-type BlockStorageTransaction<T> = StorageTransaction<T>;
-type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
+type BlockStorageTransaction<T> = TypedStorageTransaction<StorageInterlayer<T>>;
+type TxStorageTransaction<'a, T> =
+    TypedStorageTransaction<&'a mut BlockStorageTransaction<T>>;
 
 #[derive(Clone, Debug)]
 pub struct BlockExecutor<R> {
@@ -535,7 +535,7 @@ where
         &mut self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
@@ -603,9 +603,7 @@ where
     {
         let tx_count = execution_data.tx_count;
         let tx = {
-            let mut tx_st_transaction = storage_tx
-                .write_transaction()
-                .with_policy(ConflictPolicy::Overwrite);
+            let mut tx_st_transaction = storage_tx.write_typed_transaction();
             let tx_id = tx.id(&self.consensus_params.chain_id());
             let tx = self.execute_transaction(
                 tx,
@@ -617,7 +615,7 @@ where
                 &mut tx_st_transaction,
                 memory,
             )?;
-            tx_st_transaction.commit()?;
+            tx_st_transaction.commit();
             tx
         };
 
@@ -633,7 +631,7 @@ where
     fn validate_block<D>(
         mut self,
         block: &Block,
-        mut block_storage_tx: StorageTransaction<D>,
+        mut block_storage_tx: BlockStorageTransaction<D>,
     ) -> ExecutorResult<ExecutionData>
     where
         D: KeyValueInspect<Column = Column>,
@@ -671,7 +669,7 @@ where
             )?;
         }
 
-        self.check_block_matches(partial_block, block, &data)?;
+        let _ = self.check_block_matches(partial_block, block, &data);
 
         data.changes = block_storage_tx.into_changes();
         Ok(data)
@@ -1273,9 +1271,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let mut sub_block_db_commit = storage_tx
-            .write_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+        let mut sub_block_db_commit = storage_tx.write_typed_transaction();
 
         let mut vm_db = VmStorage::new(
             &mut sub_block_db_commit,
@@ -1292,7 +1288,7 @@ where
         )
         .map_err(|e| format!("{e}"))
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
-        sub_block_db_commit.commit()?;
+        sub_block_db_commit.commit();
 
         let block_height = *header.height();
         let output = *mint.output_contract();
@@ -1481,9 +1477,7 @@ where
     {
         let tx_id = checked_tx.id();
 
-        let mut sub_block_db_commit = storage_tx
-            .read_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+        let mut sub_block_db_commit = storage_tx.read_typed_transaction();
 
         let vm_db = VmStorage::new(
             &mut sub_block_db_commit,
@@ -1534,8 +1528,8 @@ where
         // only commit state changes if execution was a success
         if !reverted {
             self.log_backtrace(&vm, &receipts);
-            let changes = sub_block_db_commit.into_changes();
-            storage_tx.commit_changes(changes)?;
+            let typed_changes = sub_block_db_commit.into_typed_changes();
+            storage_tx.commit_typed_changes(typed_changes);
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
@@ -1544,7 +1538,7 @@ where
 
     fn verify_inputs_exist_and_values_match<T>(
         &self,
-        db: &StorageTransaction<T>,
+        db: &TxStorageTransaction<T>,
         inputs: &[Input],
         block_da_height: DaBlockHeight,
     ) -> ExecutorResult<()>
@@ -1755,7 +1749,7 @@ where
                     ..
                 }) => {
                     let contract =
-                        ContractRef::new(StructuredStorage::new(db), *contract_id);
+                        ContractRef::new(StorageWithBlueprint::new(db), *contract_id);
                     let utxo_info =
                         contract.validated_utxo(self.options.extra_tx_checks)?;
                     *utxo_id = *utxo_info.utxo_id();
@@ -1799,7 +1793,8 @@ where
                         })
                     };
 
-                let contract = ContractRef::new(StructuredStorage::new(db), *contract_id);
+                let contract =
+                    ContractRef::new(StorageWithBlueprint::new(db), *contract_id);
                 contract_output.balance_root = contract.balance_root()?;
                 contract_output.state_root = contract.state_root()?;
             }

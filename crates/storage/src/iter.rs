@@ -1,7 +1,6 @@
 //! The module defines primitives that allow iterating of the storage.
 
 use crate::{
-    blueprint::BlueprintInspect,
     codec::{
         Decode,
         Encode,
@@ -11,7 +10,7 @@ use crate::{
         KVItem,
         KeyValueInspect,
     },
-    structured_storage::TableWithBlueprint,
+    storage_interlayer::Interlayer,
     transactional::ReferenceBytesKey,
 };
 use fuel_vm_private::fuel_storage::Mappable;
@@ -107,8 +106,7 @@ where
 
 impl<Column, M, S> IterableTable<M> for S
 where
-    M: TableWithBlueprint<Column = Column>,
-    M::Blueprint: BlueprintInspect<M, S>,
+    M: Interlayer<Column = Column>,
     S: IterableStore<Column = Column>,
 {
     fn iter_table_keys<P>(
@@ -120,9 +118,8 @@ where
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        let encoder = start.map(|start| M::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -137,10 +134,8 @@ where
         )
         .map(|val| {
             val.and_then(|(key, _)| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let key = M::KeyCodec::decode(key.as_slice())
+                    .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok(key)
             })
         })
@@ -156,9 +151,8 @@ where
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        let encoder = start.map(|start| M::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -171,14 +165,9 @@ where
         )
         .map(|val| {
             val.and_then(|(key, value)| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
-                let value =
-                    <M::Blueprint as BlueprintInspect<M, Self>>::ValueCodec::decode(
-                        value.as_slice(),
-                    )
+                let key = M::KeyCodec::decode(key.as_slice())
+                    .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let value = M::ValueCodec::decode(value.as_slice())
                     .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok((key, value))
             })

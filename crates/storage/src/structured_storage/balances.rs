@@ -1,15 +1,20 @@
 //! The module contains implementations and tests for the `ContractsAssets` table.
 
 use crate::{
-    blueprint::sparse::{
-        PrimaryKey,
-        Sparse,
+    blueprint::{
+        avl_merkle,
+        btree_merkle,
+        sparse::{
+            PrimaryKey,
+            Sparse,
+        },
     },
     codec::{
         primitive::Primitive,
         raw::Raw,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
@@ -20,6 +25,8 @@ use crate::{
     },
     Mappable,
 };
+use fuel_core_types::fuel_merkle::common::Bytes32;
+use fuel_vm_private::storage::ContractsAssetKey;
 
 /// The key convertor used to convert the key from the `ContractsAssets` table
 /// to the key of the `ContractsAssetsMerkleMetadata` table.
@@ -34,14 +41,49 @@ impl PrimaryKey for KeyConverter {
     }
 }
 
+impl avl_merkle::PrefixedKey for ContractsAssetKey {
+    fn prefix(&self) -> (Bytes32, Bytes32) {
+        let contract_id = *self.contract_id();
+        let asset_id = *self.asset_id();
+        (contract_id.into(), asset_id.into())
+    }
+}
+
+impl avl_merkle::FromPrefix for ContractsAssetKey {
+    fn from_prefix(prefix: Bytes32, unique: Bytes32) -> Self {
+        let contract_id = prefix.into();
+        let asset_id = unique.into();
+        Self::new(&contract_id, &asset_id)
+    }
+}
+
+impl btree_merkle::PrefixedKey for ContractsAssetKey {
+    fn prefix(&self) -> (Bytes32, Bytes32) {
+        let contract_id = *self.contract_id();
+        let asset_id = *self.asset_id();
+        (contract_id.into(), asset_id.into())
+    }
+}
+
+impl btree_merkle::FromPrefix for ContractsAssetKey {
+    fn from_prefix(prefix: Bytes32, unique: Bytes32) -> Self {
+        let contract_id = prefix.into();
+        let asset_id = unique.into();
+        Self::new(&contract_id, &asset_id)
+    }
+}
+
 impl TableWithBlueprint for ContractsAssets {
-    type Blueprint = Sparse<
-        Raw,
-        Primitive<8>,
+    type Blueprint = btree_merkle::BTreeMerkle<
         ContractsAssetsMerkleMetadata,
         ContractsAssetsMerkleData,
-        KeyConverter,
+        Primitive<8>,
     >;
+}
+
+impl Interlayer for ContractsAssets {
+    type KeyCodec = Raw;
+    type ValueCodec = Primitive<8>;
     type Column = Column;
 
     fn column() -> Column {
@@ -52,6 +94,7 @@ impl TableWithBlueprint for ContractsAssets {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::Mappable;
 
     fn generate_key(
         primary_key: &<ContractsAssetsMerkleMetadata as Mappable>::Key,
@@ -62,18 +105,11 @@ mod test {
         <ContractsAssets as Mappable>::Key::new(primary_key, &bytes.into())
     }
 
-    fn generate_key_for_same_contract(
-        rng: &mut impl rand::Rng,
-    ) -> <ContractsAssets as Mappable>::Key {
-        generate_key(&fuel_core_types::fuel_tx::ContractId::zeroed(), rng)
-    }
-
     crate::basic_storage_tests!(
         ContractsAssets,
         <ContractsAssets as Mappable>::Key::default(),
         <ContractsAssets as Mappable>::Value::default(),
-        <ContractsAssets as Mappable>::Value::default(),
-        generate_key_for_same_contract
+        <ContractsAssets as Mappable>::Value::default()
     );
 
     fn generate_value(rng: &mut impl rand::Rng) -> <ContractsAssets as Mappable>::Value {

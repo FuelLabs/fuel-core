@@ -8,6 +8,7 @@ use crate::{
         Encode,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
@@ -33,13 +34,13 @@ impl Encode<CompressedBlock> for BlockEncoder {
 }
 
 impl TableWithBlueprint for FuelBlocks {
-    type Blueprint = Merklized<
-        Primitive<4>,
-        Postcard,
-        FuelBlockMerkleMetadata,
-        FuelBlockMerkleData,
-        BlockEncoder,
-    >;
+    type Blueprint =
+        Merklized<FuelBlockMerkleMetadata, FuelBlockMerkleData, BlockEncoder>;
+}
+
+impl Interlayer for FuelBlocks {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {
@@ -50,10 +51,8 @@ impl TableWithBlueprint for FuelBlocks {
 #[cfg(test)]
 mod tests {
     use crate::{
-        structured_storage::{
-            test::InMemoryStorage,
-            TableWithBlueprint,
-        },
+        storage_interlayer::Interlayer,
+        structured_storage::test::InMemoryStorage,
         tables::FuelBlocks,
         transactional::ReadTransaction,
         StorageAsMut,
@@ -85,8 +84,7 @@ mod tests {
     #[test_case::test_case(&[0, 2, 5, 7, 11]; "five non-sequential blocks starting from height 0")]
     #[test_case::test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
     fn can_get_merkle_root_of_inserted_blocks(heights: &[u32]) {
-        let storage =
-            InMemoryStorage::<<FuelBlocks as TableWithBlueprint>::Column>::default();
+        let storage = InMemoryStorage::<<FuelBlocks as Interlayer>::Column>::default();
         let mut storage = storage.read_transaction();
         let blocks = heights
             .iter()
@@ -138,8 +136,7 @@ mod tests {
     fn get_merkle_root_with_no_blocks_returns_not_found_error() {
         use crate::StorageAsRef;
 
-        let storage =
-            InMemoryStorage::<<FuelBlocks as TableWithBlueprint>::Column>::default();
+        let storage = InMemoryStorage::<<FuelBlocks as Interlayer>::Column>::default();
         let database = storage.read_transaction();
 
         // check that root is not present

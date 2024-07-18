@@ -48,4 +48,4 @@ test-case = { workspace = true }
 [features]
 default = ["std"]
 std = ["fuel-core-types/std"]
-test-helpers = ["dep:mockall", "dep:rand"]
+test-helpers = ["dep:mockall", "dep:rand", "fuel-vm-private/test-helpers"]

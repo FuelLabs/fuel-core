@@ -7,7 +7,7 @@ use crate::{
     StateConfigBuilder,
     TableEncoding,
 };
-use fuel_core_storage::structured_storage::TableWithBlueprint;
+use fuel_core_storage::storage_interlayer::Interlayer;
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -306,7 +306,7 @@ impl SnapshotWriter {
 
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint,
+        T: Interlayer,
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
     {
@@ -428,9 +428,7 @@ impl TableEncoders {
         }
     }
 
-    fn encoder<T: fuel_core_storage::structured_storage::TableWithBlueprint>(
-        &mut self,
-    ) -> anyhow::Result<&mut PostcardParquetEncoder> {
+    fn encoder<T: Interlayer>(&mut self) -> anyhow::Result<&mut PostcardParquetEncoder> {
         use fuel_core_storage::kv_store::StorageColumn;
 
         let name = StorageColumn::name(&T::column()).to_string();
@@ -468,7 +466,6 @@ mod tests {
 
     use fuel_core_storage::{
         kv_store::StorageColumn,
-        structured_storage::TableWithBlueprint,
         tables::{
             Coins,
             ContractsAssets,
@@ -502,7 +499,7 @@ mod tests {
     fn parquet_encoder_encodes_tables_in_expected_files() {
         fn file_created_and_present_in_metadata<T>()
         where
-            T: TableWithBlueprint,
+            T: Interlayer,
             T::OwnedKey: serde::Serialize,
             T::OwnedValue: serde::Serialize,
             StateConfigBuilder: AddTable<T>,

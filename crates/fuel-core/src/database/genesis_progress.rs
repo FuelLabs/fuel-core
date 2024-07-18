@@ -15,6 +15,7 @@ use fuel_core_storage::{
     codec::postcard::Postcard,
     column::Column,
     iter::IteratorOverTable,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -42,7 +43,12 @@ impl<Description> Mappable for GenesisMetadata<Description> {
 }
 
 impl TableWithBlueprint for GenesisMetadata<OnChain> {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for GenesisMetadata<OnChain> {
+    type KeyCodec = Postcard;
+    type ValueCodec = Postcard;
     type Column = <OnChain as DatabaseDescription>::Column;
     fn column() -> Self::Column {
         Column::GenesisMetadata
@@ -50,7 +56,12 @@ impl TableWithBlueprint for GenesisMetadata<OnChain> {
 }
 
 impl TableWithBlueprint for GenesisMetadata<OffChain> {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for GenesisMetadata<OffChain> {
+    type KeyCodec = Postcard;
+    type ValueCodec = Postcard;
     type Column = <OffChain as DatabaseDescription>::Column;
     fn column() -> Self::Column {
         OffChainColumn::GenesisMetadata

@@ -8,6 +8,7 @@ use crate::{
         raw::Raw,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::merkle::{
         ContractsAssetsMerkleData,
@@ -25,7 +26,12 @@ macro_rules! merkle_table {
     };
     ($table:ident, $key_codec:ident) => {
         impl TableWithBlueprint for $table {
-            type Blueprint = Plain<$key_codec, Postcard>;
+            type Blueprint = Plain;
+        }
+
+        impl Interlayer for $table {
+            type KeyCodec = $key_codec;
+            type ValueCodec = Postcard;
             type Column = Column;
 
             fn column() -> Column {

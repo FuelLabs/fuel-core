@@ -5,6 +5,7 @@ use crate::{
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     transactional::Changes,
     Mappable,
@@ -30,7 +31,15 @@ impl<Description> TableWithBlueprint for ModificationsHistory<Description>
 where
     Description: DatabaseDescription,
 {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl<Description> Interlayer for ModificationsHistory<Description>
+where
+    Description: DatabaseDescription,
+{
+    type KeyCodec = Postcard;
+    type ValueCodec = Postcard;
     type Column = Column<Description>;
 
     fn column() -> Self::Column {

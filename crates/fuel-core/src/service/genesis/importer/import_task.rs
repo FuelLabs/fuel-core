@@ -1,7 +1,7 @@
 use anyhow::bail;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
+    storage_interlayer::Interlayer,
     transactional::{
         Modifiable,
         StorageTransaction,
@@ -41,8 +41,8 @@ where
 }
 
 pub trait ImportTable {
-    type TableInSnapshot: TableWithBlueprint;
-    type TableBeingWritten: TableWithBlueprint;
+    type TableInSnapshot: Interlayer;
+    type TableBeingWritten: Interlayer;
     type DbDesc: DatabaseDescription;
 
     fn process(
@@ -89,12 +89,8 @@ where
     Logic: ImportTable<DbDesc = DbDesc>,
     GroupGenerator:
         IntoIterator<Item = anyhow::Result<Vec<TableEntry<Logic::TableInSnapshot>>>>,
-    GenesisMetadata<DbDesc>: TableWithBlueprint<
-        Column = DbDesc::Column,
-        Key = str,
-        Value = usize,
-        OwnedValue = usize,
-    >,
+    GenesisMetadata<DbDesc>:
+        Interlayer<Column = DbDesc::Column, Key = str, Value = usize, OwnedValue = usize>,
     GenesisDatabase<DbDesc>:
         StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
     for<'a> StorageTransaction<&'a mut GenesisDatabase<DbDesc>>:

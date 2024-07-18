@@ -1,6 +1,7 @@
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -23,7 +24,15 @@ impl<V> TableWithBlueprint for StatisticTable<V>
 where
     V: Clone,
 {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl<V> Interlayer for StatisticTable<V>
+where
+    V: Clone + serde::Serialize + serde::de::DeserializeOwned,
+{
+    type KeyCodec = Postcard;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {

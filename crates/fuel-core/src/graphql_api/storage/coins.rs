@@ -5,6 +5,7 @@ use fuel_core_storage::{
         primitive::utxo_id_to_bytes,
         raw::Raw,
     },
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -36,7 +37,12 @@ impl Mappable for OwnedCoins {
 }
 
 impl TableWithBlueprint for OwnedCoins {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for OwnedCoins {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -48,17 +54,10 @@ impl TableWithBlueprint for OwnedCoins {
 mod test {
     use super::*;
 
-    fn generate_key(rng: &mut impl rand::Rng) -> <OwnedCoins as Mappable>::Key {
-        let mut bytes = [0u8; 66];
-        rng.fill(bytes.as_mut());
-        bytes
-    }
-
     fuel_core_storage::basic_storage_tests!(
         OwnedCoins,
         [0u8; 66],
         <OwnedCoins as Mappable>::Value::default(),
-        <OwnedCoins as Mappable>::Value::default(),
-        generate_key
+        <OwnedCoins as Mappable>::Value::default()
     );
 }

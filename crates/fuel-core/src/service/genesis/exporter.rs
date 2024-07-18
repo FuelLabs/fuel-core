@@ -34,7 +34,7 @@ use fuel_core_storage::{
         IterableTable,
     },
     kv_store::StorageColumn,
-    structured_storage::TableWithBlueprint,
+    storage_interlayer::Interlayer,
     tables::{
         merkle::{
             FuelBlockMerkleData,
@@ -183,7 +183,7 @@ where
         db_picker: impl FnOnce(&Self) -> &Database<DbDesc>,
     ) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint + 'static + Send + Sync,
+        T: Interlayer + 'static + Send + Sync,
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
         DbDesc: DatabaseDescription,

@@ -12,6 +12,7 @@ use fuel_core_storage::{
         primitive::Primitive,
         raw::Raw,
     },
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -37,7 +38,12 @@ impl Mappable for OldFuelBlocks {
 }
 
 impl TableWithBlueprint for OldFuelBlocks {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for OldFuelBlocks {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -64,7 +70,12 @@ impl Mappable for OldFuelBlockConsensus {
 }
 
 impl TableWithBlueprint for OldFuelBlockConsensus {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for OldFuelBlockConsensus {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -91,7 +102,12 @@ impl Mappable for OldTransactions {
 }
 
 impl TableWithBlueprint for OldTransactions {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for OldTransactions {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {

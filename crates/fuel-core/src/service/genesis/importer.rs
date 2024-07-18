@@ -35,7 +35,7 @@ use fuel_core_chain_config::{
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     kv_store::StorageColumn,
-    structured_storage::TableWithBlueprint,
+    storage_interlayer::Interlayer,
     tables::{
         merkle::{
             FuelBlockMerkleData,
@@ -143,7 +143,7 @@ impl SnapshotImporter {
 
     pub fn spawn_worker_on_chain<TableBeingWritten>(&mut self) -> anyhow::Result<()>
     where
-        TableBeingWritten: TableWithBlueprint + 'static + Send,
+        TableBeingWritten: Interlayer + 'static + Send,
         TableEntry<TableBeingWritten>: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<TableBeingWritten>,
         Handler<TableBeingWritten, TableBeingWritten>:
@@ -189,12 +189,12 @@ impl SnapshotImporter {
         &mut self,
     ) -> anyhow::Result<()>
     where
-        TableInSnapshot: TableWithBlueprint + Send + 'static,
+        TableInSnapshot: Interlayer + Send + 'static,
         TableEntry<TableInSnapshot>: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<TableInSnapshot>,
         Handler<TableBeingWritten, TableInSnapshot>:
             ImportTable<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,
-        TableBeingWritten: TableWithBlueprint + Send + 'static,
+        TableBeingWritten: Interlayer + Send + 'static,
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
@@ -254,8 +254,8 @@ impl<A, B> Handler<A, B> {
 
 pub fn migration_name<TableInSnapshot, TableBeingWritten>() -> String
 where
-    TableInSnapshot: TableWithBlueprint,
-    TableBeingWritten: TableWithBlueprint,
+    TableInSnapshot: Interlayer,
+    TableBeingWritten: Interlayer,
 {
     format!(
         "{} -> {}",

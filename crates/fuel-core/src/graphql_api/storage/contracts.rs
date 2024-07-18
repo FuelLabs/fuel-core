@@ -4,6 +4,7 @@ use fuel_core_storage::{
         postcard::Postcard,
         raw::Raw,
     },
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -21,7 +22,12 @@ impl Mappable for ContractsInfo {
 }
 
 impl TableWithBlueprint for ContractsInfo {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for ContractsInfo {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {

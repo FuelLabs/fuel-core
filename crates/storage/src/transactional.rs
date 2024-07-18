@@ -9,7 +9,9 @@ use crate::{
         Value,
         WriteOperation,
     },
-    structured_storage::StructuredStorage,
+    storage_interlayer::StorageInterlayer,
+    structured_storage::StorageWithBlueprint,
+    transactional::typed_int_memory_transaction::TypedInMemoryTransaction,
     Result as StorageResult,
 };
 use std::{
@@ -23,6 +25,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::transactional::typed_int_memory_transaction::TypedChanges;
 #[cfg(feature = "test-helpers")]
 use crate::{
     iter::{
@@ -32,6 +35,8 @@ use crate::{
     },
     kv_store::KVItem,
 };
+
+pub mod typed_int_memory_transaction;
 
 /// Provides an atomic view of the storage at the latest height at
 /// the moment of view instantiation. All modifications to the storage
@@ -60,7 +65,11 @@ pub trait HistoricalView: AtomicView {
 }
 
 /// Storage transaction on top of the storage.
-pub type StorageTransaction<S> = StructuredStorage<InMemoryTransaction<S>>;
+pub type StorageTransaction<S> =
+    StorageWithBlueprint<StorageInterlayer<InMemoryTransaction<S>>>;
+
+/// Typed storage transaction on top of the storage.
+pub type TypedStorageTransaction<S> = StorageWithBlueprint<TypedInMemoryTransaction<S>>;
 
 /// In memory transaction accumulates `Changes` over the storage.
 #[derive(Default, Debug, Clone)]
@@ -73,44 +82,58 @@ pub struct InMemoryTransaction<S> {
 impl<S> StorageTransaction<S> {
     /// Creates a new instance of the storage transaction.
     pub fn transaction(storage: S, policy: ConflictPolicy, changes: Changes) -> Self {
-        StructuredStorage::new(InMemoryTransaction {
+        StorageWithBlueprint::new(StorageInterlayer::new(InMemoryTransaction {
             changes,
             policy,
             storage,
-        })
+        }))
     }
 
     /// Creates a new instance of the structured storage with a `ConflictPolicy`.
     pub fn with_policy(self, policy: ConflictPolicy) -> Self {
-        StructuredStorage::new(InMemoryTransaction {
-            changes: self.inner.changes,
+        StorageWithBlueprint::new(StorageInterlayer::new(InMemoryTransaction {
+            changes: self.inner.inner.changes,
             policy,
-            storage: self.inner.storage,
-        })
+            storage: self.inner.inner.storage,
+        }))
     }
 
     /// Creates a new instance of the structured storage with a `Changes`.
     pub fn with_changes(self, changes: Changes) -> Self {
-        StructuredStorage::new(InMemoryTransaction {
+        StorageWithBlueprint::new(StorageInterlayer::new(InMemoryTransaction {
             changes,
-            policy: self.inner.policy,
-            storage: self.inner.storage,
-        })
+            policy: self.inner.inner.policy,
+            storage: self.inner.inner.storage,
+        }))
     }
 
     /// Getter to the changes.
     pub fn changes(&self) -> &Changes {
-        &self.inner.changes
+        &self.inner.inner.changes
     }
 
     /// Returns the changes to the storage.
     pub fn into_changes(self) -> Changes {
-        self.inner.changes
+        self.inner.inner.changes
     }
 
     /// Resets the changes to the storage.
     pub fn reset_changes(&mut self) {
-        self.inner.changes = Default::default();
+        self.inner.inner.changes = Default::default();
+    }
+}
+
+impl<S> TypedStorageTransaction<S> {
+    /// Returns the changes to the storage.
+    pub fn into_changes(self) -> Changes {
+        let (changes, _) = self.inner.into_changes_and_storage();
+        changes
+    }
+
+    /// Returns the typed changes to the storage.
+    pub fn into_typed_changes(self) -> TypedChanges {
+        let (changes, _) = self.inner.into_typed_changes_and_storage();
+        changes
     }
 }
 
@@ -196,6 +219,9 @@ impl core::ops::DerefMut for ReferenceBytesKey {
     }
 }
 
+/// The change to the single table.
+pub type TableChange = (u32, BTreeMap<ReferenceBytesKey, WriteOperation>);
+
 /// The type describing the list of changes to the storage.
 pub type Changes = HashMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
 
@@ -209,12 +235,12 @@ impl<Storage> From<StorageTransaction<Storage>> for Changes {
 pub trait IntoTransaction: Sized {
     /// Converts the type into the storage transaction consuming it.
     fn into_transaction(self) -> StorageTransaction<Self>;
+
+    /// Converts the type into the typed storage transaction consuming it.
+    fn into_typed_transaction(self) -> TypedStorageTransaction<Self>;
 }
 
-impl<S> IntoTransaction for S
-where
-    S: KeyValueInspect,
-{
+impl<S> IntoTransaction for S {
     fn into_transaction(self) -> StorageTransaction<Self> {
         StorageTransaction::transaction(
             self,
@@ -222,18 +248,22 @@ where
             Default::default(),
         )
     }
+
+    fn into_typed_transaction(self) -> TypedStorageTransaction<Self> {
+        TypedStorageTransaction::new(TypedInMemoryTransaction::new(self))
+    }
 }
 
 /// Creates a new instance of the storage read transaction.
 pub trait ReadTransaction {
     /// Returns the read transaction without ability to commit the changes.
     fn read_transaction(&self) -> StorageTransaction<&Self>;
+
+    /// Returns the typed read transaction without ability to commit the changes.
+    fn read_typed_transaction(&self) -> TypedStorageTransaction<&Self>;
 }
 
-impl<S> ReadTransaction for S
-where
-    S: KeyValueInspect,
-{
+impl<S> ReadTransaction for S {
     fn read_transaction(&self) -> StorageTransaction<&Self> {
         StorageTransaction::transaction(
             self,
@@ -241,24 +271,32 @@ where
             Default::default(),
         )
     }
+
+    fn read_typed_transaction(&self) -> TypedStorageTransaction<&Self> {
+        TypedStorageTransaction::new(TypedInMemoryTransaction::new(self))
+    }
 }
 
 /// Creates a new instance of the storage write transaction.
 pub trait WriteTransaction {
     /// Returns the write transaction that can commit the changes.
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self>;
+
+    /// Returns the typed write transaction that can commit the changes.
+    fn write_typed_transaction(&mut self) -> TypedStorageTransaction<&mut Self>;
 }
 
-impl<S> WriteTransaction for S
-where
-    S: Modifiable,
-{
+impl<S> WriteTransaction for S {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(
             self,
             ConflictPolicy::Overwrite,
             Default::default(),
         )
+    }
+
+    fn write_typed_transaction(&mut self) -> TypedStorageTransaction<&mut Self> {
+        TypedStorageTransaction::new(TypedInMemoryTransaction::new(self))
     }
 }
 
@@ -268,9 +306,9 @@ where
 {
     /// Commits the changes into the storage.
     pub fn commit(mut self) -> StorageResult<Storage> {
-        let changes = core::mem::take(&mut self.inner.changes);
-        self.inner.storage.commit_changes(changes)?;
-        Ok(self.inner.storage)
+        let changes = core::mem::take(&mut self.inner.inner.changes);
+        self.inner.inner.storage.commit_changes(changes)?;
+        Ok(self.inner.inner.storage)
     }
 }
 
@@ -621,8 +659,61 @@ mod test {
 
     #[cfg(test)]
     mod key_value_functionality {
-        use super::*;
-        use crate::column::Column;
+        use crate::{
+            column::Column,
+            kv_store::{
+                KeyValueInspect,
+                KeyValueMutate,
+            },
+            transactional::{
+                test::InMemoryStorage,
+                ConflictPolicy,
+                InMemoryTransaction,
+                Modifiable,
+                StorageInterlayer,
+            },
+        };
+        use std::sync::Arc;
+
+        trait TestTransaction {
+            fn read_transaction(&self) -> StorageInterlayer<InMemoryTransaction<&Self>>;
+
+            fn write_transaction(
+                &mut self,
+            ) -> StorageInterlayer<InMemoryTransaction<&mut Self>>;
+        }
+
+        impl<Storage> StorageInterlayer<InMemoryTransaction<Storage>>
+        where
+            Storage: Modifiable,
+        {
+            /// Commits the changes into the storage.
+            fn commit(mut self) -> crate::Result<Storage> {
+                let changes = core::mem::take(&mut self.inner.changes);
+                self.inner.storage.commit_changes(changes)?;
+                Ok(self.inner.storage)
+            }
+        }
+
+        impl<S> TestTransaction for S {
+            fn read_transaction(&self) -> StorageInterlayer<InMemoryTransaction<&Self>> {
+                StorageInterlayer::new(InMemoryTransaction {
+                    changes: Default::default(),
+                    policy: ConflictPolicy::Overwrite,
+                    storage: self,
+                })
+            }
+
+            fn write_transaction(
+                &mut self,
+            ) -> StorageInterlayer<InMemoryTransaction<&mut Self>> {
+                StorageInterlayer::new(InMemoryTransaction {
+                    changes: Default::default(),
+                    policy: ConflictPolicy::Overwrite,
+                    storage: self,
+                })
+            }
+        }
 
         #[test]
         fn get_returns_from_view() {

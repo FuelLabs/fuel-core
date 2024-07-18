@@ -125,6 +125,7 @@ pub struct RocksDb<Description> {
     db: Arc<DB>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
     metrics: Arc<DatabaseMetrics>,
+    path: PathBuf,
     // used for RAII
     _drop: Arc<DropResources>,
     _marker: core::marker::PhantomData<Description>,
@@ -274,14 +275,14 @@ where
         if let Some(capacity) = capacity {
             // Set cache size 1/3 of the capacity as recommended by
             // https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
-            let block_cache_size = capacity / 3;
+            let block_cache_size = capacity;
             let cache = Cache::new_lru_cache(block_cache_size);
             block_opts.set_block_cache(&cache);
-            // "index and filter blocks will be stored in block cache, together with all other data blocks."
-            // See: https://github.com/facebook/rocksdb/wiki/Memory-usage-in-RocksDB#indexes-and-filter-blocks
-            block_opts.set_cache_index_and_filter_blocks(true);
-            // Don't evict L0 filter/index blocks from the cache
-            block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
+            // // "index and filter blocks will be stored in block cache, together with all other data blocks."
+            // // See: https://github.com/facebook/rocksdb/wiki/Memory-usage-in-RocksDB#indexes-and-filter-blocks
+            // block_opts.set_cache_index_and_filter_blocks(true);
+            // // Don't evict L0 filter/index blocks from the cache
+            // block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
         } else {
             block_opts.disable_cache();
         }
@@ -301,12 +302,15 @@ where
             // used by block cache and the last 1 / 3 remains for other purposes:
             //
             // https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
-            let row_cache_size = capacity / 3;
+            let row_cache_size = capacity;
             let cache = Cache::new_lru_cache(row_cache_size);
             opts.set_row_cache(&cache);
         }
         opts.set_max_background_jobs(6);
         opts.set_bytes_per_sync(1048576);
+
+        #[cfg(not(feature = "test-helpers"))]
+        opts.set_max_open_files(1048576 - 1024);
 
         #[cfg(feature = "test-helpers")]
         opts.set_max_open_files(512);
@@ -362,6 +366,7 @@ where
             snapshot: None,
             db,
             metrics,
+            path: original_path,
             _drop: Default::default(),
             _marker: Default::default(),
         };
@@ -387,11 +392,16 @@ where
         self.create_snapshot_generic()
     }
 
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
     pub fn create_snapshot_generic<TargetDescription>(
         &self,
     ) -> RocksDb<TargetDescription> {
         let db = self.db.clone();
         let metrics = self.metrics.clone();
+        let path = self.path.clone();
         let _drop = self._drop.clone();
 
         // Safety: We are transmuting the snapshot to 'static lifetime, but it's safe
@@ -408,6 +418,7 @@ where
             read_options: Self::generate_read_options(&snapshot),
             snapshot,
             db,
+            path,
             metrics,
             _drop,
             _marker: Default::default(),
@@ -784,7 +795,7 @@ mod tests {
             buf: &[u8],
         ) -> StorageResult<usize> {
             let mut transaction = self.read_transaction();
-            let len = transaction.write(key, column, buf)?;
+            let len = transaction.as_mut().write(key, column, buf)?;
             let changes = transaction.into_changes();
             self.commit_changes(&changes)?;
 
@@ -793,7 +804,7 @@ mod tests {
 
         fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
             let mut transaction = self.read_transaction();
-            transaction.delete(key, column)?;
+            transaction.as_mut().delete(key, column)?;
             let changes = transaction.into_changes();
             self.commit_changes(&changes)?;
             Ok(())

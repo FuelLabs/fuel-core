@@ -8,6 +8,7 @@ version = "0.0.0"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+fs_extra = "1.2.0"
 clap = { workspace = true, features = ["derive"] }
 criterion = { version = "0.5", features = [
   "html_reports",

@@ -9,6 +9,7 @@ use crate::database::{
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Error as StorageError,
     Mappable,
@@ -34,7 +35,16 @@ impl<Description> TableWithBlueprint for MetadataTable<Description>
 where
     Description: DatabaseDescription,
 {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl<Description> Interlayer for MetadataTable<Description>
+where
+    Description: DatabaseDescription,
+    Description::Height: serde::Serialize + serde::de::DeserializeOwned,
+{
+    type KeyCodec = Postcard;
+    type ValueCodec = Postcard;
     type Column = Description::Column;
 
     fn column() -> Self::Column {

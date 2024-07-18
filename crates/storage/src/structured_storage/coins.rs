@@ -7,12 +7,18 @@ use crate::{
         primitive::Primitive,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::Coins,
 };
 
 impl TableWithBlueprint for Coins {
-    type Blueprint = Plain<Primitive<34>, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for Coins {
+    type KeyCodec = Primitive<34>;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {

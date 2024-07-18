@@ -7,12 +7,18 @@ use crate::{
         primitive::Primitive,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::SealedBlockConsensus,
 };
 
 impl TableWithBlueprint for SealedBlockConsensus {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for SealedBlockConsensus {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {

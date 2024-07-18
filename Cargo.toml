@@ -41,6 +41,7 @@ exclude = ["version-compatibility"]
 codegen-units = 1
 lto = "fat"
 panic = "unwind"
+debug = true
 
 [workspace.package]
 authors = ["Fuel Labs <contact@fuel.sh>"]
@@ -139,3 +140,6 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
+
+[patch.crates-io]
+fuel-vm = { path = "../fuel-vm/fuel-vm" }

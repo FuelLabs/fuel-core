@@ -214,7 +214,7 @@ mod tests {
         TableEntry,
     };
     use fuel_core_storage::{
-        structured_storage::TableWithBlueprint,
+        storage_interlayer::Interlayer,
         tables::{
             Coins,
             ContractsAssets,
@@ -337,7 +337,7 @@ mod tests {
 
             fn read<T>(reader: &mut SnapshotReader) -> Vec<TableEntry<T>>
             where
-                T: TableWithBlueprint,
+                T: Interlayer,
                 StateConfig: AsTable<T>,
                 TableEntry<T>: serde::de::DeserializeOwned,
             {
@@ -815,7 +815,7 @@ mod tests {
         expected_data: Vec<TableEntry<T>>,
         reader: &mut SnapshotReader,
     ) where
-        T: TableWithBlueprint,
+        T: Interlayer,
         T::OwnedKey: serde::de::DeserializeOwned + core::fmt::Debug + PartialEq,
         T::OwnedValue: serde::de::DeserializeOwned + core::fmt::Debug + PartialEq,
         StateConfig: AsTable<T>,

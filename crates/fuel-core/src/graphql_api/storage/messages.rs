@@ -11,6 +11,7 @@ use fuel_core_storage::{
         postcard::Postcard,
         raw::Raw,
     },
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -49,7 +50,12 @@ impl Mappable for OwnedMessageIds {
 }
 
 impl TableWithBlueprint for OwnedMessageIds {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for OwnedMessageIds {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -75,7 +81,12 @@ impl Mappable for SpentMessages {
 }
 
 impl TableWithBlueprint for SpentMessages {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for SpentMessages {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {

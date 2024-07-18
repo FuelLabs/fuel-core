@@ -14,6 +14,7 @@ use fuel_core_storage::{
         Decode,
         Encode,
     },
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -41,7 +42,12 @@ impl Mappable for OwnedTransactions {
 }
 
 impl TableWithBlueprint for OwnedTransactions {
-    type Blueprint = Plain<Manual<OwnedTransactionIndexKey>, Raw>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for OwnedTransactions {
+    type KeyCodec = Manual<OwnedTransactionIndexKey>;
+    type ValueCodec = Raw;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -72,7 +78,12 @@ impl Mappable for TransactionStatuses {
 }
 
 impl TableWithBlueprint for TransactionStatuses {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for TransactionStatuses {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -221,18 +232,11 @@ impl From<OwnedTransactionIndexCursor> for Vec<u8> {
 mod test {
     use super::*;
 
-    fn generate_key(rng: &mut impl rand::Rng) -> <OwnedTransactions as Mappable>::Key {
-        let mut bytes = [0u8; INDEX_SIZE];
-        rng.fill(bytes.as_mut());
-        bytes.into()
-    }
-
     fuel_core_storage::basic_storage_tests!(
         OwnedTransactions,
         [1u8; INDEX_SIZE].into(),
         <OwnedTransactions as Mappable>::Value::default(),
-        <OwnedTransactions as Mappable>::Value::default(),
-        generate_key
+        <OwnedTransactions as Mappable>::Value::default()
     );
 
     fuel_core_storage::basic_storage_tests!(

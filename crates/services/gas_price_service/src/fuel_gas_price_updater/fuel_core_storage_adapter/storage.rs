@@ -6,6 +6,7 @@ use fuel_core_storage::{
         primitive::Primitive,
     },
     kv_store::StorageColumn,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -60,7 +61,12 @@ impl Mappable for GasPriceMetadata {
 }
 
 impl TableWithBlueprint for GasPriceMetadata {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for GasPriceMetadata {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
     type Column = GasPriceColumn;
 
     fn column() -> Self::Column {

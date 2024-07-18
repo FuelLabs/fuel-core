@@ -8,6 +8,7 @@ use crate::{
         raw::Raw,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::{
         ConsensusParametersVersions,
@@ -17,7 +18,12 @@ use crate::{
 use fuel_vm_private::storage::UploadedBytecodes;
 
 impl TableWithBlueprint for ConsensusParametersVersions {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for ConsensusParametersVersions {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {
@@ -26,7 +32,12 @@ impl TableWithBlueprint for ConsensusParametersVersions {
 }
 
 impl TableWithBlueprint for StateTransitionBytecodeVersions {
-    type Blueprint = Plain<Primitive<4>, Raw>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for StateTransitionBytecodeVersions {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Raw;
     type Column = Column;
 
     fn column() -> Column {
@@ -35,7 +46,12 @@ impl TableWithBlueprint for StateTransitionBytecodeVersions {
 }
 
 impl TableWithBlueprint for UploadedBytecodes {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for UploadedBytecodes {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Self::Column {
@@ -48,24 +64,18 @@ mod test {
     use super::*;
     use fuel_core_types::fuel_tx::ConsensusParameters;
 
-    fn generate_key(rng: &mut impl rand::Rng) -> u32 {
-        rng.next_u32()
-    }
-
     crate::basic_storage_tests!(
         ConsensusParametersVersions,
         <ConsensusParametersVersions as crate::Mappable>::Key::default(),
         ConsensusParameters::default(),
-        ConsensusParameters::default(),
-        generate_key
+        ConsensusParameters::default()
     );
 
     crate::basic_storage_tests!(
         StateTransitionBytecodeVersions,
         0u32,
         <StateTransitionBytecodeVersions as crate::Mappable>::OwnedValue::from([123; 32]),
-        <StateTransitionBytecodeVersions as crate::Mappable>::OwnedValue::from([123; 32]),
-        generate_key
+        <StateTransitionBytecodeVersions as crate::Mappable>::OwnedValue::from([123; 32])
     );
 
     crate::basic_storage_tests!(

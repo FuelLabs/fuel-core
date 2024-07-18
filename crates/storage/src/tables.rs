@@ -142,11 +142,19 @@ pub mod merkle {
     };
     use fuel_core_types::{
         fuel_merkle::{
+            avl,
             binary,
+            btree,
             sparse,
         },
-        fuel_tx::ContractId,
-        fuel_types::BlockHeight,
+        fuel_types::{
+            BlockHeight,
+            ContractId,
+        },
+    };
+    use fuel_vm_private::storage::{
+        ContractsAssetKey,
+        ContractsStateKey,
     };
 
     /// The key for the corresponding `DenseMerkleMetadata` type.
@@ -288,6 +296,94 @@ pub mod merkle {
         }
     }
 
+    /// Metadata for AVL Merkle trees
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+    pub enum AVLMerkleMetadata {
+        /// V1 AVL Merkle Metadata
+        V1(AVLMerkleMetadataV1),
+    }
+
+    impl Default for AVLMerkleMetadata {
+        fn default() -> Self {
+            Self::V1(Default::default())
+        }
+    }
+
+    impl AVLMerkleMetadata {
+        /// Create a new AVL Merkle metadata object from the given root node.
+        pub fn new(root_node: Option<avl::Node>) -> Self {
+            let metadata = AVLMerkleMetadataV1 { root_node };
+            Self::V1(metadata)
+        }
+
+        /// Get the root node stored in the metadata
+        pub fn root_node(&self) -> &Option<avl::Node> {
+            match self {
+                AVLMerkleMetadata::V1(metadata) => &metadata.root_node,
+            }
+        }
+    }
+
+    /// Metadata V1 for AVL Merkle trees
+    #[derive(
+        Default, Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq,
+    )]
+    pub struct AVLMerkleMetadataV1 {
+        /// The root node of the AVL Merkle tree structure
+        pub root_node: Option<avl::Node>,
+    }
+
+    impl From<AVLMerkleMetadataV1> for AVLMerkleMetadata {
+        fn from(value: AVLMerkleMetadataV1) -> Self {
+            Self::V1(value)
+        }
+    }
+
+    /// Metadata for BTree Merkle trees
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+    pub enum BTreeMerkleMetadata {
+        /// V1 BTree Merkle Metadata
+        V1(BTreeMerkleMetadataV1),
+    }
+
+    impl Default for BTreeMerkleMetadata {
+        fn default() -> Self {
+            Self::V1(Default::default())
+        }
+    }
+
+    use crate::blueprint::btree_merkle::BTREE_NODES;
+
+    impl BTreeMerkleMetadata {
+        /// Create a new BTree Merkle metadata object from the given root node.
+        pub fn new(root_node: Option<btree::Node<BTREE_NODES>>) -> Self {
+            let metadata = BTreeMerkleMetadataV1 { root_node };
+            Self::V1(metadata)
+        }
+
+        /// Get the root node stored in the metadata
+        pub fn root_node(self) -> Option<btree::Node<BTREE_NODES>> {
+            match self {
+                BTreeMerkleMetadata::V1(metadata) => metadata.root_node,
+            }
+        }
+    }
+
+    /// Metadata V1 for BTree Merkle trees
+    #[derive(
+        Default, Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq,
+    )]
+    pub struct BTreeMerkleMetadataV1 {
+        /// The root node of the AVL Merkle tree structure
+        pub root_node: Option<btree::Node<BTREE_NODES>>,
+    }
+
+    impl From<BTreeMerkleMetadataV1> for BTreeMerkleMetadata {
+        fn from(value: BTreeMerkleMetadataV1) -> Self {
+            Self::V1(value)
+        }
+    }
+
     /// The table of BMT data for Fuel blocks.
     pub struct FuelBlockMerkleData;
 
@@ -308,13 +404,13 @@ pub mod merkle {
         type OwnedValue = Self::Value;
     }
 
-    /// The table of SMT data for Contract assets.
+    /// The table of AVL data for Contract assets.
     pub struct ContractsAssetsMerkleData;
 
     impl Mappable for ContractsAssetsMerkleData {
-        type Key = [u8; 32];
+        type Key = ContractsAssetKey;
         type OwnedKey = Self::Key;
-        type Value = sparse::Primitive;
+        type Value = btree::StorageNode;
         type OwnedValue = Self::Value;
     }
 
@@ -324,17 +420,17 @@ pub mod merkle {
     impl Mappable for ContractsAssetsMerkleMetadata {
         type Key = ContractId;
         type OwnedKey = Self::Key;
-        type Value = SparseMerkleMetadata;
+        type Value = BTreeMerkleMetadata;
         type OwnedValue = Self::Value;
     }
 
-    /// The table of SMT data for Contract state.
+    /// The table of AVL data for Contract state.
     pub struct ContractsStateMerkleData;
 
     impl Mappable for ContractsStateMerkleData {
-        type Key = [u8; 32];
+        type Key = ContractsStateKey;
         type OwnedKey = Self::Key;
-        type Value = sparse::Primitive;
+        type Value = btree::StorageNode;
         type OwnedValue = Self::Value;
     }
 
@@ -344,7 +440,7 @@ pub mod merkle {
     impl Mappable for ContractsStateMerkleMetadata {
         type Key = ContractId;
         type OwnedKey = Self::Key;
-        type Value = SparseMerkleMetadata;
+        type Value = BTreeMerkleMetadata;
         type OwnedValue = Self::Value;
     }
 }

@@ -7,6 +7,7 @@ use crate::{
         raw::Raw,
     },
     column::Column,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     tables::{
         ProcessedTransactions,
@@ -15,7 +16,12 @@ use crate::{
 };
 
 impl TableWithBlueprint for Transactions {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for Transactions {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {
@@ -31,7 +37,12 @@ crate::basic_storage_tests!(
 );
 
 impl TableWithBlueprint for ProcessedTransactions {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for ProcessedTransactions {
+    type KeyCodec = Raw;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {

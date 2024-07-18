@@ -10,17 +10,10 @@ use crate::{
         SupportsMerkle,
     },
     codec::{
-        Decode,
         Encode,
         Encoder as EncoderTrait,
     },
-    kv_store::{
-        BatchOperations,
-        KeyValueInspect,
-        KeyValueMutate,
-    },
     not_found,
-    structured_storage::StructuredStorage,
     tables::merkle::{
         DenseMerkleMetadata,
         DenseMerkleMetadataV1,
@@ -31,48 +24,44 @@ use crate::{
     MerkleRoot,
     Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::fuel_merkle::binary::Primitive;
+use std::borrow::Cow;
 
 /// The `Merklized` blueprint builds the storage as a [`Plain`](super::plain::Plain)
 /// blueprint and maintains the binary merkle tree by the `Metadata` table.
 ///
-/// It uses the `KeyCodec` and `ValueCodec` to encode/decode the key and value in the
-/// same way as a plain blueprint.
-///
 /// The `Metadata` table stores the metadata of the binary merkle tree(like a root of the tree and leaves count).
 ///
 /// The `ValueEncoder` is used to encode the value for merklelization.
-pub struct Merklized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder> {
-    _marker:
-        core::marker::PhantomData<(KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder)>,
+pub struct Merklized<Metadata, Nodes, ValueEncoder> {
+    _marker: core::marker::PhantomData<(Metadata, Nodes, ValueEncoder)>,
 }
 
-impl<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
-    Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+impl<Metadata, Nodes, Encoder> Merklized<Metadata, Nodes, Encoder>
 where
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
 {
-    fn insert_into_tree<S, K, V>(
+    fn insert_into_tree<S, M>(
         mut storage: &mut S,
-        key: K,
-        value: &V,
+        key: &M::Key,
+        value: &M::Value,
     ) -> StorageResult<()>
     where
-        V: ?Sized,
+        M: Mappable,
         Metadata: Mappable<
-            Key = DenseMetadataKey<K>,
+            Key = DenseMetadataKey<M::OwnedKey>,
             Value = DenseMerkleMetadata,
             OwnedValue = DenseMerkleMetadata,
         >,
+        Encoder: Encode<M::Value>,
         S: StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
-        for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
-            + StorageMutate<Nodes, Error = StorageError>,
-        Encoder: Encode<V>,
     {
+        let key = key.to_owned().into();
         // Get latest metadata entry
         let prev_metadata = storage
             .storage::<Metadata>()
@@ -104,11 +93,12 @@ where
         Ok(())
     }
 
-    fn remove<S>(storage: &mut S, key: &[u8], column: S::Column) -> StorageResult<()>
+    fn remove<S, M>(storage: &mut S, key: &M::Key) -> StorageResult<()>
     where
-        S: KeyValueMutate,
+        S: StorageInspect<M, Error = StorageError>,
+        M: Mappable,
     {
-        if storage.exists(key, column)? {
+        if storage.contains_key(key)? {
             Err(anyhow::anyhow!(
                 "It is not allowed to remove or override entries in the merklelized table"
             )
@@ -119,26 +109,28 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintInspect<M, S>
-    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+impl<M, S, Metadata, Nodes, Encoder> BlueprintInspect<M, S>
+    for Merklized<Metadata, Nodes, Encoder>
 where
     M: Mappable,
-    S: KeyValueInspect,
-    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
-    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
+    S: StorageInspect<M, Error = StorageError>,
 {
-    type KeyCodec = KeyCodec;
-    type ValueCodec = ValueCodec;
+    fn exists(storage: &S, key: &M::Key) -> StorageResult<bool> {
+        storage.storage_as_ref::<M>().contains_key(key)
+    }
+
+    fn get<'a>(
+        storage: &'a S,
+        key: &M::Key,
+    ) -> StorageResult<Option<Cow<'a, M::OwnedValue>>> {
+        storage.storage_as_ref::<M>().get(key)
+    }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintMutate<M, S>
-    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+impl<M, S, Metadata, Nodes, Encoder> BlueprintMutate<M, S>
+    for Merklized<Metadata, Nodes, Encoder>
 where
     M: Mappable,
-    S: KeyValueMutate,
-    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
-    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
-    Encoder: Encode<M::Value>,
     Metadata: Mappable<
         Key = DenseMetadataKey<M::OwnedKey>,
         OwnedKey = DenseMetadataKey<M::OwnedKey>,
@@ -146,89 +138,57 @@ where
         OwnedValue = DenseMerkleMetadata,
     >,
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-    S: StorageMutate<Metadata, Error = StorageError>
-        + StorageMutate<Nodes, Error = StorageError>,
-    for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
+    Encoder: Encode<M::Value>,
+    S: StorageMutate<M, Error = StorageError>
+        + StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
 {
-    fn put(
-        storage: &mut S,
-        key: &M::Key,
-        column: S::Column,
-        value: &M::Value,
-    ) -> StorageResult<()> {
-        let key_encoder = KeyCodec::encode(key);
-        let key_bytes = key_encoder.as_bytes();
-        let encoded_value = ValueCodec::encode_as_value(value);
-        storage.put(key_bytes.as_ref(), column, encoded_value)?;
-        let key = key.to_owned().into();
-        Self::insert_into_tree(storage, key, value)
+    fn put(storage: &mut S, key: &M::Key, value: &M::Value) -> StorageResult<()> {
+        storage.storage_as_mut::<M>().insert(key, value)?;
+        Self::insert_into_tree::<S, M>(storage, key, value)
     }
 
     fn replace(
         storage: &mut S,
         key: &M::Key,
-        column: S::Column,
         value: &M::Value,
     ) -> StorageResult<Option<M::OwnedValue>> {
-        let key_encoder = KeyCodec::encode(key);
-        let key_bytes = key_encoder.as_bytes();
-        let encoded_value = ValueCodec::encode_as_value(value);
-        let prev =
-            KeyValueMutate::replace(storage, key_bytes.as_ref(), column, encoded_value)?
-                .map(|value| {
-                    ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
-                })
-                .transpose()?;
+        let prev = storage.storage_as_mut::<M>().replace(key, value)?;
 
         if prev.is_some() {
-            Self::remove(storage, key_bytes.as_ref(), column)?;
+            Self::remove::<S, M>(storage, key)?;
         }
 
-        let key = key.to_owned().into();
-        Self::insert_into_tree(storage, key, value)?;
+        Self::insert_into_tree::<S, M>(storage, key, value)?;
         Ok(prev)
     }
 
-    fn take(
-        storage: &mut S,
-        key: &M::Key,
-        column: S::Column,
-    ) -> StorageResult<Option<M::OwnedValue>> {
-        let key_encoder = KeyCodec::encode(key);
-        let key_bytes = key_encoder.as_bytes();
-        Self::remove(storage, key_bytes.as_ref(), column)?;
-        let prev = KeyValueMutate::take(storage, key_bytes.as_ref(), column)?
-            .map(|value| {
-                ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
-            })
-            .transpose()?;
+    fn take(storage: &mut S, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
+        Self::remove::<S, M>(storage, key)?;
+        let prev = storage.storage_as_mut::<M>().take(key)?;
         Ok(prev)
     }
 
-    fn delete(storage: &mut S, key: &M::Key, column: S::Column) -> StorageResult<()> {
-        let key_encoder = KeyCodec::encode(key);
-        let key_bytes = key_encoder.as_bytes();
-        Self::remove(storage, key_bytes.as_ref(), column)
+    fn delete(storage: &mut S, key: &M::Key) -> StorageResult<()> {
+        Self::remove::<S, M>(storage, key)?;
+        storage.storage_as_mut::<M>().remove(key)
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> SupportsMerkle<M::Key, M, S>
-    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+impl<M, S, Metadata, Nodes, Encoder> SupportsMerkle<M::Key, M, S>
+    for Merklized<Metadata, Nodes, Encoder>
 where
     M: Mappable,
-    S: KeyValueInspect,
     Metadata: Mappable<
         Key = DenseMetadataKey<M::OwnedKey>,
         OwnedKey = DenseMetadataKey<M::OwnedKey>,
         Value = DenseMerkleMetadata,
         OwnedValue = DenseMerkleMetadata,
     >,
-    Self: BlueprintInspect<M, S>,
     S: StorageInspect<Metadata, Error = StorageError>,
+    Self: BlueprintInspect<M, S>,
 {
     fn root(storage: &S, key: &M::Key) -> StorageResult<MerkleRoot> {
-        use crate::StorageAsRef;
         let key = key.to_owned().into();
         let metadata = storage
             .storage_as_ref::<Metadata>()
@@ -238,13 +198,10 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> SupportsBatching<M, S>
-    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+impl<M, S, Metadata, Nodes, Encoder> SupportsBatching<M, S>
+    for Merklized<Metadata, Nodes, Encoder>
 where
     M: Mappable,
-    S: BatchOperations,
-    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
-    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
     Encoder: Encode<M::Value>,
     Metadata: Mappable<
         Key = DenseMetadataKey<M::OwnedKey>,
@@ -253,50 +210,39 @@ where
         OwnedValue = DenseMerkleMetadata,
     >,
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-    S: StorageMutate<Metadata, Error = StorageError>
-        + StorageMutate<Nodes, Error = StorageError>,
-    for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
+    S: StorageMutate<M, Error = StorageError>
+        + StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
 {
-    fn init<'a, Iter>(storage: &mut S, column: S::Column, set: Iter) -> StorageResult<()>
+    fn init<'a, Iter>(storage: &mut S, set: Iter) -> StorageResult<()>
     where
         Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
         M::Key: 'a,
         M::Value: 'a,
     {
-        <Self as SupportsBatching<M, S>>::insert(storage, column, set)
+        <Self as SupportsBatching<M, S>>::insert(storage, set)
     }
 
-    fn insert<'a, Iter>(
-        storage: &mut S,
-        column: S::Column,
-        set: Iter,
-    ) -> StorageResult<()>
+    fn insert<'a, Iter>(storage: &mut S, set: Iter) -> StorageResult<()>
     where
         Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
         M::Key: 'a,
         M::Value: 'a,
     {
         for (key, value) in set {
-            <Self as BlueprintMutate<M, S>>::replace(storage, key, column, value)?;
+            <Self as BlueprintMutate<M, S>>::replace(storage, key, value)?;
         }
 
         Ok(())
     }
 
-    fn remove<'a, Iter>(
-        storage: &mut S,
-        column: S::Column,
-        set: Iter,
-    ) -> StorageResult<()>
+    fn remove<'a, Iter>(storage: &mut S, set: Iter) -> StorageResult<()>
     where
         Iter: 'a + Iterator<Item = &'a M::Key>,
         M::Key: 'a,
     {
-        for item in set {
-            let key_encoder = KeyCodec::encode(item);
-            let key_bytes = key_encoder.as_bytes();
-            Self::remove(storage, key_bytes.as_ref(), column)?;
+        for key in set {
+            Self::remove::<S, M>(storage, key)?;
         }
         Ok(())
     }

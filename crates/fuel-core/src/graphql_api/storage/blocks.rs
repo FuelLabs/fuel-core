@@ -4,6 +4,7 @@ use fuel_core_storage::{
         primitive::Primitive,
         raw::Raw,
     },
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -26,7 +27,12 @@ impl Mappable for FuelBlockIdsToHeights {
 }
 
 impl TableWithBlueprint for FuelBlockIdsToHeights {
-    type Blueprint = Plain<Raw, Primitive<4>>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for FuelBlockIdsToHeights {
+    type KeyCodec = Raw;
+    type ValueCodec = Primitive<4>;
     type Column = super::Column;
 
     fn column() -> Self::Column {

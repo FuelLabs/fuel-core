@@ -12,6 +12,7 @@ use fuel_core_storage::{
         primitive::Primitive,
     },
     kv_store::StorageColumn,
+    storage_interlayer::Interlayer,
     structured_storage::TableWithBlueprint,
     transactional::{
         Modifiable,
@@ -82,7 +83,12 @@ impl Mappable for EventsHistory {
 }
 
 impl TableWithBlueprint for EventsHistory {
-    type Blueprint = Plain<Primitive<8>, Postcard>;
+    type Blueprint = Plain;
+}
+
+impl Interlayer for EventsHistory {
+    type KeyCodec = Primitive<8>;
+    type ValueCodec = Postcard;
     type Column = Column;
 
     fn column() -> Column {

@@ -207,7 +207,7 @@ mod tests {
             buf: &[u8],
         ) -> StorageResult<usize> {
             let mut transaction = self.read_transaction();
-            let len = transaction.write(key, column, buf)?;
+            let len = transaction.as_mut().write(key, column, buf)?;
             let changes = transaction.into_changes();
             self.commit_changes(None, changes)?;
             Ok(len)
@@ -215,7 +215,7 @@ mod tests {
 
         fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
             let mut transaction = self.read_transaction();
-            transaction.delete(key, column)?;
+            transaction.as_mut().delete(key, column)?;
             let changes = transaction.into_changes();
             self.commit_changes(None, changes)?;
             Ok(())

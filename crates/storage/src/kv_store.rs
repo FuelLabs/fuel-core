@@ -123,6 +123,17 @@ pub enum WriteOperation {
     Remove,
 }
 
+/// The operation to write into the storage the typed value.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "test-helpers", derive(Default))]
+pub enum TypedWriteOperation<Type> {
+    /// Insert the typed value into the storage.
+    Insert(Type),
+    #[cfg_attr(feature = "test-helpers", default)]
+    /// Remove the value from the storage.
+    Remove,
+}
+
 /// The definition of the key-value store with batch operations.
 #[impl_tools::autoimpl(for<T: trait> &mut T, Box<T>)]
 pub trait BatchOperations: KeyValueMutate {

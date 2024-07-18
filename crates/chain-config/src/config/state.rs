@@ -9,7 +9,6 @@ use crate::{
     ContractStateConfig,
 };
 use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsAssets,
@@ -52,9 +51,12 @@ use bech32::{
 };
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
-use fuel_core_storage::tables::merkle::{
-    FuelBlockMerkleData,
-    FuelBlockMerkleMetadata,
+use fuel_core_storage::{
+    storage_interlayer::Interlayer,
+    tables::merkle::{
+        FuelBlockMerkleData,
+        FuelBlockMerkleMetadata,
+    },
 };
 use fuel_core_types::blockchain::header::{
     BlockHeader,
@@ -299,7 +301,7 @@ impl crate::Randomize for StateConfig {
 
 pub trait AsTable<T>
 where
-    T: TableWithBlueprint,
+    T: Interlayer,
 {
     fn as_table(&self) -> Vec<TableEntry<T>>;
 }
@@ -826,7 +828,7 @@ mod tests {
         writer: impl FnOnce(&Path) -> SnapshotWriter,
         reader: impl FnOnce(SnapshotMetadata, usize) -> SnapshotReader,
     ) where
-        T: TableWithBlueprint,
+        T: Interlayer,
         T::OwnedKey: Randomize
             + serde::Serialize
             + serde::de::DeserializeOwned
@@ -890,7 +892,7 @@ mod tests {
             encoder: &mut SnapshotWriter,
         ) -> Vec<Vec<TableEntry<T>>>
         where
-            T: TableWithBlueprint,
+            T: Interlayer,
             T::OwnedKey: serde::Serialize,
             T::OwnedValue: serde::Serialize,
             TableEntry<T>: Randomize,

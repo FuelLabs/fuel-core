@@ -9,6 +9,7 @@ use fuel_core_storage::{
         KeyValueInspect,
         Value,
     },
+    storage_interlayer::StorageInterlayer,
     structured_storage::StructuredStorage,
     Error as StorageError,
     Mappable,
@@ -29,17 +30,17 @@ pub struct GenericDatabase<Storage> {
 
 impl<Storage> GenericDatabase<Storage> {
     pub fn inner_storage(&self) -> &Storage {
-        self.storage.as_ref()
+        self.storage.as_ref().as_ref()
     }
 
     pub fn from_storage(storage: Storage) -> Self {
         Self {
-            storage: StructuredStorage::new(storage),
+            storage: StructuredStorage::new(StorageInterlayer::new(storage)),
         }
     }
 
     pub fn into_inner(self) -> Storage {
-        self.storage.into_inner()
+        self.storage.into_inner().into_inner()
     }
 }
 
@@ -142,13 +143,13 @@ where
 
 impl<Storage> AsRef<Storage> for GenericDatabase<Storage> {
     fn as_ref(&self) -> &Storage {
-        self.storage.as_ref()
+        self.storage.as_ref().as_ref()
     }
 }
 
 impl<Storage> AsMut<Storage> for GenericDatabase<Storage> {
     fn as_mut(&mut self) -> &mut Storage {
-        self.storage.as_mut()
+        self.storage.as_mut().as_mut()
     }
 }
 

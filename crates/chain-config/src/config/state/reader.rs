@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
+    storage_interlayer::Interlayer,
     Mappable,
 };
 use itertools::Itertools;
@@ -243,7 +243,7 @@ impl SnapshotReader {
 
     pub fn read<T>(&self) -> anyhow::Result<Groups<T>>
     where
-        T: TableWithBlueprint,
+        T: Interlayer,
         StateConfig: AsTable<T>,
         TableEntry<T>: serde::de::DeserializeOwned,
     {
