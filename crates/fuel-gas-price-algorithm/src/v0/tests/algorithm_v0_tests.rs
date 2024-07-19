@@ -58,6 +58,30 @@ proptest! {
     }
 }
 
+proptest! {
+    #[test]
+    fn worst_case__never_overflows(
+        price: u64,
+        starting_height: u32,
+        block_horizon: u32,
+        percentage: u64
+    ) {
+        // given
+        let algorithm = AlgorithmV0 {
+            new_exec_price: price,
+            for_height: starting_height,
+            percentage,
+        };
+
+        // when
+        let target_height = starting_height.saturating_add(block_horizon);
+        let _ = algorithm.worst_case(target_height);
+
+        // then
+        // doesn't panic with an overflow
+    }
+}
+
 #[test]
 fn worst_case__same_block_gives_new_exec_price() {
     // given
