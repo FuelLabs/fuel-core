@@ -52,7 +52,7 @@ proptest! {
         price: u64,
         starting_height: u32,
         block_horizon in 0..10_000u32,
-        percentage in 0..100u64
+        percentage: u64
     ) {
         _worst_case__correctly_calculates_value(price, starting_height, block_horizon, percentage);
     }
