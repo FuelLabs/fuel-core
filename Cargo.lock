@@ -3430,6 +3430,7 @@ dependencies = [
 name = "fuel-gas-price-algorithm"
 version = "0.31.0"
 dependencies = [
+ "proptest",
  "serde",
  "thiserror",
 ]

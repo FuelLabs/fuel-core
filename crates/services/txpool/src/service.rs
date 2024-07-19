@@ -1,23 +1,16 @@
-use crate::{
-    ports::{
-        BlockImporter,
-        ConsensusParametersProvider,
-        GasPriceProvider as GasPriceProviderConstraint,
-        MemoryPool,
-        PeerToPeer,
-        TxPoolDb,
-    },
-    transaction_selector::select_transactions,
-    txpool::{
-        check_single_tx,
-        check_transactions,
-    },
-    Config,
-    Error as TxPoolError,
-    TxInfo,
-    TxPool,
+use std::{
+    sync::Arc,
+    time::Duration,
 };
+
 use anyhow::anyhow;
+use parking_lot::Mutex as ParkingMutex;
+use tokio::{
+    sync::broadcast,
+    time::MissedTickBehavior,
+};
+use tokio_stream::StreamExt;
+
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -53,17 +46,27 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use parking_lot::Mutex as ParkingMutex;
-use std::{
-    sync::Arc,
-    time::Duration,
-};
-use tokio::{
-    sync::broadcast,
-    time::MissedTickBehavior,
-};
-use tokio_stream::StreamExt;
 use update_sender::UpdateSender;
+
+use crate::{
+    ports::{
+        BlockImporter,
+        ConsensusParametersProvider,
+        GasPriceProvider as GasPriceProviderConstraint,
+        MemoryPool,
+        PeerToPeer,
+        TxPoolDb,
+    },
+    transaction_selector::select_transactions,
+    txpool::{
+        check_single_tx,
+        check_transactions,
+    },
+    Config,
+    Error as TxPoolError,
+    TxInfo,
+    TxPool,
+};
 
 use self::update_sender::{
     MpscChannel,

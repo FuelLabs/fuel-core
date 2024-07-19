@@ -72,8 +72,7 @@ pub trait UpdateAlgorithm {
 }
 
 pub trait GasPriceAlgorithm {
-    fn last_gas_price(&self) -> u64;
-    fn next_gas_price(&self, block_bytes: u64) -> u64;
+    fn next_gas_price(&self) -> u64;
     fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64;
 }
 
@@ -113,12 +112,8 @@ impl<A> SharedGasPriceAlgo<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    pub async fn next_gas_price(&self, block_bytes: u64) -> u64 {
-        self.0.read().await.next_gas_price(block_bytes)
-    }
-
-    pub async fn last_gas_price(&self) -> u64 {
-        self.0.read().await.last_gas_price()
+    pub async fn next_gas_price(&self) -> u64 {
+        self.0.read().await.next_gas_price()
     }
 
     pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
@@ -203,12 +198,8 @@ mod tests {
     }
 
     impl GasPriceAlgorithm for TestAlgorithm {
-        fn last_gas_price(&self) -> u64 {
+        fn next_gas_price(&self) -> u64 {
             self.price
-        }
-
-        fn next_gas_price(&self, block_bytes: u64) -> u64 {
-            self.price + block_bytes
         }
 
         fn worst_case_gas_price(&self, _block_height: BlockHeight) -> u64 {
@@ -257,7 +248,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.last_gas_price().await;
+        let actual_price = read_algo.next_gas_price().await;
         assert_eq!(expected_price, actual_price);
     }
 }
