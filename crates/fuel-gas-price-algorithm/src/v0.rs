@@ -35,6 +35,7 @@ impl AlgorithmV0 {
         let percentage_as_decimal = percentage / 100.0;
         let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
         let mut approx = price * multiple;
+        // account for rounding errors and take a slightly higher value
         const ARB_CUTOFF: f64 = 16948547188989277.0;
         if approx > ARB_CUTOFF {
             const ARB_ADDITION: f64 = 2000.0;
