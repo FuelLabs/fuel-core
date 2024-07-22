@@ -34,6 +34,6 @@ zeroize = "1.5"
 default = ["std"]
 alloc = ["fuel-vm-private/alloc"]
 serde = ["dep:serde", "fuel-vm-private/serde"]
-std = ["fuel-vm-private/std", "bs58"]
+std = ["alloc", "fuel-vm-private/std", "bs58"]
 random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]
