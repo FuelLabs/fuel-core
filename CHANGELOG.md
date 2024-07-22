@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
         - "gas-price-threshold-percent" - the threshold percent for determining if the gas price will be increase or decreased
     And the following CLI flags are serving a new purpose
         - "min-gas-price" - the minimum gas price that the gas price algorithm will return
+- [2035](https://github.com/FuelLabs/fuel-core/pull/2035): Small code optimizations.
+    - The optimized code specifies the capacity when initializing the HashSet, avoiding potential multiple reallocations of memory during element insertion.
+    - The optimized code uses the return value of HashSet::insert to check if the insertion was successful. If the insertion fails (i.e., the element already exists), it returns an error. This reduces one lookup operation.
+    - The optimized code simplifies the initialization logic of exclude by using the Option::map_or_else method.
 ## [Version 0.31.0]
 
 ### Added
