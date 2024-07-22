@@ -44,6 +44,6 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 
 [features]
 std = ["subscriptions"]
-default = ["std"]
+default = ["std", "fuel-core-types/std"]
 test-helpers = []
 subscriptions = ["eventsource-client", "futures", "hyper-rustls"]
