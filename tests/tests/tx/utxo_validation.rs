@@ -116,7 +116,7 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
 
     // initialize node with higher minimum gas price
     let mut test_builder = TestSetupBuilder::new(2322u64);
-    test_builder.min_gas_price = 10;
+    test_builder.starting_gas_price = 10;
     let TestContext {
         client,
         srv: _dont_drop,

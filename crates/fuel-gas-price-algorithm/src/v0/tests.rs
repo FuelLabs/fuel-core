@@ -5,7 +5,7 @@
 use super::AlgorithmUpdaterV0;
 
 #[cfg(test)]
-mod algorithm_v1_tests;
+mod algorithm_v0_tests;
 #[cfg(test)]
 mod update_l2_block_data_tests;
 
