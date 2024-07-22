@@ -25,7 +25,8 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 
 [features]
 default = ["std"]
-std = ["fuel-core-types/default"]
+std = ["fuel-core-types/std", "fuel-core-storage/std"]
+alloc = ["fuel-core-types/alloc", "fuel-core-storage/alloc"]
 test-helpers = [
   "fuel-core-types/test-helpers",
   "fuel-core-storage/test-helpers",

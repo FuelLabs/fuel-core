@@ -15,9 +15,12 @@ use crate::{
     transactional::ReferenceBytesKey,
 };
 use fuel_vm_private::fuel_storage::Mappable;
-use std::{
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
     collections::BTreeMap,
-    sync::Arc,
+    vec::Vec,
 };
 
 // TODO: BoxedIter to be used until RPITIT lands in stable rust.
@@ -67,7 +70,7 @@ impl Default for IterDirection {
 }
 
 /// A trait for iterating over the storage of [`KeyValueInspect`].
-#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>)]
 pub trait IterableStore: KeyValueInspect {
     /// Returns an iterator over the values in the storage.
     fn iter_store(
@@ -77,6 +80,23 @@ pub trait IterableStore: KeyValueInspect {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem>;
+}
+
+#[cfg(feature = "std")]
+impl<T> IterableStore for std::sync::Arc<T>
+where
+    T: IterableStore,
+{
+    fn iter_store(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        use core::ops::Deref;
+        self.deref().iter_store(column, prefix, start, direction)
+    }
 }
 
 /// A trait for iterating over the `Mappable` table.

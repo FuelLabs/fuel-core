@@ -37,6 +37,7 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
+use core::time::Duration;
 use fuel_vm_private::{
     checked_transaction::{
         CheckError,
@@ -44,10 +45,7 @@ use fuel_vm_private::{
     },
     fuel_types::BlockHeight,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 use tai64::Tai64;
 
 /// The alias for transaction pool result.
@@ -287,92 +285,110 @@ pub fn from_executor_to_status(
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(derive_more::Display, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
-    #[error("Gas price not found for block height {0}")]
+    #[display(fmt = "Gas price not found for block height {_0}")]
     GasPriceNotFound(String),
-    #[error("Failed to calculate max block bytes: {0}")]
+    #[display(fmt = "Failed to calculate max block bytes: {_0}")]
     MaxBlockBytes(String),
-    #[error("TxPool required that transaction contains metadata")]
+    #[display(fmt = "TxPool required that transaction contains metadata")]
     NoMetadata,
-    #[error("TxPool doesn't support this type of transaction.")]
+    #[display(fmt = "TxPool doesn't support this type of transaction.")]
     NotSupportedTransactionType,
-    #[error("Transaction is not inserted. Hash is already known")]
+    #[display(fmt = "Transaction is not inserted. Hash is already known")]
     NotInsertedTxKnown,
-    #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
+    #[display(
+        fmt = "Transaction is not inserted. Pool limit is hit, try to increase gas_price"
+    )]
     NotInsertedLimitHit,
-    #[error("Transaction is not inserted. The gas price is too low.")]
+    #[display(fmt = "Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,
-    #[error(
-        "Transaction is not inserted. More priced tx {0:#x} already spend this UTXO output: {1:#x}"
+    #[display(
+        fmt = "Transaction is not inserted. More priced tx {_0:#x} already spend this UTXO output: {_1:#x}"
     )]
     NotInsertedCollision(TxId, UtxoId),
-    #[error(
-        "Transaction is not inserted. More priced tx has created contract with ContractId {0:#x}"
+    #[display(
+        fmt = "Transaction is not inserted. More priced tx has created contract with ContractId {_0:#x}"
     )]
     NotInsertedCollisionContractId(ContractId),
-    #[error(
-        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
+    #[display(
+        fmt = "Transaction is not inserted. A higher priced tx {_0:#x} is already spending this message: {_1:#x}"
     )]
     NotInsertedCollisionMessageId(TxId, Nonce),
-    #[error("Transaction is not inserted. UTXO input does not exist: {0:#x}")]
+    #[display(fmt = "Transaction is not inserted. UTXO input does not exist: {_0:#x}")]
     NotInsertedOutputDoesNotExist(UtxoId),
-    #[error("Transaction is not inserted. UTXO input contract does not exist or was already spent: {0:#x}")]
+    #[display(
+        fmt = "Transaction is not inserted. UTXO input contract does not exist or was already spent: {_0:#x}"
+    )]
     NotInsertedInputContractDoesNotExist(ContractId),
-    #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
+    #[display(fmt = "Transaction is not inserted. ContractId is already taken {_0:#x}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
-    #[error("Transaction is not inserted. UTXO does not exist: {0:#x}")]
+    #[display(fmt = "Transaction is not inserted. UTXO does not exist: {_0:#x}")]
     NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
-    #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
+    #[display(fmt = "Transaction is not inserted. UTXO is spent: {_0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
-    #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
+    #[display(
+        fmt = "Transaction is not inserted. Message id {_0:#x} does not match any received message from the DA layer."
+    )]
     NotInsertedInputMessageUnknown(Nonce),
-    #[error(
-        "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
+    #[display(
+        fmt = "Transaction is not inserted. UTXO requires Contract input {_0:#x} that is priced lower"
     )]
     NotInsertedContractPricedLower(ContractId),
-    #[error("Transaction is not inserted. Input coin mismatch the values from database")]
+    #[display(
+        fmt = "Transaction is not inserted. Input coin mismatch the values from database"
+    )]
     NotInsertedIoCoinMismatch,
-    #[error("Transaction is not inserted. Input output mismatch. Coin owner is different from expected input")]
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Coin owner is different from expected input"
+    )]
     NotInsertedIoWrongOwner,
-    #[error("Transaction is not inserted. Input output mismatch. Coin output does not match expected input")]
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Coin output does not match expected input"
+    )]
     NotInsertedIoWrongAmount,
-    #[error("Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs")]
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs"
+    )]
     NotInsertedIoWrongAssetId,
-    #[error(
-        "Transaction is not inserted. Input message mismatch the values from database"
+    #[display(
+        fmt = "Transaction is not inserted. Input message mismatch the values from database"
     )]
     NotInsertedIoMessageMismatch,
-    #[error(
-        "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
     )]
     NotInsertedIoContractOutput,
-    #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
+    #[display(
+        fmt = "Transaction is not inserted. Maximum depth of dependent transaction chain reached"
+    )]
     NotInsertedMaxDepth,
     // small todo for now it can pass but in future we should include better messages
-    #[error("Transaction removed.")]
+    #[display(fmt = "Transaction removed.")]
     Removed,
-    #[error("Transaction expired because it exceeded the configured time to live `tx-pool-ttl`.")]
+    #[display(
+        fmt = "Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
+    )]
     TTLReason,
-    #[error("Transaction squeezed out because {0}")]
+    #[display(fmt = "Transaction squeezed out because {_0}")]
     SqueezedOut(String),
-    #[error("Invalid transaction data: {0:?}")]
+    #[display(fmt = "Invalid transaction data: {_0:?}")]
     ConsensusValidity(CheckError),
-    #[error("Mint transactions are disallowed from the txpool")]
+    #[display(fmt = "Mint transactions are disallowed from the txpool")]
     MintIsDisallowed,
-    #[error("The UTXO `{0}` is blacklisted")]
+    #[display(fmt = "The UTXO `{_0}` is blacklisted")]
     BlacklistedUTXO(UtxoId),
-    #[error("The owner `{0}` is blacklisted")]
+    #[display(fmt = "The owner `{_0}` is blacklisted")]
     BlacklistedOwner(Address),
-    #[error("The contract `{0}` is blacklisted")]
+    #[display(fmt = "The contract `{_0}` is blacklisted")]
     BlacklistedContract(ContractId),
-    #[error("The message `{0}` is blacklisted")]
+    #[display(fmt = "The message `{_0}` is blacklisted")]
     BlacklistedMessage(Nonce),
-    #[error("Database error: {0}")]
+    #[display(fmt = "Database error: {_0}")]
     Database(String),
     // TODO: We need it for now until channels are removed from TxPool.
-    #[error("Got some unexpected error: {0}")]
+    #[display(fmt = "Got some unexpected error: {_0}")]
     Other(String),
 }
 

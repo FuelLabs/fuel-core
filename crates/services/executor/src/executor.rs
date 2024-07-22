@@ -143,10 +143,23 @@ use fuel_core_types::{
     },
 };
 use parking_lot::Mutex as ParkingMutex;
-use std::borrow::Cow;
 use tracing::{
     debug,
     warn,
+};
+
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    format,
+    string::ToString,
+    vec,
+    vec::Vec,
 };
 
 pub struct OnceTransactionsSource {

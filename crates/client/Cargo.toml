@@ -15,7 +15,7 @@ anyhow = { workspace = true }
 cynic = { workspace = true }
 derive_more = { workspace = true }
 eventsource-client = { version = "0.12.2", optional = true }
-fuel-core-types = { workspace = true, features = ["serde"] }
+fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 futures = { workspace = true, optional = true }
 hex = "0.4"
 # Included to enable webpki in the eventsource client
@@ -43,6 +43,7 @@ schemafy_lib = { version = "0.5" }
 serde_json = { version = "1.0", features = ["raw_value"] }
 
 [features]
-default = ["subscriptions"]
+std = ["subscriptions"]
+default = ["std"]
 test-helpers = []
 subscriptions = ["eventsource-client", "futures", "hyper-rustls"]
