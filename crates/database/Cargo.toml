@@ -19,8 +19,8 @@ description = "The crates contains databases used by Fuel core protocol."
 [dependencies]
 anyhow = { workspace = true }
 derive_more = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
+fuel-core-types = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../trace" }
