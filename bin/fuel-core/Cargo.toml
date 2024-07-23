@@ -24,7 +24,7 @@ dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-types = { workspace = true, features = ["std"] }
 hex = "0.4"
 humantime = "2.1"
 pyroscope = "0.5"

@@ -11,8 +11,10 @@ description = "Fuel Block Executor"
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true, default-features = false }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
 hex = { version = "0.4", features = ["serde"] }
 parking_lot = { workspace = true }
 serde = { workspace = true }

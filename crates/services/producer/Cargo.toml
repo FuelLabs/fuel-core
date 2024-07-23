@@ -13,8 +13,8 @@ version = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
 mockall = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
