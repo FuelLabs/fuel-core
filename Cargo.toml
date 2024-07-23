@@ -6,6 +6,7 @@ members = [
   "bin/fuel-core",
   "bin/fuel-core-client",
   "bin/keygen",
+  "crates/compression",
   "crates/chain-config",
   "crates/client",
   "crates/database",
@@ -61,6 +62,7 @@ fuel-core-keygen = { version = "0.31.0", path = "./crates/keygen" }
 fuel-core-keygen-bin = { version = "0.31.0", path = "./bin/keygen" }
 fuel-core-chain-config = { version = "0.31.0", path = "./crates/chain-config", default-features = false }
 fuel-core-client = { version = "0.31.0", path = "./crates/client" }
+fuel-core-compression = { version = "0.31.0", path = "./crates/compression" }
 fuel-core-database = { version = "0.31.0", path = "./crates/database" }
 fuel-core-metrics = { version = "0.31.0", path = "./crates/metrics" }
 fuel-core-services = { version = "0.31.0", path = "./crates/services" }
@@ -85,7 +87,8 @@ fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.31.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.55.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { path = "../fuel-vm/fuel-vm", package = "fuel-vm", default-features = false }
+# fuel-vm-private = { version = "0.55.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
