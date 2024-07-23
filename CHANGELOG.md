@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 
 #### Breaking
-- [](): Include withdrawal message only if transaction is executed successfully.
+- [2045](https://github.com/FuelLabs/fuel-core/pull/2045): Include withdrawal message only if transaction is executed successfully.
 
 ## [Version 0.31.0]
 
