@@ -19,6 +19,7 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
         GasPriceSettingsProvider,
     },
     AlgorithmUpdater,
+    AlgorithmUpdaterV0,
     FuelGasPriceUpdater,
     MetadataStorage,
     UpdaterMetadata,
@@ -69,53 +70,71 @@ pub fn get_synced_algorithm_updater(
         l2_block_height: genesis_block_height.into(),
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
+    let mut metadata_storage = StructuredStorage::new(gas_price_db);
 
     match metadata_height.cmp(&latest_block_height) {
+        Ordering::Equal => {}
         Ordering::Less => sync_metadata_storage_with_on_chain_storage(
-            genesis_block_height,
-            settings,
-            block_stream,
-            gas_price_db,
+            &settings,
+            &mut metadata_storage,
             on_chain_db,
             metadata_height,
             latest_block_height,
-            default_metadata,
-        ),
-        Ordering::Equal => restore_gas_price_updater(
-            genesis_block_height,
-            settings,
-            block_stream,
-            gas_price_db,
-            metadata_height,
-            default_metadata,
-        ),
+            default_metadata.clone(),
+        )?,
         Ordering::Greater => {
             todo!()
         }
     }
+    let metadata = metadata_storage
+        .get_metadata(&metadata_height.into())
+        .map_err(|e| anyhow::anyhow!("Expected metadata to exist, got error: {e:?}"))?
+        .unwrap_or(default_metadata);
+    let l2_block_source =
+        FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
+    Ok(FuelGasPriceUpdater::new(
+        metadata.into(),
+        l2_block_source,
+        metadata_storage,
+    ))
 }
 
 fn sync_metadata_storage_with_on_chain_storage(
-    genesis_block_height: BlockHeight,
-    settings: ConsensusParametersProvider,
-    block_stream: BoxStream<SharedImportResult>,
-    gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    settings: &ConsensusParametersProvider,
+    metadata_storage: &mut StructuredStorage<
+        Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    >,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     metadata_height: u32,
     latest_block_height: u32,
     default_metadata: UpdaterMetadata,
-) -> anyhow::Result<
-    FuelGasPriceUpdater<
-        FuelL2BlockSource<ConsensusParametersProvider>,
-        StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>,
-    >,
-> {
-    let mut metadata_storage = StructuredStorage::new(gas_price_db);
+) -> anyhow::Result<()> {
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
         .unwrap_or(default_metadata);
     let mut inner: AlgorithmUpdater = metadata.into();
-    let AlgorithmUpdater::V0(ref mut updater) = &mut inner;
+    match &mut inner {
+        AlgorithmUpdater::V0(ref mut updater) => {
+            sync_v0_metadata(
+                settings,
+                on_chain_db,
+                metadata_height,
+                latest_block_height,
+                updater,
+            )?;
+        }
+    }
+    metadata_storage.set_metadata(inner.clone().into())?;
+    Ok(())
+}
+
+fn sync_v0_metadata(
+    settings: &ConsensusParametersProvider,
+    on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    metadata_height: u32,
+    latest_block_height: u32,
+    updater: &mut AlgorithmUpdaterV0,
+) -> anyhow::Result<()> {
     for height in (metadata_height + 1)..=latest_block_height {
         let view = on_chain_db.view_at(&height.into())?;
         let block = view
@@ -138,39 +157,5 @@ fn sync_metadata_storage_with_on_chain_storage(
         let block_gas_capacity = params.block_gas_limit.try_into()?;
         updater.update_l2_block_data(height, *block_gas_used, block_gas_capacity)?;
     }
-    let l2_block_source =
-        FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
-    metadata_storage.set_metadata(inner.clone().into())?;
-    Ok(FuelGasPriceUpdater::new(
-        inner,
-        l2_block_source,
-        metadata_storage,
-    ))
-}
-
-fn restore_gas_price_updater(
-    genesis_block_height: BlockHeight,
-    settings: ConsensusParametersProvider,
-    block_stream: BoxStream<SharedImportResult>,
-    gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
-    metadata_height: u32,
-    default_metadata: UpdaterMetadata,
-) -> anyhow::Result<
-    FuelGasPriceUpdater<
-        FuelL2BlockSource<ConsensusParametersProvider>,
-        StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>,
-    >,
-> {
-    let metadata_storage = StructuredStorage::new(gas_price_db);
-    let metadata = metadata_storage
-        .get_metadata(&metadata_height.into())
-        .map_err(|e| anyhow::anyhow!("Expected metadata to exist, got error: {e:?}"))?
-        .unwrap_or(default_metadata);
-    let l2_block_source =
-        FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
-    Ok(FuelGasPriceUpdater::new(
-        metadata.into(),
-        l2_block_source,
-        metadata_storage,
-    ))
+    Ok(())
 }
