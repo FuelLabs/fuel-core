@@ -4,7 +4,7 @@ use fuel_core_gas_price_service::{
     SharedGasPriceAlgo,
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
-use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPricProvider;
+use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::txpool::Result as TxPoolResult,
@@ -53,12 +53,8 @@ impl<A> FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn next_gas_price(&self, block_bytes: u64) -> u64 {
-        self.algorithm.next_gas_price(block_bytes).await
-    }
-
-    async fn last_gas_price(&self) -> u64 {
-        self.algorithm.last_gas_price().await
+    async fn next_gas_price(&self) -> u64 {
+        self.algorithm.next_gas_price().await
     }
 }
 
@@ -67,18 +63,18 @@ impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn next_gas_price(&self, block_bytes: u64) -> anyhow::Result<u64> {
-        Ok(self.next_gas_price(block_bytes).await)
+    async fn next_gas_price(&self) -> anyhow::Result<u64> {
+        Ok(self.next_gas_price().await)
     }
 }
 
 #[async_trait::async_trait]
-impl<A> TxPoolGasPricProvider for FuelGasPriceProvider<A>
+impl<A> TxPoolGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn last_gas_price(&self) -> TxPoolResult<u64> {
-        Ok(self.last_gas_price().await)
+    async fn next_gas_price(&self) -> TxPoolResult<u64> {
+        Ok(self.next_gas_price().await)
     }
 }
 

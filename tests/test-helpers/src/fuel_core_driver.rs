@@ -20,6 +20,33 @@ impl FuelCoreDriver {
         Self::spawn_with_directory(tempdir()?, extra_args).await
     }
 
+    pub async fn spawn_feeless(extra_args: &[&str]) -> anyhow::Result<Self> {
+        let mut args = vec![
+            "--starting-gas-price",
+            "0",
+            "--gas-price-change-percent",
+            "0",
+        ];
+        args.extend(extra_args);
+        Self::spawn_with_directory(tempdir()?, &args).await
+    }
+
+    pub async fn spawn_feeless_with_directory(
+        db_dir: TempDir,
+        extra_args: &[&str],
+    ) -> anyhow::Result<Self> {
+        let mut args = vec![
+            "--starting-gas-price",
+            "0",
+            "--gas-price-change-percent",
+            "0",
+            "--min-gas-price",
+            "0",
+        ];
+        args.extend(extra_args);
+        Self::spawn_with_directory(db_dir, &args).await
+    }
+
     pub async fn spawn_with_directory(
         db_dir: TempDir,
         extra_args: &[&str],

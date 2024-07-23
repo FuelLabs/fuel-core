@@ -15,13 +15,14 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::{
-        canonical::Deserialize,
+        canonical::{
+            Deserialize,
+            Serialize,
+        },
         Salt,
     },
     services::executor::TransactionExecutionResult,
 };
-
-use fuel_core_types::fuel_types::canonical::Serialize;
 use libtest_mimic::Failed;
 use std::{
     path::Path,
@@ -145,7 +146,6 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
 pub async fn arbitrary_transaction(ctx: &TestContext) -> Result<(), Failed> {
     const RAW_PATH: &str = "src/tests/test_data/arbitrary_tx.raw";
     const JSON_PATH: &str = "src/tests/test_data/arbitrary_tx.json";
-
     let dry_run_raw =
         std::fs::read_to_string(RAW_PATH).expect("Should read the raw transaction");
     let dry_run_json =

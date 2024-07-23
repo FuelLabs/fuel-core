@@ -53,7 +53,7 @@ fn update_l2_block_data__skipped_block_height_throws_error() {
 }
 
 #[test]
-fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
+fn update_l2_block_data__even_threshold_will_increase_exec_gas_price() {
     // given
     let starting_gas_price = 100;
     let unused_percent = 11;
@@ -72,7 +72,7 @@ fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
         .unwrap();
 
     // then
-    let expected = starting_gas_price;
+    let expected = starting_gas_price + starting_gas_price * unused_percent / 100;
     let actual = updater.new_exec_price;
     assert_eq!(actual, expected);
 }

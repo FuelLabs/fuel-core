@@ -191,7 +191,7 @@ impl Wallet {
         ];
 
         // build transaction
-        let mut tx = TransactionBuilder::script(
+        let mut tx_builder = TransactionBuilder::script(
             script.into_iter().collect(),
             asset_id
                 .to_bytes()
@@ -202,10 +202,11 @@ impl Wallet {
                 .chain(0u64.to_bytes().into_iter())
                 .collect(),
         );
-        tx.max_fee_limit(BASE_AMOUNT);
-        tx.script_gas_limit(self.consensus_params.tx_params().max_gas_per_tx() / 10);
+        tx_builder.max_fee_limit(BASE_AMOUNT);
+        tx_builder
+            .script_gas_limit(self.consensus_params.tx_params().max_gas_per_tx() / 10);
 
-        tx.add_input(Input::contract(
+        tx_builder.add_input(Input::contract(
             Default::default(),
             Default::default(),
             Default::default(),
@@ -214,7 +215,7 @@ impl Wallet {
         ));
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
-                tx.add_unsigned_coin_input(
+                tx_builder.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id,
                     coin.amount,
@@ -223,20 +224,24 @@ impl Wallet {
                 );
             }
         }
-        tx.add_output(Output::contract(0, Default::default(), Default::default()));
-        tx.add_output(Output::Change {
+        tx_builder.add_output(Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        ));
+        tx_builder.add_output(Output::Change {
             to: self.address,
             amount: 0,
             asset_id,
         });
-        tx.add_output(Output::Variable {
+        tx_builder.add_output(Output::Variable {
             to: Default::default(),
             amount: Default::default(),
             asset_id: Default::default(),
         });
-        tx.with_params(self.consensus_params.clone());
+        tx_builder.with_params(self.consensus_params.clone());
 
-        Ok(tx.finalize_as_transaction())
+        Ok(tx_builder.finalize_as_transaction())
     }
 
     /// Transfers coins from this wallet to another
