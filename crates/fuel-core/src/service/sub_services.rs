@@ -28,7 +28,7 @@ use crate::{
             TxPoolAdapter,
             VerifierAdapter,
         },
-        sub_services::algorithm_updater::get_synced_algorithm_updater,
+        sub_services::algorithm_updater::get_synced_gas_price_updater,
         Config,
         SharedState,
         SubServices,
@@ -186,7 +186,7 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    let update_algo = get_synced_algorithm_updater(
+    let update_algo = get_synced_gas_price_updater(
         config,
         genesis_block_height,
         settings,

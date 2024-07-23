@@ -186,23 +186,25 @@ impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata>
 where
     Metadata: MetadataStorage,
 {
-    // pub fn init(
-    //     init_metadata: UpdaterMetadata,
-    //     l2_block_source: L2,
-    //     metadata_storage: Metadata,
-    // ) -> Result<Self> {
-    //     let target_block_height = init_metadata.l2_block_height();
-    //     let inner = metadata_storage
-    //         .get_metadata(&target_block_height)?
-    //         .unwrap_or(init_metadata)
-    //         .into();
-    //     let updater = Self {
-    //         inner,
-    //         l2_block_source,
-    //         metadata_storage,
-    //     };
-    //     Ok(updater)
-    // }
+    pub fn init(
+        target_block_height: BlockHeight,
+        l2_block_source: L2,
+        metadata_storage: Metadata,
+    ) -> Result<Self> {
+        let inner = metadata_storage
+            .get_metadata(&target_block_height)?
+            .ok_or(Error::CouldNotInitUpdater(anyhow::anyhow!(
+                "No metadata found for block height: {:?}",
+                target_block_height
+            )))?
+            .into();
+        let updater = Self {
+            inner,
+            l2_block_source,
+            metadata_storage,
+        };
+        Ok(updater)
+    }
 }
 
 #[async_trait::async_trait]

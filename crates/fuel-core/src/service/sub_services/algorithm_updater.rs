@@ -42,7 +42,7 @@ use fuel_core_types::{
 };
 use std::cmp::Ordering;
 
-pub fn get_synced_algorithm_updater(
+pub fn get_synced_gas_price_updater(
     config: &Config,
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
@@ -63,44 +63,59 @@ pub fn get_synced_algorithm_updater(
         .latest_height()?
         .unwrap_or(genesis_block_height)
         .into();
-    let default_metadata = UpdaterMetadata::V0(V0Metadata {
+
+    let genesis_metadata = UpdaterMetadata::V0(V0Metadata {
         new_exec_price: config.starting_gas_price,
         min_exec_gas_price: config.min_gas_price,
         exec_gas_price_change_percent: config.gas_price_change_percent,
         l2_block_height: genesis_block_height.into(),
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
+    if BlockHeight::from(latest_block_height) == genesis_block_height {
+        let metadata_storage = StructuredStorage::new(gas_price_db);
+        let l2_block_source =
+            FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
+        let updater = FuelGasPriceUpdater::new(
+            genesis_metadata.into(),
+            l2_block_source,
+            metadata_storage,
+        );
+        Ok(updater)
+    } else {
+        let metadata_storage = match metadata_height.cmp(&latest_block_height) {
+            Ordering::Equal => StructuredStorage::new(gas_price_db),
+            Ordering::Less => {
+                let mut metadata_storage = StructuredStorage::new(gas_price_db);
+                sync_metadata_storage_with_on_chain_storage(
+                    &settings,
+                    &mut metadata_storage,
+                    on_chain_db,
+                    metadata_height,
+                    latest_block_height,
+                    genesis_metadata,
+                    genesis_block_height.into(),
+                )?;
+                metadata_storage
+            }
+            Ordering::Greater => {
+                revert_gas_price_db_to_height(
+                    &mut gas_price_db,
+                    latest_block_height.into(),
+                )?;
+                StructuredStorage::new(gas_price_db)
+            }
+        };
 
-    let metadata_storage = match metadata_height.cmp(&latest_block_height) {
-        Ordering::Equal => StructuredStorage::new(gas_price_db),
-        Ordering::Less => {
-            let mut metadata_storage = StructuredStorage::new(gas_price_db);
-            sync_metadata_storage_with_on_chain_storage(
-                &settings,
-                &mut metadata_storage,
-                on_chain_db,
-                metadata_height,
-                latest_block_height,
-                default_metadata.clone(),
-            )?;
-            metadata_storage
-        }
-        Ordering::Greater => {
-            revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
-            StructuredStorage::new(gas_price_db)
-        }
-    };
-    let metadata = metadata_storage
-        .get_metadata(&latest_block_height.into())
-        .map_err(|e| anyhow::anyhow!("Expected metadata to exist, got error: {e:?}"))?
-        .unwrap_or(default_metadata);
-    let l2_block_source =
-        FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
-    Ok(FuelGasPriceUpdater::new(
-        metadata.into(),
-        l2_block_source,
-        metadata_storage,
-    ))
+        let l2_block_source =
+            FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
+
+        FuelGasPriceUpdater::init(
+            latest_block_height.into(),
+            l2_block_source,
+            metadata_storage,
+        )
+        .map_err(|e| anyhow::anyhow!("Could not initialize gas price updater: {e:?}"))
+    }
 }
 
 fn sync_metadata_storage_with_on_chain_storage(
@@ -112,10 +127,17 @@ fn sync_metadata_storage_with_on_chain_storage(
     metadata_height: u32,
     latest_block_height: u32,
     default_metadata: UpdaterMetadata,
+    genesis_block_height: u32,
 ) -> anyhow::Result<()> {
-    let metadata = metadata_storage
-        .get_metadata(&metadata_height.into())?
-        .unwrap_or(default_metadata);
+    let metadata = if metadata_height == genesis_block_height {
+        default_metadata
+    } else {
+        metadata_storage
+            .get_metadata(&metadata_height.into())?
+            .ok_or(anyhow::anyhow!(
+                "Expected metadata to exist for height: {metadata_height}"
+            ))?
+    };
     let mut inner: AlgorithmUpdater = metadata.into();
     match &mut inner {
         AlgorithmUpdater::V0(ref mut updater) => {
