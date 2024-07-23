@@ -1,10 +1,17 @@
 use crate::{
     config::Config,
+    Protocol::{
+        Ip4,
+        Ip6,
+    },
     TryPeerId,
 };
 use libp2p::{
     self,
-    core::Endpoint,
+    core::{
+        ConnectedPoint,
+        Endpoint,
+    },
     swarm::{
         derive_prelude::{
             ConnectionClosed,
@@ -29,10 +36,13 @@ use libp2p::{
 };
 use std::{
     collections::{
+        hash_map::Entry,
         BTreeMap,
+        HashMap,
         HashSet,
         VecDeque,
     },
+    net::IpAddr,
     task::{
         Context,
         Poll,
@@ -60,6 +70,9 @@ pub enum PeerReportEvent {
     PeerDisconnected {
         peer_id: PeerId,
     },
+    AskForDisconnection {
+        peer_id: PeerId,
+    },
     /// Informs p2p service / PeerManager to perform reputation decay of connected nodes
     PerformDecay,
 }
@@ -71,15 +84,17 @@ pub struct Behaviour {
     connected_reserved_nodes: HashSet<PeerId>,
     pending_connections: HashSet<ConnectionId>,
     pending_events: VecDeque<ToSwarm<PeerReportEvent, Void>>,
+    ips_to_peers: HashMap<IpAddr, HashSet<PeerId>>,
+    max_connections_per_ip: usize,
     decay_interval: Interval,
 }
 
 impl Behaviour {
-    pub(crate) fn new(_config: &Config) -> Self {
+    pub(crate) fn new(config: &Config) -> Self {
         let mut reserved_nodes_to_connect = VecDeque::new();
         let mut reserved_nodes_multiaddr = BTreeMap::<PeerId, Vec<Multiaddr>>::new();
 
-        for multiaddr in &_config.reserved_nodes {
+        for multiaddr in &config.reserved_nodes {
             let peer_id = multiaddr.try_to_peer_id().unwrap();
             reserved_nodes_to_connect.push_back((Instant::now(), peer_id));
             reserved_nodes_multiaddr
@@ -94,11 +109,21 @@ impl Behaviour {
             connected_reserved_nodes: Default::default(),
             pending_connections: Default::default(),
             pending_events: VecDeque::default(),
+            ips_to_peers: Default::default(),
+            max_connections_per_ip: config.max_peers_per_remote_ip,
             decay_interval: time::interval(Duration::from_secs(
                 REPUTATION_DECAY_INTERVAL_IN_SECONDS,
             )),
         }
     }
+}
+
+fn get_ip_addr(addr: &Multiaddr) -> Option<IpAddr> {
+    addr.iter().find_map(|p| match p {
+        Ip4(addr) => Some(IpAddr::V4(addr)),
+        Ip6(addr) => Some(IpAddr::V6(addr)),
+        _ => None,
+    })
 }
 
 impl NetworkBehaviour for Behaviour {
@@ -108,10 +133,31 @@ impl NetworkBehaviour for Behaviour {
     fn handle_established_inbound_connection(
         &mut self,
         _connection_id: ConnectionId,
-        _peer: PeerId,
+        peer: PeerId,
         _local_addr: &Multiaddr,
-        _remote_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
+        if let Some(ip) = get_ip_addr(remote_addr) {
+            let entry = self.ips_to_peers.entry(ip);
+
+            match entry {
+                Entry::Occupied(mut occupied) => {
+                    let set = occupied.get_mut();
+
+                    if set.len() >= self.max_connections_per_ip {
+                        return Err(ConnectionDenied::new(
+                            "Max connections per IP reached",
+                        ))
+                    }
+
+                    set.insert(peer);
+                }
+                Entry::Vacant(_) => {
+                    // Do nothing
+                }
+            }
+        }
+
         Ok(dummy::ConnectionHandler)
     }
 
@@ -131,6 +177,7 @@ impl NetworkBehaviour for Behaviour {
                 let ConnectionEstablished {
                     peer_id,
                     connection_id,
+                    endpoint,
                     ..
                 } = connection_established;
                 self.pending_events.push_back(ToSwarm::GenerateEvent(
@@ -140,11 +187,30 @@ impl NetworkBehaviour for Behaviour {
                     self.connected_reserved_nodes.insert(peer_id);
                     self.pending_connections.remove(&connection_id);
                 }
+
+                match endpoint {
+                    ConnectedPoint::Dialer { .. } => {}
+                    ConnectedPoint::Listener { send_back_addr, .. } => {
+                        let ip = get_ip_addr(send_back_addr);
+
+                        if let Some(ip) = ip {
+                            let set = self.ips_to_peers.entry(ip).or_default();
+                            set.insert(peer_id);
+
+                            if set.len() > self.max_connections_per_ip {
+                                self.pending_events.push_back(ToSwarm::GenerateEvent(
+                                    PeerReportEvent::AskForDisconnection { peer_id },
+                                ));
+                            }
+                        }
+                    }
+                }
             }
             FromSwarm::ConnectionClosed(connection_closed) => {
                 let ConnectionClosed {
                     remaining_established,
                     peer_id,
+                    endpoint,
                     ..
                 } = connection_closed;
 
@@ -158,6 +224,35 @@ impl NetworkBehaviour for Behaviour {
                         self.connected_reserved_nodes.remove(&peer_id);
                         self.reserved_nodes_to_connect
                             .push_back((Instant::now(), peer_id));
+                    }
+                }
+
+                match endpoint {
+                    ConnectedPoint::Dialer { .. } => {}
+                    ConnectedPoint::Listener { send_back_addr, .. } => {
+                        let ip = get_ip_addr(send_back_addr);
+
+                        if let Some(ip) = ip {
+                            let entry = self.ips_to_peers.entry(ip);
+
+                            match entry {
+                                Entry::Occupied(mut occupied) => {
+                                    let set = occupied.get_mut();
+                                    set.remove(&peer_id);
+
+                                    if set.is_empty() {
+                                        occupied.remove();
+                                    }
+                                }
+                                Entry::Vacant(_) => {
+                                    tracing::warn!(
+                                        "IP address not found in the \
+                                        map during disconnection of the peer {:?}",
+                                        peer_id
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

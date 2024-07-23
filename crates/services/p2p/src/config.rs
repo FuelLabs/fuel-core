@@ -91,6 +91,8 @@ pub struct Config<State = Initialized> {
     /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
     pub max_peers_connected: u32,
+    /// Max number of unique peers connected with the same remote IP address.
+    pub max_peers_per_remote_ip: usize,
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
     pub max_connections_per_peer: u32,
@@ -154,6 +156,7 @@ impl Config<NotInitialized> {
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
+            max_peers_per_remote_ip: self.max_peers_per_remote_ip,
             max_connections_per_peer: self.max_connections_per_peer,
             allow_private_addresses: self.allow_private_addresses,
             random_walk: self.random_walk,
@@ -203,6 +206,7 @@ impl Config<NotInitialized> {
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,
+            max_peers_per_remote_ip: 50,
             max_connections_per_peer: 3,
             allow_private_addresses: true,
             random_walk: Some(Duration::from_millis(500)),
