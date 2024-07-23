@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
         - "gas-price-threshold-percent" - the threshold percent for determining if the gas price will be increase or decreased
     And the following CLI flags are serving a new purpose
         - "min-gas-price" - the minimum gas price that the gas price algorithm will return
+
+### Fixed
+
+#### Breaking
+- [](): Include withdrawal message only if transaction is executed successfully.
+
 ## [Version 0.31.0]
 
 ### Added

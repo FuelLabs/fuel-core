@@ -54,7 +54,10 @@ mod tests {
             RegId,
         },
         fuel_crypto::SecretKey,
-        fuel_merkle::sparse,
+        fuel_merkle::{
+            common::empty_sum_sha256,
+            sparse,
+        },
         fuel_tx::{
             consensus_parameters::gas::GasCostsValuesV1,
             field::{
@@ -2526,6 +2529,84 @@ mod tests {
                 TransactionValidityError::MessageDoesNotExist(_)
             ))
         ));
+    }
+
+    #[test]
+    fn withdrawal_message_included_in_header_for_successfully_executed_transaction() {
+        // Given
+        let amount_from_random_input = 1000;
+        let smo_tx = TransactionBuilder::script(
+            vec![
+                // The amount to send in coins.
+                op::movi(0x13, amount_from_random_input),
+                // Send the message output.
+                op::smo(0x0, 0x0, 0x0, 0x13),
+                op::ret(RegId::ONE),
+            ]
+            .into_iter()
+            .collect(),
+            vec![],
+        )
+        .add_random_fee_input()
+        .script_gas_limit(1000000)
+        .finalize_as_transaction();
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![smo_tx],
+        };
+
+        // When
+        let ExecutionResult { block, .. } =
+            create_executor(Default::default(), Default::default())
+                .produce_and_commit(block)
+                .expect("block execution failed unexpectedly");
+        create_executor(Default::default(), Default::default())
+            .validate_and_commit(&block)
+            .expect("block validation failed unexpectedly");
+
+        // Then
+        let empty_root = empty_sum_sha256();
+        assert_ne!(block.header().message_outbox_root.as_ref(), empty_root)
+    }
+
+    #[test]
+    fn withdrawal_message_not_included_in_header_for_failed_transaction() {
+        // Given
+        let amount_from_random_input = 1000;
+        let smo_tx = TransactionBuilder::script(
+            vec![
+                // The amount to send in coins.
+                op::movi(0x13, amount_from_random_input),
+                // Send the message output.
+                op::smo(0x0, 0x0, 0x0, 0x13),
+                op::rvrt(0x0),
+            ]
+            .into_iter()
+            .collect(),
+            vec![],
+        )
+        .add_random_fee_input()
+        .script_gas_limit(1000000)
+        .finalize_as_transaction();
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![smo_tx],
+        };
+
+        // When
+        let ExecutionResult { block, .. } =
+            create_executor(Default::default(), Default::default())
+                .produce_and_commit(block)
+                .expect("block execution failed unexpectedly");
+        create_executor(Default::default(), Default::default())
+            .validate_and_commit(&block)
+            .expect("block validation failed unexpectedly");
+
+        // Then
+        let empty_root = empty_sum_sha256();
+        assert_eq!(block.header().message_outbox_root.as_ref(), empty_root)
     }
 
     #[test]
