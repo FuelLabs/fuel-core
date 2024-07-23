@@ -72,6 +72,7 @@ pub fn get_synced_gas_price_updater(
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
     if BlockHeight::from(latest_block_height) == genesis_block_height {
+        revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
         let metadata_storage = StructuredStorage::new(gas_price_db);
         let l2_block_source =
             FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
@@ -126,11 +127,11 @@ fn sync_metadata_storage_with_on_chain_storage(
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     metadata_height: u32,
     latest_block_height: u32,
-    default_metadata: UpdaterMetadata,
+    genesis_metadata: UpdaterMetadata,
     genesis_block_height: u32,
 ) -> anyhow::Result<()> {
     let metadata = if metadata_height == genesis_block_height {
-        default_metadata
+        genesis_metadata
     } else {
         metadata_storage
             .get_metadata(&metadata_height.into())?

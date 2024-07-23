@@ -3300,6 +3300,7 @@ dependencies = [
  "itertools 0.12.1",
  "pretty_assertions",
  "primitive-types",
+ "proptest",
  "rand",
  "reqwest",
  "rstest",
