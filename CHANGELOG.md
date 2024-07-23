@@ -118,6 +118,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1895](https://github.com/FuelLabs/fuel-core/pull/1895): Added backward and forward compatibility integration tests for forkless upgrades.
 - [#1898](https://github.com/FuelLabs/fuel-core/pull/1898): Enforce increasing of the `Executor::VERSION` on each release.
 
+### Added
+
+- [#1609](https://github.com/FuelLabs/fuel-core/pull/1609): Add a DA compression crate `fuel-core-compression`.
+
 ### Changed
 
 - [#1906](https://github.com/FuelLabs/fuel-core/pull/1906): Makes `cli::snapshot::Command` members public such that clients can create and execute snapshot commands programmatically. This enables snapshot execution in external programs, such as the regenesis test suite. 
