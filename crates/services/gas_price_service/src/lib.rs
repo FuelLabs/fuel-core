@@ -227,8 +227,6 @@ mod tests {
     }
     #[tokio::test]
     async fn run__updates_gas_price() {
-        let _ = tracing_subscriber::fmt::try_init();
-
         // given
         let (price_sender, price_receiver) = mpsc::channel(1);
         let updater = TestAlgorithmUpdater {

@@ -7,7 +7,14 @@ use super::{
 use crate::relayer::Config as RelayerConfig;
 use crate::{
     combined_database::CombinedDatabase,
-    database::Database,
+    database::{
+        database_description::{
+            gas_price::GasPriceDatabase,
+            on_chain::OnChain,
+        },
+        Database,
+        RegularStage,
+    },
     fuel_core_graphql_api,
     fuel_core_graphql_api::Config as GraphQLConfig,
     schema::build_schema,
@@ -32,20 +39,41 @@ use crate::{
         SubServices,
     },
 };
+#[allow(unused_imports)]
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
     fuel_core_storage_adapter::FuelL2BlockSource,
     Algorithm,
+    AlgorithmV0,
     FuelGasPriceUpdater,
     UpdaterMetadata,
     V0Metadata,
 };
+use fuel_core_gas_price_service::fuel_gas_price_updater::{
+    fuel_core_storage_adapter::GasPriceSettingsProvider,
+    AlgorithmUpdater,
+    MetadataStorage,
+};
 use fuel_core_poa::Trigger;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
-    transactional::AtomicView,
+    tables::{
+        FuelBlocks,
+        Transactions,
+    },
+    transactional::{
+        AtomicView,
+        HistoricalView,
+    },
+    StorageAsRef,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::{
+    fuel_tx::field::MintAmount,
+    fuel_types::BlockHeight,
+    services::block_importer::SharedImportResult,
+};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -176,21 +204,28 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    let updater_metadata = UpdaterMetadata::V0(V0Metadata {
-        new_exec_price: config.starting_gas_price,
-        min_exec_gas_price: config.min_gas_price,
-        exec_gas_price_change_percent: config.gas_price_change_percent,
-        l2_block_height: last_height.into(),
-        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
-    });
+    // let default_metadata = UpdaterMetadata::V0(V0Metadata {
+    //     new_exec_price: config.starting_gas_price,
+    //     min_exec_gas_price: config.min_gas_price,
+    //     exec_gas_price_change_percent: config.gas_price_change_percent,
+    //     l2_block_height: last_height.into(),
+    //     l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
+    // });
     let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
-    let l2_block_source =
-        FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
-    let metadata_storage = StructuredStorage::new(database.gas_price().clone());
-    let update_algo =
-        FuelGasPriceUpdater::init(updater_metadata, l2_block_source, metadata_storage)?;
+
+    // let metadata_storage = StructuredStorage::new(database.gas_price().clone());
+    // let update_algo =
+    //     FuelGasPriceUpdater::init(updater_metadata, l2_block_source, metadata_storage)?;
+    let update_algo = get_synced_algorithm_updater(
+        config,
+        genesis_block_height,
+        settings,
+        block_stream,
+        database.gas_price().clone(),
+        database.on_chain().clone(),
+    )?;
     let gas_price_service =
         fuel_core_gas_price_service::new_service(last_height, update_algo)?;
     let next_algo = gas_price_service.shared.clone();
@@ -336,4 +371,98 @@ pub fn init_sub_services(
     services.push(Box::new(graphql_worker));
 
     Ok((services, shared))
+}
+
+fn get_synced_algorithm_updater(
+    config: &Config,
+    genesis_block_height: BlockHeight,
+    settings: ConsensusParametersProvider,
+    block_stream: BoxStream<SharedImportResult>,
+    gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+) -> anyhow::Result<
+    FuelGasPriceUpdater<
+        FuelL2BlockSource<ConsensusParametersProvider>,
+        StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>,
+    >,
+> {
+    // if gas price metadata height is behind the latest block height,
+    // we should create an updater and manually update the gas price by adding the missing l2 blocks
+    // from the on_chain database
+    let metadata_height: u32 = gas_price_db
+        .latest_height()?
+        .unwrap_or(genesis_block_height)
+        .into();
+    let latest_block_height: u32 = on_chain_db
+        .latest_height()?
+        .unwrap_or(genesis_block_height)
+        .into();
+    let default_metadata = UpdaterMetadata::V0(V0Metadata {
+        new_exec_price: config.starting_gas_price,
+        min_exec_gas_price: config.min_gas_price,
+        exec_gas_price_change_percent: config.gas_price_change_percent,
+        l2_block_height: genesis_block_height.into(),
+        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
+    });
+    if metadata_height < latest_block_height {
+        let mut metadata_storage = StructuredStorage::new(gas_price_db);
+        let metadata = metadata_storage
+            .get_metadata(&metadata_height.into())?
+            .unwrap_or(default_metadata);
+        let mut inner: AlgorithmUpdater = metadata.into();
+        let AlgorithmUpdater::V0(ref mut updater) = &mut inner;
+        for height in (metadata_height + 1)..=latest_block_height {
+            if BlockHeight::from(height) == genesis_block_height {
+                // do nothing
+            } else {
+                let view = on_chain_db.view_at(&height.into())?;
+                let block = view
+                    .storage::<FuelBlocks>()
+                    .get(&height.into())?
+                    .ok_or(anyhow::anyhow!("Expected block to exist"))?;
+                let last_tx_id = block.transactions().last().ok_or(anyhow::anyhow!(
+                    "Expected block to have at least one transaction"
+                ))?;
+                let param_version = block.header().consensus_parameters_version;
+                let params = settings.settings(&param_version)?;
+                let mint = view
+                    .storage::<Transactions>()
+                    .get(&last_tx_id)?
+                    .ok_or(anyhow::anyhow!("Expected tx to exist for id: {last_tx_id}"))?
+                    .as_mint()
+                    .ok_or(anyhow::anyhow!("Expected tx to be a mint"))?
+                    .to_owned();
+                let block_gas_used = mint.mint_amount();
+                let block_gas_capacity = params.block_gas_limit.try_into()?;
+                updater.update_l2_block_data(
+                    height,
+                    *block_gas_used,
+                    block_gas_capacity,
+                )?;
+            }
+        }
+        let l2_block_source =
+            FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
+        metadata_storage.set_metadata(inner.clone().into())?;
+        Ok(FuelGasPriceUpdater::new(
+            inner,
+            l2_block_source,
+            metadata_storage,
+        ))
+    } else if metadata_height > latest_block_height {
+        todo!()
+    } else {
+        let metadata_storage = StructuredStorage::new(gas_price_db);
+        let metadata = metadata_storage
+            .get_metadata(&metadata_height.into())
+            .map_err(|e| anyhow::anyhow!("Expected metadata to exist, got error: {e:?}"))?
+            .unwrap_or(default_metadata);
+        let l2_block_source =
+            FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
+        Ok(FuelGasPriceUpdater::new(
+            metadata.into(),
+            l2_block_source,
+            metadata_storage,
+        ))
+    }
 }
