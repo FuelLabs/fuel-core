@@ -47,7 +47,7 @@ pub fn get_synced_algorithm_updater(
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
     block_stream: BoxStream<SharedImportResult>,
-    gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
 ) -> anyhow::Result<
     FuelGasPriceUpdater<
@@ -70,24 +70,28 @@ pub fn get_synced_algorithm_updater(
         l2_block_height: genesis_block_height.into(),
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
-    let mut metadata_storage = StructuredStorage::new(gas_price_db);
 
-    match metadata_height.cmp(&latest_block_height) {
-        Ordering::Equal => {}
-        Ordering::Less => sync_metadata_storage_with_on_chain_storage(
-            &settings,
-            &mut metadata_storage,
-            on_chain_db,
-            metadata_height,
-            latest_block_height,
-            default_metadata.clone(),
-        )?,
-        Ordering::Greater => {
-            todo!()
+    let metadata_storage = match metadata_height.cmp(&latest_block_height) {
+        Ordering::Equal => StructuredStorage::new(gas_price_db),
+        Ordering::Less => {
+            let mut metadata_storage = StructuredStorage::new(gas_price_db);
+            sync_metadata_storage_with_on_chain_storage(
+                &settings,
+                &mut metadata_storage,
+                on_chain_db,
+                metadata_height,
+                latest_block_height,
+                default_metadata.clone(),
+            )?;
+            metadata_storage
         }
-    }
+        Ordering::Greater => {
+            revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
+            StructuredStorage::new(gas_price_db)
+        }
+    };
     let metadata = metadata_storage
-        .get_metadata(&metadata_height.into())
+        .get_metadata(&latest_block_height.into())
         .map_err(|e| anyhow::anyhow!("Expected metadata to exist, got error: {e:?}"))?
         .unwrap_or(default_metadata);
     let l2_block_source =
@@ -121,10 +125,10 @@ fn sync_metadata_storage_with_on_chain_storage(
                 metadata_height,
                 latest_block_height,
                 updater,
+                metadata_storage,
             )?;
         }
     }
-    metadata_storage.set_metadata(inner.clone().into())?;
     Ok(())
 }
 
@@ -134,6 +138,9 @@ fn sync_v0_metadata(
     metadata_height: u32,
     latest_block_height: u32,
     updater: &mut AlgorithmUpdaterV0,
+    metadata_storage: &mut StructuredStorage<
+        Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    >,
 ) -> anyhow::Result<()> {
     for height in (metadata_height + 1)..=latest_block_height {
         let view = on_chain_db.view_at(&height.into())?;
@@ -156,6 +163,23 @@ fn sync_v0_metadata(
         let block_gas_used = mint.mint_amount();
         let block_gas_capacity = params.block_gas_limit.try_into()?;
         updater.update_l2_block_data(height, *block_gas_used, block_gas_capacity)?;
+        let metadata = AlgorithmUpdater::V0(updater.clone()).into();
+        metadata_storage.set_metadata(metadata)?;
+    }
+    Ok(())
+}
+
+fn revert_gas_price_db_to_height(
+    gas_price_db: &mut Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    height: BlockHeight,
+) -> anyhow::Result<()> {
+    if let Some(gas_price_db_height) = gas_price_db.latest_height()? {
+        let gas_price_db_height: u32 = gas_price_db_height.into();
+        let height: u32 = height.into();
+        let diff = gas_price_db_height - height;
+        for _ in 0..diff {
+            gas_price_db.rollback_last_block()?;
+        }
     }
     Ok(())
 }
