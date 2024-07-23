@@ -31,7 +31,7 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
         Some(BlockHeight::new(HEIGHTS))
     );
     for _ in 0..HEIGHTS {
-        let _ = database.off_chain().rollback_last_block();
+        database.off_chain().rollback_last_block()?;
     }
     assert!(database.on_chain().latest_height()? > database.off_chain().latest_height()?);
     let temp_dir = driver.kill().await;
@@ -91,8 +91,8 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead(
     );
     let diff = height - lower_height;
     for _ in 0..diff {
-        let _ = database.on_chain().rollback_last_block()?;
-        let _ = database.off_chain().rollback_last_block()?;
+        database.on_chain().rollback_last_block()?;
+        database.off_chain().rollback_last_block()?;
     }
     assert!(database.on_chain().latest_height()? < database.gas_price().latest_height()?);
     let temp_dir = driver.kill().await;
