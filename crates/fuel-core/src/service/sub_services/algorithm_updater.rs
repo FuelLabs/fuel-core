@@ -42,6 +42,11 @@ use fuel_core_types::{
 };
 use std::cmp::Ordering;
 
+type Updater = FuelGasPriceUpdater<
+    FuelL2BlockSource<ConsensusParametersProvider>,
+    StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>,
+>;
+
 pub fn get_synced_gas_price_updater(
     config: &Config,
     genesis_block_height: BlockHeight,
@@ -49,12 +54,7 @@ pub fn get_synced_gas_price_updater(
     block_stream: BoxStream<SharedImportResult>,
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
-) -> anyhow::Result<
-    FuelGasPriceUpdater<
-        FuelL2BlockSource<ConsensusParametersProvider>,
-        StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>,
-    >,
-> {
+) -> anyhow::Result<Updater> {
     let metadata_height: u32 = gas_price_db
         .latest_height()?
         .unwrap_or(genesis_block_height)
@@ -164,7 +164,8 @@ fn sync_v0_metadata(
         Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     >,
 ) -> anyhow::Result<()> {
-    for height in (metadata_height + 1)..=latest_block_height {
+    let first = metadata_height.saturating_add(1);
+    for height in first..=latest_block_height {
         let view = on_chain_db.view_at(&height.into())?;
         let block = view
             .storage::<FuelBlocks>()
@@ -177,7 +178,7 @@ fn sync_v0_metadata(
         let params = settings.settings(&param_version)?;
         let mint = view
             .storage::<Transactions>()
-            .get(&last_tx_id)?
+            .get(last_tx_id)?
             .ok_or(anyhow::anyhow!("Expected tx to exist for id: {last_tx_id}"))?
             .as_mint()
             .ok_or(anyhow::anyhow!("Expected tx to be a mint"))?
@@ -198,7 +199,7 @@ fn revert_gas_price_db_to_height(
     if let Some(gas_price_db_height) = gas_price_db.latest_height()? {
         let gas_price_db_height: u32 = gas_price_db_height.into();
         let height: u32 = height.into();
-        let diff = gas_price_db_height - height;
+        let diff = gas_price_db_height.saturating_sub(height);
         for _ in 0..diff {
             gas_price_db.rollback_last_block()?;
         }
