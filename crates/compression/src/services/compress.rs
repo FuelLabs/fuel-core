@@ -3,7 +3,6 @@ use fuel_core_types::fuel_compression::{
     tables,
     Key,
     KeyPerTable,
-    RawKey,
     Table,
 };
 use tokio::sync::mpsc;
@@ -20,14 +19,9 @@ use crate::{
     Header,
 };
 
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_compression::{
-        Compactable,
-        CompactionContext,
-    },
-    fuel_tx::Transaction,
-    tai64::Tai64,
+use fuel_core_types::fuel_compression::{
+    Compactable,
+    CompactionContext,
 };
 
 /// Task handle

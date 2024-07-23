@@ -8,11 +8,7 @@ use tokio::sync::mpsc;
 
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            BlockV1,
-            PartialFuelBlock,
-        },
+        block::PartialFuelBlock,
         header::{
             ApplicationHeader,
             ConsensusHeader,
@@ -74,7 +70,7 @@ async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskRequest>)
     }
 }
 
-fn decompress(
+pub fn decompress(
     db: &mut RocksDb,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {
@@ -88,6 +84,8 @@ fn decompress(
     // if *block.header.height != db.next_block_height()? {
     //     return Err(DecompressError::NotLatest);
     // }
+
+    compressed.registrations.write_to_db(db)?;
 
     let ctx = Ctx { db };
 
@@ -128,34 +126,34 @@ impl DecompactionContext for Ctx<'_> {
         &self,
         key: Key<tables::AssetId>,
     ) -> anyhow::Result<<tables::AssetId as Table>::Type> {
-        todo!()
+        self.db.read(key)
     }
 
     fn read_Address(
         &self,
         key: Key<tables::Address>,
     ) -> anyhow::Result<<tables::Address as Table>::Type> {
-        todo!()
+        self.db.read(key)
     }
 
     fn read_ContractId(
         &self,
         key: Key<tables::ContractId>,
     ) -> anyhow::Result<<tables::ContractId as Table>::Type> {
-        todo!()
+        self.db.read(key)
     }
 
     fn read_ScriptCode(
         &self,
         key: Key<tables::ScriptCode>,
     ) -> anyhow::Result<<tables::ScriptCode as Table>::Type> {
-        todo!()
+        self.db.read(key)
     }
 
     fn read_Witness(
         &self,
         key: Key<tables::Witness>,
     ) -> anyhow::Result<<tables::Witness as Table>::Type> {
-        todo!()
+        self.db.read(key)
     }
 }

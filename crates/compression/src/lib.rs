@@ -20,7 +20,10 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx::CompactTransaction,
+    fuel_tx::{
+        CompactTransaction,
+        MessageId,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -56,7 +59,10 @@ mod tests {
     use db::RocksDb;
     use fuel_core_types::{
         blockchain::{
-            block::Block,
+            block::{
+                Block,
+                PartialFuelBlock,
+            },
             header::{
                 ApplicationHeader,
                 ConsensusHeader,
@@ -144,5 +150,55 @@ mod tests {
             sizes[1] == sizes[2],
             "Size must be constant after first block"
         );
+    }
+
+    #[test]
+    fn compress_decompress_roundtrip() {
+        let tx = Transaction::default_test_tx();
+
+        let tmpdir = TempDir::new().unwrap();
+        let mut db = RocksDb::open(tmpdir.path()).unwrap();
+
+        let original_blocks: [Block; 3] = array::from_fn(|h| {
+            Block::new(
+                PartialBlockHeader {
+                    application: ApplicationHeader {
+                        da_height: DaBlockHeight::default(),
+                        consensus_parameters_version: 4,
+                        state_transition_bytecode_version: 5,
+                        generated: Empty,
+                    },
+                    consensus: ConsensusHeader {
+                        prev_root: Bytes32::default(),
+                        height: (h as u32).into(),
+                        time: Tai64::UNIX_EPOCH,
+                        generated: Empty,
+                    },
+                },
+                vec![tx.clone()],
+                &[],
+                Bytes32::default(),
+            )
+            .expect("Invalid block header")
+        });
+
+        let compressed_bytes: [Vec<u8>; 3] = original_blocks
+            .clone()
+            .map(|block| services::compress::compress(&mut db, block).unwrap());
+
+        drop(tmpdir);
+        let tmpdir2 = TempDir::new().unwrap();
+        let mut db = RocksDb::open(tmpdir2.path()).unwrap();
+
+        let decompressed_blocks: [PartialFuelBlock; 3] = array::from_fn(|h| {
+            services::decompress::decompress(&mut db, compressed_bytes[h].clone())
+                .expect("Decompression failed")
+        });
+
+        for (original, decompressed) in
+            original_blocks.iter().zip(decompressed_blocks.iter())
+        {
+            assert_eq!(PartialFuelBlock::from(original.clone()), *decompressed);
+        }
     }
 }

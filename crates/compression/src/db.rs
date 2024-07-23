@@ -68,12 +68,24 @@ impl RocksDb {
         }))
     }
 
-    fn read<T: Table>(&self, key: Key<T>) -> anyhow::Result<T::Type> {
-        assert_ne!(key, Key::DEFAULT_VALUE);
+    pub fn read<T: Table>(&self, key: Key<T>) -> anyhow::Result<T::Type> {
+        if key == Key::DEFAULT_VALUE {
+            return Ok(T::Type::default());
+        }
 
-        let mut k = [0u8; 3];
-        postcard::to_slice(&key, &mut k).expect("Always fits");
-        let cf = self.db.cf_handle(T::NAME).unwrap();
+        let bare_key = postcard::to_stdvec(&key).expect("Never fails");
+
+        let mut table_suffix: Vec<u8> = T::NAME.bytes().collect();
+        table_suffix.push(0);
+
+        // Write new value
+        let k: Vec<u8> = table_suffix
+            .iter()
+            .chain(bare_key.iter())
+            .copied()
+            .collect();
+
+        let cf = self.db.cf_handle("temporal").unwrap();
         let Some(bytes) = self.db.get_cf(&cf, &k)? else {
             return Ok(T::Type::default());
         };
