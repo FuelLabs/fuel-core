@@ -2773,6 +2773,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types",
@@ -3393,6 +3394,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3412,6 +3414,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3431,6 +3434,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3444,10 +3448,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 
 [[package]]
 name = "fuel-tx"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -3469,6 +3475,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3479,6 +3486,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.55.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/implement-for-merkle-root-for-reference#cea372731e06365c9ee2d6901cf0dbccef4c4fc6"
 dependencies = [
  "anyhow",
  "async-trait",

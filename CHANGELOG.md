@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
 
 ### Breaking
+
+#### Changed
 - [2025](https://github.com/FuelLabs/fuel-core/pull/2025): Add new V0 algorithm for gas price to services.
     This change includes new flags for the CLI:
         - "starting-gas-price" - the starting gas price for the gas price algorithm
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
         - "gas-price-threshold-percent" - the threshold percent for determining if the gas price will be increase or decreased
     And the following CLI flags are serving a new purpose
         - "min-gas-price" - the minimum gas price that the gas price algorithm will return
+- [2048](https://github.com/FuelLabs/fuel-core/pull/2048): Disable SMT for `ContractsAssets` and `ContractsState` for the production mode of the `fuel-core`. The SMT still is used in benchmarks and tests.
+
 ## [Version 0.31.0]
 
 ### Added
