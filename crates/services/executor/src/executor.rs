@@ -9,7 +9,6 @@ use crate::{
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     tables::{
         Coins,
         ConsensusParametersVersions,
@@ -1754,8 +1753,7 @@ where
                     ref contract_id,
                     ..
                 }) => {
-                    let contract =
-                        ContractRef::new(StructuredStorage::new(db), *contract_id);
+                    let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
                         contract.validated_utxo(self.options.extra_tx_checks)?;
                     *utxo_id = *utxo_info.utxo_id();
@@ -1799,7 +1797,7 @@ where
                         })
                     };
 
-                let contract = ContractRef::new(StructuredStorage::new(db), *contract_id);
+                let contract = ContractRef::new(db, *contract_id);
                 contract_output.balance_root = contract.balance_root()?;
                 contract_output.state_root = contract.state_root()?;
             }

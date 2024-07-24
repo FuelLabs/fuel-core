@@ -1,15 +1,10 @@
 use core::fmt;
 use fuel_core_storage::{
     not_found,
-    tables::{
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsState,
-    },
+    tables::ContractsLatestUtxo,
     Error as StorageError,
     Mappable,
     MerkleRoot,
-    MerkleRootStorage,
     StorageAsRef,
     StorageInspect,
 };
@@ -25,6 +20,12 @@ use fuel_core_types::{
     },
 };
 use std::borrow::Cow;
+
+#[cfg(feature = "smt")]
+pub use smt::*;
+
+#[cfg(not(feature = "smt"))]
+pub use not_smt::*;
 
 /// The wrapper around `contract_id` to simplify work with `Contract` in the database.
 pub struct ContractRef<Database> {
@@ -87,49 +88,101 @@ where
     }
 }
 
-impl<Database> ContractRef<Database>
-where
-    Database: MerkleRootStorage<ContractId, ContractsAssets>,
-{
-    pub fn balance_root(
-        &self,
-    ) -> Result<Bytes32, <Database as StorageInspect<ContractsAssets>>::Error> {
-        self.database.root(&self.contract_id).map(Into::into)
+#[cfg(feature = "smt")]
+mod smt {
+    use super::*;
+    use fuel_core_storage::{
+        tables::{
+            ContractsAssets,
+            ContractsState,
+        },
+        MerkleRootStorage,
+    };
+
+    impl<Database> ContractRef<Database>
+    where
+        Database: ContractStorageTrait,
+    {
+        pub fn balance_root(
+            &self,
+        ) -> Result<Bytes32, <Database as StorageInspect<ContractsAssets>>::Error>
+        {
+            <Database as MerkleRootStorage<ContractId, ContractsAssets>>::root(
+                &self.database,
+                &self.contract_id,
+            )
+            .map(Into::into)
+        }
+    }
+
+    impl<Database> ContractRef<Database>
+    where
+        Database: ContractStorageTrait,
+    {
+        pub fn state_root(
+            &self,
+        ) -> Result<Bytes32, <Database as StorageInspect<ContractsState>>::Error>
+        {
+            <Database as MerkleRootStorage<ContractId, ContractsState>>::root(
+                &self.database,
+                &self.contract_id,
+            )
+            .map(Into::into)
+        }
+    }
+
+    pub trait ContractStorageTrait:
+        StorageInspect<ContractsLatestUtxo, Error = Self::InnerError>
+        + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
+        + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
+    {
+        type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
+    }
+
+    impl<D> ContractStorageTrait for D
+    where
+        D: StorageInspect<ContractsLatestUtxo, Error = StorageError>
+            + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+            + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>,
+    {
+        type InnerError = StorageError;
     }
 }
 
-impl<Database> ContractRef<Database>
-where
-    Database: MerkleRootStorage<ContractId, ContractsState>,
-{
-    pub fn state_root(
-        &self,
-    ) -> Result<Bytes32, <Database as StorageInspect<ContractsState>>::Error> {
-        self.database.root(&self.contract_id).map(Into::into)
+#[cfg(not(feature = "smt"))]
+mod not_smt {
+    use super::*;
+    use fuel_core_storage::Error as StorageError;
+
+    impl<Database> ContractRef<Database> {
+        pub fn balance_root(&self) -> Result<Bytes32, StorageError> {
+            Ok(Bytes32::zeroed())
+        }
     }
-}
 
-pub trait ContractStorageTrait:
-    StorageInspect<ContractsLatestUtxo, Error = Self::InnerError>
-    + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
-    + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
-{
-    type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
-}
+    impl<Database> ContractRef<Database> {
+        pub fn state_root(&self) -> Result<Bytes32, StorageError> {
+            Ok(Bytes32::zeroed())
+        }
+    }
 
-impl<D> ContractStorageTrait for D
-where
-    D: StorageInspect<ContractsLatestUtxo, Error = StorageError>
-        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
-        + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>,
-{
-    type InnerError = StorageError;
+    pub trait ContractStorageTrait:
+        StorageInspect<ContractsLatestUtxo, Error = Self::InnerError>
+    {
+        type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
+    }
+
+    impl<D> ContractStorageTrait for D
+    where
+        D: StorageInspect<ContractsLatestUtxo, Error = StorageError>,
+    {
+        type InnerError = StorageError;
+    }
 }
 
 impl<'a, Database> ContractRef<&'a Database>
 where
-    Database: ContractStorageTrait,
-    anyhow::Error: From<Database::InnerError>,
+    &'a Database: ContractStorageTrait<InnerError = StorageError>,
 {
     /// Returns the state root of the whole contract.
     pub fn root(&self) -> anyhow::Result<MerkleRoot> {
@@ -142,15 +195,9 @@ where
             .into_owned()
             .utxo_id();
 
-        let state_root = self
-            .database
-            .storage::<ContractsState>()
-            .root(&contract_id)?;
+        let state_root = self.state_root()?;
 
-        let balance_root = self
-            .database
-            .storage::<ContractsAssets>()
-            .root(&contract_id)?;
+        let balance_root = self.balance_root()?;
 
         let contract_hash = *Hasher::default()
             // `ContractId` already is based on contract's code and salt so we don't need it.

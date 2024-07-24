@@ -23,6 +23,8 @@ clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
+  "smt",
+  "wasm-executor",
   "test-helpers",
 ] }
 fuel-core-benches = { path = "../benches" }
@@ -42,9 +44,7 @@ fuel-core-txpool = { path = "../crates/services/txpool", features = [
   "test-helpers",
 ] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
-fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor", features = [
-  "wasm-executor",
-] }
+fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor" }
 futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
