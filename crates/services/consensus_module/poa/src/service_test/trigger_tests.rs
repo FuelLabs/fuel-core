@@ -161,7 +161,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a the next block is produced
+    // Pass time until the next block is produced
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure it's produced
@@ -178,7 +178,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a the next block is produced
+    // Pass time until the next block is produced
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure only one block is produced

@@ -10,7 +10,7 @@ Ethereum blocks are considered final after two epochs. Each epoch contains 32 sl
 
 Second finality that we have is related to fuel block attestation time limit, how long are we going to wait until challenge comes. It should be at least longer than ethereum finality. Not relevant for first version.
 
-* Problem: Validator deposit to ethereum gets reverted by block reorg. (Eth clients usually have priority for reverted txs but this does not mean it cant happen). It can potentially rearrange order of transactions
+* Problem: Validator deposit to ethereum gets reverted by block reorg. (Eth clients usually have priority for reverted txs but this does not mean it can't happen). It can potentially rearrange order of transactions
 * Solution: Introduce sliding window, only deposits that are at least eth finality long can be finalized and included in validators leader selection.
 
 * Problem: How to choose when bridge message event gets enabled for use in fuel, at what exact fuel block does this happen? (Note that we have sliding window)
