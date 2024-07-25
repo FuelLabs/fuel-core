@@ -90,7 +90,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SharedGasPriceAlgo<A>(Arc<RwLock<Option<A>>>);
 
 impl<A> Clone for SharedGasPriceAlgo<A> {
