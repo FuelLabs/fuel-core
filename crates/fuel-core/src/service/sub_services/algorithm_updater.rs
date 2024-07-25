@@ -13,19 +13,28 @@ use crate::{
     },
 };
 
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::{
-        FuelL2BlockSource,
-        GasPriceSettingsProvider,
+use fuel_core_gas_price_service::{
+    fuel_gas_price_updater::{
+        fuel_core_storage_adapter::{
+            FuelL2BlockSource,
+            GasPriceSettingsProvider,
+        },
+        Algorithm,
+        AlgorithmUpdater,
+        AlgorithmUpdaterV0,
+        FuelGasPriceUpdater,
+        MetadataStorage,
+        UpdaterMetadata,
+        V0Metadata,
     },
-    AlgorithmUpdater,
-    AlgorithmUpdaterV0,
-    FuelGasPriceUpdater,
-    MetadataStorage,
-    UpdaterMetadata,
-    V0Metadata,
+    GasPriceService,
+    SharedGasPriceAlgo,
 };
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::{
+    stream::BoxStream,
+    RunnableService,
+    StateWatcher,
+};
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
     tables::{
@@ -43,16 +52,95 @@ use fuel_core_types::{
 
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
-    StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>,
+    MetadataStorageAdapter,
 >;
+
+pub struct InitializeTask {
+    pub config: Config,
+    pub genesis_block_height: BlockHeight,
+    pub settings: ConsensusParametersProvider,
+    pub gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    pub on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    pub block_stream: BoxStream<SharedImportResult>,
+    pub shared_algo: SharedGasPriceAlgo<Algorithm>,
+}
+
+type MetadataStorageAdapter =
+    StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>;
+
+type Task = GasPriceService<
+    Algorithm,
+    FuelGasPriceUpdater<
+        FuelL2BlockSource<ConsensusParametersProvider>,
+        MetadataStorageAdapter,
+    >,
+>;
+
+impl InitializeTask {
+    pub fn new(
+        config: Config,
+        genesis_block_height: BlockHeight,
+        settings: ConsensusParametersProvider,
+        block_stream: BoxStream<SharedImportResult>,
+        gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+        on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    ) -> anyhow::Result<Self> {
+        let shared_algo = SharedGasPriceAlgo::new();
+        let task = Self {
+            config,
+            genesis_block_height,
+            settings,
+            gas_price_db,
+            on_chain_db,
+            block_stream,
+            shared_algo,
+        };
+        Ok(task)
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableService for InitializeTask {
+    const NAME: &'static str = "GasPriceUpdater";
+    type SharedData = SharedGasPriceAlgo<Algorithm>;
+    type Task = Task;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {
+        self.shared_algo.clone()
+    }
+
+    async fn into_task(
+        self,
+        _state_watcher: &StateWatcher,
+        _params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        let starting_height = self
+            .on_chain_db
+            .latest_height()?
+            .unwrap_or(self.genesis_block_height);
+
+        let updater = get_synced_gas_price_updater(
+            &self.config,
+            self.genesis_block_height,
+            self.settings,
+            self.gas_price_db,
+            self.on_chain_db,
+            self.block_stream,
+        )?;
+        let inner_service =
+            GasPriceService::new(starting_height, updater, self.shared_algo).await;
+        Ok(inner_service)
+    }
+}
 
 pub fn get_synced_gas_price_updater(
     config: &Config,
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
-    block_stream: BoxStream<SharedImportResult>,
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    block_stream: BoxStream<SharedImportResult>,
 ) -> anyhow::Result<Updater> {
     let mut metadata_height: u32 = gas_price_db
         .latest_height()?

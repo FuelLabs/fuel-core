@@ -28,7 +28,6 @@ use crate::{
             TxPoolAdapter,
             VerifierAdapter,
         },
-        sub_services::algorithm_updater::get_synced_gas_price_updater,
         Config,
         SharedState,
         SubServices,
@@ -44,6 +43,10 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     V0Metadata,
 };
 use fuel_core_poa::Trigger;
+use fuel_core_services::{
+    RunnableService,
+    ServiceRunner,
+};
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
@@ -186,17 +189,26 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    let update_algo = get_synced_gas_price_updater(
-        config,
+    // let update_algo = get_synced_gas_price_updater(
+    //     config,
+    //     genesis_block_height,
+    //     settings,
+    //     block_stream,
+    //     database.gas_price().clone(),
+    //     last_height,
+    // )?;
+    // let gas_price_service =
+    //     fuel_core_gas_price_service::new_service(last_height, update_algo)?;
+    let gas_price_init = algorithm_updater::InitializeTask::new(
+        config.clone(),
         genesis_block_height,
         settings,
         block_stream,
         database.gas_price().clone(),
         database.on_chain().clone(),
     )?;
-    let gas_price_service =
-        fuel_core_gas_price_service::new_service(last_height, update_algo)?;
-    let next_algo = gas_price_service.shared.clone();
+    let next_algo = gas_price_init.shared_data();
+    let gas_price_service = ServiceRunner::new(gas_price_init);
 
     let gas_price_provider = FuelGasPriceProvider::new(next_algo);
     let txpool = fuel_core_txpool::new_service(

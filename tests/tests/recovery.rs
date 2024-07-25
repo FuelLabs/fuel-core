@@ -128,7 +128,7 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead(
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(1))]
+    #![proptest_config(ProptestConfig::with_cases(10))]
     #[test]
     fn gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead((height, lower_height) in height_and_lower_height()) {
         let rt = multithreaded_runtime();
@@ -137,7 +137,6 @@ proptest! {
         ).unwrap()
     }
 }
-
 async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(
     height: u32,
     lower_height: u32,
