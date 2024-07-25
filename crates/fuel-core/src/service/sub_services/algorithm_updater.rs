@@ -40,7 +40,6 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
-use std::cmp::Ordering;
 
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
@@ -55,7 +54,7 @@ pub fn get_synced_gas_price_updater(
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
 ) -> anyhow::Result<Updater> {
-    let metadata_height: u32 = gas_price_db
+    let mut metadata_height: u32 = gas_price_db
         .latest_height()?
         .unwrap_or(genesis_block_height)
         .into();
@@ -71,11 +70,20 @@ pub fn get_synced_gas_price_updater(
         l2_block_height: genesis_block_height.into(),
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
-    if BlockHeight::from(latest_block_height) == genesis_block_height {
+
+    if metadata_height > latest_block_height {
         revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
-        let metadata_storage = StructuredStorage::new(gas_price_db);
-        let l2_block_source =
-            FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
+        metadata_height = gas_price_db
+            .latest_height()?
+            .unwrap_or(genesis_block_height)
+            .into();
+    }
+
+    let mut metadata_storage = StructuredStorage::new(gas_price_db);
+    let l2_block_source =
+        FuelL2BlockSource::new(genesis_block_height, settings.clone(), block_stream);
+
+    if BlockHeight::from(latest_block_height) == genesis_block_height {
         let updater = FuelGasPriceUpdater::new(
             genesis_metadata.into(),
             l2_block_source,
@@ -83,32 +91,17 @@ pub fn get_synced_gas_price_updater(
         );
         Ok(updater)
     } else {
-        let metadata_storage = match metadata_height.cmp(&latest_block_height) {
-            Ordering::Equal => StructuredStorage::new(gas_price_db),
-            Ordering::Less => {
-                let mut metadata_storage = StructuredStorage::new(gas_price_db);
-                sync_metadata_storage_with_on_chain_storage(
-                    &settings,
-                    &mut metadata_storage,
-                    on_chain_db,
-                    metadata_height,
-                    latest_block_height,
-                    genesis_metadata,
-                    genesis_block_height.into(),
-                )?;
-                metadata_storage
-            }
-            Ordering::Greater => {
-                revert_gas_price_db_to_height(
-                    &mut gas_price_db,
-                    latest_block_height.into(),
-                )?;
-                StructuredStorage::new(gas_price_db)
-            }
-        };
-
-        let l2_block_source =
-            FuelL2BlockSource::new(genesis_block_height, settings, block_stream);
+        if latest_block_height > metadata_height {
+            sync_metadata_storage_with_on_chain_storage(
+                &settings,
+                &mut metadata_storage,
+                on_chain_db,
+                metadata_height,
+                latest_block_height,
+                genesis_metadata,
+                genesis_block_height.into(),
+            )?;
+        }
 
         FuelGasPriceUpdater::init(
             latest_block_height.into(),
