@@ -2561,13 +2561,38 @@ mod tests {
             create_executor(Default::default(), Default::default())
                 .produce_and_commit(block)
                 .expect("block execution failed unexpectedly");
-        create_executor(Default::default(), Default::default())
+        let result = create_executor(Default::default(), Default::default())
             .validate_and_commit(&block)
             .expect("block validation failed unexpectedly");
 
         // Then
-        let empty_root = empty_sum_sha256();
-        assert_ne!(block.header().message_outbox_root.as_ref(), empty_root)
+        let Some(Receipt::MessageOut {
+            sender,
+            recipient,
+            amount,
+            nonce,
+            data,
+            ..
+        }) = result.tx_status[0].result.receipts().get(0).cloned()
+        else {
+            panic!("Expected a MessageOut receipt");
+        };
+
+        // Reconstruct merkle message outbox merkle root  and see that it matches
+        let mut mt = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
+        mt.push(
+            &Message::V1(MessageV1 {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                data: data.unwrap_or_default(),
+                da_height: 1u64.into(),
+            })
+            .message_id()
+            .to_bytes(),
+        );
+        assert_eq!(block.header().message_outbox_root.as_ref(), mt.root());
     }
 
     #[test]
