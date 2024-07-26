@@ -2573,7 +2573,7 @@ mod tests {
             nonce,
             data,
             ..
-        }) = result.tx_status[0].result.receipts().get(0).cloned()
+        }) = result.tx_status[0].result.receipts().first().cloned()
         else {
             panic!("Expected a MessageOut receipt");
         };
