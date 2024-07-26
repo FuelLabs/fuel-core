@@ -11,7 +11,10 @@ async fn estimate_gas_price__happy_path() {
 
     // when
     let expected_price = algo.worst_case_gas_price(next_height);
-    let actual_price = gas_price_provider.worst_case_gas_price(next_height).await;
+    let actual_price = gas_price_provider
+        .worst_case_gas_price(next_height)
+        .await
+        .unwrap();
 
     // then
     assert_eq!(expected_price, actual_price);

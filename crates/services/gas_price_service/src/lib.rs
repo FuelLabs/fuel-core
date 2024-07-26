@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
-    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -18,18 +17,6 @@ use tokio::sync::RwLock;
 pub mod static_updater;
 
 pub mod fuel_gas_price_updater;
-
-pub fn new_service<A, U>(
-    current_fuel_block_height: BlockHeight,
-    update_algo: U,
-) -> anyhow::Result<ServiceRunner<GasPriceService<A, U>>>
-where
-    U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
-    A: Send + Sync,
-{
-    let service = GasPriceService::new(current_fuel_block_height, update_algo);
-    Ok(ServiceRunner::new(service))
-}
 
 /// The service that updates the gas price algorithm.
 pub struct GasPriceService<A, U> {
@@ -44,11 +31,15 @@ where
     U: UpdateAlgorithm<Algorithm = A>,
     A: Send + Sync,
 {
-    pub fn new(starting_block_height: BlockHeight, update_algorithm: U) -> Self {
+    pub async fn new(
+        starting_block_height: BlockHeight,
+        update_algorithm: U,
+        mut shared_algo: SharedGasPriceAlgo<A>,
+    ) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
-        let next_block_algorithm = SharedGasPriceAlgo::new(algorithm);
+        shared_algo.update(algorithm).await;
         Self {
-            next_block_algorithm,
+            next_block_algorithm: shared_algo,
             update_algorithm,
         }
     }
@@ -86,8 +77,8 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct SharedGasPriceAlgo<A>(Arc<RwLock<A>>);
+#[derive(Debug, Default)]
+pub struct SharedGasPriceAlgo<A>(Arc<RwLock<Option<A>>>);
 
 impl<A> Clone for SharedGasPriceAlgo<A> {
     fn clone(&self) -> Self {
@@ -99,12 +90,17 @@ impl<A> SharedGasPriceAlgo<A>
 where
     A: Send + Sync,
 {
-    pub fn new(algo: A) -> Self {
-        Self(Arc::new(RwLock::new(algo)))
+    pub fn new() -> Self {
+        Self(Arc::new(RwLock::new(None)))
     }
+
+    pub fn new_with_algorithm(algorithm: A) -> Self {
+        Self(Arc::new(RwLock::new(Some(algorithm))))
+    }
+
     pub async fn update(&mut self, new_algo: A) {
         let mut write_lock = self.0.write().await;
-        *write_lock = new_algo;
+        *write_lock = Some(new_algo);
     }
 }
 
@@ -112,12 +108,16 @@ impl<A> SharedGasPriceAlgo<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    pub async fn next_gas_price(&self) -> u64 {
-        self.0.read().await.next_gas_price()
+    pub async fn next_gas_price(&self) -> Option<u64> {
+        self.0.read().await.as_ref().map(|a| a.next_gas_price())
     }
 
-    pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
-        self.0.read().await.worst_case_gas_price(block_height)
+    pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> Option<u64> {
+        self.0
+            .read()
+            .await
+            .as_ref()
+            .map(|a| a.worst_case_gas_price(block_height))
     }
 }
 
@@ -181,6 +181,7 @@ mod tests {
     use crate::{
         GasPriceAlgorithm,
         GasPriceService,
+        SharedGasPriceAlgo,
         UpdateAlgorithm,
     };
     use fuel_core_services::{
@@ -227,15 +228,14 @@ mod tests {
     }
     #[tokio::test]
     async fn run__updates_gas_price() {
-        let _ = tracing_subscriber::fmt::try_init();
-
         // given
         let (price_sender, price_receiver) = mpsc::channel(1);
         let updater = TestAlgorithmUpdater {
             start: TestAlgorithm { price: 0 },
             price_source: price_receiver,
         };
-        let service = GasPriceService::new(0.into(), updater);
+        let shared_algo = SharedGasPriceAlgo::new();
+        let service = GasPriceService::new(0.into(), updater, shared_algo).await;
         let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
         let task = service.into_task(&watcher, ()).await.unwrap();
@@ -248,7 +248,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.next_gas_price().await;
+        let actual_price = read_algo.next_gas_price().await.unwrap();
         assert_eq!(expected_price, actual_price);
     }
 }
