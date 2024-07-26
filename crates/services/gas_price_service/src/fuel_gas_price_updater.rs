@@ -151,7 +151,7 @@ pub struct V0Metadata {
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
     /// based on the fullness of the last L2 block
     pub exec_gas_price_change_percent: u64,
-    /// The height of the next L2 block
+    /// The height for which the `new_exec_price` is calculated, which should be the _next_ block
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
     /// This is a percentage of the total capacity of the L2 block
@@ -187,14 +187,16 @@ where
     Metadata: MetadataStorage,
 {
     pub fn init(
-        init_metadata: UpdaterMetadata,
+        target_block_height: BlockHeight,
         l2_block_source: L2,
         metadata_storage: Metadata,
     ) -> Result<Self> {
-        let target_block_height = init_metadata.l2_block_height();
         let inner = metadata_storage
             .get_metadata(&target_block_height)?
-            .unwrap_or(init_metadata)
+            .ok_or(Error::CouldNotInitUpdater(anyhow::anyhow!(
+                "No metadata found for block height: {:?}",
+                target_block_height
+            )))?
             .into();
         let updater = Self {
             inner,
