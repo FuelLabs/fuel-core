@@ -189,16 +189,6 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    // let update_algo = get_synced_gas_price_updater(
-    //     config,
-    //     genesis_block_height,
-    //     settings,
-    //     block_stream,
-    //     database.gas_price().clone(),
-    //     last_height,
-    // )?;
-    // let gas_price_service =
-    //     fuel_core_gas_price_service::new_service(last_height, update_algo)?;
     let gas_price_init = algorithm_updater::InitializeTask::new(
         config.clone(),
         genesis_block_height,

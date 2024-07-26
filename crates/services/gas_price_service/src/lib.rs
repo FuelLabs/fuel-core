@@ -18,19 +18,6 @@ pub mod static_updater;
 
 pub mod fuel_gas_price_updater;
 
-// pub fn new_service<A, U>(
-//     current_fuel_block_height: BlockHeight,
-//     update_algo: U,
-// ) -> anyhow::Result<ServiceRunner<GasPriceService<A, U>>>
-// where
-//     U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
-//     A: Send + Sync,
-// {
-//     let shared_algo
-//     let service = GasPriceService::new(current_fuel_block_height, update_algo, SharedGasPriceAlgo::new(update_algo.start(current_fuel_block_height));
-//     Ok(ServiceRunner::new(service))
-// }
-
 /// The service that updates the gas price algorithm.
 pub struct GasPriceService<A, U> {
     /// The algorithm that can be used in the next block
