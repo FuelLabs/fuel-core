@@ -64,7 +64,7 @@ pub enum Column {
     /// Table for genesis state import progress tracking.
     GenesisMetadata = 20,
 
-    /// See [`Blobs`](crate::tables::Blobs)
+    /// See [`Blobs`](fuel_vm_private::storage::BlobData)
     Blobs = 21,
 }
 
