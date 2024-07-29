@@ -119,7 +119,7 @@
     }
   ],
   "messages": [],
-  "blobsGasCostsValuesV4": [],
+  "blobs": [],
   "contracts": [
     {
       "contract_id": "7777777777777777777777777777777777777777777777777777777777777777",
