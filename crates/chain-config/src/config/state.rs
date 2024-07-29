@@ -146,6 +146,7 @@ impl StateConfigBuilder {
     pub fn merge(&mut self, builder: Self) -> &mut Self {
         self.coins.extend(builder.coins);
         self.messages.extend(builder.messages);
+        self.blobs.extend(builder.blobs);
         self.contract_state.extend(builder.contract_state);
         self.contract_balance.extend(builder.contract_balance);
         self.contract_code.extend(builder.contract_code);
