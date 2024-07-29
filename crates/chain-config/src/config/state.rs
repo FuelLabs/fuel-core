@@ -124,6 +124,7 @@ pub struct StateConfig {
     /// Messages from Layer 1
     pub messages: Vec<MessageConfig>,
     /// Blobs
+    #[serde(default)]
     pub blobs: Vec<BlobConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
