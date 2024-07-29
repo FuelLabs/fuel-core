@@ -284,8 +284,8 @@ pub struct GasCosts {
     pub xori: U64,
 
     pub aloc_dependent_cost: DependentCost,
-    pub bldd: Option<DependentCost>,
     pub bsiz: Option<DependentCost>,
+    pub bldd: Option<DependentCost>,
     pub cfe: DependentCost,
     pub cfei_dependent_cost: DependentCost,
     pub call: DependentCost,

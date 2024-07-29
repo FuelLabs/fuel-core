@@ -338,7 +338,10 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
     else {
         panic!("Expected transaction to be squeezed out")
     };
-    assert!(reason.contains("Transaction id was already used"));
+    assert!(
+        reason.contains("Transaction id was already used"),
+        "Unexpected message {reason:?}"
+    );
 
     Ok(())
 }

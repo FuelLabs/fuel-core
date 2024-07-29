@@ -132,13 +132,13 @@
               "units_per_gas": 15
             }
           },
-          "bldd": {
+          "bsiz": {
             "LightOperation": {
-              "base": 15,
-              "units_per_gas": 272
+              "base": 17,
+              "units_per_gas": 790
             }
           },
-          "bsiz": {
+          "bldd": {
             "LightOperation": {
               "base": 15,
               "units_per_gas": 272
@@ -182,7 +182,7 @@
           },
           "ed19": {
             "LightOperation": {
-              "base": 300,
+              "base": 3000,
               "units_per_gas": 214
             }
           },
