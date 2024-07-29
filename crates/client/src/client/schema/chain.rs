@@ -211,7 +211,6 @@ pub struct GasCosts {
     pub divi: U64,
     pub eck1: U64,
     pub ecr1: U64,
-    pub ed19: U64,
     pub eq: U64,
     pub exp: U64,
     pub expi: U64,
@@ -285,12 +284,15 @@ pub struct GasCosts {
     pub xori: U64,
 
     pub aloc_dependent_cost: DependentCost,
+    pub bldd: DependentCost,
+    pub bsiz: DependentCost,
     pub cfe: DependentCost,
     pub cfei_dependent_cost: DependentCost,
     pub call: DependentCost,
     pub ccp: DependentCost,
     pub croo: DependentCost,
     pub csiz: DependentCost,
+    pub ed19: DependentCost,
     pub k256: DependentCost,
     pub ldc: DependentCost,
     pub logd: DependentCost,
@@ -325,7 +327,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
     fn try_from(value: GasCosts) -> Result<Self, Self::Error> {
         match value.version {
             GasCostsVersion::V1 => {
-                let values = fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV3 {
+                let values = fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV4 {
                     add: value.add.into(),
                     addi: value.addi.into(),
                     and: value.and.into(),
@@ -334,6 +336,8 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     bhei: value.bhei.into(),
                     bhsh: value.bhsh.into(),
                     burn: value.burn.into(),
+                    bldd: value.bldd.into(),
+                    bsiz: value.bsiz.into(),
                     cb: value.cb.into(),
                     cfsi: value.cfsi.into(),
                     div: value.div.into(),

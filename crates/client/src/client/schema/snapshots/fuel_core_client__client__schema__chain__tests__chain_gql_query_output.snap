@@ -92,7 +92,6 @@ query {
         divi
         eck1
         ecr1
-        ed19
         eq
         exp
         expi
@@ -175,6 +174,28 @@ query {
             gasPerUnit
           }
         }
+        bldd {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        bsiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
         cfe {
           __typename
           ... on LightOperation {
@@ -231,6 +252,17 @@ query {
           }
         }
         csiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        ed19 {
           __typename
           ... on LightOperation {
             base
