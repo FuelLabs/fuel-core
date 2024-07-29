@@ -1,4 +1,5 @@
 use super::{
+    blob::BlobConfig,
     coin::CoinConfig,
     contract::ContractConfig,
     message::MessageConfig,
@@ -33,6 +34,7 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
+    fuel_vm::BlobData,
 };
 use itertools::Itertools;
 use serde::{
@@ -121,6 +123,8 @@ pub struct StateConfig {
     pub coins: Vec<CoinConfig>,
     /// Messages from Layer 1
     pub messages: Vec<MessageConfig>,
+    /// Blobs
+    pub blobs: Vec<BlobConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
     /// Last block config.
@@ -131,6 +135,7 @@ pub struct StateConfig {
 pub struct StateConfigBuilder {
     coins: Vec<TableEntry<Coins>>,
     messages: Vec<TableEntry<Messages>>,
+    blobs: Vec<TableEntry<BlobData>>,
     contract_state: Vec<TableEntry<ContractsState>>,
     contract_balance: Vec<TableEntry<ContractsAssets>>,
     contract_code: Vec<TableEntry<ContractsRawCode>>,
@@ -162,6 +167,7 @@ impl StateConfigBuilder {
             .into_iter()
             .map(|message| message.into())
             .collect();
+        let blobs = self.blobs.into_iter().map(|blob| blob.into()).collect();
         let contract_ids = self
             .contract_code
             .iter()
@@ -240,6 +246,7 @@ impl StateConfigBuilder {
         Ok(StateConfig {
             coins,
             messages,
+            blobs,
             contracts,
             last_block: latest_block_config,
         })
@@ -285,6 +292,7 @@ impl crate::Randomize for StateConfig {
         Self {
             coins: rand_collection(&mut rng, amount),
             messages: rand_collection(&mut rng, amount),
+            blobs: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
             last_block: Some(LastBlockConfig {
                 block_height: rng.gen(),
@@ -317,6 +325,22 @@ impl AsTable<Messages> for StateConfig {
 impl AddTable<Messages> for StateConfigBuilder {
     fn add(&mut self, entries: Vec<TableEntry<Messages>>) {
         self.messages.extend(entries);
+    }
+}
+
+impl AsTable<BlobData> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<BlobData>> {
+        self.blobs
+            .clone()
+            .into_iter()
+            .map(|blob| blob.into())
+            .collect()
+    }
+}
+
+impl AddTable<BlobData> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<BlobData>>) {
+        self.blobs.extend(entries);
     }
 }
 
