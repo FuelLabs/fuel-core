@@ -694,6 +694,14 @@ impl GasCosts {
         self.0.aloc().into()
     }
 
+    async fn bldd(&self) -> Option<DependentCost> {
+        self.0.bldd().ok().map(Into::into)
+    }
+
+    async fn bsiz(&self) -> Option<DependentCost> {
+        self.0.bsiz().ok().map(Into::into)
+    }
+
     async fn cfe(&self) -> DependentCost {
         self.0.cfe().into()
     }

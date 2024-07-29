@@ -431,8 +431,8 @@ type GasCosts {
 	xor: U64!
 	xori: U64!
 	alocDependentCost: DependentCost!
-	bldd: DependentCost!
-	bsiz: DependentCost!
+	bldd: DependentCost
+	bsiz: DependentCost
 	cfe: DependentCost!
 	cfeiDependentCost: DependentCost!
 	call: DependentCost!

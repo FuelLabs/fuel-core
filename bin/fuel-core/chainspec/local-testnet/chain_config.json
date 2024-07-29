@@ -40,7 +40,7 @@
       },
       "chain_id": 0,
       "gas_costs": {
-        "V3": {
+        "V4": {
           "add": 2,
           "addi": 2,
           "and": 2,
@@ -55,7 +55,6 @@
           "divi": 2,
           "eck1": 1907,
           "ecr1": 26135,
-          "ed19": 1893,
           "eq": 2,
           "exp": 2,
           "expi": 2,
@@ -133,6 +132,18 @@
               "units_per_gas": 15
             }
           },
+          "bldd": {
+            "LightOperation": {
+              "base": 15,
+              "units_per_gas": 272
+            }
+          },
+          "bsiz": {
+            "LightOperation": {
+              "base": 15,
+              "units_per_gas": 272
+            }
+          },
           "cfe": {
             "LightOperation": {
               "base": 10,
@@ -167,6 +178,12 @@
             "LightOperation": {
               "base": 31,
               "units_per_gas": 438
+            }
+          },
+          "ed19": {
+            "LightOperation": {
+              "base": 300,
+              "units_per_gas": 214
             }
           },
           "k256": {
