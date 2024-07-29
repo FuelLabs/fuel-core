@@ -2,6 +2,7 @@
 #![deny(warnings)]
 
 mod balances;
+mod blob;
 mod blocks;
 mod chain;
 mod coin;
