@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
-- [#1988](https://github.com/FuelLabs/fuel-core/pull/1988): Updated `fuel-vm` to `0.55.0` ([release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0)). Adds Blob transaction support.
+- [#1988](https://github.com/FuelLabs/fuel-core/pull/1988): Updated `fuel-vm` to `0.56.0` ([release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0)). Adds Blob transaction support.
 - [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
 
 ### Breaking
