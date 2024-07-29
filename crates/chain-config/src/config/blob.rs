@@ -6,7 +6,6 @@ use fuel_core_types::{
     fuel_tx::{
         AssetId,
         BlobId,
-        BlobIdExt,
         StorageSlot,
     },
     fuel_types::Bytes32,
@@ -76,6 +75,8 @@ impl crate::Randomize for BlobBalanceConfig {
 #[cfg(feature = "test-helpers")]
 impl crate::Randomize for BlobConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
+        use fuel_core_types::fuel_tx::BlobIdExt;
+
         let payload_len = rng.gen_range(32..128);
         let mut payload = vec![0; payload_len as usize];
         rng.fill_bytes(&mut payload);
