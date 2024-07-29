@@ -508,6 +508,12 @@ impl StateConfig {
             .sorted_by_key(|m| m.nonce)
             .collect();
 
+        self.blobs = self
+            .blobs
+            .into_iter()
+            .sorted_by_key(|b| b.blob_id)
+            .collect();
+
         self.contracts = self
             .contracts
             .into_iter()

@@ -174,7 +174,7 @@ query {
             gasPerUnit
           }
         }
-        bldd {
+        bsiz {
           __typename
           ... on LightOperation {
             base
@@ -185,7 +185,7 @@ query {
             gasPerUnit
           }
         }
-        bsiz {
+        bldd {
           __typename
           ... on LightOperation {
             base

@@ -182,6 +182,7 @@ impl CombinedDatabase {
         use fuel_core_chain_config::AddTable;
         use fuel_core_producer::ports::BlockProducerDatabase;
         use fuel_core_storage::transactional::AtomicView;
+        use fuel_core_types::fuel_vm::BlobData;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
 
@@ -200,6 +201,7 @@ impl CombinedDatabase {
         add_tables!(
             Coins,
             Messages,
+            BlobData,
             ContractsAssets,
             ContractsState,
             ContractsRawCode,
