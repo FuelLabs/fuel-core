@@ -463,7 +463,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     divi: value.divi.into(),
                     eck1: value.eck1.into(),
                     ecr1: value.ecr1.into(),
-                    ed19: fuel_core_types::fuel_tx::DependentCost::from(value.ed19).base().into(),
+                    ed19: fuel_core_types::fuel_tx::DependentCost::from(value.ed19).base(),
                     eq: value.eq.into(),
                     exp: value.exp.into(),
                     expi: value.expi.into(),
