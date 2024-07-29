@@ -549,6 +549,14 @@ impl StateConfig {
 
         builder.add(messages);
 
+        let blobs = reader
+            .read::<BlobData>()?
+            .into_iter()
+            .flatten_ok()
+            .try_collect()?;
+
+        builder.add(blobs);
+
         let contract_state = reader
             .read::<ContractsState>()?
             .into_iter()
@@ -759,23 +767,21 @@ mod tests {
         let chain_config = ChainConfig::local_testnet();
 
         macro_rules! write_in_fragments {
-                ($($fragment_ty: ty,)*) => {
-                [
+            ($($fragment_ty: ty,)*) => {[
                 $({
                     let mut writer = create_writer();
                     writer
                         .write(AsTable::<$fragment_ty>::as_table(&state_config))
                         .unwrap();
                     writer.partial_close().unwrap()
-
                 }),*
-                ]
-            }
-            }
+            ]}
+        }
 
         let fragments = write_in_fragments!(
             Coins,
             Messages,
+            BlobData,
             ContractsState,
             ContractsAssets,
             ContractsRawCode,

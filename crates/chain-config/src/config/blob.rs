@@ -76,7 +76,7 @@ impl crate::Randomize for BlobBalanceConfig {
 #[cfg(feature = "test-helpers")]
 impl crate::Randomize for BlobConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
-        let payload_len = rng.next_u32() % 100;
+        let payload_len = rng.gen_range(32..128);
         let mut payload = vec![0; payload_len as usize];
         rng.fill_bytes(&mut payload);
 

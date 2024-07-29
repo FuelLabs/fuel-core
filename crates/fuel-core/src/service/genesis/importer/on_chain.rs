@@ -283,7 +283,7 @@ fn init_blob_payload(
         .replace(&blob_id, payload)?
         .is_some()
     {
-        return Err(anyhow!("Contract code should not exist"));
+        return Err(anyhow!("Blob should not exist"));
     }
 
     Ok(())
