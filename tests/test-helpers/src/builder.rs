@@ -90,7 +90,7 @@ pub struct TestSetupBuilder {
     pub rng: StdRng,
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
-    pub min_gas_price: u64,
+    pub starting_gas_price: u64,
     pub gas_limit: Option<u64>,
     pub starting_block: Option<BlockHeight>,
     pub utxo_validation: bool,
@@ -226,7 +226,7 @@ impl TestSetupBuilder {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config::default(),
             block_production: self.trigger,
-            static_gas_price: self.min_gas_price,
+            starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
 
@@ -247,7 +247,7 @@ impl Default for TestSetupBuilder {
             rng: StdRng::seed_from_u64(2322u64),
             contracts: Default::default(),
             initial_coins: vec![],
-            min_gas_price: 0,
+            starting_gas_price: 0,
             gas_limit: None,
             starting_block: None,
             utxo_validation: true,

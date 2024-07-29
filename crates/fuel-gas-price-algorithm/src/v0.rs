@@ -16,11 +16,33 @@ pub enum Error {
 pub struct AlgorithmV0 {
     /// The gas price for to cover the execution of the next block
     new_exec_price: u64,
+    /// The block height of the next L2 block
+    for_height: u32,
+    /// The change percentage per block
+    percentage: u64,
 }
 
 impl AlgorithmV0 {
     pub fn calculate(&self) -> u64 {
         self.new_exec_price
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn worst_case(&self, height: u32) -> u64 {
+        let price = self.new_exec_price as f64;
+        let blocks = height.saturating_sub(self.for_height) as f64;
+        let percentage = self.percentage as f64;
+        let percentage_as_decimal = percentage / 100.0;
+        let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
+        let mut approx = price * multiple;
+        // account for rounding errors and take a slightly higher value
+        const ARB_CUTOFF: f64 = 16948547188989277.0;
+        if approx > ARB_CUTOFF {
+            const ARB_ADDITION: f64 = 2000.0;
+            approx += ARB_ADDITION;
+        }
+        // `f64` over `u64::MAX` are cast to `u64::MAX`
+        approx.ceil() as u64
     }
 }
 
@@ -85,7 +107,7 @@ impl AlgorithmUpdaterV0 {
             .unwrap_or(self.l2_block_fullness_threshold_percent);
 
         match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {
-            std::cmp::Ordering::Greater => {
+            std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {
                 let change_amount = self.change_amount(exec_gas_price);
                 exec_gas_price = exec_gas_price.saturating_add(change_amount);
             }
@@ -93,7 +115,6 @@ impl AlgorithmUpdaterV0 {
                 let change_amount = self.change_amount(exec_gas_price);
                 exec_gas_price = exec_gas_price.saturating_sub(change_amount);
             }
-            std::cmp::Ordering::Equal => {}
         }
         self.new_exec_price = max(self.min_exec_gas_price, exec_gas_price);
     }
@@ -107,6 +128,8 @@ impl AlgorithmUpdaterV0 {
     pub fn algorithm(&self) -> AlgorithmV0 {
         AlgorithmV0 {
             new_exec_price: self.new_exec_price,
+            for_height: self.l2_block_height,
+            percentage: self.exec_gas_price_change_percent,
         }
     }
 }

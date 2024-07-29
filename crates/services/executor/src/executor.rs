@@ -1376,9 +1376,13 @@ where
             .used_gas
             .checked_add(used_gas)
             .ok_or(ExecutorError::GasOverflow)?;
-        execution_data
-            .message_ids
-            .extend(receipts.iter().filter_map(|r| r.message_id()));
+
+        if !reverted {
+            execution_data
+                .message_ids
+                .extend(receipts.iter().filter_map(|r| r.message_id()));
+        }
+
         let status = if reverted {
             TransactionExecutionResult::Failed {
                 result: Some(state),

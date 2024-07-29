@@ -165,9 +165,21 @@ pub struct Command {
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
+    /// The starting gas price for the network
+    #[arg(long = "starting-gas-price", default_value = "0", env)]
+    pub starting_gas_price: u64,
+
+    /// The percentage change in gas price per block
+    #[arg(long = "gas-price-change-percent", default_value = "0", env)]
+    pub gas_price_change_percent: u64,
+
     /// The minimum allowed gas price
     #[arg(long = "min-gas-price", default_value = "0", env)]
     pub min_gas_price: u64,
+
+    /// The percentage threshold for gas price increase
+    #[arg(long = "gas-price-threshold-percent", default_value = "50", env)]
+    pub gas_price_threshold_percent: u64,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
@@ -245,7 +257,10 @@ impl Command {
             debug,
             utxo_validation,
             native_executor_version,
+            starting_gas_price,
+            gas_price_change_percent,
             min_gas_price,
+            gas_price_threshold_percent,
             consensus_key,
             poa_trigger,
             coinbase_recipient,
@@ -408,7 +423,10 @@ impl Command {
                 coinbase_recipient,
                 metrics,
             },
-            static_gas_price: min_gas_price,
+            starting_gas_price,
+            gas_price_change_percent,
+            min_gas_price,
+            gas_price_threshold_percent,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,

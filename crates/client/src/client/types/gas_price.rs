@@ -1,6 +1,7 @@
 use crate::client::schema;
 use fuel_core_types::fuel_types::BlockHeight;
 
+#[derive(Debug, Copy, Clone)]
 pub struct LatestGasPrice {
     pub gas_price: u64,
     pub block_height: BlockHeight,

@@ -231,7 +231,7 @@ impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValu
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn next_gas_price(&self, _block_bytes: u64) -> anyhow::Result<u64> {
+    async fn next_gas_price(&self) -> anyhow::Result<u64> {
         Ok(self.gas_price)
     }
 }

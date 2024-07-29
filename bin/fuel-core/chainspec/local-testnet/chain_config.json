@@ -34,7 +34,7 @@
       },
       "fee_params": {
         "V1": {
-          "gas_price_factor": 92,
+          "gas_price_factor": 92000,
           "gas_per_byte": 63
         }
       },

@@ -338,7 +338,12 @@ fn service_with_many_contracts(
     }
 
     let service = FuelService::new(
-        CombinedDatabase::new(database, Default::default(), Default::default()),
+        CombinedDatabase::new(
+            database,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ),
         config.clone(),
     )
     .expect("Unable to start a FuelService");

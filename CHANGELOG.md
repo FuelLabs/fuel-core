@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1988](https://github.com/FuelLabs/fuel-core/pull/1988): Updated `fuel-vm` to `0.55.0` ([release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0)). Adds Blob transaction support.
 - [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
 
+### Breaking
+- [2025](https://github.com/FuelLabs/fuel-core/pull/2025): Add new V0 algorithm for gas price to services.
+    This change includes new flags for the CLI:
+        - "starting-gas-price" - the starting gas price for the gas price algorithm
+        - "gas-price-change-percent" - the percent change for each gas price update
+        - "gas-price-threshold-percent" - the threshold percent for determining if the gas price will be increase or decreased
+    And the following CLI flags are serving a new purpose
+        - "min-gas-price" - the minimum gas price that the gas price algorithm will return
+
+### Fixed
+
+#### Breaking
+- [2045](https://github.com/FuelLabs/fuel-core/pull/2045): Include withdrawal message only if transaction is executed successfully.
+- [2041](https://github.com/FuelLabs/fuel-core/pull/2041): Add code for startup of the gas price algorithm updater so 
+    the gas price db on startup is always in sync with the on chain db
+
 ## [Version 0.31.0]
 
 ### Added

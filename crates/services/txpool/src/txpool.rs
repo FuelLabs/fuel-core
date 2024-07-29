@@ -536,7 +536,7 @@ where
         tx.into_checked_basic(current_height, consensus_params)?
     };
 
-    let gas_price = gas_price_provider.last_gas_price().await?;
+    let gas_price = gas_price_provider.next_gas_price().await?;
 
     let tx = verify_tx_min_gas_price(tx, consensus_params, gas_price)?;
 

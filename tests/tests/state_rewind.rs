@@ -63,7 +63,7 @@ fn transfer_transaction(min_amount: u64, rng: &mut StdRng) -> Transaction {
 #[tokio::test(flavor = "multi_thread")]
 async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let driver = FuelCoreDriver::spawn(&[
+    let driver = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -139,7 +139,7 @@ async fn rollback_existing_chain_to_target_height_and_verify(
     blocks_in_the_chain: u32,
 ) -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let driver = FuelCoreDriver::spawn(&[
+    let driver = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -177,7 +177,7 @@ async fn rollback_existing_chain_to_target_height_and_verify(
     fuel_core_bin::cli::rollback::exec(command).await?;
 
     // Then
-    let driver = FuelCoreDriver::spawn_with_directory(
+    let driver = FuelCoreDriver::spawn_feeless_with_directory(
         temp_dir,
         &[
             "--debug",

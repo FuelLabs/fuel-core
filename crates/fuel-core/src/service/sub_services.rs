@@ -1,8 +1,11 @@
 #![allow(clippy::let_unit_value)]
+
 use super::{
     adapters::P2PAdapter,
     genesis::create_genesis_block,
 };
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -12,6 +15,9 @@ use crate::{
     service::{
         adapters::{
             consensus_parameters_provider,
+            fuel_gas_price_provider::FuelGasPriceProvider,
+            graphql_api::GraphQLBlockImporter,
+            import_result_provider::ImportResultProvider,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ConsensusParametersProvider,
@@ -27,24 +33,30 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_poa::Trigger;
-use fuel_core_storage::transactional::AtomicView;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::{
-    fuel_gas_price_provider::FuelGasPriceProvider,
-    graphql_api::GraphQLBlockImporter,
-    import_result_provider::ImportResultProvider,
+#[allow(unused_imports)]
+use fuel_core_gas_price_service::fuel_gas_price_updater::{
+    fuel_core_storage_adapter::FuelL2BlockSource,
+    Algorithm,
+    AlgorithmV0,
+    FuelGasPriceUpdater,
+    UpdaterMetadata,
+    V0Metadata,
 };
-use fuel_core_gas_price_service::static_updater::{
-    StaticAlgorithm,
-    StaticAlgorithmUpdater,
+use fuel_core_poa::Trigger;
+use fuel_core_services::{
+    RunnableService,
+    ServiceRunner,
+};
+use fuel_core_storage::{
+    self,
+    transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+mod algorithm_updater;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
@@ -53,7 +65,7 @@ pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
-    FuelGasPriceProvider<StaticAlgorithm>,
+    FuelGasPriceProvider<Algorithm>,
     ConsensusParametersProvider,
     SharedMemoryPool,
 >;
@@ -61,7 +73,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    FuelGasPriceProvider<StaticAlgorithm>,
+    FuelGasPriceProvider<Algorithm>,
     ConsensusParametersProvider,
 >;
 
@@ -173,10 +185,20 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    let update_algo = StaticAlgorithmUpdater::new(config.static_gas_price);
-    let gas_price_service =
-        fuel_core_gas_price_service::new_service(last_height, update_algo)?;
-    let next_algo = gas_price_service.shared.clone();
+    let genesis_block_height = *genesis_block.header().height();
+    let settings = consensus_parameters_provider.clone();
+    let block_stream = importer_adapter.events_shared_result();
+
+    let gas_price_init = algorithm_updater::InitializeTask::new(
+        config.clone(),
+        genesis_block_height,
+        settings,
+        block_stream,
+        database.gas_price().clone(),
+        database.on_chain().clone(),
+    )?;
+    let next_algo = gas_price_init.shared_data();
+    let gas_price_service = ServiceRunner::new(gas_price_init);
 
     let gas_price_provider = FuelGasPriceProvider::new(next_algo);
     let txpool = fuel_core_txpool::new_service(
