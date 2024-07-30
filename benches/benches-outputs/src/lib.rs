@@ -1,5 +1,5 @@
 use fuel_core_types::fuel_tx::{
-    consensus_parameters::gas::{GasCostsValuesV3, GasCostsValuesV4},
+    consensus_parameters::gas::GasCostsValuesV4,
     DependentCost,
     GasCostsValues,
 };
