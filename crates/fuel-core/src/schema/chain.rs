@@ -406,6 +406,10 @@ impl GasCosts {
         self.0.eck1().into()
     }
 
+    async fn ed19(&self) -> U64 {
+        self.0.ed19().base().into()
+    }
+
     async fn eq(&self) -> U64 {
         self.0.eq_().into()
     }
@@ -726,7 +730,7 @@ impl GasCosts {
         self.0.csiz().into()
     }
 
-    async fn ed19(&self) -> DependentCost {
+    async fn ed19_dependent_cost(&self) -> DependentCost {
         self.0.ed19().into()
     }
 

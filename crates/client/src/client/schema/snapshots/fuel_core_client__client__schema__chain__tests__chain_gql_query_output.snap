@@ -92,6 +92,7 @@ query {
         divi
         eck1
         ecr1
+        ed19
         eq
         exp
         expi
@@ -262,7 +263,7 @@ query {
             gasPerUnit
           }
         }
-        ed19 {
+        ed19DependentCost {
           __typename
           ... on LightOperation {
             base
