@@ -73,12 +73,14 @@ impl TestContext {
 async fn blob__upload_works() {
     // Given
     let mut ctx = TestContext::new().await;
+
+    // When
     let (status, blob_id) = ctx
         .new_blob([op::ret(RegId::ONE)].into_iter().collect())
         .await;
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
-    // When
+    // Then
     let script_tx = TransactionBuilder::script(
         vec![
             op::gtf_args(0x11, RegId::ZERO, GTFArgs::ScriptData),
@@ -97,8 +99,6 @@ async fn blob__upload_works() {
         .submit_and_await_commit(&script_tx)
         .await
         .unwrap();
-
-    // Then
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
 }
 
