@@ -36,7 +36,6 @@ use fuel_core::{
         Config as TxPoolConfig,
     },
     types::{
-        blockchain::primitives::SecretKeyWrapper,
         fuel_tx::ContractId,
         fuel_vm::SecretKey,
         secrecy::Secret,
@@ -46,6 +45,7 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
+use fuel_core_poa::signer::SignMode;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
@@ -307,23 +307,21 @@ impl Command {
         }
 
         let consensus_key = load_consensus_key(consensus_key)?;
-        if consensus_key.is_some() && trigger == Trigger::Never {
+        if consensus_key.is_available() && trigger == Trigger::Never {
             warn!("Consensus key configured but block production is disabled!");
         }
 
         // if consensus key is not configured, fallback to dev consensus key
-        let consensus_key = consensus_key.or_else(|| {
-            if debug {
-                let key = default_consensus_dev_key();
-                warn!(
-                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
-                    key.public_key()
-                );
-                Some(Secret::new(key.into()))
-            } else {
-                None
-            }
-        });
+        let consensus_key = if debug && matches!(consensus_key, SignMode::Unavailable) {
+            let key = default_consensus_dev_key();
+            warn!(
+                "Fuel Core is using an insecure test key for consensus. Public key: {}",
+                key.public_key()
+            );
+            SignMode::Key(Secret::new(key.into()))
+        } else {
+            consensus_key
+        };
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
             Some(coinbase_recipient)
@@ -495,9 +493,9 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 }
 
 // Attempt to load the consensus key from cli arg first, otherwise check the env.
-fn load_consensus_key(
-    cli_arg: Option<String>,
-) -> anyhow::Result<Option<Secret<SecretKeyWrapper>>> {
+fn load_consensus_key(cli_arg: Option<String>) -> anyhow::Result<SignMode> {
+    // TODO: AWS KMS
+
     let secret_string = if let Some(cli_arg) = cli_arg {
         warn!("Consensus key configured insecurely using cli args. Consider setting the {} env var instead.", CONSENSUS_KEY_ENV);
         Some(cli_arg)
@@ -508,9 +506,9 @@ fn load_consensus_key(
     if let Some(key) = secret_string {
         let key =
             SecretKey::from_str(&key).context("failed to parse consensus signing key")?;
-        Ok(Some(Secret::new(key.into())))
+        Ok(SignMode::Key(Secret::new(key.into())))
     } else {
-        Ok(None)
+        Ok(SignMode::Unavailable)
     }
 }
 
