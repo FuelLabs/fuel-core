@@ -23,6 +23,7 @@ use fuel_core_types::{
 };
 use std::ops::Deref;
 
+/// How the block is signed
 #[derive(Clone, Debug)]
 pub enum SignMode {
     /// Blocks cannot be produced
@@ -37,10 +38,12 @@ pub enum SignMode {
 }
 
 impl SignMode {
+    /// Is block sigining (production) available
     pub fn is_available(&self) -> bool {
         !matches!(self, SignMode::Unavailable)
     }
 
+    /// Sign a block
     pub async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
         let block_hash = block.id();
         let message = block_hash.into_message();
@@ -71,7 +74,7 @@ impl SignMode {
                 assert_eq!(
                     signature.len(),
                     64,
-                    "incorrect signature length from AWS KMS"
+                    "Incorrect signature length from AWS KMS"
                 );
                 let mut signature_bytes = [0u8; 64];
                 signature_bytes.copy_from_slice(&signature);
@@ -81,8 +84,3 @@ impl SignMode {
         Ok(Consensus::PoA(PoAConsensus::new(poa_signature)))
     }
 }
-
-// async fn foo() {
-//     let config = aws_config::load_from_env().await;
-//     let client = aws_sdk_kms::Client::new(&config);
-// }
