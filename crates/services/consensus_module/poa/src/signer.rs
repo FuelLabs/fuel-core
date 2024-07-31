@@ -1,4 +1,7 @@
-use anyhow::anyhow;
+use anyhow::{
+    anyhow,
+    Context,
+};
 use aws_sdk_kms::{
     primitives::Blob,
     types::{
@@ -72,28 +75,57 @@ impl SignMode {
                     .ok_or_else(|| anyhow!("no signature returned from AWS KMS"))?
                     .into_inner();
                 // https://stackoverflow.com/a/71475108
-                // https://datatracker.ietf.org/doc/html/rfc3279#section-2.2.3
-                let obj = match der_parser::der::parse_der(&signature_der) {
-                    Ok((_, obj)) => obj,
-                    Err(err) => {
-                        anyhow::bail!("Failed to parse DER signature: {}", err);
-                    }
-                };
-                let mut signature_bytes = [0u8; 64];
-                match obj.content {
-                    der_parser::ber::BerObjectContent::OctetString(s) => {
-                        if s.len() != 64 {
-                            anyhow::bail!("Invalid signature length: {}", s.len());
-                        }
-                        signature_bytes.copy_from_slice(s);
-                    }
-                    _ => {
-                        anyhow::bail!("Invalid signature type: {:?}", obj.tag());
-                    }
-                }
-                Signature::from_bytes(signature_bytes)
+                parse_der_signature(&signature_der)?
             }
         };
         Ok(Consensus::PoA(PoAConsensus::new(poa_signature)))
     }
+}
+
+/// https://datatracker.ietf.org/doc/html/rfc3279#section-2.2.3
+fn parse_der_signature(signature_der: &[u8]) -> anyhow::Result<Signature> {
+    let (rest, obj) = der_parser::der::parse_der(signature_der)
+        .context("Parsing DER signature from AWS KMS")?;
+
+    if !rest.is_empty() {
+        anyhow::bail!("Extra bytes after DER signature: {:?}", rest);
+    }
+
+    let der_parser::ber::BerObjectContent::Sequence(seq) = obj.content else {
+        anyhow::bail!("Expected a sequence of (r, s) in DER signature");
+    };
+
+    if seq.len() != 2 {
+        anyhow::bail!(
+            "Invalid signature sequence length (expected (r, s)): {}",
+            seq.len()
+        );
+    }
+
+    let der_parser::ber::BerObjectContent::Integer(r) = seq[0].content else {
+        anyhow::bail!("Expected an integer for r in DER signature");
+    };
+
+    if r.len() != 32 {
+        anyhow::bail!(
+            "Invalid signature element r length: {} (expected 32)",
+            r.len()
+        );
+    }
+
+    let der_parser::ber::BerObjectContent::Integer(s) = seq[1].content else {
+        anyhow::bail!("Expected an integer for s in DER signature");
+    };
+
+    if s.len() != 32 {
+        anyhow::bail!(
+            "Invalid signature element r length: {} (expected 32)",
+            r.len()
+        );
+    }
+
+    let mut signature_bytes = [0u8; 64];
+    signature_bytes[..32].copy_from_slice(r);
+    signature_bytes[32..].copy_from_slice(s);
+    Ok(Signature::from_bytes(signature_bytes))
 }
