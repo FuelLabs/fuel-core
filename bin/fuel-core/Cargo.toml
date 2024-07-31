@@ -18,6 +18,8 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"], optional = true}
+aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true, features = ["derive", "env", "string"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
@@ -54,7 +56,8 @@ tempfile = { workspace = true }
 test-case = { workspace = true }
 
 [features]
-default = ["env", "relayer", "rocksdb"]
+default = ["env", "relayer", "rocksdb", "aws-kms"]
+aws-kms = ["dep:aws-config", "dep:aws-sdk-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]
@@ -62,4 +65,4 @@ parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]
 # features to enable in production, but increase build times
-production = ["env", "relayer", "rocksdb-production", "p2p", "parquet"]
+production = ["env", "relayer", "rocksdb-production", "p2p", "parquet", "aws-kms"]

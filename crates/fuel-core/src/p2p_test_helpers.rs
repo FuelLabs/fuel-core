@@ -321,7 +321,7 @@ pub async fn make_nodes(
             node_config.utxo_validation = utxo_validation;
             update_signing_key(&mut node_config, Input::owner(&secret.public_key()));
 
-            node_config.consensus_key = SignMode::Key(Secret::new(secret.into()));
+            node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
 
             test_txs = txs;
         }

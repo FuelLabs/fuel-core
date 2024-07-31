@@ -30,7 +30,10 @@ pub enum SignMode {
     /// Sign using a secret key
     Key(Secret<SecretKeyWrapper>),
     /// Sign using AWS KMS
-    Kms(aws_sdk_kms::Client),
+    Kms {
+        key_id: String,
+        client: aws_sdk_kms::Client,
+    },
 }
 
 impl SignMode {
@@ -52,10 +55,10 @@ impl SignMode {
                 let signing_key = key.expose_secret().deref();
                 Signature::sign(signing_key, &message)
             }
-            SignMode::Kms(client) => {
+            SignMode::Kms { key_id, client } => {
                 let reply = client
                     .sign()
-                    // .key_id(key_id)
+                    .key_id(key_id)
                     .signing_algorithm(SigningAlgorithmSpec::EcdsaSha256)
                     .message_type(MessageType::Digest)
                     .message(Blob::new(*message))

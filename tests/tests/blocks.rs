@@ -132,7 +132,7 @@ async fn produce_block() {
         let block_height: u32 = block.header.height;
         assert_eq!(block_height, 1);
 
-        match config.consensus_key {
+        match config.consensus_signer {
             SignMode::Key(key) => {
                 let expected_pub_key = key.expose_secret().deref().public_key();
                 assert_eq!(*actual_pub_key, expected_pub_key);
@@ -162,7 +162,7 @@ async fn produce_block_manually() {
     let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
-    match config.consensus_key {
+    match config.consensus_signer {
         SignMode::Key(key) => {
             let expected_pub_key = key.expose_secret().deref().public_key();
             assert_eq!(*actual_pub_key, expected_pub_key);

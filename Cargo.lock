@@ -3223,6 +3223,8 @@ version = "0.31.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "aws-config",
+ "aws-sdk-kms",
  "clap 4.5.9",
  "const_format",
  "dirs 4.0.0",

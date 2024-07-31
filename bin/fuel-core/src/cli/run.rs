@@ -73,8 +73,6 @@ use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
 use super::DEFAULT_DATABASE_CACHE_SIZE;
 
-pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
-
 #[cfg(feature = "p2p")]
 mod p2p;
 
@@ -183,8 +181,14 @@ pub struct Command {
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
-    #[arg(long = "consensus-key", env)]
+    #[arg(long = "consensus-key", env = "CONSENSUS_KEY_SECRET")]
     pub consensus_key: Option<String>,
+
+    /// Use [AWS KMS](https://docs.aws.amazon.com/kms/latest/APIReference/Welcome.html)for signing blocks.
+    /// Takes the [key ARN](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id)
+    /// as an argument, and loads the AWS credentials from the environment.
+    #[arg(long = "consensus-aws-kms", env, conflicts_with = "consensus_key")]
+    pub consensus_aws_kms: Option<String>,
 
     /// A new block is produced instantly when transactions are available.
     #[clap(flatten)]
@@ -242,7 +246,7 @@ pub struct Command {
 }
 
 impl Command {
-    pub fn get_config(self) -> anyhow::Result<Config> {
+    pub async fn get_config(self) -> anyhow::Result<Config> {
         let Command {
             service_name: name,
             max_database_cache_size,
@@ -262,6 +266,7 @@ impl Command {
             min_gas_price,
             gas_price_threshold_percent,
             consensus_key,
+            consensus_aws_kms,
             poa_trigger,
             coinbase_recipient,
             #[cfg(feature = "relayer")]
@@ -306,13 +311,16 @@ impl Command {
             info!("Block production disabled");
         }
 
-        let consensus_key = load_consensus_key(consensus_key)?;
-        if consensus_key.is_available() && trigger == Trigger::Never {
-            warn!("Consensus key configured but block production is disabled!");
-        }
-
-        // if consensus key is not configured, fallback to dev consensus key
-        let consensus_key = if debug && matches!(consensus_key, SignMode::Unavailable) {
+        let consensus_signer = if let Some(key_id) = consensus_aws_kms {
+            let config = aws_config::load_from_env().await;
+            let client = aws_sdk_kms::Client::new(&config);
+            SignMode::Kms { key_id, client }
+        } else if let Some(consensus_key) = consensus_key {
+            let key = SecretKey::from_str(&consensus_key)
+                .context("failed to parse consensus signing key")?;
+            SignMode::Key(Secret::new(key.into()))
+        } else if debug {
+            // if consensus key is not configured, fallback to dev consensus key
             let key = default_consensus_dev_key();
             warn!(
                 "Fuel Core is using an insecure test key for consensus. Public key: {}",
@@ -320,8 +328,12 @@ impl Command {
             );
             SignMode::Key(Secret::new(key.into()))
         } else {
-            consensus_key
+            SignMode::Unavailable
         };
+
+        if consensus_signer.is_available() && trigger == Trigger::Never {
+            warn!("Consensus key configured but block production is disabled!");
+        }
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
             Some(coinbase_recipient)
@@ -432,7 +444,7 @@ impl Command {
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
-            consensus_key,
+            consensus_signer,
             name,
             relayer_consensus_config: verifier,
             min_connected_reserved_peers,
@@ -443,14 +455,14 @@ impl Command {
     }
 }
 
-pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
+pub async fn get_service(command: Command) -> anyhow::Result<FuelService> {
     #[cfg(feature = "rocksdb")]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }
 
     let profiling = command.profiling.clone();
-    let config = command.get_config()?;
+    let config = command.get_config().await?;
 
     // start profiling agent if url is configured
     let _profiling_agent = start_pyroscope_agent(profiling, &config)?;
@@ -465,7 +477,7 @@ pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let service = get_service(command)?;
+    let service = get_service(command).await?;
 
     let shutdown_listener = ShutdownListener::spawn();
     // Genesis could take a long time depending on the snapshot size. Start needs to be
@@ -490,26 +502,6 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     service.stop_and_await().await?;
 
     Ok(())
-}
-
-// Attempt to load the consensus key from cli arg first, otherwise check the env.
-fn load_consensus_key(cli_arg: Option<String>) -> anyhow::Result<SignMode> {
-    // TODO: AWS KMS
-
-    let secret_string = if let Some(cli_arg) = cli_arg {
-        warn!("Consensus key configured insecurely using cli args. Consider setting the {} env var instead.", CONSENSUS_KEY_ENV);
-        Some(cli_arg)
-    } else {
-        env::var(CONSENSUS_KEY_ENV).ok()
-    };
-
-    if let Some(key) = secret_string {
-        let key =
-            SecretKey::from_str(&key).context("failed to parse consensus signing key")?;
-        Ok(SignMode::Key(Secret::new(key.into())))
-    } else {
-        Ok(SignMode::Unavailable)
-    }
 }
 
 fn start_pyroscope_agent(

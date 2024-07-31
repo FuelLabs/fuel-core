@@ -33,7 +33,8 @@ async fn poa_never_trigger_doesnt_produce_blocks() {
     let db = Database::default();
     let mut config = Config::local_node();
     config.block_production = Trigger::Never;
-    config.consensus_key = SignMode::Key(Secret::new(SecretKey::random(&mut rng).into()));
+    config.consensus_signer =
+        SignMode::Key(Secret::new(SecretKey::random(&mut rng).into()));
     let srv = FuelService::from_database(db.clone(), config)
         .await
         .unwrap();
