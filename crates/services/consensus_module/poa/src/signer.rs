@@ -91,7 +91,7 @@ fn parse_der_signature(signature_der: &[u8]) -> anyhow::Result<Signature> {
         anyhow::bail!("Extra bytes after DER signature: {:?}", rest);
     }
 
-    let der_parser::ber::BerObjectContent::Sequence(seq) = obj.content else {
+    let der_parser::ber::BerObjectContent::Sequence(mut seq) = obj.content else {
         anyhow::bail!("Expected a sequence of (r, s) in DER signature");
     };
 
@@ -102,30 +102,34 @@ fn parse_der_signature(signature_der: &[u8]) -> anyhow::Result<Signature> {
         );
     }
 
-    let der_parser::ber::BerObjectContent::Integer(r) = seq[0].content else {
-        anyhow::bail!("Expected an integer for r in DER signature");
-    };
-
-    if r.len() != 32 {
-        anyhow::bail!(
-            "Invalid signature element r length: {} (expected 32)",
-            r.len()
-        );
-    }
-
-    let der_parser::ber::BerObjectContent::Integer(s) = seq[1].content else {
-        anyhow::bail!("Expected an integer for s in DER signature");
-    };
-
-    if s.len() != 32 {
-        anyhow::bail!(
-            "Invalid signature element r length: {} (expected 32)",
-            r.len()
-        );
-    }
+    let s = parse_der_integer_32bytes(seq.pop().unwrap()).context("s")?;
+    let r = parse_der_integer_32bytes(seq.pop().unwrap()).context("r")?;
 
     let mut signature_bytes = [0u8; 64];
-    signature_bytes[..32].copy_from_slice(r);
-    signature_bytes[32..].copy_from_slice(s);
+    signature_bytes[..32].copy_from_slice(&r);
+    signature_bytes[32..].copy_from_slice(&s);
     Ok(Signature::from_bytes(signature_bytes))
+}
+
+fn parse_der_integer_32bytes(
+    obj: der_parser::ber::BerObject,
+) -> anyhow::Result<[u8; 32]> {
+    let der_parser::ber::BerObjectContent::Integer(value) = obj.content else {
+        anyhow::bail!("Expected an integer for in DER signature");
+    };
+
+    if value.len() != 33 {
+        anyhow::bail!(
+            "Invalid signature element value length: {} (expected 33)",
+            value.len()
+        );
+    }
+
+    if value[0] == 0x02 {
+        anyhow::bail!("Expected integer 0x02 prefix in DER signature");
+    }
+
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&value[1..]);
+    Ok(bytes)
 }
