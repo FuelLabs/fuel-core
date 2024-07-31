@@ -14,11 +14,11 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-kms = "1.37.0"
-der-parser = "9.0.0"
 fuel-core-chain-config = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+k256 = { version = "0.13.3", features = ["ecdsa-core"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
