@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"], optional = true}
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"], optional = true }
 aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true, features = ["derive", "env", "string"] }
 const_format = { version = "0.2", optional = true }
@@ -26,8 +26,8 @@ dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
-fuel-core-types = { workspace = true }
 fuel-core-poa = { workspace = true }
+fuel-core-types = { workspace = true }
 hex = "0.4"
 humantime = "2.1"
 pyroscope = "0.5"
