@@ -9,6 +9,7 @@ use crate::{
         MockTransactionPool,
     },
     service::MainTask,
+    signer::SignMode,
     Config,
     Service,
     Trigger,
@@ -325,7 +326,7 @@ async fn remove_skipped_transactions() {
 
     let config = Config {
         trigger: Trigger::Instant,
-        signing_key: Some(Secret::new(secret_key.into())),
+        signer: SignMode::Key(Secret::new(secret_key.into())),
         metrics: false,
         ..Default::default()
     };
@@ -372,7 +373,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let config = Config {
         trigger: Trigger::Instant,
-        signing_key: Some(Secret::new(secret_key.into())),
+        signer: SignMode::Key(Secret::new(secret_key.into())),
         metrics: false,
         ..Default::default()
     };

@@ -11,6 +11,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use fuel_core_poa::signer::SignMode;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::consensus::Consensus,
@@ -31,7 +32,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 
     let db = CombinedDatabase::default();
     let mut config = Config::local_node();
-    config.consensus_key = Some(Secret::new(poa_secret.into()));
+    config.consensus_key = SignMode::Key(Secret::new(poa_secret.into()));
     let srv = FuelService::from_combined_database(db.clone(), config)
         .await
         .unwrap();
@@ -133,7 +134,7 @@ mod p2p {
             let mut config = make_config(name.to_string(), config.clone());
             config.debug = true;
             config.block_production = Trigger::Never;
-            config.consensus_key = Some(Secret::new(secret.into()));
+            config.consensus_key = SignMode::Key(Secret::new(secret.into()));
             config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().info_interval = Some(Duration::from_millis(100));

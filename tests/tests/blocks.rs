@@ -17,7 +17,10 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::Trigger;
+use fuel_core_poa::{
+    signer::SignMode,
+    Trigger,
+};
 use fuel_core_storage::{
     tables::{
         FuelBlocks,
@@ -127,15 +130,15 @@ async fn produce_block() {
         let block = client.block_by_height(block_height).await.unwrap().unwrap();
         let actual_pub_key = block.block_producer().unwrap();
         let block_height: u32 = block.header.height;
-        let expected_pub_key = config
-            .consensus_key
-            .unwrap()
-            .expose_secret()
-            .deref()
-            .public_key();
+        assert_eq!(block_height, 1);
 
-        assert!(1 == block_height);
-        assert_eq!(*actual_pub_key, expected_pub_key);
+        match config.consensus_key {
+            SignMode::Key(key) => {
+                let expected_pub_key = key.expose_secret().deref().public_key();
+                assert_eq!(*actual_pub_key, expected_pub_key);
+            }
+            _ => panic!("config must have a consensus signing key"),
+        }
     } else {
         panic!("Wrong tx status");
     };
@@ -159,13 +162,13 @@ async fn produce_block_manually() {
     let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
-    let expected_pub_key = config
-        .consensus_key
-        .unwrap()
-        .expose_secret()
-        .deref()
-        .public_key();
-    assert_eq!(*actual_pub_key, expected_pub_key);
+    match config.consensus_key {
+        SignMode::Key(key) => {
+            let expected_pub_key = key.expose_secret().deref().public_key();
+            assert_eq!(*actual_pub_key, expected_pub_key);
+        }
+        _ => panic!("config must have a consensus signing key"),
+    }
 }
 
 #[tokio::test]
