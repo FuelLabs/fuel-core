@@ -74,7 +74,7 @@ impl SignMode {
                 assert_eq!(
                     signature.len(),
                     64,
-                    "Incorrect signature length from AWS KMS"
+                    "Incorrect signature length from AWS KMS: {signature:?}"
                 );
                 let mut signature_bytes = [0u8; 64];
                 signature_bytes.copy_from_slice(&signature);
