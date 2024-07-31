@@ -67,17 +67,30 @@ impl SignMode {
                     .message(Blob::new(*message))
                     .send()
                     .await?;
-                let signature = reply
+                let signature_der = reply
                     .signature
                     .ok_or_else(|| anyhow!("no signature returned from AWS KMS"))?
                     .into_inner();
-                assert_eq!(
-                    signature.len(),
-                    64,
-                    "Incorrect signature length from AWS KMS: {signature:?}"
-                );
+                // https://stackoverflow.com/a/71475108
+                // https://datatracker.ietf.org/doc/html/rfc3279#section-2.2.3
+                let obj = match der_parser::der::parse_der(&signature_der) {
+                    Ok((_, obj)) => obj,
+                    Err(err) => {
+                        anyhow::bail!("Failed to parse DER signature: {}", err);
+                    }
+                };
                 let mut signature_bytes = [0u8; 64];
-                signature_bytes.copy_from_slice(&signature);
+                match obj.content {
+                    der_parser::ber::BerObjectContent::OctetString(s) => {
+                        if s.len() != 64 {
+                            anyhow::bail!("Invalid signature length: {}", s.len());
+                        }
+                        signature_bytes.copy_from_slice(s);
+                    }
+                    _ => {
+                        anyhow::bail!("Invalid signature type: {:?}", obj.tag());
+                    }
+                }
                 Signature::from_bytes(signature_bytes)
             }
         };
