@@ -707,6 +707,7 @@ mod tests {
 
         test_tables!(
             Coins,
+            BlobData,
             ContractsAssets,
             ContractsLatestUtxo,
             ContractsRawCode,
@@ -724,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn json_roundtrip_coins_and_messages() {
+    fn json_roundtrip_non_contract_related_tables() {
         let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
         let reader = |metadata: SnapshotMetadata, group_size: usize| {
             SnapshotReader::open_w_config(metadata, group_size).unwrap()
@@ -732,6 +733,7 @@ mod tests {
 
         assert_roundtrip::<Coins>(writer, reader);
         assert_roundtrip::<Messages>(writer, reader);
+        assert_roundtrip::<BlobData>(writer, reader);
     }
 
     #[test]
