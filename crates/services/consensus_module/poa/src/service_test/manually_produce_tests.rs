@@ -52,7 +52,7 @@ async fn can_manually_produce_block(
     let mut ctx_builder = TestContextBuilder::new();
     ctx_builder.with_config(Config {
         trigger,
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     });

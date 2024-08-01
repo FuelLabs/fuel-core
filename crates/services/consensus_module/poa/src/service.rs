@@ -10,6 +10,7 @@ use crate::{
         TransactionPool,
         TransactionsSource,
     },
+    signer::SignMode,
     sync::{
         SyncState,
         SyncTask,
@@ -32,25 +33,14 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
-        block::Block,
-        consensus::{
-            poa::PoAConsensus,
-            Consensus,
-        },
         header::BlockHeader,
-        primitives::SecretKeyWrapper,
         SealedBlock,
     },
-    fuel_crypto::Signature,
     fuel_tx::{
         Transaction,
         TxId,
     },
     fuel_types::BlockHeight,
-    secrecy::{
-        ExposeSecret,
-        Secret,
-    },
     services::{
         block_importer::ImportResult,
         executor::{
@@ -61,10 +51,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    ops::Deref,
-    time::Duration,
-};
+use std::time::Duration;
 use tokio::{
     sync::{
         mpsc,
@@ -129,7 +116,7 @@ pub(crate) enum RequestType {
 }
 
 pub struct MainTask<T, B, I> {
-    signing_key: Option<Secret<SecretKeyWrapper>>,
+    signer: SignMode,
     block_producer: B,
     block_importer: I,
     txpool: T,
@@ -167,7 +154,7 @@ where
         let peer_connections_stream = p2p_port.reserved_peers_count();
 
         let Config {
-            signing_key,
+            signer,
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
@@ -185,7 +172,7 @@ where
         let sync_task_handle = ServiceRunner::new(sync_task);
 
         Self {
-            signing_key,
+            signer,
             txpool,
             block_producer,
             block_importer,
@@ -313,7 +300,7 @@ where
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
-        if self.signing_key.is_none() {
+        if !self.signer.is_available() {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
         }
 
@@ -347,7 +334,7 @@ where
         self.txpool.remove_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
-        let seal = seal_block(&self.signing_key, &block)?;
+        let seal = self.signer.seal_block(&block).await?;
         let block = SealedBlock {
             entity: block,
             consensus: seal,
@@ -560,25 +547,6 @@ where
         block_importer,
         p2p_port,
     ))
-}
-
-fn seal_block(
-    signing_key: &Option<Secret<SecretKeyWrapper>>,
-    block: &Block,
-) -> anyhow::Result<Consensus> {
-    if let Some(key) = signing_key {
-        let block_hash = block.id();
-        let message = block_hash.into_message();
-
-        // The length of the secret is checked
-        let signing_key = key.expose_secret().deref();
-
-        let poa_signature = Signature::sign(signing_key, &message);
-        let seal = Consensus::PoA(PoAConsensus::new(poa_signature));
-        Ok(seal)
-    } else {
-        Err(anyhow!("no PoA signing key configured"))
-    }
 }
 
 fn increase_time(time: Tai64, duration: Duration) -> anyhow::Result<Tai64> {

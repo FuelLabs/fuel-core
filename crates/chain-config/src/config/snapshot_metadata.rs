@@ -40,6 +40,7 @@ impl TableEncoding {
         Ok(())
     }
 
+    #[allow(clippy::needless_borrows_for_generic_args)] // False positive
     fn prepend_path(&mut self, dir: &Path) {
         match self {
             TableEncoding::Json { filepath } => {

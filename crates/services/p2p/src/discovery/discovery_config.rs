@@ -42,7 +42,7 @@ impl Config {
             reserved_nodes: vec![],
             reserved_nodes_only_mode: false,
             random_walk: None,
-            max_peers_connected: std::usize::MAX,
+            max_peers_connected: usize::MAX,
             with_mdns: false,
             network_name,
             connection_idle_timeout: Duration::from_secs(10),
