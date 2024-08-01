@@ -1,37 +1,37 @@
 [workspace]
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
 members = [
-    "benches",
-    "bin/e2e-test-client",
-    "bin/fuel-core",
-    "bin/fuel-core-client",
-    "bin/keygen",
-    "crates/chain-config",
-    "crates/client",
-    "crates/database",
-    "crates/fuel-core",
-    "crates/fuel-gas-price-algorithm",
-    "crates/keygen",
-    "crates/metrics",
-    "crates/services",
-    "crates/services/consensus_module",
-    "crates/services/consensus_module/bft",
-    "crates/services/consensus_module/poa",
-    "crates/services/executor",
-    "crates/services/gas_price_service",
-    "crates/services/importer",
-    "crates/services/p2p",
-    "crates/services/producer",
-    "crates/services/relayer",
-    "crates/services/sync",
-    "crates/services/txpool",
-    "crates/services/upgradable-executor",
-    "crates/services/upgradable-executor/wasm-executor",
-    "crates/storage",
-    "crates/trace",
-    "crates/types",
-    "tests",
-    "xtask",
+  "benches",
+  "bin/e2e-test-client",
+  "bin/fuel-core",
+  "bin/fuel-core-client",
+  "bin/keygen",
+  "crates/chain-config",
+  "crates/client",
+  "crates/database",
+  "crates/fuel-core",
+  "crates/fuel-gas-price-algorithm",
+  "crates/keygen",
+  "crates/metrics",
+  "crates/services",
+  "crates/services/consensus_module",
+  "crates/services/consensus_module/bft",
+  "crates/services/consensus_module/poa",
+  "crates/services/executor",
+  "crates/services/gas_price_service",
+  "crates/services/importer",
+  "crates/services/p2p",
+  "crates/services/producer",
+  "crates/services/relayer",
+  "crates/services/sync",
+  "crates/services/txpool",
+  "crates/services/upgradable-executor",
+  "crates/services/upgradable-executor/wasm-executor",
+  "crates/storage",
+  "crates/trace",
+  "crates/types",
+  "tests",
+  "xtask",
 ]
 resolver = "2"
 
@@ -117,8 +117,8 @@ strum = { version = "0.25" }
 strum_macros = "0.25"
 # enable cookie store to support L7 sticky sessions
 reqwest = { version = "0.11.16", default-features = false, features = [
-    "rustls-tls",
-    "cookies",
+  "rustls-tls",
+  "cookies",
 ] }
 mockall = "0.11"
 num_enum = "0.7"
@@ -139,4 +139,3 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
-
