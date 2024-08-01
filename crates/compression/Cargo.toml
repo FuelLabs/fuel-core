@@ -1,0 +1,30 @@
+[package]
+name = "fuel-core-compression"
+version = { workspace = true }
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-core", "fuel-client", "fuel-compression"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Compression and decompression of Fuel blocks for DA storage."
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fuel-core-types = { workspace = true, features = ["serde", "da-compression"] }
+postcard = { version = "1.0", features = ["use-std"] }
+rocksdb = { version = "0.21", default-features = false, optional = true }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+bincode = { version = "1.3" }
+fuel-core-compression = { workspace = true, features = ["test-helpers"] }
+tempfile = "3"
+
+[features]
+default = ["rocksdb"]
+rocksdb = ["dep:rocksdb"]
+test-helpers = ["fuel-core-types/test-helpers", "fuel-core-types/random", "fuel-core-types/std"]
