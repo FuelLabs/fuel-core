@@ -59,6 +59,7 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_types::BlockHeight,
+    fuel_vm::BlobData,
 };
 use import_task::{
     ImportTable,
@@ -112,6 +113,7 @@ impl SnapshotImporter {
         tracing::info!("Running imports");
         self.spawn_worker_on_chain::<Coins>()?;
         self.spawn_worker_on_chain::<Messages>()?;
+        self.spawn_worker_on_chain::<BlobData>()?;
         self.spawn_worker_on_chain::<ContractsRawCode>()?;
         self.spawn_worker_on_chain::<ContractsLatestUtxo>()?;
         self.spawn_worker_on_chain::<ContractsState>()?;

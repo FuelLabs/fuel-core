@@ -292,11 +292,13 @@ impl SnapshotWriter {
             ContractsState,
             Messages,
         };
+        use fuel_core_types::fuel_vm::BlobData;
 
         use crate::AsTable;
 
         self.write::<Coins>(state_config.as_table())?;
         self.write::<Messages>(state_config.as_table())?;
+        self.write::<BlobData>(state_config.as_table())?;
         self.write::<ContractsRawCode>(state_config.as_table())?;
         self.write::<ContractsLatestUtxo>(state_config.as_table())?;
         self.write::<ContractsState>(state_config.as_table())?;

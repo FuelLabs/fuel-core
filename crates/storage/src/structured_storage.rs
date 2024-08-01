@@ -49,6 +49,7 @@ use std::{
 };
 
 pub mod balances;
+pub mod blobs;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;

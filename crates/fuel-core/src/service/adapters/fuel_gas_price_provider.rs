@@ -7,7 +7,10 @@ use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerG
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::{
     fuel_types::BlockHeight,
-    services::txpool::Result as TxPoolResult,
+    services::txpool::{
+        Error as TxPoolError,
+        Result as TxPoolResult,
+    },
 };
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -53,7 +56,7 @@ impl<A> FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn next_gas_price(&self) -> u64 {
+    async fn next_gas_price(&self) -> Option<u64> {
         self.algorithm.next_gas_price().await
     }
 }
@@ -64,7 +67,9 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self) -> anyhow::Result<u64> {
-        Ok(self.next_gas_price().await)
+        self.next_gas_price()
+            .await
+            .ok_or(anyhow::anyhow!("No gas price available"))
     }
 }
 
@@ -74,7 +79,11 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self) -> TxPoolResult<u64> {
-        Ok(self.next_gas_price().await)
+        self.next_gas_price()
+            .await
+            .ok_or(TxPoolError::GasPriceNotFound(
+                "Gas price not set yet".to_string(),
+            ))
     }
 }
 
@@ -83,7 +92,7 @@ impl<A> GraphqlGasPriceEstimate for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
         self.algorithm.worst_case_gas_price(height).await
     }
 }
