@@ -261,6 +261,7 @@ mod tests {
         },
     };
     use fuel_core_chain_config::{
+        BlobConfig,
         CoinConfig,
         ContractConfig,
         LastBlockConfig,
@@ -343,6 +344,10 @@ mod tests {
         .take(1000)
         .collect_vec();
 
+        let blobs = std::iter::repeat_with(|| BlobConfig::randomize(&mut rng))
+            .take(1000)
+            .collect_vec();
+
         let contracts = std::iter::repeat_with(|| given_contract_config(&mut rng))
             .take(1000)
             .collect_vec();
@@ -350,6 +355,7 @@ mod tests {
         let state = StateConfig {
             coins,
             messages,
+            blobs,
             contracts,
             last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(0u32),

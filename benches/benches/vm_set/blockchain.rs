@@ -358,7 +358,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut ldc,
             format!("{i}"),
-            VmBench::new(op::ldc(0x10, RegId::ZERO, 0x13))
+            VmBench::new(op::ldc(0x10, RegId::ZERO, 0x13, 0))
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script),

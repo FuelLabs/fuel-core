@@ -42,6 +42,10 @@ impl MaybeCheckedTransaction {
                 CheckedTransaction::Upload(tx),
                 _,
             ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Blob(tx),
+                _,
+            ) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
         }
     }
