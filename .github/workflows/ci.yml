@@ -135,15 +135,15 @@ jobs:
 
           # WASM compatibility checks
           - command: check
-            args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features
+            args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features --features alloc
           - command: check
-            args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features
+            args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features --features alloc
           - command: check
             args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
           - command: check
             args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
           - command: check
-            args: -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features
+            args: -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc
 
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45

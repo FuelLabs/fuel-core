@@ -4,6 +4,12 @@
 
 use crate::kv_store::StorageColumn;
 
+#[cfg(feature = "alloc")]
+use alloc::string::{
+    String,
+    ToString,
+};
+
 /// Database tables column ids to the corresponding [`crate::Mappable`] table.
 #[repr(u32)]
 #[derive(

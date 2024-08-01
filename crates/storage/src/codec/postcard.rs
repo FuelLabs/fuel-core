@@ -8,7 +8,12 @@ use crate::codec::{
     Decode,
     Encode,
 };
+
+#[cfg(feature = "std")]
 use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
 
 /// The codec is used to serialized/deserialized types that supports `serde::Serialize` and `serde::Deserialize`.
 pub struct Postcard;

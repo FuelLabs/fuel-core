@@ -13,8 +13,8 @@ build = "build.rs"
 [dependencies]
 anyhow = { workspace = true, optional = true }
 fuel-core-executor = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
 fuel-core-wasm-executor = { workspace = true, optional = true }
 parking_lot = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }

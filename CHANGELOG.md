@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
 
 ### Breaking
+
+#### Changed
+- [2040](https://github.com/FuelLabs/fuel-core/pull/2040): Added full `no_std` support state transition related crates. The crates now require the "alloc" feature to be enabled. Following crates are affected:
+  - `fuel-core-types`
+  - `fuel-core-storage`
+  - `fuel-core-executor`
 - [2025](https://github.com/FuelLabs/fuel-core/pull/2025): Add new V0 algorithm for gas price to services.
     This change includes new flags for the CLI:
         - "starting-gas-price" - the starting gas price for the gas price algorithm

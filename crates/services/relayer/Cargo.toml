@@ -23,8 +23,8 @@ ethers-providers = { version = "2", default-features = false, features = [
   "rustls",
 ] }
 fuel-core-services = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true, optional = true }

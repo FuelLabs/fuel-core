@@ -14,12 +14,18 @@ use crate::{
     },
 };
 use core::ops::Deref;
+
+#[cfg(feature = "std")]
 use std::sync::Arc;
+
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
 /// The uncommitted result of the block importing.
 pub type UncommittedResult<DatabaseTransaction> =
     Uncommitted<ImportResult, DatabaseTransaction>;
 
+#[cfg(feature = "std")]
 /// The alias for the `ImportResult` that can be shared between threads.
 pub type SharedImportResult = Arc<dyn Deref<Target = ImportResult> + Send + Sync>;
 
@@ -109,6 +115,7 @@ impl BlockImportInfo {
     }
 }
 
+#[cfg(feature = "std")]
 impl From<SharedImportResult> for BlockImportInfo {
     fn from(result: SharedImportResult) -> Self {
         Self {

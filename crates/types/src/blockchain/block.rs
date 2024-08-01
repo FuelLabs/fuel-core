@@ -30,6 +30,9 @@ use crate::{
     },
 };
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 /// Version-able block type
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

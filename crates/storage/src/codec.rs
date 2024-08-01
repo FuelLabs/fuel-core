@@ -2,10 +2,13 @@
 //! It implements common codecs and encoders, but it is always possible to define own codecs.
 
 use crate::kv_store::Value;
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use core::ops::Deref;
+
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
 
 pub mod manual;
 pub mod postcard;

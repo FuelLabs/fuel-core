@@ -17,6 +17,6 @@ path = "src/main.rs"
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 fuel-core-client = { workspace = true }
-fuel-core-types = { workspace = true, features = ["serde"] }
+fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tokio = { workspace = true, features = ["macros"] }

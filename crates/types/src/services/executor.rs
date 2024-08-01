@@ -34,6 +34,12 @@ use crate::{
     services::Uncommitted,
 };
 
+#[cfg(feature = "alloc")]
+use alloc::{
+    string::String,
+    vec::Vec,
+};
+
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
 /// The uncommitted result of the block production execution.
@@ -206,6 +212,7 @@ impl TransactionExecutionResult {
         }
     }
 
+    #[cfg(feature = "std")]
     /// Get the reason of the failed transaction execution.
     pub fn reason(receipts: &[Receipt], state: &Option<ProgramState>) -> String {
         receipts
@@ -321,29 +328,31 @@ impl From<ValidityError> for Error {
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, derive_more::Display, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum TransactionValidityError {
-    #[error("Coin({0:#x}) input was already spent")]
+    #[display(fmt = "Coin({_0:#x}) input was already spent")]
     CoinAlreadySpent(UtxoId),
-    #[error("The input coin({0:#x}) doesn't match the coin from database")]
+    #[display(fmt = "The input coin({_0:#x}) doesn't match the coin from database")]
     CoinMismatch(UtxoId),
-    #[error("The specified coin({0:#x}) doesn't exist")]
+    #[display(fmt = "The specified coin({_0:#x}) doesn't exist")]
     CoinDoesNotExist(UtxoId),
-    #[error(
-        "Message({0:#x}) is not yet spendable, as it's DA height is newer than this block allows"
+    #[display(
+        fmt = "Message({_0:#x}) is not yet spendable, as it's DA height is newer than this block allows"
     )]
     MessageSpendTooEarly(Nonce),
-    #[error("The specified message({0:#x}) doesn't exist, possibly because it was already spent")]
+    #[display(
+        fmt = "The specified message({_0:#x}) doesn't exist, possibly because it was already spent"
+    )]
     MessageDoesNotExist(Nonce),
-    #[error("The input message({0:#x}) doesn't match the relayer message")]
+    #[display(fmt = "The input message({_0:#x}) doesn't match the relayer message")]
     MessageMismatch(Nonce),
-    #[error("The specified contract({0:#x}) doesn't exist")]
+    #[display(fmt = "The specified contract({_0:#x}) doesn't exist")]
     ContractDoesNotExist(ContractId),
-    #[error("Contract output index isn't valid: {0:#x}")]
+    #[display(fmt = "Contract output index isn't valid: {_0:#x}")]
     InvalidContractInputIndex(UtxoId),
-    #[error("Transaction validity: {0:#?}")]
+    #[display(fmt = "Transaction validity: {_0:#?}")]
     Validation(CheckError),
 }
 

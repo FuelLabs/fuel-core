@@ -3359,7 +3359,6 @@ dependencies = [
  "secrecy",
  "serde",
  "tai64",
- "thiserror",
  "zeroize",
 ]
 

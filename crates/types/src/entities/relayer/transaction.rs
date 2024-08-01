@@ -10,6 +10,12 @@ use crate::{
     },
 };
 
+#[cfg(feature = "alloc")]
+use alloc::{
+    string::String,
+    vec::Vec,
+};
+
 /// Transaction sent from the DA layer to fuel by the relayer
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]

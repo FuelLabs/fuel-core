@@ -25,6 +25,9 @@ use secrecy::{
 };
 use zeroize::Zeroize;
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Empty generated fields.

@@ -36,6 +36,9 @@ use crate::{
 };
 use fuel_core_types::fuel_merkle::binary::Primitive;
 
+#[cfg(feature = "alloc")]
+use alloc::borrow::ToOwned;
+
 /// The `Merklized` blueprint builds the storage as a [`Plain`](super::plain::Plain)
 /// blueprint and maintains the binary merkle tree by the `Metadata` table.
 ///

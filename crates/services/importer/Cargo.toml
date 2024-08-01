@@ -13,8 +13,8 @@ description = "Fuel Block Importer"
 anyhow = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-metrics = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
 parking_lot = { workspace = true }
 rayon = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

@@ -4,8 +4,10 @@ pub mod block_importer;
 pub mod block_producer;
 pub mod executor;
 pub mod graphql_api;
+#[cfg(feature = "std")]
 pub mod p2p;
 pub mod relayer;
+#[cfg(feature = "std")]
 pub mod txpool;
 
 // TODO: Define a one common error for all services like
