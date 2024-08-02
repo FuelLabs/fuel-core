@@ -113,12 +113,7 @@ mod smt {
             )
             .map(Into::into)
         }
-    }
 
-    impl<Database> ContractRef<Database>
-    where
-        Database: ContractStorageTrait,
-    {
         pub fn state_root(
             &self,
         ) -> Result<Bytes32, <Database as StorageInspect<ContractsState>>::Error>
@@ -139,13 +134,14 @@ mod smt {
         type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
     }
 
-    impl<D> ContractStorageTrait for D
+    impl<D, E> ContractStorageTrait for D
     where
-        D: StorageInspect<ContractsLatestUtxo, Error = StorageError>
-            + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
-            + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>,
+        D: StorageInspect<ContractsLatestUtxo, Error = E>
+            + MerkleRootStorage<ContractId, ContractsState, Error = E>
+            + MerkleRootStorage<ContractId, ContractsAssets, Error = E>,
+        E: fmt::Debug + fmt::Display + Send + Sync + 'static,
     {
-        type InnerError = StorageError;
+        type InnerError = E;
     }
 }
 
@@ -172,11 +168,12 @@ mod not_smt {
         type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
     }
 
-    impl<D> ContractStorageTrait for D
+    impl<D, E> ContractStorageTrait for D
     where
-        D: StorageInspect<ContractsLatestUtxo, Error = StorageError>,
+        D: StorageInspect<ContractsLatestUtxo, Error = E>,
+        E: fmt::Debug + fmt::Display + Send + Sync + 'static,
     {
-        type InnerError = StorageError;
+        type InnerError = E;
     }
 }
 
