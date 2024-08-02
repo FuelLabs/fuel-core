@@ -3,6 +3,7 @@
 use crate::{
     new_service,
     ports::{
+        BlockSigner,
         MockBlockImporter,
         MockBlockProducer,
         MockP2pPort,
@@ -21,6 +22,8 @@ use fuel_core_services::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::Block,
+        consensus::Consensus,
         header::BlockHeader,
         primitives::SecretKeyWrapper,
         SealedBlock,
@@ -149,6 +152,8 @@ impl TestContextBuilder {
 
         let p2p_port = generate_p2p_port();
 
+        let signer = FakeBlockSigner;
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
             config,
@@ -156,14 +161,33 @@ impl TestContextBuilder {
             producer,
             importer,
             p2p_port,
+            signer,
         );
         service.start().unwrap();
         TestContext { service }
     }
 }
 
+struct FakeBlockSigner;
+
+#[async_trait::async_trait]
+impl BlockSigner for FakeBlockSigner {
+    async fn seal_block(&self, _block: &Block) -> anyhow::Result<Consensus> {
+        todo!()
+    }
+
+    fn is_available(&self) -> bool {
+        todo!()
+    }
+}
+
 struct TestContext {
-    service: Service<MockTransactionPool, MockBlockProducer, MockBlockImporter>,
+    service: Service<
+        MockTransactionPool,
+        MockBlockProducer,
+        MockBlockImporter,
+        FakeBlockSigner,
+    >,
 }
 
 impl TestContext {
@@ -333,6 +357,8 @@ async fn remove_skipped_transactions() {
 
     let p2p_port = generate_p2p_port();
 
+    let signer = FakeBlockSigner;
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -340,6 +366,7 @@ async fn remove_skipped_transactions() {
         block_producer,
         block_importer,
         p2p_port,
+        signer,
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -380,6 +407,8 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let p2p_port = generate_p2p_port();
 
+    let signer = FakeBlockSigner;
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -387,6 +416,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_producer,
         block_importer,
         p2p_port,
+        signer,
     );
 
     // simulate some txpool event to see if any block production is erroneously triggered

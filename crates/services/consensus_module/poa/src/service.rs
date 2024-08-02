@@ -6,11 +6,11 @@ use crate::{
     ports::{
         BlockImporter,
         BlockProducer,
+        BlockSigner,
         P2pPort,
         TransactionPool,
         TransactionsSource,
     },
-    signer::SignMode,
     sync::{
         SyncState,
         SyncTask,
@@ -26,7 +26,7 @@ use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
     RunnableTask,
-    Service as _,
+    Service as OtherService,
     ServiceRunner,
     StateWatcher,
 };
@@ -61,7 +61,7 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 
-pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
+pub type Service<T, B, I, S> = ServiceRunner<MainTask<T, B, I, S>>;
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -115,8 +115,8 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<T, B, I> {
-    signer: SignMode,
+pub struct MainTask<T, B, I, S> {
+    signer: S,
     block_producer: B,
     block_importer: I,
     txpool: T,
@@ -132,7 +132,7 @@ pub struct MainTask<T, B, I> {
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, S> MainTask<T, B, I, S>
 where
     T: TransactionPool,
     I: BlockImporter,
@@ -144,6 +144,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
+        signer: S,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -154,7 +155,6 @@ where
         let peer_connections_stream = p2p_port.reserved_peers_count();
 
         let Config {
-            signer,
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
@@ -228,11 +228,12 @@ where
     }
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, S> MainTask<T, B, I, S>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    S: BlockSigner,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -403,14 +404,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableService for MainTask<T, B, I>
+impl<T, B, I, S> RunnableService for MainTask<T, B, I, S>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I>;
+    type Task = MainTask<T, B, I, S>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -438,11 +439,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableTask for MainTask<T, B, I>
+impl<T, B, I, S> RunnableTask for MainTask<T, B, I, S>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    S: BlockSigner,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -525,18 +527,20 @@ where
     }
 }
 
-pub fn new_service<T, B, I, P>(
+pub fn new_service<T, B, I, P, S>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
-) -> Service<T, B, I>
+    block_signer: S,
+) -> Service<T, B, I, S>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
+    S: BlockSigner + 'static,
     P: P2pPort,
 {
     Service::new(MainTask::new(
@@ -546,6 +550,7 @@ where
         block_producer,
         block_importer,
         p2p_port,
+        block_signer,
     ))
 }
 

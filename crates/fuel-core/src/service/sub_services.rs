@@ -22,6 +22,7 @@ use crate::{
             BlockProducerAdapter,
             ConsensusParametersProvider,
             ExecutorAdapter,
+            FuelBlockSigner,
             MaybeRelayerAdapter,
             PoAAdapter,
             SharedMemoryPool,
@@ -58,8 +59,12 @@ use tokio::sync::Mutex;
 
 mod algorithm_updater;
 
-pub type PoAService =
-    fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
+pub type PoAService = fuel_core_poa::Service<
+    TxPoolAdapter,
+    BlockProducerAdapter,
+    BlockImporterAdapter,
+    FuelBlockSigner,
+>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
@@ -233,6 +238,8 @@ pub fn init_sub_services(
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
 
+    let signer = FuelBlockSigner;
+
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
@@ -241,6 +248,7 @@ pub fn init_sub_services(
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
+            signer,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
