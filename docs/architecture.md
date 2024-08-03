@@ -478,7 +478,7 @@ pub struct DebugSessionAdapter<S> {
 ## Fuel Core Services
 
 `fuel-core` is the connection point between all modules. Since adapters implement foreign traits for foreign domains,
-each domain should be wrapped in a local new-type such as `Service<D>`. Services should be sharable via 
+each domain should be wrapped in a local new-type such as `Service<D>`. Services should be shared via 
 `Arc<Service<D: Stoppable + Send + Sync>>`.
 
 The `Stoppable` trait ensures each service has a graceful shutdown method and join handle for any background tasks.
