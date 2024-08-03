@@ -1,6 +1,6 @@
 # Contributing to Fuel Core
 
-Thanks for your interest in contributing to Fuel Core! This document outlines some the conventions on building, running, and testing Fuel Core.
+Thanks for your interest in contributing to Fuel Core! This document outlines some of the conventions on building, running, and testing Fuel Core.
 
 Fuel Core has many dependent repositories. If you need any help or mentoring getting started, understanding the codebase, or anything else, please ask on our [Discord](https://discord.gg/xfpK4Pe).
 
@@ -121,7 +121,7 @@ Thanks for your contributions!
 
 For beginners, we have prepared many suitable tasks for you. Checkout our [Help Wanted issues](https://github.com/FuelLabs/fuel-core/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22) for a list.
 
-If you are planning something big, for example, relates to multiple components or changes current behaviors, make sure to open an issue to discuss with us before going on.
+If you are planning something big, for example, relates to multiple components or changes in current behaviors, make sure to open an issue to discuss with us before going on.
 
 The Client team actively develops and maintains several dependencies used in Fuel Core, which you may be also interested in:
 
