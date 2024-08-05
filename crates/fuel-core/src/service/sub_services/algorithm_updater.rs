@@ -160,7 +160,7 @@ pub fn get_synced_gas_price_updater(
         new_exec_price: config.starting_gas_price,
         min_exec_gas_price: config.min_gas_price,
         exec_gas_price_change_percent: config.gas_price_change_percent,
-        l2_block_height: latest_block_height.into(),
+        l2_block_height: latest_block_height,
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
 
