@@ -41,7 +41,7 @@ use fuel_core_storage::{
         FuelBlocks,
         Transactions,
     },
-    transactional::HistoricalView,
+    transactional::AtomicView,
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -142,20 +142,25 @@ pub fn get_synced_gas_price_updater(
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     block_stream: BoxStream<SharedImportResult>,
 ) -> anyhow::Result<Updater> {
-    let mut metadata_height: u32 = gas_price_db
-        .latest_height()?
-        .unwrap_or(genesis_block_height)
-        .into();
+    let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
         .latest_height()?
         .unwrap_or(genesis_block_height)
         .into();
 
-    let genesis_metadata = UpdaterMetadata::V0(V0Metadata {
+    let maybe_metadata_height = gas_price_db.latest_height()?;
+    let mut metadata_height = if let Some(metadata_height) = maybe_metadata_height {
+        metadata_height.into()
+    } else {
+        first_run = true;
+        latest_block_height
+    };
+
+    let first_metadata = UpdaterMetadata::V0(V0Metadata {
         new_exec_price: config.starting_gas_price,
         min_exec_gas_price: config.min_gas_price,
         exec_gas_price_change_percent: config.gas_price_change_percent,
-        l2_block_height: genesis_block_height.into(),
+        l2_block_height: latest_block_height.into(),
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
     });
 
@@ -163,7 +168,9 @@ pub fn get_synced_gas_price_updater(
         revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
         metadata_height = gas_price_db
             .latest_height()?
-            .unwrap_or(genesis_block_height)
+            .ok_or(anyhow::anyhow!(
+                "Metadata DB height should match the latest block height"
+            ))?
             .into();
     }
 
@@ -171,9 +178,9 @@ pub fn get_synced_gas_price_updater(
     let l2_block_source =
         FuelL2BlockSource::new(genesis_block_height, settings.clone(), block_stream);
 
-    if BlockHeight::from(latest_block_height) == genesis_block_height {
+    if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
         let updater = FuelGasPriceUpdater::new(
-            genesis_metadata.into(),
+            first_metadata.into(),
             l2_block_source,
             metadata_storage,
         );
@@ -186,8 +193,6 @@ pub fn get_synced_gas_price_updater(
                 on_chain_db,
                 metadata_height,
                 latest_block_height,
-                genesis_metadata,
-                genesis_block_height.into(),
             )?;
         }
 
@@ -208,18 +213,12 @@ fn sync_metadata_storage_with_on_chain_storage(
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     metadata_height: u32,
     latest_block_height: u32,
-    genesis_metadata: UpdaterMetadata,
-    genesis_block_height: u32,
 ) -> anyhow::Result<()> {
-    let metadata = if metadata_height == genesis_block_height {
-        genesis_metadata
-    } else {
-        metadata_storage
-            .get_metadata(&metadata_height.into())?
-            .ok_or(anyhow::anyhow!(
-                "Expected metadata to exist for height: {metadata_height}"
-            ))?
-    };
+    let metadata = metadata_storage
+        .get_metadata(&metadata_height.into())?
+        .ok_or(anyhow::anyhow!(
+            "Expected metadata to exist for height: {metadata_height}"
+        ))?;
     let mut inner: AlgorithmUpdater = metadata.into();
     match &mut inner {
         AlgorithmUpdater::V0(ref mut updater) => {
@@ -247,7 +246,7 @@ fn sync_v0_metadata(
     >,
 ) -> anyhow::Result<()> {
     let first = metadata_height.saturating_add(1);
-    let view = on_chain_db.view_at(&latest_block_height.into())?;
+    let view = on_chain_db.latest_view()?;
     for height in first..=latest_block_height {
         let block = view
             .storage::<FuelBlocks>()

@@ -38,6 +38,7 @@ fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
 fuel-core-relayer = { path = "../crates/services/relayer", features = [
   "test-helpers",
 ], optional = true }
+fuel-core-gas-price-service = { path = "../crates/services/gas_price_service" }
 fuel-core-storage = { path = "../crates/storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "../crates/trace" }
 fuel-core-txpool = { path = "../crates/services/txpool", features = [

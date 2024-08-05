@@ -3285,6 +3285,7 @@ dependencies = [
  "fuel-core-bin",
  "fuel-core-client",
  "fuel-core-executor",
+ "fuel-core-gas-price-service",
  "fuel-core-p2p",
  "fuel-core-poa",
  "fuel-core-relayer",
