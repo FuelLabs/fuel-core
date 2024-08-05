@@ -71,7 +71,7 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
 }
 
 prop_compose! {
-    fn height_and_lower_height()(height in 1..100u32)(height in Just(height), lower_height in 0..height) -> (u32, u32) {
+    fn height_and_lower_height()(height in 2..100u32)(height in Just(height), lower_height in 1..height) -> (u32, u32) {
         (height, lower_height)
     }
 }
@@ -253,7 +253,7 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
     .await?;
 
     // Then
-    // advance the block height to the next block
+    // advance the block height to the next block to add the metadata to db
     recovered_driver.client.produce_blocks(1, None).await?;
     let recovered_database = &recovered_driver.node.shared.database;
     let next_height = height + 1;
@@ -265,11 +265,10 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
         recovered_database.gas_price().latest_height()?,
         Some(BlockHeight::new(next_height))
     );
-    let prev_height = height - 1;
     let view = recovered_database.gas_price().latest_view().unwrap();
     let previous_metadata = view
         .storage::<GasPriceMetadata>()
-        .get(&prev_height.into())
+        .get(&height.into())
         .unwrap()
         .clone();
     assert!(previous_metadata.is_none());
