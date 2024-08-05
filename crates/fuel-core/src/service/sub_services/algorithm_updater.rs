@@ -247,8 +247,8 @@ fn sync_v0_metadata(
     >,
 ) -> anyhow::Result<()> {
     let first = metadata_height.saturating_add(1);
+    let view = on_chain_db.view_at(&latest_block_height.into())?;
     for height in first..=latest_block_height {
-        let view = on_chain_db.view_at(&height.into())?;
         let block = view
             .storage::<FuelBlocks>()
             .get(&height.into())?
