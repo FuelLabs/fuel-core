@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.32.0]
+
 ### Added
 - [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
 
-#### Breaking
+### Breaking
 - [2048](https://github.com/FuelLabs/fuel-core/pull/2048): Disable SMT for `ContractsAssets` and `ContractsState` for the production mode of the `fuel-core`. The SMT still is used in benchmarks and tests.
 - [#1988](https://github.com/FuelLabs/fuel-core/pull/1988): Updated `fuel-vm` to `0.56.0` ([release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0)). Adds Blob transaction support.
 - [2025](https://github.com/FuelLabs/fuel-core/pull/2025): Add new V0 algorithm for gas price to services.
