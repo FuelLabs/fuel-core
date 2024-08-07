@@ -163,14 +163,14 @@ impl DatabaseBlocks for ReadView {
         // Chain together blocks from the off-chain db and the on-chain db
         // The blocks in off-chain db, if any, are from time before regenesis
 
-        if let BlockHeightQuery::Specific(height) = height {
-            match (height >= self.genesis_height, direction) {
+        if let BlockHeightQuery::Specific(inner) = height {
+            match (inner >= self.genesis_height, direction) {
                 (true, IterDirection::Forward) => self
                     .on_chain
-                    .blocks(BlockHeightQuery::Specific(height), direction),
+                    .blocks(height, direction),
                 (true, IterDirection::Reverse) => self
                     .on_chain
-                    .blocks(BlockHeightQuery::Specific(height), direction)
+                    .blocks(height, direction)
                     .chain(
                         self.off_chain
                             .old_blocks(BlockHeightQuery::Genesis, direction),
@@ -178,12 +178,12 @@ impl DatabaseBlocks for ReadView {
                     .into_boxed(),
                 (false, IterDirection::Forward) => self
                     .off_chain
-                    .old_blocks(BlockHeightQuery::Specific(height), direction)
+                    .old_blocks(height, direction)
                     .chain(self.on_chain.blocks(BlockHeightQuery::Genesis, direction))
                     .into_boxed(),
                 (false, IterDirection::Reverse) => self
                     .off_chain
-                    .old_blocks(BlockHeightQuery::Specific(height), direction),
+                    .old_blocks(height, direction),
             }
         } else {
             match direction {
