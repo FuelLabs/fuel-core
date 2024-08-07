@@ -1,5 +1,28 @@
+use std::time::Duration;
+
 use clap::ValueEnum;
+use strum_macros::{
+    Display,
+    EnumString,
+    EnumVariantNames,
+};
+
 use fuel_core_chain_config::SnapshotReader;
+#[cfg(feature = "test-helpers")]
+use fuel_core_chain_config::{
+    ChainConfig,
+    StateConfig,
+};
+pub use fuel_core_consensus_module::RelayerConsensusConfig;
+pub use fuel_core_importer;
+#[cfg(feature = "p2p")]
+use fuel_core_p2p::config::{
+    Config as P2PConfig,
+    NotInitialized,
+};
+pub use fuel_core_poa::Trigger;
+#[cfg(feature = "relayer")]
+use fuel_core_relayer::Config as RelayerConfig;
 use fuel_core_types::{
     blockchain::{
         header::StateTransitionBytecodeVersion,
@@ -7,31 +30,6 @@ use fuel_core_types::{
     },
     secrecy::Secret,
 };
-use std::time::Duration;
-use strum_macros::{
-    Display,
-    EnumString,
-    EnumVariantNames,
-};
-
-#[cfg(feature = "p2p")]
-use fuel_core_p2p::config::{
-    Config as P2PConfig,
-    NotInitialized,
-};
-
-#[cfg(feature = "relayer")]
-use fuel_core_relayer::Config as RelayerConfig;
-
-#[cfg(feature = "test-helpers")]
-use fuel_core_chain_config::{
-    ChainConfig,
-    StateConfig,
-};
-
-pub use fuel_core_consensus_module::RelayerConsensusConfig;
-pub use fuel_core_importer;
-pub use fuel_core_poa::Trigger;
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
@@ -56,7 +54,10 @@ pub struct Config {
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
-    pub static_gas_price: u64,
+    pub starting_gas_price: u64,
+    pub gas_price_change_percent: u64,
+    pub min_gas_price: u64,
+    pub gas_price_threshold_percent: u64,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -109,7 +110,6 @@ impl Config {
             );
 
         let utxo_validation = false;
-        let min_gas_price = 0;
 
         let combined_db_config = CombinedDatabaseConfig {
             // Set the cache for tests = 10MB
@@ -122,6 +122,10 @@ impl Config {
             #[cfg(feature = "rocksdb")]
             state_rewind_policy: Default::default(),
         };
+        let starting_gas_price = 0;
+        let gas_price_change_percent = 0;
+        let min_gas_price = 0;
+        let gas_price_threshold_percent = 50;
 
         Self {
             graphql_config: GraphQLConfig {
@@ -152,7 +156,10 @@ impl Config {
             block_producer: fuel_core_producer::Config {
                 ..Default::default()
             },
-            static_gas_price: min_gas_price,
+            starting_gas_price,
+            gas_price_change_percent,
+            min_gas_price,
+            gas_price_threshold_percent,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,

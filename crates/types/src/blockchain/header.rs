@@ -75,8 +75,7 @@ impl BlockHeader {
         }
     }
 
-    /// Mutable getter for consensus portion of header
-    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+    fn _consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
         match self {
             BlockHeader::V1(v1) => &mut v1.consensus,
         }
@@ -85,6 +84,10 @@ impl BlockHeader {
 
 #[cfg(feature = "test-helpers")]
 impl BlockHeader {
+    /// Mutable getter for consensus portion of header
+    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+        self._consensus_mut()
+    }
     /// Set the entire consensus header
     pub fn set_consensus_header(
         &mut self,
@@ -163,7 +166,7 @@ pub type ConsensusParametersVersion = u32;
 pub type StateTransitionBytecodeVersion = u32;
 
 /// The latest version of the state transition bytecode.
-pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 5;
+pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 6;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -353,7 +356,7 @@ impl BlockHeader {
     /// Re-generate the header metadata.
     pub fn recalculate_metadata(&mut self) {
         let application_hash = self.application().hash();
-        self.consensus_mut().generated.application_hash = application_hash;
+        self._consensus_mut().generated.application_hash = application_hash;
         let id = self.hash();
         match self {
             BlockHeader::V1(v1) => {

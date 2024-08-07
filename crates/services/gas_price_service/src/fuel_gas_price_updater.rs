@@ -1,13 +1,18 @@
-use crate::UpdateAlgorithm;
-use fuel_core_types::fuel_types::BlockHeight;
-use fuel_gas_price_algorithm::v0::{
-    AlgorithmUpdaterV0,
-    AlgorithmV0,
+use crate::{
+    GasPriceAlgorithm,
+    UpdateAlgorithm,
 };
-pub use fuel_gas_price_algorithm::v1::{
-    AlgorithmUpdaterV1,
-    AlgorithmV1,
-    RecordedBlock,
+use fuel_core_types::fuel_types::BlockHeight;
+pub use fuel_gas_price_algorithm::{
+    v0::{
+        AlgorithmUpdaterV0,
+        AlgorithmV0,
+    },
+    v1::{
+        AlgorithmUpdaterV1,
+        AlgorithmV1,
+        RecordedBlock,
+    },
 };
 use std::num::NonZeroU64;
 
@@ -17,14 +22,33 @@ mod tests;
 pub mod fuel_core_storage_adapter;
 
 pub struct FuelGasPriceUpdater<L2, Metadata> {
-    inner: AlgorithmUpdaterV0,
+    inner: AlgorithmUpdater,
     l2_block_source: L2,
     metadata_storage: Metadata,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlgorithmUpdater {
+    V0(AlgorithmUpdaterV0),
+}
+
+impl AlgorithmUpdater {
+    pub fn algorithm(&self) -> Algorithm {
+        match self {
+            AlgorithmUpdater::V0(v0) => Algorithm::V0(v0.algorithm()),
+        }
+    }
+
+    pub fn l2_block_height(&self) -> BlockHeight {
+        match self {
+            AlgorithmUpdater::V0(v0) => v0.l2_block_height.into(),
+        }
+    }
+}
+
 impl<L2, Metadata> FuelGasPriceUpdater<L2, Metadata> {
     pub fn new(
-        inner: AlgorithmUpdaterV0,
+        inner: AlgorithmUpdater,
         l2_block_source: L2,
         metadata_storage: Metadata,
     ) -> Self {
@@ -62,13 +86,18 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 // Info required about the l2 block for the gas price algorithm
 #[derive(Debug, Clone, PartialEq)]
-pub struct BlockInfo {
-    // Block height
-    pub height: u32,
-    // Gas used in the block
-    pub gas_used: u64,
-    // Total gas capacity of the block
-    pub block_gas_capacity: u64,
+pub enum BlockInfo {
+    // The genesis block of the L2 chain
+    GenesisBlock,
+    // A normal block in the L2 chain
+    Block {
+        // Block height
+        height: u32,
+        // Gas used in the block
+        gas_used: u64,
+        // Total gas capacity of the block
+        block_gas_capacity: u64,
+    },
 }
 #[async_trait::async_trait]
 pub trait L2BlockSource: Send + Sync {
@@ -88,9 +117,8 @@ impl UpdaterMetadata {
     }
 }
 
-impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV0 {
-    type Error = anyhow::Error;
-    fn try_from(metadata: UpdaterMetadata) -> Result<Self, Self::Error> {
+impl From<UpdaterMetadata> for AlgorithmUpdater {
+    fn from(metadata: UpdaterMetadata) -> Self {
         match metadata {
             UpdaterMetadata::V0(v1_no_da) => {
                 let V0Metadata {
@@ -107,7 +135,7 @@ impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV0 {
                     l2_block_height,
                     l2_block_fullness_threshold_percent,
                 };
-                Ok(updater)
+                AlgorithmUpdater::V0(updater)
             }
         }
     }
@@ -123,23 +151,28 @@ pub struct V0Metadata {
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
     /// based on the fullness of the last L2 block
     pub exec_gas_price_change_percent: u64,
-    /// The height of the next L2 block
+    /// The height for which the `new_exec_price` is calculated, which should be the _next_ block
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
     /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: u64,
 }
 
-impl From<AlgorithmUpdaterV0> for UpdaterMetadata {
-    fn from(v1: AlgorithmUpdaterV0) -> Self {
-        let v0 = V0Metadata {
-            new_exec_price: v1.new_exec_price,
-            min_exec_gas_price: v1.min_exec_gas_price,
-            exec_gas_price_change_percent: v1.exec_gas_price_change_percent,
-            l2_block_height: v1.l2_block_height,
-            l2_block_fullness_threshold_percent: v1.l2_block_fullness_threshold_percent,
-        };
-        UpdaterMetadata::V0(v0)
+impl From<AlgorithmUpdater> for UpdaterMetadata {
+    fn from(updater: AlgorithmUpdater) -> Self {
+        match updater {
+            AlgorithmUpdater::V0(v0) => {
+                let metadata = V0Metadata {
+                    new_exec_price: v0.new_exec_price,
+                    min_exec_gas_price: v0.min_exec_gas_price,
+                    exec_gas_price_change_percent: v0.exec_gas_price_change_percent,
+                    l2_block_height: v0.l2_block_height,
+                    l2_block_fullness_threshold_percent: v0
+                        .l2_block_fullness_threshold_percent,
+                };
+                UpdaterMetadata::V0(metadata)
+            }
+        }
     }
 }
 
@@ -154,16 +187,17 @@ where
     Metadata: MetadataStorage,
 {
     pub fn init(
-        init_metadata: UpdaterMetadata,
+        target_block_height: BlockHeight,
         l2_block_source: L2,
         metadata_storage: Metadata,
     ) -> Result<Self> {
-        let target_block_height = init_metadata.l2_block_height();
         let inner = metadata_storage
             .get_metadata(&target_block_height)?
-            .unwrap_or(init_metadata)
-            .try_into()
-            .map_err(Error::CouldNotInitUpdater)?;
+            .ok_or(Error::CouldNotInitUpdater(anyhow::anyhow!(
+                "No metadata found for block height: {:?}",
+                target_block_height
+            )))?
+            .into();
         let updater = Self {
             inner,
             l2_block_source,
@@ -179,34 +213,56 @@ where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
 {
-    type Algorithm = AlgorithmV0;
+    type Algorithm = Algorithm;
 
     fn start(&self, _for_block: BlockHeight) -> Self::Algorithm {
         self.inner.algorithm()
     }
 
     async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
-        tokio::select! {
-            l2_block = self.l2_block_source.get_l2_block(self.inner.l2_block_height.into()) => {
-                tracing::info!("Received L2 block: {:?}", l2_block);
-                let l2_block = l2_block?;
-                let BlockInfo {
-                    height,
-                    gas_used,
-                    block_gas_capacity,
-                } = l2_block;
+        let l2_block_res = self
+            .l2_block_source
+            .get_l2_block(self.inner.l2_block_height())
+            .await;
+        tracing::info!("Received L2 block result: {:?}", l2_block_res);
+        let l2_block = l2_block_res?;
+        let AlgorithmUpdater::V0(ref mut updater) = &mut self.inner;
+        match l2_block {
+            BlockInfo::GenesisBlock => {
+                // do nothing
+            }
+            BlockInfo::Block {
+                height,
+                gas_used,
+                block_gas_capacity,
+            } => {
                 let capacity = NonZeroU64::new(block_gas_capacity).ok_or_else(|| {
                     anyhow::anyhow!("Block gas capacity must be non-zero")
                 })?;
-                self.inner.update_l2_block_data(
-                    height,
-                    gas_used,
-                    capacity,
-                )?;
+                updater.update_l2_block_data(height, gas_used, capacity)?;
                 self.metadata_storage
                     .set_metadata(self.inner.clone().into())?;
-                Ok(self.inner.algorithm())
             }
+        }
+        Ok(self.inner.algorithm())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Algorithm {
+    V0(AlgorithmV0),
+}
+
+impl GasPriceAlgorithm for Algorithm {
+    fn next_gas_price(&self) -> u64 {
+        match self {
+            Algorithm::V0(v0) => v0.calculate(),
+        }
+    }
+
+    fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
+        match self {
+            Algorithm::V0(v0) => v0.worst_case(height.into()),
         }
     }
 }

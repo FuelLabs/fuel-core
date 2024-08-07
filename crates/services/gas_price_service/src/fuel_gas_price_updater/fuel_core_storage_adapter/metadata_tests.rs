@@ -1,5 +1,9 @@
 #![allow(non_snake_case)]
 
+use crate::fuel_gas_price_updater::{
+    fuel_core_storage_adapter::storage::GasPriceColumn,
+    AlgorithmUpdater,
+};
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
     transactional::{
@@ -10,8 +14,6 @@ use fuel_core_storage::{
 };
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 
-use crate::fuel_gas_price_updater::fuel_core_storage_adapter::storage::GasPriceColumn;
-
 use super::*;
 
 fn arb_metadata() -> UpdaterMetadata {
@@ -20,14 +22,14 @@ fn arb_metadata() -> UpdaterMetadata {
 }
 
 fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
-    AlgorithmUpdaterV0 {
+    let inner = AlgorithmUpdaterV0 {
         new_exec_price: 100,
         min_exec_gas_price: 12,
         exec_gas_price_change_percent: 2,
         l2_block_height: l2_height.into(),
         l2_block_fullness_threshold_percent: 0,
-    }
-    .into()
+    };
+    AlgorithmUpdater::V0(inner).into()
 }
 
 fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {

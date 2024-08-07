@@ -13,6 +13,7 @@ use crate::{
             ScriptGasLimit,
             Tip,
         },
+        Blob,
         Cacheable,
         Chargeable,
         Create,
@@ -67,6 +68,8 @@ pub enum PoolTransaction {
     Upgrade(Checked<Upgrade>, ConsensusParametersVersion),
     /// Upload
     Upload(Checked<Upload>, ConsensusParametersVersion),
+    /// Blob
+    Blob(Checked<Blob>, ConsensusParametersVersion),
 }
 
 impl PoolTransaction {
@@ -76,7 +79,8 @@ impl PoolTransaction {
             PoolTransaction::Script(_, version)
             | PoolTransaction::Create(_, version)
             | PoolTransaction::Upgrade(_, version)
-            | PoolTransaction::Upload(_, version) => *version,
+            | PoolTransaction::Upload(_, version)
+            | PoolTransaction::Blob(_, version) => *version,
         }
     }
 
@@ -87,6 +91,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().metered_bytes_size(),
         }
     }
 
@@ -97,6 +102,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.id(),
             PoolTransaction::Upgrade(tx, _) => tx.id(),
             PoolTransaction::Upload(tx, _) => tx.id(),
+            PoolTransaction::Blob(tx, _) => tx.id(),
         }
     }
 
@@ -107,6 +113,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Blob(tx, _) => tx.metadata().max_gas,
         }
     }
 }
@@ -121,6 +128,7 @@ impl PoolTransaction {
             PoolTransaction::Create(_, _) => None,
             PoolTransaction::Upgrade(_, _) => None,
             PoolTransaction::Upload(_, _) => None,
+            PoolTransaction::Blob(_, _) => None,
         }
     }
 
@@ -130,6 +138,7 @@ impl PoolTransaction {
             Self::Create(tx, _) => tx.transaction().tip(),
             Self::Upload(tx, _) => tx.transaction().tip(),
             Self::Upgrade(tx, _) => tx.transaction().tip(),
+            Self::Blob(tx, _) => tx.transaction().tip(),
         }
     }
 
@@ -139,6 +148,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Upload(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().is_computed(),
         }
     }
 
@@ -148,6 +158,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().inputs(),
         }
     }
 
@@ -157,6 +168,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().outputs(),
         }
     }
 }
@@ -176,6 +188,7 @@ impl From<&PoolTransaction> for Transaction {
             PoolTransaction::Upload(tx, _) => {
                 Transaction::Upload(tx.transaction().clone())
             }
+            PoolTransaction::Blob(tx, _) => Transaction::Blob(tx.transaction().clone()),
         }
     }
 }
@@ -187,6 +200,7 @@ impl From<&PoolTransaction> for CheckedTransaction {
             PoolTransaction::Create(tx, _) => CheckedTransaction::Create(tx.clone()),
             PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx.clone()),
             PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx.clone()),
+            PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx.clone()),
         }
     }
 }

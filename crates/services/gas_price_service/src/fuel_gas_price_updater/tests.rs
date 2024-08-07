@@ -78,7 +78,7 @@ fn different_arb_metadata() -> UpdaterMetadata {
 #[tokio::test]
 async fn next__fetches_l2_block() {
     // given
-    let l2_block = BlockInfo {
+    let l2_block = BlockInfo::Block {
         height: 1,
         gas_used: 60,
         block_gas_capacity: 100,
@@ -90,9 +90,11 @@ async fn next__fetches_l2_block() {
     let metadata_storage = FakeMetadata::empty();
 
     let starting_metadata = arb_metadata();
-    let mut updater =
-        FuelGasPriceUpdater::init(starting_metadata, l2_block_source, metadata_storage)
-            .unwrap();
+    let mut updater = FuelGasPriceUpdater::new(
+        starting_metadata.into(),
+        l2_block_source,
+        metadata_storage,
+    );
 
     let start = updater.start(0.into());
     // when
@@ -116,40 +118,35 @@ async fn init__if_exists_already_reload() {
     let l2_block_source = PendingL2BlockSource;
 
     // when
-    let different_metadata = different_arb_metadata();
+    let height = metadata.l2_block_height();
     let updater =
-        FuelGasPriceUpdater::init(different_metadata, l2_block_source, metadata_storage)
-            .unwrap();
+        FuelGasPriceUpdater::init(height, l2_block_source, metadata_storage).unwrap();
 
     // then
-    let expected: AlgorithmUpdaterV0 = metadata.try_into().unwrap();
+    let expected: AlgorithmUpdater = metadata.into();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
 
 #[tokio::test]
-async fn init__if_it_does_not_exist_create_with_provided_values() {
+async fn init__if_it_does_not_exist_fail() {
     // given
     let metadata_storage = FakeMetadata::empty();
     let l2_block_source = PendingL2BlockSource;
 
     // when
     let metadata = different_arb_metadata();
-    let updater =
-        FuelGasPriceUpdater::init(metadata.clone(), l2_block_source, metadata_storage)
-            .unwrap();
+    let height = u32::from(metadata.l2_block_height()) + 1;
+    let res = FuelGasPriceUpdater::init(height.into(), l2_block_source, metadata_storage);
 
     // then
-    let expected: AlgorithmUpdaterV0 = metadata.try_into().unwrap();
-    let actual = updater.inner;
-    assert_eq!(expected, actual);
+    assert!(matches!(res, Err(Error::CouldNotInitUpdater(_))));
 }
 
 #[tokio::test]
 async fn next__new_l2_block_saves_old_metadata() {
-    let _ = tracing_subscriber::fmt::try_init();
     // given
-    let l2_block = BlockInfo {
+    let l2_block = BlockInfo::Block {
         height: 1,
         gas_used: 60,
         block_gas_capacity: 100,
@@ -164,12 +161,11 @@ async fn next__new_l2_block_saves_old_metadata() {
     };
 
     let starting_metadata = arb_metadata();
-    let mut updater = FuelGasPriceUpdater::init(
-        starting_metadata.clone(),
+    let mut updater = FuelGasPriceUpdater::new(
+        starting_metadata.clone().into(),
         l2_block_source,
         metadata_storage,
-    )
-    .unwrap();
+    );
 
     // when
     let next = tokio::spawn(async move { updater.next().await });

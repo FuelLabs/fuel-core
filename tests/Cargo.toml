@@ -23,12 +23,15 @@ clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
+  "smt",
+  "wasm-executor",
   "test-helpers",
 ] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true }
+fuel-core-gas-price-service = { path = "../crates/services/gas_price_service" }
 fuel-core-p2p = { path = "../crates/services/p2p", features = [
   "test-helpers",
 ], optional = true }
@@ -42,9 +45,7 @@ fuel-core-txpool = { path = "../crates/services/txpool", features = [
   "test-helpers",
 ] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
-fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor", features = [
-  "wasm-executor",
-] }
+fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor" }
 futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
@@ -65,6 +66,7 @@ tokio = { workspace = true, features = [
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+proptest = { workspace = true }
 tracing = { workspace = true }
 
 [features]

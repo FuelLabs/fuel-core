@@ -166,8 +166,8 @@ impl worker::TxPool for TxPoolAdapter {
 
 #[async_trait::async_trait]
 impl GasPriceEstimate for StaticGasPrice {
-    async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
-        self.gas_price
+    async fn worst_case_gas_price(&self, _height: BlockHeight) -> Option<u64> {
+        Some(self.gas_price)
     }
 }
 

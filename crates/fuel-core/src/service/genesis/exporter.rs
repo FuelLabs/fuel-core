@@ -53,7 +53,10 @@ use fuel_core_storage::{
     },
     transactional::AtomicView,
 };
-use fuel_core_types::fuel_types::ContractId;
+use fuel_core_types::{
+    fuel_types::ContractId,
+    fuel_vm::BlobData,
+};
 use itertools::Itertools;
 
 use super::{
@@ -105,6 +108,7 @@ where
             |ctx: &Self| ctx.db.on_chain(),
             Coins,
             Messages,
+            BlobData,
             ContractsRawCode,
             ContractsLatestUtxo,
             ContractsState,

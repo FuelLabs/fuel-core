@@ -32,7 +32,8 @@ pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
         .iter()
         .any(|receipt| matches!(receipt, Receipt::TransferOut { .. }))
     {
-        return Err("collect fee hasn't produced `TransferOut` receipt".into())
+        let msg = format!("TransferOut receipt not found in receipts: {:?}", receipts);
+        return Err(msg.into())
     }
 
     Ok(())

@@ -79,7 +79,7 @@ impl MockTxPoolGasPrice {
 
 #[async_trait::async_trait]
 impl GasPriceProviderConstraint for MockTxPoolGasPrice {
-    async fn last_gas_price(&self) -> TxPoolResult<GasPrice> {
+    async fn next_gas_price(&self) -> TxPoolResult<GasPrice> {
         self.gas_price.ok_or(TxPoolError::GasPriceNotFound(
             "Gas price not found".to_string(),
         ))

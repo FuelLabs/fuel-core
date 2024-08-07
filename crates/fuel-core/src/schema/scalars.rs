@@ -295,6 +295,7 @@ fuel_type_scalar!("Bytes32", Bytes32, Bytes32, 32);
 fuel_type_scalar!("Address", Address, Address, 32);
 fuel_type_scalar!("BlockId", BlockId, Bytes32, 32);
 fuel_type_scalar!("AssetId", AssetId, AssetId, 32);
+fuel_type_scalar!("BlobId", BlobId, BlobId, 32);
 fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);

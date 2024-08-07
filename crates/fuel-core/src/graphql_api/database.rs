@@ -165,9 +165,7 @@ impl DatabaseBlocks for ReadView {
 
         if let BlockHeightQuery::Specific(inner) = height {
             match (inner >= self.genesis_height, direction) {
-                (true, IterDirection::Forward) => self
-                    .on_chain
-                    .blocks(height, direction),
+                (true, IterDirection::Forward) => self.on_chain.blocks(height, direction),
                 (true, IterDirection::Reverse) => self
                     .on_chain
                     .blocks(height, direction)
@@ -181,9 +179,9 @@ impl DatabaseBlocks for ReadView {
                     .old_blocks(height, direction)
                     .chain(self.on_chain.blocks(BlockHeightQuery::Genesis, direction))
                     .into_boxed(),
-                (false, IterDirection::Reverse) => self
-                    .off_chain
-                    .old_blocks(height, direction),
+                (false, IterDirection::Reverse) => {
+                    self.off_chain.old_blocks(height, direction)
+                }
             }
         } else {
             match direction {

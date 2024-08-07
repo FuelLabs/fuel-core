@@ -363,6 +363,7 @@ where
             CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
             CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx, version),
             CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx, version),
+            CheckedTransaction::Blob(tx) => PoolTransaction::Blob(tx, version),
         });
 
         self.check_blacklisting(tx.as_ref())?;
@@ -535,7 +536,7 @@ where
         tx.into_checked_basic(current_height, consensus_params)?
     };
 
-    let gas_price = gas_price_provider.last_gas_price().await?;
+    let gas_price = gas_price_provider.next_gas_price().await?;
 
     let tx = verify_tx_min_gas_price(tx, consensus_params, gas_price)?;
 
@@ -570,6 +571,11 @@ fn verify_tx_min_gas_price(
             let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
             let (_, checked) = ready.decompose();
             CheckedTransaction::Upload(checked)
+        }
+        CheckedTransaction::Blob(tx) => {
+            let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = ready.decompose();
+            CheckedTransaction::Blob(checked)
         }
         CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
     };

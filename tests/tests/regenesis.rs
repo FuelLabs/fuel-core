@@ -56,7 +56,14 @@ async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
             Default::default(),
         ))
         .finalize_as_transaction();
-    client.submit_and_await_commit(&contract_tx).await.unwrap();
+    let status = client
+        .submit_and_await_commit(&contract_tx)
+        .await
+        .expect("Failed to send tx");
+    assert!(
+        matches!(status, TransactionStatus::Success { .. }),
+        "{status:?}"
+    );
 }
 
 async fn take_snapshot(db_dir: &TempDir, snapshot_dir: &TempDir) -> anyhow::Result<()> {
@@ -78,8 +85,8 @@ async fn take_snapshot(db_dir: &TempDir, snapshot_dir: &TempDir) -> anyhow::Resu
 async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
 
-    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
-
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
     // Add some blocks
     produce_block_with_tx(&mut rng, &core.client).await;
     produce_block_with_tx(&mut rng, &core.client).await;
@@ -108,7 +115,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     // ------------------------- Start a node with the first regenesis -------------------------
 
     // Start a new node with the snapshot
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -145,7 +152,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     // ------------------------- Start a node with the second regenesis -------------------------
 
     // Make sure the old blocks persisted through the second regenesis
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -209,7 +216,7 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
         .write_state_config(state_config, &ChainConfig::local_testnet())
         .unwrap();
 
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -260,7 +267,7 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
     // ------------------------- Start a node with the regenesis -------------------------
 
     // Start a new node with the snapshot
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -282,7 +289,8 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
 
     // Add some blocks
     let secret = SecretKey::random(&mut rng);
@@ -323,7 +331,7 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
     // ------------------------- Start a node with the regenesis -------------------------
 
     // Start a new node with the snapshot
-    let core = FuelCoreDriver::spawn(&[
+    let core = FuelCoreDriver::spawn_feeless(&[
         "--debug",
         "--poa-instant",
         "true",
@@ -337,7 +345,10 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
     else {
         panic!("Expected transaction to be squeezed out")
     };
-    assert!(reason.contains("Transaction id was already used"));
+    assert!(
+        reason.contains("Transaction id was already used"),
+        "Unexpected message {reason:?}"
+    );
 
     Ok(())
 }
@@ -345,7 +356,8 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
 #[tokio::test(flavor = "multi_thread")]
 async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
     let base_asset_id = *core
         .node
         .shared
@@ -386,7 +398,6 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             Default::default(),
             base_asset_id,
         ))
-        .max_fee_limit(1_000_000)
         .script_gas_limit(1_000_000)
         .finalize_as_transaction();
 

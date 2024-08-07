@@ -53,6 +53,7 @@ query($id: TransactionId!) {
     isMint
     isUpgrade
     isUpload
+    isBlob
     outputs {
       __typename
       ... on CoinOutput {
@@ -207,5 +208,6 @@ query($id: TransactionId!) {
         root
       }
     }
+    blobId
   }
 }
