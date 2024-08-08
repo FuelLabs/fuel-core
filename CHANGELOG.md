@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2061](https://github.com/FuelLabs/fuel-core/pull/2061): Allow querying filled transaction body from the status.
+
 ### Bug Fixes
 - [2059](https://github.com/FuelLabs/fuel-core/pull/2059): Remove unwrap that is breaking backwards compatibility
 
