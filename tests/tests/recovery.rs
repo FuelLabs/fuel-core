@@ -1,5 +1,12 @@
 #![allow(non_snake_case)]
 
+use fuel_core_gas_price_service::fuel_gas_price_updater::{
+    fuel_core_storage_adapter::storage::GasPriceMetadata,
+};
+use fuel_core_storage::{
+    transactional::AtomicView,
+    StorageAsRef,
+};
 use fuel_core_types::fuel_types::BlockHeight;
 use proptest::{
     prelude::{
@@ -64,7 +71,7 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
 }
 
 prop_compose! {
-    fn height_and_lower_height()(height in 1..100u32)(height in Just(height), lower_height in 0..height) -> (u32, u32) {
+    fn height_and_lower_height()(height in 2..100u32)(height in Just(height), lower_height in 1..height) -> (u32, u32) {
         (height, lower_height)
     }
 }
@@ -201,6 +208,72 @@ proptest! {
             _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(height, lower_height)
         ).unwrap()
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
+) -> anyhow::Result<()> {
+    let driver = FuelCoreDriver::spawn(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--state-rewind-duration",
+        "7d",
+    ])
+    .await?;
+
+    // Given
+    let height = 100;
+    let lower_height = 0;
+    driver.client.produce_blocks(height, None).await?;
+    let database = &driver.node.shared.database;
+    assert_eq!(
+        database.on_chain().latest_height()?,
+        Some(BlockHeight::new(height))
+    );
+
+    let diff = height - lower_height;
+    for _ in 0..diff {
+        let _ = database.gas_price().rollback_last_block();
+    }
+    assert!(database.on_chain().latest_height()? > database.gas_price().latest_height()?);
+    let temp_dir = driver.kill().await;
+
+    // When
+    let recovered_driver = FuelCoreDriver::spawn_with_directory(
+        temp_dir,
+        &[
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--state-rewind-duration",
+            "7d",
+        ],
+    )
+    .await?;
+
+    // Then
+    // advance the block height to the next block to add the metadata to db
+    recovered_driver.client.produce_blocks(1, None).await?;
+    let recovered_database = &recovered_driver.node.shared.database;
+    let next_height = height + 1;
+    assert_eq!(
+        recovered_database.on_chain().latest_height()?,
+        Some(BlockHeight::new(next_height))
+    );
+    assert_eq!(
+        recovered_database.gas_price().latest_height()?,
+        Some(BlockHeight::new(next_height))
+    );
+    let view = recovered_database.gas_price().latest_view().unwrap();
+    let previous_metadata = view
+        .storage::<GasPriceMetadata>()
+        .get(&height.into())
+        .unwrap()
+        .clone();
+    assert!(previous_metadata.is_none());
+
+    Ok(())
 }
 
 fn multithreaded_runtime() -> tokio::runtime::Runtime {

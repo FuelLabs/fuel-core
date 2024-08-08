@@ -136,7 +136,8 @@ impl<S, R> Executor<S, R> {
         ("0-28-0", 2),
         ("0-29-0", 3),
         ("0-30-0", 4),
-        ("0-31-0", LATEST_STATE_TRANSITION_VERSION),
+        ("0-31-0", 5),
+        ("0-32-0", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
@@ -483,7 +484,12 @@ where
             gas_price,
         };
 
-        let previous_block_height = block.header_to_produce.height().pred();
+        let previous_block_height = if !dry_run {
+            block.header_to_produce.height().pred()
+        } else {
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
+            None
+        };
 
         let instance_without_input =
             crate::instance::Instance::new(&self.engine).add_source(source)?;
@@ -559,7 +565,12 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let previous_block_height = block.header_to_produce.height().pred();
+        let previous_block_height = if !dry_run {
+            block.header_to_produce.height().pred()
+        } else {
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
+            None
+        };
         let relayer = self.relayer_view_provider.latest_view()?;
 
         if let Some(previous_block_height) = previous_block_height {
