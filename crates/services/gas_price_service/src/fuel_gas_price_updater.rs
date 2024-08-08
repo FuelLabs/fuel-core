@@ -190,14 +190,28 @@ where
         target_block_height: BlockHeight,
         l2_block_source: L2,
         metadata_storage: Metadata,
+        min_exec_gas_price: u64,
+        exec_gas_price_change_percent: u64,
+        l2_block_fullness_threshold_percent: u64,
     ) -> Result<Self> {
-        let inner = metadata_storage
-            .get_metadata(&target_block_height)?
-            .ok_or(Error::CouldNotInitUpdater(anyhow::anyhow!(
+        let old_metadata = metadata_storage.get_metadata(&target_block_height)?.ok_or(
+            Error::CouldNotInitUpdater(anyhow::anyhow!(
                 "No metadata found for block height: {:?}",
                 target_block_height
-            )))?
-            .into();
+            )),
+        )?;
+        let new_metadata = match old_metadata {
+            UpdaterMetadata::V0(old) => {
+                let inner = V0Metadata {
+                    min_exec_gas_price,
+                    exec_gas_price_change_percent,
+                    l2_block_fullness_threshold_percent,
+                    ..old
+                };
+                UpdaterMetadata::V0(inner)
+            }
+        };
+        let inner = new_metadata.into();
         let updater = Self {
             inner,
             l2_block_source,
