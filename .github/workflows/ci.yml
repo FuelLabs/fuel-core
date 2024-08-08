@@ -303,6 +303,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: List repository info
+        run: |
+          echo "${{ github.server_url }}/${{ github.repository_owner }}"
+          echo "${{ github.repository }}"
+
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -368,9 +373,22 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Configure AWS credentials for ECR publishing
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_fuellabs_fuel-core
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR Public
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
 
       - name: Docker meta
         id: meta
@@ -378,6 +396,7 @@ jobs:
         with:
           images: |
             ghcr.io/fuellabs/fuel-core-debug
+            ${{ steps.login-ecr-public.outputs.registry }}/q2z3y3a7/fuel-core-debug
           tags: |
             type=sha
             type=ref,event=branch
@@ -422,9 +441,22 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Configure AWS credentials for ECR publishing
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_fuellabs_fuel-core
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR Public
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
 
       - name: Docker meta
         id: meta
@@ -432,6 +464,7 @@ jobs:
         with:
           images: |
             ghcr.io/fuellabs/fuel-core-e2e-client
+            ${{ steps.login-ecr-public.outputs.registry }}/q2z3y3a7/fuel-core-e2e-client
           tags: |
             type=sha
             type=ref,event=branch
