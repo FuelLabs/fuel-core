@@ -48,7 +48,7 @@ jobs:
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_fuellabs_fuel-core
+          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
       - name: Login to Amazon ECR Public
         id: login-ecr-public
@@ -336,7 +336,7 @@ jobs:
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_fuellabs_fuel-core
+          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
 
       - name: Login to Amazon ECR Public
@@ -406,7 +406,7 @@ jobs:
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_fuellabs_fuel-core
+          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
 
       - name: Login to Amazon ECR Public
@@ -474,7 +474,7 @@ jobs:
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_fuellabs_fuel-core
+          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
 
       - name: Login to Amazon ECR Public
