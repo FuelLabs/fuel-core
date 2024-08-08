@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Bug Fixes
 - [2059](https://github.com/FuelLabs/fuel-core/pull/2059): Remove unwrap that is breaking backwards compatibility
+- [2063](https://github.com/FuelLabs/fuel-core/pull/2063): Don't use historical view during dry run.
 
 ## [Version 0.32.0]
 
