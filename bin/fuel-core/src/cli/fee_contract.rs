@@ -10,12 +10,13 @@ use std::{
 #[derive(Debug, Parser)]
 pub struct Command {
     /// Address to withdraw fees to
+    #[clap(env = "FEE_CONTRACT_WITHDRAWAL_ADDRESS")]
     withdrawal_address: Address,
     /// Output file. If not provided, will print hex representation to stdout.
-    #[clap(short, long)]
+    #[clap(short, long, env = "FEE_CONTRACT_OUTPUT_PATH")]
     output: Option<PathBuf>,
     /// Overwrite output file if it exists. No effect if `output` is not provided.
-    #[clap(short, long)]
+    #[clap(short, long, env = "FEE_CONTRACT_OVERWRITE_FILE")]
     force: bool,
 }
 
