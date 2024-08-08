@@ -28,6 +28,25 @@ env:
   FUEL_ALWAYS_USE_WASM: true
 
 jobs:
+  oidc_debug_test:
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    name: A test of the oidc debugger
+    steps:
+      - name: Checkout actions-oidc-debugger
+        uses: actions/checkout@v3
+        with:
+          repository: github/actions-oidc-debugger
+          ref: main
+          token: ${{ secrets.your-checkout-token }}
+          path: ./.github/actions/actions-oidc-debugger
+      - name: Debug OIDC Claims
+        uses: ./.github/actions/actions-oidc-debugger
+        with:
+          audience: '${{ github.server_url }}/${{ github.repository_owner }}'
+
   check-changelog:
     name: Check Changelog
     runs-on: ubuntu-latest
