@@ -419,15 +419,15 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     bsiz: value
                         .bsiz
                         .unwrap_or(DependentCost::LightOperation(LightOperation {
-                            base: 0.into(),
-                            units_per_gas: 0.into(),
+                            base: 0u64.into(),
+                            units_per_gas: 0u64.into(),
                         }))
                         .into(),
                     bldd: value
                         .bldd
                         .unwrap_or(DependentCost::LightOperation(LightOperation {
-                            base: 0.into(),
-                            units_per_gas: 0.into(),
+                            base: 0u64.into(),
+                            units_per_gas: 0u64.into(),
                         }))
                         .into(),
                     cfe: value.cfe.into(),
