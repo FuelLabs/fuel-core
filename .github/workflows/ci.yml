@@ -28,34 +28,6 @@ env:
   FUEL_ALWAYS_USE_WASM: true
 
 jobs:
-  oidc_debug_test:
-    permissions:
-      contents: read
-      id-token: write
-    runs-on: ubuntu-latest
-    name: A test of the oidc debugger
-    steps:
-      - name: Checkout actions-oidc-debugger
-        uses: actions/checkout@v3
-        with:
-          repository: github/actions-oidc-debugger
-          ref: main
-          path: ./.github/actions/actions-oidc-debugger
-      - name: Debug OIDC Claims
-        uses: ./.github/actions/actions-oidc-debugger
-        with:
-          audience: '${{ github.server_url }}/${{ github.repository_owner }}'
-      - name: Configure AWS credentials for ECR publishing
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
-          aws-region: us-east-1
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registry-type: public
-
   check-changelog:
     name: Check Changelog
     runs-on: ubuntu-latest
