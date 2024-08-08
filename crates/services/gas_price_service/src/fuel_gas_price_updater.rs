@@ -200,18 +200,18 @@ where
                 target_block_height
             )),
         )?;
-        let new_metadata = match old_metadata {
+        let inner = match old_metadata {
             UpdaterMetadata::V0(old) => {
-                let inner = V0Metadata {
+                let v0 = AlgorithmUpdaterV0::new(
+                    old.new_exec_price,
                     min_exec_gas_price,
                     exec_gas_price_change_percent,
+                    old.l2_block_height,
                     l2_block_fullness_threshold_percent,
-                    ..old
-                };
-                UpdaterMetadata::V0(inner)
+                );
+                AlgorithmUpdater::V0(v0)
             }
         };
-        let inner = new_metadata.into();
         let updater = Self {
             inner,
             l2_block_source,
