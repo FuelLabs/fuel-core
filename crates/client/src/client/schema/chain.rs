@@ -416,20 +416,8 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     xori: value.xori.into(),
 
                     aloc: value.aloc_dependent_cost.into(),
-                    bsiz: value
-                        .bsiz
-                        .unwrap_or(DependentCost::LightOperation(LightOperation {
-                            base: 0u64.into(),
-                            units_per_gas: 0u64.into(),
-                        }))
-                        .into(),
-                    bldd: value
-                        .bldd
-                        .unwrap_or(DependentCost::LightOperation(LightOperation {
-                            base: 0u64.into(),
-                            units_per_gas: 0u64.into(),
-                        }))
-                        .into(),
+                    bsiz: value.bsiz.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
+                    bldd: value.bldd.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
                     cfe: value.cfe.into(),
                     cfei: value.cfei_dependent_cost.into(),
                     call: value.call.into(),
