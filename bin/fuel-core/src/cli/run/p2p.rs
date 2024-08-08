@@ -90,6 +90,10 @@ pub struct P2PArgs {
     #[clap(long = "max-peers-connected", default_value = "50", env)]
     pub max_peers_connected: u32,
 
+    /// Max number of unique peers connected with the same remote IP address.
+    #[clap(long = "max-peers-per-remote-ip", default_value = "5", env)]
+    pub max_peers_per_remote_ip: usize,
+
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
     #[clap(long = "max-connections-per-peer", default_value = "3", env)]
@@ -309,6 +313,7 @@ impl P2PArgs {
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
+            max_peers_per_remote_ip: self.max_peers_per_remote_ip,
             max_connections_per_peer: self.max_connections_per_peer,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,

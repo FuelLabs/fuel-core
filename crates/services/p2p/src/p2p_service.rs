@@ -544,6 +544,9 @@ impl FuelP2PService {
                 self.peer_manager.handle_peer_disconnect(peer_id);
                 return Some(FuelP2PEvent::PeerDisconnected(peer_id));
             }
+            PeerReportEvent::AskForDisconnection { peer_id } => {
+                let _ = self.swarm.disconnect_peer_id(peer_id);
+            }
         }
         None
     }
@@ -748,6 +751,11 @@ mod tests {
     };
     use futures::{
         future::join_all,
+        stream::{
+            select_all,
+            BoxStream,
+        },
+        FutureExt,
         StreamExt,
     };
     use libp2p::{
@@ -772,6 +780,8 @@ mod tests {
         mpsc,
         oneshot,
         watch,
+        Mutex,
+        OwnedMutexGuard,
     };
     use tracing_attributes::instrument;
 
@@ -1183,6 +1193,128 @@ mod tests {
                     tracing::info!("Node C Event: {:?}", node_c_event);
                 }
             };
+        }
+    }
+
+    fn any_event_from_node<'a>(
+        nodes: Vec<P2PService>,
+    ) -> BoxStream<'a, (OwnedMutexGuard<P2PService>, FuelP2PEvent)> {
+        use futures::stream;
+
+        let streams = nodes.into_iter().map(|node| {
+            let node = Arc::new(Mutex::new(node));
+
+            stream::unfold(node, |node| {
+                async move {
+                    let new_node = node.clone();
+                    let mut lock = node.lock_owned().await;
+                    loop {
+                        let event = lock.next_event().await;
+                        if let Some(event) = event {
+                            return Some(((lock, event), new_node));
+                        }
+                    }
+                }
+                .boxed()
+            })
+        });
+
+        select_all(streams).boxed()
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn limited_number_of_connections_per_remote_ip() {
+        const LIMIT: usize = 10;
+
+        // Node A
+        let mut p2p_config =
+            Config::default_initialized("limited_number_of_connections_per_remote_ip");
+        p2p_config.max_peers_per_remote_ip = LIMIT;
+
+        let mut target_node = build_service_from_config(p2p_config.clone()).await;
+
+        p2p_config.bootstrap_nodes = target_node.multiaddrs();
+
+        let mut nodes_that_fit_into_limit = vec![];
+        for _ in 0..LIMIT {
+            let node = build_service_from_config(p2p_config.clone()).await;
+            nodes_that_fit_into_limit.push(node);
+        }
+
+        let mut good_nodes = any_event_from_node(nodes_that_fit_into_limit);
+        let mut connected_nodes: usize = 0;
+
+        loop {
+            tokio::select! {
+                target_node_event = target_node.next_event() => {
+                    if let Some(event) = target_node_event {
+                        tracing::info!("Target node Event: {:?}", event);
+                        match event {
+                            FuelP2PEvent::PeerConnected(_) => {
+                                connected_nodes = connected_nodes.saturating_add(1);
+                            }
+                            _ => {
+                                // Do nothing
+                            }
+                        }
+
+                        if connected_nodes >= LIMIT {
+                            break
+                        }
+                    }
+                },
+                event = good_nodes.next() => {
+                    if let Some((good_node, event)) = event {
+                        tracing::info!("Good node {:?}: {:?}", good_node.local_peer_id, event);
+
+                        match event {
+                            FuelP2PEvent::PeerDisconnected(_) => {
+                                panic!("Good node should not disconnect");
+                            }
+                            _ => {
+                                // Do nothing
+                            }
+                        }
+                    }
+                },
+            }
+        }
+
+        let mut nodes_that_not_fit_into_limit = vec![];
+        for _ in 0..LIMIT {
+            let node = build_service_from_config(p2p_config.clone()).await;
+            nodes_that_not_fit_into_limit.push(node);
+        }
+        let new_nodes = any_event_from_node(nodes_that_not_fit_into_limit);
+        let mut nodes = select_all(vec![good_nodes, new_nodes]);
+        let mut rejected_nodes = HashSet::new();
+
+        loop {
+            tokio::select! {
+                target_node_event = target_node.next_event() => {
+                    tracing::info!("Target node Event: {:?}", target_node_event);
+                    assert!(target_node.peer_manager.get_peers_ids().count() <= LIMIT);
+                },
+                node_event = nodes.next() => {
+                    if let Some((node, event)) = node_event {
+                        tracing::info!("Node {:?}: {:?}", node.local_peer_id, event);
+
+                        match event {
+                            FuelP2PEvent::PeerDisconnected(_) => {
+                                rejected_nodes.insert(node.local_peer_id);
+                            }
+                            _ => {
+                                // Do nothing
+                            }
+                        }
+
+                        if rejected_nodes.len() == LIMIT {
+                            break
+                        }
+                    }
+                },
+            }
         }
     }
 
