@@ -21,6 +21,7 @@ use fuel_core_types::{
         block::CompressedBlock,
         consensus::Consensus,
         primitives::{
+            BlockHeightQuery,
             BlockId,
             DaBlockHeight,
         },
@@ -94,7 +95,7 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn old_blocks(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
@@ -133,7 +134,7 @@ pub trait DatabaseBlocks {
 
     fn blocks(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
@@ -275,6 +276,7 @@ pub mod worker {
         StorageMutate,
     };
     use fuel_core_types::{
+        blockchain::primitives::BlockHeightQuery,
         fuel_tx::{
             Address,
             Bytes32,
@@ -346,7 +348,7 @@ pub mod worker {
         /// Return the import result at the given height.
         fn block_event_at_height(
             &self,
-            height: Option<BlockHeight>,
+            height: BlockHeightQuery,
         ) -> anyhow::Result<SharedImportResult>;
     }
 

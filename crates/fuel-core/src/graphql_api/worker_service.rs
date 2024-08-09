@@ -513,7 +513,7 @@ where
             off_chain_height.map(|height| BlockHeight::new(height.saturating_add(1)));
 
         let import_result =
-            import_result_provider.block_event_at_height(next_block_height)?;
+            import_result_provider.block_event_at_height(next_block_height.into())?;
 
         task.process_block(import_result)?
     }
