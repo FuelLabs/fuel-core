@@ -322,6 +322,7 @@ type FailureStatus {
 	transactionId: TransactionId!
 	blockHeight: U32!
 	block: Block!
+	transaction: Transaction!
 	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
@@ -1122,6 +1123,7 @@ type SuccessStatus {
 	transactionId: TransactionId!
 	blockHeight: U32!
 	block: Block!
+	transaction: Transaction!
 	time: Tai64Timestamp!
 	programState: ProgramState
 	receipts: [Receipt!]!

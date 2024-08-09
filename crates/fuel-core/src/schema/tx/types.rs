@@ -15,6 +15,7 @@ use crate::{
     },
     query::{
         SimpleBlockData,
+        SimpleTransactionData,
         TransactionQueryData,
     },
     schema::{
@@ -188,6 +189,13 @@ impl SuccessStatus {
         Ok(block.into())
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Transaction::from_tx(self.tx_id, transaction))
+    }
+
     async fn time(&self) -> Tai64Timestamp {
         Tai64Timestamp(self.time)
     }
@@ -235,6 +243,13 @@ impl FailureStatus {
         let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
+    }
+
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Transaction::from_tx(self.tx_id, transaction))
     }
 
     async fn time(&self) -> Tai64Timestamp {
