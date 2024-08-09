@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Changed
--[2064](https://github.com/FuelLabs/fuel-core/pull/2064):  Allow gas price metadata values to be overridden with config
+-[2067](https://github.com/FuelLabs/fuel-core/pull/2067): Return error from TxPool level if the `BlobId` is known.
+-[2064](https://github.com/FuelLabs/fuel-core/pull/2064): Allow gas price metadata values to be overridden with config
 
 ### Bug Fixes
 - [2059](https://github.com/FuelLabs/fuel-core/pull/2059): Remove unwrap that is breaking backwards compatibility
