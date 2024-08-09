@@ -444,6 +444,7 @@ pub mod tests {
     use crate::client::schema::Bytes;
     use fuel_core_types::fuel_types::canonical::Serialize;
 
+    #[cfg(not(feature = "test-helpers"))]
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
@@ -453,6 +454,7 @@ pub mod tests {
         insta::assert_snapshot!(operation.query)
     }
 
+    #[cfg(not(feature = "test-helpers"))]
     #[test]
     fn opaque_transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
@@ -462,6 +464,7 @@ pub mod tests {
         insta::assert_snapshot!(operation.query)
     }
 
+    #[cfg(not(feature = "test-helpers"))]
     #[test]
     fn transactions_connection_query_gql_output() {
         use cynic::QueryBuilder;
@@ -474,6 +477,7 @@ pub mod tests {
         insta::assert_snapshot!(operation.query)
     }
 
+    #[cfg(not(feature = "test-helpers"))]
     #[test]
     fn transactions_by_owner_gql_output() {
         use cynic::QueryBuilder;
