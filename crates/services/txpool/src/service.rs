@@ -343,10 +343,6 @@ impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, MP>
         self.txpool.lock().find_one(&id)
     }
 
-    pub fn find_dependent(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.txpool.lock().find_dependent(&ids)
-    }
-
     pub fn select_transactions(&self, max_gas: u64) -> Vec<ArcPoolTx> {
         let mut guard = self.txpool.lock();
         let txs = guard.includable();
