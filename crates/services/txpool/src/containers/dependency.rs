@@ -98,7 +98,7 @@ pub struct MessageState {
 
 #[derive(Debug, Clone)]
 pub struct BlobState {
-    origin: TxId,
+    origin_tx_id: TxId,
     tip: Word,
 }
 
@@ -238,13 +238,13 @@ impl Dependency {
                 if state.tip >= tx.tip() {
                     return Err(Error::NotInsertedCollisionBlobId(*blob_id))
                 } else {
-                    collided.push(state.origin);
+                    collided.push(state.origin_tx_id);
                 }
             }
             db_blobs.insert(
                 *blob_id,
                 BlobState {
-                    origin: tx.id(),
+                    origin_tx_id: tx.id(),
                     tip: tx.tip(),
                 },
             );

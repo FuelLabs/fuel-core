@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::{
     service::test_helpers::MockTxPoolGasPrice,
     test_helpers::{
@@ -1357,7 +1359,7 @@ async fn predicate_that_returns_false_is_invalid() {
 }
 
 #[tokio::test]
-async fn insert_blob_works() {
+async fn insert_single__blob_tx_works() {
     let program = vec![123; 123];
     let tx = TransactionBuilder::blob(BlobBody {
         id: BlobId::compute(program.as_slice()),
@@ -1376,16 +1378,18 @@ async fn insert_blob_works() {
 
     // Given
     let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let id = tx.id();
 
     // When
     let result = txpool.insert_single(tx);
 
     // Then
     let _ = result.expect("Should insert blob");
+    assert!(txpool.by_hash.contains_key(&id));
 }
 
 #[tokio::test]
-async fn insert_the_same_blob_fails_in_txpool_level() {
+async fn insert_single__blob_tx_fails_if_blob_already_inserted_and_lower_tip() {
     let program = vec![123; 123];
     let blob_id = BlobId::compute(program.as_slice());
     let tx = TransactionBuilder::blob(BlobBody {
@@ -1423,7 +1427,7 @@ async fn insert_the_same_blob_fails_in_txpool_level() {
 }
 
 #[tokio::test]
-async fn insert_the_same_blob_works_with_higher_tip() {
+async fn insert_single__blob_tx_succeeds_if_blob_already_inserted_but_higher_tip() {
     let program = vec![123; 123];
     let blob_id = BlobId::compute(program.as_slice());
     let tx = TransactionBuilder::blob(BlobBody {
@@ -1463,7 +1467,7 @@ async fn insert_the_same_blob_works_with_higher_tip() {
 }
 
 #[tokio::test]
-async fn insert_the_same_blob_fails_in_database_level() {
+async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
     let program = vec![123; 123];
     let blob_id = BlobId::compute(program.as_slice());
     let tx = TransactionBuilder::blob(BlobBody {
