@@ -243,6 +243,25 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
 }
 
 #[tokio::test]
+async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero() {
+    const MIN_GAS_PRICE: u64 = 1;
+
+    // Given
+    let mut node_config = Config::local_node();
+    node_config.min_gas_price = MIN_GAS_PRICE;
+    node_config.starting_gas_price = 0;
+    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // When
+    let result = client.estimate_gas_price(10).await.unwrap();
+
+    // Then
+    let actual = result.gas_price.0;
+    assert_eq!(MIN_GAS_PRICE, actual)
+}
+
+#[tokio::test]
 async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     // given
     let args = vec![
