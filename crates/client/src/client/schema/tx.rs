@@ -51,7 +51,19 @@ pub struct TxIdArgs {
 )]
 pub struct TransactionQuery {
     #[arguments(id: $id)]
-    pub transaction: Option<OpaqueTransaction>,
+    pub transaction: Option<OpaqueTransactionWithStatus>,
+}
+
+/// Retrieves the transaction in opaque form
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "TxIdArgs"
+)]
+pub struct TransactionStatusQuery {
+    #[arguments(id: $id)]
+    pub transaction: Option<OpaqueTransactionStatus>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -92,13 +104,25 @@ impl TryFrom<TransactionConnection> for PaginatedResult<TransactionResponse, Str
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionEdge {
     pub cursor: String,
-    pub node: OpaqueTransaction,
+    pub node: OpaqueTransactionWithStatus,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
+pub struct OpaqueTransactionWithStatus {
+    pub raw_payload: HexString,
+    pub status: Option<TransactionStatus>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
+pub struct OpaqueTransactionStatus {
     pub status: Option<TransactionStatus>,
 }
 
@@ -178,7 +202,8 @@ pub struct SubmittedStatus {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
-    pub transaction_id: TransactionId,
+    #[cfg(feature = "test-helpers")]
+    pub transaction: OpaqueTransaction,
     pub block_height: U32,
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
@@ -190,7 +215,8 @@ pub struct SuccessStatus {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
-    pub transaction_id: TransactionId,
+    #[cfg(feature = "test-helpers")]
+    pub transaction: OpaqueTransaction,
     pub block_height: U32,
     pub time: Tai64Timestamp,
     pub reason: String,
