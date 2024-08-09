@@ -18,6 +18,8 @@ env:
   GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
   GIT_REPO_OWNER: ${{ github.repository_owner }}
   GIT_REPO: ${{ github.repository }}
+  AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
+  AWS_ECR_ORG: q2z3y3a7
   CARGO_TERM_COLOR: always
   RUST_VERSION: 1.75.0
   RUST_VERSION_FMT: nightly-2023-10-29
@@ -308,8 +310,8 @@ jobs:
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
-          aws-region: us-east-1
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: us-east-1 # ecr public is only in us-east-1
 
       - name: Login to Amazon ECR Public
         id: login-ecr-public
@@ -323,7 +325,7 @@ jobs:
         with:
           images: |
             ghcr.io/fuellabs/fuel-core
-            ${{ steps.login-ecr-public.outputs.registry }}/q2z3y3a7/fuel-core
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/fuel-core
           tags: |
             type=sha
             type=ref,event=branch
@@ -378,8 +380,8 @@ jobs:
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
-          aws-region: us-east-1
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: us-east-1 # ecr public is only in us-east-1
 
       - name: Login to Amazon ECR Public
         id: login-ecr-public
@@ -393,7 +395,7 @@ jobs:
         with:
           images: |
             ghcr.io/fuellabs/fuel-core-debug
-            ${{ steps.login-ecr-public.outputs.registry }}/q2z3y3a7/fuel-core-debug
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/fuel-core-debug
           tags: |
             type=sha
             type=ref,event=branch
@@ -446,8 +448,8 @@ jobs:
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
-          aws-region: us-east-1
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: us-east-1 # ecr public is only in us-east-1
 
       - name: Login to Amazon ECR Public
         id: login-ecr-public
@@ -461,7 +463,7 @@ jobs:
         with:
           images: |
             ghcr.io/fuellabs/fuel-core-e2e-client
-            ${{ steps.login-ecr-public.outputs.registry }}/q2z3y3a7/fuel-core-e2e-client
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/fuel-core-e2e-client
           tags: |
             type=sha
             type=ref,event=branch
