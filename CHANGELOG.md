@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+-[2064](https://github.com/FuelLabs/fuel-core/pull/2064):  Allow gas price metadata values to be overridden with config
+
 ### Fixes
 - [2060](https://github.com/FuelLabs/fuel-core/pull/2060): Use `min-gas-price` as a starting point if `start-gas-price` is zero.
 - [2059](https://github.com/FuelLabs/fuel-core/pull/2059): Remove unwrap that is breaking backwards compatibility

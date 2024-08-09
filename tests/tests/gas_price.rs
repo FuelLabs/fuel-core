@@ -19,7 +19,16 @@ use fuel_core_client::client::{
     types::gas_price::LatestGasPrice,
     FuelClient,
 };
+use fuel_core_gas_price_service::fuel_gas_price_updater::{
+    fuel_core_storage_adapter::storage::GasPriceMetadata,
+    UpdaterMetadata,
+    V0Metadata,
+};
 use fuel_core_poa::Trigger;
+use fuel_core_storage::{
+    transactional::AtomicView,
+    StorageAsRef,
+};
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::{
@@ -38,6 +47,7 @@ use fuel_core_types::{
 use rand::Rng;
 use std::{
     iter::repeat,
+    ops::Deref,
     time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
@@ -346,4 +356,69 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
     assert_eq!(total_fee_zero_gas_price, 0);
 
     assert_eq!(total_gas, total_gas_zero_gas_price);
+}
+
+#[tokio::test]
+async fn startup__can_override_gas_price_values_by_changing_config() {
+    // given
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--gas-price-change-percent",
+        "0",
+        "--gas-price-threshold-percent",
+        "0",
+        "--min-gas-price",
+        "0",
+    ];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+    driver.client.produce_blocks(1, None).await.unwrap();
+    let temp_dir = driver.kill().await;
+
+    // when
+    let new_args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--gas-price-change-percent",
+        "11",
+        "--gas-price-threshold-percent",
+        "22",
+        "--min-gas-price",
+        "33",
+    ];
+    let recovered_driver = FuelCoreDriver::spawn_with_directory(temp_dir, &new_args)
+        .await
+        .unwrap();
+
+    // then
+    recovered_driver
+        .client
+        .produce_blocks(1, None)
+        .await
+        .unwrap();
+    let new_height = 2;
+
+    let recovered_database = &recovered_driver.node.shared.database;
+    let recovered_view = recovered_database.gas_price().latest_view().unwrap();
+    let new_metadata = recovered_view
+        .storage::<GasPriceMetadata>()
+        .get(&new_height.into())
+        .unwrap()
+        .unwrap()
+        .deref()
+        .clone();
+
+    let UpdaterMetadata::V0(V0Metadata {
+        min_exec_gas_price,
+        exec_gas_price_change_percent,
+        l2_block_height,
+        l2_block_fullness_threshold_percent,
+        ..
+    }) = new_metadata;
+    assert_eq!(exec_gas_price_change_percent, 11);
+    assert_eq!(l2_block_fullness_threshold_percent, 22);
+    assert_eq!(min_exec_gas_price, 33);
+    assert_eq!(l2_block_height, new_height);
 }
