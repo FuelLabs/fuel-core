@@ -39,7 +39,7 @@ pub use node_info::NodeInfo;
 use crate::client::schema::{
     relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
     tx::{
-        OpaqueTransaction,
+        OpaqueTransactionWithStatus,
         TransactionStatus as SchemaTxStatus,
     },
     ConversionError,
@@ -96,6 +96,8 @@ pub enum TransactionStatus {
         submitted_at: Tai64,
     },
     Success {
+        #[cfg(feature = "test-helpers")]
+        transaction: Transaction,
         block_height: BlockHeight,
         time: Tai64,
         program_state: Option<ProgramState>,
@@ -107,6 +109,8 @@ pub enum TransactionStatus {
         reason: String,
     },
     Failure {
+        #[cfg(feature = "test-helpers")]
+        transaction: Transaction,
         block_height: BlockHeight,
         time: Tai64,
         reason: String,
@@ -126,6 +130,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 submitted_at: s.time.0,
             },
             SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
+                #[cfg(feature = "test-helpers")]
+                transaction: s.transaction.try_into()?,
                 block_height: s.block_height.into(),
                 time: s.time.0,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
@@ -138,6 +144,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_fee: s.total_fee.0,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
+                #[cfg(feature = "test-helpers")]
+                transaction: s.transaction.try_into()?,
                 block_height: s.block_height.into(),
                 time: s.time.0,
                 reason: s.reason,
@@ -160,10 +168,10 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
     }
 }
 
-impl TryFrom<OpaqueTransaction> for TransactionResponse {
+impl TryFrom<OpaqueTransactionWithStatus> for TransactionResponse {
     type Error = ConversionError;
 
-    fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
+    fn try_from(value: OpaqueTransactionWithStatus) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
         let tx: Transaction = Transaction::from_bytes(bytes.as_slice())
             .map_err(ConversionError::TransactionFromBytesError)?;
