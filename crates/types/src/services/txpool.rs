@@ -43,6 +43,7 @@ use fuel_vm_private::{
         CheckError,
         CheckedTransaction,
     },
+    fuel_tx::BlobId,
     fuel_types::BlockHeight,
 };
 use std::{
@@ -207,7 +208,7 @@ impl From<&PoolTransaction> for CheckedTransaction {
 
 /// The `removed` field contains the list of removed transactions during the insertion
 /// of the `inserted` transaction.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InsertionResult {
     /// This was inserted
     pub inserted: ArcPoolTx,
@@ -327,6 +328,10 @@ pub enum Error {
     )]
     NotInsertedCollisionContractId(ContractId),
     #[error(
+        "Transaction is not inserted. More priced tx has uploaded the blob with BlobId {0:#x}"
+    )]
+    NotInsertedCollisionBlobId(BlobId),
+    #[error(
         "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
     )]
     NotInsertedCollisionMessageId(TxId, Nonce),
@@ -336,6 +341,8 @@ pub enum Error {
     NotInsertedInputContractDoesNotExist(ContractId),
     #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
+    #[error("Transaction is not inserted. BlobId is already taken {0:#x}")]
+    NotInsertedBlobIdAlreadyTaken(BlobId),
     #[error("Transaction is not inserted. UTXO does not exist: {0:#x}")]
     NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
@@ -388,6 +395,13 @@ pub enum Error {
     // TODO: We need it for now until channels are removed from TxPool.
     #[error("Got some unexpected error: {0}")]
     Other(String),
+}
+
+#[cfg(feature = "test-helpers")]
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string().eq(&other.to_string())
+    }
 }
 
 impl From<CheckError> for Error {
