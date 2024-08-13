@@ -1,6 +1,6 @@
 # Contributing to Fuel Core
 
-Thanks for your interest in contributing to Fuel Core! This document outlines some the conventions on building, running, and testing Fuel Core.
+Thanks for your interest in contributing to Fuel Core! This document outlines some of the conventions on building, running, and testing Fuel Core.
 
 Fuel Core has many dependent repositories. If you need any help or mentoring getting started, understanding the codebase, or anything else, please ask on our [Discord](https://discord.gg/xfpK4Pe).
 
@@ -34,7 +34,7 @@ git clone https://github.com/FuelLabs/fuel-core
 
 `rustup` is the official toolchain manager for Rust.
 
-We use some additional components such as `clippy` and `rustfmt`(nightly), to install those:
+We use some additional components such as `clippy` and `rustfmt` (nightly), to install those:
 
 ```sh
 rustup component add clippy
@@ -106,7 +106,7 @@ This is a rough outline of what a contributor's workflow looks like:
     -   If the change is breaking, please include a migration guide.
 -   If you are part of the FuelLabs Github org, please open a PR from the repository itself.
 -   Otherwise, push your changes to a branch in your fork of the repository and submit a pull request.
-    -   Make sure mention the issue, which is created at step 1, in the commit message.
+    -   Make sure to mention the issue, which is created at step 1, in the commit message.
 -   Your PR will be reviewed and some changes may be requested.
     -   Once you've made changes, your PR must be re-reviewed and approved.
     -   If the PR becomes out of date, you can use GitHub's 'update branch' button.
@@ -162,7 +162,7 @@ we still need to increase the version.
 The network can easily skip releases by upgrading to the old state transition function.
 
 The `fuel_core_upgradable_executor` crate also contains the mapping of the crate 
-version to the executor's version(`CRATE_VERSIONS`). For each release, 
+version to the executor's version (`CRATE_VERSIONS`). For each release, 
 we need to add a new entry there. The version of the crate uses `-` instead 
 of the `.` to avoid overriding old entries accidentally. 
 If you forgot to upgrade the version or add a new entry, the `version_check` test will fail.
