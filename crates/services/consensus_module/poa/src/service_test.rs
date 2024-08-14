@@ -490,7 +490,7 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
         .returning(|| Box::pin(tokio_stream::empty()));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
-    let TxPoolContext { txpool, txs, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let task = MainTask::new(
         &last_block,
         config,
@@ -517,5 +517,4 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
         maybe_produced_block,
         ProduceBlock::New(_, _)
     });
-    drop(txs);
 }
