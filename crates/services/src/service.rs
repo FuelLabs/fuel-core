@@ -251,6 +251,7 @@ where
     let state = Shared::new(sender);
     let stop_sender = state.clone();
     // Spawned as a task to check if the service is already running and to capture any panics.
+    tracing::info!("Starting the service {}", S::NAME);
     tokio::task::spawn(
         async move {
             tracing::debug!("running");

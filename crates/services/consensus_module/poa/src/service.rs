@@ -1,26 +1,21 @@
-use crate::{
-    deadline_clock::{
-        DeadlineClock,
-        OnConflict,
-    },
-    ports::{
-        BlockImporter,
-        BlockProducer,
-        P2pPort,
-        TransactionPool,
-        TransactionsSource,
-    },
-    sync::{
-        SyncState,
-        SyncTask,
-    },
-    Config,
-    Trigger,
+use std::{
+    ops::Deref,
+    time::Duration,
 };
+
 use anyhow::{
     anyhow,
     Context,
 };
+use tokio::{
+    sync::{
+        mpsc,
+        oneshot,
+    },
+    time::Instant,
+};
+use tokio_stream::StreamExt;
+
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -61,18 +56,26 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    ops::Deref,
-    time::Duration,
-};
-use tokio::{
-    sync::{
-        mpsc,
-        oneshot,
+
+use crate::{
+    deadline_clock::{
+        DeadlineClock,
+        OnConflict,
     },
-    time::Instant,
+    ports::{
+        BlockImporter,
+        BlockProducer,
+        P2pPort,
+        TransactionPool,
+        TransactionsSource,
+    },
+    sync::{
+        SyncState,
+        SyncTask,
+    },
+    Config,
+    Trigger,
 };
-use tokio_stream::StreamExt;
 
 pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
 #[derive(Clone)]
@@ -508,7 +511,6 @@ where
         let should_continue;
         let mut state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
-        tracing::info!("Waiting for the node to be synced");
         while *state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
@@ -527,7 +529,6 @@ where
                 }
             }
         }
-        tracing::info!("Node is synced");
 
         if let SyncState::Synced(block_header) = &*state.borrow_and_update() {
             let (last_height, last_timestamp, last_block_created) =

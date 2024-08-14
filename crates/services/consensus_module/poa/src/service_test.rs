@@ -471,8 +471,10 @@ impl BlockProducer for FakeBlockProducer {
 
 #[tokio::test]
 async fn consensus_service__run__will_include_predefined_blocks_before_new_blocks() {
+    tracing_subscriber::fmt::init();
+
     // given
-    let blocks = vec![];
+    let blocks = vec![Block::default(), Block::default(), Block::default()];
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
     let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
     let config = Config {
@@ -486,18 +488,26 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, txs, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    // let watcher = StateWatcher::started();
     let task = MainTask::new(
         &last_block,
         config,
-        MockTransactionPool::no_tx_updates(),
+        txpool,
         block_producer,
         block_importer,
         generate_p2p_port(),
         blocks.clone(),
     );
 
+    tracing::info!("Starting service runner");
     // when
-    ServiceRunner::new(task).start().unwrap();
+    let service = ServiceRunner::new(task);
+    service.start().unwrap();
+
+    tokio::time::sleep(Duration::from_millis(1000)).await;
 
     // then
     for block in blocks {
@@ -511,4 +521,5 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
     //     maybe_produced_block,
     //     ProduceBlock::New(_, _)
     // });
+    drop(txs);
 }
