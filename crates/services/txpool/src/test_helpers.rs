@@ -196,7 +196,7 @@ impl WasmChecker for MockWasmChecker {
         &self,
         _wasm_root: &Bytes32,
     ) -> Result<(), WasmValidityError> {
-        self.result.clone()
+        self.result
     }
 }
 
