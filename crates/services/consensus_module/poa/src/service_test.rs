@@ -203,7 +203,6 @@ impl MockTransactionPool {
         txpool
             .expect_transaction_status_events()
             .returning(move || {
-                tracing::info!("hit endpoint");
                 let status_channel =
                     (status_sender_clone.clone(), status_receiver.clone());
                 let stream = fuel_core_services::stream::unfold(
@@ -472,8 +471,6 @@ impl BlockProducer for FakeBlockProducer {
 
 #[tokio::test]
 async fn consensus_service__run__will_include_predefined_blocks_before_new_blocks() {
-    tracing_subscriber::fmt::init();
-
     // given
     let blocks = vec![Block::default(), Block::default(), Block::default()];
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
