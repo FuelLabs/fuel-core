@@ -622,7 +622,7 @@ where
         &self,
         _wasm_root: &Bytes32,
     ) -> Result<(), UpgradableError> {
-        Err(ExecutorError::NoWasmSupport)
+        Err(UpgradableError::NoWasmSupport)
     }
 
     /// Attempt to fetch and validate an uploaded WASM module.

@@ -1533,7 +1533,7 @@ async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
     ))
     .finalize_as_transaction();
     let mut params = ConsensusParameters::default();
-    params.set_privileged_address(privileged_address.clone());
+    params.set_privileged_address(privileged_address);
     let tx = check_single_tx(
         tx,
         Default::default(),
