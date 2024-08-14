@@ -66,6 +66,7 @@ pub trait TxPoolDb: Send + Sync {
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WasmValidityError {
     /// Wasm support is not enabled.
     NotEnabled,

@@ -275,7 +275,7 @@ impl TestContextBuilder {
             MockDBProvider(mock_db.clone()),
             importer,
             p2p,
-            MockWasmChecker,
+            MockWasmChecker { result: Ok(()) },
             Default::default(),
             gas_price_provider,
             consensus_parameters_provider,

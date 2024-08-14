@@ -1,9 +1,11 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    ports::WasmValidityError,
     service::test_helpers::MockTxPoolGasPrice,
     test_helpers::{
         IntoEstimated,
+        MockWasmChecker,
         TextContext,
         TEST_COIN_AMOUNT,
     },
@@ -30,6 +32,7 @@ use fuel_core_types::{
         BlobBody,
         BlobId,
         BlobIdExt,
+        Bytes32,
         ConsensusParameters,
         Contract,
         Finalizable,
@@ -40,6 +43,7 @@ use fuel_core_types::{
         TransactionBuilder,
         TxParameters,
         UniqueIdentifier,
+        UpgradePurpose,
         UtxoId,
     },
     fuel_types::ChainId,
@@ -1494,4 +1498,56 @@ async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
 
     // Then
     assert_eq!(result, Err(Error::NotInsertedBlobIdAlreadyTaken(blob_id)));
+}
+
+#[tokio::test]
+async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
+    let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
+    let privileged_address = Input::predicate_owner(predicate.clone());
+
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let context = TextContext::default()
+        .config(config)
+        .wasm_checker(MockWasmChecker {
+            result: Err(WasmValidityError::NotValid),
+        });
+    let mut txpool = context.build();
+    let gas_price_provider = MockTxPoolGasPrice::new(0);
+
+    // Given
+    let tx = TransactionBuilder::upgrade(UpgradePurpose::StateTransition {
+        root: Bytes32::new([1; 32]),
+    })
+    .add_input(Input::coin_predicate(
+        UtxoId::new(Bytes32::new([1; 32]), 0),
+        privileged_address,
+        1_000_000_000,
+        AssetId::BASE,
+        Default::default(),
+        Default::default(),
+        predicate,
+        vec![],
+    ))
+    .finalize_as_transaction();
+    let mut params = ConsensusParameters::default();
+    params.set_privileged_address(privileged_address.clone());
+    let tx = check_single_tx(
+        tx,
+        Default::default(),
+        false,
+        &params,
+        &gas_price_provider,
+        MemoryInstance::new(),
+    )
+    .await
+    .expect("Transaction should be checked");
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    assert_eq!(result, Err(Error::NotInsertedInvalidWasm));
 }
