@@ -203,6 +203,7 @@ impl MockTransactionPool {
         txpool
             .expect_transaction_status_events()
             .returning(move || {
+                tracing::info!("hit endpoint");
                 let status_channel =
                     (status_sender_clone.clone(), status_receiver.clone());
                 let stream = fuel_core_services::stream::unfold(
@@ -478,7 +479,9 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
     let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
     let config = Config {
-        trigger: Trigger::Instant,
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(100),
+        },
         signing_key: Some(test_signing_key()),
         metrics: false,
         ..Default::default()
@@ -491,7 +494,6 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, txs, .. } = MockTransactionPool::new_with_txs(vec![tx]);
-    // let watcher = StateWatcher::started();
     let task = MainTask::new(
         &last_block,
         config,
@@ -502,12 +504,9 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
         blocks.clone(),
     );
 
-    tracing::info!("Starting service runner");
     // when
     let service = ServiceRunner::new(task);
     service.start().unwrap();
-
-    tokio::time::sleep(Duration::from_millis(1000)).await;
 
     // then
     for block in blocks {
@@ -516,10 +515,10 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
             ProduceBlock::Predefined(block)
         );
     }
-    // let maybe_produced_block = block_receiver.recv().await.unwrap();
-    // assert!(matches! {
-    //     maybe_produced_block,
-    //     ProduceBlock::New(_, _)
-    // });
+    let maybe_produced_block = block_receiver.recv().await.unwrap();
+    assert!(matches! {
+        maybe_produced_block,
+        ProduceBlock::New(_, _)
+    });
     drop(txs);
 }
