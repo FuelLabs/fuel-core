@@ -57,8 +57,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
 
-/// Transaction type used by the transaction pool. Transaction pool supports not
-/// all `fuel_tx::Transaction` variants.
+/// Transaction type used by the transaction pool.
+/// Not all `fuel_tx::Transaction` variants are supported by the txpool.
 #[derive(Debug, Eq, PartialEq)]
 pub enum PoolTransaction {
     /// Script
@@ -317,6 +317,8 @@ pub enum Error {
     NotInsertedTxKnown,
     #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
     NotInsertedLimitHit,
+    #[error("Transaction is not inserted. Wasm contents are invalid.")]
+    NotInsertedInvalidWasm,
     #[error("Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,
     #[error(

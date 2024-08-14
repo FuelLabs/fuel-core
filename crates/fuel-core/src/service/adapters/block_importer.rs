@@ -32,12 +32,14 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
+use fuel_core_txpool::ports::WasmChecker;
 use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
         SealedBlock,
     },
+    fuel_tx::Bytes32,
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -106,5 +108,11 @@ impl Validator for ExecutorAdapter {
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         self.executor.validate(block)
+    }
+}
+
+impl WasmChecker for ExecutorAdapter {
+    fn uploaded_wasm_is_valid(&self, wasm_root: &Bytes32) -> bool {
+        self.executor.uploaded_wasm_is_valid(wasm_root)
     }
 }

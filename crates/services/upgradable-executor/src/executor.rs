@@ -29,7 +29,10 @@ use fuel_core_types::{
         },
     },
     fuel_tx::Transaction,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
         block_producer::Components,
         executor::{
@@ -193,7 +196,7 @@ impl<S, R> Executor<S, R> {
         let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
         let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
             wasmtime::Module::new(engine, crate::WASM_BYTECODE)
-                .expect("Failed to compile the WASM bytecode")
+                .expect("Failed to validate the WASM bytecode")
         });
 
         Self {
@@ -604,6 +607,45 @@ where
         }
     }
 
+    /// Wasm support is disabled in the current build.
+    #[cfg(not(feature = "wasm-executor"))]
+    pub fn uploaded_wasm_is_valid(&self, _wasm_root: &Bytes32) -> bool {
+        false
+    }
+
+    /// Attempt to fetch and validate an uploaded WASM module.
+    #[cfg(feature = "wasm-executor")]
+    pub fn uploaded_wasm_is_valid(&self, wasm_root: &Bytes32) -> bool {
+        self.get_module_by_root_and_validate(*wasm_root).is_ok()
+    }
+
+    /// Find an uploaded WASM blob by it's hash and validate it.
+    /// This is a slow operation, and the cached result should be used if possible,
+    /// for instancy by calling `get_module` below.
+    #[cfg(feature = "wasm-executor")]
+    fn get_module_by_root_and_validate(
+        &self,
+        bytecode_root: Bytes32,
+    ) -> ExecutorResult<wasmtime::Module> {
+        let view = StructuredStorage::new(self.storage_view_provider.latest_view()?);
+        let uploaded_bytecode = view
+            .storage::<UploadedBytecodes>()
+            .get(&bytecode_root)?
+            .ok_or(not_found!(UploadedBytecodes))?;
+
+        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
+            uploaded_bytecode.as_ref()
+        else {
+            return Err(ExecutorError::Other(format!(
+                "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
+            )))
+        };
+
+        wasmtime::Module::new(&self.engine, bytecode).map_err(|e| {
+            ExecutorError::Other(format!("The module is not valid wasm: {e}"))
+        })
+    }
+
     /// Returns the compiled WASM module of the state transition function.
     ///
     /// Note: The method compiles the WASM module if it is not cached.
@@ -624,26 +666,15 @@ where
             .storage::<StateTransitionBytecodeVersions>()
             .get(&version)?
             .ok_or(not_found!(StateTransitionBytecodeVersions))?;
-        let uploaded_bytecode = view
-            .storage::<UploadedBytecodes>()
-            .get(&bytecode_root)?
-            .ok_or(not_found!(UploadedBytecodes))?;
 
-        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
-            uploaded_bytecode.as_ref()
-        else {
-            return Err(ExecutorError::Other(format!(
-                "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
-            )))
-        };
-
-        // Compiles the module
-        let module = wasmtime::Module::new(&self.engine, bytecode).map_err(|e| {
-            ExecutorError::Other(format!(
-                "Failed to compile the module for the version `{}` with {e}",
-                version,
-            ))
-        })?;
+        let module = self
+            .get_module_by_root_and_validate(bytecode_root)
+            .map_err(|mut err| {
+                if let ExecutorError::Other(msg) = &mut err {
+                    msg.push_str(&format!(" (version {version})"));
+                }
+                err
+            })?;
 
         self.cached_modules.lock().insert(version, module.clone());
         Ok(module)

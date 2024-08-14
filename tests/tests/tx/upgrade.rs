@@ -143,7 +143,7 @@ async fn can_upgrade_to_uploaded_state_transition() {
 
     // Then
     let TransactionStatus::Success { block_height, .. } =
-        result.expect("We should be able to upload the bytecode subsection")
+        result.expect("We should be able to upgrade to the uploaded bytecode")
     else {
         unreachable!()
     };
@@ -166,6 +166,60 @@ async fn can_upgrade_to_uploaded_state_transition() {
         state_transition_bytecode_version_before_upgrade,
         state_transition_bytecode_version_after_upgrade
     );
+}
+
+#[tokio::test]
+async fn upgrading_to_invalid_state_transition_fails() {
+    let privileged_address = Input::predicate_owner(predicate());
+    let amount = 1_000;
+    let subsections = UploadSubsection::split_bytecode(
+        b"This is definitely not valid wasm!",
+        SUBSECTION_SIZE,
+    )
+    .unwrap();
+    let root = subsections[0].root;
+    let mut test_builder = TestSetupBuilder::new(2322);
+    test_builder.utxo_validation = false;
+    test_builder.privileged_address = privileged_address;
+    let TestContext {
+        client,
+        srv: _drop,
+        mut rng,
+        ..
+    } = test_builder.finalize().await;
+
+    let transactions = transactions_from_subsections(&mut rng, subsections, amount);
+    for upload in transactions {
+        let mut tx = upload.into();
+        client.estimate_predicates(&mut tx).await.unwrap();
+        client.submit_and_await_commit(&tx).await.unwrap();
+    }
+
+    // Given
+    let upgrade = Transaction::upgrade(
+        UpgradePurpose::StateTransition { root },
+        Policies::new().with_max_fee(amount),
+        vec![Input::coin_predicate(
+            rng.gen(),
+            privileged_address,
+            amount,
+            AssetId::BASE,
+            Default::default(),
+            Default::default(),
+            predicate(),
+            vec![],
+        )],
+        vec![],
+        vec![],
+    );
+
+    // When
+    let mut tx = upgrade.into();
+    client.estimate_predicates(&mut tx).await.unwrap();
+    let result = client.submit_and_await_commit(&tx).await;
+
+    // Then
+    result.expect_err("Upgrading to an incorrect bytecode should fail");
 }
 
 fn valid_transaction(rng: &mut StdRng, amount: u64) -> Transaction {

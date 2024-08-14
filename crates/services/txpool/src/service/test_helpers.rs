@@ -5,6 +5,7 @@ use crate::{
         BlockImporter,
         MockConsensusParametersProvider,
     },
+    test_helpers::MockWasmChecker,
     types::GasPrice,
     MockDb,
 };
@@ -52,6 +53,7 @@ pub struct TestContext {
     pub(crate) service: Service<
         MockP2P,
         MockDBProvider,
+        MockWasmChecker,
         MockTxPoolGasPrice,
         MockConsensusParametersProvider,
         DummyPool,
@@ -96,6 +98,7 @@ impl TestContext {
     ) -> &Service<
         MockP2P,
         MockDBProvider,
+        MockWasmChecker,
         MockTxPoolGasPrice,
         MockConsensusParametersProvider,
         DummyPool,
@@ -272,6 +275,7 @@ impl TestContextBuilder {
             MockDBProvider(mock_db.clone()),
             importer,
             p2p,
+            MockWasmChecker,
             Default::default(),
             gas_price_provider,
             consensus_parameters_provider,

@@ -8,6 +8,7 @@ use fuel_core_types::{
         relayer::message::Message,
     },
     fuel_tx::{
+        Bytes32,
         ConsensusParameters,
         Transaction,
         UtxoId,
@@ -63,6 +64,10 @@ pub trait TxPoolDb: Send + Sync {
     fn blob_exist(&self, blob_id: &BlobId) -> StorageResult<bool>;
 
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
+}
+
+pub trait WasmChecker {
+    fn uploaded_wasm_is_valid(&self, wasm_root: &Bytes32) -> bool;
 }
 
 #[async_trait::async_trait]

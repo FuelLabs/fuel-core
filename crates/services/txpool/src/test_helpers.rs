@@ -3,6 +3,7 @@
 
 use crate::{
     mock_db::MockDBProvider,
+    ports::WasmChecker,
     Config,
     MockDb,
     TxPool,
@@ -27,6 +28,7 @@ use fuel_core_types::{
             },
             contract::Contract,
         },
+        Bytes32,
         ConsensusParameters,
         Finalizable,
         Input,
@@ -76,10 +78,11 @@ impl TextContext {
         }
     }
 
-    pub(crate) fn build(self) -> TxPool<MockDBProvider> {
+    pub(crate) fn build(self) -> TxPool<MockDBProvider, MockWasmChecker> {
         TxPool::new(
             self.config.unwrap_or_default(),
             MockDBProvider(self.mock_db),
+            MockWasmChecker,
         )
     }
 
@@ -170,6 +173,13 @@ pub(crate) fn random_predicate(
         vec![],
     )
     .into_default_estimated()
+}
+
+pub struct MockWasmChecker;
+impl WasmChecker for MockWasmChecker {
+    fn uploaded_wasm_is_valid(&self, _wasm_root: &Bytes32) -> bool {
+        true
+    }
 }
 
 pub struct UnsetInput(Input);
