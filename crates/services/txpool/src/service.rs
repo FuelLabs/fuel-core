@@ -166,11 +166,11 @@ impl<P2P, ViewProvider, GasPriceProvider, WasmChecker, ConsensusProvider, MP> Cl
     }
 }
 
-pub struct Task<P2P, ViewProvider, Executor, GasPriceProvider, ConsensusProvider, MP> {
+pub struct Task<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<SharedImportResult>,
     tx_pool_shared_state:
-        SharedState<P2P, ViewProvider, Executor, GasPriceProvider, ConsensusProvider, MP>,
+        SharedState<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>,
     ttl_timer: tokio::time::Interval,
 }
 
