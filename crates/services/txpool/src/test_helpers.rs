@@ -180,7 +180,7 @@ pub(crate) fn random_predicate(
 
 pub struct MockWasmChecker;
 impl WasmChecker for MockWasmChecker {
-    fn uploaded_wasm_is_valid(
+    fn validate_uploaded_wasm(
         &self,
         _wasm_root: &Bytes32,
     ) -> Result<(), WasmValidityError> {

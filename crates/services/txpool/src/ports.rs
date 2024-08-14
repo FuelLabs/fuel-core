@@ -76,7 +76,7 @@ pub enum WasmValidityError {
 }
 
 pub trait WasmChecker {
-    fn uploaded_wasm_is_valid(
+    fn validate_uploaded_wasm(
         &self,
         wasm_root: &Bytes32,
     ) -> Result<(), WasmValidityError>;

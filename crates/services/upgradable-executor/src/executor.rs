@@ -40,6 +40,7 @@ use fuel_core_types::{
             ExecutionResult,
             Result as ExecutorResult,
             TransactionExecutionStatus,
+            UpgradableError,
             ValidationResult,
         },
         Uncommitted,
@@ -382,7 +383,11 @@ where
                 }
             }
         } else {
-            let module = self.get_module(block_version)?;
+            let module = self.get_module(block_version).map_err(|err| match err {
+                UpgradableError::InvalidWasm(_, _) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, block_version={block_version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::NoWasmSupport => unreachable!("Wasm support is enabled"),
+                UpgradableError::ExecutorError(err) => err
+            })?;
             self.wasm_produce_inner(&module, block, options, dry_run)
         }
     }
@@ -425,7 +430,11 @@ where
                 }
             }
         } else {
-            let module = self.get_module(block_version)?;
+            let module = self.get_module(block_version).map_err(|err| match err {
+                UpgradableError::InvalidWasm(_, _) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, block_version={block_version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::NoWasmSupport => unreachable!("Wasm support is enabled"),
+                UpgradableError::ExecutorError(err) => err
+            })?;
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
         }
     }
@@ -609,13 +618,19 @@ where
 
     /// Wasm support is disabled in the current build.
     #[cfg(not(feature = "wasm-executor"))]
-    pub fn uploaded_wasm_is_valid(&self, _wasm_root: &Bytes32) -> ExecutorResult<()> {
+    pub fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), UpgradableError> {
         Err(ExecutorError::NoWasmSupport)
     }
 
     /// Attempt to fetch and validate an uploaded WASM module.
     #[cfg(feature = "wasm-executor")]
-    pub fn uploaded_wasm_is_valid(&self, wasm_root: &Bytes32) -> ExecutorResult<()> {
+    pub fn validate_uploaded_wasm(
+        &self,
+        wasm_root: &Bytes32,
+    ) -> Result<(), UpgradableError> {
         self.get_module_by_root_and_validate(*wasm_root).map(|_| ())
     }
 
@@ -626,23 +641,29 @@ where
     fn get_module_by_root_and_validate(
         &self,
         bytecode_root: Bytes32,
-    ) -> ExecutorResult<wasmtime::Module> {
-        let view = StructuredStorage::new(self.storage_view_provider.latest_view()?);
+    ) -> Result<wasmtime::Module, UpgradableError> {
+        let view = StructuredStorage::new(
+            self.storage_view_provider
+                .latest_view()
+                .map_err(ExecutorError::from)?,
+        );
         let uploaded_bytecode = view
             .storage::<UploadedBytecodes>()
-            .get(&bytecode_root)?
-            .ok_or(not_found!(UploadedBytecodes))?;
+            .get(&bytecode_root)
+            .map_err(ExecutorError::from)?
+            .ok_or(not_found!(UploadedBytecodes))
+            .map_err(ExecutorError::from)?;
 
         let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
             uploaded_bytecode.as_ref()
         else {
             return Err(ExecutorError::Other(format!(
                 "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
-            )))
+            )).into())
         };
 
         wasmtime::Module::new(&self.engine, bytecode)
-            .map_err(|e| ExecutorError::InvalidWasm(e.to_string(), None))
+            .map_err(|e| UpgradableError::InvalidWasm(e.to_string(), None))
     }
 
     /// Returns the compiled WASM module of the state transition function.
@@ -653,24 +674,30 @@ where
     fn get_module(
         &self,
         version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
-    ) -> ExecutorResult<wasmtime::Module> {
+    ) -> Result<wasmtime::Module, UpgradableError> {
         let guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
             return Ok(module.clone());
         }
         drop(guard);
 
-        let view = StructuredStorage::new(self.storage_view_provider.latest_view()?);
+        let view = StructuredStorage::new(
+            self.storage_view_provider
+                .latest_view()
+                .map_err(ExecutorError::from)?,
+        );
         let bytecode_root = *view
             .storage::<StateTransitionBytecodeVersions>()
-            .get(&version)?
-            .ok_or(not_found!(StateTransitionBytecodeVersions))?;
+            .get(&version)
+            .map_err(ExecutorError::from)?
+            .ok_or(not_found!(StateTransitionBytecodeVersions))
+            .map_err(ExecutorError::from)?;
 
         let module = self
             .get_module_by_root_and_validate(bytecode_root)
             .map_err(|mut err| {
                 // Inject the version into the error, if relevant.
-                if let ExecutorError::InvalidWasm(_, v) = &mut err {
+                if let UpgradableError::InvalidWasm(_, v) = &mut err {
                     *v = Some(version);
                 }
                 err

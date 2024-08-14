@@ -48,9 +48,9 @@ use fuel_core_types::{
         ChainId,
     },
     services::executor::{
-        Error as ExecutorError,
         Result as ExecutorResult,
         UncommittedValidationResult,
+        UpgradableError as UpgradableExecutorError,
     },
 };
 use std::sync::Arc;
@@ -114,15 +114,15 @@ impl Validator for ExecutorAdapter {
 }
 
 impl WasmChecker for ExecutorAdapter {
-    fn uploaded_wasm_is_valid(
+    fn validate_uploaded_wasm(
         &self,
         wasm_root: &Bytes32,
     ) -> Result<(), WasmValidityError> {
         self.executor
-            .uploaded_wasm_is_valid(wasm_root)
+            .validate_uploaded_wasm(wasm_root)
             .map_err(|err| match err {
-                ExecutorError::NoWasmSupport => WasmValidityError::NotEnabled,
-                ExecutorError::InvalidWasm(_, _) => WasmValidityError::NotValid,
+                UpgradableExecutorError::NoWasmSupport => WasmValidityError::NotEnabled,
+                UpgradableExecutorError::InvalidWasm(_, _) => WasmValidityError::NotValid,
                 _ => WasmValidityError::NotFound,
             })
     }

@@ -76,7 +76,7 @@ use self::update_sender::{
 
 mod update_sender;
 
-pub type Service<P2P, DB, E, GP, CP, MP> = ServiceRunner<Task<P2P, DB, E, GP, CP, MP>>;
+pub type Service<P2P, DB, WC, GP, CP, MP> = ServiceRunner<Task<P2P, DB, WC, GP, CP, MP>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
@@ -352,8 +352,8 @@ where
 //  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
 //  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
 //  `StorageInspect` trait.
-impl<P2P, ViewProvider, Executor, GasPriceProvider, ConsensusProvider, MP>
-    SharedState<P2P, ViewProvider, Executor, GasPriceProvider, ConsensusProvider, MP>
+impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
+    SharedState<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
 {
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()

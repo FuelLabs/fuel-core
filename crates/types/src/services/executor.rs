@@ -295,10 +295,6 @@ pub enum Error {
     RelayerGivesIncorrectMessages,
     #[display(fmt = "Consensus parameters not found for version {_0}")]
     ConsensusParametersNotFound(ConsensusParametersVersion),
-    #[display(fmt = "Invalid WASM bytecode: {_0} (version: {_1:?})")]
-    InvalidWasm(String, Option<StateTransitionBytecodeVersion>),
-    #[display(fmt = "WASM support is not enabled")]
-    NoWasmSupport,
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),
@@ -362,4 +358,18 @@ impl From<ValidityError> for TransactionValidityError {
     fn from(e: ValidityError) -> Self {
         Self::Validation(CheckError::Validity(e))
     }
+}
+
+/// Error type for the upgradable (wasm) executor.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, derive_more::Display, derive_more::From)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum UpgradableError {
+    #[display(fmt = "Invalid WASM bytecode: {_0} (version: {_1:?})")]
+    InvalidWasm(String, Option<StateTransitionBytecodeVersion>),
+    #[display(fmt = "WASM support is not enabled")]
+    NoWasmSupport,
+    /// Normal errors from the executor
+    #[display(fmt = "Eexecutor error: {_0}")]
+    ExecutorError(Error),
 }

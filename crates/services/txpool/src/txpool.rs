@@ -374,7 +374,7 @@ where
             if let UpgradePurpose::StateTransition { root } =
                 upgrade.transaction().upgrade_purpose()
             {
-                if let Err(err) = self.wasm_checker.uploaded_wasm_is_valid(root) {
+                if let Err(err) = self.wasm_checker.validate_uploaded_wasm(root) {
                     return Err(match err {
                         WasmValidityError::NotEnabled => Error::NotInsertedWasmNotEnabled,
                         WasmValidityError::NotFound => Error::NotInsertedWasmNotFound,
