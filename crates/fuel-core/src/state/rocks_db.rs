@@ -42,6 +42,7 @@ use rocksdb::{
 };
 use std::{
     cmp,
+    collections::BTreeMap,
     env,
     fmt,
     fmt::Formatter,
@@ -313,16 +314,28 @@ where
 
         let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_default();
 
-        let mut cf_descriptors_to_open = vec![];
-        let mut cf_descriptors_to_create = vec![];
+        let mut cf_descriptors_to_open = BTreeMap::new();
+        let mut cf_descriptors_to_create = BTreeMap::new();
         for column in columns.clone() {
             let column_name = Self::col_name(column.id());
             let opts = Self::cf_opts(column, &block_opts);
             if existing_column_families.contains(&column_name) {
-                cf_descriptors_to_open.push((column_name, opts));
+                cf_descriptors_to_open.insert(column_name, opts);
             } else {
-                cf_descriptors_to_create.push((column_name, opts));
+                cf_descriptors_to_create.insert(column_name, opts);
             }
+        }
+
+        for column_name in existing_column_families {
+            if cf_descriptors_to_open.contains_key(&column_name)
+                || cf_descriptors_to_create.contains_key(&column_name)
+            {
+                continue;
+            }
+
+            let unknown_column_name = column_name;
+            let unknown_column_options = Self::default_cf_opts(&block_opts);
+            cf_descriptors_to_open.insert(unknown_column_name, unknown_column_options);
         }
 
         let iterator = cf_descriptors_to_open
@@ -428,11 +441,17 @@ where
         format!("col-{}", column)
     }
 
-    fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
+    fn default_cf_opts(block_opts: &BlockBasedOptions) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         opts.set_block_based_table_factory(block_opts);
+
+        opts
+    }
+
+    fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
+        let mut opts = Self::default_cf_opts(block_opts);
 
         // All double-keys should be configured here
         if let Some(size) = Description::prefix(&column) {
@@ -758,6 +777,7 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     None
 }
 
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -992,9 +1012,9 @@ mod tests {
         let (_primary_db, tmp_dir) = create_db();
 
         // When
-        let old_columns =
-            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
-        let result = RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None);
+        let columns = enum_iterator::all::<<OnChain as DatabaseDescription>::Column>()
+            .collect::<Vec<_>>();
+        let result = RocksDb::<OnChain>::open(tmp_dir.path(), columns, None);
 
         // Then
         assert!(result.is_err());
@@ -1112,5 +1132,24 @@ mod tests {
 
         // Then
         drop(snapshot);
+    }
+
+    #[test]
+    fn open__opens_subset_of_columns_after_opening_all_columns() {
+        // Given
+        let (first_open_with_all_columns, tmp_dir) = create_db();
+
+        // When
+        drop(first_open_with_all_columns);
+        let part_of_columns =
+            enum_iterator::all::<<OnChain as DatabaseDescription>::Column>()
+                .skip(1)
+                .collect::<Vec<_>>();
+        let open_with_part_of_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), part_of_columns, None);
+
+        // Then
+        let _ = open_with_part_of_columns
+            .expect("Should open the database with shorter number of columns");
     }
 }
