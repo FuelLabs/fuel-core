@@ -52,11 +52,9 @@ impl OnChainIterableKeyValueView {
     }
 
     pub fn genesis_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Ok(self
-            .iter_all::<FuelBlocks>(Some(IterDirection::Forward))
+        self.iter_all_keys::<FuelBlocks>(Some(IterDirection::Forward))
             .next()
-            .transpose()?
-            .map(|(height, _)| height))
+            .transpose()
     }
 
     pub fn genesis_block(&self) -> StorageResult<Option<CompressedBlock>> {
