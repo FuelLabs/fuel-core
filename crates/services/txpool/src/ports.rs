@@ -66,8 +66,20 @@ pub trait TxPoolDb: Send + Sync {
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 }
 
+pub enum WasmValidityError {
+    /// Wasm support is not enabled.
+    NotEnabled,
+    /// The supposedly-uploaded wasm was not found.
+    NotFound,
+    /// The uploaded bytecode was found but it's is not valid wasm.
+    NotValid,
+}
+
 pub trait WasmChecker {
-    fn uploaded_wasm_is_valid(&self, wasm_root: &Bytes32) -> bool;
+    fn uploaded_wasm_is_valid(
+        &self,
+        wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError>;
 }
 
 #[async_trait::async_trait]

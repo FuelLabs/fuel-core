@@ -6,6 +6,7 @@ use crate::{
         header::{
             BlockHeaderError,
             ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
         },
     },
     entities::{
@@ -294,6 +295,10 @@ pub enum Error {
     RelayerGivesIncorrectMessages,
     #[display(fmt = "Consensus parameters not found for version {_0}")]
     ConsensusParametersNotFound(ConsensusParametersVersion),
+    #[display(fmt = "Invalid WASM bytecode: {_0} (version: {_1:?})")]
+    InvalidWasm(String, Option<StateTransitionBytecodeVersion>),
+    #[display(fmt = "WASM support is not enabled")]
+    NoWasmSupport,
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),

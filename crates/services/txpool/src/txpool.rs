@@ -7,6 +7,7 @@ use crate::{
     ports::{
         TxPoolDb,
         WasmChecker as WasmCheckerConstraint,
+        WasmValidityError,
     },
     service::TxStatusChange,
     types::*,
@@ -373,8 +374,12 @@ where
             if let UpgradePurpose::StateTransition { root } =
                 upgrade.transaction().upgrade_purpose()
             {
-                if !self.wasm_checker.uploaded_wasm_is_valid(root) {
-                    return Err(Error::NotInsertedInvalidWasm)
+                if let Err(err) = self.wasm_checker.uploaded_wasm_is_valid(root) {
+                    return Err(match err {
+                        WasmValidityError::NotEnabled => Error::NotInsertedWasmNotEnabled,
+                        WasmValidityError::NotFound => Error::NotInsertedWasmNotFound,
+                        WasmValidityError::NotValid => Error::NotInsertedInvalidWasm,
+                    });
                 }
             }
         }

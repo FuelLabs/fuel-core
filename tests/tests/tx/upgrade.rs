@@ -4,6 +4,7 @@ use fuel_core_types::{
     fuel_tx::{
         policies::Policies,
         AssetId,
+        Bytes32,
         GasCosts,
         Input,
         Receipt,
@@ -221,7 +222,60 @@ async fn upgrading_to_invalid_state_transition_fails() {
     // Then
     let result_str = format!("{:?}", result); // io::Result forces string handling
     result.expect_err("Upgrading to an incorrect bytecode should fail");
-    assert!(result_str.contains("Wasm contents are invalid"));
+    assert!(
+        result_str.contains("WASM bytecode contents are not valid"),
+        "msg: {}",
+        result_str
+    );
+}
+
+#[tokio::test]
+async fn upgrading_to_missing_state_transition_fails() {
+    let privileged_address = Input::predicate_owner(predicate());
+    let amount = 1_000;
+    let mut test_builder = TestSetupBuilder::new(2322);
+    test_builder.utxo_validation = false;
+    test_builder.privileged_address = privileged_address;
+    let TestContext {
+        client,
+        srv: _drop,
+        mut rng,
+        ..
+    } = test_builder.finalize().await;
+
+    // Given
+    let upgrade = Transaction::upgrade(
+        UpgradePurpose::StateTransition {
+            root: Bytes32::new([1; 32]),
+        },
+        Policies::new().with_max_fee(amount),
+        vec![Input::coin_predicate(
+            rng.gen(),
+            privileged_address,
+            amount,
+            AssetId::BASE,
+            Default::default(),
+            Default::default(),
+            predicate(),
+            vec![],
+        )],
+        vec![],
+        vec![],
+    );
+
+    // When
+    let mut tx = upgrade.into();
+    client.estimate_predicates(&mut tx).await.unwrap();
+    let result = client.submit_and_await_commit(&tx).await;
+
+    // Then
+    let result_str = format!("{:?}", result); // io::Result forces string handling
+    result.expect_err("Upgrading to missing bytecode should fail");
+    assert!(
+        result_str.contains("WASM bytecode matching the given root was not found"),
+        "msg: {}",
+        result_str
+    );
 }
 
 fn valid_transaction(rng: &mut StdRng, amount: u64) -> Transaction {

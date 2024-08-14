@@ -317,7 +317,11 @@ pub enum Error {
     NotInsertedTxKnown,
     #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
     NotInsertedLimitHit,
-    #[error("Transaction is not inserted. Wasm contents are invalid.")]
+    #[error("Transaction is not inserted. Attempting to upgrade WAMS bytecode when WASM support is not enabled.")]
+    NotInsertedWasmNotEnabled,
+    #[error("Transaction is not inserted. WASM bytecode matching the given root was not found.")]
+    NotInsertedWasmNotFound,
+    #[error("Transaction is not inserted. WASM bytecode contents are not valid.")]
     NotInsertedInvalidWasm,
     #[error("Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,

@@ -3,7 +3,10 @@
 
 use crate::{
     mock_db::MockDBProvider,
-    ports::WasmChecker,
+    ports::{
+        WasmChecker,
+        WasmValidityError,
+    },
     Config,
     MockDb,
     TxPool,
@@ -177,8 +180,11 @@ pub(crate) fn random_predicate(
 
 pub struct MockWasmChecker;
 impl WasmChecker for MockWasmChecker {
-    fn uploaded_wasm_is_valid(&self, _wasm_root: &Bytes32) -> bool {
-        true
+    fn uploaded_wasm_is_valid(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        Ok(())
     }
 }
 

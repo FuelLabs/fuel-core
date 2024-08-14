@@ -609,14 +609,14 @@ where
 
     /// Wasm support is disabled in the current build.
     #[cfg(not(feature = "wasm-executor"))]
-    pub fn uploaded_wasm_is_valid(&self, _wasm_root: &Bytes32) -> bool {
-        false
+    pub fn uploaded_wasm_is_valid(&self, _wasm_root: &Bytes32) -> ExecutorResult<()> {
+        Err(ExecutorError::NoWasmSupport)
     }
 
     /// Attempt to fetch and validate an uploaded WASM module.
     #[cfg(feature = "wasm-executor")]
-    pub fn uploaded_wasm_is_valid(&self, wasm_root: &Bytes32) -> bool {
-        self.get_module_by_root_and_validate(*wasm_root).is_ok()
+    pub fn uploaded_wasm_is_valid(&self, wasm_root: &Bytes32) -> ExecutorResult<()> {
+        self.get_module_by_root_and_validate(*wasm_root).map(|_| ())
     }
 
     /// Find an uploaded WASM blob by it's hash and validate it.
@@ -641,9 +641,8 @@ where
             )))
         };
 
-        wasmtime::Module::new(&self.engine, bytecode).map_err(|e| {
-            ExecutorError::Other(format!("The module is not valid wasm: {e}"))
-        })
+        wasmtime::Module::new(&self.engine, bytecode)
+            .map_err(|e| ExecutorError::InvalidWasm(e.to_string(), None))
     }
 
     /// Returns the compiled WASM module of the state transition function.
@@ -670,8 +669,9 @@ where
         let module = self
             .get_module_by_root_and_validate(bytecode_root)
             .map_err(|mut err| {
-                if let ExecutorError::Other(msg) = &mut err {
-                    msg.push_str(&format!(" (version {version})"));
+                // Inject the version into the error, if relevant.
+                if let ExecutorError::InvalidWasm(_, v) = &mut err {
+                    *v = Some(version);
                 }
                 err
             })?;
