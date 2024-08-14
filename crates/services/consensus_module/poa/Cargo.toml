@@ -28,6 +28,7 @@ mockall = { workspace = true }
 rand = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+fuel-core-services = { workspace = true, features = ["test-helpers"] }
 
 [features]
 test-helpers = [

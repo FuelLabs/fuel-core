@@ -5,6 +5,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::Block,
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
@@ -58,6 +59,11 @@ pub trait BlockProducer: Send + Sync {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+
+    async fn produce_predefined_block(
+        &self,
+        block: &Block,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 }
 

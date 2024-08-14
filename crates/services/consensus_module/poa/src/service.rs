@@ -139,6 +139,7 @@ pub struct MainTask<T, B, I> {
     last_height: BlockHeight,
     last_timestamp: Tai64,
     last_block_created: Instant,
+    predefined_blocks: Vec<Block>,
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
@@ -157,6 +158,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
+        predefined_blocks: Vec<Block>,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -195,6 +197,7 @@ where
             last_height,
             last_timestamp,
             last_block_created,
+            predefined_blocks,
             trigger,
             timer: DeadlineClock::new(),
             sync_task_handle,
@@ -387,6 +390,50 @@ where
         Ok(())
     }
 
+    async fn produce_predefined_block(&mut self, block: &Block) -> anyhow::Result<()> {
+        let last_block_created = Instant::now();
+        // verify signing key is set
+        if self.signing_key.is_none() {
+            return Err(anyhow!("unable to produce blocks without a consensus key"))
+        }
+
+        // Ask the block producer to create the block
+        let (
+            ExecutionResult {
+                block,
+                skipped_transactions: _,
+                tx_status,
+                events,
+            },
+            changes,
+        ) = self
+            .block_producer
+            .produce_predefined_block(block)
+            .await?
+            .into();
+
+        // Sign the block and seal it
+        let seal = seal_block(&self.signing_key, &block)?;
+        let block = SealedBlock {
+            entity: block,
+            consensus: seal,
+        };
+        // Import the sealed block
+        self.block_importer
+            .commit_result(Uncommitted::new(
+                ImportResult::new_from_local(block.clone(), tx_status, events),
+                changes,
+            ))
+            .await?;
+
+        // Update last block time
+        self.last_height = *block.entity.header().height();
+        self.last_timestamp = block.entity.header().time();
+        self.last_block_created = last_block_created;
+
+        Ok(())
+    }
+
     pub(crate) async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
         match self.trigger {
             Trigger::Instant => {
@@ -461,6 +508,7 @@ where
         let should_continue;
         let mut state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
+        tracing::info!("Waiting for the node to be synced");
         while *state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
@@ -479,6 +527,7 @@ where
                 }
             }
         }
+        tracing::info!("Node is synced");
 
         if let SyncState::Synced(block_header) = &*state.borrow_and_update() {
             let (last_height, last_timestamp, last_block_created) =
@@ -488,6 +537,11 @@ where
                 self.last_timestamp = last_timestamp;
                 self.last_block_created = last_block_created;
             }
+        }
+
+        let blocks = self.predefined_blocks.clone();
+        for block in blocks {
+            self.produce_predefined_block(&block).await?;
         }
 
         tokio::select! {
@@ -552,6 +606,7 @@ where
     I: BlockImporter + 'static,
     P: P2pPort,
 {
+    let predefined_blocks = Vec::new();
     Service::new(MainTask::new(
         last_block,
         config,
@@ -559,6 +614,7 @@ where
         block_producer,
         block_importer,
         p2p_port,
+        predefined_blocks,
     ))
 }
 
