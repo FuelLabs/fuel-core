@@ -5,6 +5,7 @@ use crate::database::database_description::{
 use fuel_core_storage::{
     iter::{
         iterator,
+        keys_iterator,
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
@@ -12,6 +13,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -47,6 +49,20 @@ where
             .map(|(key, value)| (key.clone().into(), value.clone()))
             .map(Ok)
     }
+
+    pub fn iter_all_keys<'a>(
+        &'a self,
+        column: Description::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = KeyItem> + 'a {
+        let btree = &self.inner[column.as_usize()];
+
+        keys_iterator(btree, prefix, start, direction)
+            .map(|key| key.clone().into())
+            .map(Ok)
+    }
 }
 
 impl<Description> KeyValueInspect for MemoryView<Description>
@@ -72,5 +88,16 @@ where
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
         self.iter_all(column, prefix, start, direction).into_boxed()
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        self.iter_all_keys(column, prefix, start, direction)
+            .into_boxed()
     }
 }

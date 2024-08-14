@@ -129,6 +129,18 @@ where
     ) -> BoxedIter<KVItem> {
         self.iter_all(column, prefix, start, direction).into_boxed()
     }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+        self.iter_all(column, prefix, start, direction)
+            .map(|item| item.map(|(key, _)| key))
+            .into_boxed()
+    }
 }
 
 impl<Description> TransactableStorage<Description::Height> for MemoryStore<Description>

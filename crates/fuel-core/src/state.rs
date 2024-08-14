@@ -34,6 +34,8 @@ pub mod iterable_key_value_view;
 pub mod key_value_view;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
+#[cfg(feature = "rocksdb")]
+pub mod rocks_db_key_iterator;
 
 pub type ColumnType<Description> = <Description as DatabaseDescription>::Column;
 
@@ -156,5 +158,20 @@ where
         } else {
             core::iter::empty().into_boxed()
         }
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+        // We cannot define iter_store_keys appropriately for the `ChangesIterator`,
+        // because we have to filter out the keys that were removed, which are
+        // marked as `WriteOperation::Remove` in the value
+        self.iter_store(column, prefix, start, direction)
+            .map(|item| item.map(|(key, _)| key))
+            .into_boxed()
     }
 }

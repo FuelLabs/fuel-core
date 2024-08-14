@@ -172,6 +172,7 @@ mod tests {
         },
         kv_store::{
             KVItem,
+            KeyItem,
             KeyValueInspect,
             Value,
         },
@@ -551,6 +552,16 @@ mod tests {
             _: Option<&[u8]>,
             _: IterDirection,
         ) -> BoxedIter<KVItem> {
+            unimplemented!()
+        }
+
+        fn iter_store_keys(
+            &self,
+            _: Self::Column,
+            _: Option<&[u8]>,
+            _: Option<&[u8]>,
+            _: IterDirection,
+        ) -> BoxedIter<KeyItem> {
             unimplemented!()
         }
     }
