@@ -375,6 +375,7 @@ where
                 upgrade.transaction().upgrade_purpose()
             {
                 if let Err(err) = self.wasm_checker.validate_uploaded_wasm(root) {
+                    // TODO: should be a From<_> impl, see https://github.com/FuelLabs/fuel-core/issues/2082
                     return Err(match err {
                         WasmValidityError::NotEnabled => Error::NotInsertedWasmNotEnabled,
                         WasmValidityError::NotFound => Error::NotInsertedWasmNotFound,
