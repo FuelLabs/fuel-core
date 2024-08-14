@@ -87,11 +87,9 @@ impl BlockVerifier for VerifierAdapter {
 
 impl ImporterDatabase for Database {
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Ok(self
-            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+        self.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
             .next()
-            .transpose()?
-            .map(|(height, _)| height))
+            .transpose()
     }
 
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
