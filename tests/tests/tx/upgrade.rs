@@ -219,7 +219,9 @@ async fn upgrading_to_invalid_state_transition_fails() {
     let result = client.submit_and_await_commit(&tx).await;
 
     // Then
+    let result_str = format!("{:?}", result); // io::Result forces string handling
     result.expect_err("Upgrading to an incorrect bytecode should fail");
+    assert!(result_str.contains("Wasm contents are invalid"));
 }
 
 fn valid_transaction(rng: &mut StdRng, amount: u64) -> Transaction {
