@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2079](https://github.com/FuelLabs/fuel-core/pull/2079): Open unknown columns in the RocksDB for forward compatibility.
+
 ### Changed
 -[2076](https://github.com/FuelLabs/fuel-core/pull/2076): Replace usages of `iter_all` with `iter_all_keys` where necessary.
 
