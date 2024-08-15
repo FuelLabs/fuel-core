@@ -1,41 +1,63 @@
-# Stage 1: Build
-FROM rust:1.75.0 AS chef
-RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
-WORKDIR /build/
-# hadolint ignore=DL3008
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Stage 1: Base Setup
+FROM rust:1.75.0 AS base
 
-FROM chef as planner
+# Install cargo-chef and add the wasm target
+RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
+
+# Set working directory
+WORKDIR /build/
+
+# Install necessary dependencies and clean up
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Stage 2: Dependency Planning
+FROM base as planner
+
+# Set environment variable to force Cargo to use the git CLI for fetching
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+# Copy the project files to the container
 COPY . .
+
+# Generate a recipe for cargo-chef to cache dependencies
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef as builder
+# Stage 3: Build Application
+FROM base as builder
+
+# Set environment variable to force Cargo to use the git CLI for fetching
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+# Copy the dependency recipe from the planner stage
 COPY --from=planner /build/recipe.json recipe.json
-# Build our project dependencies, not our application!
+
+# Build the project dependencies, caching the results
 RUN cargo chef cook --release -p fuel-core-e2e-client --features p2p --recipe-path recipe.json
-# Up to this point, if our dependency tree stays the same,
-# all layers should be cached.
+
+# Copy the remaining project files and build the application
 COPY . .
+
 RUN cargo build --release -p fuel-core-e2e-client --features p2p
 
-# Stage 2: Run
-FROM ubuntu:22.04 as run
+# Stage 4: Final Runtime Image
+FROM ubuntu:22.04 as runtime
 
+# Set working directory
 WORKDIR /root/
 
-RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    # Clean up
+# Install necessary runtime dependencies and clean up
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends ca-certificates \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy the compiled binary and any associated files from the builder stage
 COPY --from=builder /build/target/release/fuel-core-e2e-client .
 COPY --from=builder /build/target/release/fuel-core-e2e-client.d .
 
-CMD exec ./fuel-core-e2e-client
+# Set the entrypoint to the built binary
+CMD ["./fuel-core-e2e-client"]
