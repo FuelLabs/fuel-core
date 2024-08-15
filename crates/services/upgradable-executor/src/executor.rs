@@ -29,10 +29,7 @@ use fuel_core_types::{
         },
     },
     fuel_tx::Transaction,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::BlockHeight,
     services::{
         block_producer::Components,
         executor::{
@@ -40,11 +37,15 @@ use fuel_core_types::{
             ExecutionResult,
             Result as ExecutorResult,
             TransactionExecutionStatus,
-            UpgradableError,
             ValidationResult,
         },
         Uncommitted,
     },
+};
+#[cfg(feature = "wasm-executor")]
+use fuel_core_types::{
+    fuel_types::Bytes32,
+    services::executor::UpgradableError,
 };
 use std::sync::Arc;
 

@@ -360,6 +360,7 @@ impl From<ValidityError> for TransactionValidityError {
 }
 
 /// Error type for the upgradable (wasm) executor.
+#[cfg(feature = "wasm-executor")]
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, derive_more::Display, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
