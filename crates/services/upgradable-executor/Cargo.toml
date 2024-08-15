@@ -12,7 +12,7 @@ build = "build.rs"
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, optional = true }
 fuel-core-executor = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
@@ -47,6 +47,7 @@ smt = [
 ]
 wasm-executor = [
   "dep:anyhow",
+  "dep:derive_more",
   "dep:parking_lot",
   "dep:postcard",
   "dep:tracing",
