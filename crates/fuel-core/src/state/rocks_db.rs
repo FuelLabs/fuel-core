@@ -326,17 +326,18 @@ where
             }
         }
 
-        for column_name in existing_column_families {
-            if cf_descriptors_to_open.contains_key(&column_name)
-                || cf_descriptors_to_create.contains_key(&column_name)
-            {
-                continue;
-            }
-
-            let unknown_column_name = column_name;
-            let unknown_column_options = Self::default_cf_opts(&block_opts);
-            cf_descriptors_to_open.insert(unknown_column_name, unknown_column_options);
-        }
+        let unknown_columns_to_open: BTreeMap<_, _> = existing_column_families
+            .iter()
+            .filter(|column_name| {
+                !cf_descriptors_to_open.contains_key(*column_name)
+                    && !cf_descriptors_to_create.contains_key(*column_name)
+            })
+            .map(|unknown_column_name| {
+                let unknown_column_options = Self::default_opts(&block_opts);
+                (unknown_column_name.clone(), unknown_column_options)
+            })
+            .collect();
+        cf_descriptors_to_open.extend(unknown_columns_to_open);
 
         let iterator = cf_descriptors_to_open
             .clone()
@@ -441,7 +442,7 @@ where
         format!("col-{}", column)
     }
 
-    fn default_cf_opts(block_opts: &BlockBasedOptions) -> Options {
+    fn default_opts(block_opts: &BlockBasedOptions) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
@@ -451,7 +452,7 @@ where
     }
 
     fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
-        let mut opts = Self::default_cf_opts(block_opts);
+        let mut opts = Self::default_opts(block_opts);
 
         // All double-keys should be configured here
         if let Some(size) = Description::prefix(&column) {
