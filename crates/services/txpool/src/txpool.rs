@@ -1,42 +1,76 @@
 use crate::{
     containers::{
-        dependency::Dependency, time_sort::TimeSort, tip_per_gas_sort::RatioGasTipSort,
+        dependency::Dependency,
+        time_sort::TimeSort,
+        tip_per_gas_sort::RatioGasTipSort,
     },
-    ports::{TxPoolDb, WasmChecker as WasmCheckerConstraint},
+    ports::{
+        TxPoolDb,
+        WasmChecker as WasmCheckerConstraint,
+    },
     service::TxStatusChange,
     types::*,
-    Config, Error, TxInfo,
+    Config,
+    Error,
+    TxInfo,
 };
 use fuel_core_types::{
-    fuel_tx::{field::UpgradePurpose as _, Transaction, UpgradePurpose},
+    fuel_tx::{
+        field::UpgradePurpose as _,
+        Transaction,
+        UpgradePurpose,
+    },
     fuel_types::BlockHeight,
     fuel_vm::checked_transaction::{
-        CheckPredicates, Checked, CheckedTransaction, Checks, IntoChecked,
+        CheckPredicates,
+        Checked,
+        CheckedTransaction,
+        Checks,
+        IntoChecked,
     },
-    services::txpool::{ArcPoolTx, InsertionResult},
+    services::txpool::{
+        ArcPoolTx,
+        InsertionResult,
+    },
     tai64::Tai64,
 };
 use num_rational::Ratio;
 
-use crate::ports::{GasPriceProvider, MemoryPool};
+use crate::ports::{
+    GasPriceProvider,
+    MemoryPool,
+};
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_tx::{
         input::{
-            coin::{CoinPredicate, CoinSigned},
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
             message::{
-                MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
                 MessageDataSigned,
             },
         },
-        ConsensusParameters, Input,
+        ConsensusParameters,
+        Input,
     },
-    fuel_vm::{checked_transaction::CheckPredicateParams, interpreter::Memory},
+    fuel_vm::{
+        checked_transaction::CheckPredicateParams,
+        interpreter::Memory,
+    },
     services::executor::TransactionExecutionStatus,
 };
-use std::{collections::HashMap, ops::Deref, sync::Arc};
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    sync::Arc,
+};
 
 #[cfg(test)]
 mod test_helpers;

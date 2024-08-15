@@ -8,6 +8,7 @@ use crate::{
     test_helpers::MockWasmChecker,
     types::GasPrice,
     MockDb,
+    Result as TxPoolResult,
 };
 use fuel_core_services::{
     stream::BoxStream,
@@ -31,7 +32,6 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::GossipsubMessageAcceptance,
-        txpool::Result as TxPoolResult,
     },
 };
 use std::cell::RefCell;
