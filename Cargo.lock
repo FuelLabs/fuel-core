@@ -3377,6 +3377,7 @@ dependencies = [
  "ntest",
  "parking_lot",
  "postcard",
+ "serde",
  "tracing",
  "wasmtime",
 ]
