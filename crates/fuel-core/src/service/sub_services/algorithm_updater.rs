@@ -157,7 +157,7 @@ pub fn get_synced_gas_price_updater(
     };
 
     let first_metadata = UpdaterMetadata::V0(V0Metadata {
-        new_exec_price: config.starting_gas_price,
+        new_exec_price: config.starting_gas_price.max(config.min_gas_price),
         min_exec_gas_price: config.min_gas_price,
         exec_gas_price_change_percent: config.gas_price_change_percent,
         l2_block_height: latest_block_height,
@@ -200,6 +200,9 @@ pub fn get_synced_gas_price_updater(
             latest_block_height.into(),
             l2_block_source,
             metadata_storage,
+            config.min_gas_price,
+            config.gas_price_change_percent,
+            config.gas_price_threshold_percent,
         )
         .map_err(|e| anyhow::anyhow!("Could not initialize gas price updater: {e:?}"))
     }

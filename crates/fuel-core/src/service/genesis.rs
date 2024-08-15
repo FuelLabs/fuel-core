@@ -83,13 +83,11 @@ pub async fn execute_genesis_block(
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
-        .iter_all::<GenesisMetadata<OnChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OnChain>>(None)
         .try_collect()?;
     let genesis_progress_off_chain: Vec<String> = db
         .off_chain()
-        .iter_all::<GenesisMetadata<OffChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OffChain>>(None)
         .try_collect()?;
 
     let chain_config = config.snapshot_reader.chain_config();

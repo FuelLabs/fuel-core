@@ -4,6 +4,7 @@
 #![deny(warnings)]
 
 pub mod config;
+pub mod error;
 pub mod executor;
 
 #[cfg(feature = "wasm-executor")]
