@@ -126,7 +126,9 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         &self,
         block: &Block,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.block_producer.produce_and_execute_predefined(block)
+        self.block_producer
+            .produce_and_execute_predefined(block)
+            .await
     }
 }
 

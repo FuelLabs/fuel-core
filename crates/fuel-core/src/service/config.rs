@@ -204,6 +204,11 @@ impl From<&Config> for fuel_core_poa::Config {
             metrics: false,
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
+            chain_id: config
+                .snapshot_reader
+                .chain_config()
+                .consensus_parameters
+                .chain_id(),
         }
     }
 }

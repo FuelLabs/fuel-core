@@ -101,20 +101,22 @@ where
 {
     pub async fn produce_and_execute_predefined(
         &self,
-        block: &Block,
+        predefined_block: &Block,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
         Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     {
         let _production_guard = self.lock.lock().await;
 
-        let source = block.transactions().to_vec();
+        let source = predefined_block.transactions().to_vec();
 
-        let height = block.header().consensus().height;
+        let height = predefined_block.header().consensus().height;
 
-        let header = block.header().into();
+        let block_time = predefined_block.header().consensus().time;
 
-        let mint_tx = block
+        let header = self.new_header(height, block_time).await?;
+
+        let mint_tx = predefined_block
             .transactions()
             .last()
             .and_then(|tx| tx.as_mint())
