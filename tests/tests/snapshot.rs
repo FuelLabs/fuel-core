@@ -28,10 +28,10 @@ async fn loads_snapshot() {
     // setup config
     let starting_state = StateConfig {
         last_block: Some(LastBlockConfig {
-            block_height: (u32::MAX - 1).into(),
+            block_height: (u32::MAX - 2).into(),
             da_block_height: DaBlockHeight(u64::MAX),
-            consensus_parameters_version: u32::MAX - 1,
-            state_transition_version: u32::MAX - 1,
+            consensus_parameters_version: u32::MAX - 2,
+            state_transition_version: u32::MAX - 2,
             blocks_root,
         }),
         ..StateConfig::randomize(&mut rng)
@@ -46,15 +46,15 @@ async fn loads_snapshot() {
     let actual_state = db.read_state_config().unwrap();
     let mut expected = starting_state.sorted();
     expected.last_block = Some(LastBlockConfig {
-        block_height: u32::MAX.into(),
+        block_height: (u32::MAX - 1).into(),
         da_block_height: DaBlockHeight(u64::MAX),
-        consensus_parameters_version: u32::MAX,
-        state_transition_version: u32::MAX,
+        consensus_parameters_version: u32::MAX - 1,
+        state_transition_version: u32::MAX - 1,
         blocks_root: db
             .on_chain()
             .latest_view()
             .unwrap()
-            .block_header_merkle_root(&u32::MAX.into())
+            .block_header_merkle_root(&(u32::MAX - 1).into())
             .unwrap(),
     });
 
