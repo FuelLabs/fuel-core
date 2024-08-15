@@ -801,6 +801,7 @@ mod tests {
             StateConfig {
                 coins: vec![],
                 messages: vec![],
+                blobs: vec![],
                 contracts: vec![randomly_chosen_contract],
                 last_block: Some(latest_block),
             }

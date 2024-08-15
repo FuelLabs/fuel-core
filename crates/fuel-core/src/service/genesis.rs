@@ -83,13 +83,11 @@ pub async fn execute_genesis_block(
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
-        .iter_all::<GenesisMetadata<OnChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OnChain>>(None)
         .try_collect()?;
     let genesis_progress_off_chain: Vec<String> = db
         .off_chain()
-        .iter_all::<GenesisMetadata<OffChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OffChain>>(None)
         .try_collect()?;
 
     let chain_config = config.snapshot_reader.chain_config();
@@ -261,6 +259,7 @@ mod tests {
         },
     };
     use fuel_core_chain_config::{
+        BlobConfig,
         CoinConfig,
         ContractConfig,
         LastBlockConfig,
@@ -343,6 +342,10 @@ mod tests {
         .take(1000)
         .collect_vec();
 
+        let blobs = std::iter::repeat_with(|| BlobConfig::randomize(&mut rng))
+            .take(1000)
+            .collect_vec();
+
         let contracts = std::iter::repeat_with(|| given_contract_config(&mut rng))
             .take(1000)
             .collect_vec();
@@ -350,6 +353,7 @@ mod tests {
         let state = StateConfig {
             coins,
             messages,
+            blobs,
             contracts,
             last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(0u32),

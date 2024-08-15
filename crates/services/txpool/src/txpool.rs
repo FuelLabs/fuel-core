@@ -60,7 +60,6 @@ use fuel_core_types::{
     services::executor::TransactionExecutionStatus,
 };
 use std::{
-    cmp::Reverse,
     collections::HashMap,
     ops::Deref,
     sync::Arc,
@@ -171,27 +170,6 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
     pub fn find_one(&self, hash: &TxId) -> Option<TxInfo> {
         self.txs().get(hash).cloned()
-    }
-
-    /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
-    pub fn find_dependent(&self, hashes: &[TxId]) -> Vec<ArcPoolTx> {
-        let mut seen = HashMap::new();
-        {
-            for hash in hashes {
-                if let Some(tx) = self.txs().get(hash) {
-                    self.dependency().find_dependent(
-                        tx.tx().clone(),
-                        &mut seen,
-                        self.txs(),
-                    );
-                }
-            }
-        }
-        let mut list: Vec<_> = seen.into_values().collect();
-        // sort from high to low price
-        list.sort_by_key(|tx| Reverse(tx.tip()));
-
-        list
     }
 
     /// The number of pending transaction in the pool.
@@ -363,6 +341,7 @@ where
             CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
             CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx, version),
             CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx, version),
+            CheckedTransaction::Blob(tx) => PoolTransaction::Blob(tx, version),
         });
 
         self.check_blacklisting(tx.as_ref())?;
@@ -570,6 +549,11 @@ fn verify_tx_min_gas_price(
             let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
             let (_, checked) = ready.decompose();
             CheckedTransaction::Upload(checked)
+        }
+        CheckedTransaction::Blob(tx) => {
+            let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = ready.decompose();
+            CheckedTransaction::Blob(checked)
         }
         CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
     };

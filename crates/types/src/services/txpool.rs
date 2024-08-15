@@ -13,6 +13,7 @@ use crate::{
             ScriptGasLimit,
             Tip,
         },
+        Blob,
         Cacheable,
         Chargeable,
         Create,
@@ -42,6 +43,7 @@ use fuel_vm_private::{
         CheckError,
         CheckedTransaction,
     },
+    fuel_tx::BlobId,
     fuel_types::BlockHeight,
 };
 use std::{
@@ -67,6 +69,8 @@ pub enum PoolTransaction {
     Upgrade(Checked<Upgrade>, ConsensusParametersVersion),
     /// Upload
     Upload(Checked<Upload>, ConsensusParametersVersion),
+    /// Blob
+    Blob(Checked<Blob>, ConsensusParametersVersion),
 }
 
 impl PoolTransaction {
@@ -76,7 +80,8 @@ impl PoolTransaction {
             PoolTransaction::Script(_, version)
             | PoolTransaction::Create(_, version)
             | PoolTransaction::Upgrade(_, version)
-            | PoolTransaction::Upload(_, version) => *version,
+            | PoolTransaction::Upload(_, version)
+            | PoolTransaction::Blob(_, version) => *version,
         }
     }
 
@@ -87,6 +92,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().metered_bytes_size(),
         }
     }
 
@@ -97,6 +103,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.id(),
             PoolTransaction::Upgrade(tx, _) => tx.id(),
             PoolTransaction::Upload(tx, _) => tx.id(),
+            PoolTransaction::Blob(tx, _) => tx.id(),
         }
     }
 
@@ -107,6 +114,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Blob(tx, _) => tx.metadata().max_gas,
         }
     }
 }
@@ -121,6 +129,7 @@ impl PoolTransaction {
             PoolTransaction::Create(_, _) => None,
             PoolTransaction::Upgrade(_, _) => None,
             PoolTransaction::Upload(_, _) => None,
+            PoolTransaction::Blob(_, _) => None,
         }
     }
 
@@ -130,6 +139,7 @@ impl PoolTransaction {
             Self::Create(tx, _) => tx.transaction().tip(),
             Self::Upload(tx, _) => tx.transaction().tip(),
             Self::Upgrade(tx, _) => tx.transaction().tip(),
+            Self::Blob(tx, _) => tx.transaction().tip(),
         }
     }
 
@@ -139,6 +149,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Upload(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().is_computed(),
         }
     }
 
@@ -148,6 +159,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().inputs(),
         }
     }
 
@@ -157,6 +169,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().outputs(),
         }
     }
 }
@@ -176,6 +189,7 @@ impl From<&PoolTransaction> for Transaction {
             PoolTransaction::Upload(tx, _) => {
                 Transaction::Upload(tx.transaction().clone())
             }
+            PoolTransaction::Blob(tx, _) => Transaction::Blob(tx.transaction().clone()),
         }
     }
 }
@@ -187,13 +201,14 @@ impl From<&PoolTransaction> for CheckedTransaction {
             PoolTransaction::Create(tx, _) => CheckedTransaction::Create(tx.clone()),
             PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx.clone()),
             PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx.clone()),
+            PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx.clone()),
         }
     }
 }
 
 /// The `removed` field contains the list of removed transactions during the insertion
 /// of the `inserted` transaction.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InsertionResult {
     /// This was inserted
     pub inserted: ArcPoolTx,
@@ -313,6 +328,10 @@ pub enum Error {
     )]
     NotInsertedCollisionContractId(ContractId),
     #[error(
+        "Transaction is not inserted. More priced tx has uploaded the blob with BlobId {0:#x}"
+    )]
+    NotInsertedCollisionBlobId(BlobId),
+    #[error(
         "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
     )]
     NotInsertedCollisionMessageId(TxId, Nonce),
@@ -322,6 +341,8 @@ pub enum Error {
     NotInsertedInputContractDoesNotExist(ContractId),
     #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
+    #[error("Transaction is not inserted. BlobId is already taken {0:#x}")]
+    NotInsertedBlobIdAlreadyTaken(BlobId),
     #[error("Transaction is not inserted. UTXO does not exist: {0:#x}")]
     NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
@@ -374,6 +395,13 @@ pub enum Error {
     // TODO: We need it for now until channels are removed from TxPool.
     #[error("Got some unexpected error: {0}")]
     Other(String),
+}
+
+#[cfg(feature = "test-helpers")]
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string().eq(&other.to_string())
+    }
 }
 
 impl From<CheckError> for Error {

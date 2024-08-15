@@ -56,7 +56,14 @@ async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
             Default::default(),
         ))
         .finalize_as_transaction();
-    client.submit_and_await_commit(&contract_tx).await.unwrap();
+    let status = client
+        .submit_and_await_commit(&contract_tx)
+        .await
+        .expect("Failed to send tx");
+    assert!(
+        matches!(status, TransactionStatus::Success { .. }),
+        "{status:?}"
+    );
 }
 
 async fn take_snapshot(db_dir: &TempDir, snapshot_dir: &TempDir) -> anyhow::Result<()> {
@@ -338,7 +345,10 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
     else {
         panic!("Expected transaction to be squeezed out")
     };
-    assert!(reason.contains("Transaction id was already used"));
+    assert!(
+        reason.contains("Transaction id was already used"),
+        "Unexpected message {reason:?}"
+    );
 
     Ok(())
 }

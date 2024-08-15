@@ -1,6 +1,8 @@
-[Link to related issue(s) here, if any]
+## Linked Issues/PRs
+<!-- List of related issues/PRs -->
 
-[Short description of the changes.]
+## Description
+<!-- List of detailed changes -->
 
 ## Checklist
 - [ ] Breaking changes are clearly marked as such in the PR description and changelog

@@ -48,4 +48,5 @@ test-case = { workspace = true }
 [features]
 default = ["std"]
 std = ["fuel-core-types/std"]
+smt = []
 test-helpers = ["dep:mockall", "dep:rand"]

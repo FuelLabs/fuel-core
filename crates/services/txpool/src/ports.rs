@@ -13,6 +13,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        BlobId,
         ContractId,
         Nonce,
     },
@@ -58,6 +59,8 @@ pub trait TxPoolDb: Send + Sync {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
+
+    fn blob_exist(&self, blob_id: &BlobId) -> StorageResult<bool>;
 
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 }

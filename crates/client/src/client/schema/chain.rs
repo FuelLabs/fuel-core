@@ -285,12 +285,15 @@ pub struct GasCosts {
     pub xori: U64,
 
     pub aloc_dependent_cost: DependentCost,
+    pub bsiz: Option<DependentCost>,
+    pub bldd: Option<DependentCost>,
     pub cfe: DependentCost,
     pub cfei_dependent_cost: DependentCost,
     pub call: DependentCost,
     pub ccp: DependentCost,
     pub croo: DependentCost,
     pub csiz: DependentCost,
+    pub ed19_dependent_cost: DependentCost,
     pub k256: DependentCost,
     pub ldc: DependentCost,
     pub logd: DependentCost,
@@ -324,8 +327,8 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
 
     fn try_from(value: GasCosts) -> Result<Self, Self::Error> {
         match value.version {
-            GasCostsVersion::V1 => {
-                let values = fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV3 {
+            GasCostsVersion::V1 => Ok(fuel_core_types::fuel_tx::GasCosts::new(
+                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV4 {
                     add: value.add.into(),
                     addi: value.addi.into(),
                     and: value.and.into(),
@@ -340,7 +343,6 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     divi: value.divi.into(),
                     eck1: value.eck1.into(),
                     ecr1: value.ecr1.into(),
-                    ed19: value.ed19.into(),
                     eq: value.eq.into(),
                     exp: value.exp.into(),
                     expi: value.expi.into(),
@@ -414,12 +416,15 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     xori: value.xori.into(),
 
                     aloc: value.aloc_dependent_cost.into(),
+                    bsiz: value.bsiz.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
+                    bldd: value.bldd.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
                     cfe: value.cfe.into(),
                     cfei: value.cfei_dependent_cost.into(),
                     call: value.call.into(),
                     ccp: value.ccp.into(),
                     croo: value.croo.into(),
                     csiz: value.csiz.into(),
+                    ed19: value.ed19_dependent_cost.into(),
                     k256: value.k256.into(),
                     ldc: value.ldc.into(),
                     logd: value.logd.into(),
@@ -438,9 +443,9 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     state_root: value.state_root.into(),
                     vm_initialization: value.vm_initialization.into(),
                     new_storage_per_byte: value.new_storage_per_byte.into(),
-                };
-                Ok(fuel_core_types::fuel_tx::GasCosts::new(values.into()))
-            }
+                }
+                .into(),
+            )),
         }
     }
 }

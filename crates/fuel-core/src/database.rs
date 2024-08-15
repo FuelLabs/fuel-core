@@ -127,10 +127,9 @@ pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisS
 
 impl OnChainIterableKeyValueView {
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
-        self.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+        self.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
             .next()
             .ok_or(not_found!("BlockHeight"))?
-            .map(|(height, _)| height)
     }
 
     pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
@@ -328,8 +327,7 @@ where
 impl Modifiable for Database<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |iter| {
-            iter.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
-                .map(|result| result.map(|(height, _)| height))
+            iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
                 .try_collect()
         })
     }
@@ -348,8 +346,7 @@ impl Modifiable for Database<OffChain> {
 impl Modifiable for Database<GasPriceDatabase> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |iter| {
-            iter.iter_all::<GasPriceMetadata>(Some(IterDirection::Reverse))
-                .map(|result| result.map(|(height, _)| height))
+            iter.iter_all_keys::<GasPriceMetadata>(Some(IterDirection::Reverse))
                 .try_collect()
         })
     }
@@ -359,10 +356,9 @@ impl Modifiable for Database<GasPriceDatabase> {
 impl Modifiable for Database<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |iter| {
-            iter.iter_all::<fuel_core_relayer::storage::EventsHistory>(Some(
+            iter.iter_all_keys::<fuel_core_relayer::storage::EventsHistory>(Some(
                 IterDirection::Reverse,
             ))
-            .map(|result| result.map(|(height, _)| height))
             .try_collect()
         })
     }

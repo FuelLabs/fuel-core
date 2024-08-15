@@ -80,6 +80,22 @@ pub struct BlockBytes {
 }
 
 impl AlgorithmUpdaterV0 {
+    pub fn new(
+        new_exec_price: u64,
+        min_exec_gas_price: u64,
+        exec_gas_price_change_percent: u64,
+        l2_block_height: u32,
+        l2_block_fullness_threshold_percent: u64,
+    ) -> Self {
+        Self {
+            new_exec_price,
+            min_exec_gas_price,
+            exec_gas_price_change_percent,
+            l2_block_height,
+            l2_block_fullness_threshold_percent,
+        }
+    }
+
     pub fn update_l2_block_data(
         &mut self,
         height: u32,
