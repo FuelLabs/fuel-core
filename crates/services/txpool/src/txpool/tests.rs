@@ -1512,10 +1512,7 @@ async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
     let context = TextContext::default()
         .config(config)
         .wasm_checker(MockWasmChecker {
-            #[cfg(feature = "wasm-executor")]
             result: Err(WasmValidityError::NotValid),
-            #[cfg(not(feature = "wasm-executor"))]
-            result: Err(WasmValidityError::NotEnabled),
         });
     let mut txpool = context.build();
     let gas_price_provider = MockTxPoolGasPrice::new(0);
@@ -1552,8 +1549,5 @@ async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
     let result = txpool.insert_single(tx);
 
     // Then
-    #[cfg(feature = "wasm-executor")]
     assert_eq!(result, Err(Error::NotInsertedInvalidWasm));
-    #[cfg(not(feature = "wasm-executor"))]
-    assert_eq!(result, Err(Error::NotInsertedWasmNotEnabled));
 }
