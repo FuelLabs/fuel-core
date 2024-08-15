@@ -6,6 +6,7 @@ use crate::{
             GasPriceProvider,
             MockConsensusParametersProvider,
         },
+        Bytes32,
         Error,
     },
     mocks::{
@@ -23,6 +24,7 @@ use fuel_core_producer as _;
 use fuel_core_types::{
     blockchain::{
         block::{
+            Block,
             CompressedBlock,
             PartialFuelBlock,
         },
@@ -33,7 +35,11 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx::ConsensusParameters,
+    fuel_tx::{
+        ConsensusParameters,
+        Mint,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
@@ -532,6 +538,41 @@ mod produce_and_execute_block_txpool {
         // then
         assert!(result.is_err());
     }
+}
+
+fn block_with_height(height: impl Into<BlockHeight>) -> Block {
+    let header = PartialBlockHeader {
+        consensus: ConsensusHeader {
+            height: height.into(),
+            ..Default::default()
+        },
+        application: ApplicationHeader {
+            da_height: DaBlockHeight::default(),
+            ..Default::default()
+        },
+    };
+    let mint = Transaction::Mint(Mint::default());
+    let txs = vec![mint];
+    let outbox_message_ids = vec![];
+    let event_inbox_root = Bytes32::default();
+    Block::new(header, txs, &outbox_message_ids, event_inbox_root).unwrap()
+}
+
+#[tokio::test]
+async fn produce_and_execute_predefined_block__happy() {
+    // given
+    let height = 1u32;
+    let block = block_with_height(height);
+    let executor = MockExecutorWithCapture::default();
+    let ctx = TestContext::default_from_executor(executor.clone());
+
+    let producer = ctx.producer();
+
+    // when
+    let result = producer.produce_and_execute_predefined(&block).await;
+
+    // then
+    assert!(result.is_ok());
 }
 
 struct TestContext<Executor> {

@@ -17,6 +17,7 @@ use fuel_core_storage::transactional::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::Block,
         header::{
             ApplicationHeader,
             ConsensusHeader,
@@ -24,7 +25,10 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx::Transaction,
+    fuel_tx::{
+        field::MintGasPrice,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -88,6 +92,58 @@ pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusP
     pub consensus_parameters_provider: ConsensusProvider,
 }
 
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+where
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
+    ConsensusProvider: ConsensusParametersProvider,
+{
+    pub async fn produce_and_execute_predefined(
+        &self,
+        block: &Block,
+    ) -> anyhow::Result<UncommittedResult<Changes>>
+    where
+        Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
+    {
+        let _production_guard = self.lock.lock().await;
+
+        let source = block.transactions().to_vec();
+
+        let height = block.header().consensus().height;
+
+        let header = block.header().into();
+
+        let mint_tx = block
+            .transactions()
+            .last()
+            .and_then(|tx| tx.as_mint())
+            .ok_or(anyhow!(
+                "The last transaction in the block should be a mint transaction"
+            ))?;
+
+        let gas_price = *mint_tx.gas_price();
+
+        let component = Components {
+            header_to_produce: header,
+            transactions_source: source,
+            coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
+            gas_price,
+        };
+
+        // Store the context string in case we error.
+        let context_string =
+            format!("Failed to produce block {height:?} due to execution failure");
+        let result = self
+            .executor
+            .produce_without_commit(component)
+            .map_err(Into::<anyhow::Error>::into)
+            .context(context_string)?;
+
+        debug!("Produced block with result: {:?}", result.result());
+        Ok(result)
+    }
+}
 impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
