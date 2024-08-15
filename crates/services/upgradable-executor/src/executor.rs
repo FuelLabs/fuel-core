@@ -641,7 +641,7 @@ where
         let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
             uploaded_bytecode.as_ref()
         else {
-            return Err(ExecutorError::IncompleteUploadedBytecode(bytecode_root).into())
+            return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root))
         };
 
         wasmtime::Module::new(&self.engine, bytecode)
@@ -679,6 +679,7 @@ where
             .get_module_by_root_and_validate(bytecode_root)
             .map_err(|err| match err {
                 UpgradableError::InvalidWasm(_) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, version={version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::IncompleteUploadedBytecode(_) => ExecutorError::Other(format!("Attempting to load wasm bytecode failed since the upload is incomplete, version={version}. Current version is `{}`", Self::VERSION)),
                 UpgradableError::ExecutorError(err) => err
             })?;
 

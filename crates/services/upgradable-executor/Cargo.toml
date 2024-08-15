@@ -19,7 +19,6 @@ fuel-core-types = { workspace = true }
 fuel-core-wasm-executor = { workspace = true, optional = true }
 parking_lot = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
-serde = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 wasmtime = { version = "18.0.1", default-features = false, features = [
   "cache",
@@ -41,7 +40,6 @@ fuel-core-wasm-executor = { workspace = true, optional = true, default-features 
 [features]
 default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
-serde = ["dep:serde"]
 smt = [
   "fuel-core-storage/smt",
   "fuel-core-executor/smt",
@@ -55,7 +53,6 @@ wasm-executor = [
   "dep:tracing",
   "dep:fuel-core-wasm-executor",
   "dep:wasmtime",
-  "serde",
 ]
 test-helpers = [
   "fuel-core-storage/test-helpers",

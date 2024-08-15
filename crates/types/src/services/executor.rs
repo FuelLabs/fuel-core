@@ -300,8 +300,6 @@ pub enum Error {
     /// Number of outputs is more than `u16::MAX`.
     #[display(fmt = "Number of outputs is more than `u16::MAX`")]
     TooManyOutputs,
-    #[display(fmt = "The uploaded bytecode with root {_0} is incomplete")]
-    IncompleteUploadedBytecode(Bytes32),
 }
 
 impl From<Error> for anyhow::Error {
