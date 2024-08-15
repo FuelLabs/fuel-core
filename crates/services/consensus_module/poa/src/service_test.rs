@@ -5,11 +5,11 @@ use crate::{
     new_service,
     ports::{
         BlockProducer,
+        InMemoryPredefinedBlocks,
         MockBlockImporter,
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
-        PredefinedBlocks,
         TransactionsSource,
     },
     service::MainTask,
@@ -178,34 +178,12 @@ impl TestContextBuilder {
     }
 }
 
-pub struct FakePredefinedBlocks {
-    blocks: HashMap<BlockHeight, Block>,
-}
-
-impl From<HashMap<BlockHeight, Block>> for FakePredefinedBlocks {
-    fn from(blocks: HashMap<BlockHeight, Block>) -> Self {
-        Self::new(blocks)
-    }
-}
-
-impl FakePredefinedBlocks {
-    pub fn new(blocks: HashMap<BlockHeight, Block>) -> Self {
-        Self { blocks }
-    }
-}
-
-impl PredefinedBlocks for FakePredefinedBlocks {
-    fn get_block(&self, height: &BlockHeight) -> Option<Block> {
-        self.blocks.get(height).cloned()
-    }
-}
-
 struct TestContext {
     service: Service<
         MockTransactionPool,
         MockBlockProducer,
         MockBlockImporter,
-        FakePredefinedBlocks,
+        InMemoryPredefinedBlocks,
     >,
 }
 
@@ -376,7 +354,7 @@ async fn remove_skipped_transactions() {
 
     let p2p_port = generate_p2p_port();
 
-    let predefined_blocks: FakePredefinedBlocks = HashMap::new().into();
+    let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
 
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -426,7 +404,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let p2p_port = generate_p2p_port();
 
-    let predefined_blocks: FakePredefinedBlocks = HashMap::new().into();
+    let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
 
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -549,7 +527,7 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
         block_producer,
         block_importer,
         generate_p2p_port(),
-        FakePredefinedBlocks::new(blocks_map),
+        InMemoryPredefinedBlocks::new(blocks_map),
     );
 
     // when
