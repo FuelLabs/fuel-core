@@ -1,18 +1,45 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{block::Block, header::ConsensusParametersVersion},
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
     fuel_asm::Word,
     fuel_tx::{
-        field::{Inputs, Outputs, ScriptGasLimit, Tip},
-        Blob, Cacheable, Chargeable, Create, Input, Output, Receipt, Script, Transaction,
-        TxId, Upgrade, Upload,
+        field::{
+            Inputs,
+            Outputs,
+            ScriptGasLimit,
+            Tip,
+        },
+        Blob,
+        Cacheable,
+        Chargeable,
+        Create,
+        Input,
+        Output,
+        Receipt,
+        Script,
+        Transaction,
+        TxId,
+        Upgrade,
+        Upload,
     },
-    fuel_vm::{checked_transaction::Checked, ProgramState},
+    fuel_vm::{
+        checked_transaction::Checked,
+        ProgramState,
+    },
     services::executor::TransactionExecutionResult,
 };
-use fuel_vm_private::{checked_transaction::CheckedTransaction, fuel_types::BlockHeight};
-use std::{sync::Arc, time::Duration};
+use fuel_vm_private::{
+    checked_transaction::CheckedTransaction,
+    fuel_types::BlockHeight,
+};
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tai64::Tai64;
 
 /// Pool transaction wrapped in an Arc for thread-safe sharing

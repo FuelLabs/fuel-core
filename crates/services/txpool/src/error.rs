@@ -10,6 +10,8 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckError,
 };
 
+use crate::ports::WasmValidityError;
+
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[allow(missing_docs)]
@@ -124,5 +126,15 @@ impl PartialEq for Error {
 impl From<CheckError> for Error {
     fn from(e: CheckError) -> Self {
         Error::ConsensusValidity(e)
+    }
+}
+
+impl From<WasmValidityError> for Error {
+    fn from(err: WasmValidityError) -> Self {
+        match err {
+            WasmValidityError::NotEnabled => Error::NotInsertedWasmNotEnabled,
+            WasmValidityError::NotFound => Error::NotInsertedWasmNotFound,
+            WasmValidityError::NotValid => Error::NotInsertedInvalidWasm,
+        }
     }
 }
