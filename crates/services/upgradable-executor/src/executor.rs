@@ -647,9 +647,7 @@ where
         let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
             uploaded_bytecode.as_ref()
         else {
-            return Err(ExecutorError::Other(format!(
-                "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
-            )).into())
+            return Err(ExecutorError::IncompleteUploadedBytecode(bytecode_root).into())
         };
 
         wasmtime::Module::new(&self.engine, bytecode)
