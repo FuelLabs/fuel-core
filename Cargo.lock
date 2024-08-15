@@ -3369,6 +3369,7 @@ name = "fuel-core-upgradable-executor"
 version = "0.32.1"
 dependencies = [
  "anyhow",
+ "derive_more",
  "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-types",
