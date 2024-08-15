@@ -186,9 +186,9 @@ pub struct Command {
 
     /// Use [AWS KMS](https://docs.aws.amazon.com/kms/latest/APIReference/Welcome.html)for signing blocks.
     /// Loads the AWS credentials and configuration from the environment.
-    /// Generates a new key if the key doesn't exist yet.
+    /// Takes key_id as an argument, e.g. key ARN works.
     #[arg(long = "consensus-aws-kms", env, conflicts_with = "consensus_key")]
-    pub consensus_aws_kms: bool,
+    pub consensus_aws_kms: Option<String>,
 
     /// A new block is produced instantly when transactions are available.
     #[clap(flatten)]
@@ -311,32 +311,11 @@ impl Command {
             info!("Block production disabled");
         }
 
-        let consensus_signer = if consensus_aws_kms {
+        let consensus_signer = if let Some(key_id) = consensus_aws_kms {
             let config = aws_config::load_from_env().await;
             let client = aws_sdk_kms::Client::new(&config);
-
-            // Find if we have a key already
-            let key_id = client.list_keys().send().await?.keys.and_then(|keys| {
-                keys.first()
-                    .map(|key| key.key_id.clone().expect("Missing key_id"))
-            });
-
-            // Generate a new key if the key doesn't exist yet
-            let key_id = match key_id {
-                Some(key_id) => key_id,
-                None => client
-                    .create_key()
-                    .key_spec(aws_sdk_kms::types::KeySpec::EccSecgP256K1)
-                    .key_usage(aws_sdk_kms::types::KeyUsageType::SignVerify)
-                    .send()
-                    .await?
-                    .key_metadata
-                    .as_ref()
-                    .expect("Missing key_metadata")
-                    .key_id()
-                    .to_owned(),
-            };
-
+            // Ensure that we can use the key
+            let _ = client.get_public_key().key_id(&key_id).send().await?;
             SignMode::Kms { key_id, client }
         } else if let Some(consensus_key) = consensus_key {
             let key = SecretKey::from_str(&consensus_key)
