@@ -113,6 +113,7 @@ impl Validator for ExecutorAdapter {
     }
 }
 
+#[cfg(feature = "wasm-executor")]
 impl WasmChecker for ExecutorAdapter {
     fn validate_uploaded_wasm(
         &self,
@@ -121,9 +122,18 @@ impl WasmChecker for ExecutorAdapter {
         self.executor
             .validate_uploaded_wasm(wasm_root)
             .map_err(|err| match err {
-                UpgradableExecutorError::NoWasmSupport => WasmValidityError::NotEnabled,
                 UpgradableExecutorError::InvalidWasm(_, _) => WasmValidityError::NotValid,
                 _ => WasmValidityError::NotFound,
             })
+    }
+}
+
+#[cfg(not(feature = "wasm-executor"))]
+impl WasmChecker for ExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        WasmValidityError::NotEnabled
     }
 }

@@ -32,8 +32,9 @@ thiserror = "1.0"
 zeroize = "1.5"
 
 [features]
-default = ["std"]
+default = ["std", "wasm-executor"]
 serde = ["dep:serde", "fuel-vm-private/serde"]
 std = ["fuel-vm-private/std"]
 random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]
+wasm-executor = []

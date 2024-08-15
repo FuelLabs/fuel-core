@@ -51,6 +51,7 @@ wasm-executor = [
   "dep:tracing",
   "dep:fuel-core-wasm-executor",
   "dep:wasmtime",
+  "fuel-core-types/wasm-executor",
 ]
 test-helpers = [
   "fuel-core-storage/test-helpers",

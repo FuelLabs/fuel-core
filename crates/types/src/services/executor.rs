@@ -6,7 +6,6 @@ use crate::{
         header::{
             BlockHeaderError,
             ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
         },
     },
     entities::{
@@ -366,9 +365,11 @@ impl From<ValidityError> for TransactionValidityError {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UpgradableError {
     #[display(fmt = "Invalid WASM bytecode: {_0} (version: {_1:?})")]
-    InvalidWasm(String, Option<StateTransitionBytecodeVersion>),
-    #[display(fmt = "WASM support is not enabled")]
-    NoWasmSupport,
+    #[cfg(feature = "wasm-executor")]
+    InvalidWasm(
+        String,
+        Option<crate::blockchain::header::StateTransitionBytecodeVersion>,
+    ),
     /// Normal errors from the executor
     #[display(fmt = "Eexecutor error: {_0}")]
     ExecutorError(Error),

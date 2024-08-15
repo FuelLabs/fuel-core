@@ -385,7 +385,6 @@ where
         } else {
             let module = self.get_module(block_version).map_err(|err| match err {
                 UpgradableError::InvalidWasm(_, _) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, block_version={block_version}. Current version is `{}`", Self::VERSION)),
-                UpgradableError::NoWasmSupport => unreachable!("Wasm support is enabled"),
                 UpgradableError::ExecutorError(err) => err
             })?;
             self.wasm_produce_inner(&module, block, options, dry_run)
@@ -432,7 +431,6 @@ where
         } else {
             let module = self.get_module(block_version).map_err(|err| match err {
                 UpgradableError::InvalidWasm(_, _) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, block_version={block_version}. Current version is `{}`", Self::VERSION)),
-                UpgradableError::NoWasmSupport => unreachable!("Wasm support is enabled"),
                 UpgradableError::ExecutorError(err) => err
             })?;
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
@@ -614,15 +612,6 @@ where
             ExecutionInstance::new(relayer, database, options)
                 .validate_without_commit(block)
         }
-    }
-
-    /// Wasm support is disabled in the current build.
-    #[cfg(not(feature = "wasm-executor"))]
-    pub fn validate_uploaded_wasm(
-        &self,
-        _wasm_root: &Bytes32,
-    ) -> Result<(), UpgradableError> {
-        Err(UpgradableError::NoWasmSupport)
     }
 
     /// Attempt to fetch and validate an uploaded WASM module.
