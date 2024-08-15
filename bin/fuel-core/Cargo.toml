@@ -73,5 +73,5 @@ production = [
   "rocksdb-production",
   "p2p",
   "parquet",
-  "aws-kms"
+  "aws-kms",
 ]
