@@ -799,3 +799,85 @@ async fn starting_node_with_overwritten_new_poa_key_rollbacks_the_state(
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn starting_node_with_overwritten_new_poa_key_from_the_future_doesnt_rollback_the_state(
+) -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let state_config = StateConfig::local_testnet();
+    let mut original_chain_config = ChainConfig::local_testnet();
+    let tmp_dir = tempdir()?;
+    let tmp_path: PathBuf = tmp_dir.path().into();
+    let snapshot_writer = SnapshotWriter::json(tmp_path.clone());
+
+    let (original_secret_key, original_address) = random_key(&mut rng);
+    original_chain_config.consensus =
+        ConsensusConfig::PoAV2(PoAV2::new(original_address, Default::default()));
+    snapshot_writer.write_state_config(state_config.clone(), &original_chain_config)?;
+
+    let core = FuelCoreDriver::spawn_with_directory(
+        tmp_dir,
+        &[
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--snapshot",
+            tmp_path.to_str().unwrap(),
+            "--consensus-key",
+            original_secret_key.to_string().as_str(),
+        ],
+    )
+    .await?;
+
+    // Given
+    core.client.produce_blocks(10, None).await?;
+    let original_block_height = core
+        .client
+        .chain_info()
+        .await
+        .expect("Failed to get blocks")
+        .latest_block
+        .header
+        .height;
+    let tmp_dir = core.kill().await;
+
+    // When
+    let override_height = original_block_height + 5u32;
+    let (new_secret_key, new_address) = random_key(&mut rng);
+    let mut modified_chain_config = original_chain_config.clone();
+    modified_chain_config.consensus =
+        ConsensusConfig::PoAV2(PoAV2::new(original_address, {
+            let mut overrides = BTreeMap::default();
+            overrides.insert(override_height.into(), new_address);
+            overrides
+        }));
+
+    let snapshot_writer = SnapshotWriter::json(tmp_path.clone());
+    snapshot_writer.write_state_config(state_config.clone(), &modified_chain_config)?;
+    let core = FuelCoreDriver::spawn_with_directory(
+        tmp_dir,
+        &[
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--snapshot",
+            tmp_path.to_str().unwrap(),
+            "--consensus-key",
+            new_secret_key.to_string().as_str(),
+        ],
+    )
+    .await?;
+
+    // Then
+    let block_height_after_override = core
+        .client
+        .chain_info()
+        .await
+        .expect("Failed to get blocks")
+        .latest_block
+        .header
+        .height;
+    assert_eq!(original_block_height, block_height_after_override);
+
+    Ok(())
+}
