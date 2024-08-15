@@ -227,6 +227,12 @@ impl FuelService {
                 let on_chain_view = combined_database.on_chain().latest_view()?;
 
                 for override_height in poa.get_all_overrides().keys() {
+                    let current_height = on_chain_view.latest_height()?;
+
+                    if override_height > &current_height {
+                        return Ok(());
+                    }
+
                     let block_header = on_chain_view
                         .get_sealed_block_header(override_height)?
                         .ok_or(not_found!("SealedBlockHeader"))?;
