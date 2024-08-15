@@ -17,7 +17,7 @@ concurrency:
 env:
   GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.80.0
+  RUST_VERSION: 1.80.1
   RUST_VERSION_FMT: nightly-2023-10-29
   RUST_VERSION_COV: nightly-2024-06-05
   RUSTFLAGS: -D warnings
