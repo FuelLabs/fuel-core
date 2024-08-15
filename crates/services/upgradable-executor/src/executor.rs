@@ -384,10 +384,7 @@ where
                 }
             }
         } else {
-            let module = self.get_module(block_version).map_err(|err| match err {
-                UpgradableError::InvalidWasm(_, _) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, block_version={block_version}. Current version is `{}`", Self::VERSION)),
-                UpgradableError::ExecutorError(err) => err
-            })?;
+            let module = self.get_module(block_version)?;
             self.wasm_produce_inner(&module, block, options, dry_run)
         }
     }
@@ -430,10 +427,7 @@ where
                 }
             }
         } else {
-            let module = self.get_module(block_version).map_err(|err| match err {
-                UpgradableError::InvalidWasm(_, _) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, block_version={block_version}. Current version is `{}`", Self::VERSION)),
-                UpgradableError::ExecutorError(err) => err
-            })?;
+            let module = self.get_module(block_version)?;
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
         }
     }
@@ -651,7 +645,7 @@ where
         };
 
         wasmtime::Module::new(&self.engine, bytecode)
-            .map_err(|e| UpgradableError::InvalidWasm(e.to_string(), None))
+            .map_err(|e| UpgradableError::InvalidWasm(e.to_string()))
     }
 
     /// Returns the compiled WASM module of the state transition function.
@@ -662,7 +656,7 @@ where
     fn get_module(
         &self,
         version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
-    ) -> Result<wasmtime::Module, UpgradableError> {
+    ) -> ExecutorResult<wasmtime::Module> {
         let guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
             return Ok(module.clone());
@@ -683,12 +677,9 @@ where
 
         let module = self
             .get_module_by_root_and_validate(bytecode_root)
-            .map_err(|mut err| {
-                // Inject the version into the error, if relevant.
-                if let UpgradableError::InvalidWasm(_, v) = &mut err {
-                    *v = Some(version);
-                }
-                err
+            .map_err(|err| match err {
+                UpgradableError::InvalidWasm(_) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, version={version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::ExecutorError(err) => err
             })?;
 
         self.cached_modules.lock().insert(version, module.clone());
