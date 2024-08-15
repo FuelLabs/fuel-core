@@ -3,7 +3,10 @@ use fuel_core_consensus_module::{
     RelayerConsensusConfig,
 };
 use fuel_core_importer::ImporterResult;
-use fuel_core_poa::ports::BlockSigner;
+use fuel_core_poa::{
+    ports::BlockSigner,
+    signer::SignMode,
+};
 use fuel_core_services::stream::BoxStream;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
@@ -184,16 +187,23 @@ impl BlockImporterAdapter {
     }
 }
 
-pub struct FuelBlockSigner;
+pub struct FuelBlockSigner {
+    mode: SignMode,
+}
+impl FuelBlockSigner {
+    pub fn new(mode: SignMode) -> Self {
+        Self { mode }
+    }
+}
 
 #[async_trait::async_trait]
 impl BlockSigner for FuelBlockSigner {
-    async fn seal_block(&self, _block: &Block) -> anyhow::Result<Consensus> {
-        todo!()
+    async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
+        self.mode.seal_block(block).await
     }
 
     fn is_available(&self) -> bool {
-        todo!()
+        self.mode.is_available()
     }
 }
 
