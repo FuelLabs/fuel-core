@@ -1,4 +1,7 @@
 use crate::config::Config;
+#[cfg(feature = "wasm-executor")]
+use crate::error::UpgradableError;
+
 use fuel_core_executor::{
     executor::{
         ExecutionInstance,
@@ -20,6 +23,8 @@ use fuel_core_storage::{
         Modifiable,
     },
 };
+#[cfg(feature = "wasm-executor")]
+use fuel_core_types::fuel_types::Bytes32;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -41,11 +46,6 @@ use fuel_core_types::{
         },
         Uncommitted,
     },
-};
-#[cfg(feature = "wasm-executor")]
-use fuel_core_types::{
-    fuel_types::Bytes32,
-    services::executor::UpgradableError,
 };
 use std::sync::Arc;
 

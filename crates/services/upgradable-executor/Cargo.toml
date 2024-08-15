@@ -12,6 +12,7 @@ build = "build.rs"
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
+derive_more = { workspace = true }
 fuel-core-executor = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
@@ -51,7 +52,6 @@ wasm-executor = [
   "dep:tracing",
   "dep:fuel-core-wasm-executor",
   "dep:wasmtime",
-  "fuel-core-types/wasm-executor",
 ]
 test-helpers = [
   "fuel-core-storage/test-helpers",
