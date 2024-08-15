@@ -1,4 +1,7 @@
-use crate::types::GasPrice;
+use crate::{
+    types::GasPrice,
+    Result as TxPoolResult,
+};
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -26,7 +29,6 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             NetworkData,
         },
-        txpool::Result as TxPoolResult,
     },
 };
 use std::{

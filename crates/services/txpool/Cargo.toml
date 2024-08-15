@@ -20,6 +20,7 @@ fuel-core-types = { workspace = true }
 mockall = { workspace = true, optional = true }
 num-rational = { workspace = true }
 parking_lot = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true }
