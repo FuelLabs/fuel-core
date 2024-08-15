@@ -228,3 +228,9 @@ $ cargo run --bin fuel-core-client -- transaction submit \
     \"data\":[167,184,58,243,113,131,73,255,233,187,213,245,147,97,92,200,55,162,35,88,241,0,222,151,44,66,30,244,186,138,146,161,73,250,79,15,67,105,225,4,79,142,222,72,74,1,221,173,88,143,201,96,229,4,170,19,75,126,67,159,133,151,149,51]}
   ]}}"
 ```
+
+You may meet the error `Transaction is not inserted. UTXO does not exist` due to the UTXO validation. The UTXO validation can be turned off by adding the `--debug` flag.
+
+```console
+$ ./target/debug/fuel-core run --db-type in-memory --debug
+```
