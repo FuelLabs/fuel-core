@@ -39,7 +39,7 @@ ntest = "0.9.2"
 fuel-core-wasm-executor = { workspace = true, optional = true, default-features = false }
 
 [features]
-default = ["std", "serde"]
+default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
 serde = ["dep:serde"]
 smt = [
@@ -55,6 +55,7 @@ wasm-executor = [
   "dep:tracing",
   "dep:fuel-core-wasm-executor",
   "dep:wasmtime",
+  "serde",
 ]
 test-helpers = [
   "fuel-core-storage/test-helpers",
