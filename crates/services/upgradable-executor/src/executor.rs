@@ -1,4 +1,7 @@
 use crate::config::Config;
+#[cfg(feature = "wasm-executor")]
+use crate::error::UpgradableError;
+
 use fuel_core_executor::{
     executor::{
         ExecutionInstance,
@@ -20,6 +23,8 @@ use fuel_core_storage::{
         Modifiable,
     },
 };
+#[cfg(feature = "wasm-executor")]
+use fuel_core_types::fuel_types::Bytes32;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -193,7 +198,7 @@ impl<S, R> Executor<S, R> {
         let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
         let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
             wasmtime::Module::new(engine, crate::WASM_BYTECODE)
-                .expect("Failed to compile the WASM bytecode")
+                .expect("Failed to validate the WASM bytecode")
         });
 
         Self {
@@ -604,6 +609,45 @@ where
         }
     }
 
+    /// Attempt to fetch and validate an uploaded WASM module.
+    #[cfg(feature = "wasm-executor")]
+    pub fn validate_uploaded_wasm(
+        &self,
+        wasm_root: &Bytes32,
+    ) -> Result<(), UpgradableError> {
+        self.get_module_by_root_and_validate(*wasm_root).map(|_| ())
+    }
+
+    /// Find an uploaded WASM blob by it's hash and validate it.
+    /// This is a slow operation, and the cached result should be used if possible,
+    /// for instancy by calling `get_module` below.
+    #[cfg(feature = "wasm-executor")]
+    fn get_module_by_root_and_validate(
+        &self,
+        bytecode_root: Bytes32,
+    ) -> Result<wasmtime::Module, UpgradableError> {
+        let view = StructuredStorage::new(
+            self.storage_view_provider
+                .latest_view()
+                .map_err(ExecutorError::from)?,
+        );
+        let uploaded_bytecode = view
+            .storage::<UploadedBytecodes>()
+            .get(&bytecode_root)
+            .map_err(ExecutorError::from)?
+            .ok_or(not_found!(UploadedBytecodes))
+            .map_err(ExecutorError::from)?;
+
+        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
+            uploaded_bytecode.as_ref()
+        else {
+            return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root))
+        };
+
+        wasmtime::Module::new(&self.engine, bytecode)
+            .map_err(|e| UpgradableError::InvalidWasm(e.to_string()))
+    }
+
     /// Returns the compiled WASM module of the state transition function.
     ///
     /// Note: The method compiles the WASM module if it is not cached.
@@ -619,31 +663,25 @@ where
         }
         drop(guard);
 
-        let view = StructuredStorage::new(self.storage_view_provider.latest_view()?);
+        let view = StructuredStorage::new(
+            self.storage_view_provider
+                .latest_view()
+                .map_err(ExecutorError::from)?,
+        );
         let bytecode_root = *view
             .storage::<StateTransitionBytecodeVersions>()
-            .get(&version)?
-            .ok_or(not_found!(StateTransitionBytecodeVersions))?;
-        let uploaded_bytecode = view
-            .storage::<UploadedBytecodes>()
-            .get(&bytecode_root)?
-            .ok_or(not_found!(UploadedBytecodes))?;
+            .get(&version)
+            .map_err(ExecutorError::from)?
+            .ok_or(not_found!(StateTransitionBytecodeVersions))
+            .map_err(ExecutorError::from)?;
 
-        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
-            uploaded_bytecode.as_ref()
-        else {
-            return Err(ExecutorError::Other(format!(
-                "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
-            )))
-        };
-
-        // Compiles the module
-        let module = wasmtime::Module::new(&self.engine, bytecode).map_err(|e| {
-            ExecutorError::Other(format!(
-                "Failed to compile the module for the version `{}` with {e}",
-                version,
-            ))
-        })?;
+        let module = self
+            .get_module_by_root_and_validate(bytecode_root)
+            .map_err(|err| match err {
+                UpgradableError::InvalidWasm(_) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, version={version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::IncompleteUploadedBytecode(_) => ExecutorError::Other(format!("Attempting to load wasm bytecode failed since the upload is incomplete, version={version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::ExecutorError(err) => err
+            })?;
 
         self.cached_modules.lock().insert(version, module.clone());
         Ok(module)

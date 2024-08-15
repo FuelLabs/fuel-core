@@ -4,6 +4,7 @@ use fuel_core_types::{
     fuel_tx::{
         policies::Policies,
         AssetId,
+        Bytes32,
         GasCosts,
         Input,
         Receipt,
@@ -143,7 +144,7 @@ async fn can_upgrade_to_uploaded_state_transition() {
 
     // Then
     let TransactionStatus::Success { block_height, .. } =
-        result.expect("We should be able to upload the bytecode subsection")
+        result.expect("We should be able to upgrade to the uploaded bytecode")
     else {
         unreachable!()
     };
@@ -165,6 +166,174 @@ async fn can_upgrade_to_uploaded_state_transition() {
     assert_ne!(
         state_transition_bytecode_version_before_upgrade,
         state_transition_bytecode_version_after_upgrade
+    );
+}
+
+#[tokio::test]
+async fn upgrading_to_invalid_state_transition_fails() {
+    let privileged_address = Input::predicate_owner(predicate());
+    let amount = 1_000;
+    let subsections = UploadSubsection::split_bytecode(
+        b"This is definitely not valid wasm!",
+        SUBSECTION_SIZE,
+    )
+    .unwrap();
+    let root = subsections[0].root;
+    let mut test_builder = TestSetupBuilder::new(2322);
+    test_builder.utxo_validation = false;
+    test_builder.privileged_address = privileged_address;
+    let TestContext {
+        client,
+        srv: _drop,
+        mut rng,
+        ..
+    } = test_builder.finalize().await;
+
+    let transactions = transactions_from_subsections(&mut rng, subsections, amount);
+    for upload in transactions {
+        let mut tx = upload.into();
+        client.estimate_predicates(&mut tx).await.unwrap();
+        client.submit_and_await_commit(&tx).await.unwrap();
+    }
+
+    // Given
+    let upgrade = Transaction::upgrade(
+        UpgradePurpose::StateTransition { root },
+        Policies::new().with_max_fee(amount),
+        vec![Input::coin_predicate(
+            rng.gen(),
+            privileged_address,
+            amount,
+            AssetId::BASE,
+            Default::default(),
+            Default::default(),
+            predicate(),
+            vec![],
+        )],
+        vec![],
+        vec![],
+    );
+
+    // When
+    let mut tx = upgrade.into();
+    client.estimate_predicates(&mut tx).await.unwrap();
+    let result = client.submit_and_await_commit(&tx).await;
+
+    // Then
+    let result_str = format!("{:?}", result); // io::Result forces string handling
+    result.expect_err("Upgrading to an incorrect bytecode should fail");
+    assert!(
+        result_str.contains("WASM bytecode contents are not valid"),
+        "msg: {}",
+        result_str
+    );
+}
+
+#[tokio::test]
+async fn upgrading_to_missing_state_transition_fails() {
+    let privileged_address = Input::predicate_owner(predicate());
+    let amount = 1_000;
+    let mut test_builder = TestSetupBuilder::new(2322);
+    test_builder.utxo_validation = false;
+    test_builder.privileged_address = privileged_address;
+    let TestContext {
+        client,
+        srv: _drop,
+        mut rng,
+        ..
+    } = test_builder.finalize().await;
+
+    // Given
+    let upgrade = Transaction::upgrade(
+        UpgradePurpose::StateTransition {
+            root: Bytes32::new([1; 32]),
+        },
+        Policies::new().with_max_fee(amount),
+        vec![Input::coin_predicate(
+            rng.gen(),
+            privileged_address,
+            amount,
+            AssetId::BASE,
+            Default::default(),
+            Default::default(),
+            predicate(),
+            vec![],
+        )],
+        vec![],
+        vec![],
+    );
+
+    // When
+    let mut tx = upgrade.into();
+    client.estimate_predicates(&mut tx).await.unwrap();
+    let result = client.submit_and_await_commit(&tx).await;
+
+    // Then
+    let result_str = format!("{:?}", result); // io::Result forces string handling
+    result.expect_err("Upgrading to missing bytecode should fail");
+    assert!(
+        result_str.contains("WASM bytecode matching the given root was not found"),
+        "msg: {}",
+        result_str
+    );
+}
+
+#[tokio::test]
+async fn upgrade_to_a_partially_uploaded_state_transition_fails() {
+    let privileged_address = Input::predicate_owner(predicate());
+    let amount = 1_000;
+    let subsections =
+        UploadSubsection::split_bytecode(WASM_BYTECODE, SUBSECTION_SIZE).unwrap();
+    let root = subsections[0].root;
+    let mut test_builder = TestSetupBuilder::new(2322);
+    test_builder.utxo_validation = false;
+    test_builder.privileged_address = privileged_address;
+    let TestContext {
+        client,
+        srv: _drop,
+        mut rng,
+        ..
+    } = test_builder.finalize().await;
+
+    let mut transactions = transactions_from_subsections(&mut rng, subsections, amount);
+    assert!(transactions.len() > 1);
+    let _ = transactions.pop(); // Don't upload the last subsection
+    for upload in transactions {
+        let mut tx = upload.into();
+        client.estimate_predicates(&mut tx).await.unwrap();
+        client.submit_and_await_commit(&tx).await.unwrap();
+    }
+
+    // Given
+    let upgrade = Transaction::upgrade(
+        UpgradePurpose::StateTransition { root },
+        Policies::new().with_max_fee(amount),
+        vec![Input::coin_predicate(
+            rng.gen(),
+            privileged_address,
+            amount,
+            AssetId::BASE,
+            Default::default(),
+            Default::default(),
+            predicate(),
+            vec![],
+        )],
+        vec![],
+        vec![],
+    );
+
+    // When
+    let mut tx = upgrade.into();
+    client.estimate_predicates(&mut tx).await.unwrap();
+    let result = client.submit_and_await_commit(&tx).await;
+
+    // Then
+    let result_str = format!("{:?}", result); // io::Result forces string handling
+    result.expect_err("Upgrading to missing bytecode should fail");
+    assert!(
+        result_str.contains("WASM bytecode matching the given root was not found"),
+        "msg: {}",
+        result_str
     );
 }
 

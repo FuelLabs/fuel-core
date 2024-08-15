@@ -3,6 +3,10 @@
 
 use crate::{
     mock_db::MockDBProvider,
+    ports::{
+        WasmChecker,
+        WasmValidityError,
+    },
     Config,
     MockDb,
     TxPool,
@@ -27,6 +31,7 @@ use fuel_core_types::{
             },
             contract::Contract,
         },
+        Bytes32,
         ConsensusParameters,
         Finalizable,
         Input,
@@ -51,6 +56,7 @@ pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 pub(crate) struct TextContext {
     mock_db: MockDb,
     rng: StdRng,
+    wasm_checker: MockWasmChecker,
     config: Option<Config>,
 }
 
@@ -59,6 +65,7 @@ impl Default for TextContext {
         Self {
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(0),
+            wasm_checker: MockWasmChecker { result: Ok(()) },
             config: None,
         }
     }
@@ -76,10 +83,18 @@ impl TextContext {
         }
     }
 
-    pub(crate) fn build(self) -> TxPool<MockDBProvider> {
+    pub(crate) fn wasm_checker(self, wasm_checker: MockWasmChecker) -> Self {
+        Self {
+            wasm_checker,
+            ..self
+        }
+    }
+
+    pub(crate) fn build(self) -> TxPool<MockDBProvider, MockWasmChecker> {
         TxPool::new(
             self.config.unwrap_or_default(),
             MockDBProvider(self.mock_db),
+            self.wasm_checker,
         )
     }
 
@@ -170,6 +185,19 @@ pub(crate) fn random_predicate(
         vec![],
     )
     .into_default_estimated()
+}
+
+pub struct MockWasmChecker {
+    pub result: Result<(), WasmValidityError>,
+}
+
+impl WasmChecker for MockWasmChecker {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        self.result
+    }
 }
 
 pub struct UnsetInput(Input);
