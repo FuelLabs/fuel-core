@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Added support for PoA key rotation.
 - [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chan config.
 
+### Breaking
+-[2080](https://github.com/FuelLabs/fuel-core/pull/2080): Reject Upgrade txs with invalid wasm on txpool level.
+
 ## [Version 0.32.1]
 
 ### Added

@@ -65,6 +65,7 @@ pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
+    ExecutorAdapter,
     FuelGasPriceProvider<Algorithm>,
     ConsensusParametersProvider,
     SharedMemoryPool,
@@ -206,6 +207,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         importer_adapter.clone(),
         p2p_adapter.clone(),
+        executor.clone(),
         last_height,
         gas_price_provider.clone(),
         consensus_parameters_provider.clone(),
