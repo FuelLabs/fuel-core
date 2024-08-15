@@ -38,7 +38,6 @@ use fuel_core_chain_config::{
     ContractConfig,
     StateConfig,
 };
-use fuel_core_services::Service;
 use fuel_core_storage::{
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,
@@ -337,17 +336,19 @@ fn service_with_many_contracts(
             .unwrap();
     }
 
-    let service = FuelService::new(
-        CombinedDatabase::new(
-            database,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        ),
-        config.clone(),
-    )
-    .expect("Unable to start a FuelService");
-    service.start().expect("Unable to start the service");
+    let service = rt.block_on(async move {
+        FuelService::from_combined_database(
+            CombinedDatabase::new(
+                database,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            ),
+            config.clone(),
+        )
+        .await
+        .expect("Unable to start a FuelService")
+    });
     (service, rt)
 }
 

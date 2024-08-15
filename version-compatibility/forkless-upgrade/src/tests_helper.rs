@@ -18,7 +18,6 @@ use genesis_fuel_core_client::client::FuelClient as GenesisClient;
 use genesis_fuel_core_services::Service as _;
 use latest_fuel_core_bin::FuelService as LatestFuelService;
 use latest_fuel_core_client::client::FuelClient as LatestClient;
-use latest_fuel_core_services::Service as _;
 use libp2p::PeerId;
 use rand::{
     prelude::StdRng,
