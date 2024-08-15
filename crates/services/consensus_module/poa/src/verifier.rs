@@ -28,6 +28,15 @@ pub fn verify_consensus(
                 .recover(m)
                 .map_or(false, |k| Input::owner(&k) == *signing_key)
         }
+        ConsensusConfig::PoAV2(poa) => {
+            let id = header.id();
+            let m = id.as_message();
+            let signing_key = poa.signing_key_at(*header.height());
+            consensus
+                .signature
+                .recover(m)
+                .map_or(false, |k| Input::owner(&k) == signing_key)
+        }
     }
 }
 

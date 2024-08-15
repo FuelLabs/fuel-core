@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+extern crate alloc;
+
 pub mod config;
 pub mod fee_collection_contract;
 mod genesis;
