@@ -3,9 +3,11 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+use crate::service::genesis::NotifyCancel;
+use tokio_util::sync::CancellationToken;
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-use crate::service::genesis::NotifyCancel;
 #[doc(no_inline)]
 pub use fuel_core_chain_config as chain_config;
 #[cfg(feature = "p2p")]
@@ -23,7 +25,6 @@ pub use fuel_core_sync as sync;
 pub use fuel_core_txpool as txpool;
 #[doc(no_inline)]
 pub use fuel_core_types as types;
-use tokio_util::sync::CancellationToken;
 
 pub mod coins_query;
 pub mod combined_database;

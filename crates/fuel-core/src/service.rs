@@ -473,7 +473,7 @@ mod tests {
                 service.sub_services()[i].stop_and_await().await.unwrap();
                 tokio::time::timeout(Duration::from_secs(5), service.await_shutdown())
                     .await
-                    .expect("Failed to stop the service in reasonable period fo time")
+                    .expect("Failed to stop the service in reasonable period of time")
                     .expect("Failed to stop the service");
             } else {
                 break;
