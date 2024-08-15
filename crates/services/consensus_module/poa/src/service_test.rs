@@ -9,6 +9,7 @@ use crate::{
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
+        PredefinedBlocks,
         TransactionsSource,
     },
     service::MainTask,
@@ -161,6 +162,8 @@ impl TestContextBuilder {
 
         let p2p_port = generate_p2p_port();
 
+        let predefined_blocks = HashMap::new().into();
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
             config,
@@ -168,14 +171,42 @@ impl TestContextBuilder {
             producer,
             importer,
             p2p_port,
+            predefined_blocks,
         );
         service.start().unwrap();
         TestContext { service }
     }
 }
 
+pub struct FakePredefinedBlocks {
+    blocks: HashMap<BlockHeight, Block>,
+}
+
+impl From<HashMap<BlockHeight, Block>> for FakePredefinedBlocks {
+    fn from(blocks: HashMap<BlockHeight, Block>) -> Self {
+        Self::new(blocks)
+    }
+}
+
+impl FakePredefinedBlocks {
+    pub fn new(blocks: HashMap<BlockHeight, Block>) -> Self {
+        Self { blocks }
+    }
+}
+
+impl PredefinedBlocks for FakePredefinedBlocks {
+    fn get_block(&self, height: &BlockHeight) -> Option<Block> {
+        self.blocks.get(height).cloned()
+    }
+}
+
 struct TestContext {
-    service: Service<MockTransactionPool, MockBlockProducer, MockBlockImporter>,
+    service: Service<
+        MockTransactionPool,
+        MockBlockProducer,
+        MockBlockImporter,
+        FakePredefinedBlocks,
+    >,
 }
 
 impl TestContext {
@@ -345,7 +376,8 @@ async fn remove_skipped_transactions() {
 
     let p2p_port = generate_p2p_port();
 
-    let predefined_blocks = HashMap::new();
+    let predefined_blocks: FakePredefinedBlocks = HashMap::new().into();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -394,7 +426,8 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let p2p_port = generate_p2p_port();
 
-    let predefined_blocks = HashMap::new();
+    let predefined_blocks: FakePredefinedBlocks = HashMap::new().into();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -485,7 +518,7 @@ fn block_for_height(height: u32) -> Block {
 #[tokio::test]
 async fn consensus_service__run__will_include_predefined_blocks_before_new_blocks() {
     // given
-    let blocks = [
+    let blocks: [(BlockHeight, Block); 3] = [
         (2u32.into(), block_for_height(2)),
         (3u32.into(), block_for_height(3)),
         (4u32.into(), block_for_height(4)),
@@ -516,7 +549,7 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
         block_producer,
         block_importer,
         generate_p2p_port(),
-        blocks_map,
+        FakePredefinedBlocks::new(blocks_map),
     );
 
     // when

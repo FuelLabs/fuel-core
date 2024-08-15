@@ -3,7 +3,6 @@ use anyhow::{
     Context,
 };
 use std::{
-    collections::HashMap,
     ops::Deref,
     sync::Arc,
     time::Duration,
@@ -26,6 +25,7 @@ use crate::{
         BlockImporter,
         BlockProducer,
         P2pPort,
+        PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
     },
@@ -81,7 +81,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
+pub type Service<T, B, I, PB> = ServiceRunner<MainTask<T, B, I, PB>>;
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -135,7 +135,7 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<T, B, I> {
+pub struct MainTask<T, B, I, PB> {
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
     block_importer: I,
@@ -146,7 +146,7 @@ pub struct MainTask<T, B, I> {
     last_height: BlockHeight,
     last_timestamp: Tai64,
     last_block_created: Instant,
-    predefined_blocks: HashMap<BlockHeight, Block>,
+    predefined_blocks: PB,
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
@@ -154,10 +154,11 @@ pub struct MainTask<T, B, I> {
     chain_id: ChainId,
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, PB> MainTask<T, B, I, PB>
 where
     T: TransactionPool,
     I: BlockImporter,
+    PB: PredefinedBlocks,
 {
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
@@ -166,7 +167,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
-        predefined_blocks: HashMap<BlockHeight, Block>,
+        predefined_blocks: PB,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -254,11 +255,12 @@ where
     }
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, PB> MainTask<T, B, I, PB>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    PB: PredefinedBlocks,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -502,14 +504,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableService for MainTask<T, B, I>
+impl<T, B, I, PB> RunnableService for MainTask<T, B, I, PB>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I>;
+    type Task = MainTask<T, B, I, PB>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -537,11 +539,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableTask for MainTask<T, B, I>
+impl<T, B, I, PB> RunnableTask for MainTask<T, B, I, PB>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    PB: PredefinedBlocks,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -572,7 +575,8 @@ where
 
         let next_height = self.next_height();
         let chain_id = self.chain_id;
-        if let Some(block) = self.predefined_blocks.remove(&next_height) {
+        let maybe_block = self.predefined_blocks.get_block(&next_height);
+        if let Some(block) = maybe_block {
             self.produce_predefined_block(&block, &chain_id).await?;
             should_continue = true;
         } else {
@@ -625,21 +629,22 @@ where
     }
 }
 
-pub fn new_service<T, B, I, P>(
+pub fn new_service<T, B, I, P, PB>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
-) -> Service<T, B, I>
+    predefined_blocks: PB,
+) -> Service<T, B, I, PB>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
+    PB: PredefinedBlocks + 'static,
     P: P2pPort,
 {
-    let predefined_blocks = HashMap::new();
     Service::new(MainTask::new(
         last_block,
         config,

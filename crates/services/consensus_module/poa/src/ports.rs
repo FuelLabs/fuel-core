@@ -114,3 +114,7 @@ pub trait SyncPort: Send + Sync {
     /// await synchronization with the peers
     async fn sync_with_peers(&mut self) -> anyhow::Result<()>;
 }
+
+pub trait PredefinedBlocks: Send + Sync {
+    fn get_block(&self, height: &BlockHeight) -> Option<Block>;
+}
