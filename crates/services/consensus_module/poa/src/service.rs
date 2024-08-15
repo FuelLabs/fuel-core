@@ -1,11 +1,12 @@
-use std::{
-    ops::Deref,
-    time::Duration,
-};
-
 use anyhow::{
     anyhow,
     Context,
+};
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    sync::Arc,
+    time::Duration,
 };
 use tokio::{
     sync::{
@@ -142,7 +143,7 @@ pub struct MainTask<T, B, I> {
     last_height: BlockHeight,
     last_timestamp: Tai64,
     last_block_created: Instant,
-    predefined_blocks: Vec<Block>,
+    predefined_blocks: HashMap<BlockHeight, Block>,
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
@@ -161,7 +162,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
-        predefined_blocks: Vec<Block>,
+        predefined_blocks: HashMap<BlockHeight, Block>,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -209,10 +210,10 @@ where
 
     fn extract_block_info(last_block: &BlockHeader) -> (BlockHeight, Tai64, Instant) {
         let last_timestamp = last_block.time();
-        let duration =
+        let duration_since_last_block =
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now()
-            .checked_sub(duration)
+            .checked_sub(duration_since_last_block)
             .unwrap_or(Instant::now());
         let last_height = *last_block.height();
         (last_height, last_timestamp, last_block_created)
@@ -393,7 +394,10 @@ where
         Ok(())
     }
 
-    async fn produce_predefined_block(&mut self, block: &Block) -> anyhow::Result<()> {
+    async fn produce_predefined_block(
+        &mut self,
+        predefined_block: &Block,
+    ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
         if self.signing_key.is_none() {
@@ -411,27 +415,27 @@ where
             changes,
         ) = self
             .block_producer
-            .produce_predefined_block(block)
+            .produce_predefined_block(predefined_block)
             .await?
             .into();
 
         // Sign the block and seal it
         let seal = seal_block(&self.signing_key, &block)?;
-        let block = SealedBlock {
+        let sealed_block = SealedBlock {
             entity: block,
             consensus: seal,
         };
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
-                ImportResult::new_from_local(block.clone(), tx_status, events),
+                ImportResult::new_from_local(sealed_block.clone(), tx_status, events),
                 changes,
             ))
             .await?;
 
         // Update last block time
-        self.last_height = *block.entity.header().height();
-        self.last_timestamp = block.entity.header().time();
+        self.last_height = *sealed_block.entity.header().height();
+        self.last_timestamp = sealed_block.entity.header().time();
         self.last_block_created = last_block_created;
 
         Ok(())
@@ -461,6 +465,15 @@ where
                 self.produce_next_block().await?;
                 Ok(())
             }
+        }
+    }
+    fn update_last_block_values(&mut self, block_header: &Arc<BlockHeader>) {
+        let (last_height, last_timestamp, last_block_created) =
+            Self::extract_block_info(block_header);
+        if last_height > self.last_height {
+            self.last_height = last_height;
+            self.last_timestamp = last_timestamp;
+            self.last_block_created = last_block_created;
         }
     }
 }
@@ -509,16 +522,16 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
-        let mut state = self.sync_task_handle.shared.clone();
+        let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
-        while *state.borrow_and_update() == SyncState::NotSynced {
+        while *sync_state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     should_continue = result?.started();
                     return Ok(should_continue);
                 }
-                _ = state.changed() => {
+                _ = sync_state.changed() => {
                     break;
                 }
                 _ = self.tx_status_update_stream.next() => {
@@ -530,57 +543,52 @@ where
             }
         }
 
-        if let SyncState::Synced(block_header) = &*state.borrow_and_update() {
-            let (last_height, last_timestamp, last_block_created) =
-                Self::extract_block_info(block_header);
-            if last_height > self.last_height {
-                self.last_height = last_height;
-                self.last_timestamp = last_timestamp;
-                self.last_block_created = last_block_created;
-            }
+        if let SyncState::Synced(block_header) = &*sync_state.borrow_and_update() {
+            self.update_last_block_values(block_header);
         }
 
-        let blocks = self.predefined_blocks.clone();
-        for block in blocks {
+        let next_height = self.next_height();
+        if let Some(block) = self.predefined_blocks.remove(&next_height) {
             self.produce_predefined_block(&block).await?;
-        }
-
-        tokio::select! {
-            biased;
-            _ = watcher.while_started() => {
-                should_continue = false;
-            }
-            request = self.request_receiver.recv() => {
-                if let Some(request) = request {
-                    match request {
-                        Request::ManualBlocks((block, response)) => {
-                            let result = self.produce_manual_blocks(block).await;
-                            let _ = response.send(result);
+            should_continue = true;
+        } else {
+            tokio::select! {
+                biased;
+                _ = watcher.while_started() => {
+                    should_continue = false;
+                }
+                request = self.request_receiver.recv() => {
+                    if let Some(request) = request {
+                        match request {
+                            Request::ManualBlocks((block, response)) => {
+                                let result = self.produce_manual_blocks(block).await;
+                                let _ = response.send(result);
+                            }
                         }
+                        should_continue = true;
+                    } else {
+                        tracing::error!("The PoA task should be the holder of the `Sender`");
+                        should_continue = false;
                     }
-                    should_continue = true;
-                } else {
-                    tracing::error!("The PoA task should be the holder of the `Sender`");
-                    should_continue = false;
                 }
-            }
-            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
-            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
-            //       into the first block production trigger, we'll still call the event handler
-            //       for each tx after they've already been included into a block.
-            //       The poa service also doesn't care about events unrelated to new tx submissions,
-            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-            txpool_event = self.tx_status_update_stream.next() => {
-                if txpool_event.is_some()  {
-                    self.on_txpool_event().await.context("While processing txpool event")?;
-                    should_continue = true;
-                } else {
-                    should_continue = false;
+                // TODO: This should likely be refactored to use something like tokio::sync::Notify.
+                //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
+                //       into the first block production trigger, we'll still call the event handler
+                //       for each tx after they've already been included into a block.
+                //       The poa service also doesn't care about events unrelated to new tx submissions,
+                //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
+                txpool_event = self.tx_status_update_stream.next() => {
+                    if txpool_event.is_some()  {
+                        self.on_txpool_event().await.context("While processing txpool event")?;
+                        should_continue = true;
+                    } else {
+                        should_continue = false;
+                    }
                 }
-            }
-            at = self.timer.wait() => {
-                self.on_timer(at).await.context("While processing timer event")?;
-                should_continue = true;
+                at = self.timer.wait() => {
+                    self.on_timer(at).await.context("While processing timer event")?;
+                    should_continue = true;
+                }
             }
         }
         Ok(should_continue)
@@ -607,7 +615,7 @@ where
     I: BlockImporter + 'static,
     P: P2pPort,
 {
-    let predefined_blocks = Vec::new();
+    let predefined_blocks = HashMap::new();
     Service::new(MainTask::new(
         last_block,
         config,
