@@ -17,6 +17,25 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 
+use crate::{
+    deadline_clock::{
+        DeadlineClock,
+        OnConflict,
+    },
+    ports::{
+        BlockImporter,
+        BlockProducer,
+        P2pPort,
+        TransactionPool,
+        TransactionsSource,
+    },
+    sync::{
+        SyncState,
+        SyncTask,
+    },
+    Config,
+    Trigger,
+};
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -41,8 +60,12 @@ use fuel_core_types::{
     fuel_tx::{
         Transaction,
         TxId,
+        UniqueIdentifier,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     secrecy::{
         ExposeSecret,
         Secret,
@@ -56,26 +79,6 @@ use fuel_core_types::{
         Uncommitted,
     },
     tai64::Tai64,
-};
-
-use crate::{
-    deadline_clock::{
-        DeadlineClock,
-        OnConflict,
-    },
-    ports::{
-        BlockImporter,
-        BlockProducer,
-        P2pPort,
-        TransactionPool,
-        TransactionsSource,
-    },
-    sync::{
-        SyncState,
-        SyncTask,
-    },
-    Config,
-    Trigger,
 };
 
 pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
@@ -148,6 +151,7 @@ pub struct MainTask<T, B, I> {
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     sync_task_handle: ServiceRunner<SyncTask>,
+    chain_id: ChainId,
 }
 
 impl<T, B, I> MainTask<T, B, I>
@@ -177,6 +181,7 @@ where
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
+            chain_id,
             ..
         } = config;
 
@@ -205,6 +210,7 @@ where
             trigger,
             timer: DeadlineClock::new(),
             sync_task_handle,
+            chain_id,
         }
     }
 
@@ -397,7 +403,9 @@ where
     async fn produce_predefined_block(
         &mut self,
         predefined_block: &Block,
+        chain_id: &ChainId,
     ) -> anyhow::Result<()> {
+        tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
         // verify signing key is set
         if self.signing_key.is_none() {
@@ -408,7 +416,7 @@ where
         let (
             ExecutionResult {
                 block,
-                skipped_transactions: _,
+                skipped_transactions,
                 tx_status,
                 events,
             },
@@ -419,6 +427,21 @@ where
             .await?
             .into();
 
+        if !skipped_transactions.is_empty() {
+            tracing::error!("During block production got invalid transactions");
+            let txs = predefined_block.transactions();
+
+            for (tx_id, err) in skipped_transactions {
+                let maybe_tx = txs.iter().find(|tx| tx.id(chain_id) == tx_id);
+                if let Some(tx) = maybe_tx {
+                    tracing::error!(
+                "During block production got invalid transaction {:?} with error {:?}",
+                tx,
+                err
+            );
+                }
+            }
+        }
         // Sign the block and seal it
         let seal = seal_block(&self.signing_key, &block)?;
         let sealed_block = SealedBlock {
@@ -548,8 +571,9 @@ where
         }
 
         let next_height = self.next_height();
+        let chain_id = self.chain_id;
         if let Some(block) = self.predefined_blocks.remove(&next_height) {
-            self.produce_predefined_block(&block).await?;
+            self.produce_predefined_block(&block, &chain_id).await?;
             should_continue = true;
         } else {
             tokio::select! {

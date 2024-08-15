@@ -524,7 +524,7 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
     service.start().unwrap();
 
     // then
-    for (_, block) in blocks.into_iter() {
+    for (_, block) in blocks {
         let expected = FakeProducedBlock::Predefined(block);
         let actual = block_receiver.recv().await.unwrap();
         assert_eq!(expected, actual);
