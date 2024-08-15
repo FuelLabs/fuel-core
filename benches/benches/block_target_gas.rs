@@ -347,7 +347,7 @@ fn service_with_many_contracts(
             config.clone(),
         )
         .await
-        .expect("Unable to start a FuelService")
+        .expect("Unable to start FuelService")
     });
     (service, rt)
 }

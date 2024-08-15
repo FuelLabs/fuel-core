@@ -1,5 +1,4 @@
 use alloc::collections::BTreeMap;
-use core::ops::Bound;
 use fuel_core_types::{
     fuel_tx::Input,
     fuel_types::{
@@ -53,8 +52,8 @@ impl PoAV2 {
             self.genesis_signing_key
         } else {
             self.signing_key_overrides
-                .range((Bound::Unbounded, Bound::Included(height)))
-                .next_back()
+                .range(..=height)
+                .last()
                 .map(|(_, key)| key)
                 .cloned()
                 .unwrap_or(self.genesis_signing_key)

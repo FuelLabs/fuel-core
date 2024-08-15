@@ -304,6 +304,13 @@ impl CombinedDatabase {
                 );
             }
         }
+
+        if shutdown_listener.is_cancelled() {
+            return Err(anyhow::anyhow!(
+                "Stop the rollback due to shutdown signal received"
+            ));
+        }
+
         Ok(())
     }
 }

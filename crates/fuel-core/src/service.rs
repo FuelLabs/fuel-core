@@ -255,8 +255,8 @@ impl FuelService {
         if let Some(rollback_height) = rollback_height {
             tracing::warn!(
                 "The consensus at override height {rollback_height} \
-                is not match to the database. \
-                Rollback the database to the height {rollback_height}"
+                does not match with the database. \
+                Rollbacking the database to the height {rollback_height}"
             );
             combined_database.rollback_to(rollback_height, shutdown_listener)?;
         }
