@@ -3326,6 +3326,7 @@ version = "0.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "derive_more",
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
@@ -3339,7 +3340,6 @@ dependencies = [
  "proptest",
  "rstest",
  "test-strategy",
- "thiserror",
  "tokio",
  "tokio-rayon",
  "tokio-stream",
