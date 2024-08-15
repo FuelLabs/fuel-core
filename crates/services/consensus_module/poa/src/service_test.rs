@@ -485,13 +485,12 @@ fn block_for_height(height: u32) -> Block {
 #[tokio::test]
 async fn consensus_service__run__will_include_predefined_blocks_before_new_blocks() {
     // given
-    let blocks: HashMap<_, _> = [
+    let blocks = [
         (2u32.into(), block_for_height(2)),
         (3u32.into(), block_for_height(3)),
         (4u32.into(), block_for_height(4)),
-    ]
-    .into_iter()
-    .collect();
+    ];
+    let blocks_map: HashMap<_, _> = blocks.clone().into_iter().collect();
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
     let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
     let config = Config {
@@ -517,7 +516,7 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
         block_producer,
         block_importer,
         generate_p2p_port(),
-        blocks.clone(),
+        blocks_map,
     );
 
     // when
@@ -525,7 +524,7 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
     service.start().unwrap();
 
     // then
-    for (_, block) in blocks {
+    for (_, block) in blocks.into_iter() {
         let expected = FakeProducedBlock::Predefined(block);
         let actual = block_receiver.recv().await.unwrap();
         assert_eq!(expected, actual);
