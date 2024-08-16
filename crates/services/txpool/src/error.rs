@@ -63,10 +63,6 @@ pub enum Error {
     )]
     NotInsertedCollisionMessageId(TxId, Nonce),
     #[display(fmt = "Transaction is not inserted. UTXO input does not exist: {_0:#x}")]
-    NotInsertedOutputDoesNotExist(UtxoId),
-    #[display(
-        fmt = "Transaction is not inserted. UTXO input contract does not exist or was already spent: {_0:#x}"
-    )]
     NotInsertedInputContractDoesNotExist(ContractId),
     #[display(fmt = "Transaction is not inserted. ContractId is already taken {_0:#x}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
