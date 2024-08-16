@@ -5,6 +5,7 @@ use fuel_core::{
         database_description::on_chain::OnChain,
         Database,
     },
+    schema::scalars,
     service::Config,
 };
 use fuel_core_bin::FuelService;
@@ -30,7 +31,7 @@ use fuel_core_types::{
 use tokio::io;
 
 struct TestContext {
-    _node: FuelService,
+    node: FuelService,
     client: FuelClient,
 }
 impl TestContext {
@@ -41,12 +42,12 @@ impl TestContext {
             ..Config::local_node()
         };
 
-        let _node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
+        let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
             .await
             .unwrap();
-        let client = FuelClient::from(_node.bound_address);
+        let client = FuelClient::from(node.bound_address);
 
-        Self { _node, client }
+        Self { node, client }
     }
 
     async fn new_blob(
@@ -69,6 +70,22 @@ impl TestContext {
             .submit_and_await_commit(tx.transaction())
             .await?;
         Ok((status, blob_id))
+    }
+
+    async fn query_blob(&self, blob_id: BlobId) -> String {
+        let blob_id: scalars::BlobId = blob_id.into();
+        let query = r#"
+                        query {
+                            blob(id: "BLOB_ID" ) {
+                                id,
+                                bytecode
+                            }
+                        }
+                    "#
+        .replace("BLOB_ID", &blob_id.to_string());
+
+        let url = format!("http://{}/v1/graphql", self.node.bound_address);
+        test_helpers::send_graph_ql_query(&url, &query).await
     }
 }
 
@@ -150,4 +167,20 @@ async fn blob__accessing_nonexitent_blob_panics_vm() {
 
     // Then
     assert!(matches!(tx_status, TransactionStatus::Failure { .. }));
+}
+
+#[tokio::test]
+async fn blob__can_be_queried_if_uploaded() {
+    // Given
+    let mut ctx = TestContext::new().await;
+
+    // When
+    let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
+    let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
+    assert!(matches!(status, TransactionStatus::Success { .. }));
+
+    // Then
+    let result = ctx.query_blob(blob_id).await;
+    assert!(result.contains(&format!(r#""id":"0x{}"#, blob_id)));
+    assert!(result.contains(&format!(r#""bytecode":"0x{}""#, hex::encode(bytecode))));
 }

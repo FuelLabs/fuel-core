@@ -39,7 +39,7 @@ fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
-hex = { version = "0.4", features = ["serde"] }
+hex = { workspace = true }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }

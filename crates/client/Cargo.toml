@@ -17,7 +17,7 @@ derive_more = { workspace = true }
 eventsource-client = { version = "0.12.2", optional = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true, optional = true }
-hex = "0.4"
+hex = { workspace = true }
 # Included to enable webpki in the eventsource client
 hyper-rustls = { version = "0.24", features = [
   "webpki-tokio",
