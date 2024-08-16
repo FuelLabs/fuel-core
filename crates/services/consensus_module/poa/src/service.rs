@@ -571,7 +571,7 @@ where
         }
 
         let next_height = self.next_height();
-        let maybe_block = self.predefined_blocks.get_block(&next_height);
+        let maybe_block = self.predefined_blocks.get_block(&next_height)?;
         if let Some(block) = maybe_block {
             self.produce_predefined_block(&block).await?;
             should_continue = true;
