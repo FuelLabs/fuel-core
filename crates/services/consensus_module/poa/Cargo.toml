@@ -12,7 +12,6 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-kms = "1.37.0"
 fuel-core-chain-config = { workspace = true }
 fuel-core-services = { workspace = true }

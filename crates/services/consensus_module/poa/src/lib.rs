@@ -11,8 +11,6 @@ mod sync;
 #[cfg(test)]
 mod service_test;
 
-use aws_config as _; // todo
-
 pub mod config;
 pub mod ports;
 pub mod service;
