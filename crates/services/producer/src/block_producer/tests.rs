@@ -35,6 +35,7 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
+    fuel_tx,
     fuel_tx::{
         field::InputContract,
         ConsensusParameters,
@@ -549,10 +550,15 @@ use proptest::{
 };
 
 prop_compose! {
-    fn arb_block()(height in 1..255u8, da_height in 1..255u64, gas_price: u64, num_txs in 0..100u32) -> Block {
+    fn arb_block()(height in 1..255u8, da_height in 1..255u64, gas_price: u64, coinbase_recipient: [u8; 32], num_txs in 0..100u32) -> Block {
         let mut txs : Vec<_> = (0..num_txs).map(|_| Transaction::Script(Script::default())).collect();
         let mut inner_mint = Mint::default();
         *inner_mint.gas_price_mut() = gas_price;
+        *inner_mint.input_contract_mut() = fuel_tx::input::contract::Contract{
+            contract_id: coinbase_recipient.into(),
+            ..Default::default()
+        };
+
         let mint = Transaction::Mint(inner_mint);
         txs.push(mint);
         let header = PartialBlockHeader {
@@ -626,7 +632,7 @@ proptest! {
 
     // coinbase
     #[test]
-    fn produce_and_execute_predefined_block__contains_expected_coinbase(block in arb_block()) {
+    fn produce_and_execute_predefined_block__contains_expected_coinbase_recipient(block in arb_block()) {
         let rt = multithreaded_runtime();
 
         // given

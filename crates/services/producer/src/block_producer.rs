@@ -26,7 +26,10 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_tx::{
-        field::MintGasPrice,
+        field::{
+            InputContract,
+            MintGasPrice,
+        },
         Transaction,
     },
     fuel_types::{
@@ -108,7 +111,7 @@ where
     {
         let _production_guard = self.lock.lock().await;
 
-        let source = predefined_block.transactions().to_vec();
+        let transactions_source = predefined_block.transactions().to_vec();
 
         let height = predefined_block.header().consensus().height;
 
@@ -116,7 +119,7 @@ where
 
         let da_height = predefined_block.header().application().da_height;
 
-        let header = self
+        let header_to_produce = self
             .new_header_with_da_height(height, block_time, da_height)
             .await?;
 
@@ -129,11 +132,12 @@ where
             ))?;
 
         let gas_price = *mint_tx.gas_price();
+        let coinbase_recipient = mint_tx.input_contract().contract_id;
 
         let component = Components {
-            header_to_produce: header,
-            transactions_source: source,
-            coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
+            header_to_produce,
+            transactions_source,
+            coinbase_recipient,
             gas_price,
         };
 
