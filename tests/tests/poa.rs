@@ -115,8 +115,7 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
                 .get_sealed_block_by_height(&block_height.into())
                 .unwrap()
                 .unwrap();
-            let block = sealed_block.entity;
-            block
+            sealed_block.entity
         })
         .collect();
     assert_eq!(predefined_blocks.len(), BLOCK_TO_PRODUCE);
@@ -150,8 +149,7 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
                 .get_sealed_block_by_height(&block_height.into())
                 .unwrap()
                 .unwrap();
-            let block = sealed_block.entity;
-            block
+            sealed_block.entity
         })
         .collect();
     assert_eq!(predefined_blocks, blocks_from_new_node);

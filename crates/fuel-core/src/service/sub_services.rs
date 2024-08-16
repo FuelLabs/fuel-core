@@ -43,10 +43,7 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     UpdaterMetadata,
     V0Metadata,
 };
-use fuel_core_poa::{
-    ports::InMemoryPredefinedBlocks,
-    Trigger,
-};
+use fuel_core_poa::Trigger;
 use fuel_core_services::{
     RunnableService,
     ServiceRunner,
@@ -66,7 +63,7 @@ pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
     BlockImporterAdapter,
-    InMemoryPredefinedBlocks,
+    InDirectoryPredefinedBlocks,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
