@@ -49,13 +49,9 @@ impl SignMode {
         let block_hash = block.id();
         let message = block_hash.into_message();
 
-        // https://docs.aws.amazon.com/kms/latest/developerguide/asymmetric-key-specs.html
-        // const AWS_KEY_TYPE: KeySpec = KeySpec::ECC_SECG_P256K1;
-
         let poa_signature = match self {
             SignMode::Unavailable => return Err(anyhow!("no PoA signing key configured")),
             SignMode::Key(key) => {
-                // The length of the secret is checked
                 let signing_key = key.expose_secret().deref();
                 Signature::sign(signing_key, &message)
             }
@@ -81,7 +77,6 @@ async fn sign_with_kms(
         .send()
         .await
         .inspect_err(|err| tracing::error!("Failed to sign with AWS KMS: {err:?}"))?;
-
     let signature_der = reply
         .signature
         .ok_or_else(|| anyhow!("no signature returned from AWS KMS"))?
