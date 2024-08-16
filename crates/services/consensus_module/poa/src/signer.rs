@@ -77,7 +77,7 @@ async fn sign_with_kms(
         .key_id(key_id)
         .signing_algorithm(SigningAlgorithmSpec::EcdsaSha256)
         .message_type(MessageType::Digest)
-        .message(Blob::new(&*message))
+        .message(Blob::new(*message))
         .send()
         .await
         .inspect_err(|err| tracing::error!("Failed to sign with AWS KMS: {err:?}"))?;

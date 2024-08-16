@@ -128,7 +128,11 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         kms_arn,
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
-    let _ = driver.client.produce_blocks(num_blocks, None).await.unwrap();
+    let _ = driver
+        .client
+        .produce_blocks(num_blocks, None)
+        .await
+        .unwrap();
 
     // stop the node and just grab the database
     let db_path = driver.kill().await;

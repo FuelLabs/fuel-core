@@ -484,13 +484,14 @@ pub async fn get_service_with_shutdown_listeners(
     ))
 }
 
-pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
-    let (service, _) = get_service_with_shutdown_listeners(command)?;
+pub async fn get_service(command: Command) -> anyhow::Result<FuelService> {
+    let (service, _) = get_service_with_shutdown_listeners(command).await?;
     Ok(service)
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let (service, shutdown_listener) = get_service_with_shutdown_listeners(command).await?;
+    let (service, shutdown_listener) =
+        get_service_with_shutdown_listeners(command).await?;
 
     // Genesis could take a long time depending on the snapshot size. Start needs to be
     // interruptible by the shutdown_signal

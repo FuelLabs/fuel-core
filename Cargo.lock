@@ -3222,7 +3222,6 @@ name = "fuel-core-bin"
 version = "0.32.1"
 dependencies = [
  "anyhow",
- "async-trait",
  "aws-config",
  "aws-sdk-kms",
  "clap 4.5.13",
