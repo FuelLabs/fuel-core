@@ -16,7 +16,8 @@ use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_crypto::{
-        PublicKey, SecretKey
+        PublicKey,
+        SecretKey,
     },
     fuel_tx::Transaction,
     secrecy::Secret,
@@ -113,9 +114,12 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         .expect("invalid DER signature from AWS KMS")
         .subject_public_key
         .raw_bytes();
-    let poa_public = k256::ecdsa::VerifyingKey::from_sec1_bytes(&poa_public_bytes).expect("invalid public key");
+    let poa_public = k256::ecdsa::VerifyingKey::from_sec1_bytes(&poa_public_bytes)
+        .expect("invalid public key");
     let poa_public = PublicKey::from(&poa_public);
 
+    // start node with the kms enabled and produce some blocks
+    let num_blocks = 100;
     let args = vec![
         "--debug",
         "--poa-instant",
@@ -124,7 +128,7 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         kms_arn,
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
-    let block_height = driver.client.produce_blocks(1, None).await.unwrap();
+    let _ = driver.client.produce_blocks(num_blocks, None).await.unwrap();
 
     // stop the node and just grab the database
     let db_path = driver.kill().await;
@@ -133,21 +137,21 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
 
     let view = db.on_chain().latest_view().unwrap();
 
-    // check sealed block header is correct
-    let sealed_block = view
-        .get_sealed_block_by_height(&block_height)
-        .unwrap()
-        .expect("expected sealed header to be available");
-
-    // verify signature
-    let block_id = sealed_block.entity.id();
-    let signature = match sealed_block.consensus {
-        Consensus::PoA(poa) => poa.signature,
-        _ => panic!("Not expected consensus"),
-    };
-    signature
-        .verify(&poa_public, &block_id.into_message())
-        .expect("failed to verify signature");
+    // verify signatures
+    for height in 1..=num_blocks {
+        let sealed_block = view
+            .get_sealed_block_by_height(&height.into())
+            .unwrap()
+            .expect("expected sealed block to be available");
+        let block_id = sealed_block.entity.id();
+        let signature = match sealed_block.consensus {
+            Consensus::PoA(poa) => poa.signature,
+            _ => panic!("Not expected consensus"),
+        };
+        signature
+            .verify(&poa_public, &block_id.into_message())
+            .expect("failed to verify signature");
+    }
 }
 
 #[cfg(feature = "p2p")]

@@ -15,6 +15,7 @@ use fuel_core_types::{
         },
         primitives::SecretKeyWrapper,
     },
+    fuel_crypto::Message,
     fuel_vm::Signature,
     secrecy::{
         ExposeSecret,
@@ -59,26 +60,36 @@ impl SignMode {
                 Signature::sign(signing_key, &message)
             }
             SignMode::Kms { key_id, client } => {
-                let reply = client
-                    .sign()
-                    .key_id(key_id)
-                    .signing_algorithm(SigningAlgorithmSpec::EcdsaSha256)
-                    .message_type(MessageType::Digest)
-                    .message(Blob::new(*message))
-                    .send()
-                    .await?;
-                let signature_der = reply
-                    .signature
-                    .ok_or_else(|| anyhow!("no signature returned from AWS KMS"))?
-                    .into_inner();
-                // https://stackoverflow.com/a/71475108
-                let sig_bytes = k256::ecdsa::Signature::from_der(&signature_der)
-                    .map_err(|_| anyhow!("invalid DER signature from AWS KMS"))?
-                    .to_bytes();
-
-                Signature::from_bytes(<[u8; 64]>::from(sig_bytes))
+                sign_with_kms(client, key_id, message).await?
             }
         };
         Ok(Consensus::PoA(PoAConsensus::new(poa_signature)))
     }
+}
+
+async fn sign_with_kms(
+    client: &aws_sdk_kms::Client,
+    key_id: &str,
+    message: Message,
+) -> anyhow::Result<Signature> {
+    let reply = client
+        .sign()
+        .key_id(key_id)
+        .signing_algorithm(SigningAlgorithmSpec::EcdsaSha256)
+        .message_type(MessageType::Digest)
+        .message(Blob::new(&*message))
+        .send()
+        .await
+        .inspect_err(|err| tracing::error!("Failed to sign with AWS KMS: {err:?}"))?;
+
+    let signature_der = reply
+        .signature
+        .ok_or_else(|| anyhow!("no signature returned from AWS KMS"))?
+        .into_inner();
+    // https://stackoverflow.com/a/71475108
+    let sig = k256::ecdsa::Signature::from_der(&signature_der)
+        .map_err(|_| anyhow!("invalid DER signature from AWS KMS"))?;
+    let sig = sig.normalize_s().unwrap_or(sig);
+    let sig_bytes = <[u8; 64]>::from(sig.to_bytes());
+    Ok(Signature::from_bytes(sig_bytes))
 }
