@@ -574,46 +574,47 @@ where
         if let Some(block) = maybe_block {
             self.produce_predefined_block(&block).await?;
             should_continue = true;
-        } else {
-            tokio::select! {
-                biased;
-                _ = watcher.while_started() => {
+            return Ok(should_continue)
+        }
+        tokio::select! {
+            biased;
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
+            request = self.request_receiver.recv() => {
+                if let Some(request) = request {
+                    match request {
+                        Request::ManualBlocks((block, response)) => {
+                            let result = self.produce_manual_blocks(block).await;
+                            let _ = response.send(result);
+                        }
+                    }
+                    should_continue = true;
+                } else {
+                    tracing::error!("The PoA task should be the holder of the `Sender`");
                     should_continue = false;
                 }
-                request = self.request_receiver.recv() => {
-                    if let Some(request) = request {
-                        match request {
-                            Request::ManualBlocks((block, response)) => {
-                                let result = self.produce_manual_blocks(block).await;
-                                let _ = response.send(result);
-                            }
-                        }
-                        should_continue = true;
-                    } else {
-                        tracing::error!("The PoA task should be the holder of the `Sender`");
-                        should_continue = false;
-                    }
-                }
-                // TODO: This should likely be refactored to use something like tokio::sync::Notify.
-                //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
-                //       into the first block production trigger, we'll still call the event handler
-                //       for each tx after they've already been included into a block.
-                //       The poa service also doesn't care about events unrelated to new tx submissions,
-                //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-                txpool_event = self.tx_status_update_stream.next() => {
-                    if txpool_event.is_some()  {
-                        self.on_txpool_event().await.context("While processing txpool event")?;
-                        should_continue = true;
-                    } else {
-                        should_continue = false;
-                    }
-                }
-                at = self.timer.wait() => {
-                    self.on_timer(at).await.context("While processing timer event")?;
+            }
+            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
+            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
+            //       into the first block production trigger, we'll still call the event handler
+            //       for each tx after they've already been included into a block.
+            //       The poa service also doesn't care about events unrelated to new tx submissions,
+            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
+            txpool_event = self.tx_status_update_stream.next() => {
+                if txpool_event.is_some()  {
+                    self.on_txpool_event().await.context("While processing txpool event")?;
                     should_continue = true;
+                } else {
+                    should_continue = false;
                 }
             }
+            at = self.timer.wait() => {
+                self.on_timer(at).await.context("While processing timer event")?;
+                should_continue = true;
+            }
         }
+
         Ok(should_continue)
     }
 
