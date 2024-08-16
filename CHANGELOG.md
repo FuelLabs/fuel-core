@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2060](https://github.com/FuelLabs/fuel-core/pull/2060): Use `min-gas-price` as a starting point if `start-gas-price` is zero.
 - [2059](https://github.com/FuelLabs/fuel-core/pull/2059): Remove unwrap that is breaking backwards compatibility
 - [2063](https://github.com/FuelLabs/fuel-core/pull/2063): Don't use historical view during dry run.
-- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Add support for AWS KMS signing for the PoA consensus module. Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also updates MSRV to 1.80.1.
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Add support for AWS KMS signing for the PoA consensus module. Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also updates MSRV to 1.79.0.
 
 ## [Version 0.32.0]
 
