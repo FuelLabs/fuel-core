@@ -111,7 +111,7 @@ where
     {
         let _production_guard = self.lock.lock().await;
 
-        let transactions_source = predefined_block.transactions().to_vec();
+        let mut transactions_source = predefined_block.transactions().to_vec();
 
         let height = predefined_block.header().consensus().height;
 
@@ -123,13 +123,13 @@ where
             .new_header_with_da_height(height, block_time, da_height)
             .await?;
 
-        let mint_tx = predefined_block
-            .transactions()
-            .last()
-            .and_then(|tx| tx.as_mint())
-            .ok_or(anyhow!(
-                "The last transaction in the block should be a mint transaction"
-            ))?;
+        let maybe_mint_tx = transactions_source.pop();
+        let mint_tx =
+            maybe_mint_tx
+                .and_then(|tx| tx.as_mint().cloned())
+                .ok_or(anyhow!(
+                    "The last transaction in the block should be a mint transaction"
+                ))?;
 
         let gas_price = *mint_tx.gas_price();
         let coinbase_recipient = mint_tx.input_contract().contract_id;

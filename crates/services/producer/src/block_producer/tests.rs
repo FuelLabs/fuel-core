@@ -667,6 +667,24 @@ proptest! {
         let actual = captured.as_ref().unwrap().header_to_produce.application.da_height;
         assert_eq!(expected_da_height, actual);
     }
+
+    #[test]
+    fn produce_and_execute_predefined_block__do_not_include_original_mint_in_txs_source(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let captured = executor.captured.lock().unwrap();
+        let txs_source = &captured.as_ref().unwrap().transactions_source;
+        let has_a_mint = txs_source.iter().any(|tx| matches!(tx, Transaction::Mint(_)));
+        assert!(!has_a_mint);
+    }
 }
 
 fn multithreaded_runtime() -> tokio::runtime::Runtime {
