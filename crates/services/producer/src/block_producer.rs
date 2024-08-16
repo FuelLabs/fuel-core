@@ -114,7 +114,11 @@ where
 
         let block_time = predefined_block.header().consensus().time;
 
-        let header = self.new_header(height, block_time).await?;
+        let da_height = predefined_block.header().application().da_height;
+
+        let header = self
+            .new_header_with_da_height(height, block_time, da_height)
+            .await?;
 
         let mint_tx = predefined_block
             .transactions()
@@ -354,7 +358,17 @@ where
 
         Ok(block_header)
     }
-
+    /// Create the header for a new block at the provided height
+    async fn new_header_with_da_height(
+        &self,
+        height: BlockHeight,
+        block_time: Tai64,
+        da_height: DaBlockHeight,
+    ) -> anyhow::Result<PartialBlockHeader> {
+        let mut block_header = self._new_header(height, block_time)?;
+        block_header.application.da_height = da_height;
+        Ok(block_header)
+    }
     async fn select_new_da_height(
         &self,
         gas_limit: u64,

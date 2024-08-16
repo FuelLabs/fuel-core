@@ -3176,6 +3176,7 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types",
  "mockall",
+ "proptest",
  "rand",
  "tokio",
  "tokio-rayon",
