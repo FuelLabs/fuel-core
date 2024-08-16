@@ -551,15 +551,19 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
 #[tokio::test]
 async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order() {
     // given
-    let blocks: &[Option<(BlockHeight, Block)>] = &[
-        Some((2u32.into(), block_for_height(2))),
+    let predefined_blocks: &[Option<(BlockHeight, Block)>] = &[
         None,
-        Some((4u32.into(), block_for_height(4))),
+        Some((3u32.into(), block_for_height(3))),
         None,
-        Some((6u32.into(), block_for_height(6))),
+        Some((5u32.into(), block_for_height(5))),
+        None,
+        Some((7u32.into(), block_for_height(7))),
         None,
     ];
-    let blocks_map: HashMap<_, _> = blocks.iter().flat_map(|x| x.to_owned()).collect();
+    let predefined_blocks_map: HashMap<_, _> = predefined_blocks
+        .iter()
+        .flat_map(|x| x.to_owned())
+        .collect();
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
     let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
     let config = Config {
@@ -585,7 +589,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         block_producer,
         block_importer,
         generate_p2p_port(),
-        InMemoryPredefinedBlocks::new(blocks_map),
+        InMemoryPredefinedBlocks::new(predefined_blocks_map),
     );
 
     // when
@@ -593,7 +597,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     service.start().unwrap();
 
     // then
-    for maybe_predefined in blocks {
+    for maybe_predefined in predefined_blocks {
         let actual = block_receiver.recv().await.unwrap();
         if let Some((_, block)) = maybe_predefined {
             let expected = FakeProducedBlock::Predefined(block.clone());

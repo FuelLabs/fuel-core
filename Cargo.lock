@@ -3156,6 +3156,8 @@ dependencies = [
  "fuel-core-types",
  "mockall",
  "rand",
+ "serde",
+ "serde_json",
  "test-case",
  "tokio",
  "tokio-stream",
