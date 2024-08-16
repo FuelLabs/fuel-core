@@ -1,26 +1,37 @@
 #![allow(clippy::arithmetic_side_effects)]
+#![allow(non_snake_case)]
 
 use crate::{
     new_service,
     ports::{
+        BlockProducer,
+        InMemoryPredefinedBlocks,
         MockBlockImporter,
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
+        TransactionsSource,
     },
     service::MainTask,
     Config,
     Service,
     Trigger,
 };
+use async_trait::async_trait;
 use fuel_core_services::{
     stream::pending,
     Service as StorageTrait,
+    ServiceRunner,
     State,
 };
+use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
-        header::BlockHeader,
+        block::Block,
+        header::{
+            BlockHeader,
+            PartialBlockHeader,
+        },
         primitives::SecretKeyWrapper,
         SealedBlock,
     },
@@ -47,7 +58,10 @@ use rand::{
     SeedableRng,
 };
 use std::{
-    collections::HashSet,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     sync::{
         Arc,
         Mutex as StdMutex,
@@ -148,6 +162,8 @@ impl TestContextBuilder {
 
         let p2p_port = generate_p2p_port();
 
+        let predefined_blocks = HashMap::new().into();
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
             config,
@@ -155,6 +171,7 @@ impl TestContextBuilder {
             producer,
             importer,
             p2p_port,
+            predefined_blocks,
         );
         service.start().unwrap();
         TestContext { service }
@@ -162,7 +179,12 @@ impl TestContextBuilder {
 }
 
 struct TestContext {
-    service: Service<MockTransactionPool, MockBlockProducer, MockBlockImporter>,
+    service: Service<
+        MockTransactionPool,
+        MockBlockProducer,
+        MockBlockImporter,
+        InMemoryPredefinedBlocks,
+    >,
 }
 
 impl TestContext {
@@ -332,6 +354,8 @@ async fn remove_skipped_transactions() {
 
     let p2p_port = generate_p2p_port();
 
+    let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -339,6 +363,7 @@ async fn remove_skipped_transactions() {
         block_producer,
         block_importer,
         p2p_port,
+        predefined_blocks,
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -379,6 +404,8 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let p2p_port = generate_p2p_port();
 
+    let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -386,6 +413,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_producer,
         block_importer,
         p2p_port,
+        predefined_blocks,
     );
 
     // simulate some txpool event to see if any block production is erroneously triggered
@@ -396,4 +424,189 @@ fn test_signing_key() -> Secret<SecretKeyWrapper> {
     let mut rng = StdRng::seed_from_u64(0);
     let secret_key = SecretKey::random(&mut rng);
     Secret::new(secret_key.into())
+}
+
+#[derive(Debug, PartialEq)]
+enum FakeProducedBlock {
+    Predefined(Block),
+    New(BlockHeight, Tai64),
+}
+
+struct FakeBlockProducer {
+    block_sender: tokio::sync::mpsc::Sender<FakeProducedBlock>,
+}
+
+impl FakeBlockProducer {
+    fn new() -> (Self, tokio::sync::mpsc::Receiver<FakeProducedBlock>) {
+        let (block_sender, receiver) = tokio::sync::mpsc::channel(100);
+        (Self { block_sender }, receiver)
+    }
+}
+
+#[async_trait]
+impl BlockProducer for FakeBlockProducer {
+    async fn produce_and_execute_block(
+        &self,
+        height: BlockHeight,
+        block_time: Tai64,
+        _source: TransactionsSource,
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
+        self.block_sender
+            .send(FakeProducedBlock::New(height, block_time))
+            .await
+            .unwrap();
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block: Default::default(),
+                skipped_transactions: Default::default(),
+                tx_status: Default::default(),
+                events: Default::default(),
+            },
+            Default::default(),
+        ))
+    }
+
+    async fn produce_predefined_block(
+        &self,
+        block: &Block,
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
+        self.block_sender
+            .send(FakeProducedBlock::Predefined(block.clone()))
+            .await
+            .unwrap();
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block: block.clone(),
+                skipped_transactions: Default::default(),
+                tx_status: Default::default(),
+                events: Default::default(),
+            },
+            Default::default(),
+        ))
+    }
+}
+
+fn block_for_height(height: u32) -> Block {
+    let mut header = PartialBlockHeader::default();
+    header.consensus.height = height.into();
+    let transactions = vec![];
+    Block::new(header, transactions, Default::default(), Default::default()).unwrap()
+}
+
+#[tokio::test]
+async fn consensus_service__run__will_include_sequential_predefined_blocks_before_new_blocks(
+) {
+    // given
+    let blocks: [(BlockHeight, Block); 3] = [
+        (2u32.into(), block_for_height(2)),
+        (3u32.into(), block_for_height(3)),
+        (4u32.into(), block_for_height(4)),
+    ];
+    let blocks_map: HashMap<_, _> = blocks.clone().into_iter().collect();
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(100),
+        },
+        signing_key: Some(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let task = MainTask::new(
+        &last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        InMemoryPredefinedBlocks::new(blocks_map),
+    );
+
+    // when
+    let service = ServiceRunner::new(task);
+    service.start().unwrap();
+
+    // then
+    for (_, block) in blocks {
+        let expected = FakeProducedBlock::Predefined(block);
+        let actual = block_receiver.recv().await.unwrap();
+        assert_eq!(expected, actual);
+    }
+    let maybe_produced_block = block_receiver.recv().await.unwrap();
+    assert!(matches! {
+        maybe_produced_block,
+        FakeProducedBlock::New(_, _)
+    });
+}
+
+#[tokio::test]
+async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order() {
+    // given
+    let predefined_blocks: &[Option<(BlockHeight, Block)>] = &[
+        None,
+        Some((3u32.into(), block_for_height(3))),
+        None,
+        Some((5u32.into(), block_for_height(5))),
+        None,
+        Some((7u32.into(), block_for_height(7))),
+        None,
+    ];
+    let predefined_blocks_map: HashMap<_, _> = predefined_blocks
+        .iter()
+        .flat_map(|x| x.to_owned())
+        .collect();
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(100),
+        },
+        signing_key: Some(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let task = MainTask::new(
+        &last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        InMemoryPredefinedBlocks::new(predefined_blocks_map),
+    );
+
+    // when
+    let service = ServiceRunner::new(task);
+    service.start().unwrap();
+
+    // then
+    for maybe_predefined in predefined_blocks {
+        let actual = block_receiver.recv().await.unwrap();
+        if let Some((_, block)) = maybe_predefined {
+            let expected = FakeProducedBlock::Predefined(block.clone());
+            assert_eq!(expected, actual);
+        } else {
+            assert!(matches! {
+                actual,
+                FakeProducedBlock::New(_, _)
+            });
+        }
+    }
 }

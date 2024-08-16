@@ -24,6 +24,7 @@ use fuel_core_poa::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
+    blockchain::block::Block,
     fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
@@ -119,6 +120,15 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
                     .await
             }
         }
+    }
+
+    async fn produce_predefined_block(
+        &self,
+        block: &Block,
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
+        self.block_producer
+            .produce_and_execute_predefined(block)
+            .await
     }
 }
 

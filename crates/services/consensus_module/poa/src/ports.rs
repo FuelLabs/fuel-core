@@ -5,6 +5,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::Block,
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
@@ -29,6 +30,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use std::collections::HashMap;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
@@ -58,6 +60,11 @@ pub trait BlockProducer: Send + Sync {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+
+    async fn produce_predefined_block(
+        &self,
+        block: &Block,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 }
 
@@ -107,4 +114,30 @@ pub trait P2pPort: Send + Sync + 'static {
 pub trait SyncPort: Send + Sync {
     /// await synchronization with the peers
     async fn sync_with_peers(&mut self) -> anyhow::Result<()>;
+}
+
+pub trait PredefinedBlocks: Send + Sync {
+    fn get_block(&self, height: &BlockHeight) -> Option<Block>;
+}
+
+pub struct InMemoryPredefinedBlocks {
+    blocks: HashMap<BlockHeight, Block>,
+}
+
+impl From<HashMap<BlockHeight, Block>> for InMemoryPredefinedBlocks {
+    fn from(blocks: HashMap<BlockHeight, Block>) -> Self {
+        Self::new(blocks)
+    }
+}
+
+impl InMemoryPredefinedBlocks {
+    pub fn new(blocks: HashMap<BlockHeight, Block>) -> Self {
+        Self { blocks }
+    }
+}
+
+impl PredefinedBlocks for InMemoryPredefinedBlocks {
+    fn get_block(&self, height: &BlockHeight) -> Option<Block> {
+        self.blocks.get(height).cloned()
+    }
 }

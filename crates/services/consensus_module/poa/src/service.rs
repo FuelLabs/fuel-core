@@ -1,3 +1,21 @@
+use anyhow::{
+    anyhow,
+    Context,
+};
+use std::{
+    ops::Deref,
+    sync::Arc,
+    time::Duration,
+};
+use tokio::{
+    sync::{
+        mpsc,
+        oneshot,
+    },
+    time::Instant,
+};
+use tokio_stream::StreamExt;
+
 use crate::{
     deadline_clock::{
         DeadlineClock,
@@ -7,6 +25,7 @@ use crate::{
         BlockImporter,
         BlockProducer,
         P2pPort,
+        PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
     },
@@ -16,10 +35,6 @@ use crate::{
     },
     Config,
     Trigger,
-};
-use anyhow::{
-    anyhow,
-    Context,
 };
 use fuel_core_services::{
     stream::BoxStream,
@@ -54,6 +69,7 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         executor::{
+            Error as ExecutorError,
             ExecutionResult,
             UncommittedResult as UncommittedExecutionResult,
         },
@@ -61,20 +77,9 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    ops::Deref,
-    time::Duration,
-};
-use tokio::{
-    sync::{
-        mpsc,
-        oneshot,
-    },
-    time::Instant,
-};
-use tokio_stream::StreamExt;
+use serde::Serialize;
 
-pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
+pub type Service<T, B, I, PB> = ServiceRunner<MainTask<T, B, I, PB>>;
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -128,7 +133,7 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<T, B, I> {
+pub struct MainTask<T, B, I, PB> {
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
     block_importer: I,
@@ -139,16 +144,18 @@ pub struct MainTask<T, B, I> {
     last_height: BlockHeight,
     last_timestamp: Tai64,
     last_block_created: Instant,
+    predefined_blocks: PB,
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, PB> MainTask<T, B, I, PB>
 where
     T: TransactionPool,
     I: BlockImporter,
+    PB: PredefinedBlocks,
 {
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
@@ -157,6 +164,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
+        predefined_blocks: PB,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -195,6 +203,7 @@ where
             last_height,
             last_timestamp,
             last_block_created,
+            predefined_blocks,
             trigger,
             timer: DeadlineClock::new(),
             sync_task_handle,
@@ -203,10 +212,10 @@ where
 
     fn extract_block_info(last_block: &BlockHeader) -> (BlockHeight, Tai64, Instant) {
         let last_timestamp = last_block.time();
-        let duration =
+        let duration_since_last_block =
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now()
-            .checked_sub(duration)
+            .checked_sub(duration_since_last_block)
             .unwrap_or(Instant::now());
         let last_height = *last_block.height();
         (last_height, last_timestamp, last_block_created)
@@ -241,11 +250,12 @@ where
     }
 }
 
-impl<T, B, I> MainTask<T, B, I>
+impl<T, B, I, PB> MainTask<T, B, I, PB>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    PB: PredefinedBlocks,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -387,6 +397,65 @@ where
         Ok(())
     }
 
+    async fn produce_predefined_block(
+        &mut self,
+        predefined_block: &Block,
+    ) -> anyhow::Result<()> {
+        tracing::info!("Producing predefined block");
+        let last_block_created = Instant::now();
+        // verify signing key is set
+        if self.signing_key.is_none() {
+            return Err(anyhow!("unable to produce blocks without a consensus key"))
+        }
+
+        // Ask the block producer to create the block
+        let (
+            ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            },
+            changes,
+        ) = self
+            .block_producer
+            .produce_predefined_block(predefined_block)
+            .await?
+            .into();
+
+        if !skipped_transactions.is_empty() {
+            let block_and_skipped = PredefinedBlockWithSkippedTransactions {
+                block: predefined_block.clone(),
+                skipped_transactions,
+            };
+            let serialized = serde_json::to_string_pretty(&block_and_skipped)?;
+            tracing::error!(
+                "During block production got invalid transactions: BEGIN {} END",
+                serialized
+            );
+        }
+        // Sign the block and seal it
+        let seal = seal_block(&self.signing_key, &block)?;
+        let sealed_block = SealedBlock {
+            entity: block,
+            consensus: seal,
+        };
+        // Import the sealed block
+        self.block_importer
+            .commit_result(Uncommitted::new(
+                ImportResult::new_from_local(sealed_block.clone(), tx_status, events),
+                changes,
+            ))
+            .await?;
+
+        // Update last block time
+        self.last_height = *sealed_block.entity.header().height();
+        self.last_timestamp = sealed_block.entity.header().time();
+        self.last_block_created = last_block_created;
+
+        Ok(())
+    }
+
     pub(crate) async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
         match self.trigger {
             Trigger::Instant => {
@@ -413,17 +482,32 @@ where
             }
         }
     }
+    fn update_last_block_values(&mut self, block_header: &Arc<BlockHeader>) {
+        let (last_height, last_timestamp, last_block_created) =
+            Self::extract_block_info(block_header);
+        if last_height > self.last_height {
+            self.last_height = last_height;
+            self.last_timestamp = last_timestamp;
+            self.last_block_created = last_block_created;
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct PredefinedBlockWithSkippedTransactions {
+    block: Block,
+    skipped_transactions: Vec<(TxId, ExecutorError)>,
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableService for MainTask<T, B, I>
+impl<T, B, I, PB> RunnableService for MainTask<T, B, I, PB>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I>;
+    type Task = MainTask<T, B, I, PB>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -451,24 +535,25 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableTask for MainTask<T, B, I>
+impl<T, B, I, PB> RunnableTask for MainTask<T, B, I, PB>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    PB: PredefinedBlocks,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
-        let mut state = self.sync_task_handle.shared.clone();
+        let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
-        while *state.borrow_and_update() == SyncState::NotSynced {
+        while *sync_state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     should_continue = result?.started();
                     return Ok(should_continue);
                 }
-                _ = state.changed() => {
+                _ = sync_state.changed() => {
                     break;
                 }
                 _ = self.tx_status_update_stream.next() => {
@@ -480,16 +565,17 @@ where
             }
         }
 
-        if let SyncState::Synced(block_header) = &*state.borrow_and_update() {
-            let (last_height, last_timestamp, last_block_created) =
-                Self::extract_block_info(block_header);
-            if last_height > self.last_height {
-                self.last_height = last_height;
-                self.last_timestamp = last_timestamp;
-                self.last_block_created = last_block_created;
-            }
+        if let SyncState::Synced(block_header) = &*sync_state.borrow_and_update() {
+            self.update_last_block_values(block_header);
         }
 
+        let next_height = self.next_height();
+        let maybe_block = self.predefined_blocks.get_block(&next_height);
+        if let Some(block) = maybe_block {
+            self.produce_predefined_block(&block).await?;
+            should_continue = true;
+            return Ok(should_continue)
+        }
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
@@ -528,6 +614,7 @@ where
                 should_continue = true;
             }
         }
+
         Ok(should_continue)
     }
 
@@ -538,18 +625,20 @@ where
     }
 }
 
-pub fn new_service<T, B, I, P>(
+pub fn new_service<T, B, I, P, PB>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
-) -> Service<T, B, I>
+    predefined_blocks: PB,
+) -> Service<T, B, I, PB>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
+    PB: PredefinedBlocks + 'static,
     P: P2pPort,
 {
     Service::new(MainTask::new(
@@ -559,6 +648,7 @@ where
         block_producer,
         block_importer,
         p2p_port,
+        predefined_blocks,
     ))
 }
 
