@@ -41,7 +41,10 @@ use fuel_core_storage::{
         FuelBlocks,
         Transactions,
     },
-    transactional::AtomicView,
+    transactional::{
+        AtomicView,
+        HistoricalView,
+    },
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -117,7 +120,7 @@ impl RunnableService for InitializeTask {
     ) -> anyhow::Result<Self::Task> {
         let starting_height = self
             .on_chain_db
-            .latest_height()?
+            .latest_height()
             .unwrap_or(self.genesis_block_height);
 
         let updater = get_synced_gas_price_updater(
@@ -144,11 +147,11 @@ pub fn get_synced_gas_price_updater(
 ) -> anyhow::Result<Updater> {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
-        .latest_height()?
+        .latest_height()
         .unwrap_or(genesis_block_height)
         .into();
 
-    let maybe_metadata_height = gas_price_db.latest_height()?;
+    let maybe_metadata_height = gas_price_db.latest_height();
     let mut metadata_height = if let Some(metadata_height) = maybe_metadata_height {
         metadata_height.into()
     } else {
@@ -167,7 +170,7 @@ pub fn get_synced_gas_price_updater(
     if metadata_height > latest_block_height {
         revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
         metadata_height = gas_price_db
-            .latest_height()?
+            .latest_height()
             .ok_or(anyhow::anyhow!(
                 "Metadata DB height should match the latest block height"
             ))?
@@ -280,7 +283,7 @@ fn revert_gas_price_db_to_height(
     gas_price_db: &mut Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
-    if let Some(gas_price_db_height) = gas_price_db.latest_height()? {
+    if let Some(gas_price_db_height) = gas_price_db.latest_height() {
         let gas_price_db_height: u32 = gas_price_db_height.into();
         let height: u32 = height.into();
         let diff = gas_price_db_height.saturating_sub(height);

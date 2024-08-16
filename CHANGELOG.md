@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Added support for PoA key rotation.
 - [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chan config.
 
+### Fixed
+
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Fixed bug in rollback logic because of wrong ordering of modifications.
+
 ## [Version 0.32.1]
 
 ### Added

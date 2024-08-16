@@ -95,7 +95,7 @@ impl FuelCoreDriver {
                 .shared
                 .database
                 .on_chain()
-                .latest_height()
+                .latest_height_from_metadata()
                 .unwrap()
                 .unwrap();
 

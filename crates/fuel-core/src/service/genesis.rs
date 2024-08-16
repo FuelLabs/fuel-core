@@ -274,7 +274,10 @@ mod tests {
             ContractsAssets,
             ContractsState,
         },
-        transactional::AtomicView,
+        transactional::{
+            AtomicView,
+            HistoricalView,
+        },
         StorageAsRef,
     };
     use fuel_core_types::{
@@ -318,7 +321,6 @@ mod tests {
         assert_eq!(
             genesis_block_height,
             db.latest_height()
-                .unwrap()
                 .expect("Expected a block height to be set")
         )
     }
