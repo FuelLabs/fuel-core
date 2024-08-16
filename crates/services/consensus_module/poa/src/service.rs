@@ -60,12 +60,8 @@ use fuel_core_types::{
     fuel_tx::{
         Transaction,
         TxId,
-        UniqueIdentifier,
     },
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_types::BlockHeight,
     secrecy::{
         ExposeSecret,
         Secret,
@@ -73,6 +69,7 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         executor::{
+            Error as ExecutorError,
             ExecutionResult,
             UncommittedResult as UncommittedExecutionResult,
         },
@@ -80,6 +77,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use serde::Serialize;
 
 pub type Service<T, B, I, PB> = ServiceRunner<MainTask<T, B, I, PB>>;
 #[derive(Clone)]
@@ -151,7 +149,6 @@ pub struct MainTask<T, B, I, PB> {
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     sync_task_handle: ServiceRunner<SyncTask>,
-    chain_id: ChainId,
 }
 
 impl<T, B, I, PB> MainTask<T, B, I, PB>
@@ -182,7 +179,6 @@ where
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
-            chain_id,
             ..
         } = config;
 
@@ -211,7 +207,6 @@ where
             trigger,
             timer: DeadlineClock::new(),
             sync_task_handle,
-            chain_id,
         }
     }
 
@@ -405,7 +400,6 @@ where
     async fn produce_predefined_block(
         &mut self,
         predefined_block: &Block,
-        chain_id: &ChainId,
     ) -> anyhow::Result<()> {
         tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
@@ -430,19 +424,15 @@ where
             .into();
 
         if !skipped_transactions.is_empty() {
-            tracing::error!("During block production got invalid transactions");
-            let txs = predefined_block.transactions();
-
-            for (tx_id, err) in skipped_transactions {
-                let maybe_tx = txs.iter().find(|tx| tx.id(chain_id) == tx_id);
-                if let Some(tx) = maybe_tx {
-                    tracing::error!(
-                "During block production got invalid transaction {:?} with error {:?}",
-                tx,
-                err
+            let block_and_skipped = PredefinedBlockWithSkippedTransactions {
+                block: predefined_block.clone(),
+                skipped_transactions,
+            };
+            let serialized = serde_json::to_string_pretty(&block_and_skipped)?;
+            tracing::error!(
+                "During block production got invalid transactions: BEGIN {} END",
+                serialized
             );
-                }
-            }
         }
         // Sign the block and seal it
         let seal = seal_block(&self.signing_key, &block)?;
@@ -501,6 +491,12 @@ where
             self.last_block_created = last_block_created;
         }
     }
+}
+
+#[derive(Serialize)]
+struct PredefinedBlockWithSkippedTransactions {
+    block: Block,
+    skipped_transactions: Vec<(TxId, ExecutorError)>,
 }
 
 #[async_trait::async_trait]
@@ -574,10 +570,9 @@ where
         }
 
         let next_height = self.next_height();
-        let chain_id = self.chain_id;
         let maybe_block = self.predefined_blocks.get_block(&next_height);
         if let Some(block) = maybe_block {
-            self.produce_predefined_block(&block, &chain_id).await?;
+            self.produce_predefined_block(&block).await?;
             should_continue = true;
         } else {
             tokio::select! {
