@@ -3,7 +3,6 @@ use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
     combined_database::CombinedDatabase,
-    service::genesis::NotifyCancel,
     state::historical_rocksdb::StateRewindPolicy,
 };
 use std::path::PathBuf;
@@ -37,57 +36,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     .map_err(Into::<anyhow::Error>::into)
     .context(format!("failed to open combined database at path {path:?}"))?;
 
-    let shutdown_listener = ShutdownListener::spawn();
+    let mut shutdown_listener = ShutdownListener::spawn();
     let target_block_height = command.target_block_height.into();
 
-    while !shutdown_listener.is_cancelled() {
-        let on_chain_height = db
-            .on_chain()
-            .latest_height()?
-            .ok_or(anyhow::anyhow!("on-chain database doesn't have height"))?;
+    db.rollback_to(target_block_height, &mut shutdown_listener)?;
 
-        let off_chain_height = db
-            .off_chain()
-            .latest_height()?
-            .ok_or(anyhow::anyhow!("on-chain database doesn't have height"))?;
-
-        if on_chain_height == target_block_height
-            && off_chain_height == target_block_height
-        {
-            break;
-        }
-
-        if off_chain_height == target_block_height
-            && on_chain_height < target_block_height
-        {
-            return Err(anyhow::anyhow!(
-                "on-chain database height is less than target height"
-            ));
-        }
-
-        if on_chain_height == target_block_height
-            && off_chain_height < target_block_height
-        {
-            return Err(anyhow::anyhow!(
-                "off-chain database height is less than target height"
-            ));
-        }
-
-        if on_chain_height > target_block_height {
-            db.on_chain().rollback_last_block()?;
-            tracing::info!(
-                "Rolled back on-chain database to height {:?}",
-                on_chain_height.pred()
-            );
-        }
-
-        if off_chain_height > target_block_height {
-            db.off_chain().rollback_last_block()?;
-            tracing::info!(
-                "Rolled back off-chain database to height {:?}",
-                on_chain_height.pred()
-            );
-        }
-    }
     Ok(())
 }

@@ -123,7 +123,7 @@ pub fn init_sub_services(
 
     let verifier = VerifierAdapter::new(
         &genesis_block,
-        chain_config.consensus,
+        chain_config.consensus.clone(),
         database.on_chain().clone(),
     );
 

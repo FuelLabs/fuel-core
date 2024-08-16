@@ -11,10 +11,12 @@ use crate::{
     service::{
         Config,
         FuelService,
-        ServiceTrait,
     },
 };
-use fuel_core_chain_config::StateConfig;
+use fuel_core_chain_config::{
+    ConsensusConfig,
+    StateConfig,
+};
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -386,8 +388,11 @@ fn update_signing_key(config: &mut Config, key: Address) {
 
     let mut chain_config = snapshot_reader.chain_config().clone();
     match &mut chain_config.consensus {
-        crate::chain_config::ConsensusConfig::PoA { signing_key } => {
+        ConsensusConfig::PoA { signing_key } => {
             *signing_key = key;
+        }
+        ConsensusConfig::PoAV2(poa) => {
+            poa.set_genesis_signing_key(key);
         }
     }
     config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config)
@@ -473,7 +478,7 @@ impl Node {
                 result = blocks.next() => {
                     result.unwrap();
                 }
-                _ = self.node.await_stop() => {
+                _ = self.node.await_shutdown() => {
                     panic!("Got a stop signal")
                 }
             }
@@ -537,7 +542,10 @@ impl Node {
 
     /// Stop a node.
     pub async fn shutdown(&mut self) {
-        self.node.stop_and_await().await.unwrap();
+        self.node
+            .send_stop_signal_and_await_shutdown()
+            .await
+            .unwrap();
     }
 }
 

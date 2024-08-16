@@ -28,7 +28,6 @@ use fuel_core::{
         Config,
         DbType,
         RelayerConsensusConfig,
-        ServiceTrait,
         VMConfig,
     },
     txpool::{
@@ -457,7 +456,9 @@ impl Command {
     }
 }
 
-pub async fn get_service(command: Command) -> anyhow::Result<FuelService> {
+pub async fn get_service_with_shutdown_listeners(
+    command: Command,
+) -> anyhow::Result<(FuelService, ShutdownListener)> {
     #[cfg(feature = "rocksdb")]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
@@ -475,13 +476,22 @@ pub async fn get_service(command: Command) -> anyhow::Result<FuelService> {
     // initialize the server
     let combined_database = CombinedDatabase::from_config(&config.combined_db_config)?;
 
-    FuelService::new(combined_database, config)
+    let mut shutdown_listener = ShutdownListener::spawn();
+
+    Ok((
+        FuelService::new(combined_database, config, &mut shutdown_listener)?,
+        shutdown_listener,
+    ))
+}
+
+pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
+    let (service, _) = get_service_with_shutdown_listeners(command)?;
+    Ok(service)
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let service = get_service(command).await?;
+    let (service, shutdown_listener) = get_service_with_shutdown_listeners(command).await?;
 
-    let shutdown_listener = ShutdownListener::spawn();
     // Genesis could take a long time depending on the snapshot size. Start needs to be
     // interruptible by the shutdown_signal
     tokio::select! {
@@ -489,19 +499,19 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             result?;
         }
         _ = shutdown_listener.wait_until_cancelled() => {
-            service.stop();
+            service.send_stop_signal();
         }
     }
 
     // pause the main task while service is running
     tokio::select! {
-        result = service.await_stop() => {
+        result = service.await_shutdown() => {
             result?;
         }
         _ = shutdown_listener.wait_until_cancelled() => {}
     }
 
-    service.stop_and_await().await?;
+    service.send_stop_signal_and_await_shutdown().await?;
 
     Ok(())
 }
