@@ -39,7 +39,6 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
-            Error,
             InsertionResult,
             TransactionStatus,
         },
@@ -247,7 +246,7 @@ where
             _ = self.ttl_timer.tick() => {
                 let removed = self.tx_pool_shared_state.txpool.lock().prune_old_txs();
                 for tx in removed {
-                    self.tx_pool_shared_state.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
+                    self.tx_pool_shared_state.tx_status_sender.send_squeezed_out(tx.id(), TxPoolError::TTLReason);
                 }
 
                 should_continue = true
@@ -311,7 +310,7 @@ where
                                 },
                                 // Use similar p2p punishment rules as bitcoin
                                 // https://github.com/bitcoin/bitcoin/blob/6ff0aa089c01ff3e610ecb47814ed739d685a14c/src/net_processing.cpp#L1856
-                                Some(Err(Error::ConsensusValidity(_))) | Some(Err(Error::MintIsDisallowed)) => {
+                                Some(Err(TxPoolError::ConsensusValidity(_))) | Some(Err(TxPoolError::MintIsDisallowed)) => {
                                     GossipsubMessageAcceptance::Reject
                                 },
                                 _ => GossipsubMessageAcceptance::Ignore
@@ -430,7 +429,7 @@ where
     pub async fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
-    ) -> Vec<Result<InsertionResult, Error>> {
+    ) -> Vec<Result<InsertionResult, TxPoolError>> {
         // verify txs
         let current_height = *self.current_height.lock();
         let (version, params) = self
@@ -489,7 +488,7 @@ where
             .into_iter()
             .map(|check_result| match check_result {
                 None => insertion.next().unwrap_or_else(|| {
-                    Err(Error::Other(
+                    Err(TxPoolError::Other(
                         anyhow::anyhow!("Insertion result is missing").to_string(),
                     ))
                 }),
