@@ -186,6 +186,9 @@ jobs:
   cargo-test-kms:
     runs-on: buildjet-4vcpu-ubuntu-2204
     timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Configure AWS credentials for integration testing
         uses: aws-actions/configure-aws-credentials@v4
