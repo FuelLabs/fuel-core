@@ -28,7 +28,7 @@ pub async fn send_graph_ql_query(url: &str, query: &str) -> String {
 
 pub async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
     let secret = SecretKey::random(rng);
-    let contract_tx = TransactionBuilder::script(vec![], vec![])
+    let script_tx = TransactionBuilder::script(vec![], vec![])
         .add_unsigned_coin_input(
             secret,
             rng.gen(),
@@ -43,7 +43,7 @@ pub async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
         ))
         .finalize_as_transaction();
     let status = client
-        .submit_and_await_commit(&contract_tx)
+        .submit_and_await_commit(&script_tx)
         .await
         .expect("Failed to send tx");
     assert!(
