@@ -494,7 +494,8 @@ fn block_for_height(height: u32) -> Block {
 }
 
 #[tokio::test]
-async fn consensus_service__run__will_include_predefined_blocks_before_new_blocks() {
+async fn consensus_service__run__will_include_sequential_predefined_blocks_before_new_blocks(
+) {
     // given
     let blocks: [(BlockHeight, Block); 3] = [
         (2u32.into(), block_for_height(2)),
@@ -545,4 +546,63 @@ async fn consensus_service__run__will_include_predefined_blocks_before_new_block
         maybe_produced_block,
         FakeProducedBlock::New(_, _)
     });
+}
+
+#[tokio::test]
+async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order() {
+    // given
+    let blocks: &[Option<(BlockHeight, Block)>] = &[
+        Some((2u32.into(), block_for_height(2))),
+        None,
+        Some((4u32.into(), block_for_height(4))),
+        None,
+        Some((6u32.into(), block_for_height(6))),
+        None,
+    ];
+    let blocks_map: HashMap<_, _> = blocks.iter().flat_map(|x| x.to_owned()).collect();
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(100),
+        },
+        signing_key: Some(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let task = MainTask::new(
+        &last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        InMemoryPredefinedBlocks::new(blocks_map),
+    );
+
+    // when
+    let service = ServiceRunner::new(task);
+    service.start().unwrap();
+
+    // then
+    for maybe_predefined in blocks {
+        let actual = block_receiver.recv().await.unwrap();
+        if let Some((_, block)) = maybe_predefined {
+            let expected = FakeProducedBlock::Predefined(block.clone());
+            assert_eq!(expected, actual);
+        } else {
+            assert!(matches! {
+                actual,
+                FakeProducedBlock::New(_, _)
+            });
+        }
+    }
 }
