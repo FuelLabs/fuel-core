@@ -22,7 +22,7 @@ pub enum Error {
     GasPriceNotFound(String),
     #[display(fmt = "Failed to calculate max block bytes: {_0}")]
     MaxBlockBytes(String),
-    #[display(fmt = "TxPool required that transaction contains metadata")]
+    #[display(fmt = "TxPool requires that the transaction contains metadata")]
     NoMetadata,
     #[display(fmt = "TxPool doesn't support this type of transaction.")]
     NotSupportedTransactionType,
@@ -47,15 +47,15 @@ pub enum Error {
     #[display(fmt = "Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,
     #[display(
-        fmt = "Transaction is not inserted. More priced tx {_0:#x} already spend this UTXO output: {_1:#x}"
+        fmt = "Transaction is not inserted. Higher priced tx {_0:#x} has already spent this UTXO output: {_1:#x}"
     )]
     NotInsertedCollision(TxId, UtxoId),
     #[display(
-        fmt = "Transaction is not inserted. More priced tx has created contract with ContractId {_0:#x}"
+        fmt = "Transaction is not inserted. Higher priced tx has created contract with ContractId {_0:#x}"
     )]
     NotInsertedCollisionContractId(ContractId),
     #[display(
-        fmt = "Transaction is not inserted. More priced tx has uploaded the blob with BlobId {_0:#x}"
+        fmt = "Transaction is not inserted. Higher priced tx has uploaded the blob with BlobId {_0:#x}"
     )]
     NotInsertedCollisionBlobId(BlobId),
     #[display(
@@ -85,7 +85,7 @@ pub enum Error {
     )]
     NotInsertedContractPricedLower(ContractId),
     #[display(
-        fmt = "Transaction is not inserted. Input coin mismatch the values from database"
+        fmt = "Transaction is not inserted. Input coin does not match the values from database"
     )]
     NotInsertedIoCoinMismatch,
     #[display(
@@ -101,7 +101,7 @@ pub enum Error {
     )]
     NotInsertedIoWrongAssetId,
     #[display(
-        fmt = "Transaction is not inserted. Input message mismatch the values from database"
+        fmt = "Transaction is not inserted. Input message does not match the values from database"
     )]
     NotInsertedIoMessageMismatch,
     #[display(
