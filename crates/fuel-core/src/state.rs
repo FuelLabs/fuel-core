@@ -170,8 +170,17 @@ where
         // We cannot define iter_store_keys appropriately for the `ChangesIterator`,
         // because we have to filter out the keys that were removed, which are
         // marked as `WriteOperation::Remove` in the value
-        self.iter_store(column, prefix, start, direction)
-            .map(|item| item.map(|(key, _)| key))
-            .into_boxed()
+        // copied as-is from the above function, but only to return keys
+        if let Some(tree) = self.changes.get(&column.id()) {
+            fuel_core_storage::iter::iterator(tree, prefix, start, direction)
+                .filter_map(|(key, value)| match value {
+                    WriteOperation::Insert(_) => Some(key.clone().into()),
+                    WriteOperation::Remove => None,
+                })
+                .map(Ok)
+                .into_boxed()
+        } else {
+            core::iter::empty().into_boxed()
+        }
     }
 }
