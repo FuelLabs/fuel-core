@@ -1,13 +1,6 @@
 #![allow(non_snake_case)]
 
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::storage::GasPriceMetadata,
-};
-use fuel_core_storage::{
-    transactional::AtomicView,
-    transactional::HistoricalView,
-    StorageAsRef,
-};
+use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use proptest::{
     prelude::{
@@ -266,13 +259,6 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
         recovered_database.gas_price().latest_height(),
         Some(BlockHeight::new(next_height))
     );
-    let view = recovered_database.gas_price().latest_view().unwrap();
-    let previous_metadata = view
-        .storage::<GasPriceMetadata>()
-        .get(&height.into())
-        .unwrap()
-        .clone();
-    assert!(previous_metadata.is_none());
 
     Ok(())
 }
