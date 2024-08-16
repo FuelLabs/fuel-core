@@ -114,7 +114,7 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         .expect("invalid DER signature from AWS KMS")
         .subject_public_key
         .raw_bytes();
-    let poa_public = k256::ecdsa::VerifyingKey::from_sec1_bytes(&poa_public_bytes)
+    let poa_public = k256::ecdsa::VerifyingKey::from_sec1_bytes(poa_public_bytes)
         .expect("invalid public key");
     let poa_public = PublicKey::from(&poa_public);
 
