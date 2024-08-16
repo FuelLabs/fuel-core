@@ -141,14 +141,13 @@ where
             gas_price,
         };
 
-        // Store the context string in case we error.
-        let context_string =
-            format!("Failed to produce block {height:?} due to execution failure");
         let result = self
             .executor
             .produce_without_commit(component)
             .map_err(Into::<anyhow::Error>::into)
-            .context(context_string)?;
+            .with_context(|| {
+                format!("Failed to produce block {height:?} due to execution failure")
+            })?;
 
         debug!("Produced block with result: {:?}", result.result());
         Ok(result)
