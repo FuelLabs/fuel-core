@@ -209,8 +209,8 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: cargo-test-kms-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run integration tests
-        run: cargo test -p fuel-core
+      - name: Run integration tests for kms only
+        run: cargo test -p fuel-core-tests -- kms
         env:
           RUSTFLAGS: -D warnings
           FUEL_CORE_TEST_AWS_KMS_ARN: "arn:aws:kms:us-east-1:249945542445:key/mrk-e13c7118ce544f7da66294f6e87c8790"
