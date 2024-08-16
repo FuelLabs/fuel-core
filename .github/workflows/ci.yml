@@ -179,6 +179,36 @@ jobs:
         env:
           RUSTFLAGS: -D warnings
 
+  cargo-test-kms:
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    timeout-minutes: 45
+    steps:
+      - name: Configure AWS credentials for integration testing
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
+          aws-region: us-east-1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - uses: rui314/setup-mold@v1
+      - uses: buildjet/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-test-kms-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run integration tests
+        run: cargo test -p fuel-core --features ci-test-aws-kms
+        env:
+          RUSTFLAGS: -D warnings
+          FUEL_CORE_TEST_AWS_KMS_ARN: "arn:aws:kms:us-east-1:249945542445:key/mrk-e13c7118ce544f7da66294f6e87c8790"
+
+
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
@@ -240,6 +270,7 @@ jobs:
   verifications-complete:
     needs:
       - cargo-verifications
+      - cargo-test-kms
       - publish-crates-check
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
