@@ -53,7 +53,7 @@ macro_rules! define_core_driver {
 
                 let node = $bin_crate::cli::run::get_service(
                     $bin_crate::cli::run::Command::parse_from(args),
-                )?;
+                ).await?;
 
                 node.start_and_await().await?;
 
