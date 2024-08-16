@@ -24,10 +24,7 @@ use fuel_core_p2p::config::{
 pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
-use fuel_core_types::{
-    blockchain::header::StateTransitionBytecodeVersion,
-    secrecy::Secret,
-};
+use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
@@ -165,7 +162,7 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
-            consensus_signer: SignMode::Key(Secret::new(
+            consensus_signer: SignMode::Key(fuel_core_types::secrecy::Secret::new(
                 fuel_core_chain_config::default_consensus_dev_key().into(),
             )),
             name: String::default(),
