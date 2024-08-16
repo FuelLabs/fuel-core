@@ -255,7 +255,7 @@ impl<ViewProvider, WasmChecker> TxPool<ViewProvider, WasmChecker> {
                 let removed = self.remove_inner(&oldest_tx);
                 result.extend(removed.into_iter());
             } else {
-                break;
+                break
             }
         }
 
