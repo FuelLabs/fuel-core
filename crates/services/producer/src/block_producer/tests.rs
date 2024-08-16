@@ -577,17 +577,17 @@ prop_compose! {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 fn ctx_for_block<Tx>(
     block: &Block,
     executor: MockExecutorWithCapture<Tx>,
 ) -> TestContext<MockExecutorWithCapture<Tx>> {
     let prev_height = block.header().height().pred().unwrap();
     let prev_da_height = block.header().da_height.as_u64() - 1;
-    let ctx = TestContextBuilder::new()
+    TestContextBuilder::new()
         .with_prev_height(prev_height)
         .with_prev_da_height(prev_da_height.into())
-        .build_with_executor(executor);
-    ctx
+        .build_with_executor(executor)
 }
 
 // gas_price
