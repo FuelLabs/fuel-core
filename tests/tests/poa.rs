@@ -3,6 +3,7 @@
 use fuel_core::{
     combined_database::CombinedDatabase,
     service::{
+        adapters::consensus_module::poa::block_path,
         Config,
         FuelService,
     },
@@ -21,6 +22,11 @@ use fuel_core_types::{
 use rand::{
     rngs::StdRng,
     SeedableRng,
+};
+use tempfile::tempdir;
+use test_helpers::{
+    fuel_core_driver::FuelCoreDriver,
+    produce_block_with_tx,
 };
 
 #[tokio::test]
@@ -83,6 +89,74 @@ async fn can_get_sealed_block_from_poa_produced_block() {
     signature
         .verify(&poa_public, &block_id.into_message())
         .expect("failed to verify signature");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
+) -> anyhow::Result<()> {
+    const BLOCK_TO_PRODUCE: usize = 10;
+    let mut rng = StdRng::seed_from_u64(1234);
+
+    let directory_with_predefined_blocks = tempdir()?;
+    std::fs::create_dir_all(directory_with_predefined_blocks.path())?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
+
+    for _ in 0..BLOCK_TO_PRODUCE {
+        produce_block_with_tx(&mut rng, &core.client).await;
+    }
+    let on_chain_view = core.node.shared.database.on_chain().latest_view()?;
+
+    // Given
+    let predefined_blocks: Vec<_> = (1..=BLOCK_TO_PRODUCE)
+        .map(|block_height| {
+            let block_height = block_height as u32;
+            let sealed_block = on_chain_view
+                .get_sealed_block_by_height(&block_height.into())
+                .unwrap()
+                .unwrap();
+            let block = sealed_block.entity;
+            block
+        })
+        .collect();
+    assert_eq!(predefined_blocks.len(), BLOCK_TO_PRODUCE);
+    core.kill().await;
+    for block in &predefined_blocks {
+        let json = serde_json::to_string_pretty(block)?;
+        let height: u32 = (*block.header().height()).into();
+        let path = block_path(directory_with_predefined_blocks.path(), height);
+        std::fs::write(path, json)?;
+    }
+
+    // When
+    let new_core = FuelCoreDriver::spawn_feeless(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--predefined-blocks-path",
+        directory_with_predefined_blocks.path().to_str().unwrap(),
+    ])
+    .await?;
+
+    // Then
+    let expected_height = BLOCK_TO_PRODUCE as u32;
+    new_core
+        .wait_for_block_height_10s(&expected_height.into())
+        .await;
+    let blocks_from_new_node: Vec<_> = (1..=BLOCK_TO_PRODUCE)
+        .map(|block_height| {
+            let block_height = block_height as u32;
+            let sealed_block = on_chain_view
+                .get_sealed_block_by_height(&block_height.into())
+                .unwrap()
+                .unwrap();
+            let block = sealed_block.entity;
+            block
+        })
+        .collect();
+    assert_eq!(predefined_blocks, blocks_from_new_node);
+
+    Ok(())
 }
 
 #[cfg(feature = "p2p")]

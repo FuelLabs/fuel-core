@@ -437,13 +437,14 @@ where
                 let maybe_tx = txs.iter().find(|tx| tx.id(chain_id) == tx_id);
                 if let Some(tx) = maybe_tx {
                     tracing::error!(
-                "During block production got invalid transaction {:?} with error {:?}",
-                tx,
-                err
-            );
+                        "During block production got invalid transaction {:?} with error {:?}",
+                        tx,
+                        err
+                    );
                 }
             }
         }
+
         // Sign the block and seal it
         let seal = seal_block(&self.signing_key, &block)?;
         let sealed_block = SealedBlock {
@@ -575,7 +576,7 @@ where
 
         let next_height = self.next_height();
         let chain_id = self.chain_id;
-        let maybe_block = self.predefined_blocks.get_block(&next_height);
+        let maybe_block = self.predefined_blocks.get_block(&next_height)?;
         if let Some(block) = maybe_block {
             self.produce_predefined_block(&block, &chain_id).await?;
             should_continue = true;

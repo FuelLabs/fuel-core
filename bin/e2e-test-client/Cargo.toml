@@ -18,7 +18,7 @@ fuel-core = { workspace = true, default-features = false, optional = true }
 fuel-core-chain-config = { workspace = true, features = ["default"] }
 fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-futures = "0.3"
+futures = { workspace = true }
 hex = "0.4"
 humantime-serde = "1.1"
 itertools = { workspace = true }

@@ -117,7 +117,7 @@ pub trait SyncPort: Send + Sync {
 }
 
 pub trait PredefinedBlocks: Send + Sync {
-    fn get_block(&self, height: &BlockHeight) -> Option<Block>;
+    fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>>;
 }
 
 pub struct InMemoryPredefinedBlocks {
@@ -137,7 +137,7 @@ impl InMemoryPredefinedBlocks {
 }
 
 impl PredefinedBlocks for InMemoryPredefinedBlocks {
-    fn get_block(&self, height: &BlockHeight) -> Option<Block> {
-        self.blocks.get(height).cloned()
+    fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>> {
+        Ok(self.blocks.get(height).cloned())
     }
 }

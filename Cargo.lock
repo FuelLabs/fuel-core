@@ -8193,10 +8193,12 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
+ "futures",
  "itertools 0.12.1",
  "rand",
  "reqwest",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

@@ -14,6 +14,7 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
+            consensus_module::poa::InDirectoryPredefinedBlocks,
             consensus_parameters_provider,
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
@@ -56,10 +57,7 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 mod algorithm_updater;
@@ -245,7 +243,8 @@ pub fn init_sub_services(
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
 
-    let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
+    let predefined_blocks =
+        InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
