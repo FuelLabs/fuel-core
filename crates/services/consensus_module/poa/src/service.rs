@@ -335,7 +335,8 @@ where
         self.txpool.remove_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
-        let seal = self.signer.seal_block(&block).await?;
+        let seal = self.signer.seal_block(&block).await
+        .expect("Failed to seal block. Panicing for now, TODO: https://github.com/FuelLabs/fuel-core/issues/1917");
         let block = SealedBlock {
             entity: block,
             consensus: seal,

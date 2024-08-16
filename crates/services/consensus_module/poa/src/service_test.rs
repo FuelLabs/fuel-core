@@ -15,6 +15,7 @@ use crate::{
     Service,
     Trigger,
 };
+use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
     stream::pending,
     Service as StorageTrait,
@@ -159,23 +160,31 @@ impl TestContextBuilder {
             producer,
             importer,
             p2p_port,
-            FakeBlockSigner(config.signer),
+            FakeBlockSigner { succeeds: true },
         );
         service.start().unwrap();
         TestContext { service }
     }
 }
 
-struct FakeBlockSigner(SignMode);
+struct FakeBlockSigner {
+    succeeds: bool,
+}
 
 #[async_trait::async_trait]
 impl BlockSigner for FakeBlockSigner {
     async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
-        self.0.seal_block(block).await
+        if self.succeeds {
+            SignMode::Key(Secret::new(default_consensus_dev_key().into()))
+                .seal_block(block)
+                .await
+        } else {
+            Err(anyhow::anyhow!("failed to sign block"))
+        }
     }
 
     fn is_available(&self) -> bool {
-        self.0.is_available()
+        true
     }
 }
 
@@ -364,10 +373,75 @@ async fn remove_skipped_transactions() {
         block_producer,
         block_importer,
         p2p_port,
-        FakeBlockSigner(signer),
+        FakeBlockSigner { succeeds: true },
     );
 
     assert!(task.produce_next_block().await.is_ok());
+}
+
+#[tokio::test]
+#[should_panic = "failed to sign block"]
+async fn panics_if_signing_fails() {
+    // The test verifies that if `BlockProducer` returns skipped transactions, they would
+    // be propagated to `TxPool` for removal.
+    let mut rng = StdRng::seed_from_u64(2322);
+    let secret_key = SecretKey::random(&mut rng);
+
+    let mut block_producer = MockBlockProducer::default();
+    block_producer
+        .expect_produce_and_execute_block()
+        .times(1)
+        .returning(move |_, _, _| {
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block: Default::default(),
+                    skipped_transactions: Default::default(),
+                    tx_status: Default::default(),
+                    events: Default::default(),
+                },
+                Default::default(),
+            ))
+        });
+
+    let mut block_importer = MockBlockImporter::default();
+
+    block_importer
+        .expect_commit_result()
+        .times(1)
+        .returning(|_| Ok(()));
+
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+
+    let TxPoolContext {
+        txpool,
+        status_sender: _,
+        txs: _,
+    } = MockTransactionPool::new_with_txs(vec![make_tx(&mut rng)]);
+
+    let signer = SignMode::Key(Secret::new(secret_key.into()));
+
+    let config = Config {
+        trigger: Trigger::Instant,
+        signer: signer.clone(),
+        metrics: false,
+        ..Default::default()
+    };
+
+    let p2p_port = generate_p2p_port();
+
+    let mut task = MainTask::new(
+        &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: false },
+    );
+
+    let _ = task.produce_next_block().await; // This panics for now
 }
 
 #[tokio::test]
@@ -414,7 +488,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_producer,
         block_importer,
         p2p_port,
-        FakeBlockSigner(signer),
+        FakeBlockSigner { succeeds: true },
     );
 
     // simulate some txpool event to see if any block production is erroneously triggered
