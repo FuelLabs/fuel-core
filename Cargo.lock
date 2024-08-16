@@ -2881,7 +2881,6 @@ name = "fuel-core-bin"
 version = "0.32.1"
 dependencies = [
  "anyhow",
- "async-trait",
  "clap 4.5.13",
  "const_format",
  "dirs 4.0.0",
@@ -2903,7 +2902,6 @@ dependencies = [
  "test-case",
  "tikv-jemallocator",
  "tokio",
- "tokio-util",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -3329,6 +3327,7 @@ version = "0.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "derive_more",
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",

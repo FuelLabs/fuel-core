@@ -14,7 +14,6 @@ use fuel_core::{
     service::{
         Config,
         FuelService,
-        ServiceTrait,
     },
 };
 use fuel_core_client::client::{
@@ -140,7 +139,7 @@ async fn relayer_can_download_logs() {
             msg
         );
     }
-    srv.stop_and_await().await.unwrap();
+    srv.send_stop_signal_and_await_shutdown().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
 }
 
@@ -258,7 +257,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     // there should be no messages after spending
     assert_eq!(query.results.len(), 0);
 
-    srv.stop_and_await().await.unwrap();
+    srv.send_stop_signal_and_await_shutdown().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
 }
 
@@ -353,7 +352,7 @@ async fn can_restart_node_with_relayer_data() {
             client.submit_and_await_commit(&tx).await.unwrap();
         }
 
-        service.stop_and_await().await.unwrap();
+        service.send_stop_signal_and_await_shutdown().await.unwrap();
     }
 
     {
@@ -367,7 +366,7 @@ async fn can_restart_node_with_relayer_data() {
 
         // Then
         client.health().await.unwrap();
-        service.stop_and_await().await.unwrap();
+        service.send_stop_signal_and_await_shutdown().await.unwrap();
     }
 }
 

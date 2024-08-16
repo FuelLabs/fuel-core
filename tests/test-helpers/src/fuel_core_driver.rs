@@ -1,8 +1,5 @@
 use clap::Parser;
-use fuel_core::service::{
-    FuelService,
-    ServiceTrait,
-};
+use fuel_core::service::FuelService;
 use fuel_core_client::client::FuelClient;
 use tempfile::{
     tempdir,
@@ -79,7 +76,7 @@ impl FuelCoreDriver {
     pub async fn kill(self) -> TempDir {
         println!("Stopping fuel service");
         self.node
-            .stop_and_await()
+            .send_stop_signal_and_await_shutdown()
             .await
             .expect("Failed to stop the node");
         self.db_dir

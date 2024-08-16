@@ -21,11 +21,14 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::ports::{
-    BlockImporter,
-    ConsensusParametersProvider as ConsensusParametersProviderTrait,
-    GasPriceProvider,
-    MemoryPool,
+use fuel_core_txpool::{
+    ports::{
+        BlockImporter,
+        ConsensusParametersProvider as ConsensusParametersProviderTrait,
+        GasPriceProvider,
+        MemoryPool,
+    },
+    Result as TxPoolResult,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -51,7 +54,6 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             TransactionGossipData,
         },
-        txpool::Result as TxPoolResult,
     },
 };
 use std::sync::Arc;

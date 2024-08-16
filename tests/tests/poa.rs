@@ -96,7 +96,6 @@ mod p2p {
             make_node,
             Bootstrap,
         },
-        service::ServiceTrait,
     };
     use fuel_core_poa::{
         service::Mode,
@@ -175,7 +174,7 @@ mod p2p {
         // Stop the first producer.
         tokio::time::timeout(
             Duration::from_secs(1),
-            first_producer.node.stop_and_await(),
+            first_producer.node.send_stop_signal_and_await_shutdown(),
         )
         .await
         .expect("Should stop services before timeout")
@@ -214,6 +213,9 @@ mod p2p {
         match &mut chain_config.consensus {
             ConsensusConfig::PoA { signing_key } => {
                 *signing_key = key;
+            }
+            ConsensusConfig::PoAV2(poa) => {
+                poa.set_genesis_signing_key(key);
             }
         }
         config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config)

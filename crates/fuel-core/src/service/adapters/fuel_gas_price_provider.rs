@@ -4,14 +4,12 @@ use fuel_core_gas_price_service::{
     SharedGasPriceAlgo,
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
-use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::txpool::{
-        Error as TxPoolError,
-        Result as TxPoolResult,
-    },
+use fuel_core_txpool::{
+    ports::GasPriceProvider as TxPoolGasPriceProvider,
+    Error as TxPoolError,
+    Result as TxPoolResult,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
