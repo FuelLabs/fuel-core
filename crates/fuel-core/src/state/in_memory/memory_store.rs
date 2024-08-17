@@ -177,7 +177,7 @@ where
         ))
     }
 
-    fn rollback_block_at(&self, _: &Description::Height) -> StorageResult<()> {
+    fn rollback_block_to(&self, _: &Description::Height) -> StorageResult<()> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
         Err(
             anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")

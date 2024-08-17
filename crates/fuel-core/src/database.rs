@@ -278,7 +278,7 @@ where
                 anyhow::anyhow!("Database doesn't have a height to rollback").into(),
             );
         };
-        self.inner_storage().data.rollback_block_at(&height)?;
+        self.inner_storage().data.rollback_block_to(&height)?;
         let new_height = height.rollback_height();
         *lock = new_height;
         tracing::info!(

@@ -575,7 +575,7 @@ mod tests {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
-        fn rollback_block_at(&self, _: &BlockHeight) -> StorageResult<()> {
+        fn rollback_block_to(&self, _: &BlockHeight) -> StorageResult<()> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }

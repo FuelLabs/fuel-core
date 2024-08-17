@@ -269,12 +269,12 @@ where
             .next()
             .ok_or(DatabaseError::ReachedEndOfHistory)??;
 
-        self.rollback_block_at(latest_height)?;
+        self.rollback_block_to(latest_height)?;
 
         Ok(latest_height)
     }
 
-    fn rollback_block_at(&self, height_to_rollback: u64) -> StorageResult<()> {
+    fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
         let mut storage_transaction = self.db.read_transaction();
 
         let last_changes = storage_transaction
@@ -456,8 +456,8 @@ where
         ))
     }
 
-    fn rollback_block_at(&self, height: &Description::Height) -> StorageResult<()> {
-        self.rollback_block_at(height.as_u64())
+    fn rollback_block_to(&self, height: &Description::Height) -> StorageResult<()> {
+        self.rollback_block_to(height.as_u64())
     }
 }
 
