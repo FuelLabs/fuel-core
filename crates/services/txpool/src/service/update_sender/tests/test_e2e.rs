@@ -66,6 +66,7 @@ fn test_update_sender_reg() {
 /// # Arguments
 ///
 /// * `ops` - A vector of `Op` enums that determine the operations to be performed on the UpdateSender.
+#[allow(clippy::assigning_clones)] // Test code, we don't care about performance.
 fn test_update_sender_inner(ops: Vec<Op>) {
     // Setup runtime
     thread_local! {
