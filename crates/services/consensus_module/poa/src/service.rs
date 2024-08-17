@@ -47,11 +47,16 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
-        block::Block, header::BlockHeader, SealedBlock
-    }, fuel_tx::{
+        block::Block,
+        header::BlockHeader,
+        SealedBlock,
+    },
+    fuel_tx::{
         Transaction,
         TxId,
-    }, fuel_types::BlockHeight, services::{
+    },
+    fuel_types::BlockHeight,
+    services::{
         block_importer::ImportResult,
         executor::{
             Error as ExecutorError,
@@ -59,7 +64,8 @@ use fuel_core_types::{
             UncommittedResult as UncommittedExecutionResult,
         },
         Uncommitted,
-    }, tai64::Tai64
+    },
+    tai64::Tai64,
 };
 use serde::Serialize;
 
@@ -142,6 +148,7 @@ where
     I: BlockImporter,
     PB: PredefinedBlocks,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
         config: Config,
@@ -612,6 +619,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn new_service<T, B, I, P, S, PB>(
     last_block: &BlockHeader,
     config: Config,

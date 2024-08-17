@@ -4,8 +4,8 @@
 use crate::{
     new_service,
     ports::{
-        BlockSigner,
         BlockProducer,
+        BlockSigner,
         InMemoryPredefinedBlocks,
         MockBlockImporter,
         MockBlockProducer,
@@ -19,8 +19,8 @@ use crate::{
     Service,
     Trigger,
 };
-use fuel_core_chain_config::default_consensus_dev_key;
 use async_trait::async_trait;
+use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
     stream::pending,
     Service as StorageTrait,
@@ -32,7 +32,6 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
-        header::BlockHeader,
         header::{
             BlockHeader,
             PartialBlockHeader,
@@ -460,6 +459,7 @@ async fn panics_if_signing_fails() {
         block_importer,
         p2p_port,
         FakeBlockSigner { succeeds: false },
+        InMemoryPredefinedBlocks::new(HashMap::new()),
     );
 
     let _ = task.produce_next_block().await; // This panics for now
@@ -601,6 +601,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         (3u32.into(), block_for_height(3)),
         (4u32.into(), block_for_height(4)),
     ];
+    let signer = SignMode::Key(test_signing_key());
     let blocks_map: HashMap<_, _> = blocks.clone().into_iter().collect();
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
     let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
@@ -608,7 +609,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         trigger: Trigger::Interval {
             block_time: Duration::from_millis(100),
         },
-        signing_key: Some(test_signing_key()),
+        signer,
         metrics: false,
         ..Default::default()
     };
@@ -627,6 +628,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         block_producer,
         block_importer,
         generate_p2p_port(),
+        FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(blocks_map),
     );
 
@@ -669,7 +671,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         trigger: Trigger::Interval {
             block_time: Duration::from_millis(100),
         },
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     };
@@ -688,6 +690,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         block_producer,
         block_importer,
         generate_p2p_port(),
+        FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
     );
 

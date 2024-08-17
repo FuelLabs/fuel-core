@@ -46,8 +46,8 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     V0Metadata,
 };
 use fuel_core_poa::{
-    signer::SignMode,
     ports::InMemoryPredefinedBlocks,
+    signer::SignMode,
     Trigger,
 };
 use fuel_core_services::{

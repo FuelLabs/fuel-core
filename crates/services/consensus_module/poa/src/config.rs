@@ -1,8 +1,4 @@
-use fuel_core_types::{
-    blockchain::primitives::SecretKeyWrapper,
-    fuel_types::ChainId,
-    secrecy::Secret,
-};
+use fuel_core_types::fuel_types::ChainId;
 use tokio::time::Duration;
 
 use crate::signer::SignMode;
