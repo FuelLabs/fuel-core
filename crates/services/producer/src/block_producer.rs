@@ -17,6 +17,7 @@ use fuel_core_storage::transactional::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::Block,
         header::{
             ApplicationHeader,
             ConsensusHeader,
@@ -24,7 +25,13 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx::Transaction,
+    fuel_tx::{
+        field::{
+            InputContract,
+            MintGasPrice,
+        },
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -88,6 +95,64 @@ pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusP
     pub consensus_parameters_provider: ConsensusProvider,
 }
 
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+where
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
+    ConsensusProvider: ConsensusParametersProvider,
+{
+    pub async fn produce_and_execute_predefined(
+        &self,
+        predefined_block: &Block,
+    ) -> anyhow::Result<UncommittedResult<Changes>>
+    where
+        Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
+    {
+        let _production_guard = self.lock.lock().await;
+
+        let mut transactions_source = predefined_block.transactions().to_vec();
+
+        let height = predefined_block.header().consensus().height;
+
+        let block_time = predefined_block.header().consensus().time;
+
+        let da_height = predefined_block.header().application().da_height;
+
+        let header_to_produce = self
+            .new_header_with_da_height(height, block_time, da_height)
+            .await?;
+
+        let maybe_mint_tx = transactions_source.pop();
+        let mint_tx =
+            maybe_mint_tx
+                .and_then(|tx| tx.as_mint().cloned())
+                .ok_or(anyhow!(
+                    "The last transaction in the block should be a mint transaction"
+                ))?;
+
+        let gas_price = *mint_tx.gas_price();
+        let coinbase_recipient = mint_tx.input_contract().contract_id;
+
+        let component = Components {
+            header_to_produce,
+            transactions_source,
+            coinbase_recipient,
+            gas_price,
+        };
+
+        let result = self
+            .executor
+            .produce_without_commit(component)
+            .map_err(Into::<anyhow::Error>::into)
+            .with_context(|| {
+                format!("Failed to produce block {height:?} due to execution failure")
+            })?;
+
+        debug!("Produced block with result: {:?}", result.result());
+        Ok(result)
+    }
+}
 impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
@@ -296,7 +361,17 @@ where
 
         Ok(block_header)
     }
-
+    /// Create the header for a new block at the provided height
+    async fn new_header_with_da_height(
+        &self,
+        height: BlockHeight,
+        block_time: Tai64,
+        da_height: DaBlockHeight,
+    ) -> anyhow::Result<PartialBlockHeader> {
+        let mut block_header = self._new_header(height, block_time)?;
+        block_header.application.da_height = da_height;
+        Ok(block_header)
+    }
     async fn select_new_da_height(
         &self,
         gas_limit: u64,

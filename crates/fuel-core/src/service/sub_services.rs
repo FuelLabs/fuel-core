@@ -47,6 +47,7 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
 };
 use fuel_core_poa::{
     signer::SignMode,
+    ports::InMemoryPredefinedBlocks,
     Trigger,
 };
 use fuel_core_services::{
@@ -59,7 +60,10 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 
 mod algorithm_updater;
@@ -69,6 +73,7 @@ pub type PoAService = fuel_core_poa::Service<
     BlockProducerAdapter,
     BlockImporterAdapter,
     SignMode,
+    InMemoryPredefinedBlocks,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
@@ -245,6 +250,7 @@ pub fn init_sub_services(
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
 
+    let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
@@ -254,6 +260,7 @@ pub fn init_sub_services(
             importer_adapter.clone(),
             p2p_adapter.clone(),
             FuelBlockSigner::new(config.consensus_signer.clone()),
+            predefined_blocks,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
