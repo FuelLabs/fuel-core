@@ -30,7 +30,9 @@ fuel-core-txpool = { path = "../../crates/services/txpool", features = [
   "test-helpers",
 ] }
 fuel-core-types = { path = "../../crates/types", features = ["test-helpers"] }
+futures = { workspace = true }
 itertools = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
+tokio = { workspace = true }
 tempfile = { workspace = true }

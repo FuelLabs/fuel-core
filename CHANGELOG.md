@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added support for predefined blocks provided via the filesystem.
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added `--predefined-blocks-path` CLI argument to pass the path to the predefined blocks.
 - [2081](https://github.com/FuelLabs/fuel-core/pull/2081): Enable producer to include predefined blocks.
 - [2079](https://github.com/FuelLabs/fuel-core/pull/2079): Open unknown columns in the RocksDB for forward compatibility.
 
@@ -18,6 +20,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2082](https://github.com/FuelLabs/fuel-core/pull/2088): Move `TxPoolError` from `fuel-core-types` to `fuel-core-txpool`.
 - [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Added support for PoA key rotation.
 - [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chan config.
+
+### Fixed
+
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Fixed bug in rollback logic because of wrong ordering of modifications.
 
 ## [Version 0.32.1]
 
