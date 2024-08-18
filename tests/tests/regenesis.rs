@@ -16,7 +16,6 @@ use fuel_core_client::client::{
         message::MessageStatus,
         TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_types::{
     blockchain::header::LATEST_STATE_TRANSITION_VERSION,
@@ -45,33 +44,10 @@ use tempfile::{
     tempdir,
     TempDir,
 };
-use test_helpers::fuel_core_driver::FuelCoreDriver;
-
-async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
-    let secret = SecretKey::random(rng);
-    let contract_tx = TransactionBuilder::script(vec![], vec![])
-        .add_unsigned_coin_input(
-            secret,
-            rng.gen(),
-            1234,
-            Default::default(),
-            Default::default(),
-        )
-        .add_output(Output::change(
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        ))
-        .finalize_as_transaction();
-    let status = client
-        .submit_and_await_commit(&contract_tx)
-        .await
-        .expect("Failed to send tx");
-    assert!(
-        matches!(status, TransactionStatus::Success { .. }),
-        "{status:?}"
-    );
-}
+use test_helpers::{
+    fuel_core_driver::FuelCoreDriver,
+    produce_block_with_tx,
+};
 
 async fn take_snapshot(db_dir: &TempDir, snapshot_dir: &TempDir) -> anyhow::Result<()> {
     snapshot::exec(snapshot::Command::parse_from([

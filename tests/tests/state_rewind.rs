@@ -198,7 +198,11 @@ async fn rollback_existing_chain_to_target_height_and_verify(
     assert_eq!(remaining_transactions.len(), expected_transactions.len());
     pretty_assertions::assert_eq!(remaining_transactions, expected_transactions);
 
-    let latest_height = node.shared.database.on_chain().latest_height();
+    let latest_height = node
+        .shared
+        .database
+        .on_chain()
+        .latest_height_from_metadata();
     assert_eq!(Ok(Some(BlockHeight::new(target_height))), latest_height);
 
     Ok(())
@@ -230,6 +234,17 @@ async fn rollback_chain_to_middle() -> anyhow::Result<()> {
 async fn rollback_chain_to_same_height() -> anyhow::Result<()> {
     let target_rollback_block_height = 100;
     let blocks_in_the_chain = 100;
+    rollback_existing_chain_to_target_height_and_verify(
+        target_rollback_block_height,
+        blocks_in_the_chain,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rollback_chain_to_same_height_1000() -> anyhow::Result<()> {
+    let target_rollback_block_height = 800;
+    let blocks_in_the_chain = 1000;
     rollback_existing_chain_to_target_height_and_verify(
         target_rollback_block_height,
         blocks_in_the_chain,

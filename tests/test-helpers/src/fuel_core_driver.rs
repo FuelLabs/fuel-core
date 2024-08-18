@@ -1,6 +1,9 @@
 use clap::Parser;
 use fuel_core::service::FuelService;
 use fuel_core_client::client::FuelClient;
+use fuel_core_poa::ports::BlockImporter;
+use fuel_core_types::fuel_types::BlockHeight;
+use std::time::Duration;
 use tempfile::{
     tempdir,
     TempDir,
@@ -80,5 +83,44 @@ impl FuelCoreDriver {
             .await
             .expect("Failed to stop the node");
         self.db_dir
+    }
+
+    /// Wait for the node to reach the block height.
+    pub async fn wait_for_block_height(&self, block_height: &BlockHeight) {
+        use futures::stream::StreamExt;
+        let mut blocks = self.node.shared.block_importer.block_stream();
+        loop {
+            let last_height = self
+                .node
+                .shared
+                .database
+                .on_chain()
+                .latest_height_from_metadata()
+                .unwrap()
+                .unwrap();
+
+            if last_height >= *block_height {
+                break;
+            }
+
+            tokio::select! {
+                result = blocks.next() => {
+                    result.unwrap();
+                }
+                _ = self.node.await_shutdown() => {
+                    panic!("Got a stop signal")
+                }
+            }
+        }
+    }
+
+    /// Wait for the node to reach the block height 10 seconds.
+    pub async fn wait_for_block_height_10s(&self, block_height: &BlockHeight) {
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            self.wait_for_block_height(block_height),
+        )
+        .await
+        .expect("Timeout waiting for block height");
     }
 }

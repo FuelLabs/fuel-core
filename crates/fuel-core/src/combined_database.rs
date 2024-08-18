@@ -243,17 +243,18 @@ impl CombinedDatabase {
         while !shutdown_listener.is_cancelled() {
             let on_chain_height = self
                 .on_chain()
-                .latest_height()?
+                .latest_height_from_metadata()?
                 .ok_or(anyhow::anyhow!("on-chain database doesn't have height"))?;
 
             let off_chain_height = self
                 .off_chain()
-                .latest_height()?
+                .latest_height_from_metadata()?
                 .ok_or(anyhow::anyhow!("off-chain database doesn't have height"))?;
 
-            let gas_price_chain_height = self.off_chain().latest_height()?.ok_or(
-                anyhow::anyhow!("gas-price-chain database doesn't have height"),
-            )?;
+            let gas_price_chain_height =
+                self.gas_price().latest_height_from_metadata()?.ok_or(
+                    anyhow::anyhow!("gas-price-chain database doesn't have height"),
+                )?;
 
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
@@ -264,44 +265,35 @@ impl CombinedDatabase {
 
             if on_chain_height < target_block_height {
                 return Err(anyhow::anyhow!(
-                    "on-chain database height is less than target height"
+                    "on-chain database height({on_chain_height}) \
+                    is less than target height({target_block_height})"
                 ));
             }
 
             if off_chain_height < target_block_height {
                 return Err(anyhow::anyhow!(
-                    "off-chain database height is less than target height"
+                    "off-chain database height({off_chain_height}) \
+                    is less than target height({target_block_height})"
                 ));
             }
 
             if gas_price_chain_height < target_block_height {
                 return Err(anyhow::anyhow!(
-                    "gas-price-chain database height is less than target height"
+                    "gas-price-chain database height({gas_price_chain_height}) \
+                    is less than target height({target_block_height})"
                 ));
             }
 
             if on_chain_height > target_block_height {
                 self.on_chain().rollback_last_block()?;
-                tracing::info!(
-                    "Rolled back on-chain database to height {:?}",
-                    on_chain_height.pred()
-                );
             }
 
             if off_chain_height > target_block_height {
                 self.off_chain().rollback_last_block()?;
-                tracing::info!(
-                    "Rolled back off-chain database to height {:?}",
-                    on_chain_height.pred()
-                );
             }
 
             if gas_price_chain_height > target_block_height {
                 self.gas_price().rollback_last_block()?;
-                tracing::info!(
-                    "Rolled back gas-price-chain database to height {:?}",
-                    gas_price_chain_height.pred()
-                );
             }
         }
 

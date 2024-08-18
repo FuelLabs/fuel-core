@@ -1,4 +1,7 @@
-use std::time::Duration;
+use std::{
+    path::PathBuf,
+    time::Duration,
+};
 
 use clap::ValueEnum;
 use strum_macros::{
@@ -51,6 +54,7 @@ pub struct Config {
     pub utxo_validation: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
     pub block_production: Trigger,
+    pub predefined_blocks_path: Option<PathBuf>,
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
@@ -147,6 +151,7 @@ impl Config {
             native_executor_version: Some(native_executor_version),
             snapshot_reader,
             block_production: Trigger::Instant,
+            predefined_blocks_path: None,
             vm: Default::default(),
             txpool: fuel_core_txpool::Config {
                 utxo_validation,
