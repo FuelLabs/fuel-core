@@ -96,6 +96,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 }
 
 #[tokio::test]
+#[cfg(feature = "aws-kms")]
 async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
     // This test is only enabled if the environment variable is set
     let Some(kms_arn) = option_env!("FUEL_CORE_TEST_AWS_KMS_ARN") else {
