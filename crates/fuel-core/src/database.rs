@@ -133,9 +133,7 @@ impl OnChainIterableKeyValueView {
     }
 
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
-        Ok(self
-            .maybe_latest_height()?
-            .ok_or(not_found!("BlockHeight"))?)
+        self.maybe_latest_height()?.ok_or(not_found!("BlockHeight"))
     }
 
     pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
