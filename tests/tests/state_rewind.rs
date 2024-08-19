@@ -287,7 +287,7 @@ async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Res
     let result = fuel_core_bin::cli::rollback::exec(command).await;
 
     // Then
-    let _ = result.expect("Rollback should succeed");
+    result.expect("Rollback should succeed");
 
     Ok(())
 }
