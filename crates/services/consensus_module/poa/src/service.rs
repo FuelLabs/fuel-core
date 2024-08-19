@@ -11,15 +11,14 @@ use tokio::{
         mpsc,
         oneshot,
     },
-    time::Instant,
+    time::{
+        sleep_until,
+        Instant,
+    },
 };
 use tokio_stream::StreamExt;
 
 use crate::{
-    deadline_clock::{
-        DeadlineClock,
-        OnConflict,
-    },
     ports::{
         BlockImporter,
         BlockProducer,
@@ -37,7 +36,10 @@ use crate::{
     Trigger,
 };
 use fuel_core_services::{
-    stream::BoxStream,
+    stream::{
+        BoxFuture,
+        BoxStream,
+    },
     RunnableService,
     RunnableTask,
     Service as OtherService,
@@ -137,8 +139,7 @@ pub struct MainTask<T, B, I, S, PB> {
     last_block_created: Instant,
     predefined_blocks: PB,
     trigger: Trigger,
-    /// Deadline clock, used by the triggers
-    timer: DeadlineClock,
+    next_production_deadline: Option<Instant>,
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
@@ -197,7 +198,7 @@ where
             last_block_created,
             predefined_blocks,
             trigger,
-            timer: DeadlineClock::new(),
+            next_production_deadline: None,
             sync_task_handle,
         }
     }
@@ -378,13 +379,11 @@ where
             (Trigger::Instant, _) => {}
             (Trigger::Interval { block_time }, RequestType::Trigger) => {
                 let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
-                self.timer.set_deadline(deadline, OnConflict::Min).await;
+                self.next_production_deadline = Some(deadline);
             }
             (Trigger::Interval { block_time }, RequestType::Manual) => {
                 let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
-                self.timer
-                    .set_deadline(deadline, OnConflict::Overwrite)
-                    .await;
+                self.next_production_deadline = Some(deadline);
             }
         }
 
@@ -464,7 +463,7 @@ where
         }
     }
 
-    async fn on_timer(&mut self, _at: Instant) -> anyhow::Result<()> {
+    async fn on_timer(&mut self) -> anyhow::Result<()> {
         match self.trigger {
             Trigger::Instant | Trigger::Never => {
                 unreachable!("Timer is never set in this mode");
@@ -515,16 +514,15 @@ where
     ) -> anyhow::Result<Self::Task> {
         self.sync_task_handle.start_and_await().await?;
 
-        match self.trigger {
-            Trigger::Never | Trigger::Instant => {}
-            Trigger::Interval { block_time } => {
-                self.timer
-                    .set_timeout(block_time, OnConflict::Overwrite)
-                    .await;
-            }
+        let next_production_deadline = match self.trigger {
+            Trigger::Never | Trigger::Instant => None,
+            Trigger::Interval { block_time } => Instant::now().checked_add(block_time),
         };
-
-        Ok(self)
+        let task = Self {
+            next_production_deadline,
+            ..self
+        };
+        Ok(task)
     }
 }
 
@@ -554,9 +552,6 @@ where
                 _ = self.tx_status_update_stream.next() => {
                     // ignore txpool events while syncing
                 }
-                _ = self.timer.wait() => {
-                    // ignore timer events while syncing
-                }
             }
         }
 
@@ -571,6 +566,14 @@ where
             should_continue = true;
             return Ok(should_continue)
         }
+        let block_production_deadline: BoxFuture<()> =
+            if let Some(next_production_deadline) = self.next_production_deadline {
+                Box::pin(sleep_until(next_production_deadline))
+            } else {
+                let future = core::future::pending();
+                Box::pin(future)
+            };
+
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
@@ -604,8 +607,8 @@ where
                     should_continue = false;
                 }
             }
-            at = self.timer.wait() => {
-                self.on_timer(at).await.context("While processing timer event")?;
+            _ = block_production_deadline => {
+                self.on_timer().await.context("While processing timer event")?;
                 should_continue = true;
             }
         }
