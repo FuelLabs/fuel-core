@@ -9,7 +9,10 @@ use crate::{
             deserialize,
             height_key,
         },
-        rocks_db::RocksDb,
+        rocks_db::{
+            KeyAndValue,
+            RocksDb,
+        },
     },
 };
 use fuel_core_storage::{
@@ -50,7 +53,7 @@ where
         let height_key = height_key(key, &self.height);
         let options = ReadOptions::default();
         let nearest_modification = read_history
-            ._iter_all(
+            .iterator::<KeyAndValue>(
                 Column::HistoricalDuplicateColumn(column),
                 options,
                 IteratorMode::From(&height_key, rocksdb::Direction::Forward),
