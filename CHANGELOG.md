@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
+
 ## [Version 0.33.0]
 
 ### Added
@@ -31,7 +34,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2061](https://github.com/FuelLabs/fuel-core/pull/2061): Allow querying filled transaction body from the status.
-- [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
 
 ### Changed
 - [2067](https://github.com/FuelLabs/fuel-core/pull/2067): Return error from TxPool level if the `BlobId` is known.
