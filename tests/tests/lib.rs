@@ -6,11 +6,6 @@ mod blob;
 mod blocks;
 mod chain;
 mod coin;
-
-#[cfg(feature = "p2p")]
-#[cfg(feature = "p2p")]
-#[cfg(feature = "relayer")]
-fuel_core_trace::enable_tracing!();
 mod coins;
 mod contract;
 mod dap;
@@ -27,11 +22,16 @@ mod node_info;
 mod poa;
 mod recovery;
 mod regenesis;
+#[cfg(feature = "relayer")]
 mod relayer;
 mod snapshot;
 mod state_rewind;
+#[cfg(feature = "p2p")]
 mod sync;
 mod trigger_integration;
 mod tx;
+#[cfg(feature = "p2p")]
 mod tx_gossip;
 mod vm_storage;
+
+fuel_core_trace::enable_tracing!();
