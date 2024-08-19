@@ -32,6 +32,7 @@ pub enum SignMode {
     /// Sign using a secret key
     Key(Secret<SecretKeyWrapper>),
     /// Sign using AWS KMS
+    #[cfg(feature = "aws-kms")]
     Kms {
         key_id: String,
         client: aws_sdk_kms::Client,
@@ -55,6 +56,7 @@ impl SignMode {
                 let signing_key = key.expose_secret().deref();
                 Signature::sign(signing_key, &message)
             }
+            #[cfg(feature = "aws-kms")]
             SignMode::Kms { key_id, client } => {
                 sign_with_kms(client, key_id, message).await?
             }
@@ -63,6 +65,7 @@ impl SignMode {
     }
 }
 
+#[cfg(feature = "aws-kms")]
 async fn sign_with_kms(
     client: &aws_sdk_kms::Client,
     key_id: &str,
