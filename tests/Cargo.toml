@@ -48,7 +48,7 @@ fuel-core-txpool = { path = "../crates/services/txpool", features = [
 ] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor" }
-futures = "0.3"
+futures = { workspace = true }
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }

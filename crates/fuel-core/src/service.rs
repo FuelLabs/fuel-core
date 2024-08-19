@@ -218,7 +218,7 @@ impl FuelService {
     {
         let start_up_consensus_config = &config.snapshot_reader.chain_config().consensus;
 
-        let mut rollback_height = None;
+        let mut found_override_height = None;
         match start_up_consensus_config {
             ConsensusConfig::PoA { .. } => {
                 // We don't support overriding of the heights for PoA version 1.
@@ -247,7 +247,7 @@ impl FuelService {
                         );
 
                         if !block_valid {
-                            rollback_height = override_height.pred();
+                            found_override_height = Some(override_height);
                         }
                     } else {
                         return Err(anyhow::anyhow!(
@@ -258,9 +258,13 @@ impl FuelService {
             }
         }
 
-        if let Some(rollback_height) = rollback_height {
+        if let Some(override_height) = found_override_height {
+            let rollback_height = override_height.pred().ok_or(anyhow::anyhow!(
+                "The override height is zero. \
+                The override height should be greater than zero."
+            ))?;
             tracing::warn!(
-                "The consensus at override height {rollback_height} \
+                "The consensus at override height {override_height} \
                 does not match with the database. \
                 Rollbacking the database to the height {rollback_height}"
             );

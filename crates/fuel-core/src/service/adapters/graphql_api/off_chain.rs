@@ -177,7 +177,7 @@ impl worker::OffChainDatabase for Database<OffChain> {
     type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
 
     fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
-        self.latest_height()
+        Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
     }
 
     fn transaction(&mut self) -> Self::Transaction<'_> {

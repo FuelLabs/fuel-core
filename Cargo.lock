@@ -3125,7 +3125,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3215,11 +3215,11 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.32.1"
+version = "0.33.0"
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3253,7 +3253,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "bech32",
@@ -3279,7 +3279,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "cynic",
@@ -3302,7 +3302,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "clap 4.5.13",
  "fuel-core-client",
@@ -3313,7 +3313,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -3325,7 +3325,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3336,7 +3336,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3362,7 +3362,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -3376,7 +3376,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-gas-price-service"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3398,7 +3398,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3416,7 +3416,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "clap 4.5.13",
@@ -3427,7 +3427,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen-bin"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "atty",
@@ -3440,7 +3440,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "parking_lot",
  "pin-project-lite",
@@ -3452,7 +3452,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3489,7 +3489,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3512,7 +3512,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3531,7 +3531,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3563,7 +3563,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3577,7 +3577,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3601,7 +3601,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3665,7 +3665,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "ctor",
  "tracing",
@@ -3675,7 +3675,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3701,7 +3701,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "bs58",
@@ -3718,7 +3718,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-upgradable-executor"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3735,7 +3735,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-wasm-executor"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "anyhow",
  "fuel-core-executor",
@@ -3781,7 +3781,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gas-price-algorithm"
-version = "0.32.1"
+version = "0.33.0"
 dependencies = [
  "proptest",
  "serde",
@@ -8580,10 +8580,12 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
+ "futures",
  "itertools 0.12.1",
  "rand",
  "reqwest",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

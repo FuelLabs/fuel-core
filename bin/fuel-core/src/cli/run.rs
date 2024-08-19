@@ -193,6 +193,10 @@ pub struct Command {
     #[clap(flatten)]
     pub poa_trigger: PoATriggerArgs,
 
+    /// The path to the directory containing JSON encoded predefined blocks.
+    #[arg(long = "predefined-blocks-path", env)]
+    pub predefined_blocks_path: Option<PathBuf>,
+
     /// The block's fee recipient public key.
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
@@ -267,6 +271,7 @@ impl Command {
             consensus_key,
             consensus_aws_kms,
             poa_trigger,
+            predefined_blocks_path,
             coinbase_recipient,
             #[cfg(feature = "relayer")]
             relayer_args,
@@ -426,6 +431,7 @@ impl Command {
             continue_on_error,
             utxo_validation,
             block_production: trigger,
+            predefined_blocks_path,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
