@@ -326,7 +326,16 @@ where
             (Trigger::Instant, _) => {}
             (Trigger::Interval { block_time }, RequestType::Trigger) => {
                 let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
-                self.next_production_deadline = Some(deadline);
+                if let Some(next_production_deadline) = &mut self.next_production_deadline
+                {
+                    if deadline < *next_production_deadline
+                        || *next_production_deadline <= last_block_created
+                    {
+                        *next_production_deadline = deadline;
+                    }
+                } else {
+                    self.next_production_deadline = Some(deadline);
+                }
             }
             (Trigger::Interval { block_time }, RequestType::Manual) => {
                 let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
