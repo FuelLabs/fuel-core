@@ -33,7 +33,7 @@ fn _worst_case__correctly_calculates_value(
     };
 
     // when
-    let target_height = starting_height + block_horizon;
+    let target_height = starting_height.saturating_add(block_horizon);
     let actual = algorithm.worst_case(target_height);
 
     // then
