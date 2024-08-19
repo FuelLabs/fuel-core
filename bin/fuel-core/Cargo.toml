@@ -56,7 +56,7 @@ tempfile = { workspace = true }
 test-case = { workspace = true }
 
 [features]
-default = ["env", "relayer", "rocksdb", "aws-kms"]
+default = ["env", "relayer", "rocksdb"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-poa/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
