@@ -5,7 +5,6 @@ use fuel_core::{
         database_description::on_chain::OnChain,
         Database,
     },
-    schema::scalars,
     service::Config,
 };
 use fuel_core_bin::FuelService;
@@ -31,7 +30,7 @@ use fuel_core_types::{
 use tokio::io;
 
 struct TestContext {
-    node: FuelService,
+    _node: FuelService,
     client: FuelClient,
 }
 impl TestContext {
@@ -47,7 +46,10 @@ impl TestContext {
             .unwrap();
         let client = FuelClient::from(node.bound_address);
 
-        Self { node, client }
+        Self {
+            _node: node,
+            client,
+        }
     }
 
     async fn new_blob(
@@ -70,22 +72,6 @@ impl TestContext {
             .submit_and_await_commit(tx.transaction())
             .await?;
         Ok((status, blob_id))
-    }
-
-    async fn query_blob(&self, blob_id: BlobId) -> String {
-        let blob_id: scalars::BlobId = blob_id.into();
-        let query = r#"
-                        query {
-                            blob(id: "BLOB_ID" ) {
-                                id,
-                                bytecode
-                            }
-                        }
-                    "#
-        .replace("BLOB_ID", &blob_id.to_string());
-
-        let url = format!("http://{}/v1/graphql", self.node.bound_address);
-        test_helpers::send_graph_ql_query(&url, &query).await
     }
 }
 
@@ -178,9 +164,14 @@ async fn blob__can_be_queried_if_uploaded() {
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // When
-    let result = ctx.query_blob(blob_id).await;
+    let queried_blob = ctx
+        .client
+        .blob(blob_id)
+        .await
+        .expect("blob query failed")
+        .expect("no block returned");
 
     // Then
-    assert!(result.contains(&format!(r#""id":"0x{}"#, blob_id)));
-    assert!(result.contains(&format!(r#""bytecode":"0x{}""#, hex::encode(bytecode))));
+    assert_eq!(queried_blob.id, blob_id);
+    assert_eq!(queried_blob.bytecode, bytecode);
 }
