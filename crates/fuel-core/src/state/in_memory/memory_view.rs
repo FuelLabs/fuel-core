@@ -50,13 +50,13 @@ where
             .map(Ok)
     }
 
-    pub fn iter_all_keys<'a>(
-        &'a self,
+    pub fn iter_all_keys(
+        &self,
         column: Description::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = KeyItem> + 'a {
+    ) -> impl Iterator<Item = KeyItem> + '_ {
         let btree = &self.inner[column.as_usize()];
 
         keys_iterator(btree, prefix, start, direction)
