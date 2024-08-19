@@ -316,6 +316,23 @@ where
         request_type: RequestType,
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
+
+        // Set timer for the next block
+        match (self.trigger, request_type) {
+            (Trigger::Never, RequestType::Manual) => (),
+            (Trigger::Never, RequestType::Trigger) => {
+                unreachable!("Trigger production will never produce blocks in never mode")
+            }
+            (Trigger::Instant, _) => {}
+            (Trigger::Interval { block_time }, RequestType::Trigger) => {
+                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
+                self.next_production_deadline = Some(deadline);
+            }
+            (Trigger::Interval { block_time }, RequestType::Manual) => {
+                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
+                self.next_production_deadline = Some(deadline);
+            }
+        }
         // verify signing key is set
         if !self.signer.is_available() {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
@@ -369,23 +386,6 @@ where
         self.last_height = height;
         self.last_timestamp = block_time;
         self.last_block_created = last_block_created;
-
-        // Set timer for the next block
-        match (self.trigger, request_type) {
-            (Trigger::Never, RequestType::Manual) => (),
-            (Trigger::Never, RequestType::Trigger) => {
-                unreachable!("Trigger production will never produce blocks in never mode")
-            }
-            (Trigger::Instant, _) => {}
-            (Trigger::Interval { block_time }, RequestType::Trigger) => {
-                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
-                self.next_production_deadline = Some(deadline);
-            }
-            (Trigger::Interval { block_time }, RequestType::Manual) => {
-                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
-                self.next_production_deadline = Some(deadline);
-            }
-        }
 
         Ok(())
     }
