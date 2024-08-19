@@ -173,14 +173,14 @@ async fn blob__accessing_nonexitent_blob_panics_vm() {
 async fn blob__can_be_queried_if_uploaded() {
     // Given
     let mut ctx = TestContext::new().await;
-
-    // When
     let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
     let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
-    // Then
+    // When
     let result = ctx.query_blob(blob_id).await;
+    
+    // Then
     assert!(result.contains(&format!(r#""id":"0x{}"#, blob_id)));
     assert!(result.contains(&format!(r#""bytecode":"0x{}""#, hex::encode(bytecode))));
 }
