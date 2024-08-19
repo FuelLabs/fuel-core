@@ -20,7 +20,7 @@ path = "tests/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-config = { version = "1.1.7", features = [
-  "behavior-version-latest"
+  "behavior-version-latest",
 ], optional = true }
 aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true }
