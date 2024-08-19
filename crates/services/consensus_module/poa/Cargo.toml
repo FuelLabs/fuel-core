@@ -12,7 +12,7 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-sdk-kms = "1.37.0"
+aws-sdk-kms = { version = "1.37.0", optional = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
@@ -35,6 +35,7 @@ test-case = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 
 [features]
+aws-kms = ["dep:aws-sdk-kms"]
 test-helpers = [
   "fuel-core-storage/test-helpers",
   "fuel-core-types/test-helpers",
