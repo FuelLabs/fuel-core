@@ -1,5 +1,6 @@
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
+    fuel_types::ChainId,
     secrecy::Secret,
 };
 use tokio::time::Duration;
@@ -11,6 +12,7 @@ pub struct Config {
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
     pub time_until_synced: Duration,
+    pub chain_id: ChainId,
 }
 
 #[cfg(feature = "test-helpers")]
@@ -22,6 +24,7 @@ impl Default for Config {
             metrics: false,
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            chain_id: ChainId::default(),
         }
     }
 }

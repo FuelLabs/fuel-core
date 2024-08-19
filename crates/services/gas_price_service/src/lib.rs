@@ -10,6 +10,7 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use futures::FutureExt;
 use std::sync::Arc;
 
 use tokio::sync::RwLock;
@@ -169,7 +170,12 @@ where
         Ok(should_continue)
     }
 
-    async fn shutdown(self) -> anyhow::Result<()> {
+    async fn shutdown(mut self) -> anyhow::Result<()> {
+        while let Some(new_algo) = self.update_algorithm.next().now_or_never() {
+            let new_algo = new_algo?;
+            tracing::debug!("Updating gas price algorithm");
+            self.update(new_algo).await;
+        }
         Ok(())
     }
 }

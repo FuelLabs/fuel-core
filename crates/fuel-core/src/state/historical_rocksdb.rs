@@ -165,6 +165,7 @@ where
         // we need to apply all modifications up to `X + 1`.
         let rollback_height = height.as_u64().saturating_add(1);
 
+        // TODO: May fail incorrectly because of https://github.com/FuelLabs/fuel-core/issues/2095
         let Some(oldest_height) = self.oldest_changes_height()? else {
             return Err(DatabaseError::NoHistoryIsAvailable.into());
         };
@@ -256,7 +257,10 @@ where
         Ok(oldest_height)
     }
 
-    fn rollback_last_block(&self) -> StorageResult<()> {
+    #[cfg(test)]
+    // TODO: This method doesn't work properly because of
+    //  https://github.com/FuelLabs/fuel-core/issues/2095
+    fn rollback_last_block(&self) -> StorageResult<u64> {
         let latest_height = self
             .db
             .iter_all_keys::<ModificationsHistory<Description>>(Some(
@@ -265,15 +269,21 @@ where
             .next()
             .ok_or(DatabaseError::ReachedEndOfHistory)??;
 
+        self.rollback_block_to(latest_height)?;
+
+        Ok(latest_height)
+    }
+
+    fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
         let mut storage_transaction = self.db.read_transaction();
 
         let last_changes = storage_transaction
             .storage_as_mut::<ModificationsHistory<Description>>()
-            .take(&latest_height)?
+            .take(&height_to_rollback)?
             .ok_or(not_found!(ModificationsHistory<Description>))?;
 
         remove_historical_modifications(
-            &latest_height,
+            &height_to_rollback,
             &mut storage_transaction,
             &last_changes,
         )?;
@@ -446,8 +456,8 @@ where
         ))
     }
 
-    fn rollback_last_block(&self) -> StorageResult<()> {
-        self.rollback_last_block()
+    fn rollback_block_to(&self, height: &Description::Height) -> StorageResult<()> {
+        self.rollback_block_to(height.as_u64())
     }
 }
 
@@ -711,7 +721,7 @@ mod tests {
         let result = historical_rocks_db.rollback_last_block();
 
         // Then
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Ok(1));
         let entries = historical_rocks_db
             .db
             .iter_all::<ModificationsHistory<OnChain>>(None)
@@ -750,13 +760,13 @@ mod tests {
 
     #[test]
     fn state_rewind_policy__rewind_range_10__rollbacks_work() {
-        const ITERATIONS: usize = 10;
+        const ITERATIONS: usize = 100;
 
         let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
         let historical_rocks_db = HistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindRange {
-                size: NonZeroU64::new(10).unwrap(),
+                size: NonZeroU64::new(ITERATIONS as u64).unwrap(),
             },
         )
         .unwrap();
@@ -791,7 +801,7 @@ mod tests {
             let result = historical_rocks_db.rollback_last_block();
 
             // Then
-            assert_eq!(result, Ok(()));
+            assert_eq!(result, Ok(height as u64));
             let entries = historical_rocks_db
                 .db
                 .iter_all::<ModificationsHistory<OnChain>>(None)
