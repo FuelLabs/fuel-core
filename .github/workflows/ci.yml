@@ -180,8 +180,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-   publish-crates-check:
+  publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - name: Checkout repository
