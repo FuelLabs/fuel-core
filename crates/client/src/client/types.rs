@@ -5,6 +5,7 @@ pub mod chain_info;
 pub mod coins;
 pub mod contract;
 pub mod gas_costs;
+pub mod upgrades;
 
 pub mod gas_price;
 pub mod merkle_proof;

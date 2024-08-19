@@ -977,6 +977,9 @@ type Query {
 		"""
 		id: RelayedTransactionId!
 	): RelayedTransactionStatus
+	consensusParameters(version: Int!): ConsensusParameters!
+	stateTransitionBytecodeByVersion(version: Int!): StateTransitionBytecode
+	stateTransitionBytecodeByRoot(root: HexString!): StateTransitionBytecode!
 }
 
 type Receipt {
@@ -1092,6 +1095,11 @@ input SpendQueryElementInput {
 
 type SqueezedOutStatus {
 	reason: String!
+}
+
+type StateTransitionBytecode {
+	root: HexString!
+	bytecode: UploadedBytecode!
 }
 
 type StateTransitionPurpose {
@@ -1241,6 +1249,12 @@ scalar U32
 scalar U64
 
 union UpgradePurpose = ConsensusParametersPurpose | StateTransitionPurpose
+
+type UploadedBytecode {
+	bytecode: HexString!
+	uploadedSubsectionsNumber: Int!
+	completed: Boolean!
+}
 
 scalar UtxoId
 
