@@ -3,7 +3,6 @@ use anyhow::{
     Context,
 };
 use std::{
-    ops::Deref,
     sync::Arc,
     time::Duration,
 };
@@ -24,6 +23,7 @@ use crate::{
     ports::{
         BlockImporter,
         BlockProducer,
+        BlockSigner,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
@@ -40,7 +40,7 @@ use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
     RunnableTask,
-    Service as _,
+    Service as OtherService,
     ServiceRunner,
     StateWatcher,
 };
@@ -48,24 +48,14 @@ use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{
-            poa::PoAConsensus,
-            Consensus,
-        },
         header::BlockHeader,
-        primitives::SecretKeyWrapper,
         SealedBlock,
     },
-    fuel_crypto::Signature,
     fuel_tx::{
         Transaction,
         TxId,
     },
     fuel_types::BlockHeight,
-    secrecy::{
-        ExposeSecret,
-        Secret,
-    },
     services::{
         block_importer::ImportResult,
         executor::{
@@ -79,7 +69,8 @@ use fuel_core_types::{
 };
 use serde::Serialize;
 
-pub type Service<T, B, I, PB> = ServiceRunner<MainTask<T, B, I, PB>>;
+pub type Service<T, B, I, S, PB> = ServiceRunner<MainTask<T, B, I, S, PB>>;
+
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -133,8 +124,8 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<T, B, I, PB> {
-    signing_key: Option<Secret<SecretKeyWrapper>>,
+pub struct MainTask<T, B, I, S, PB> {
+    signer: S,
     block_producer: B,
     block_importer: I,
     txpool: T,
@@ -151,12 +142,13 @@ pub struct MainTask<T, B, I, PB> {
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I, PB> MainTask<T, B, I, PB>
+impl<T, B, I, S, PB> MainTask<T, B, I, S, PB>
 where
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
         config: Config,
@@ -164,6 +156,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
+        signer: S,
         predefined_blocks: PB,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
@@ -175,7 +168,6 @@ where
         let peer_connections_stream = p2p_port.reserved_peers_count();
 
         let Config {
-            signing_key,
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
@@ -193,7 +185,7 @@ where
         let sync_task_handle = ServiceRunner::new(sync_task);
 
         Self {
-            signing_key,
+            signer,
             txpool,
             block_producer,
             block_importer,
@@ -250,11 +242,12 @@ where
     }
 }
 
-impl<T, B, I, PB> MainTask<T, B, I, PB>
+impl<T, B, I, S, PB> MainTask<T, B, I, S, PB>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    S: BlockSigner,
     PB: PredefinedBlocks,
 {
     // Request the block producer to make a new block, and return it when ready
@@ -323,7 +316,7 @@ where
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
-        if self.signing_key.is_none() {
+        if !self.signer.is_available() {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
         }
 
@@ -357,7 +350,8 @@ where
         self.txpool.remove_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
-        let seal = seal_block(&self.signing_key, &block)?;
+        let seal = self.signer.seal_block(&block).await
+        .expect("Failed to seal block. Panicking for now, TODO: https://github.com/FuelLabs/fuel-core/issues/1917");
         let block = SealedBlock {
             entity: block,
             consensus: seal,
@@ -403,9 +397,8 @@ where
     ) -> anyhow::Result<()> {
         tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
-        // verify signing key is set
-        if self.signing_key.is_none() {
-            return Err(anyhow!("unable to produce blocks without a consensus key"))
+        if !self.signer.is_available() {
+            return Err(anyhow!("unable to produce blocks without a signer"))
         }
 
         // Ask the block producer to create the block
@@ -436,7 +429,7 @@ where
         }
 
         // Sign the block and seal it
-        let seal = seal_block(&self.signing_key, &block)?;
+        let seal = self.signer.seal_block(&block).await?;
         let sealed_block = SealedBlock {
             entity: block,
             consensus: seal,
@@ -501,14 +494,14 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, PB> RunnableService for MainTask<T, B, I, PB>
+impl<T, B, I, S, PB> RunnableService for MainTask<T, B, I, S, PB>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I, PB>;
+    type Task = MainTask<T, B, I, S, PB>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -536,11 +529,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, PB> RunnableTask for MainTask<T, B, I, PB>
+impl<T, B, I, S, PB> RunnableTask for MainTask<T, B, I, S, PB>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
+    S: BlockSigner,
     PB: PredefinedBlocks,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
@@ -626,19 +620,22 @@ where
     }
 }
 
-pub fn new_service<T, B, I, P, PB>(
+#[allow(clippy::too_many_arguments)]
+pub fn new_service<T, B, I, P, S, PB>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
+    block_signer: S,
     predefined_blocks: PB,
-) -> Service<T, B, I, PB>
+) -> Service<T, B, I, S, PB>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
+    S: BlockSigner + 'static,
     PB: PredefinedBlocks + 'static,
     P: P2pPort,
 {
@@ -649,27 +646,9 @@ where
         block_producer,
         block_importer,
         p2p_port,
+        block_signer,
         predefined_blocks,
     ))
-}
-
-fn seal_block(
-    signing_key: &Option<Secret<SecretKeyWrapper>>,
-    block: &Block,
-) -> anyhow::Result<Consensus> {
-    if let Some(key) = signing_key {
-        let block_hash = block.id();
-        let message = block_hash.into_message();
-
-        // The length of the secret is checked
-        let signing_key = key.expose_secret().deref();
-
-        let poa_signature = Signature::sign(signing_key, &message);
-        let seal = Consensus::PoA(PoAConsensus::new(poa_signature));
-        Ok(seal)
-    } else {
-        Err(anyhow!("no PoA signing key configured"))
-    }
 }
 
 fn increase_time(time: Tai64, duration: Duration) -> anyhow::Result<Tai64> {

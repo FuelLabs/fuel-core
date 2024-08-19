@@ -5,6 +5,7 @@ use crate::{
     new_service,
     ports::{
         BlockProducer,
+        BlockSigner,
         InMemoryPredefinedBlocks,
         MockBlockImporter,
         MockBlockProducer,
@@ -13,11 +14,13 @@ use crate::{
         TransactionsSource,
     },
     service::MainTask,
+    signer::SignMode,
     Config,
     Service,
     Trigger,
 };
 use async_trait::async_trait;
+use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
     stream::pending,
     Service as StorageTrait,
@@ -28,6 +31,7 @@ use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
         block::Block,
+        consensus::Consensus,
         header::{
             BlockHeader,
             PartialBlockHeader,
@@ -166,15 +170,37 @@ impl TestContextBuilder {
 
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
-            config,
+            config.clone(),
             txpool,
             producer,
             importer,
             p2p_port,
+            FakeBlockSigner { succeeds: true },
             predefined_blocks,
         );
         service.start().unwrap();
         TestContext { service }
+    }
+}
+
+struct FakeBlockSigner {
+    succeeds: bool,
+}
+
+#[async_trait::async_trait]
+impl BlockSigner for FakeBlockSigner {
+    async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
+        if self.succeeds {
+            SignMode::Key(Secret::new(default_consensus_dev_key().into()))
+                .seal_block(block)
+                .await
+        } else {
+            Err(anyhow::anyhow!("failed to sign block"))
+        }
+    }
+
+    fn is_available(&self) -> bool {
+        true
     }
 }
 
@@ -183,6 +209,7 @@ struct TestContext {
         MockTransactionPool,
         MockBlockProducer,
         MockBlockImporter,
+        FakeBlockSigner,
         InMemoryPredefinedBlocks,
     >,
 }
@@ -345,9 +372,11 @@ async fn remove_skipped_transactions() {
         vec![]
     });
 
+    let signer = SignMode::Key(Secret::new(secret_key.into()));
+
     let config = Config {
         trigger: Trigger::Instant,
-        signing_key: Some(Secret::new(secret_key.into())),
+        signer: signer.clone(),
         metrics: false,
         ..Default::default()
     };
@@ -363,10 +392,77 @@ async fn remove_skipped_transactions() {
         block_producer,
         block_importer,
         p2p_port,
+        FakeBlockSigner { succeeds: true },
         predefined_blocks,
     );
 
     assert!(task.produce_next_block().await.is_ok());
+}
+
+#[tokio::test]
+#[should_panic = "failed to sign block"]
+async fn panics_if_signing_fails() {
+    // The test verifies that if `BlockProducer` returns skipped transactions, they would
+    // be propagated to `TxPool` for removal.
+    let mut rng = StdRng::seed_from_u64(2322);
+    let secret_key = SecretKey::random(&mut rng);
+
+    let mut block_producer = MockBlockProducer::default();
+    block_producer
+        .expect_produce_and_execute_block()
+        .times(1)
+        .returning(move |_, _, _| {
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block: Default::default(),
+                    skipped_transactions: Default::default(),
+                    tx_status: Default::default(),
+                    events: Default::default(),
+                },
+                Default::default(),
+            ))
+        });
+
+    let mut block_importer = MockBlockImporter::default();
+
+    block_importer
+        .expect_commit_result()
+        .times(1)
+        .returning(|_| Ok(()));
+
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+
+    let TxPoolContext {
+        txpool,
+        status_sender: _,
+        txs: _,
+    } = MockTransactionPool::new_with_txs(vec![make_tx(&mut rng)]);
+
+    let signer = SignMode::Key(Secret::new(secret_key.into()));
+
+    let config = Config {
+        trigger: Trigger::Instant,
+        signer: signer.clone(),
+        metrics: false,
+        ..Default::default()
+    };
+
+    let p2p_port = generate_p2p_port();
+
+    let mut task = MainTask::new(
+        &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: false },
+        InMemoryPredefinedBlocks::new(HashMap::new()),
+    );
+
+    let _ = task.produce_next_block().await; // This panics for now
 }
 
 #[tokio::test]
@@ -395,9 +491,11 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
+    let signer = SignMode::Key(Secret::new(secret_key.into()));
+
     let config = Config {
         trigger: Trigger::Instant,
-        signing_key: Some(Secret::new(secret_key.into())),
+        signer: signer.clone(),
         metrics: false,
         ..Default::default()
     };
@@ -413,6 +511,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_producer,
         block_importer,
         p2p_port,
+        FakeBlockSigner { succeeds: true },
         predefined_blocks,
     );
 
@@ -502,6 +601,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         (3u32.into(), block_for_height(3)),
         (4u32.into(), block_for_height(4)),
     ];
+    let signer = SignMode::Key(test_signing_key());
     let blocks_map: HashMap<_, _> = blocks.clone().into_iter().collect();
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
     let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
@@ -509,7 +609,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         trigger: Trigger::Interval {
             block_time: Duration::from_millis(100),
         },
-        signing_key: Some(test_signing_key()),
+        signer,
         metrics: false,
         ..Default::default()
     };
@@ -528,6 +628,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         block_producer,
         block_importer,
         generate_p2p_port(),
+        FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(blocks_map),
     );
 
@@ -570,7 +671,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         trigger: Trigger::Interval {
             block_time: Duration::from_millis(100),
         },
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     };
@@ -589,6 +690,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         block_producer,
         block_importer,
         generate_p2p_port(),
+        FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
     );
 

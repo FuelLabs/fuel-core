@@ -25,6 +25,7 @@ use fuel_core_p2p::{
 };
 use fuel_core_poa::{
     ports::BlockImporter,
+    signer::SignMode,
     Trigger,
 };
 use fuel_core_storage::{
@@ -322,7 +323,7 @@ pub async fn make_nodes(
             node_config.utxo_validation = utxo_validation;
             update_signing_key(&mut node_config, Input::owner(&secret.public_key()));
 
-            node_config.consensus_key = Some(Secret::new(secret.into()));
+            node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
 
             test_txs = txs;
         }

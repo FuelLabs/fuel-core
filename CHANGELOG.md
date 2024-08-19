@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Add support for AWS KMS signing for the PoA consensus module. The new key can be specified with `--consensus-aws-kms AWS_KEY_ARN`.
 - [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
+
+### Changed
+
+#### Breaking
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
+
 
 ## [Version 0.33.0]
 
@@ -24,7 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2080](https://github.com/FuelLabs/fuel-core/pull/2080): Reject Upgrade txs with invalid wasm on txpool level.
 - [2082](https://github.com/FuelLabs/fuel-core/pull/2088): Move `TxPoolError` from `fuel-core-types` to `fuel-core-txpool`.
 - [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Added support for PoA key rotation.
-- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chan config.
+- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chain config.
 
 ### Fixed
 

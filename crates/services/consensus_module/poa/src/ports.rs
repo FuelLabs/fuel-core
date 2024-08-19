@@ -6,6 +6,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::Block,
+        consensus::Consensus,
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
@@ -77,6 +78,12 @@ pub trait BlockImporter: Send + Sync {
     ) -> anyhow::Result<()>;
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo>;
+}
+
+#[async_trait::async_trait]
+pub trait BlockSigner: Send + Sync {
+    async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus>;
+    fn is_available(&self) -> bool;
 }
 
 #[cfg_attr(test, mockall::automock)]

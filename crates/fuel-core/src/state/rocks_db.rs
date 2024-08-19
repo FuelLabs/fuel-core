@@ -420,6 +420,8 @@ where
         // because we are not going to use it after the RocksDb is dropped.
         // We control the lifetime of the `Self` - RocksDb, so we can guarantee that
         // the snapshot will be dropped before the RocksDb.
+        #[allow(clippy::missing_transmute_annotations)]
+        // Remove this and see for yourself
         let snapshot = unsafe {
             let snapshot = db.snapshot();
             core::mem::transmute(snapshot)
