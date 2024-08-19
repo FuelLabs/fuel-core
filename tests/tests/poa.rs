@@ -16,10 +16,7 @@ use fuel_core_poa::signer::SignMode;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::consensus::Consensus,
-    fuel_crypto::{
-        PublicKey,
-        SecretKey,
-    },
+    fuel_crypto::SecretKey,
     fuel_tx::Transaction,
     secrecy::Secret,
 };
@@ -98,6 +95,8 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 #[tokio::test]
 #[cfg(feature = "aws-kms")]
 async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
+    use fuel_core_types::fuel_crypto::PublicKey;
+
     // This test is only enabled if the environment variable is set
     let Some(kms_arn) = option_env!("FUEL_CORE_TEST_AWS_KMS_ARN") else {
         return;
