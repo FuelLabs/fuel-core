@@ -19,8 +19,8 @@ path = "tests/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
-aws-sdk-kms = "1.37.0"
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"], optional = true}
+aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
@@ -78,4 +78,4 @@ default = ["fuel-core/default", "relayer"]
 p2p = ["fuel-core/p2p", "fuel-core-p2p"]
 relayer = ["fuel-core/relayer", "fuel-core-relayer"]
 wasm-executor = ["fuel-core/wasm-executor"]
-aws-kms = ["fuel-core-bin/aws-kms"]
+aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
