@@ -239,7 +239,7 @@ async fn retry_block_creation_in_case_error() -> anyhow::Result<()> {
     // Pass time until a the next block is produced
     time::sleep(Duration::new(1, 0)).await;
 
-    // Make sure it's produced
+    // Make sure the block is produced
     assert!(ctx.block_import.try_recv().is_ok());
 
     Ok(())
