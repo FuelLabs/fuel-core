@@ -187,6 +187,7 @@ pub struct Command {
     /// Loads the AWS credentials and configuration from the environment.
     /// Takes key_id as an argument, e.g. key ARN works.
     #[arg(long = "consensus-aws-kms", env, conflicts_with = "consensus_key")]
+    #[cfg(feature = "aws-kms")]
     pub consensus_aws_kms: Option<String>,
 
     /// A new block is produced instantly when transactions are available.
@@ -269,6 +270,7 @@ impl Command {
             min_gas_price,
             gas_price_threshold_percent,
             consensus_key,
+            #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
             poa_trigger,
             predefined_blocks_path,
@@ -315,7 +317,10 @@ impl Command {
             info!("Block production disabled");
         }
 
-        let consensus_signer = if let Some(key_id) = consensus_aws_kms {
+        let mut consensus_signer = SignMode::Unavailable;
+
+        #[cfg(feature = "aws-kms")]
+        if let Some(key_id) = consensus_aws_kms {
             let config = aws_config::load_from_env().await;
             let client = aws_sdk_kms::Client::new(&config);
             // Ensure that the key is accessible and has the correct type
@@ -328,22 +333,24 @@ impl Command {
             if key != Some(aws_sdk_kms::types::KeySpec::EccSecgP256K1) {
                 anyhow::bail!("The key is not of the correct type, got {:?}", key);
             }
-            SignMode::Kms { key_id, client }
-        } else if let Some(consensus_key) = consensus_key {
-            let key = SecretKey::from_str(&consensus_key)
-                .context("failed to parse consensus signing key")?;
-            SignMode::Key(Secret::new(key.into()))
-        } else if debug {
-            // if consensus key is not configured, fallback to dev consensus key
-            let key = default_consensus_dev_key();
-            warn!(
-                "Fuel Core is using an insecure test key for consensus. Public key: {}",
-                key.public_key()
-            );
-            SignMode::Key(Secret::new(key.into()))
-        } else {
-            SignMode::Unavailable
-        };
+            consensus_signer = SignMode::Kms { key_id, client };
+        }
+
+        if matches!(consensus_signer, SignMode::Unavailable) {
+            if let Some(consensus_key) = consensus_key {
+                let key = SecretKey::from_str(&consensus_key)
+                    .context("failed to parse consensus signing key")?;
+                consensus_signer = SignMode::Key(Secret::new(key.into()));
+            } else if debug {
+                // if consensus key is not configured, fallback to dev consensus key
+                let key = default_consensus_dev_key();
+                warn!(
+                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
+                    key.public_key()
+                );
+                consensus_signer = SignMode::Key(Secret::new(key.into()));
+            }
+        }
 
         if consensus_signer.is_available() && trigger == Trigger::Never {
             warn!("Consensus key configured but block production is disabled!");

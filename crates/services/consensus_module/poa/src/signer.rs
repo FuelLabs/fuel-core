@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+#[cfg(feature = "aws-kms")]
 use aws_sdk_kms::{
     primitives::Blob,
     types::{
@@ -6,6 +7,8 @@ use aws_sdk_kms::{
         SigningAlgorithmSpec,
     },
 };
+#[cfg(feature = "aws-kms")]
+use fuel_core_types::fuel_crypto::Message;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -15,7 +18,6 @@ use fuel_core_types::{
         },
         primitives::SecretKeyWrapper,
     },
-    fuel_crypto::Message,
     fuel_vm::Signature,
     secrecy::{
         ExposeSecret,
