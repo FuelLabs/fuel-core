@@ -12,6 +12,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use fuel_core_poa::signer::SignMode;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::consensus::Consensus,
@@ -37,7 +38,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 
     let db = CombinedDatabase::default();
     let mut config = Config::local_node();
-    config.consensus_key = Some(Secret::new(poa_secret.into()));
+    config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
     let srv = FuelService::from_combined_database(db.clone(), config)
         .await
         .unwrap();
@@ -89,6 +90,76 @@ async fn can_get_sealed_block_from_poa_produced_block() {
     signature
         .verify(&poa_public, &block_id.into_message())
         .expect("failed to verify signature");
+}
+
+#[tokio::test]
+#[cfg(feature = "aws-kms")]
+async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
+    use fuel_core_types::fuel_crypto::PublicKey;
+
+    // This test is only enabled if the environment variable is set
+    let Some(kms_arn) = option_env!("FUEL_CORE_TEST_AWS_KMS_ARN") else {
+        return;
+    };
+
+    // Get the public key for the KMS key
+    let config = aws_config::load_from_env().await;
+    let kms_client = aws_sdk_kms::Client::new(&config);
+    let poa_public_der = kms_client
+        .get_public_key()
+        .key_id(kms_arn)
+        .send()
+        .await
+        .expect("Unable to fetch public key from KMS")
+        .public_key
+        .unwrap()
+        .into_inner();
+    let poa_public_bytes = spki::SubjectPublicKeyInfoRef::try_from(&*poa_public_der)
+        .expect("invalid DER signature from AWS KMS")
+        .subject_public_key
+        .raw_bytes();
+    let poa_public = k256::ecdsa::VerifyingKey::from_sec1_bytes(poa_public_bytes)
+        .expect("invalid public key");
+    let poa_public = PublicKey::from(&poa_public);
+
+    // start node with the kms enabled and produce some blocks
+    let num_blocks = 100;
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--consensus-aws-kms",
+        kms_arn,
+    ];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+    let _ = driver
+        .client
+        .produce_blocks(num_blocks, None)
+        .await
+        .unwrap();
+
+    // stop the node and just grab the database
+    let db_path = driver.kill().await;
+    let db =
+        CombinedDatabase::open(db_path.path(), 1024 * 1024, Default::default()).unwrap();
+
+    let view = db.on_chain().latest_view().unwrap();
+
+    // verify signatures
+    for height in 1..=num_blocks {
+        let sealed_block = view
+            .get_sealed_block_by_height(&height.into())
+            .unwrap()
+            .expect("expected sealed block to be available");
+        let block_id = sealed_block.entity.id();
+        let signature = match sealed_block.consensus {
+            Consensus::PoA(poa) => poa.signature,
+            _ => panic!("Not expected consensus"),
+        };
+        signature
+            .verify(&poa_public, &block_id.into_message())
+            .expect("failed to verify signature");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -204,7 +275,7 @@ mod p2p {
             let mut config = make_config(name.to_string(), config.clone());
             config.debug = true;
             config.block_production = Trigger::Never;
-            config.consensus_key = Some(Secret::new(secret.into()));
+            config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
             config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().info_interval = Some(Duration::from_millis(100));

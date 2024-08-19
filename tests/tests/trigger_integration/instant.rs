@@ -12,7 +12,10 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-use fuel_core_poa::Trigger;
+use fuel_core_poa::{
+    signer::SignMode,
+    Trigger,
+};
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::SecretKey,
@@ -30,7 +33,8 @@ async fn poa_instant_trigger_is_produces_instantly() {
 
     let db = Database::default();
     let mut config = Config::local_node();
-    config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
+    config.consensus_signer =
+        SignMode::Key(Secret::new(SecretKey::random(&mut rng).into()));
     config.block_production = Trigger::Instant;
 
     let srv = FuelService::from_database(db.clone(), config)

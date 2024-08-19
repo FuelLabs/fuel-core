@@ -62,7 +62,8 @@ impl FuelCoreDriver {
 
         let node = fuel_core_bin::cli::run::get_service(
             fuel_core_bin::cli::run::Command::parse_from(args),
-        )?;
+        )
+        .await?;
 
         node.start_and_await().await?;
 

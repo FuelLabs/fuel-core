@@ -21,7 +21,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
   AWS_ECR_ORG: q2z3y3a7
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.75.0
+  RUST_VERSION: 1.79.0
   RUST_VERSION_FMT: nightly-2023-10-29
   RUST_VERSION_COV: nightly-2024-06-05
   RUSTFLAGS: -D warnings
@@ -180,9 +180,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-        env:
-          RUSTFLAGS: -D warnings
-
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
@@ -198,6 +195,43 @@ jobs:
           dry-run: true
           check-repo: false
           ignore-unpublished-changes: true
+
+  cargo-test-kms:
+    if: github.event.repository.fork == false
+    needs:
+      - cargo-verifications
+      - rustfmt
+      - check-changelog
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    env:
+      RUSTFLAGS: -D warnings
+      FUEL_CORE_TEST_AWS_KMS_ARN: "arn:aws:kms:us-east-1:249945542445:key/mrk-e13c7118ce544f7da66294f6e87c8790"
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Configure AWS credentials for integration testing
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
+          aws-region: us-east-1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - uses: rui314/setup-mold@v1
+      - uses: buildjet/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-test-kms-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run integration tests for kms only
+        run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
   publish-codecov:
     name: Publish code coverage report on GitHub pages branch

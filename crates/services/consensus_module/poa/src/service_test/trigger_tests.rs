@@ -12,7 +12,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
         let mut ctx_builder = TestContextBuilder::new();
         ctx_builder.with_config(Config {
             trigger,
-            signing_key: Some(test_signing_key()),
+            signer: SignMode::Key(test_signing_key()),
             metrics: false,
             ..Default::default()
         });
@@ -31,7 +31,7 @@ async fn never_trigger_never_produces_blocks() {
     let mut ctx_builder = TestContextBuilder::new();
     ctx_builder.with_config(Config {
         trigger: Trigger::Never,
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     });
@@ -116,7 +116,7 @@ impl DefaultContext {
 async fn instant_trigger_produces_block_instantly() {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Instant,
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     });
@@ -135,7 +135,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         trigger: Trigger::Interval {
             block_time: Duration::new(2, 0),
         },
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     });
@@ -200,7 +200,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         trigger: Trigger::Interval {
             block_time: Duration::new(2, 0),
         },
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     });

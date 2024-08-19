@@ -1,7 +1,10 @@
 #![allow(clippy::let_unit_value)]
 
 use super::{
-    adapters::P2PAdapter,
+    adapters::{
+        FuelBlockSigner,
+        P2PAdapter,
+    },
     genesis::create_genesis_block,
 };
 #[cfg(feature = "relayer")]
@@ -43,7 +46,10 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     UpdaterMetadata,
     V0Metadata,
 };
-use fuel_core_poa::Trigger;
+use fuel_core_poa::{
+    signer::SignMode,
+    Trigger,
+};
 use fuel_core_services::{
     RunnableService,
     ServiceRunner,
@@ -63,6 +69,7 @@ pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
     BlockImporterAdapter,
+    SignMode,
     InDirectoryPredefinedBlocks,
 >;
 #[cfg(feature = "p2p")]
@@ -250,6 +257,7 @@ pub fn init_sub_services(
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
+            FuelBlockSigner::new(config.consensus_signer.clone()),
             predefined_blocks,
         )
     });
