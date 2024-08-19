@@ -179,7 +179,7 @@ async fn blob__can_be_queried_if_uploaded() {
 
     // When
     let result = ctx.query_blob(blob_id).await;
-    
+
     // Then
     assert!(result.contains(&format!(r#""id":"0x{}"#, blob_id)));
     assert!(result.contains(&format!(r#""bytecode":"0x{}""#, hex::encode(bytecode))));
