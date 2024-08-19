@@ -14,6 +14,10 @@ use async_graphql::{
     Context,
     Object,
 };
+use fuel_core_storage::{
+    not_found,
+    tables::BlobData,
+};
 use fuel_core_types::fuel_types;
 
 pub struct Blob(fuel_types::BlobId);
@@ -51,6 +55,15 @@ impl BlobQuery {
         #[graphql(desc = "ID of the Blob")] id: BlobId,
     ) -> async_graphql::Result<Option<Blob>> {
         let query = ctx.read_view()?;
-        query.blob_id(id.0).into_api_result()
+        query
+            .blob_exists(id.0)
+            .and_then(|blob_exists| {
+                if blob_exists {
+                    Ok(id.0)
+                } else {
+                    Err(not_found!(BlobData))
+                }
+            })
+            .into_api_result()
     }
 }
