@@ -211,7 +211,7 @@ async fn retry_block_creation_in_case_error() -> anyhow::Result<()> {
         trigger: Trigger::Interval {
             block_time: Duration::new(2, 0),
         },
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     });
