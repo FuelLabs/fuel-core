@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
 
 ### Changed
-- [](): Modify the way the gas price service and shared algo is initialized to have some default value based on best guess instead of `None`, and initialize service before graphql.
+- [2113](https://github.com/FuelLabs/fuel-core/pull/2113): Modify the way the gas price service and shared algo is initialized to have some default value based on best guess instead of `None`, and initialize service before graphql.
 
 #### Breaking
 - [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
