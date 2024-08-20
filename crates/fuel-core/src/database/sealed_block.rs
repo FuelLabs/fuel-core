@@ -96,10 +96,14 @@ impl OnChainIterableKeyValueView {
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>> {
-        let header = self.storage::<FuelBlocks>().get(height)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(height)?;
 
-        if let (Some(header), Some(consensus)) = (header, consensus) {
+        if let Some(consensus) = consensus {
+            let header = self
+                .storage::<FuelBlocks>()
+                .get(height)?
+                .ok_or(not_found!(FuelBlocks))?; // This shouldn't happen if a block has been sealed
+
             let sealed_block = SealedBlockHeader {
                 entity: header.into_owned().header().clone(),
                 consensus: consensus.into_owned(),
