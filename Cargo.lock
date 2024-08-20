@@ -3644,6 +3644,7 @@ dependencies = [
  "fuel-core-types",
  "fuel-core-upgradable-executor",
  "futures",
+ "hex",
  "hyper",
  "insta",
  "itertools 0.12.1",
