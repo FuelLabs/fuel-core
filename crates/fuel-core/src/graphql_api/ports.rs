@@ -6,6 +6,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     tables::{
+        BlobData,
         Coins,
         ContractsAssets,
         ContractsRawCode,
@@ -117,6 +118,7 @@ pub trait OnChainDatabase:
     + DatabaseBlocks
     + DatabaseMessages
     + StorageInspect<Coins, Error = StorageError>
+    + StorageInspect<BlobData, Error = StorageError>
     + DatabaseContracts
     + DatabaseChain
     + DatabaseMessageProof
