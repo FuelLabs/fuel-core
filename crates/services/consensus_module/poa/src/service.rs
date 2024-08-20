@@ -490,6 +490,17 @@ where
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         self.sync_task_handle.start_and_await().await?;
+
+        match self.trigger {
+            Trigger::Never | Trigger::Instant => {}
+            Trigger::Interval { .. } => {
+                return Ok(Self {
+                    last_block_created: Instant::now(),
+                    ..self
+                })
+            }
+        }
+
         Ok(self)
     }
 }
