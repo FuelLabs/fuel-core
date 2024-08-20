@@ -1,3 +1,5 @@
+use anyhow::anyhow;
+
 use super::*;
 
 #[tokio::test(start_paused = true)] // Run with time paused, start/stop must still work
@@ -68,6 +70,8 @@ async fn never_trigger_never_produces_blocks() {
 struct DefaultContext {
     rng: StdRng,
     test_ctx: TestContext,
+    // Channel used to make `commit_result()` calls on a `MockBlockImporter` to fails.
+    block_import_failure_sender: broadcast::Sender<()>,
     block_import: broadcast::Receiver<SealedBlock>,
     status_sender: Arc<watch::Sender<Option<TxId>>>,
     txs: Arc<StdMutex<Vec<Script>>>,
@@ -87,10 +91,15 @@ impl DefaultContext {
         } = MockTransactionPool::new_with_txs(vec![tx1]);
         ctx_builder.with_txpool(txpool);
 
+        let (block_import_failure_sender, mut block_import_failure_receiver) =
+            broadcast::channel(100);
         let (block_import_sender, block_import_receiver) = broadcast::channel(100);
         let mut importer = MockBlockImporter::default();
         importer.expect_commit_result().returning(move |result| {
             let (result, _) = result.into();
+            if block_import_failure_receiver.try_recv().is_ok() {
+                return Err(anyhow!("Block import failed"));
+            }
             let sealed_block = result.sealed_block;
             block_import_sender.send(sealed_block)?;
             Ok(())
@@ -105,6 +114,7 @@ impl DefaultContext {
         Self {
             rng,
             test_ctx,
+            block_import_failure_sender,
             block_import: block_import_receiver,
             status_sender,
             txs,
@@ -190,6 +200,47 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
 
     // Stop
     ctx.test_ctx.service.stop_and_await().await?;
+
+    Ok(())
+}
+
+// In case of error during block creation, the block should be retried after a delay of block time.
+#[tokio::test(start_paused = true)]
+async fn retry_block_creation_in_case_error() -> anyhow::Result<()> {
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::new(2, 0),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+
+    // Make sure no blocks are produced yet
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+    // Give a failure signal to the block importer
+    ctx.block_import_failure_sender.send(()).unwrap();
+
+    // Pass time until a single block should be produced
+    time::sleep(Duration::new(2, 0)).await;
+
+    // Make sure the block hasn't been produced (because there is an import failure)
+    assert!(ctx.block_import.try_recv().is_err());
+
+    // Pass half the time until the next block should be produced
+    time::sleep(Duration::new(1, 0)).await;
+
+    // Make sure the block hasn't been produced (because there is an import failure and the block time hasn't elapsed)
+    assert!(ctx.block_import.try_recv().is_err());
+
+    // Pass time until a the next block is produced
+    time::sleep(Duration::new(1, 0)).await;
+
+    // Make sure the block is produced
+    assert!(ctx.block_import.try_recv().is_ok());
 
     Ok(())
 }
