@@ -16,6 +16,7 @@ use crate::{
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
         fuel_core_storage_adapter::{
+            storage::GasPriceMetadata,
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
@@ -88,7 +89,8 @@ impl InitializeTask {
         gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
         on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     ) -> anyhow::Result<Self> {
-        let shared_algo = SharedGasPriceAlgo::new();
+        let algo = Self::get_best_algo(&gas_price_db)?;
+        let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
         let task = Self {
             config,
             genesis_block_height,
@@ -99,6 +101,24 @@ impl InitializeTask {
             shared_algo,
         };
         Ok(task)
+    }
+
+    fn get_best_algo(
+        gas_price_db: &Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    ) -> anyhow::Result<Algorithm> {
+        let height = gas_price_db.latest_height().ok_or(anyhow::anyhow!(
+            "Gas price database does not have a latest height"
+        ))?;
+        let latest_metadata = gas_price_db
+            .storage::<GasPriceMetadata>()
+            .get(&height)?
+            .ok_or(anyhow::anyhow!(
+                "Gas price database does not have metadata for height: {height:?}"
+            ))?
+            .into_owned();
+        let updater: AlgorithmUpdater = latest_metadata.into();
+        let algo = updater.algorithm();
+        Ok(algo)
     }
 }
 

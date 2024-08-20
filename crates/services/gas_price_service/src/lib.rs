@@ -79,7 +79,7 @@ where
 }
 
 #[derive(Debug, Default)]
-pub struct SharedGasPriceAlgo<A>(Arc<RwLock<Option<A>>>);
+pub struct SharedGasPriceAlgo<A>(Arc<RwLock<A>>);
 
 impl<A> Clone for SharedGasPriceAlgo<A> {
     fn clone(&self) -> Self {
@@ -91,17 +91,13 @@ impl<A> SharedGasPriceAlgo<A>
 where
     A: Send + Sync,
 {
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(None)))
-    }
-
     pub fn new_with_algorithm(algorithm: A) -> Self {
-        Self(Arc::new(RwLock::new(Some(algorithm))))
+        Self(Arc::new(RwLock::new(algorithm)))
     }
 
     pub async fn update(&mut self, new_algo: A) {
         let mut write_lock = self.0.write().await;
-        *write_lock = Some(new_algo);
+        *write_lock = new_algo;
     }
 }
 
@@ -109,16 +105,12 @@ impl<A> SharedGasPriceAlgo<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    pub async fn next_gas_price(&self) -> Option<u64> {
-        self.0.read().await.as_ref().map(|a| a.next_gas_price())
+    pub async fn next_gas_price(&self) -> u64 {
+        self.0.read().await.next_gas_price()
     }
 
-    pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> Option<u64> {
-        self.0
-            .read()
-            .await
-            .as_ref()
-            .map(|a| a.worst_case_gas_price(block_height))
+    pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
+        self.0.read().await.worst_case_gas_price(block_height)
     }
 }
 
@@ -236,11 +228,12 @@ mod tests {
     async fn run__updates_gas_price() {
         // given
         let (price_sender, price_receiver) = mpsc::channel(1);
+        let start_algo = TestAlgorithm { price: 50 };
         let updater = TestAlgorithmUpdater {
-            start: TestAlgorithm { price: 0 },
+            start: TestAlgorithm { price: 100 },
             price_source: price_receiver,
         };
-        let shared_algo = SharedGasPriceAlgo::new();
+        let shared_algo = SharedGasPriceAlgo::new_with_algorithm(start_algo);
         let service = GasPriceService::new(0.into(), updater, shared_algo).await;
         let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
@@ -254,7 +247,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.next_gas_price().await.unwrap();
+        let actual_price = read_algo.next_gas_price().await;
         assert_eq!(expected_price, actual_price);
     }
 }

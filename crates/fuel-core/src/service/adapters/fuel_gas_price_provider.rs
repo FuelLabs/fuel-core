@@ -55,7 +55,7 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self) -> Option<u64> {
-        self.algorithm.next_gas_price().await
+        Some(self.algorithm.next_gas_price().await)
     }
 }
 
@@ -91,6 +91,6 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        self.algorithm.worst_case_gas_price(height).await
+        Some(self.algorithm.worst_case_gas_price(height).await)
     }
 }
