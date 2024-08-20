@@ -1,4 +1,5 @@
 pub mod balance;
+pub mod blob;
 pub mod block;
 pub mod chain_info;
 pub mod coins;
@@ -11,6 +12,7 @@ pub mod message;
 pub mod node_info;
 
 pub use balance::Balance;
+pub use blob::Blob;
 pub use block::{
     Block,
     Consensus,
@@ -67,6 +69,7 @@ pub mod primitives {
         fuel_types::{
             Address,
             AssetId,
+            BlobId,
             Bytes32,
             Bytes64,
             ChainId,

@@ -27,6 +27,7 @@ use itertools::Itertools;
 use std::borrow::Cow;
 
 pub mod balance;
+pub mod blob;
 pub mod block;
 pub mod chain;
 pub mod coins;
@@ -46,6 +47,7 @@ pub mod relayed_tx;
 pub struct Query(
     dap::DapQuery,
     balance::BalanceQuery,
+    blob::BlobQuery,
     block::BlockQuery,
     chain::ChainQuery,
     tx::TxQuery,
