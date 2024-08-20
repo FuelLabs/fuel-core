@@ -49,6 +49,9 @@ pub const MAX_RESPONSE_SIZE: usize = 18 * 1024 * 1024;
 /// Maximum number of headers per request.
 pub const MAX_HEADERS_PER_REQUEST: u32 = 100;
 
+/// Maximum number of blocks per transaction request.
+pub const MAX_BLOCKS_PER_TX_REQUEST: u32 = 100;
+
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
     /// The keypair used for handshake during communication with other p2p nodes.
@@ -72,6 +75,7 @@ pub struct Config<State = Initialized> {
     /// Max Size of a Block in bytes
     pub max_block_size: usize,
     pub max_headers_per_request: u32,
+    pub max_blocks_per_tx_request: u32,
 
     // `DiscoveryBehaviour` related fields
     pub bootstrap_nodes: Vec<Multiaddr>,
@@ -151,6 +155,7 @@ impl Config<NotInitialized> {
             tcp_port: self.tcp_port,
             max_block_size: self.max_block_size,
             max_headers_per_request: self.max_headers_per_request,
+            max_blocks_per_tx_request: self.max_blocks_per_tx_request,
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
@@ -200,6 +205,7 @@ impl Config<NotInitialized> {
             tcp_port: 0,
             max_block_size: MAX_RESPONSE_SIZE,
             max_headers_per_request: MAX_HEADERS_PER_REQUEST,
+            max_blocks_per_tx_request: MAX_BLOCKS_PER_TX_REQUEST,
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,

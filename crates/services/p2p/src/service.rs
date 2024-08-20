@@ -328,6 +328,7 @@ pub struct Task<P, V, B> {
     database_processor: HeavyTaskProcessor,
     broadcast: B,
     max_headers_per_request: u32,
+    max_blocks_per_tx_request: u32,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
     heartbeat_max_avg_interval: Duration,
@@ -437,6 +438,20 @@ where
         let response_channel = self.request_sender.clone();
         match request_message {
             RequestMessage::Transactions(range) => {
+                let max_len = self
+                    .max_blocks_per_tx_request
+                    .try_into()
+                    .expect("u32 should always fit into usize");
+                if range.len() > max_len {
+                    tracing::error!("Requested range of blocks is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
+                    let response = None;
+                    let _ = self.p2p_service.send_response_msg(
+                        request_id,
+                        ResponseMessage::Transactions(response),
+                    );
+                    return Ok(())
+                }
+
                 let view = self.view_provider.latest_view()?;
                 let result = self.database_processor.spawn(move || {
                     if instant.elapsed() > timeout {
@@ -570,6 +585,7 @@ where
         let Config {
             max_block_size,
             max_headers_per_request,
+            max_blocks_per_tx_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -610,6 +626,7 @@ where
             broadcast,
             database_processor,
             max_headers_per_request,
+            max_blocks_per_tx_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1202,6 +1219,7 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_blocks_per_tx_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1289,6 +1307,7 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_blocks_per_tx_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1348,6 +1367,7 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_blocks_per_tx_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval: Default::default(),
             heartbeat_max_time_since_last: Default::default(),
