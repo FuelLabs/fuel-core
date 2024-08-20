@@ -229,8 +229,11 @@ mod tests {
         // given
         let (price_sender, price_receiver) = mpsc::channel(1);
         let start_algo = TestAlgorithm { price: 50 };
+        let expected_price = 100;
         let updater = TestAlgorithmUpdater {
-            start: TestAlgorithm { price: 100 },
+            start: TestAlgorithm {
+                price: expected_price,
+            },
             price_source: price_receiver,
         };
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(start_algo);
@@ -238,7 +241,6 @@ mod tests {
         let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
         let task = service.into_task(&watcher, ()).await.unwrap();
-        let expected_price = 100;
         let service = ServiceRunner::new(task);
         service.start().unwrap();
 

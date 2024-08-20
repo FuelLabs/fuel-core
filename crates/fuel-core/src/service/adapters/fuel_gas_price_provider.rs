@@ -6,7 +6,6 @@ use fuel_core_gas_price_service::{
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_txpool::{
     ports::GasPriceProvider as TxPoolGasPriceProvider,
-    Error as TxPoolError,
     Result as TxPoolResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -54,8 +53,8 @@ impl<A> FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn next_gas_price(&self) -> Option<u64> {
-        Some(self.algorithm.next_gas_price().await)
+    async fn next_gas_price(&self) -> u64 {
+        self.algorithm.next_gas_price().await
     }
 }
 
@@ -65,9 +64,7 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self) -> anyhow::Result<u64> {
-        self.next_gas_price()
-            .await
-            .ok_or(anyhow::anyhow!("No gas price available"))
+        Ok(self.next_gas_price().await)
     }
 }
 
@@ -77,11 +74,7 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self) -> TxPoolResult<u64> {
-        self.next_gas_price()
-            .await
-            .ok_or(TxPoolError::GasPriceNotFound(
-                "Gas price not set yet".to_string(),
-            ))
+        Ok(self.next_gas_price().await)
     }
 }
 
