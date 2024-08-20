@@ -200,9 +200,9 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test(start_paused = true)]
-async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second() -> anyhow::Result<()> {
+async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second(
+) -> anyhow::Result<()> {
     // given
     let config = Config {
         trigger: Trigger::Interval {
@@ -214,7 +214,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
     };
     let block_production_waitpoint = Arc::new(Notify::new());
     let block_production_waitpoint_trigger = block_production_waitpoint.clone();
-    
+
     let mut ctx_builder = TestContextBuilder::new();
     ctx_builder.with_config(config);
     let mut mock_tx_pool = MockTransactionPool::no_tx_updates();
@@ -248,10 +248,10 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
 
     // when
     block_production_waitpoint.notified().await;
-    
+
     // then
     assert!(before_retry.elapsed() >= Duration::from_secs(1));
-    
+
     test_ctx.service.stop_and_await().await?;
     Ok(())
 }
