@@ -54,8 +54,8 @@ impl OnChainIterableKeyValueView {
         }
     }
 
-    /// Returns a finalized `Block` by height
-    pub fn get_finalized_block_by_height(
+    /// Returns a `Block`, which is sealed, by height
+    pub fn get_block_by_height(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<Block>> {
@@ -144,7 +144,7 @@ impl OnChainIterableKeyValueView {
             .map(BlockHeight::from)
             .map(|block_height| {
                 let transactions = self
-                    .get_finalized_block_by_height(&block_height)?
+                    .get_block_by_height(&block_height)?
                     .map(|block| block.into_inner().1)
                     .map(Transactions);
                 Ok(transactions)

@@ -183,7 +183,7 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
         .map(|block_height| {
             let block_height = block_height as u32;
             on_chain_view
-                .get_finalized_block_by_height(&block_height.into())
+                .get_block_by_height(&block_height.into())
                 .unwrap()
                 .unwrap()
         })
@@ -216,7 +216,7 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
         .map(|block_height| {
             let block_height = block_height as u32;
             on_chain_view
-                .get_finalized_block_by_height(&block_height.into())
+                .get_block_by_height(&block_height.into())
                 .unwrap()
                 .unwrap()
         })
