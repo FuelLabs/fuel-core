@@ -119,7 +119,8 @@ impl Config {
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             #[cfg(feature = "rocksdb")]
-            state_rewind_policy: Default::default(),
+            state_rewind_policy:
+                crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
         };
         let starting_gas_price = 0;
         let gas_price_change_percent = 0;
