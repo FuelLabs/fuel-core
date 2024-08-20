@@ -1,3 +1,9 @@
+use mockall::Sequence;
+use tokio::{
+    sync::Notify,
+    time::Instant,
+};
+
 use super::*;
 
 #[tokio::test(start_paused = true)] // Run with time paused, start/stop must still work
@@ -191,6 +197,62 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     // Stop
     ctx.test_ctx.service.stop_and_await().await?;
 
+    Ok(())
+}
+
+#[tokio::test(start_paused = true)]
+async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second(
+) -> anyhow::Result<()> {
+    // given
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::new(2, 0),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let block_production_waitpoint = Arc::new(Notify::new());
+    let block_production_waitpoint_trigger = block_production_waitpoint.clone();
+
+    let mut ctx_builder = TestContextBuilder::new();
+    ctx_builder.with_config(config);
+    let mut mock_tx_pool = MockTransactionPool::no_tx_updates();
+    mock_tx_pool.expect_remove_txs().returning(|_| vec![]);
+    ctx_builder.with_txpool(mock_tx_pool);
+
+    let mut importer = MockBlockImporter::default();
+    let mut seq = Sequence::new();
+    // First attempt fails
+    importer
+        .expect_commit_result()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(move |_| Err(anyhow::anyhow!("Error in production")));
+    // Second attempt should be triggered after 1 second and success
+    importer
+        .expect_commit_result()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(move |_| {
+            block_production_waitpoint_trigger.notify_waiters();
+            Ok(())
+        });
+    importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    ctx_builder.with_importer(importer);
+    let test_ctx = ctx_builder.build();
+
+    let before_retry = Instant::now();
+
+    // when
+    block_production_waitpoint.notified().await;
+
+    // then
+    assert!(before_retry.elapsed() >= Duration::from_secs(1));
+
+    test_ctx.service.stop_and_await().await?;
     Ok(())
 }
 
