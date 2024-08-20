@@ -346,8 +346,7 @@ where
         self.txpool.remove_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
-        let seal = self.signer.seal_block(&block).await
-        .expect("Failed to seal block. Panicking for now, TODO: https://github.com/FuelLabs/fuel-core/issues/1917");
+        let seal = self.signer.seal_block(&block).await?;
         let block = SealedBlock {
             entity: block,
             consensus: seal,
@@ -491,17 +490,6 @@ where
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         self.sync_task_handle.start_and_await().await?;
-
-        match self.trigger {
-            Trigger::Never | Trigger::Instant => {}
-            Trigger::Interval { .. } => {
-                return Ok(Self {
-                    last_block_created: Instant::now(),
-                    ..self
-                })
-            }
-        }
-
         Ok(self)
     }
 }
