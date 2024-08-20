@@ -32,6 +32,7 @@ use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use crate::{
     combined_database::CombinedDatabaseConfig,
     graphql_api::ServiceConfig as GraphQLConfig,
+    state::historical_rocksdb::StateRewindPolicy,
 };
 
 #[derive(Clone, Debug)]
@@ -119,7 +120,7 @@ impl Config {
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             #[cfg(feature = "rocksdb")]
-            state_rewind_policy: Default::default(),
+            state_rewind_policy: StateRewindPolicy::RewindFullRange,
         };
         let starting_gas_price = 0;
         let gas_price_change_percent = 0;
