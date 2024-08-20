@@ -249,6 +249,9 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
     // Then
     // advance the block height to the next block to add the metadata to db
     recovered_driver.client.produce_blocks(1, None).await?;
+    // And wait for the gas price updater to update the gas price metadata.
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+
     let recovered_database = &recovered_driver.node.shared.database;
     let next_height = height + 1;
     assert_eq!(

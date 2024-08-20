@@ -119,9 +119,8 @@ where
 
         let da_height = predefined_block.header().application().da_height;
 
-        let header_to_produce = self
-            .new_header_with_da_height(height, block_time, da_height)
-            .await?;
+        let header_to_produce =
+            self.new_header_with_da_height(height, block_time, da_height)?;
 
         let maybe_mint_tx = transactions_source.pop();
         let mint_tx =
@@ -362,7 +361,7 @@ where
         Ok(block_header)
     }
     /// Create the header for a new block at the provided height
-    async fn new_header_with_da_height(
+    fn new_header_with_da_height(
         &self,
         height: BlockHeight,
         block_time: Tai64,
