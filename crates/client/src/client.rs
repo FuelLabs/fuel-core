@@ -472,6 +472,33 @@ impl FuelClient {
         Ok(status)
     }
 
+    /// Submit the transaction and wait for it either to be included in
+    /// a block or removed from `TxPool`, but immediately return the status.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_status_commit(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<TransactionStatus> {
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let mut stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
+                let status: TransactionStatus = r?.submit_and_await_status.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        let status = stream.next().await.ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to get status from the submission",
+        ))??;
+
+        Ok(status)
+    }
+
     pub async fn start_session(&self) -> io::Result<String> {
         let query = schema::StartSession::build(());
 

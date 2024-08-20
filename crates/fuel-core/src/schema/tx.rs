@@ -52,13 +52,16 @@ use fuel_core_types::{
         Transaction as FuelTx,
         UniqueIdentifier,
     },
-    fuel_types,
-    fuel_types::canonical::Deserialize,
+    fuel_types::{
+        self,
+        canonical::Deserialize,
+    },
     fuel_vm::checked_transaction::{
         CheckPredicateParams,
         EstimatePredicates,
     },
     services::txpool,
+    tai64::Tai64,
 };
 use futures::{
     Stream,
@@ -155,7 +158,7 @@ impl TxQuery {
                     .skip_while(move |result| {
                         if let Ok(sorted) = result {
                             if let Some(start) = start {
-                                return sorted != &start
+                                return sorted != &start;
                             }
                         }
                         false
@@ -411,5 +414,50 @@ impl TxStatusSubscription {
                 }
             })
             .take(1))
+    }
+
+    /// Submits transaction to the `TxPool` and throws failure immediately or returns `SubmittedStatus`, then waits for confirmation or failure.
+    #[graphql(complexity = "QUERY_COSTS.submit_and_await_status + child_complexity")]
+    async fn submit_and_await_status<'a>(
+        &self,
+        ctx: &'a Context<'a>,
+        tx: HexString,
+    ) -> async_graphql::Result<
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+    > {
+        let txpool = ctx.data_unchecked::<TxPool>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
+        let tx = FuelTx::from_bytes(&tx.0)?;
+        let tx_id = tx.id(&params.chain_id());
+
+        // Attempt to insert the transaction
+        let insert_result = txpool.insert(vec![Arc::new(tx)]).await;
+        if let Err(e) = insert_result.into_iter().collect::<Result<Vec<_>, _>>() {
+            return Err(e.into());
+        }
+
+        let subscription = txpool.tx_update_subscribe(tx_id)?;
+
+        // Immediately yield the SubmittedStatus
+        let initial_status = TransactionStatus::new(
+            tx_id,
+            txpool::TransactionStatus::Submitted { time: Tai64::now() },
+        );
+
+        Ok(
+            futures::stream::once(async move { Ok(initial_status) }).chain(
+                subscription.map(move |event| match event {
+                    TxStatusMessage::Status(status) => {
+                        let status = TransactionStatus::new(tx_id, status);
+                        Ok(status)
+                    }
+                    TxStatusMessage::FailedStatus => {
+                        Err(anyhow::anyhow!("Failed to get transaction status").into())
+                    }
+                }),
+            ),
+        )
     }
 }
