@@ -30,7 +30,10 @@ use crate::{
         IterDirection,
         IterableStore,
     },
-    kv_store::KVItem,
+    kv_store::{
+        KVItem,
+        KeyItem,
+    },
 };
 
 /// Provides an atomic view of the storage at the latest height at
@@ -280,7 +283,7 @@ impl<Storage> Modifiable for InMemoryTransaction<Storage> {
             let btree = match self.changes.entry(column) {
                 hash_map::Entry::Vacant(vacant) => {
                     vacant.insert(value);
-                    continue
+                    continue;
                 }
                 hash_map::Entry::Occupied(occupied) => occupied.into_mut(),
             };
@@ -520,6 +523,16 @@ where
         _: Option<&[u8]>,
         _: IterDirection,
     ) -> BoxedIter<KVItem> {
+        unimplemented!()
+    }
+
+    fn iter_store_keys(
+        &self,
+        _: Self::Column,
+        _: Option<&[u8]>,
+        _: Option<&[u8]>,
+        _: IterDirection,
+    ) -> BoxedIter<KeyItem> {
         unimplemented!()
     }
 }

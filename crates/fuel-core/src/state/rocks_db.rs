@@ -16,6 +16,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -31,7 +32,9 @@ use rocksdb::{
     BoundColumnFamily,
     Cache,
     ColumnFamilyDescriptor,
+    DBAccess,
     DBCompressionType,
+    DBRawIteratorWithThreadMode,
     DBWithThreadMode,
     IteratorMode,
     MultiThreaded,
@@ -54,6 +57,11 @@ use std::{
     sync::Arc,
 };
 use tempfile::TempDir;
+
+use super::rocks_db_key_iterator::{
+    ExtractItem,
+    RocksDBKeyIterator,
+};
 
 type DB = DBWithThreadMode<MultiThreaded>;
 
@@ -471,11 +479,14 @@ where
     /// but skip the first element to jump on the previous prefix.
     /// If we can't find the next element, we are at the end of the list,
     /// so we can use `IteratorMode::End` to start reverse iteration.
-    fn reverse_prefix_iter(
+    fn reverse_prefix_iter<T>(
         &self,
         prefix: &[u8],
         column: Description::Column,
-    ) -> impl Iterator<Item = KVItem> + '_ {
+    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_
+    where
+        T: ExtractItem,
+    {
         let maybe_next_item = next_prefix(prefix.to_vec())
             .and_then(|next_prefix| {
                 self.iter_store(
@@ -495,12 +506,12 @@ where
             );
             let prefix = prefix.to_vec();
             self
-                ._iter_all(column, self.read_options(), iter_mode)
+                .iterator::<T>(column, self.read_options(), iter_mode)
                 // Skip the element under the `next_start_key` key.
                 .skip(1)
                 .take_while(move |item| {
-                    if let Ok((key, _)) = item {
-                        key.starts_with(prefix.as_slice())
+                    if let Ok(item) = item {
+                        T::starts_with(item, prefix.as_slice())
                     } else {
                         true
                     }
@@ -509,10 +520,10 @@ where
         } else {
             // No next item, so we can start backward iteration from the end.
             let prefix = prefix.to_vec();
-            self._iter_all(column, self.read_options(), IteratorMode::End)
+            self.iterator::<T>(column, self.read_options(), IteratorMode::End)
                 .take_while(move |item| {
-                    if let Ok((key, _)) = item {
-                        key.starts_with(prefix.as_slice())
+                    if let Ok(item) = item {
+                        T::starts_with(item, prefix.as_slice())
                     } else {
                         true
                     }
@@ -521,30 +532,31 @@ where
         }
     }
 
-    pub(crate) fn _iter_all(
+    pub(crate) fn iterator<T>(
         &self,
         column: Description::Column,
         opts: ReadOptions,
         iter_mode: IteratorMode,
-    ) -> impl Iterator<Item = KVItem> + '_ {
+    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_
+    where
+        T: ExtractItem,
+    {
         let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
-        self.db
-            .iterator_cf_opt(&self.cf(column), opts, iter_mode)
-            .map(move |item| {
-                item.map(|(key, value)| {
-                    let value_as_vec = Vec::from(value);
-                    let key_as_vec = Vec::from(key);
 
-                    self.metrics.read_meter.inc();
-                    column_metrics.map(|metric| metric.inc());
-                    self.metrics.bytes_read.inc_by(
-                        key_as_vec.len().saturating_add(value_as_vec.len()) as u64,
-                    );
+        RocksDBKeyIterator::<_, T>::new(
+            self.db.raw_iterator_cf_opt(&self.cf(column), opts),
+            iter_mode,
+        )
+        .map(move |item| {
+            item.map(|item| {
+                self.metrics.read_meter.inc();
+                column_metrics.map(|metric| metric.inc());
+                self.metrics.bytes_read.inc_by(T::size(&item));
 
-                    (key_as_vec, Arc::new(value_as_vec))
-                })
-                .map_err(|e| DatabaseError::Other(e.into()).into())
+                item
             })
+            .map_err(|e| DatabaseError::Other(e.into()).into())
+        })
     }
 
     pub fn multi_get<K, I>(
@@ -575,6 +587,135 @@ where
             })
             .try_collect()?;
         Ok(results)
+    }
+
+    fn _iter_store<T>(
+        &self,
+        column: Description::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<T::Item>>
+    where
+        T: ExtractItem,
+    {
+        match (prefix, start) {
+            (None, None) => {
+                let iter_mode =
+                    // if no start or prefix just start iterating over entire keyspace
+                    match direction {
+                        IterDirection::Forward => IteratorMode::Start,
+                        // end always iterates in reverse
+                        IterDirection::Reverse => IteratorMode::End,
+                    };
+                self.iterator::<T>(column, self.read_options(), iter_mode)
+                    .into_boxed()
+            }
+            (Some(prefix), None) => {
+                if direction == IterDirection::Reverse {
+                    self.reverse_prefix_iter::<T>(prefix, column).into_boxed()
+                } else {
+                    // start iterating in a certain direction within the keyspace
+                    let iter_mode = IteratorMode::From(
+                        prefix,
+                        convert_to_rocksdb_direction(direction),
+                    );
+
+                    // Setting prefix on the RocksDB level to optimize iteration.
+                    let mut opts = self.read_options();
+                    opts.set_prefix_same_as_start(true);
+
+                    let prefix = prefix.to_vec();
+                    self.iterator::<T>(column, opts, iter_mode)
+                        // Not all tables has a prefix set, so we need to filter out the keys.
+                        .take_while(move |item| {
+                            if let Ok(item) = item {
+                                T::starts_with(item, prefix.as_slice())
+                            } else {
+                                true
+                            }
+                        })
+                        .into_boxed()
+                }
+            }
+            (None, Some(start)) => {
+                // start iterating in a certain direction from the start key
+                let iter_mode =
+                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
+                self.iterator::<T>(column, self.read_options(), iter_mode)
+                    .into_boxed()
+            }
+            (Some(prefix), Some(start)) => {
+                // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
+                // If the `start` doesn't have the same `prefix`, return nothing.
+                if !start.starts_with(prefix) {
+                    return iter::empty().into_boxed();
+                }
+
+                // start iterating in a certain direction from the start key
+                // and end iterating when we've gone outside the prefix
+                let prefix = prefix.to_vec();
+                let iter_mode =
+                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
+                self.iterator::<T>(column, self.read_options(), iter_mode)
+                    .take_while(move |item| {
+                        if let Ok(item) = item {
+                            T::starts_with(item, prefix.as_slice())
+                        } else {
+                            true
+                        }
+                    })
+                    .into_boxed()
+            }
+        }
+    }
+}
+
+pub(crate) struct KeyOnly;
+
+impl ExtractItem for KeyOnly {
+    type Item = Vec<u8>;
+
+    fn extract_item<D>(
+        raw_iterator: &DBRawIteratorWithThreadMode<D>,
+    ) -> Option<Self::Item>
+    where
+        D: DBAccess,
+    {
+        raw_iterator.key().map(|key| key.to_vec())
+    }
+
+    fn size(item: &Self::Item) -> u64 {
+        item.len() as u64
+    }
+
+    fn starts_with(item: &Self::Item, prefix: &[u8]) -> bool {
+        item.starts_with(prefix)
+    }
+}
+
+pub(crate) struct KeyAndValue;
+
+impl ExtractItem for KeyAndValue {
+    type Item = (Vec<u8>, Value);
+
+    fn extract_item<D>(
+        raw_iterator: &DBRawIteratorWithThreadMode<D>,
+    ) -> Option<Self::Item>
+    where
+        D: DBAccess,
+    {
+        raw_iterator
+            .item()
+            .map(|(key, value)| (key.to_vec(), Arc::new(value.to_vec())))
+    }
+
+    fn size(item: &Self::Item) -> u64 {
+        item.0.len().saturating_add(item.1.len()) as u64
+    }
+
+    fn starts_with(item: &Self::Item, prefix: &[u8]) -> bool {
+        item.0.starts_with(prefix)
     }
 }
 
@@ -658,75 +799,17 @@ where
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        match (prefix, start) {
-            (None, None) => {
-                let iter_mode =
-                    // if no start or prefix just start iterating over entire keyspace
-                    match direction {
-                        IterDirection::Forward => IteratorMode::Start,
-                        // end always iterates in reverse
-                        IterDirection::Reverse => IteratorMode::End,
-                    };
-                self._iter_all(column, self.read_options(), iter_mode)
-                    .into_boxed()
-            }
-            (Some(prefix), None) => {
-                if direction == IterDirection::Reverse {
-                    self.reverse_prefix_iter(prefix, column).into_boxed()
-                } else {
-                    // start iterating in a certain direction within the keyspace
-                    let iter_mode = IteratorMode::From(
-                        prefix,
-                        convert_to_rocksdb_direction(direction),
-                    );
+        self._iter_store::<KeyAndValue>(column, prefix, start, direction)
+    }
 
-                    // Setting prefix on the RocksDB level to optimize iteration.
-                    let mut opts = self.read_options();
-                    opts.set_prefix_same_as_start(true);
-
-                    let prefix = prefix.to_vec();
-                    self._iter_all(column, opts, iter_mode)
-                        // Not all tables has a prefix set, so we need to filter out the keys.
-                        .take_while(move |item| {
-                            if let Ok((key, _)) = item {
-                                key.starts_with(prefix.as_slice())
-                            } else {
-                                true
-                            }
-                        })
-                        .into_boxed()
-                }
-            }
-            (None, Some(start)) => {
-                // start iterating in a certain direction from the start key
-                let iter_mode =
-                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self._iter_all(column, self.read_options(), iter_mode)
-                    .into_boxed()
-            }
-            (Some(prefix), Some(start)) => {
-                // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
-                // If the `start` doesn't have the same `prefix`, return nothing.
-                if !start.starts_with(prefix) {
-                    return iter::empty().into_boxed();
-                }
-
-                // start iterating in a certain direction from the start key
-                // and end iterating when we've gone outside the prefix
-                let prefix = prefix.to_vec();
-                let iter_mode =
-                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self._iter_all(column, self.read_options(), iter_mode)
-                    .take_while(move |item| {
-                        if let Ok((key, _)) = item {
-                            key.starts_with(prefix.as_slice())
-                        } else {
-                            true
-                        }
-                    })
-                    .into_boxed()
-            }
-        }
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        self._iter_store::<KeyOnly>(column, prefix, start, direction)
     }
 }
 

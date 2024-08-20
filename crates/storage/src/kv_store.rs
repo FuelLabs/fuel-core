@@ -6,10 +6,14 @@ use crate::{
 };
 use std::sync::Arc;
 
+/// The key of the storage.
+pub type Key = Vec<u8>;
 /// The value of the storage. It is wrapped into the `Arc` to provide less cloning of massive objects.
 pub type Value = Arc<Vec<u8>>;
 /// The pair of key and value from the storage.
-pub type KVItem = StorageResult<(Vec<u8>, Value)>;
+pub type KVItem = StorageResult<(Key, Value)>;
+/// The key from the storage.
+pub type KeyItem = StorageResult<Key>;
 
 /// A column of the storage.
 pub trait StorageColumn: Copy + core::fmt::Debug {
