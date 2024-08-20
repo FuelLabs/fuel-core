@@ -89,7 +89,12 @@ impl InitializeTask {
         gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
         on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     ) -> anyhow::Result<Self> {
-        let algo = Self::get_best_algo(&gas_price_db)?;
+        let latest_block_height = on_chain_db
+            .latest_height()
+            .unwrap_or(genesis_block_height)
+            .into();
+        let first_metadata = get_first_metadata(&config, latest_block_height);
+        let algo = get_best_algo(&gas_price_db, first_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
         let task = Self {
             config,
@@ -102,26 +107,33 @@ impl InitializeTask {
         };
         Ok(task)
     }
-
-    fn get_best_algo(
-        gas_price_db: &Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
-    ) -> anyhow::Result<Algorithm> {
-        let height = gas_price_db.latest_height().ok_or(anyhow::anyhow!(
-            "Gas price database does not have a latest height"
-        ))?;
-        let latest_metadata = gas_price_db
-            .storage::<GasPriceMetadata>()
-            .get(&height)?
-            .ok_or(anyhow::anyhow!(
-                "Gas price database does not have metadata for height: {height:?}"
-            ))?
-            .into_owned();
-        let updater: AlgorithmUpdater = latest_metadata.into();
-        let algo = updater.algorithm();
-        Ok(algo)
-    }
 }
 
+fn get_first_metadata(config: &Config, latest_block_height: u32) -> UpdaterMetadata {
+    let first_metadata = UpdaterMetadata::V0(V0Metadata {
+        new_exec_price: config.starting_gas_price.max(config.min_gas_price),
+        min_exec_gas_price: config.min_gas_price,
+        exec_gas_price_change_percent: config.gas_price_change_percent,
+        l2_block_height: latest_block_height,
+        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
+    });
+    first_metadata
+}
+
+fn get_best_algo(
+    gas_price_db: &Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    first_metadata: UpdaterMetadata,
+) -> anyhow::Result<Algorithm> {
+    let height = gas_price_db.latest_height().unwrap_or(0.into());
+    let latest_metadata = gas_price_db
+        .storage::<GasPriceMetadata>()
+        .get(&height)?
+        .map(|m| m.into_owned())
+        .unwrap_or(first_metadata);
+    let updater: AlgorithmUpdater = latest_metadata.into();
+    let algo = updater.algorithm();
+    Ok(algo)
+}
 #[async_trait::async_trait]
 impl RunnableService for InitializeTask {
     const NAME: &'static str = "GasPriceUpdater";
@@ -144,7 +156,7 @@ impl RunnableService for InitializeTask {
             .unwrap_or(self.genesis_block_height);
 
         let updater = get_synced_gas_price_updater(
-            &self.config,
+            self.config,
             self.genesis_block_height,
             self.settings,
             self.gas_price_db,
@@ -158,7 +170,7 @@ impl RunnableService for InitializeTask {
 }
 
 pub fn get_synced_gas_price_updater(
-    config: &Config,
+    config: Config,
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
@@ -178,14 +190,7 @@ pub fn get_synced_gas_price_updater(
         first_run = true;
         latest_block_height
     };
-
-    let first_metadata = UpdaterMetadata::V0(V0Metadata {
-        new_exec_price: config.starting_gas_price.max(config.min_gas_price),
-        min_exec_gas_price: config.min_gas_price,
-        exec_gas_price_change_percent: config.gas_price_change_percent,
-        l2_block_height: latest_block_height,
-        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
-    });
+    let first_metadata = get_first_metadata(&config, latest_block_height);
 
     if metadata_height > latest_block_height {
         revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
