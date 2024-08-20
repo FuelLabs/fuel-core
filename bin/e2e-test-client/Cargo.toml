@@ -18,8 +18,8 @@ fuel-core = { workspace = true, default-features = false, optional = true }
 fuel-core-chain-config = { workspace = true, features = ["default"] }
 fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-futures = "0.3"
-hex = "0.4"
+futures = { workspace = true }
+hex = { workspace = true }
 humantime-serde = "1.1"
 itertools = { workspace = true }
 libtest-mimic = "0.6.0"
@@ -31,9 +31,9 @@ toml = { version = "0.5" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-e2e_client = { path = ".", features = [
+fuel-core-e2e-client = { path = ".", features = [
   "dev-deps",
-], package = "fuel-core-e2e-client", default-features = false }
+], default-features = false }
 fuel-core-trace = { path = "../../crates/trace" }
 insta = { workspace = true }
 tempfile = { workspace = true }

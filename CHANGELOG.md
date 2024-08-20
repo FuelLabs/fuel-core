@@ -7,9 +7,67 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Add support for AWS KMS signing for the PoA consensus module. The new key can be specified with `--consensus-aws-kms AWS_KEY_ARN`.
+- [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
+- [2096](https://github.com/FuelLabs/fuel-core/pull/2096): GraphQL endpoint to fetch blob byte code by its blob ID.
+
+### Changed
+
+- [2035](https://github.com/FuelLabs/fuel-core/pull/2035): Small code optimizations.
+    - The optimized code specifies the capacity when initializing the HashSet, avoiding potential multiple reallocations of memory during element insertion.
+    - The optimized code uses the return value of HashSet::insert to check if the insertion was successful. If the insertion fails (i.e., the element already exists), it returns an error. This reduces one lookup operation.
+    - The optimized code simplifies the initialization logic of exclude by using the Option::map_or_else method.
+
+#### Breaking
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
+
+### Fixed
+
+- [2105](https://github.com/FuelLabs/fuel-core/pull/2105): Fixed the rollback functionality to work with empty gas price database.
+
+## [Version 0.33.0]
+
+### Added
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added support for predefined blocks provided via the filesystem.
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added `--predefined-blocks-path` CLI argument to pass the path to the predefined blocks.
+- [2081](https://github.com/FuelLabs/fuel-core/pull/2081): Enable producer to include predefined blocks.
+- [2079](https://github.com/FuelLabs/fuel-core/pull/2079): Open unknown columns in the RocksDB for forward compatibility.
+
+### Changed
+- [2076](https://github.com/FuelLabs/fuel-core/pull/2076): Replace usages of `iter_all` with `iter_all_keys` where necessary.
+
+#### Breaking
+- [2080](https://github.com/FuelLabs/fuel-core/pull/2080): Reject Upgrade txs with invalid wasm on txpool level.
+- [2082](https://github.com/FuelLabs/fuel-core/pull/2088): Move `TxPoolError` from `fuel-core-types` to `fuel-core-txpool`.
+- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Added support for PoA key rotation.
+- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chain config.
+
+### Fixed
+
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Fixed bug in rollback logic because of wrong ordering of modifications.
+
+## [Version 0.32.1]
+
+### Added
+- [2061](https://github.com/FuelLabs/fuel-core/pull/2061): Allow querying filled transaction body from the status.
+
+### Changed
+- [2067](https://github.com/FuelLabs/fuel-core/pull/2067): Return error from TxPool level if the `BlobId` is known.
+- [2064](https://github.com/FuelLabs/fuel-core/pull/2064): Allow gas price metadata values to be overridden with config
+
+### Fixes
+- [2060](https://github.com/FuelLabs/fuel-core/pull/2060): Use `min-gas-price` as a starting point if `start-gas-price` is zero.
+- [2059](https://github.com/FuelLabs/fuel-core/pull/2059): Remove unwrap that is breaking backwards compatibility
+- [2063](https://github.com/FuelLabs/fuel-core/pull/2063): Don't use historical view during dry run.
+
+## [Version 0.32.0]
+
+### Added
 - [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
 
 ### Breaking
+- [2048](https://github.com/FuelLabs/fuel-core/pull/2048): Disable SMT for `ContractsAssets` and `ContractsState` for the production mode of the `fuel-core`. The SMT still is used in benchmarks and tests.
+- [#1988](https://github.com/FuelLabs/fuel-core/pull/1988): Updated `fuel-vm` to `0.56.0` ([release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0)). Adds Blob transaction support.
 - [2025](https://github.com/FuelLabs/fuel-core/pull/2025): Add new V0 algorithm for gas price to services.
     This change includes new flags for the CLI:
         - "starting-gas-price" - the starting gas price for the gas price algorithm
@@ -17,10 +75,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
         - "gas-price-threshold-percent" - the threshold percent for determining if the gas price will be increase or decreased
     And the following CLI flags are serving a new purpose
         - "min-gas-price" - the minimum gas price that the gas price algorithm will return
-- [2035](https://github.com/FuelLabs/fuel-core/pull/2035): Small code optimizations.
-    - The optimized code specifies the capacity when initializing the HashSet, avoiding potential multiple reallocations of memory during element insertion.
-    - The optimized code uses the return value of HashSet::insert to check if the insertion was successful. If the insertion fails (i.e., the element already exists), it returns an error. This reduces one lookup operation.
-    - The optimized code simplifies the initialization logic of exclude by using the Option::map_or_else method.
+- [2045](https://github.com/FuelLabs/fuel-core/pull/2045): Include withdrawal message only if transaction is executed successfully.
+- [2041](https://github.com/FuelLabs/fuel-core/pull/2041): Add code for startup of the gas price algorithm updater so 
+    the gas price db on startup is always in sync with the on chain db
+
 ## [Version 0.31.0]
 
 ### Added

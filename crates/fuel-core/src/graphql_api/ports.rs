@@ -6,6 +6,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     tables::{
+        BlobData,
         Coins,
         ContractsAssets,
         ContractsRawCode,
@@ -117,6 +118,7 @@ pub trait OnChainDatabase:
     + DatabaseBlocks
     + DatabaseMessages
     + StorageInspect<Coins, Error = StorageError>
+    + StorageInspect<BlobData, Error = StorageError>
     + DatabaseContracts
     + DatabaseChain
     + DatabaseMessageProof
@@ -236,7 +238,7 @@ pub trait P2pPort: Send + Sync {
 #[async_trait::async_trait]
 pub trait GasPriceEstimate: Send + Sync {
     /// The worst case scenario for gas price at a given horizon
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> u64;
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64>;
 }
 
 /// Trait for getting VM memory.

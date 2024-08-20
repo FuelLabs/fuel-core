@@ -1,6 +1,10 @@
-use std::time::Duration;
+use std::{
+    path::PathBuf,
+    time::Duration,
+};
 
 use clap::ValueEnum;
+use fuel_core_poa::signer::SignMode;
 use strum_macros::{
     Display,
     EnumString,
@@ -23,13 +27,7 @@ use fuel_core_p2p::config::{
 pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
-use fuel_core_types::{
-    blockchain::{
-        header::StateTransitionBytecodeVersion,
-        primitives::SecretKeyWrapper,
-    },
-    secrecy::Secret,
-};
+use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
@@ -51,6 +49,7 @@ pub struct Config {
     pub utxo_validation: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
     pub block_production: Trigger,
+    pub predefined_blocks_path: Option<PathBuf>,
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
@@ -65,7 +64,7 @@ pub struct Config {
     pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
-    pub consensus_key: Option<Secret<SecretKeyWrapper>>,
+    pub consensus_signer: SignMode,
     pub name: String,
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
     /// The number of reserved peers to connect to before starting to sync.
@@ -147,6 +146,7 @@ impl Config {
             native_executor_version: Some(native_executor_version),
             snapshot_reader,
             block_production: Trigger::Instant,
+            predefined_blocks_path: None,
             vm: Default::default(),
             txpool: fuel_core_txpool::Config {
                 utxo_validation,
@@ -167,7 +167,7 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
-            consensus_key: Some(Secret::new(
+            consensus_signer: SignMode::Key(fuel_core_types::secrecy::Secret::new(
                 fuel_core_chain_config::default_consensus_dev_key().into(),
             )),
             name: String::default(),
@@ -200,10 +200,15 @@ impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
         fuel_core_poa::Config {
             trigger: config.block_production,
-            signing_key: config.consensus_key.clone(),
+            signer: config.consensus_signer.clone(),
             metrics: false,
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
+            chain_id: config
+                .snapshot_reader
+                .chain_config()
+                .consensus_parameters
+                .chain_id(),
         }
     }
 }

@@ -90,9 +90,11 @@ async fn next__fetches_l2_block() {
     let metadata_storage = FakeMetadata::empty();
 
     let starting_metadata = arb_metadata();
-    let mut updater =
-        FuelGasPriceUpdater::init(starting_metadata, l2_block_source, metadata_storage)
-            .unwrap();
+    let mut updater = FuelGasPriceUpdater::new(
+        starting_metadata.into(),
+        l2_block_source,
+        metadata_storage,
+    );
 
     let start = updater.start(0.into());
     // when
@@ -106,43 +108,63 @@ async fn next__fetches_l2_block() {
 }
 
 #[tokio::test]
-async fn init__if_exists_already_reload() {
+async fn init__if_exists_already_reload_old_values_with_overrides() {
     // given
-    let metadata = arb_metadata();
-    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(metadata.clone())));
+    let original = arb_metadata();
+    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
     let metadata_storage = FakeMetadata {
         inner: metadata_inner,
     };
     let l2_block_source = PendingL2BlockSource;
+    let new_min_exec_gas_price = 99;
+    let new_exec_gas_price_change_percent = 88;
+    let new_l2_block_fullness_threshold_percent = 77;
 
     // when
-    let different_metadata = different_arb_metadata();
-    let updater =
-        FuelGasPriceUpdater::init(different_metadata, l2_block_source, metadata_storage)
-            .unwrap();
+    let height = original.l2_block_height();
+    let updater = FuelGasPriceUpdater::init(
+        height,
+        l2_block_source,
+        metadata_storage,
+        new_min_exec_gas_price,
+        new_exec_gas_price_change_percent,
+        new_l2_block_fullness_threshold_percent,
+    )
+    .unwrap();
 
     // then
-    let expected: AlgorithmUpdater = metadata.into();
+    let UpdaterMetadata::V0(original_inner) = original;
+    let expected: AlgorithmUpdater = UpdaterMetadata::V0(V0Metadata {
+        min_exec_gas_price: new_min_exec_gas_price,
+        exec_gas_price_change_percent: new_exec_gas_price_change_percent,
+        l2_block_fullness_threshold_percent: new_l2_block_fullness_threshold_percent,
+        ..original_inner
+    })
+    .into();
     let actual = updater.inner;
     assert_eq!(expected, actual);
 }
 
 #[tokio::test]
-async fn init__if_it_does_not_exist_create_with_provided_values() {
+async fn init__if_it_does_not_exist_fail() {
     // given
     let metadata_storage = FakeMetadata::empty();
     let l2_block_source = PendingL2BlockSource;
 
     // when
     let metadata = different_arb_metadata();
-    let updater =
-        FuelGasPriceUpdater::init(metadata.clone(), l2_block_source, metadata_storage)
-            .unwrap();
+    let height = u32::from(metadata.l2_block_height()) + 1;
+    let res = FuelGasPriceUpdater::init(
+        height.into(),
+        l2_block_source,
+        metadata_storage,
+        0,
+        0,
+        0,
+    );
 
     // then
-    let expected: AlgorithmUpdater = metadata.into();
-    let actual = updater.inner;
-    assert_eq!(expected, actual);
+    assert!(matches!(res, Err(Error::CouldNotInitUpdater(_))));
 }
 
 #[tokio::test]
@@ -163,12 +185,11 @@ async fn next__new_l2_block_saves_old_metadata() {
     };
 
     let starting_metadata = arb_metadata();
-    let mut updater = FuelGasPriceUpdater::init(
-        starting_metadata.clone(),
+    let mut updater = FuelGasPriceUpdater::new(
+        starting_metadata.clone().into(),
         l2_block_source,
         metadata_storage,
-    )
-    .unwrap();
+    );
 
     // when
     let next = tokio::spawn(async move { updater.next().await });

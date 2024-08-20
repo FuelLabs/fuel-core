@@ -151,7 +151,7 @@ pub struct V0Metadata {
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
     /// based on the fullness of the last L2 block
     pub exec_gas_price_change_percent: u64,
-    /// The height of the next L2 block
+    /// The height for which the `new_exec_price` is calculated, which should be the _next_ block
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
     /// This is a percentage of the total capacity of the L2 block
@@ -187,15 +187,31 @@ where
     Metadata: MetadataStorage,
 {
     pub fn init(
-        init_metadata: UpdaterMetadata,
+        target_block_height: BlockHeight,
         l2_block_source: L2,
         metadata_storage: Metadata,
+        min_exec_gas_price: u64,
+        exec_gas_price_change_percent: u64,
+        l2_block_fullness_threshold_percent: u64,
     ) -> Result<Self> {
-        let target_block_height = init_metadata.l2_block_height();
-        let inner = metadata_storage
-            .get_metadata(&target_block_height)?
-            .unwrap_or(init_metadata)
-            .into();
+        let old_metadata = metadata_storage.get_metadata(&target_block_height)?.ok_or(
+            Error::CouldNotInitUpdater(anyhow::anyhow!(
+                "No metadata found for block height: {:?}",
+                target_block_height
+            )),
+        )?;
+        let inner = match old_metadata {
+            UpdaterMetadata::V0(old) => {
+                let v0 = AlgorithmUpdaterV0::new(
+                    old.new_exec_price,
+                    min_exec_gas_price,
+                    exec_gas_price_change_percent,
+                    old.l2_block_height,
+                    l2_block_fullness_threshold_percent,
+                );
+                AlgorithmUpdater::V0(v0)
+            }
+        };
         let updater = Self {
             inner,
             l2_block_source,
@@ -227,7 +243,8 @@ where
         let AlgorithmUpdater::V0(ref mut updater) = &mut self.inner;
         match l2_block {
             BlockInfo::GenesisBlock => {
-                // do nothing
+                self.metadata_storage
+                    .set_metadata(self.inner.clone().into())?;
             }
             BlockInfo::Block {
                 height,

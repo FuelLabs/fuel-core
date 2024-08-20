@@ -1,5 +1,4 @@
 [advisories]
 ignore = [
-    "RUSTSEC-2023-0052", # https://github.com/FuelLabs/fuel-core/issues/1316
     "RUSTSEC-2024-0336" # https://github.com/FuelLabs/fuel-core/issues/1843
-    ]
+]

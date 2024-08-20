@@ -1,6 +1,6 @@
 # Stage 1: Build
 FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
-FROM --platform=$BUILDPLATFORM rust:1.75.0 AS chef
+FROM --platform=$BUILDPLATFORM rust:1.79.0 AS chef
 
 ARG TARGETPLATFORM
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
@@ -20,13 +20,13 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 
-FROM chef as planner
+FROM chef AS planner
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 
-FROM chef as builder
+FROM chef AS builder
 ARG FEATURES="production"
 ARG DEBUG_SYMBOLS=false
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -40,13 +40,16 @@ RUN xx-cargo chef cook --release --no-default-features --features "${BUILD_FEATU
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
+# download latest chain-configuration repo after cache to ensure most recent version
+RUN git clone --depth=1 https://github.com/FuelLabs/chain-configuration.git /chain-config
+# build application
 RUN xx-cargo build --release --no-default-features --features "$BUILD_FEATURES" -p fuel-core-bin \
     && xx-verify ./target/$(xx-cargo --print-target-triple)/release/fuel-core \
     && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core ./target/release/fuel-core \
     && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d ./target/release/fuel-core.d
 
 # Stage 2: Run
-FROM ubuntu:22.04 as run
+FROM ubuntu:22.04 AS run
 
 ARG IP=0.0.0.0
 ARG PORT=4000
@@ -68,6 +71,7 @@ RUN apt-get update -y \
 
 COPY --from=builder /build/target/release/fuel-core .
 COPY --from=builder /build/target/release/fuel-core.d .
+COPY --from=builder /chain-config ./config
 
 EXPOSE ${PORT}
 EXPOSE ${P2P_PORT}

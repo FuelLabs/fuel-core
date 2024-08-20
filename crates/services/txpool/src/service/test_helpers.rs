@@ -5,8 +5,10 @@ use crate::{
         BlockImporter,
         MockConsensusParametersProvider,
     },
+    test_helpers::MockWasmChecker,
     types::GasPrice,
     MockDb,
+    Result as TxPoolResult,
 };
 use fuel_core_services::{
     stream::BoxStream,
@@ -30,7 +32,6 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::GossipsubMessageAcceptance,
-        txpool::Result as TxPoolResult,
     },
 };
 use std::cell::RefCell;
@@ -52,6 +53,7 @@ pub struct TestContext {
     pub(crate) service: Service<
         MockP2P,
         MockDBProvider,
+        MockWasmChecker,
         MockTxPoolGasPrice,
         MockConsensusParametersProvider,
         DummyPool,
@@ -96,6 +98,7 @@ impl TestContext {
     ) -> &Service<
         MockP2P,
         MockDBProvider,
+        MockWasmChecker,
         MockTxPoolGasPrice,
         MockConsensusParametersProvider,
         DummyPool,
@@ -272,6 +275,7 @@ impl TestContextBuilder {
             MockDBProvider(mock_db.clone()),
             importer,
             p2p,
+            MockWasmChecker { result: Ok(()) },
             Default::default(),
             gas_price_provider,
             consensus_parameters_provider,

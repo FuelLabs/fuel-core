@@ -43,13 +43,14 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        BlobId,
         Bytes32,
         Receipt,
         Transaction,
         TxId,
     },
-    fuel_types,
     fuel_types::{
+        self,
         canonical::Serialize,
         BlockHeight,
         Nonce,
@@ -69,6 +70,7 @@ use pagination::{
 };
 use schema::{
     balance::BalanceArgs,
+    blob::BlobByIdArgs,
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
@@ -587,16 +589,17 @@ impl FuelClient {
 
     /// Get the status of a transaction
     pub async fn transaction_status(&self, id: &TxId) -> io::Result<TransactionStatus> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
+        let query =
+            schema::tx::TransactionStatusQuery::build(TxIdArgs { id: (*id).into() });
 
-        let tx = self.query(query).await?.transaction.ok_or_else(|| {
+        let status = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(
                 ErrorKind::NotFound,
                 format!("status not found for transaction {id} "),
             )
         })?;
 
-        let status = tx
+        let status = status
             .status
             .ok_or_else(|| {
                 io::Error::new(
@@ -684,7 +687,8 @@ impl FuelClient {
     }
 
     pub async fn receipts(&self, id: &TxId) -> io::Result<Option<Vec<Receipt>>> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
+        let query =
+            schema::tx::TransactionStatusQuery::build(TxIdArgs { id: (*id).into() });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
@@ -774,6 +778,13 @@ impl FuelClient {
             .transpose()?;
 
         Ok(block)
+    }
+
+    /// Retrieve a blob by its ID
+    pub async fn blob(&self, id: BlobId) -> io::Result<Option<types::Blob>> {
+        let query = schema::blob::BlobByIdQuery::build(BlobByIdArgs { id: id.into() });
+        let blob = self.query(query).await?.blob.map(Into::into);
+        Ok(blob)
     }
 
     /// Retrieve multiple blocks
@@ -1018,6 +1029,11 @@ impl FuelClient {
 
         let transaction = self.query(query).await?.transaction;
 
-        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
+        Ok(transaction
+            .map(|tx| {
+                let response: TransactionResponse = tx.try_into()?;
+                Ok::<_, ConversionError>(response.transaction)
+            })
+            .transpose()?)
     }
 }

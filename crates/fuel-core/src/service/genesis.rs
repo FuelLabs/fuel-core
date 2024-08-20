@@ -83,13 +83,11 @@ pub async fn execute_genesis_block(
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
-        .iter_all::<GenesisMetadata<OnChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OnChain>>(None)
         .try_collect()?;
     let genesis_progress_off_chain: Vec<String> = db
         .off_chain()
-        .iter_all::<GenesisMetadata<OffChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OffChain>>(None)
         .try_collect()?;
 
     let chain_config = config.snapshot_reader.chain_config();
@@ -257,10 +255,11 @@ mod tests {
         service::{
             config::Config,
             FuelService,
-            Task,
         },
+        ShutdownListener,
     };
     use fuel_core_chain_config::{
+        BlobConfig,
         CoinConfig,
         ContractConfig,
         LastBlockConfig,
@@ -269,14 +268,16 @@ mod tests {
         StateConfig,
     };
     use fuel_core_producer::ports::BlockProducerDatabase;
-    use fuel_core_services::RunnableService;
     use fuel_core_storage::{
         tables::{
             Coins,
             ContractsAssets,
             ContractsState,
         },
-        transactional::AtomicView,
+        transactional::{
+            AtomicView,
+            HistoricalView,
+        },
         StorageAsRef,
     };
     use fuel_core_types::{
@@ -320,7 +321,6 @@ mod tests {
         assert_eq!(
             genesis_block_height,
             db.latest_height()
-                .unwrap()
                 .expect("Expected a block height to be set")
         )
     }
@@ -343,6 +343,10 @@ mod tests {
         .take(1000)
         .collect_vec();
 
+        let blobs = std::iter::repeat_with(|| BlobConfig::randomize(&mut rng))
+            .take(1000)
+            .collect_vec();
+
         let contracts = std::iter::repeat_with(|| given_contract_config(&mut rng))
             .take(1000)
             .collect_vec();
@@ -350,6 +354,7 @@ mod tests {
         let state = StateConfig {
             coins,
             messages,
+            blobs,
             contracts,
             last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(0u32),
@@ -579,8 +584,9 @@ mod tests {
         let service_config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
-        let task = Task::new(db, service_config).unwrap();
-        let init_result = task.into_task(&Default::default(), ()).await;
+        let mut shutdown = ShutdownListener::spawn();
+        let task = FuelService::new(db, service_config, &mut shutdown).unwrap();
+        let init_result = task.start_and_await().await;
 
         assert!(init_result.is_err())
     }
@@ -605,8 +611,9 @@ mod tests {
         let service_config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
-        let task = Task::new(db, service_config).unwrap();
-        let init_result = task.into_task(&Default::default(), ()).await;
+        let mut shutdown = ShutdownListener::spawn();
+        let task = FuelService::new(db, service_config, &mut shutdown).unwrap();
+        let init_result = task.start_and_await().await;
 
         assert!(init_result.is_err())
     }

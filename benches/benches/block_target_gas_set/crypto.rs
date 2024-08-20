@@ -97,43 +97,46 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
             .collect(),
     );
 
-    let message = Message::new(b"foo");
     let ed19_secret = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng {});
     let ed19_signature = ed19_secret.sign(&*message);
 
-    run(
-        "crypto/ed19 opcode",
-        group,
-        vec![
-            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
-            op::addi(
-                0x21,
-                0x20,
-                ed19_secret
-                    .verifying_key()
-                    .as_ref()
-                    .len()
-                    .try_into()
-                    .unwrap(),
-            ),
-            op::addi(
-                0x22,
-                0x21,
-                ed19_signature.to_bytes().len().try_into().unwrap(),
-            ),
-            op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
-            op::ed19(0x20, 0x21, 0x22),
-            op::jmpb(RegId::ZERO, 0),
-        ],
-        ed19_secret
-            .verifying_key()
-            .to_bytes()
-            .iter()
-            .copied()
-            .chain(ed19_signature.to_bytes())
-            .chain(message.as_ref().iter().copied())
-            .collect(),
-    );
+    for i in arb_dependent_cost_values() {
+        let id = format!("crypto/ed19 opcode {:?}", i);
+        let message = vec![1u8; i as usize];
+        run(
+            &id,
+            group,
+            vec![
+                op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                op::addi(
+                    0x21,
+                    0x20,
+                    ed19_secret
+                        .verifying_key()
+                        .as_ref()
+                        .len()
+                        .try_into()
+                        .unwrap(),
+                ),
+                op::addi(
+                    0x22,
+                    0x21,
+                    ed19_signature.to_bytes().len().try_into().unwrap(),
+                ),
+                op::movi(0x23, message.len().try_into().unwrap()),
+                op::ed19(0x20, 0x21, 0x22, 0x23),
+                op::jmpb(RegId::ZERO, 0),
+            ],
+            ed19_secret
+                .verifying_key()
+                .to_bytes()
+                .iter()
+                .copied()
+                .chain(ed19_signature.to_bytes())
+                .chain(message.iter().copied())
+                .collect(),
+        );
+    }
 
     for i in arb_dependent_cost_values() {
         let id = format!("crypto/s256 opcode {:?}", i);

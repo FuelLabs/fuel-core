@@ -13,6 +13,7 @@ use fuel_core_poa::{
     ports::{
         BlockImporter,
         P2pPort,
+        PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
     },
@@ -24,6 +25,7 @@ use fuel_core_poa::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
+    blockchain::block::Block,
     fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
@@ -38,6 +40,10 @@ use fuel_core_types::{
         txpool::ArcPoolTx,
     },
     tai64::Tai64,
+};
+use std::path::{
+    Path,
+    PathBuf,
 };
 use tokio_stream::{
     wrappers::BroadcastStream,
@@ -120,6 +126,15 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
             }
         }
     }
+
+    async fn produce_predefined_block(
+        &self,
+        block: &Block,
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
+        self.block_producer
+            .produce_and_execute_predefined(block)
+            .await
+    }
 }
 
 #[async_trait::async_trait]
@@ -162,4 +177,40 @@ impl P2pPort for P2PAdapter {
     fn reserved_peers_count(&self) -> BoxStream<usize> {
         Box::pin(tokio_stream::pending())
     }
+}
+
+pub struct InDirectoryPredefinedBlocks {
+    path_to_directory: Option<PathBuf>,
+}
+
+impl InDirectoryPredefinedBlocks {
+    pub fn new(path_to_directory: Option<PathBuf>) -> Self {
+        Self { path_to_directory }
+    }
+}
+
+impl PredefinedBlocks for InDirectoryPredefinedBlocks {
+    fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>> {
+        let Some(path) = &self.path_to_directory else {
+            return Ok(None);
+        };
+
+        let block_height: u32 = (*height).into();
+        if block_exists(path.as_path(), block_height) {
+            let block_path = block_path(path.as_path(), block_height);
+            let block_bytes = std::fs::read(block_path)?;
+            let block: Block = serde_json::from_slice(block_bytes.as_slice())?;
+            Ok(Some(block))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+pub fn block_path(path_to_directory: &Path, block_height: u32) -> PathBuf {
+    path_to_directory.join(format!("{}.json", block_height))
+}
+
+pub fn block_exists(path_to_directory: &Path, block_height: u32) -> bool {
+    block_path(path_to_directory, block_height).exists()
 }

@@ -1,3 +1,4 @@
+mod blob;
 mod chain;
 mod coin;
 mod consensus;
@@ -10,6 +11,7 @@ mod snapshot_metadata;
 mod state;
 mod table_entry;
 
+pub use blob::*;
 pub use chain::*;
 pub use coin::*;
 pub use consensus::*;

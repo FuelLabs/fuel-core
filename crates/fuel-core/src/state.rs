@@ -34,6 +34,8 @@ pub mod iterable_key_value_view;
 pub mod key_value_view;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
+#[cfg(feature = "rocksdb")]
+pub mod rocks_db_key_iterator;
 
 pub type ColumnType<Description> = <Description as DatabaseDescription>::Column;
 
@@ -71,7 +73,7 @@ pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
 
     fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>>;
 
-    fn rollback_last_block(&self) -> StorageResult<()>;
+    fn rollback_block_to(&self, height: &Height) -> StorageResult<()>;
 }
 
 // It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
@@ -93,7 +95,7 @@ where
         unimplemented!()
     }
 
-    fn rollback_last_block(&self) -> StorageResult<()> {
+    fn rollback_block_to(&self, _: &Height) -> StorageResult<()> {
         unimplemented!()
     }
 }
@@ -149,6 +151,30 @@ where
                     WriteOperation::Insert(value) => {
                         Some((key.clone().into(), value.clone()))
                     }
+                    WriteOperation::Remove => None,
+                })
+                .map(Ok)
+                .into_boxed()
+        } else {
+            core::iter::empty().into_boxed()
+        }
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+        // We cannot define iter_store_keys appropriately for the `ChangesIterator`,
+        // because we have to filter out the keys that were removed, which are
+        // marked as `WriteOperation::Remove` in the value
+        // copied as-is from the above function, but only to return keys
+        if let Some(tree) = self.changes.get(&column.id()) {
+            fuel_core_storage::iter::iterator(tree, prefix, start, direction)
+                .filter_map(|(key, value)| match value {
+                    WriteOperation::Insert(_) => Some(key.clone().into()),
                     WriteOperation::Remove => None,
                 })
                 .map(Ok)

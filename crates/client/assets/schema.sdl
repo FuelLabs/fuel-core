@@ -44,6 +44,13 @@ input BalanceFilterInput {
 	owner: Address!
 }
 
+type Blob {
+	id: BlobId!
+	bytecode: HexString!
+}
+
+scalar BlobId
+
 type Block {
 	version: BlockVersion!
 	id: BlockId!
@@ -320,6 +327,7 @@ type FailureStatus {
 	transactionId: TransactionId!
 	blockHeight: U32!
 	block: Block!
+	transaction: Transaction!
 	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
@@ -430,12 +438,15 @@ type GasCosts {
 	xor: U64!
 	xori: U64!
 	alocDependentCost: DependentCost!
+	bldd: DependentCost
+	bsiz: DependentCost
 	cfe: DependentCost!
 	cfeiDependentCost: DependentCost!
 	call: DependentCost!
 	ccp: DependentCost!
 	croo: DependentCost!
 	csiz: DependentCost!
+	ed19DependentCost: DependentCost!
 	k256: DependentCost!
 	ldc: DependentCost!
 	logd: DependentCost!
@@ -853,6 +864,12 @@ type Query {
 		assetId: AssetId!
 	): Balance!
 	balances(filter: BalanceFilterInput!, first: Int, after: String, last: Int, before: String): BalanceConnection!
+	blob(
+		"""
+		ID of the Blob
+		"""
+		id: BlobId!
+	): Blob
 	block(
 		"""
 		ID of the block
@@ -1117,6 +1134,7 @@ type SuccessStatus {
 	transactionId: TransactionId!
 	blockHeight: U32!
 	block: Block!
+	transaction: Transaction!
 	time: Tai64Timestamp!
 	programState: ProgramState
 	receipts: [Receipt!]!
@@ -1143,6 +1161,7 @@ type Transaction {
 	isMint: Boolean!
 	isUpgrade: Boolean!
 	isUpload: Boolean!
+	isBlob: Boolean!
 	inputs: [Input!]
 	outputs: [Output!]!
 	outputContract: ContractOutput
@@ -1152,6 +1171,7 @@ type Transaction {
 	script: HexString
 	scriptData: HexString
 	bytecodeWitnessIndex: U16
+	blobId: BlobId
 	salt: Salt
 	storageSlots: [HexString!]
 	bytecodeRoot: Bytes32

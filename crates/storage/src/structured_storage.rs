@@ -21,6 +21,7 @@ use crate::{
     kv_store::{
         BatchOperations,
         KVItem,
+        KeyItem,
         KeyValueInspect,
         KeyValueMutate,
         StorageColumn,
@@ -49,6 +50,7 @@ use std::{
 };
 
 pub mod balances;
+pub mod blobs;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
@@ -200,6 +202,16 @@ where
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
         self.inner.iter_store(column, prefix, start, direction)
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        self.inner.iter_store_keys(column, prefix, start, direction)
     }
 }
 

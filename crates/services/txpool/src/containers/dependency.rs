@@ -6,6 +6,7 @@ use crate::{
 };
 use fuel_core_types::{
     fuel_tx::{
+        field::BlobId as BlobIdField,
         input::{
             coin::{
                 CoinPredicate,
@@ -23,7 +24,10 @@ use fuel_core_types::{
         Output,
         UtxoId,
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        BlobId,
+        Nonce,
+    },
     services::txpool::ArcPoolTx,
 };
 use std::collections::{
@@ -40,6 +44,8 @@ pub struct Dependency {
     coins: HashMap<UtxoId, CoinState>,
     /// Contract-> Tx mapping.
     contracts: HashMap<ContractId, ContractState>,
+    /// Blob-> Tx mapping.
+    blobs: HashMap<BlobId, BlobState>,
     /// messageId -> tx mapping
     messages: HashMap<Nonce, MessageState>,
     /// max depth of dependency.
@@ -90,74 +96,21 @@ pub struct MessageState {
     tip: Word,
 }
 
+#[derive(Debug, Clone)]
+pub struct BlobState {
+    origin_tx_id: TxId,
+    tip: Word,
+}
+
 impl Dependency {
     pub fn new(max_depth: usize, utxo_validation: bool) -> Self {
         Self {
             coins: HashMap::new(),
             contracts: HashMap::new(),
+            blobs: HashMap::new(),
             messages: HashMap::new(),
             max_depth,
             utxo_validation,
-        }
-    }
-
-    /// find all dependent Transactions that are inside txpool.
-    /// Does not check db. They can be sorted by gasPrice to get order of dependency
-    pub(crate) fn find_dependent(
-        &self,
-        tx: ArcPoolTx,
-        seen: &mut HashMap<TxId, ArcPoolTx>,
-        txs: &HashMap<TxId, TxInfo>,
-    ) {
-        // for every input aggregate UtxoId and check if it is inside
-        let mut check = vec![tx.id()];
-        while let Some(parent_txhash) = check.pop() {
-            let mut is_new = false;
-            let mut parent_tx = None;
-            seen.entry(parent_txhash).or_insert_with(|| {
-                is_new = true;
-                let parent = txs.get(&parent_txhash).expect("To have tx in txpool");
-                parent_tx = Some(parent.clone());
-                parent.tx().clone()
-            });
-            // for every input check if tx_id is inside seen. if not, check coins/contract map.
-            if let Some(parent_tx) = parent_tx {
-                for input in parent_tx.inputs() {
-                    // if found and depth is not zero add it to `check`.
-                    match input {
-                        Input::CoinSigned(CoinSigned { utxo_id, .. })
-                        | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                            let state = self
-                                .coins
-                                .get(utxo_id)
-                                .expect("to find coin inside spend tx");
-                            if !state.is_in_database() {
-                                check.push(*utxo_id.tx_id());
-                            }
-                        }
-                        Input::Contract(Contract { contract_id, .. }) => {
-                            let state = self
-                                .contracts
-                                .get(contract_id)
-                                .expect("Expect to find contract in dependency");
-
-                            if !state.is_in_database() {
-                                let origin = state
-                                    .origin
-                                    .as_ref()
-                                    .expect("contract origin to be present");
-                                check.push(*origin.tx_id());
-                            }
-                        }
-                        Input::MessageCoinSigned(_)
-                        | Input::MessageCoinPredicate(_)
-                        | Input::MessageDataSigned(_)
-                        | Input::MessageDataPredicate(_) => {
-                            // Message inputs do not depend on any other fuel transactions
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -258,6 +211,7 @@ impl Dependency {
             usize,
             HashMap<UtxoId, CoinState>,
             HashMap<ContractId, ContractState>,
+            HashMap<BlobId, BlobState>,
             HashMap<Nonce, MessageState>,
             Vec<TxId>,
         ),
@@ -268,7 +222,34 @@ impl Dependency {
         let mut max_depth = 0;
         let mut db_coins: HashMap<UtxoId, CoinState> = HashMap::new();
         let mut db_contracts: HashMap<ContractId, ContractState> = HashMap::new();
+        let mut db_blobs: HashMap<BlobId, BlobState> = HashMap::new();
         let mut db_messages: HashMap<Nonce, MessageState> = HashMap::new();
+
+        if let PoolTransaction::Blob(checked_tx, _) = tx.as_ref() {
+            let blob_id = checked_tx.transaction().blob_id();
+            if db
+                .blob_exist(blob_id)
+                .map_err(|e| Error::Database(format!("{:?}", e)))?
+            {
+                return Err(Error::NotInsertedBlobIdAlreadyTaken(*blob_id))
+            }
+
+            if let Some(state) = self.blobs.get(blob_id) {
+                if state.tip >= tx.tip() {
+                    return Err(Error::NotInsertedCollisionBlobId(*blob_id))
+                } else {
+                    collided.push(state.origin_tx_id);
+                }
+            }
+            db_blobs.insert(
+                *blob_id,
+                BlobState {
+                    origin_tx_id: tx.id(),
+                    tip: tx.tip(),
+                },
+            );
+        }
+
         for input in tx.inputs() {
             // check if all required inputs are here.
             match input {
@@ -461,7 +442,14 @@ impl Dependency {
             // collision of other outputs is not possible.
         }
 
-        Ok((max_depth, db_coins, db_contracts, db_messages, collided))
+        Ok((
+            max_depth,
+            db_coins,
+            db_contracts,
+            db_blobs,
+            db_messages,
+            collided,
+        ))
     }
 
     /// insert tx inside dependency
@@ -475,7 +463,7 @@ impl Dependency {
     where
         DB: TxPoolDb,
     {
-        let (max_depth, db_coins, db_contracts, db_messages, collided) =
+        let (max_depth, db_coins, db_contracts, db_blobs, db_messages, collided) =
             self.check_for_collision(txs, db, tx)?;
 
         // now we are sure that transaction can be included. remove all collided transactions
@@ -519,6 +507,7 @@ impl Dependency {
         // for contracts from db that are not found in dependency, we already inserted used_by
         // and are okay to just extend current list
         self.contracts.extend(db_contracts);
+        self.blobs.extend(db_blobs);
         // insert / overwrite all applicable message id spending relations
         self.messages.extend(db_messages);
 
@@ -555,7 +544,7 @@ impl Dependency {
                     );
                 }
                 Output::Contract(_) => {
-                    // do nothing, this contract is already already found in dependencies.
+                    // do nothing, this contract is already found in dependencies.
                     // as it is tied with input and used_by is already inserted.
                 }
             };
@@ -661,6 +650,11 @@ impl Dependency {
                     self.messages.remove(nonce);
                 }
             }
+        }
+
+        if let PoolTransaction::Blob(checked_tx, _) = tx.as_ref() {
+            // remove blob state
+            self.blobs.remove(checked_tx.transaction().blob_id());
         }
 
         removed_transactions

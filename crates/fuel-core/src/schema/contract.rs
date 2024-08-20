@@ -24,6 +24,10 @@ use async_graphql::{
     InputObject,
     Object,
 };
+use fuel_core_storage::{
+    not_found,
+    tables::ContractsRawCode,
+};
 use fuel_core_types::{
     fuel_types,
     services::graphql_api,
@@ -74,7 +78,16 @@ impl ContractQuery {
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
         let query = ctx.read_view()?;
-        query.contract_id(id.0).into_api_result()
+        query
+            .contract_exists(id.0)
+            .and_then(|contract_exists| {
+                if contract_exists {
+                    Ok(id.0)
+                } else {
+                    Err(not_found!(ContractsRawCode))
+                }
+            })
+            .into_api_result()
     }
 }
 
