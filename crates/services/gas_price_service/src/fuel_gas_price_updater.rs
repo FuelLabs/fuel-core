@@ -243,7 +243,8 @@ where
         let AlgorithmUpdater::V0(ref mut updater) = &mut self.inner;
         match l2_block {
             BlockInfo::GenesisBlock => {
-                // do nothing
+                self.metadata_storage
+                    .set_metadata(self.inner.clone().into())?;
             }
             BlockInfo::Block {
                 height,

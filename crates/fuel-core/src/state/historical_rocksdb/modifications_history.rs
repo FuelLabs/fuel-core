@@ -30,6 +30,8 @@ impl<Description> TableWithBlueprint for ModificationsHistory<Description>
 where
     Description: DatabaseDescription,
 {
+    // TODO: The Blueprint should be `Plain<Primitive<8>, Postcard>` to sort
+    //  the keys in the database. https://github.com/FuelLabs/fuel-core/issues/2095
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column<Description>;
 

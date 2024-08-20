@@ -6,6 +6,7 @@ use crate::{
             GasPriceProvider,
             MockConsensusParametersProvider,
         },
+        Bytes32,
         Error,
     },
     mocks::{
@@ -23,6 +24,7 @@ use fuel_core_producer as _;
 use fuel_core_types::{
     blockchain::{
         block::{
+            Block,
             CompressedBlock,
             PartialFuelBlock,
         },
@@ -33,7 +35,14 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx::ConsensusParameters,
+    fuel_tx,
+    fuel_tx::{
+        field::InputContract,
+        ConsensusParameters,
+        Mint,
+        Script,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
@@ -534,6 +543,157 @@ mod produce_and_execute_block_txpool {
     }
 }
 
+use fuel_core_types::fuel_tx::field::MintGasPrice;
+use proptest::{
+    prop_compose,
+    proptest,
+};
+
+prop_compose! {
+    fn arb_block()(height in 1..255u8, da_height in 1..255u64, gas_price: u64, coinbase_recipient: [u8; 32], num_txs in 0..100u32) -> Block {
+        let mut txs : Vec<_> = (0..num_txs).map(|_| Transaction::Script(Script::default())).collect();
+        let mut inner_mint = Mint::default();
+        *inner_mint.gas_price_mut() = gas_price;
+        *inner_mint.input_contract_mut() = fuel_tx::input::contract::Contract{
+            contract_id: coinbase_recipient.into(),
+            ..Default::default()
+        };
+
+        let mint = Transaction::Mint(inner_mint);
+        txs.push(mint);
+        let header = PartialBlockHeader {
+            consensus: ConsensusHeader {
+                height: (height as u32).into(),
+                ..Default::default()
+            },
+            application: ApplicationHeader {
+                da_height: DaBlockHeight(da_height),
+                ..Default::default()
+            },
+        };
+        let outbox_message_ids = vec![];
+        let event_inbox_root = Bytes32::default();
+        Block::new(header, txs, &outbox_message_ids, event_inbox_root).unwrap()
+    }
+}
+
+#[allow(clippy::arithmetic_side_effects)]
+fn ctx_for_block<Tx>(
+    block: &Block,
+    executor: MockExecutorWithCapture<Tx>,
+) -> TestContext<MockExecutorWithCapture<Tx>> {
+    let prev_height = block.header().height().pred().unwrap();
+    let prev_da_height = block.header().da_height.as_u64() - 1;
+    TestContextBuilder::new()
+        .with_prev_height(prev_height)
+        .with_prev_da_height(prev_da_height.into())
+        .build_with_executor(executor)
+}
+
+// gas_price
+proptest! {
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_gas_price(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_gas_price = *block
+            .transactions().last().and_then(|tx| tx.as_mint()).unwrap().gas_price();
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().gas_price;
+        assert_eq!(expected_gas_price, actual);
+    }
+
+    // time
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_time(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_time = block.header().consensus().time;
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().header_to_produce.consensus.time;
+        assert_eq!(expected_time, actual);
+    }
+
+    // coinbase
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_coinbase_recipient(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_coinbase = block.transactions().last().and_then(|tx| tx.as_mint()).unwrap().input_contract().contract_id;
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().coinbase_recipient;
+        assert_eq!(expected_coinbase, actual);
+    }
+
+    // DA height
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_da_height(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_da_height = block.header().application().da_height;
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().header_to_produce.application.da_height;
+        assert_eq!(expected_da_height, actual);
+    }
+
+    #[test]
+    fn produce_and_execute_predefined_block__do_not_include_original_mint_in_txs_source(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let captured = executor.captured.lock().unwrap();
+        let txs_source = &captured.as_ref().unwrap().transactions_source;
+        let has_a_mint = txs_source.iter().any(|tx| matches!(tx, Transaction::Mint(_)));
+        assert!(!has_a_mint);
+    }
+}
+
+fn multithreaded_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+}
+
 struct TestContext<Executor> {
     config: Config,
     db: MockDb,
@@ -725,6 +885,48 @@ impl TestContextBuilder {
             relayer: mock_relayer,
             block_gas_limit: self.block_gas_limit.unwrap_or_default(),
             ..TestContext::default_from_db(db)
+        }
+    }
+
+    fn build_with_executor<Ex>(&self, executor: Ex) -> TestContext<Ex> {
+        let da_height = self.prev_da_height;
+        let previous_block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                application: ApplicationHeader {
+                    da_height,
+                    ..Default::default()
+                },
+                consensus: ConsensusHeader {
+                    height: self.prev_height,
+                    ..Default::default()
+                },
+            },
+            transactions: vec![],
+        }
+        .generate(&[], Default::default())
+        .unwrap()
+        .compress(&Default::default());
+
+        let db = MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(self.prev_height, previous_block)]
+                    .into_iter()
+                    .collect(),
+            )),
+            consensus_parameters_version: 0,
+            state_transition_bytecode_version: 0,
+        };
+
+        let mock_relayer = MockRelayer {
+            latest_block_height: self.latest_block_height,
+            latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
+            ..Default::default()
+        };
+
+        TestContext {
+            relayer: mock_relayer,
+            block_gas_limit: self.block_gas_limit.unwrap_or_default(),
+            ..TestContext::default_from_db_and_executor(db, executor)
         }
     }
 }

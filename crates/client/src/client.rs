@@ -43,13 +43,14 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        BlobId,
         Bytes32,
         Receipt,
         Transaction,
         TxId,
     },
-    fuel_types,
     fuel_types::{
+        self,
         canonical::Serialize,
         BlockHeight,
         Nonce,
@@ -69,6 +70,7 @@ use pagination::{
 };
 use schema::{
     balance::BalanceArgs,
+    blob::BlobByIdArgs,
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
@@ -776,6 +778,13 @@ impl FuelClient {
             .transpose()?;
 
         Ok(block)
+    }
+
+    /// Retrieve a blob by its ID
+    pub async fn blob(&self, id: BlobId) -> io::Result<Option<types::Blob>> {
+        let query = schema::blob::BlobByIdQuery::build(BlobByIdArgs { id: id.into() });
+        let blob = self.query(query).await?.blob.map(Into::into);
+        Ok(blob)
     }
 
     /// Retrieve multiple blocks

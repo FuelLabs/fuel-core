@@ -7,10 +7,36 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Add support for AWS KMS signing for the PoA consensus module. The new key can be specified with `--consensus-aws-kms AWS_KEY_ARN`.
+- [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
+- [2096](https://github.com/FuelLabs/fuel-core/pull/2096): GraphQL endpoint to fetch blob byte code by its blob ID.
+
+### Changed
+
+#### Breaking
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
+
+
+## [Version 0.33.0]
+
+### Added
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added support for predefined blocks provided via the filesystem.
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added `--predefined-blocks-path` CLI argument to pass the path to the predefined blocks.
+- [2081](https://github.com/FuelLabs/fuel-core/pull/2081): Enable producer to include predefined blocks.
 - [2079](https://github.com/FuelLabs/fuel-core/pull/2079): Open unknown columns in the RocksDB for forward compatibility.
 
 ### Changed
--[2076](https://github.com/FuelLabs/fuel-core/pull/2076): Replace usages of `iter_all` with `iter_all_keys` where necessary.
+- [2076](https://github.com/FuelLabs/fuel-core/pull/2076): Replace usages of `iter_all` with `iter_all_keys` where necessary.
+
+#### Breaking
+- [2080](https://github.com/FuelLabs/fuel-core/pull/2080): Reject Upgrade txs with invalid wasm on txpool level.
+- [2082](https://github.com/FuelLabs/fuel-core/pull/2088): Move `TxPoolError` from `fuel-core-types` to `fuel-core-txpool`.
+- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Added support for PoA key rotation.
+- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chain config.
+
+### Fixed
+
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Fixed bug in rollback logic because of wrong ordering of modifications.
 
 ## [Version 0.32.1]
 
@@ -18,8 +44,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2061](https://github.com/FuelLabs/fuel-core/pull/2061): Allow querying filled transaction body from the status.
 
 ### Changed
--[2067](https://github.com/FuelLabs/fuel-core/pull/2067): Return error from TxPool level if the `BlobId` is known.
--[2064](https://github.com/FuelLabs/fuel-core/pull/2064): Allow gas price metadata values to be overridden with config
+- [2067](https://github.com/FuelLabs/fuel-core/pull/2067): Return error from TxPool level if the `BlobId` is known.
+- [2064](https://github.com/FuelLabs/fuel-core/pull/2064): Allow gas price metadata values to be overridden with config
 
 ### Fixes
 - [2060](https://github.com/FuelLabs/fuel-core/pull/2060): Use `min-gas-price` as a starting point if `start-gas-price` is zero.

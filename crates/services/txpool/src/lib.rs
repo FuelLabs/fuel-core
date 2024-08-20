@@ -17,6 +17,7 @@ use std::{
 
 pub mod config;
 mod containers;
+pub mod error;
 pub mod ports;
 pub mod service;
 mod transaction_selector;
@@ -29,7 +30,10 @@ pub mod mock_db;
 pub use mock_db::MockDb;
 
 pub use config::Config;
-pub use fuel_core_types::services::txpool::Error;
+pub use error::{
+    Error,
+    Result,
+};
 pub use service::{
     new_service,
     Service,

@@ -182,7 +182,7 @@ where
             },
         ));
         let height = database
-            .latest_height()
+            .latest_height_from_metadata()
             .expect("Failed to get latest height during creation of the database");
 
         database.stage.height = SharedMutex::new(height);
@@ -278,10 +278,14 @@ where
                 anyhow::anyhow!("Database doesn't have a height to rollback").into(),
             );
         };
-        self.inner_storage().data.rollback_last_block()?;
+        self.inner_storage().data.rollback_block_to(&height)?;
         let new_height = height.rollback_height();
         *lock = new_height;
-        tracing::info!("Rollback to the height {:?} was successful", new_height);
+        tracing::info!(
+            "Rollback of the {} to the height {:?} was successful",
+            Description::name(),
+            new_height
+        );
 
         Ok(())
     }
@@ -547,7 +551,7 @@ mod tests {
         fn database_advances_with_a_new_block() {
             // Given
             let mut database = Database::<OnChain>::default();
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(database.latest_height(), None);
 
             // When
             let advanced_height = 1.into();
@@ -557,14 +561,14 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), Some(advanced_height));
+            assert_eq!(database.latest_height(), Some(advanced_height));
         }
 
         #[test]
         fn database_not_advances_without_block() {
             // Given
             let mut database = Database::<OnChain>::default();
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(database.latest_height(), None);
 
             // When
             database
@@ -585,7 +589,7 @@ mod tests {
                 .storage_as_mut::<FuelBlocks>()
                 .insert(&starting_height, &CompressedBlock::default())
                 .unwrap();
-            assert_eq!(database.latest_height().unwrap(), Some(starting_height));
+            assert_eq!(database.latest_height(), Some(starting_height));
 
             // When
             let next_height = starting_height.advance_height().unwrap();
@@ -595,7 +599,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), Some(next_height));
+            assert_eq!(database.latest_height(), Some(next_height));
         }
 
         #[test]
@@ -707,7 +711,7 @@ mod tests {
         fn database_advances_with_a_new_block() {
             // Given
             let mut database = Database::<OffChain>::default();
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(database.latest_height(), None);
 
             // When
             let advanced_height = 1.into();
@@ -717,14 +721,14 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), Some(advanced_height));
+            assert_eq!(database.latest_height(), Some(advanced_height));
         }
 
         #[test]
         fn database_not_advances_without_block() {
             // Given
             let mut database = Database::<OffChain>::default();
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(database.latest_height(), None);
 
             // When
             database
@@ -745,7 +749,7 @@ mod tests {
                 .storage_as_mut::<FuelBlockIdsToHeights>()
                 .insert(&Default::default(), &starting_height)
                 .unwrap();
-            assert_eq!(database.latest_height().unwrap(), Some(starting_height));
+            assert_eq!(database.latest_height(), Some(starting_height));
 
             // When
             let next_height = starting_height.advance_height().unwrap();
@@ -755,7 +759,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), Some(next_height));
+            assert_eq!(database.latest_height(), Some(next_height));
         }
 
         #[test]
@@ -867,7 +871,7 @@ mod tests {
         fn database_advances_with_a_new_block() {
             // Given
             let mut database = Database::<Relayer>::default();
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(database.latest_height(), None);
 
             // When
             let advanced_height = 1u64.into();
@@ -877,14 +881,14 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), Some(advanced_height));
+            assert_eq!(database.latest_height(), Some(advanced_height));
         }
 
         #[test]
         fn database_not_advances_without_block() {
             // Given
             let mut database = Database::<Relayer>::default();
-            assert_eq!(database.latest_height().unwrap(), None);
+            assert_eq!(database.latest_height(), None);
 
             // When
             database
@@ -911,7 +915,7 @@ mod tests {
                 .storage_as_mut::<EventsHistory>()
                 .insert(&starting_height, &[])
                 .unwrap();
-            assert_eq!(database.latest_height().unwrap(), Some(starting_height));
+            assert_eq!(database.latest_height(), Some(starting_height));
 
             // When
             let next_height = starting_height.advance_height().unwrap();
@@ -921,7 +925,7 @@ mod tests {
                 .unwrap();
 
             // Then
-            assert_eq!(database.latest_height().unwrap(), Some(next_height));
+            assert_eq!(database.latest_height(), Some(next_height));
         }
 
         #[test]

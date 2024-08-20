@@ -1,6 +1,6 @@
 # Stage 1: Build
 FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
-FROM --platform=$BUILDPLATFORM rust:1.75.0 AS chef
+FROM --platform=$BUILDPLATFORM rust:1.79.0 AS chef
 
 ARG TARGETPLATFORM
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown

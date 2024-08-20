@@ -13,6 +13,7 @@ description = "Transaction pool"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+derive_more = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }

@@ -172,6 +172,7 @@ mod tests {
         },
         kv_store::{
             KVItem,
+            KeyItem,
             KeyValueInspect,
             Value,
         },
@@ -553,6 +554,16 @@ mod tests {
         ) -> BoxedIter<KVItem> {
             unimplemented!()
         }
+
+        fn iter_store_keys(
+            &self,
+            _: Self::Column,
+            _: Option<&[u8]>,
+            _: Option<&[u8]>,
+            _: IterDirection,
+        ) -> BoxedIter<KeyItem> {
+            unimplemented!()
+        }
     }
 
     impl TransactableStorage<BlockHeight> for BrokenTransactions {
@@ -575,7 +586,7 @@ mod tests {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
-        fn rollback_last_block(&self) -> StorageResult<()> {
+        fn rollback_block_to(&self, _: &BlockHeight) -> StorageResult<()> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }
