@@ -93,7 +93,7 @@ impl InitializeTask {
             .latest_height()
             .unwrap_or(genesis_block_height)
             .into();
-        let default_metadata = get_first_metadata(&config, latest_block_height);
+        let default_metadata = get_default_metadata(&config, latest_block_height);
         let algo = get_best_algo(&gas_price_db, default_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
         let task = Self {
@@ -109,7 +109,7 @@ impl InitializeTask {
     }
 }
 
-fn get_first_metadata(config: &Config, latest_block_height: u32) -> UpdaterMetadata {
+fn get_default_metadata(config: &Config, latest_block_height: u32) -> UpdaterMetadata {
     UpdaterMetadata::V0(V0Metadata {
         new_exec_price: config.starting_gas_price.max(config.min_gas_price),
         min_exec_gas_price: config.min_gas_price,
@@ -193,7 +193,7 @@ pub fn get_synced_gas_price_updater(
         first_run = true;
         latest_block_height
     };
-    let first_metadata = get_first_metadata(&config, latest_block_height);
+    let default_metadata = get_default_metadata(&config, latest_block_height);
 
     if metadata_height > latest_block_height {
         revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
@@ -211,7 +211,7 @@ pub fn get_synced_gas_price_updater(
 
     if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
         let updater = FuelGasPriceUpdater::new(
-            first_metadata.into(),
+            default_metadata.into(),
             l2_block_source,
             metadata_storage,
         );
