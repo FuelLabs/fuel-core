@@ -138,6 +138,17 @@ where
     ) -> BoxedIter<KVItem> {
         self.storage.iter_store(column, prefix, start, direction)
     }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+        self.storage
+            .iter_store_keys(column, prefix, start, direction)
+    }
 }
 
 impl<Storage> AsRef<Storage> for GenericDatabase<Storage> {

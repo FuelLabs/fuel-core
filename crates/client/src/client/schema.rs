@@ -27,6 +27,7 @@ use crate::client::pagination::{
 pub use primitives::*;
 
 pub mod balance;
+pub mod blob;
 pub mod block;
 pub mod chain;
 pub mod coins;
