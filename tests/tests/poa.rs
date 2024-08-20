@@ -182,11 +182,10 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
     let predefined_blocks: Vec<_> = (1..=BLOCK_TO_PRODUCE)
         .map(|block_height| {
             let block_height = block_height as u32;
-            let block = on_chain_view
+            on_chain_view
                 .get_finalized_block_by_height(&block_height.into())
                 .unwrap()
-                .unwrap();
-            block
+                .unwrap()
         })
         .collect();
     assert_eq!(predefined_blocks.len(), BLOCK_TO_PRODUCE);
@@ -216,11 +215,10 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
     let blocks_from_new_node: Vec<_> = (1..=BLOCK_TO_PRODUCE)
         .map(|block_height| {
             let block_height = block_height as u32;
-            let block = on_chain_view
+            on_chain_view
                 .get_finalized_block_by_height(&block_height.into())
                 .unwrap()
-                .unwrap();
-            block
+                .unwrap()
         })
         .collect();
     assert_eq!(predefined_blocks, blocks_from_new_node);
