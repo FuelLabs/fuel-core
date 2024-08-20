@@ -36,10 +36,11 @@ impl OnChainIterableKeyValueView {
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
         // combine the block and consensus metadata into a sealed fuel block type
-        let block = self.get_full_block(height)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(height)?;
 
-        if let (Some(block), Some(consensus)) = (block, consensus) {
+        if let Some(consensus) = consensus {
+            let block = self.get_full_block(height)?.ok_or(not_found!(FuelBlocks))?;
+
             let sealed_block = SealedBlock {
                 entity: block,
                 consensus: consensus.into_owned(),
