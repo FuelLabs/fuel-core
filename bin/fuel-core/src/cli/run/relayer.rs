@@ -4,13 +4,10 @@ use clap::{
 };
 use core::time::Duration;
 use fuel_core::{
-    relayer::{
-        Config,
-        H160,
-    },
+    relayer::Config,
     types::blockchain::primitives::DaBlockHeight,
 };
-use std::str::FromStr;
+use fuel_core_types::fuel_types::Bytes20;
 
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
@@ -28,8 +25,8 @@ pub struct RelayerArgs {
     pub relayer: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
-    #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, value_delimiter = ',', env)]
-    pub eth_v2_listening_contracts: Vec<H160>,
+    #[arg(long = "relayer-v2-listening-contracts", value_delimiter = ',', env)]
+    pub eth_v2_listening_contracts: Vec<Bytes20>,
 
     /// Number of da block that the contract is deployed at.
     #[clap(long = "relayer-da-deploy-height", default_value_t = Config::DEFAULT_DA_DEPLOY_HEIGHT, env)]
@@ -51,10 +48,6 @@ pub struct RelayerArgs {
 
     #[clap(long = "relayer-eth-sync-log-freq-s", default_value_t = Config::DEFAULT_SYNCING_LOG_FREQ.as_secs(), env)]
     pub syncing_log_frequency_secs: u64,
-}
-
-pub fn parse_h160(input: &str) -> Result<H160, <H160 as FromStr>::Err> {
-    H160::from_str(input)
 }
 
 impl RelayerArgs {
