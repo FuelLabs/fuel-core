@@ -3493,6 +3493,7 @@ version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "aws-config",
  "aws-sdk-kms",
  "fuel-core-chain-config",
  "fuel-core-poa",
