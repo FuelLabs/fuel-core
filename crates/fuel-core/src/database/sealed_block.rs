@@ -14,11 +14,13 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         consensus::{
             Consensus,
             Genesis,
-            Sealed,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -47,6 +49,23 @@ impl OnChainIterableKeyValueView {
             };
 
             Ok(Some(sealed_block))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Returns a finalized `Block` by height
+    pub fn get_finalized_block_by_height(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Option<Block>> {
+        if self
+            .storage::<SealedBlockConsensus>()
+            .contains_key(height)?
+        {
+            Ok(Some(
+                self.get_full_block(height)?.ok_or(not_found!(FuelBlocks))?,
+            ))
         } else {
             Ok(None)
         }
@@ -125,8 +144,8 @@ impl OnChainIterableKeyValueView {
             .map(BlockHeight::from)
             .map(|block_height| {
                 let transactions = self
-                    .get_sealed_block_by_height(&block_height)?
-                    .map(|Sealed { entity: block, .. }| block.into_inner().1)
+                    .get_finalized_block_by_height(&block_height)?
+                    .map(|block| block.into_inner().1)
                     .map(Transactions);
                 Ok(transactions)
             })
