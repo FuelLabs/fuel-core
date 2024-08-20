@@ -333,7 +333,6 @@ pub fn init_sub_services(
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
         Box::new(gas_price_service),
-        Box::new(graph_ql),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),
     ];
@@ -355,6 +354,7 @@ pub fn init_sub_services(
         }
     }
 
+    services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
 
     Ok((services, shared))
