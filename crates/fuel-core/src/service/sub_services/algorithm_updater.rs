@@ -93,8 +93,8 @@ impl InitializeTask {
             .latest_height()
             .unwrap_or(genesis_block_height)
             .into();
-        let first_metadata = get_first_metadata(&config, latest_block_height);
-        let algo = get_best_algo(&gas_price_db, first_metadata)?;
+        let default_metadata = get_first_metadata(&config, latest_block_height);
+        let algo = get_best_algo(&gas_price_db, default_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
         let task = Self {
             config,
@@ -110,27 +110,30 @@ impl InitializeTask {
 }
 
 fn get_first_metadata(config: &Config, latest_block_height: u32) -> UpdaterMetadata {
-    let first_metadata = UpdaterMetadata::V0(V0Metadata {
+    UpdaterMetadata::V0(V0Metadata {
         new_exec_price: config.starting_gas_price.max(config.min_gas_price),
         min_exec_gas_price: config.min_gas_price,
         exec_gas_price_change_percent: config.gas_price_change_percent,
         l2_block_height: latest_block_height,
         l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
-    });
-    first_metadata
+    })
 }
 
 fn get_best_algo(
     gas_price_db: &Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
-    first_metadata: UpdaterMetadata,
+    default_metadata: UpdaterMetadata,
 ) -> anyhow::Result<Algorithm> {
-    let height = gas_price_db.latest_height().unwrap_or(0.into());
-    let latest_metadata = gas_price_db
-        .storage::<GasPriceMetadata>()
-        .get(&height)?
-        .map(|m| m.into_owned())
-        .unwrap_or(first_metadata);
-    let updater: AlgorithmUpdater = latest_metadata.into();
+    let best_metadata: UpdaterMetadata =
+        if let Some(height) = gas_price_db.latest_height() {
+            gas_price_db
+                .storage::<GasPriceMetadata>()
+                .get(&height)?
+                .map(|m| m.into_owned())
+                .unwrap_or(default_metadata)
+        } else {
+            default_metadata
+        };
+    let updater: AlgorithmUpdater = best_metadata.into();
     let algo = updater.algorithm();
     Ok(algo)
 }
