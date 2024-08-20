@@ -254,13 +254,13 @@ impl CombinedDatabase {
             let gas_price_chain_height =
                 self.gas_price().latest_height_from_metadata()?;
 
-            let gas_price_roll_backed = gas_price_chain_height.is_none()
+            let gas_price_rolled_back = gas_price_chain_height.is_none()
                 || gas_price_chain_height.expect("We checked height before")
                     == target_block_height;
 
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
-                && gas_price_roll_backed
+                && gas_price_rolled_back
             {
                 break;
             }
