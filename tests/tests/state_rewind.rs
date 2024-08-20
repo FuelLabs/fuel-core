@@ -29,7 +29,10 @@ use rand::{
     SeedableRng,
 };
 use std::collections::BTreeSet;
-use test_helpers::fuel_core_driver::FuelCoreDriver;
+use test_helpers::{
+    fuel_core_driver::FuelCoreDriver,
+    produce_block_with_tx,
+};
 
 fn transfer_transaction(min_amount: u64, rng: &mut StdRng) -> Transaction {
     let mut builder = TransactionBuilder::script(vec![], vec![]);
@@ -250,4 +253,41 @@ async fn rollback_chain_to_same_height_1000() -> anyhow::Result<()> {
         blocks_in_the_chain,
     )
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let driver = FuelCoreDriver::spawn_feeless(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--state-rewind-duration",
+        "7d",
+    ])
+    .await?;
+
+    // Given
+    const TOTAL_BLOCKS: u64 = 500;
+    for _ in 0..TOTAL_BLOCKS {
+        produce_block_with_tx(&mut rng, &driver.client).await;
+    }
+    let temp_dir = driver.kill().await;
+    std::fs::remove_dir_all(temp_dir.path().join("gas_price")).unwrap();
+
+    // When
+    let args = [
+        "_IGNORED_",
+        "--db-path",
+        temp_dir.path().to_str().unwrap(),
+        "--target-block-height",
+        "1",
+    ];
+    let command = fuel_core_bin::cli::rollback::Command::parse_from(args);
+    let result = fuel_core_bin::cli::rollback::exec(command).await;
+
+    // Then
+    result.expect("Rollback should succeed");
+
+    Ok(())
 }

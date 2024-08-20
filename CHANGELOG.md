@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 #### Breaking
 - [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
 
+### Fixed
+
+- [2105](https://github.com/FuelLabs/fuel-core/pull/2105): Fixed the rollback functionality to work with empty gas price database.
 
 ## [Version 0.33.0]
 
