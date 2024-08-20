@@ -41,12 +41,15 @@ impl TestContext {
             ..Config::local_node()
         };
 
-        let _node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
+        let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
             .await
             .unwrap();
-        let client = FuelClient::from(_node.bound_address);
+        let client = FuelClient::from(node.bound_address);
 
-        Self { _node, client }
+        Self {
+            _node: node,
+            client,
+        }
     }
 
     async fn new_blob(
@@ -150,4 +153,25 @@ async fn blob__accessing_nonexitent_blob_panics_vm() {
 
     // Then
     assert!(matches!(tx_status, TransactionStatus::Failure { .. }));
+}
+
+#[tokio::test]
+async fn blob__can_be_queried_if_uploaded() {
+    // Given
+    let mut ctx = TestContext::new().await;
+    let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
+    let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
+    assert!(matches!(status, TransactionStatus::Success { .. }));
+
+    // When
+    let queried_blob = ctx
+        .client
+        .blob(blob_id)
+        .await
+        .expect("blob query failed")
+        .expect("no block returned");
+
+    // Then
+    assert_eq!(queried_blob.id, blob_id);
+    assert_eq!(queried_blob.bytecode, bytecode);
 }

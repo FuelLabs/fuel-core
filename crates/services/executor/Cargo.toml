@@ -13,7 +13,7 @@ description = "Fuel Block Executor"
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false }
-hex = { version = "0.4", features = ["serde"] }
+hex = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
