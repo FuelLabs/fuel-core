@@ -19,7 +19,7 @@ pub enum TableEncoding {
     },
 }
 impl TableEncoding {
-    #[allow(clippy::assigning_clones)] // TODO: clean up the following code
+    #[allow(clippy::assigning_clones)] // False positive will be fixed in 1.81 Rust (https://github.com/rust-lang/rust-clippy/pull/12756)
     fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<()> {
         match self {
             TableEncoding::Json { filepath } => {
@@ -41,7 +41,6 @@ impl TableEncoding {
         Ok(())
     }
 
-    #[allow(clippy::needless_borrows_for_generic_args)] // False positive
     fn prepend_path(&mut self, dir: &Path) {
         match self {
             TableEncoding::Json { filepath } => {
@@ -82,7 +81,7 @@ impl SnapshotMetadata {
         Ok(snapshot)
     }
 
-    #[allow(clippy::assigning_clones)] // TODO: clean up the following code
+    #[allow(clippy::assigning_clones)] // False positive will be fixed in 1.81 Rust (https://github.com/rust-lang/rust-clippy/pull/12756)
     fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<&mut Self> {
         self.chain_config = self.chain_config.strip_prefix(dir)?.to_owned();
         self.table_encoding.strip_prefix(dir)?;
