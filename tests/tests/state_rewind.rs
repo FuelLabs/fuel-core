@@ -97,11 +97,10 @@ async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
     for i in 0..TOTAL_BLOCKS {
         let height_to_execute = rng.gen_range(1..last_block_height);
 
-        let sealed_block = view
-            .get_sealed_block_by_height(&height_to_execute.into())
+        let block = view
+            .get_full_block(&height_to_execute.into())
             .unwrap()
             .unwrap();
-        let block = sealed_block.entity;
 
         // When
         tracing::info!("Validating block {i} at height {}", height_to_execute);
