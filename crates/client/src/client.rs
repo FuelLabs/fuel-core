@@ -408,6 +408,7 @@ impl FuelClient {
     ) -> io::Result<Option<StateTransitionBytecode>> {
         let args = schema::upgrades::StateTransitionBytecodeByVersionArgs { version };
         let query = schema::upgrades::StateTransitionBytecodeByVersionQuery::build(args);
+
         let result = self
             .query(query)
             .await?
@@ -426,6 +427,7 @@ impl FuelClient {
             root: HexString(Bytes(root.to_vec())),
         };
         let query = schema::upgrades::StateTransitionBytecodeByRootQuery::build(args);
+
         let result = self
             .query(query)
             .await?
