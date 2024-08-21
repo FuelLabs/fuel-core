@@ -98,7 +98,7 @@ async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
         let height_to_execute = rng.gen_range(1..last_block_height);
 
         let block = view
-            .get_block_by_height(&height_to_execute.into())
+            .get_full_block(&height_to_execute.into())
             .unwrap()
             .unwrap();
 

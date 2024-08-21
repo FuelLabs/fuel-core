@@ -14,10 +14,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
+        block::CompressedBlock,
         consensus::{
             Consensus,
             Genesis,
@@ -52,14 +49,6 @@ impl OnChainIterableKeyValueView {
         } else {
             Ok(None)
         }
-    }
-
-    /// Returns a `Block` by its height.
-    pub fn get_block_by_height(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Option<Block>> {
-        self.get_full_block(height)
     }
 
     pub fn genesis_height(&self) -> StorageResult<Option<BlockHeight>> {
@@ -135,7 +124,7 @@ impl OnChainIterableKeyValueView {
             .map(BlockHeight::from)
             .map(|block_height| {
                 let transactions = self
-                    .get_block_by_height(&block_height)?
+                    .get_full_block(&block_height)?
                     .map(|block| block.into_inner().1)
                     .map(Transactions);
                 Ok(transactions)
