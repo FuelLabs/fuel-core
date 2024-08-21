@@ -59,16 +59,7 @@ impl OnChainIterableKeyValueView {
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<Block>> {
-        if self
-            .storage::<SealedBlockConsensus>()
-            .contains_key(height)?
-        {
-            Ok(Some(
-                self.get_full_block(height)?.ok_or(not_found!(FuelBlocks))?,
-            ))
-        } else {
-            Ok(None)
-        }
+        self.get_full_block(height)
     }
 
     pub fn genesis_height(&self) -> StorageResult<Option<BlockHeight>> {
