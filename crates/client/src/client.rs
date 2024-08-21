@@ -479,6 +479,7 @@ impl FuelClient {
         &self,
         tx: &Transaction,
     ) -> io::Result<TransactionStatus> {
+        use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
         let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
             tx: HexString(Bytes(tx)),

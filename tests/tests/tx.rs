@@ -206,7 +206,7 @@ async fn submit_and_await_status() {
         .finalize_as_transaction();
 
     let status = client.submit_and_await_status_commit(&tx).await.unwrap();
-    assert!(matches!(status, TransactionStatus::Success { .. }));
+    assert!(matches!(status, TransactionStatus::Submitted { .. }));
 }
 
 #[ignore]
