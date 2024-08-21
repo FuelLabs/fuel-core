@@ -43,6 +43,7 @@ impl UpgradeQuery {
         Ok(ConsensusParameters(params))
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn state_transition_bytecode_by_version(
         &self,
         ctx: &Context<'_>,
@@ -54,6 +55,7 @@ impl UpgradeQuery {
             .into_api_result()
     }
 
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn state_transition_bytecode_by_root(
         &self,
         root: HexString,
