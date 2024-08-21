@@ -18,7 +18,6 @@ use fuel_core_types::{
         consensus::{
             Consensus,
             Genesis,
-            Sealed,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -36,10 +35,11 @@ impl OnChainIterableKeyValueView {
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
         // combine the block and consensus metadata into a sealed fuel block type
-        let block = self.get_full_block(height)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(height)?;
 
-        if let (Some(block), Some(consensus)) = (block, consensus) {
+        if let Some(consensus) = consensus {
+            let block = self.get_full_block(height)?.ok_or(not_found!(FuelBlocks))?;
+
             let sealed_block = SealedBlock {
                 entity: block,
                 consensus: consensus.into_owned(),
@@ -96,10 +96,14 @@ impl OnChainIterableKeyValueView {
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>> {
-        let header = self.storage::<FuelBlocks>().get(height)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(height)?;
 
-        if let (Some(header), Some(consensus)) = (header, consensus) {
+        if let Some(consensus) = consensus {
+            let header = self
+                .storage::<FuelBlocks>()
+                .get(height)?
+                .ok_or(not_found!(FuelBlocks))?; // This shouldn't happen if a block has been sealed
+
             let sealed_block = SealedBlockHeader {
                 entity: header.into_owned().header().clone(),
                 consensus: consensus.into_owned(),
@@ -120,8 +124,8 @@ impl OnChainIterableKeyValueView {
             .map(BlockHeight::from)
             .map(|block_height| {
                 let transactions = self
-                    .get_sealed_block_by_height(&block_height)?
-                    .map(|Sealed { entity: block, .. }| block.into_inner().1)
+                    .get_full_block(&block_height)?
+                    .map(|block| block.into_inner().1)
                     .map(Transactions);
                 Ok(transactions)
             })
