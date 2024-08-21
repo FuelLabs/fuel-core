@@ -694,6 +694,47 @@ async fn starting_node_with_overwritten_old_poa_key_doesnt_rollback_the_state(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn starting_empty_node_with_overwritten_poa_works() -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let state_config = StateConfig::local_testnet();
+    let mut original_chain_config = ChainConfig::local_testnet();
+    let tmp_dir = tempdir()?;
+    let tmp_path: PathBuf = tmp_dir.path().into();
+    let snapshot_writer = SnapshotWriter::json(tmp_path.clone());
+
+    // Given
+    let (original_secret_key, original_address) = random_key(&mut rng);
+    original_chain_config.consensus =
+        ConsensusConfig::PoAV2(PoAV2::new(original_address, {
+            let mut overrides = BTreeMap::default();
+            overrides.insert(123.into(), original_address);
+            overrides
+        }));
+    snapshot_writer.write_state_config(state_config.clone(), &original_chain_config)?;
+
+    // When
+    let result = FuelCoreDriver::spawn_with_directory(
+        tmp_dir,
+        &[
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--snapshot",
+            tmp_path.to_str().unwrap(),
+            "--consensus-key",
+            original_secret_key.to_string().as_str(),
+        ],
+    )
+    .await;
+
+    // Then
+    let core = result.expect("Failed to start the node");
+    produce_block_with_tx(&mut rng, &core.client).await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn starting_node_with_overwritten_new_poa_key_rollbacks_the_state(
 ) -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);

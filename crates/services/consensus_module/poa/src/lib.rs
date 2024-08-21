@@ -5,7 +5,6 @@
 #![deny(warnings)]
 #![allow(clippy::blocks_in_conditions)] // False positives with tracing macros
 
-mod deadline_clock;
 mod sync;
 
 #[cfg(test)]

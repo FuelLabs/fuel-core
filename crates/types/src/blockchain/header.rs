@@ -166,7 +166,7 @@ pub type ConsensusParametersVersion = u32;
 pub type StateTransitionBytecodeVersion = u32;
 
 /// The latest version of the state transition bytecode.
-pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 8;
+pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 9;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

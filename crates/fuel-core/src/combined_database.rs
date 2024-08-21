@@ -252,13 +252,15 @@ impl CombinedDatabase {
                 .ok_or(anyhow::anyhow!("off-chain database doesn't have height"))?;
 
             let gas_price_chain_height =
-                self.gas_price().latest_height_from_metadata()?.ok_or(
-                    anyhow::anyhow!("gas-price-chain database doesn't have height"),
-                )?;
+                self.gas_price().latest_height_from_metadata()?;
+
+            let gas_price_rolled_back = gas_price_chain_height.is_none()
+                || gas_price_chain_height.expect("We checked height before")
+                    == target_block_height;
 
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
-                && gas_price_chain_height == target_block_height
+                && gas_price_rolled_back
             {
                 break;
             }
@@ -277,11 +279,13 @@ impl CombinedDatabase {
                 ));
             }
 
-            if gas_price_chain_height < target_block_height {
-                return Err(anyhow::anyhow!(
-                    "gas-price-chain database height({gas_price_chain_height}) \
-                    is less than target height({target_block_height})"
-                ));
+            if let Some(gas_price_chain_height) = gas_price_chain_height {
+                if gas_price_chain_height < target_block_height {
+                    return Err(anyhow::anyhow!(
+                        "gas-price-chain database height({gas_price_chain_height}) \
+                        is less than target height({target_block_height})"
+                    ));
+                }
             }
 
             if on_chain_height > target_block_height {
@@ -292,8 +296,10 @@ impl CombinedDatabase {
                 self.off_chain().rollback_last_block()?;
             }
 
-            if gas_price_chain_height > target_block_height {
-                self.gas_price().rollback_last_block()?;
+            if let Some(gas_price_chain_height) = gas_price_chain_height {
+                if gas_price_chain_height > target_block_height {
+                    self.gas_price().rollback_last_block()?;
+                }
             }
         }
 
