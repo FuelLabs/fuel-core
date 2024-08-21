@@ -327,7 +327,7 @@ pub struct Task<P, V, B> {
     request_sender: mpsc::Sender<TaskRequest>,
     database_processor: HeavyTaskProcessor,
     broadcast: B,
-    max_headers_per_request: u32,
+    max_headers_per_request: usize,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
     heartbeat_max_avg_interval: Duration,
@@ -439,8 +439,7 @@ where
 
         match request_message {
             RequestMessage::Transactions(range) => {
-                let range_size = range.end.saturating_sub(range.start);
-                if range_size > max_len {
+                if range.len() > max_len {
                     tracing::error!(
                         requested_length = range.len(),
                         max_len,
@@ -491,8 +490,7 @@ where
                 }
             }
             RequestMessage::SealedHeaders(range) => {
-                let range_size = range.end.saturating_sub(range.start);
-                if range_size > max_len {
+                if range.len() > max_len {
                     tracing::error!(
                         requested_length = range.len(),
                         max_len,
