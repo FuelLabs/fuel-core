@@ -435,13 +435,12 @@ where
         let instant = Instant::now();
         let timeout = self.response_timeout;
         let response_channel = self.request_sender.clone();
+        let max_len = self.max_headers_per_request;
+
         match request_message {
             RequestMessage::Transactions(range) => {
-                let max_len = self
-                    .max_headers_per_request
-                    .try_into()
-                    .expect("u32 should always fit into usize");
-                if range.len() > max_len {
+                let range_size = range.end.saturating_sub(range.start);
+                if range_size > max_len {
                     tracing::error!(
                         requested_length = range.len(),
                         max_len,
@@ -492,11 +491,8 @@ where
                 }
             }
             RequestMessage::SealedHeaders(range) => {
-                let max_len = self
-                    .max_headers_per_request
-                    .try_into()
-                    .expect("u32 should always fit into usize");
-                if range.len() > max_len {
+                let range_size = range.end.saturating_sub(range.start);
+                if range_size > max_len {
                     tracing::error!(
                         requested_length = range.len(),
                         max_len,
