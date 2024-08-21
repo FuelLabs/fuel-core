@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - [2113](https://github.com/FuelLabs/fuel-core/pull/2113): Modify the way the gas price service and shared algo is initialized to have some default value based on best guess instead of `None`, and initialize service before graphql.
 - [2112](https://github.com/FuelLabs/fuel-core/pull/2112): Alter the way the sealed blocks are fetched with a given height.
-
+- [2120](https://github.com/FuelLabs/fuel-core/pull/2120): Added `submitAndAwaitStatus` subscription endpoint which returns the `SubmittedStatus` after the transaction is submitted as well as the `TransactionStatus` subscription.
 
 ## [Version 0.34.0]
 
@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     And the following CLI flags are serving a new purpose
         - "min-gas-price" - the minimum gas price that the gas price algorithm will return
 - [2045](https://github.com/FuelLabs/fuel-core/pull/2045): Include withdrawal message only if transaction is executed successfully.
-- [2041](https://github.com/FuelLabs/fuel-core/pull/2041): Add code for startup of the gas price algorithm updater so 
+- [2041](https://github.com/FuelLabs/fuel-core/pull/2041): Add code for startup of the gas price algorithm updater so
     the gas price db on startup is always in sync with the on chain db
 
 ## [Version 0.31.0]
@@ -194,7 +194,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
-- [#1906](https://github.com/FuelLabs/fuel-core/pull/1906): Makes `cli::snapshot::Command` members public such that clients can create and execute snapshot commands programmatically. This enables snapshot execution in external programs, such as the regenesis test suite. 
+- [#1906](https://github.com/FuelLabs/fuel-core/pull/1906): Makes `cli::snapshot::Command` members public such that clients can create and execute snapshot commands programmatically. This enables snapshot execution in external programs, such as the regenesis test suite.
 - [#1891](https://github.com/FuelLabs/fuel-core/pull/1891): Regenesis now preserves `FuelBlockMerkleData` and `FuelBlockMerkleMetadata` in the off-chain table. These tables are checked when querying message proofs.
 - [#1886](https://github.com/FuelLabs/fuel-core/pull/1886): Use ref to `Block` in validation code
 - [#1876](https://github.com/FuelLabs/fuel-core/pull/1876): Updated benchmark to include the worst scenario for `CROO` opcode. Also include consensus parameters in bench output.
@@ -218,12 +218,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1868](https://github.com/FuelLabs/fuel-core/pull/1868): Include the `event_inbox_root` in the header hash. Changed types of the `transactions_count` to `u16` and `message_receipt_count` to `u32` instead of `u64`. Updated the application hash root calculation to not pad numbers.
 - [#1866](https://github.com/FuelLabs/fuel-core/pull/1866): Fixed a runtime panic that occurred when restarting a node. The panic happens when the relayer database is already populated, and the relayer attempts an empty commit during start up. This invalid commit is removed in this PR.
 - [#1871](https://github.com/FuelLabs/fuel-core/pull/1871): Fixed `block` endpoint to return fetch the blocks from both databases after regenesis.
-- [#1856](https://github.com/FuelLabs/fuel-core/pull/1856): Replaced instances of `Union` with `Enum` for GraphQL definitions of `ConsensusParametersVersion` and related types. This is needed because `Union` does not support multiple `Version`s inside discriminants or empty variants. 
-- [#1870](https://github.com/FuelLabs/fuel-core/pull/1870): Fixed benchmarks for the `0.25.3`. 
+- [#1856](https://github.com/FuelLabs/fuel-core/pull/1856): Replaced instances of `Union` with `Enum` for GraphQL definitions of `ConsensusParametersVersion` and related types. This is needed because `Union` does not support multiple `Version`s inside discriminants or empty variants.
+- [#1870](https://github.com/FuelLabs/fuel-core/pull/1870): Fixed benchmarks for the `0.25.3`.
 - [#1870](https://github.com/FuelLabs/fuel-core/pull/1870): Improves the performance of getting the size of the contract from the `InMemoryTransaction`.
 - [#1851](https://github.com/FuelLabs/fuel-core/pull/1851/): Provided migration capabilities (enabled addition of new column families) to RocksDB instance.
 
-### Added 
+### Added
 
 - [#1853](https://github.com/FuelLabs/fuel-core/pull/1853): Added a test case to verify the database's behavior when new columns are added to the RocksDB database.
 - [#1860](https://github.com/FuelLabs/fuel-core/pull/1860): Regenesis now preserves `FuelBlockIdsToHeights` off-chain table.
@@ -281,14 +281,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     - Along with the new block height, the regenesis process also increases the state transition bytecode and consensus parameters versions. It guarantees that a new network doesn't use values from the previous network and allows us not to migrate `StateTransitionBytecodeVersions` and `ConsensusParametersVersions` tables.
     - Added a new CLI argument, `native-executor-version,` that allows overriding of the default version of the native executor. It can be useful for side rollups that have their own history of executor upgrades.
     - Replaced:
-      
+
       ```rust
                let file = std::fs::File::open(path)?;
                let mut snapshot: Self = serde_json::from_reader(&file)?;
       ```
-      
+
       with a:
-      
+
       ```rust
                let mut json = String::new();
                std::fs::File::open(&path)
@@ -300,7 +300,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     - Updated all tests to use `Config::local_node_*` instead of working with the `SnapshotReader` directly. It is the preparation of the tests for the futures bumps of the `Executor::VERSION`. When we increase the version, all tests continue to use `GenesisBlock.state_transition_bytecode = 0` while the version is different, which forces the usage of the WASM executor, while for tests, we still prefer to test native execution. The `Config::local_node_*` handles it and forces the executor to use the native version.
     - Reworked the `build.rs` file of the upgradable executor. The script now caches WASM bytecode to avoid recompilation. Also, fixed the issue with outdated WASM bytecode. The script reacts on any modifications of the `fuel-core-wasm-executor` and forces recompilation (it is why we need the cache), so WASM bytecode always is actual now.
 - [#1822](https://github.com/FuelLabs/fuel-core/pull/1822): Removed support of `Create` transaction from debugger since it doesn't have any script to execute.
-- [#1822](https://github.com/FuelLabs/fuel-core/pull/1822): Use `fuel-vm 0.49.0` with new transactions types - `Upgrade` and `Upload`. Also added `max_bytecode_subsections` field to the `ConsensusParameters` to limit the number of bytecode subsections in the state transition bytecode. 
+- [#1822](https://github.com/FuelLabs/fuel-core/pull/1822): Use `fuel-vm 0.49.0` with new transactions types - `Upgrade` and `Upload`. Also added `max_bytecode_subsections` field to the `ConsensusParameters` to limit the number of bytecode subsections in the state transition bytecode.
 - [#1816](https://github.com/FuelLabs/fuel-core/pull/1816): Updated the upgradable executor to fetch the state transition bytecode from the database when the version doesn't match a native one. This change enables the WASM executor in the "production" build and requires a `wasm32-unknown-unknown` target.
 
 ## [Version 0.24.2]
@@ -339,9 +339,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [1785](https://github.com/FuelLabs/fuel-core/pull/1785): Producer will only include DA height if it has enough gas to include the associate forced transactions.
 - [#1771](https://github.com/FuelLabs/fuel-core/pull/1771): Contract 'states' and 'balances' brought back into `ContractConfig`. Parquet now writes a file per table.
 - [1779](https://github.com/FuelLabs/fuel-core/pull/1779): Modify Relayer service to order Events from L1 by block index
-- [#1783](https://github.com/FuelLabs/fuel-core/pull/1783): The PR upgrade `fuel-vm` to `0.48.0` release. Because of some breaking changes, we also adapted our codebase to follow them: 
+- [#1783](https://github.com/FuelLabs/fuel-core/pull/1783): The PR upgrade `fuel-vm` to `0.48.0` release. Because of some breaking changes, we also adapted our codebase to follow them:
   - Implementation of `Default` for configs was moved under the `test-helpers` feature. The `fuel-core` binary uses testnet configuration instead of `Default::default`(for cases when `ChainConfig` was not provided by the user).
-  - All parameter types are enums now and require corresponding modifications across the codebase(we need to use getters and setters). The GraphQL API remains the same for simplicity, but each parameter now has one more field - `version`, that can be used to decide how to deserialize. 
+  - All parameter types are enums now and require corresponding modifications across the codebase(we need to use getters and setters). The GraphQL API remains the same for simplicity, but each parameter now has one more field - `version`, that can be used to decide how to deserialize.
   - The `UtxoId` type now is 34 bytes instead of 33. It affects hex representation and requires adding `00`.
   - The `block_gas_limit` was moved to `ConsensusParameters` from `ChainConfig`. It means the block producer doesn't specify the block gas limit anymore, and we don't need to propagate this information.
   - The `bytecodeLength` field is removed from the `Create` transaction.
@@ -364,13 +364,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     - The change splits the `KeyValueStore` into `KeyValueInspect` and `KeyValueMutate`, as well the `Blueprint` into `BlueprintInspect` and `BlueprintMutate`. It allows requiring less restricted constraints for any read-related operations.
 
     - One of the main ideas of the change is to allow for the actual storage only to implement `KeyValueInspect` and `Modifiable` without the `KeyValueMutate`. It simplifies work with the databases and provides a safe way of interacting with them (Modification into the database can only go through the `Modifiable::commit_changes`). This feature is used to [track the height](https://github.com/FuelLabs/fuel-core/pull/1694/files#diff-c95a3d57a39feac7c8c2f3b193a24eec39e794413adc741df36450f9a4539898) of each database during commits and even limit how commits are done, providing additional safety. This part of the change was done as a [separate commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/7b1141ac838568e3590f09dd420cb24a6946bd32).
-    
+
     - The `StorageTransaction` is a `StructuredStorage` that uses `InMemoryTransaction` inside to accumulate modifications. Only `InMemoryTransaction` has a real implementation of the `KeyValueMutate`(Other types only implement it in tests).
-    
+
     - The implementation of the `Modifiable` for the `Database` contains a business logic that provides additional safety but limits the usage of the database. The `Database` now tracks its height and is responsible for its updates. In the `commit_changes` function, it analyzes the changes that were done and tries to find a new height(For example, in the case of the `OnChain` database, we are looking for a new `Block` in the `FuelBlocks` table).
-    
+
     - As was planned in the issue, now the executor has full control over how commits to the storage are done.
-    
+
     - All mutation methods now require `&mut self` - exclusive ownership over the object to be able to write into it. It almost negates the chance of concurrent modification of the storage, but it is still possible since the `Database` implements the `Clone` trait. To be sure that we don't corrupt the state of the database, the `commit_changes` function implements additional safety checks to be sure that we commit updates per each height only once time.
 
     - Side changes:
@@ -462,7 +462,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Changed `CROO` gas price type from `Word` to `DependentGasPrice`. The dependent gas price values are dummy values while awaiting updated benchmarks.
 - [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The GraphQL API uses block height instead of the block id where it is possible. The transaction status contains `block_height` instead of the `block_id`.
 - [#1675](https://github.com/FuelLabs/fuel-core/pull/1675): Simplify GQL schema by disabling contract resolvers in most cases, and just return a ContractId scalar instead.
-- [#1658](https://github.com/FuelLabs/fuel-core/pull/1658): Receipts are part of the transaction status. 
+- [#1658](https://github.com/FuelLabs/fuel-core/pull/1658): Receipts are part of the transaction status.
     Removed `reason` from the `TransactionExecutionResult::Failed`. It can be calculated based on the program state and receipts.
     Also, it is not possible to fetch `receipts` from the `Transaction` directly anymore. Instead, you need to fetch `status` and its receipts.
 - [#1646](https://github.com/FuelLabs/fuel-core/pull/1646): Remove redundant receipts from queries.
@@ -476,57 +476,57 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1596](https://github.com/FuelLabs/fuel-core/pull/1596): Make `Consensus` type a version-able enum
 - [#1593](https://github.com/FuelLabs/fuel-core/pull/1593): Make `Block` type a version-able enum
 - [#1576](https://github.com/FuelLabs/fuel-core/pull/1576): The change moves the implementation of the storage traits for required tables from `fuel-core` to `fuel-core-storage` crate. The change also adds a more flexible configuration of the encoding/decoding per the table and allows the implementation of specific behaviors for the table in a much easier way. It unifies the encoding between database, SMTs, and iteration, preventing mismatching bytes representation on the Rust type system level. Plus, it increases the re-usage of the code by applying the same blueprint to other tables.
-    
+
     It is a breaking PR because it changes database encoding/decoding for some tables.
-    
+
     ### StructuredStorage
-    
+
     The change adds a new type `StructuredStorage`. It is a wrapper around the key-value storage that implements the storage traits(`StorageInspect`, `StorageMutate`, `StorageRead`, etc) for the tables with blueprint. This blueprint works in tandem with the `TableWithBlueprint` trait. The table may implement `TableWithBlueprint` specifying the blueprint, as an example:
-    
+
     ```rust
     impl TableWithBlueprint for ContractsRawCode {
         type Blueprint = Plain<Raw, Raw>;
-    
+
         fn column() -> Column {
             Column::ContractsRawCode
         }
     }
     ```
-    
+
     It is a definition of the blueprint for the `ContractsRawCode` table. It has a plain blueprint meaning it simply encodes/decodes bytes and stores/loads them into/from the storage. As a key codec and value codec, it uses a `Raw` encoding/decoding that simplifies writing bytes and loads them back into the memory without applying any serialization or deserialization algorithm.
-    
+
     If the table implements `TableWithBlueprint` and the selected codec satisfies all blueprint requirements, the corresponding storage traits for that table are implemented on the `StructuredStorage` type.
-    
+
     ### Codecs
-    
+
     Each blueprint allows customizing the key and value codecs. It allows the use of different codecs for different tables, taking into account the complexity and weight of the data and providing a way of more optimal implementation.
-    
+
     That property may be very useful to perform migration in a more easier way. Plus, it also can be a `no_std` migration potentially allowing its fraud proving.
-    
+
     An example of migration:
-    
+
     ```rust
     /// Define the table for V1 value encoding/decoding.
     impl TableWithBlueprint for ContractsRawCodeV1 {
         type Blueprint = Plain<Raw, Raw>;
-    
+
         fn column() -> Column {
             Column::ContractsRawCode
         }
     }
-    
+
     /// Define the table for V2 value encoding/decoding.
     /// It uses `Postcard` codec for the value instead of `Raw` codec.
     ///
     /// # Dev-note: The columns is the same.
     impl TableWithBlueprint for ContractsRawCodeV2 {
         type Blueprint = Plain<Raw, Postcard>;
-    
+
         fn column() -> Column {
             Column::ContractsRawCode
         }
     }
-    
+
     fn migration(storage: &mut Database) {
         let mut iter = storage.iter_all::<ContractsRawCodeV1>(None);
         while let Ok((key, value)) = iter.next() {
@@ -535,19 +535,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
         }
     }
     ```
-    
+
     ### Structures
-    
+
     The blueprint of the table defines its behavior. As an example, a `Plain` blueprint simply encodes/decodes bytes and stores/loads them into/from the storage. The `SMT` blueprint builds a sparse merkle tree on top of the key-value pairs.
-    
+
     Implementing a blueprint one time, we can apply it to any table satisfying the requirements of this blueprint. It increases the re-usage of the code and minimizes duplication.
-    
+
     It can be useful if we decide to create global roots for all required tables that are used in fraud proving.
-    
+
     ```rust
     impl TableWithBlueprint for SpentMessages {
         type Blueprint = Plain<Raw, Postcard>;
-    
+
         fn column() -> Column {
             Column::SpentMessages
         }
@@ -555,28 +555,28 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
                      |
                      |
                     \|/
-    
+
     impl TableWithBlueprint for SpentMessages {
         type Blueprint =
             Sparse<Raw, Postcard, SpentMessagesMerkleMetadata, SpentMessagesMerkleNodes>;
-    
+
         fn column() -> Column {
             Column::SpentMessages
         }
     }
     ```
-    
+
     ### Side changes
-    
+
     #### `iter_all`
     The `iter_all` functionality now accepts the table instead of `K` and `V` generics. It is done to use the correct codec during deserialization. Also, the table definition provides the column.
-    
+
     #### Duplicated unit tests
-    
+
     The `fuel-core-storage` crate provides macros that generate unit tests. Almost all tables had the same test like `get`, `insert`, `remove`, `exist`. All duplicated tests were moved to macros. The unique one still stays at the same place where it was before.
-    
+
     #### `StorageBatchMutate`
-    
+
     Added a new `StorageBatchMutate` trait that we can move to `fuel-storage` crate later. It allows batch operations on the storage. It may be more performant in some cases.
 
 - [#1573](https://github.com/FuelLabs/fuel-core/pull/1573): Remove nested p2p request/response encoding. Only breaks p2p networking compatibility with older fuel-core versions, but is otherwise fully internal.
@@ -590,22 +590,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   ```shell
         --tx-blacklist-addresses <TX_BLACKLIST_ADDRESSES>
             The list of banned addresses ignored by the `TxPool`
-            
+
             [env: TX_BLACKLIST_ADDRESSES=]
-  
+
         --tx-blacklist-coins <TX_BLACKLIST_COINS>
             The list of banned coins ignored by the `TxPool`
-            
+
             [env: TX_BLACKLIST_COINS=]
-  
+
         --tx-blacklist-messages <TX_BLACKLIST_MESSAGES>
             The list of banned messages ignored by the `TxPool`
-            
+
             [env: TX_BLACKLIST_MESSAGES=]
-  
+
         --tx-blacklist-contracts <TX_BLACKLIST_CONTRACTS>
             The list of banned contracts ignored by the `TxPool`
-            
+
             [env: TX_BLACKLIST_CONTRACTS=]
   ```
 
@@ -640,13 +640,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
-- [#1517](https://github.com/FuelLabs/fuel-core/pull/1517): Changed default gossip heartbeat interval to 500ms. 
+- [#1517](https://github.com/FuelLabs/fuel-core/pull/1517): Changed default gossip heartbeat interval to 500ms.
 - [#1520](https://github.com/FuelLabs/fuel-core/pull/1520): Extract `executor` into `fuel-core-executor` crate.
 
 ### Fixed
 
 #### Breaking
-- [#1536](https://github.com/FuelLabs/fuel-core/pull/1536): The change fixes the contracts tables to not touch SMT nodes of foreign contracts. Before, it was possible to invalidate the SMT from another contract. It is a breaking change and requires re-calculating the whole state from the beginning with new SMT roots. 
+- [#1536](https://github.com/FuelLabs/fuel-core/pull/1536): The change fixes the contracts tables to not touch SMT nodes of foreign contracts. Before, it was possible to invalidate the SMT from another contract. It is a breaking change and requires re-calculating the whole state from the beginning with new SMT roots.
 - [#1542](https://github.com/FuelLabs/fuel-core/pull/1542): Migrates information about peers to NodeInfo instead of ChainInfo. It also elides information about peers in the default node_info query.
 
 ## [Version 0.21.0]
@@ -672,7 +672,7 @@ FuelVM received a lot of safety and stability improvements:
 - Removed the `ChainId` from the `PredicateId` calculation, allowing the use of predicates cross-chain.
 - Improvements in the performance of some storage-related opcodes.
 - Support the `ECAL` instruction that allows adding custom functionality to the VM. It can be used to create unique rollups or advanced indexers in the future.
-- Support of [transaction policies](https://github.com/FuelLabs/fuel-vm/blob/master/CHANGELOG.md#version-0420) provides additional safety for the user. 
+- Support of [transaction policies](https://github.com/FuelLabs/fuel-vm/blob/master/CHANGELOG.md#version-0420) provides additional safety for the user.
     It also allows the implementation of a multi-dimensional price model in the future, making the transaction execution cheaper and allowing more transactions that don't affect storage.
 - Refactored errors, returning more detailed errors to the user, simplifying debugging.
 
@@ -713,8 +713,8 @@ FuelVM received a lot of safety and stability improvements:
 - [#1339](https://github.com/FuelLabs/fuel-core/pull/1339): Adds `baseAssetId` to `FeeParameters` in the GraphQL API.
 - [#1331](https://github.com/FuelLabs/fuel-core/pull/1331): Add peer reputation reporting to block import code.
 - [#1324](https://github.com/FuelLabs/fuel-core/pull/1324): Added pyroscope profiling to fuel-core, intended to be used by a secondary docker image that has debug symbols enabled.
-- [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.  
-- [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way. 
+- [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.
+- [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way.
 - [#1304](https://github.com/FuelLabs/fuel-core/pull/1304): Implemented `submit_and_await_commit_with_receipts` method for `FuelClient`.
 - [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 - [#1274](https://github.com/FuelLabs/fuel-core/pull/1274): Added tests to benchmark block synchronization.
