@@ -54,7 +54,7 @@ impl OnChainIterableKeyValueView {
         }
     }
 
-    /// Returns a `Block`, which is sealed, by height
+    /// Returns a `Block` by its height.
     pub fn get_block_by_height(
         &self,
         height: &BlockHeight,
