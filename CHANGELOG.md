@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2112](https://github.com/FuelLabs/fuel-core/pull/2112): Alter the way the sealed blocks are fetched with a given height.
 - [2115](https://github.com/FuelLabs/fuel-core/pull/2115): Add test for `SignMode` `is_available` method.
 
+### Added
+- [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
 
 ## [Version 0.34.0]
 
@@ -18,7 +20,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Add support for AWS KMS signing for the PoA consensus module. The new key can be specified with `--consensus-aws-kms AWS_KEY_ARN`.
 - [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
 - [2096](https://github.com/FuelLabs/fuel-core/pull/2096): GraphQL query field to fetch blob byte code by its blob ID.
-- [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
 
 ### Changed
 - [2106](https://github.com/FuelLabs/fuel-core/pull/2106): Remove deadline clock in POA and replace with tokio time functions.
