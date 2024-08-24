@@ -462,10 +462,7 @@ where
         // For now, we only process requests that are smaller than the max_blocks_per_request
         // If there are other types of data we send over p2p req/res protocol, then this needs
         // to be generalized
-        let max_len = self
-            .max_headers_per_request
-            .try_into()
-            .expect("u32 should always fit into usize");
+        let max_len = self.max_headers_per_request;
 
         if range.len() > max_len {
             tracing::error!(
@@ -515,7 +512,7 @@ where
             |view, range| {
                 view.get_transactions(range)
                     .map_err(anyhow::Error::from)
-                    .map(|res| res.and_then(|opt| Some(opt)))
+                    .map(|res| res.map(|opt| opt))
             },
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
@@ -536,7 +533,7 @@ where
             |view, range| {
                 view.get_sealed_headers(range)
                     .map_err(anyhow::Error::from)
-                    .map(|res| Some(res))
+                    .map(Some)
             },
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
