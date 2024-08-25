@@ -71,6 +71,10 @@ pub enum Column {
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
     GenesisMetadata = 21,
+
+    /// See [`FullFuelBlocks`](crate::tables::FullFuelBlocks)
+    /// we don't use this table at the moment, only used for benchmarks
+    FullFuelBlocks = 22,
 }
 
 impl Column {
