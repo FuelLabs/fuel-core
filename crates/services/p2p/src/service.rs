@@ -451,7 +451,9 @@ where
         task_request: fn(Option<R>, InboundRequestId) -> TaskRequest,
     ) -> anyhow::Result<()>
     where
-        F: FnOnce(&V::LatestView, Range<u32>) -> Option<R> + Send + 'static,
+        F: FnOnce(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>>
+            + Send
+            + 'static,
         R: Send + 'static,
     {
         let instant = Instant::now();
@@ -482,7 +484,7 @@ where
                 return;
             }
 
-            let response = db_lookup(&view, range.clone());
+            let response = db_lookup(&view, range.clone()).ok().flatten();
 
             let _ = response_channel
                 .try_send(task_request(response, request_id))
@@ -507,12 +509,7 @@ where
             range,
             request_id,
             ResponseMessage::Transactions,
-            |view, range| {
-                view.get_transactions(range)
-                    .map_err(anyhow::Error::from)
-                    .ok()
-                    .flatten()
-            },
+            |view, range| view.get_transactions(range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
                 request_id,
@@ -529,11 +526,7 @@ where
             range,
             request_id,
             ResponseMessage::SealedHeaders,
-            |view, range| {
-                view.get_sealed_headers(range)
-                    .map_err(anyhow::Error::from)
-                    .ok()
-            },
+            |view, range| view.get_sealed_headers(range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
                 request_id,
@@ -993,7 +986,7 @@ pub mod tests {
         fn get_sealed_headers(
             &self,
             _block_height_range: Range<u32>,
-        ) -> StorageResult<Vec<SealedBlockHeader>> {
+        ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
             unimplemented!()
         }
 
@@ -1109,7 +1102,7 @@ pub mod tests {
         fn get_sealed_headers(
             &self,
             _block_height_range: Range<u32>,
-        ) -> StorageResult<Vec<SealedBlockHeader>> {
+        ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
             todo!()
         }
 
