@@ -1251,8 +1251,17 @@ scalar U64
 union UpgradePurpose = ConsensusParametersPurpose | StateTransitionPurpose
 
 type UploadedBytecode {
+	"""
+	Combined bytecode of all uploaded subsections.
+	"""
 	bytecode: HexString!
-	uploadedSubsectionsNumber: Int!
+	"""
+	Number of uploaded subsections (if incomplete).
+	"""
+	uploadedSubsectionsNumber: Int
+	"""
+	Indicates if the bytecode upload is complete.
+	"""
 	completed: Boolean!
 }
 

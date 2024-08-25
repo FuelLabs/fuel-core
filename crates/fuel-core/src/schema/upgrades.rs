@@ -103,8 +103,11 @@ impl TryFrom<HexString> for StateTransitionBytecode {
 
 #[derive(SimpleObject)]
 pub struct UploadedBytecode {
+    /// Combined bytecode of all uploaded subsections.
     bytecode: HexString,
-    uploaded_subsections_number: u16,
+    /// Number of uploaded subsections (if incomplete).
+    uploaded_subsections_number: Option<u16>,
+    /// Indicates if the bytecode upload is complete.
     completed: bool,
 }
 
@@ -116,12 +119,12 @@ impl From<StorageUploadedBytecode> for UploadedBytecode {
                 uploaded_subsections_number,
             } => Self {
                 bytecode: HexString(bytecode),
-                uploaded_subsections_number,
+                uploaded_subsections_number: Some(uploaded_subsections_number),
                 completed: false,
             },
             StorageUploadedBytecode::Completed(bytecode) => Self {
                 bytecode: HexString(bytecode),
-                uploaded_subsections_number: 0,
+                uploaded_subsections_number: None,
                 completed: true,
             },
         }

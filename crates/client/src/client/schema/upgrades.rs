@@ -1,13 +1,14 @@
 use crate::client::schema::schema;
 
-use crate::client::schema::{
-    chain::ConsensusParameters,
-    primitives::HexString,
+use crate::client::{
+    schema::{
+        chain::ConsensusParameters,
+        primitives::HexString,
+    },
+    ConversionError,
 };
 
 use fuel_core_types::fuel_vm::UploadedBytecode as VmUploadedBytecode;
-
-use std::num::TryFromIntError;
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct ConsensusParametersByVersionArgs {
@@ -68,14 +69,14 @@ pub struct StateTransitionBytecode {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct UploadedBytecode {
     pub bytecode: HexString,
-    pub uploaded_subsections_number: i32,
+    pub uploaded_subsections_number: Option<i32>,
     pub completed: bool,
 }
 
 // GrapqhQL translation
 
 impl TryFrom<UploadedBytecode> for VmUploadedBytecode {
-    type Error = TryFromIntError;
+    type Error = ConversionError;
     fn try_from(value: UploadedBytecode) -> Result<Self, Self::Error> {
         Ok(match value.completed {
             true => Self::Completed(value.bytecode.into()),
@@ -83,6 +84,11 @@ impl TryFrom<UploadedBytecode> for VmUploadedBytecode {
                 bytecode: value.bytecode.into(),
                 uploaded_subsections_number: value
                     .uploaded_subsections_number
+                    .ok_or_else(|| {
+                        ConversionError::MissingField(
+                            "uploaded_subsections_number".to_string(),
+                        )
+                    })?
                     .try_into()?,
             },
         })
