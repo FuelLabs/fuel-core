@@ -451,9 +451,7 @@ where
         task_request: fn(Option<R>, InboundRequestId) -> TaskRequest,
     ) -> anyhow::Result<()>
     where
-        F: FnOnce(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>>
-            + Send
-            + 'static,
+        F: FnOnce(&V::LatestView, Range<u32>) -> Option<R> + Send + 'static,
         R: Send + 'static,
     {
         let instant = Instant::now();
@@ -484,7 +482,7 @@ where
                 return;
             }
 
-            let response = db_lookup(&view, range.clone()).ok().flatten();
+            let response = db_lookup(&view, range.clone());
 
             let _ = response_channel
                 .try_send(task_request(response, request_id))
@@ -512,7 +510,8 @@ where
             |view, range| {
                 view.get_transactions(range)
                     .map_err(anyhow::Error::from)
-                    .map(|res| res.map(|opt| opt))
+                    .ok()
+                    .flatten()
             },
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
@@ -533,7 +532,7 @@ where
             |view, range| {
                 view.get_sealed_headers(range)
                     .map_err(anyhow::Error::from)
-                    .map(Some)
+                    .ok()
             },
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
