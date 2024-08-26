@@ -28,7 +28,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 # ensure we have consistent workdir for cache
-WORKDIR /
+WORKDIR /root/
 ARG FEATURES="production"
 ARG DEBUG_SYMBOLS=false
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -43,7 +43,7 @@ RUN \
   --mount=type=cache,target=/root/.cargo/registry/index \
   --mount=type=cache,target=/root/.cargo/registry/cache \
   --mount=type=cache,target=/root/.cargo/git/db \
-  --mount=type=cache,target=/target \
+  --mount=type=cache,target=/root/target \
   xx-cargo chef cook --release --no-default-features --features "${BUILD_FEATURES}" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
@@ -56,7 +56,7 @@ RUN \
   --mount=type=cache,target=/root/.cargo/registry/index \
   --mount=type=cache,target=/root/.cargo/registry/cache \
   --mount=type=cache,target=/root/.cargo/git/db \
-  --mount=type=cache,target=/target \
+  --mount=type=cache,target=/root/target \
   xx-cargo build --release --no-default-features --features "$BUILD_FEATURES" -p fuel-core-bin \
     && xx-verify ./target/$(xx-cargo --print-target-triple)/release/fuel-core \
     && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core ./target/release/fuel-core \
