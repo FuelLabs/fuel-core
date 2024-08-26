@@ -400,7 +400,7 @@ impl TxStatusSubscription {
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
-        Ok(submit_and_await_status(ctx, tx).await?)
+        submit_and_await_status(ctx, tx).await
     }
 }
 
