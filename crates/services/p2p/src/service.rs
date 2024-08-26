@@ -442,18 +442,20 @@ where
         }
     }
 
-    fn handle_request<F, R>(
+    fn handle_request<DbLookUpFn, ResponseSenderFn, TaskRequestFn, R>(
         &mut self,
         range: Range<u32>,
         request_id: InboundRequestId,
-        response_sender: fn(Option<R>) -> ResponseMessage,
-        db_lookup: F,
-        task_request: fn(Option<R>, InboundRequestId) -> TaskRequest,
+        response_sender: ResponseSenderFn,
+        db_lookup: DbLookUpFn,
+        task_request: TaskRequestFn,
     ) -> anyhow::Result<()>
     where
-        F: FnOnce(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>>
+        DbLookUpFn: Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>>
             + Send
             + 'static,
+        ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
+        TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
         R: Send + 'static,
     {
         let instant = Instant::now();
