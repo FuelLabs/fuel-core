@@ -63,10 +63,7 @@ impl OnChainIterableKeyValueView {
     }
 
     /// Retrieve the full block and all associated transactions
-    pub(crate) fn get_full_block(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Option<Block>> {
+    pub fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Option<Block>> {
         let db_block = self.storage::<FuelBlocks>().get(height)?;
         if let Some(block) = db_block {
             // fetch all the transactions

@@ -11,15 +11,14 @@ use tokio::{
         mpsc,
         oneshot,
     },
-    time::Instant,
+    time::{
+        sleep_until,
+        Instant,
+    },
 };
 use tokio_stream::StreamExt;
 
 use crate::{
-    deadline_clock::{
-        DeadlineClock,
-        OnConflict,
-    },
     ports::{
         BlockImporter,
         BlockProducer,
@@ -37,7 +36,10 @@ use crate::{
     Trigger,
 };
 use fuel_core_services::{
-    stream::BoxStream,
+    stream::{
+        BoxFuture,
+        BoxStream,
+    },
     RunnableService,
     RunnableTask,
     Service as OtherService,
@@ -138,7 +140,6 @@ pub struct MainTask<T, B, I, S, PB> {
     predefined_blocks: PB,
     trigger: Trigger,
     /// Deadline clock, used by the triggers
-    timer: DeadlineClock,
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
@@ -197,7 +198,6 @@ where
             last_block_created,
             predefined_blocks,
             trigger,
-            timer: DeadlineClock::new(),
             sync_task_handle,
         }
     }
@@ -267,7 +267,6 @@ where
             self.next_height(),
             self.next_time(RequestType::Trigger)?,
             TransactionsSource::TxPool,
-            RequestType::Trigger,
         )
         .await
     }
@@ -288,7 +287,6 @@ where
                         self.next_height(),
                         block_time,
                         TransactionsSource::TxPool,
-                        RequestType::Manual,
                     )
                     .await?;
                     block_time = self.next_time(RequestType::Manual)?;
@@ -299,7 +297,6 @@ where
                     self.next_height(),
                     block_time,
                     TransactionsSource::SpecificTransactions(txs),
-                    RequestType::Manual,
                 )
                 .await?;
             }
@@ -312,7 +309,6 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        request_type: RequestType,
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
@@ -350,8 +346,7 @@ where
         self.txpool.remove_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
-        let seal = self.signer.seal_block(&block).await
-        .expect("Failed to seal block. Panicking for now, TODO: https://github.com/FuelLabs/fuel-core/issues/1917");
+        let seal = self.signer.seal_block(&block).await?;
         let block = SealedBlock {
             entity: block,
             consensus: seal,
@@ -368,25 +363,6 @@ where
         self.last_height = height;
         self.last_timestamp = block_time;
         self.last_block_created = last_block_created;
-
-        // Set timer for the next block
-        match (self.trigger, request_type) {
-            (Trigger::Never, RequestType::Manual) => (),
-            (Trigger::Never, RequestType::Trigger) => {
-                unreachable!("Trigger production will never produce blocks in never mode")
-            }
-            (Trigger::Instant, _) => {}
-            (Trigger::Interval { block_time }, RequestType::Trigger) => {
-                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
-                self.timer.set_deadline(deadline, OnConflict::Min).await;
-            }
-            (Trigger::Interval { block_time }, RequestType::Manual) => {
-                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
-                self.timer
-                    .set_deadline(deadline, OnConflict::Overwrite)
-                    .await;
-            }
-        }
 
         Ok(())
     }
@@ -464,7 +440,7 @@ where
         }
     }
 
-    async fn on_timer(&mut self, _at: Instant) -> anyhow::Result<()> {
+    async fn on_timer(&mut self) -> anyhow::Result<()> {
         match self.trigger {
             Trigger::Instant | Trigger::Never => {
                 unreachable!("Timer is never set in this mode");
@@ -517,12 +493,13 @@ where
 
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
-            Trigger::Interval { block_time } => {
-                self.timer
-                    .set_timeout(block_time, OnConflict::Overwrite)
-                    .await;
+            Trigger::Interval { .. } => {
+                return Ok(Self {
+                    last_block_created: Instant::now(),
+                    ..self
+                })
             }
-        };
+        }
 
         Ok(self)
     }
@@ -554,9 +531,6 @@ where
                 _ = self.tx_status_update_stream.next() => {
                     // ignore txpool events while syncing
                 }
-                _ = self.timer.wait() => {
-                    // ignore timer events while syncing
-                }
             }
         }
 
@@ -571,6 +545,16 @@ where
             should_continue = true;
             return Ok(should_continue)
         }
+
+        let next_block_production: BoxFuture<()> = match self.trigger {
+            Trigger::Never | Trigger::Instant => Box::pin(core::future::pending()),
+            Trigger::Interval { block_time } => Box::pin(sleep_until(
+                self.last_block_created
+                    .checked_add(block_time)
+                    .ok_or(anyhow!("Time exceeds system limits"))?,
+            )),
+        };
+
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
@@ -604,9 +588,15 @@ where
                     should_continue = false;
                 }
             }
-            at = self.timer.wait() => {
-                self.on_timer(at).await.context("While processing timer event")?;
-                should_continue = true;
+            _ = next_block_production => {
+                match self.on_timer().await.context("While processing timer event") {
+                    Ok(()) => should_continue = true,
+                    Err(err) => {
+                        // Wait some time in case of error to avoid spamming retry block production
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        return Err(err);
+                    }
+                };
             }
         }
 
