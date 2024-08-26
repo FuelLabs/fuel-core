@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
-- [2122](https://github.com/FuelLabs/fuel-core/pull/2122): Change relayer URI address to be vector and use quorum provider
+- [2122](https://github.com/FuelLabs/fuel-core/pull/2122): Changed the relayer URI address to be a vector and use a quorum provider. The `relayer` argument now supports multiple URLs to fetch information from different sources.
 
 ### Changed
 - [2113](https://github.com/FuelLabs/fuel-core/pull/2113): Modify the way the gas price service and shared algo is initialized to have some default value based on best guess instead of `None`, and initialize service before graphql.
