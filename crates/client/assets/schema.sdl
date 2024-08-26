@@ -1137,7 +1137,9 @@ type Subscription {
 	"""
 	submitAndAwait(tx: HexString!): TransactionStatus!
 	"""
-	Submits transaction to the `TxPool` and throws failure immediately or returns `SubmittedStatus`, then waits for confirmation or failure.
+	Submits the transaction to the `TxPool` and returns a stream of events.
+	Compared to the `submitAndAwait`, the stream also contains `
+	SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
 }

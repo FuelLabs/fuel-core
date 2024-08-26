@@ -63,7 +63,10 @@ use fuel_core_types::{
     },
 };
 #[cfg(feature = "subscriptions")]
-use futures::StreamExt;
+use futures::{
+    Stream,
+    StreamExt,
+};
 use itertools::Itertools;
 use pagination::{
     PageDirection,
@@ -527,32 +530,28 @@ impl FuelClient {
         Ok(status)
     }
 
-    /// Submit the transaction and wait for it either to be included in
-    /// a block or removed from `TxPool`, but immediately return the status.
+    /// Submits the transaction to the `TxPool` and returns a stream of events.
+    /// Compared to the `submit_and_await_commit`, the stream also contains
+    /// `SubmittedStatus` as an intermediate state.
     #[cfg(feature = "subscriptions")]
-    pub async fn submit_and_await_status_commit(
+    pub async fn submit_and_await_status(
         &self,
         tx: &Transaction,
-    ) -> io::Result<TransactionStatus> {
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>>> {
         use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
         let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
             tx: HexString(Bytes(tx)),
         });
 
-        let mut stream = self.subscribe(s).await?.map(
+        let stream = self.subscribe(s).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
                 let status: TransactionStatus = r?.submit_and_await_status.try_into()?;
                 Result::<_, io::Error>::Ok(status)
             },
         );
 
-        let status = stream.next().await.ok_or(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to get status from the submission",
-        ))??;
-
-        Ok(status)
+        Ok(stream)
     }
 
     pub async fn start_session(&self) -> io::Result<String> {

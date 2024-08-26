@@ -24,6 +24,7 @@ use fuel_core_types::{
     },
     fuel_types::ChainId,
 };
+use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
     prelude::StdRng,
@@ -205,8 +206,14 @@ async fn submit_and_await_status() {
         .add_random_fee_input()
         .finalize_as_transaction();
 
-    let status = client.submit_and_await_status_commit(&tx).await.unwrap();
-    assert!(matches!(status, TransactionStatus::Submitted { .. }));
+    let mut status_stream = client.submit_and_await_status(&tx).await.unwrap();
+    let intermediate_status = status_stream.next().await.unwrap().unwrap();
+    assert!(matches!(
+        intermediate_status,
+        TransactionStatus::Submitted { .. }
+    ));
+    let final_status = status_stream.next().await.unwrap().unwrap();
+    assert!(matches!(final_status, TransactionStatus::Success { .. }));
 }
 
 #[ignore]
