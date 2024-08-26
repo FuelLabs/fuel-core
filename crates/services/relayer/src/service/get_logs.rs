@@ -1,5 +1,4 @@
 use super::*;
-use ethers_core::types::H160;
 use fuel_core_types::{
     entities::RelayedTransaction,
     fuel_types::Bytes20,
@@ -33,7 +32,7 @@ where
         move |page: Option<state::EthSyncPage>| {
             let contracts = contracts
                 .iter()
-                .map(|c| H160::from_slice(c.as_slice()))
+                .map(|c| ethereum_types::Address::from_slice(c.as_slice()))
                 .collect();
             async move {
                 match page {
