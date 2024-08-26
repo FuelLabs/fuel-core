@@ -451,9 +451,8 @@ where
         task_request: TaskRequestFn,
     ) -> anyhow::Result<()>
     where
-        DbLookUpFn: Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>>
-            + Send
-            + 'static,
+        DbLookUpFn:
+            Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
         ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
         R: Send + 'static,
