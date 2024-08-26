@@ -18,8 +18,9 @@ env:
   GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
   GIT_REPO_OWNER: ${{ github.repository_owner }}
   GIT_REPO: ${{ github.repository }}
+  GIT_REPO_NAME: ${{ github.event.repository.name }}
   AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
-  AWS_ECR_ORG: q2z3y3a7
+  AWS_ECR_ORG: fuellabs
   CARGO_TERM_COLOR: always
   RUST_VERSION: 1.79.0
   RUST_VERSION_FMT: nightly-2023-10-29
@@ -41,7 +42,7 @@ jobs:
   rustfmt:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
@@ -54,7 +55,7 @@ jobs:
   lint-toml-files:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -86,7 +87,7 @@ jobs:
   prevent-openssl:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # ensure openssl hasn't crept into the dep tree
       - name: Check if openssl is included
         run: ./.github/workflows/scripts/verify_openssl.sh
@@ -153,7 +154,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -180,11 +181,12 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -216,7 +218,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -241,7 +243,7 @@ jobs:
     permissions: # Write access to push changes to pages
       contents: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install latest Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -255,7 +257,7 @@ jobs:
         run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
 
       - name: Checkout the repo again for pushing pages revision
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: 'codecov-pages'
           path: 'pages-branch'
@@ -290,7 +292,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Verify tag version
         run: |
@@ -309,7 +311,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -329,17 +331,101 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
-  publish-docker-image:
+  build-docker-images:
     needs:
       - verifications-complete
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    strategy:
+      matrix:
+        arch: [
+          # build on native runners instead of using emulation
+          {platform: linux/amd64, runner: buildjet-8vcpu-ubuntu-2204},
+          {platform: linux/arm64, runner: buildjet-8vcpu-ubuntu-2204-arm}
+        ]
+    runs-on: ${{ matrix.arch.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Setup environment
+        run: |
+          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
+          platform=${{ matrix.arch.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the ghcr.io registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to the docker.io registry
+        uses: docker/login-action@v3
+        with:
+          username: fuellabs
+          password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_URL }}
+
+      - name: Build and push the image to ghcr.io
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.arch.platform }}
+          file: deployment/Dockerfile
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache:latest-${{ matrix.arch.runner }}
+          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache:latest-${{ matrix.arch.runner }},mode=max,image-manifest=true,oci-mediatypes=true
+          outputs: |
+            type=image,name=${{ env.REGISTRY_URL }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-docker-images:
+    needs:
+      - build-docker-images
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Setup environment
+        run: |
+          echo "REGISTRY_URL=${REGISTRY@L}/${IMAGE_NAME@L}" >>${GITHUB_ENV}
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
@@ -353,49 +439,43 @@ jobs:
         with:
           registry-type: public
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: |
-            ghcr.io/fuellabs/fuel-core
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/fuel-core
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-          flavor: |
-            latest=${{ github.ref == 'refs/heads/master' }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
       - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to the docker.io registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: fuellabs
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
 
-      - name: Build and push the image to ghcr.io
-        uses: docker/build-push-action@v4
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          file: deployment/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest
-          cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest,mode=max
+          images: |
+            ${{ env.REGISTRY_URL }}
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Create manifest list and push to all registries
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY_URL }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY_URL }}:${{ steps.meta.outputs.version }}
 
   # duplicate of publish-docker-image, but with profiling features enabled
   # this is split into a separate action since it takes longer to build
@@ -409,7 +489,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
@@ -477,7 +557,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
@@ -569,7 +649,7 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         if: matrix.job.cross_image
@@ -718,7 +798,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions-rs/audit-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
