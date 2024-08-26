@@ -378,6 +378,31 @@ jobs:
         with:
           images: ${{ env.REGISTRY_URL }}
 
+      - name: Setup Rust build cache
+        id: cache
+        uses: buildjet/cache@v3
+        with:
+          path: |
+            home-cargo-bin
+            home-cargo-registry-index
+            home-cargo-registry-cache
+            home-cargo-git-db
+            target
+          key: ${{ matrix.arch.runner }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Inject cache into docker
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
+        with:
+          cache-map: |
+            {
+              "home-cargo-bin": "/root/.cargo/bin",
+              "home-cargo-registry-index": "/root/.cargo/registry/index",
+              "home-cargo-registry-cache": "/root/.cargo/registry/cache",
+              "home-cargo-git-db": "/root/.cargo/git/db",
+              "target": "/target"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+
       - name: Build Docker image
         id: build
         uses: docker/build-push-action@v6
