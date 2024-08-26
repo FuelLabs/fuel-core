@@ -28,13 +28,10 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_poa::service::Mode;
-use fuel_core_relayer::{
-    test_helpers::{
-        middleware::MockMiddleware,
-        EvtToLog,
-        LogTestHelper,
-    },
-    H160,
+use fuel_core_relayer::test_helpers::{
+    middleware::MockMiddleware,
+    EvtToLog,
+    LogTestHelper,
 };
 use fuel_core_storage::{
     tables::Messages,
@@ -390,7 +387,7 @@ fn make_message_event(
         data: data.map(Into::into).unwrap_or_default(),
     };
     let mut log = message.into_log();
-    log.address = H160::from_slice(contract_address.as_slice());
+    log.address = ethereum_types::Address::from_slice(contract_address.as_slice());
     log.block_number = Some(block_number.into());
     log.log_index = Some(log_index.into());
     log
