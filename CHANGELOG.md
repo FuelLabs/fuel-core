@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - [2106](https://github.com/FuelLabs/fuel-core/pull/2106): Remove deadline clock in POA and replace with tokio time functions.
 
+- [2035](https://github.com/FuelLabs/fuel-core/pull/2035): Small code optimizations.
+    - The optimized code specifies the capacity when initializing the HashSet, avoiding potential multiple reallocations of memory during element insertion.
+    - The optimized code uses the return value of HashSet::insert to check if the insertion was successful. If the insertion fails (i.e., the element already exists), it returns an error. This reduces one lookup operation.
+    - The optimized code simplifies the initialization logic of exclude by using the Option::map_or_else method.
+
 #### Breaking
 - [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
 
