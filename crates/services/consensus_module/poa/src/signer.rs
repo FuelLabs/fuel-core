@@ -93,3 +93,39 @@ async fn sign_with_kms(
     let sig_bytes = <[u8; 64]>::from(sig.to_bytes());
     Ok(Signature::from_bytes(sig_bytes))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_types::fuel_crypto::SecretKey;
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
+
+    #[cfg(not(feature = "aws-kms"))]
+    use aws_config as _;
+
+    #[tokio::test]
+    async fn sign_mode_is_available() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let secret_key = SecretKey::random(&mut rng);
+        assert!(!SignMode::Unavailable.is_available());
+        let signer = SignMode::Key(Secret::new(secret_key.into()));
+        assert!(signer.is_available());
+        #[cfg(feature = "aws-kms")]
+        {
+            // This part of the test is only enabled if the environment variable is set
+            let Some(kms_arn) = option_env!("FUEL_CORE_TEST_AWS_KMS_ARN") else {
+                return;
+            };
+            let config = aws_config::load_from_env().await;
+            let kms_client = aws_sdk_kms::Client::new(&config);
+            assert!(SignMode::Kms {
+                key_id: kms_arn.to_string(),
+                client: kms_client,
+            }
+            .is_available())
+        };
+    }
+}
