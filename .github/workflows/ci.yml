@@ -404,7 +404,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  publish-docker-images:
+  publish-docker-image:
     needs:
       - build-docker-images
     runs-on: ubuntu-latest
