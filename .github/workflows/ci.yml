@@ -332,6 +332,8 @@ jobs:
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   build-docker-images:
+    needs:
+      - publish-crates-check
     strategy:
       matrix:
         arch: [
