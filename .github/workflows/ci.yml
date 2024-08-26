@@ -332,8 +332,6 @@ jobs:
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   build-docker-images:
-    needs:
-      - verifications-complete
     strategy:
       matrix:
         arch: [
@@ -407,6 +405,7 @@ jobs:
   publish-docker-image:
     needs:
       - build-docker-images
+      - verifications-complete
     runs-on: ubuntu-latest
     permissions:
       contents: read
