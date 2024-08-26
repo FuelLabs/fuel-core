@@ -188,9 +188,7 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let metadata =
-            SnapshotMetadata::read("../bin/fuel-core/chainspec/local-testnet").unwrap();
-        let mut chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
+        let mut chain_conf = local_chain_config();
 
         if let Some(gas_limit) = self.gas_limit {
             let tx_params = *chain_conf.consensus_parameters.tx_params();
@@ -256,4 +254,10 @@ impl Default for TestSetupBuilder {
             trigger: Trigger::Instant,
         }
     }
+}
+
+pub fn local_chain_config() -> ChainConfig {
+    let metadata =
+        SnapshotMetadata::read("../bin/fuel-core/chainspec/local-testnet").unwrap();
+    ChainConfig::from_snapshot_metadata(&metadata).unwrap()
 }

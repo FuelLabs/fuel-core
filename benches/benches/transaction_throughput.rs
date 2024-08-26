@@ -8,6 +8,7 @@ use criterion::{
     Criterion,
     SamplingMode,
 };
+use ed25519_dalek::Signer;
 use fuel_core::service::config::Trigger;
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::AtomicView;
@@ -49,6 +50,7 @@ use std::{
     time::Duration,
 };
 use test_helpers::builder::{
+    local_chain_config,
     TestContext,
     TestSetupBuilder,
 };
@@ -85,6 +87,7 @@ where
             // disable automated block production
             test_builder.trigger = Trigger::Never;
             test_builder.utxo_validation = true;
+            test_builder.gas_limit = Some(10_000_000_000);
 
             // spin up node
             let transactions: Vec<Transaction> =
@@ -109,7 +112,12 @@ where
                                 test_builder.finalize().await;
 
                             // insert all transactions
-                            srv.shared.txpool_shared_state.insert(transactions).await;
+                            let results =
+                                srv.shared.txpool_shared_state.insert(transactions).await;
+                            for result in results {
+                                let result = result.expect("Should insert transaction");
+                                assert_eq!(result.removed.len(), 0);
+                            }
                             let _ = client.produce_blocks(1, None).await;
 
                             // sanity check block to ensure the transactions were actually processed
@@ -191,7 +199,6 @@ fn predicate_transfers(c: &mut Criterion) {
         let owner = Input::predicate_owner(&predicate);
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
-            .script_gas_limit(10000)
             .add_input(Input::coin_predicate(
                 rng.gen(),
                 owner,
@@ -215,7 +222,7 @@ fn predicate_transfers(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
+        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
             .expect("Predicate check failed");
         tx
     };
@@ -281,17 +288,90 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
+        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
             .expect("Predicate check failed");
         tx
     };
     bench_txs("predicate transfers eck1", c, generator);
 }
 
+fn predicate_transfers_ed19(c: &mut Criterion) {
+    let generator = |rng: &mut StdRng| {
+        let ed19_secret = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng {});
+        let public = ed19_secret.verifying_key();
+
+        let message = b"The gift of words is the gift of deception and illusion.";
+        let message = Message::new(message);
+
+        let signature = ed19_secret.sign(&*message).to_bytes();
+
+        let predicate = vec![
+            op::gm_args(0x20, GMArgs::GetVerifyingPredicate),
+            op::gtf_args(0x20, 0x20, GTFArgs::InputCoinPredicateData),
+            op::addi(0x21, 0x20, PublicKey::LEN as Immediate12),
+            op::addi(0x22, 0x21, signature.len() as Immediate12),
+            op::movi(0x24, message.as_ref().len() as Immediate18),
+            op::ed19(0x20, 0x21, 0x22, 0x24),
+            op::eq(0x12, RegId::ERR, RegId::ONE),
+            op::ret(0x12),
+        ]
+        .into_iter()
+        .collect::<Vec<u8>>();
+        let owner = Input::predicate_owner(&predicate);
+
+        let predicate_data: Vec<u8> = public
+            .to_bytes()
+            .iter()
+            .copied()
+            .chain(
+                signature
+                    .iter()
+                    .copied()
+                    .chain(message.as_ref().iter().copied()),
+            )
+            .collect();
+
+        let mut tx = TransactionBuilder::script(vec![], vec![])
+            .script_gas_limit(10000)
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                1000,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                predicate.clone(),
+                predicate_data.clone(),
+            ))
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                1000,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                predicate,
+                predicate_data,
+            ))
+            .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
+            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+            .finalize();
+        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
+            .expect("Predicate check failed");
+        tx
+    };
+    bench_txs("predicate transfers ed19", c, generator);
+}
+
 criterion_group!(
     benches,
     signed_transfers,
     predicate_transfers,
-    predicate_transfers_eck1
+    predicate_transfers_eck1,
+    predicate_transfers_ed19
 );
 criterion_main!(benches);
+
+fn checked_parameters() -> CheckPredicateParams {
+    local_chain_config().consensus_parameters.into()
+}
