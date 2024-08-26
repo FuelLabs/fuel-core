@@ -36,3 +36,4 @@ proptest = { workspace = true }
 [features]
 default = ["std"]
 std = []
+smt = ["fuel-core-storage/smt", "fuel-core-executor/smt"]

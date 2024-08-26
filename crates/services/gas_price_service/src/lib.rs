@@ -7,10 +7,10 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
-    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use futures::FutureExt;
 use std::sync::Arc;
 
 use tokio::sync::RwLock;
@@ -18,18 +18,6 @@ use tokio::sync::RwLock;
 pub mod static_updater;
 
 pub mod fuel_gas_price_updater;
-
-pub fn new_service<A, U>(
-    current_fuel_block_height: BlockHeight,
-    update_algo: U,
-) -> anyhow::Result<ServiceRunner<GasPriceService<A, U>>>
-where
-    U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
-    A: Send + Sync,
-{
-    let service = GasPriceService::new(current_fuel_block_height, update_algo);
-    Ok(ServiceRunner::new(service))
-}
 
 /// The service that updates the gas price algorithm.
 pub struct GasPriceService<A, U> {
@@ -44,11 +32,15 @@ where
     U: UpdateAlgorithm<Algorithm = A>,
     A: Send + Sync,
 {
-    pub fn new(starting_block_height: BlockHeight, update_algorithm: U) -> Self {
+    pub async fn new(
+        starting_block_height: BlockHeight,
+        update_algorithm: U,
+        mut shared_algo: SharedGasPriceAlgo<A>,
+    ) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
-        let next_block_algorithm = SharedGasPriceAlgo::new(algorithm);
+        shared_algo.update(algorithm).await;
         Self {
-            next_block_algorithm,
+            next_block_algorithm: shared_algo,
             update_algorithm,
         }
     }
@@ -86,7 +78,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SharedGasPriceAlgo<A>(Arc<RwLock<A>>);
 
 impl<A> Clone for SharedGasPriceAlgo<A> {
@@ -99,9 +91,10 @@ impl<A> SharedGasPriceAlgo<A>
 where
     A: Send + Sync,
 {
-    pub fn new(algo: A) -> Self {
-        Self(Arc::new(RwLock::new(algo)))
+    pub fn new_with_algorithm(algorithm: A) -> Self {
+        Self(Arc::new(RwLock::new(algorithm)))
     }
+
     pub async fn update(&mut self, new_algo: A) {
         let mut write_lock = self.0.write().await;
         *write_lock = new_algo;
@@ -169,7 +162,12 @@ where
         Ok(should_continue)
     }
 
-    async fn shutdown(self) -> anyhow::Result<()> {
+    async fn shutdown(mut self) -> anyhow::Result<()> {
+        while let Some(new_algo) = self.update_algorithm.next().now_or_never() {
+            let new_algo = new_algo?;
+            tracing::debug!("Updating gas price algorithm");
+            self.update(new_algo).await;
+        }
         Ok(())
     }
 }
@@ -181,6 +179,7 @@ mod tests {
     use crate::{
         GasPriceAlgorithm,
         GasPriceService,
+        SharedGasPriceAlgo,
         UpdateAlgorithm,
     };
     use fuel_core_services::{
@@ -227,19 +226,21 @@ mod tests {
     }
     #[tokio::test]
     async fn run__updates_gas_price() {
-        let _ = tracing_subscriber::fmt::try_init();
-
         // given
         let (price_sender, price_receiver) = mpsc::channel(1);
+        let start_algo = TestAlgorithm { price: 50 };
+        let expected_price = 100;
         let updater = TestAlgorithmUpdater {
-            start: TestAlgorithm { price: 0 },
+            start: TestAlgorithm {
+                price: expected_price,
+            },
             price_source: price_receiver,
         };
-        let service = GasPriceService::new(0.into(), updater);
+        let shared_algo = SharedGasPriceAlgo::new_with_algorithm(start_algo);
+        let service = GasPriceService::new(0.into(), updater, shared_algo).await;
         let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
         let task = service.into_task(&watcher, ()).await.unwrap();
-        let expected_price = 100;
         let service = ServiceRunner::new(task);
         service.start().unwrap();
 

@@ -9,7 +9,6 @@ use crate::{
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     tables::{
         Coins,
         ConsensusParametersVersions,
@@ -934,7 +933,8 @@ where
             Transaction::Script(_)
             | Transaction::Create(_)
             | Transaction::Upgrade(_)
-            | Transaction::Upload(_) => Ok(()),
+            | Transaction::Upload(_)
+            | Transaction::Blob(_) => Ok(()),
         }
     }
 
@@ -954,6 +954,7 @@ where
             }
             Transaction::Upgrade(tx) => tx.max_gas(gas_costs, fee_params),
             Transaction::Upload(tx) => tx.max_gas(gas_costs, fee_params),
+            Transaction::Blob(tx) => tx.max_gas(gas_costs, fee_params),
         };
         if actual_max_gas > claimed_max_gas {
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
@@ -1020,6 +1021,15 @@ where
                 memory,
             ),
             CheckedTransaction::Upload(tx) => self.execute_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                storage_tx,
+                memory,
+            ),
+            CheckedTransaction::Blob(tx) => self.execute_chargeable_transaction(
                 tx,
                 header,
                 coinbase_contract_id,
@@ -1378,9 +1388,13 @@ where
             .used_gas
             .checked_add(used_gas)
             .ok_or(ExecutorError::GasOverflow)?;
-        execution_data
-            .message_ids
-            .extend(receipts.iter().filter_map(|r| r.message_id()));
+
+        if !reverted {
+            execution_data
+                .message_ids
+                .extend(receipts.iter().filter_map(|r| r.message_id()));
+        }
+
         let status = if reverted {
             TransactionExecutionResult::Failed {
                 result: Some(state),
@@ -1767,8 +1781,7 @@ where
                     ref contract_id,
                     ..
                 }) => {
-                    let contract =
-                        ContractRef::new(StructuredStorage::new(db), *contract_id);
+                    let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
                         contract.validated_utxo(self.options.extra_tx_checks)?;
                     *utxo_id = *utxo_info.utxo_id();
@@ -1812,7 +1825,7 @@ where
                         })
                     };
 
-                let contract = ContractRef::new(StructuredStorage::new(db), *contract_id);
+                let contract = ContractRef::new(db, *contract_id);
                 contract_output.balance_root = contract.balance_root()?;
                 contract_output.state_root = contract.state_root()?;
             }

@@ -64,6 +64,10 @@ pub mod fuel_vm {
         storage::ContractsAssetKey,
         storage::ContractsStateKey,
         storage::UploadedBytecode,
+        storage::{
+            BlobBytes,
+            BlobData,
+        },
         util,
     };
 }

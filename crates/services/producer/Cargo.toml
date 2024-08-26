@@ -24,6 +24,7 @@ tracing = { workspace = true }
 fuel-core-producer = { path = "", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
+proptest = { workspace = true }
 rand = { workspace = true }
 
 [features]

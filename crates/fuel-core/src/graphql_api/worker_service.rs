@@ -98,6 +98,7 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     chain_id: ChainId,
     continue_on_error: bool,
     tx_pool: TxPool,
+    blocks_events: BoxStream<SharedImportResult>,
     block_importer: BlockImporter,
     on_chain_database: OnChain,
     off_chain_database: OffChain,
@@ -256,6 +257,10 @@ where
                 inputs = tx.inputs().as_slice();
                 outputs = tx.outputs().as_slice();
             }
+            Transaction::Blob(tx) => {
+                inputs = tx.inputs().as_slice();
+                outputs = tx.outputs().as_slice();
+            }
         }
         persist_owners_index(
             block_height,
@@ -373,7 +378,8 @@ where
             Transaction::Script(_)
             | Transaction::Mint(_)
             | Transaction::Upgrade(_)
-            | Transaction::Upload(_) => {
+            | Transaction::Upload(_)
+            | Transaction::Blob(_) => {
                 // Do nothing
             }
         }
@@ -451,6 +457,7 @@ where
             chain_id,
             tx_pool,
             block_importer,
+            blocks_events,
             on_chain_database,
             off_chain_database,
             continue_on_error,
@@ -458,49 +465,49 @@ where
 
         let mut task = Task {
             tx_pool,
-            block_importer: block_importer.block_events(),
+            block_importer: blocks_events,
             database: off_chain_database,
             chain_id,
             continue_on_error,
         };
 
+        let mut target_chain_height = on_chain_database.latest_height()?;
         // Process all blocks that were imported before the service started.
         // The block importer may produce some blocks on start-up during the
         // genesis stage or the recovery process. In this case, we need to
         // process these blocks because, without them,
         // our block height will be less than on the chain database.
         while let Some(Some(block)) = task.block_importer.next().now_or_never() {
+            target_chain_height = Some(*block.sealed_block.entity.header().height());
             task.process_block(block)?;
         }
 
-        sync_databases(&mut task, &on_chain_database, &block_importer)?;
+        sync_databases(&mut task, target_chain_height, &block_importer)?;
 
         Ok(task)
     }
 }
 
-fn sync_databases<TxPool, BlockImporter, OnChain, OffChain>(
+fn sync_databases<TxPool, BlockImporter, OffChain>(
     task: &mut Task<TxPool, OffChain>,
-    on_chain_database: &OnChain,
+    target_chain_height: Option<BlockHeight>,
     import_result_provider: &BlockImporter,
 ) -> anyhow::Result<()>
 where
     TxPool: ports::worker::TxPool,
     BlockImporter: ports::worker::BlockImporter,
-    OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
 {
     loop {
-        let on_chain_height = on_chain_database.latest_height()?;
         let off_chain_height = task.database.latest_height()?;
 
-        if on_chain_height < off_chain_height {
+        if target_chain_height < off_chain_height {
             return Err(anyhow::anyhow!(
-                    "The on-chain database height is lower than the off-chain database height"
-                ));
+                "The target chain height is lower than the off-chain database height"
+            ));
         }
 
-        if on_chain_height == off_chain_height {
+        if target_chain_height == off_chain_height {
             break;
         }
 
@@ -582,6 +589,7 @@ where
 {
     ServiceRunner::new(InitializeTask {
         tx_pool,
+        blocks_events: block_importer.block_events(),
         block_importer,
         on_chain_database,
         off_chain_database,

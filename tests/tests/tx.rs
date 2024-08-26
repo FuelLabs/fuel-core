@@ -18,7 +18,10 @@ use fuel_core_poa::service::Mode;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::SecretKey,
-    fuel_tx::*,
+    fuel_tx::{
+        field::ReceiptsRoot,
+        *,
+    },
     fuel_types::ChainId,
 };
 use itertools::Itertools;
@@ -266,6 +269,28 @@ async fn get_transparent_transaction_by_id() {
 
     // verify transaction round-trips via transparent graphql
     assert_eq!(opaque_tx, transparent_transaction);
+}
+
+#[tokio::test]
+async fn get_executed_transaction_from_status() {
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let transaction = Transaction::default_test_tx();
+    let receipt_root_before_execution = *transaction.as_script().unwrap().receipts_root();
+    assert_eq!(receipt_root_before_execution, Bytes32::zeroed());
+
+    // When
+    let result = client.submit_and_await_commit(&transaction).await;
+
+    // Then
+    let status = result.expect("Expected executed transaction");
+    let TransactionStatus::Success { transaction, .. } = status else {
+        panic!("Not successful transaction")
+    };
+    let receipt_root_after_execution = *transaction.as_script().unwrap().receipts_root();
+    assert_ne!(receipt_root_after_execution, Bytes32::zeroed());
 }
 
 #[tokio::test]

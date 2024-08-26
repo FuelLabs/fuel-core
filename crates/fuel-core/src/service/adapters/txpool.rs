@@ -21,11 +21,14 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::ports::{
-    BlockImporter,
-    ConsensusParametersProvider as ConsensusParametersProviderTrait,
-    GasPriceProvider,
-    MemoryPool,
+use fuel_core_txpool::{
+    ports::{
+        BlockImporter,
+        ConsensusParametersProvider as ConsensusParametersProviderTrait,
+        GasPriceProvider,
+        MemoryPool,
+    },
+    Result as TxPoolResult,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -34,6 +37,7 @@ use fuel_core_types::{
         relayer::message::Message,
     },
     fuel_tx::{
+        BlobId,
         ConsensusParameters,
         Transaction,
         UtxoId,
@@ -42,6 +46,7 @@ use fuel_core_types::{
         ContractId,
         Nonce,
     },
+    fuel_vm::BlobData,
     services::{
         block_importer::SharedImportResult,
         p2p::{
@@ -49,7 +54,6 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             TransactionGossipData,
         },
-        txpool::Result as TxPoolResult,
     },
 };
 use std::sync::Arc;
@@ -133,6 +137,10 @@ impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
         self.storage::<ContractsRawCode>().contains_key(contract_id)
+    }
+
+    fn blob_exist(&self, blob_id: &BlobId) -> StorageResult<bool> {
+        self.storage::<BlobData>().contains_key(blob_id)
     }
 
     fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {

@@ -40,7 +40,7 @@
       },
       "chain_id": 0,
       "gas_costs": {
-        "V3": {
+        "V4": {
           "add": 2,
           "addi": 2,
           "and": 2,
@@ -55,7 +55,6 @@
           "divi": 2,
           "eck1": 1907,
           "ecr1": 26135,
-          "ed19": 1893,
           "eq": 2,
           "exp": 2,
           "expi": 2,
@@ -133,6 +132,18 @@
               "units_per_gas": 15
             }
           },
+          "bsiz": {
+            "LightOperation": {
+              "base": 17,
+              "units_per_gas": 790
+            }
+          },
+          "bldd": {
+            "LightOperation": {
+              "base": 15,
+              "units_per_gas": 272
+            }
+          },
           "cfe": {
             "LightOperation": {
               "base": 10,
@@ -167,6 +178,12 @@
             "LightOperation": {
               "base": 31,
               "units_per_gas": 438
+            }
+          },
+          "ed19": {
+            "LightOperation": {
+              "base": 3000,
+              "units_per_gas": 214
             }
           },
           "k256": {
@@ -279,10 +296,11 @@
       "privileged_address": "9f0e19d6c2a6283a3222426ab2630d35516b1799b503f37b02105bebe1b8a3e9"
     }
   },
-  "genesis_state_transition_version": 5,
+  "genesis_state_transition_version": 9,
   "consensus": {
-    "PoA": {
-      "signing_key": "e0a9fcde1b73f545252e01b30b50819eb9547d07531fa3df0385c5695736634d"
+    "PoAV2": {
+      "genesis_signing_key": "e0a9fcde1b73f545252e01b30b50819eb9547d07531fa3df0385c5695736634d",
+      "signing_key_overrides": {}
     }
   }
 }

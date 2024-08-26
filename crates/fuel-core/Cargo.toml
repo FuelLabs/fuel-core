@@ -39,7 +39,7 @@ fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
-hex = { version = "0.4", features = ["serde"] }
+hex = { workspace = true }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
@@ -66,7 +66,7 @@ uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-core = { path = ".", features = ["test-helpers"] }
+fuel-core = { path = ".", features = ["smt", "test-helpers"] }
 fuel-core-executor = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
@@ -82,6 +82,11 @@ test-strategy = { workspace = true }
 
 [features]
 default = ["rocksdb"]
+smt = [
+  "fuel-core-storage/smt",
+  "fuel-core-executor/smt",
+  "fuel-core-upgradable-executor/smt",
+]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]

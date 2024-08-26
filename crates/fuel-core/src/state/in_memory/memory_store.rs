@@ -15,12 +15,14 @@ use crate::{
 use fuel_core_storage::{
     iter::{
         iterator,
+        keys_iterator,
         BoxedIter,
         IntoBoxedIter,
         IterableStore,
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -99,6 +101,22 @@ where
 
         collection.into_iter().map(Ok)
     }
+
+    pub fn iter_all_keys(
+        &self,
+        column: Description::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = KeyItem> {
+        let lock = self.inner[column.as_usize()].lock().expect("poisoned");
+
+        let collection: Vec<_> = keys_iterator(&lock, prefix, start, direction)
+            .map(|key| key.to_vec())
+            .collect();
+
+        collection.into_iter().map(Ok)
+    }
 }
 
 impl<Description> KeyValueInspect for MemoryStore<Description>
@@ -128,6 +146,17 @@ where
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
         self.iter_all(column, prefix, start, direction).into_boxed()
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+        self.iter_all_keys(column, prefix, start, direction)
+            .into_boxed()
     }
 }
 
@@ -177,7 +206,7 @@ where
         ))
     }
 
-    fn rollback_last_block(&self) -> StorageResult<()> {
+    fn rollback_block_to(&self, _: &Description::Height) -> StorageResult<()> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
         Err(
             anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")

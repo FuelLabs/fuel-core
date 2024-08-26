@@ -30,6 +30,7 @@ use fuel_core_types::{
     },
 };
 pub use fuel_vm_private::storage::{
+    BlobData,
     ContractsAssets,
     ContractsRawCode,
     ContractsState,

@@ -1,18 +1,25 @@
-use std::sync::Arc;
-
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
 use fuel_core_importer::ImporterResult;
+use fuel_core_poa::{
+    ports::BlockSigner,
+    signer::SignMode,
+};
 use fuel_core_services::stream::BoxStream;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::Consensus,
+    },
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
 use fuel_core_upgradable_executor::executor::Executor;
+use std::sync::Arc;
 
 use crate::{
     database::{
@@ -177,6 +184,26 @@ impl BlockImporterAdapter {
                 .filter_map(|r| futures::future::ready(r.ok()))
                 .map(|r| r.shared_result),
         )
+    }
+}
+
+pub struct FuelBlockSigner {
+    mode: SignMode,
+}
+impl FuelBlockSigner {
+    pub fn new(mode: SignMode) -> Self {
+        Self { mode }
+    }
+}
+
+#[async_trait::async_trait]
+impl BlockSigner for FuelBlockSigner {
+    async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
+        self.mode.seal_block(block).await
+    }
+
+    fn is_available(&self) -> bool {
+        self.mode.is_available()
     }
 }
 

@@ -42,6 +42,7 @@ use fuel_core_types::{
         RegId,
     },
     fuel_tx::{
+        BlobId,
         ContractId,
         Transaction,
         TransactionBuilder,
@@ -57,6 +58,8 @@ use fuel_core_types::{
         Nonce,
     },
     fuel_vm::{
+        BlobBytes,
+        BlobData,
         Salt,
         Signature,
     },
@@ -93,6 +96,7 @@ macro_rules! delegating_impl {
 
 delegating_table_impl!(
     Coins,
+    BlobData,
     ContractsRawCode,
     ContractsState,
     ContractsAssets,
@@ -111,6 +115,8 @@ impl Randomize for TableEntry<Messages> {
 }
 
 delegating_impl!(
+    BlobBytes,
+    BlobId,
     DaBlockHeight,
     BlockHeight,
     Address,

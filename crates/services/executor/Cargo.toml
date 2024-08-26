@@ -15,7 +15,7 @@ fuel-core-storage = { workspace = true, features = ["alloc"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
-hex = { version = "0.4", features = ["serde"] }
+hex = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
@@ -29,6 +29,7 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 default = ["std"]
 std = ["fuel-core-types/std", "fuel-core-storage/std"]
 alloc = ["fuel-core-types/alloc", "fuel-core-storage/alloc"]
+smt = ["fuel-core-storage/smt"]
 test-helpers = [
   "fuel-core-types/test-helpers",
   "fuel-core-storage/test-helpers",

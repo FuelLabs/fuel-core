@@ -4,7 +4,6 @@ use fuel_core::{
     service::{
         Config,
         FuelService,
-        ServiceTrait,
     },
     types::fuel_tx::Transaction,
 };
@@ -34,7 +33,10 @@ async fn can_restart_node() {
         let first_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
-        first_startup.stop_and_await().await.unwrap();
+        first_startup
+            .send_stop_signal_and_await_shutdown()
+            .await
+            .unwrap();
     }
 
     {
@@ -66,7 +68,7 @@ async fn can_restart_node_with_transactions() {
             client.submit_and_await_commit(&tx).await.unwrap();
         }
 
-        service.stop_and_await().await.unwrap();
+        service.send_stop_signal_and_await_shutdown().await.unwrap();
     }
 
     {
@@ -80,6 +82,6 @@ async fn can_restart_node_with_transactions() {
 
         // Then
         client.health().await.unwrap();
-        service.stop_and_await().await.unwrap();
+        service.send_stop_signal_and_await_shutdown().await.unwrap();
     }
 }

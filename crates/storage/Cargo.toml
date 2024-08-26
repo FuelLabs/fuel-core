@@ -49,4 +49,5 @@ test-case = { workspace = true }
 default = ["std"]
 alloc = ["fuel-vm-private/alloc", "fuel-core-types/alloc"]
 std = ["alloc", "fuel-vm-private/std", "fuel-core-types/std"]
+smt = []
 test-helpers = ["dep:mockall", "dep:rand"]

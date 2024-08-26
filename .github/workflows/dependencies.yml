@@ -16,7 +16,7 @@ defaults:
 env:
   # So cargo doesn't complain about unstable features
   RUSTC_BOOTSTRAP: 1
-  RUST_VERSION: 1.75.0
+  RUST_VERSION: 1.79.0
   PR_TITLE: Weekly `cargo update`
   PR_MESSAGE: |
     Automation to keep dependencies in `Cargo.lock` current.

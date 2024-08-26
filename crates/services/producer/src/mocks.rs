@@ -24,6 +24,7 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
+    fuel_tx::Transaction,
     fuel_types::{
         Address,
         BlockHeight,
@@ -50,7 +51,6 @@ use std::{
         Mutex,
     },
 };
-
 // TODO: Replace mocks with `mockall`.
 
 #[derive(Default, Clone)]
@@ -107,7 +107,7 @@ impl AsRef<MockDb> for MockDb {
     }
 }
 
-fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
+fn arc_pool_tx_comp_to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
     let transactions = component
         .transactions_source
         .clone()
@@ -123,12 +123,23 @@ fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
     .unwrap()
 }
 
+fn tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block {
+    let transactions = component.transactions_source.clone();
+    Block::new(
+        component.header_to_produce,
+        transactions,
+        &[],
+        Default::default(),
+    )
+    .unwrap()
+}
+
 impl BlockProducer<Vec<ArcPoolTx>> for MockExecutor {
     fn produce_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let block = to_block(&component);
+        let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(
@@ -159,7 +170,7 @@ impl BlockProducer<Vec<ArcPoolTx>> for FailingMockExecutor {
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            let block = to_block(&component);
+            let block = arc_pool_tx_comp_to_block(&component);
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block,
@@ -174,16 +185,16 @@ impl BlockProducer<Vec<ArcPoolTx>> for FailingMockExecutor {
 }
 
 #[derive(Clone)]
-pub struct MockExecutorWithCapture {
-    pub captured: Arc<Mutex<Option<Components<Vec<ArcPoolTx>>>>>,
+pub struct MockExecutorWithCapture<Tx> {
+    pub captured: Arc<Mutex<Option<Components<Vec<Tx>>>>>,
 }
 
-impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture {
+impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture<ArcPoolTx> {
     fn produce_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let block = to_block(&component);
+        let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
         Ok(UncommittedResult::new(
             ExecutionResult {
@@ -197,7 +208,26 @@ impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture {
     }
 }
 
-impl Default for MockExecutorWithCapture {
+impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture<Transaction> {
+    fn produce_without_commit(
+        &self,
+        component: Components<Vec<Transaction>>,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        let block = tx_comp_to_block(&component);
+        *self.captured.lock().unwrap() = Some(component);
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+                tx_status: vec![],
+                events: vec![],
+            },
+            Default::default(),
+        ))
+    }
+}
+
+impl<Tx> Default for MockExecutorWithCapture<Tx> {
     fn default() -> Self {
         Self {
             captured: Arc::new(Mutex::new(None)),

@@ -4,11 +4,11 @@ use fuel_core_gas_price_service::{
     SharedGasPriceAlgo,
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
-use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::txpool::Result as TxPoolResult,
+use fuel_core_txpool::{
+    ports::GasPriceProvider as TxPoolGasPriceProvider,
+    Result as TxPoolResult,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -83,7 +83,7 @@ impl<A> GraphqlGasPriceEstimate for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
-        self.algorithm.worst_case_gas_price(height).await
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
+        Some(self.algorithm.worst_case_gas_price(height).await)
     }
 }
