@@ -377,7 +377,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_URL }}
 
-      - name: Build and push the image to ghcr.io
+      - name: Build Docker image
         id: build
         uses: docker/build-push-action@v6
         with:
