@@ -19,6 +19,7 @@ use crate::{
         SimulationResults,
     },
 };
+use crate::charts::draw_bytes_and_cost_per_block;
 
 mod optimisation;
 mod simulation;
@@ -35,6 +36,7 @@ fn main() {
         exec_gas_prices,
         da_gas_prices,
         fullness,
+        bytes_and_costs,
         actual_profit,
         projected_profit,
         pessimistic_costs,
@@ -48,13 +50,20 @@ fn main() {
     let root =
         BitMapBackend::new(FILE_PATH, (plot_width, plot_height)).into_drawing_area();
     root.fill(&WHITE).unwrap();
-    let (upper, lower) = root.split_vertically(plot_height / 3);
-    let (middle, bottom) = lower.split_vertically(plot_height / 3);
+    let (window_one, lower) = root.split_vertically(plot_height / 4);
+    let (window_two, new_lower) = lower.split_vertically(plot_height / 4);
+    let (window_three, window_four) = new_lower.split_vertically(plot_height / 4);
 
-    draw_fullness(&upper, &fullness, "Fullness");
+    draw_fullness(&window_one, &fullness, "Fullness");
+
+    draw_bytes_and_cost_per_block(
+        &window_two,
+        &bytes_and_costs,
+        "Bytes Per Block",
+    );
 
     draw_profit(
-        &middle,
+        &window_three,
         &actual_profit,
         &projected_profit,
         &pessimistic_costs,
@@ -63,12 +72,14 @@ fn main() {
         ),
     );
     draw_gas_prices(
-        &bottom,
+        &window_four,
         &gas_prices,
         &exec_gas_prices,
         &da_gas_prices,
         "Gas Prices",
     );
 
+
     root.present().unwrap();
 }
+

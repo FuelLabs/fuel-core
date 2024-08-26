@@ -115,6 +115,63 @@ pub fn draw_fullness(
         .unwrap();
 }
 
+pub fn draw_bytes_and_cost_per_block(
+    drawing_area: &DrawingArea<BitMapBackend, Shift>,
+    bytes_and_costs_per_block: &[(u64, u64)],
+    title: &str,
+) {
+    const BYTES_PER_BLOCK_COLOR: RGBColor = BLACK;
+    let (bytes, costs): (Vec<u64>, Vec<u64>) = bytes_and_costs_per_block.iter().cloned().unzip();
+
+    let min = 0;
+    let max_left = *bytes.iter().max().unwrap();
+    let max_right = *costs.iter().max().unwrap();
+
+    let mut chart = ChartBuilder::on(drawing_area)
+        .caption(title, ("sans-serif", 50).into_font())
+        .margin(5)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .right_y_label_area_size(40)
+        .build_cartesian_2d(0..bytes_and_costs_per_block.len(), min..max_left)
+        .unwrap()
+        .set_secondary_coord(0..bytes_and_costs_per_block.len(), min..max_right);
+
+    chart
+        .configure_mesh()
+        .y_desc("Bytes Per Block")
+        .x_desc("Block")
+        .draw()
+        .unwrap();
+
+    chart.configure_secondary_axes().y_desc("Cost Per Block").draw().unwrap();
+
+    chart
+        .draw_series(LineSeries::new(
+            bytes.iter().enumerate().map(|(x, y)| (x, *y)),
+            BYTES_PER_BLOCK_COLOR,
+        ))
+        .unwrap()
+        .label("Bytes Per Block")
+        .legend(|(x, y)| {
+            PathElement::new(vec![(x, y), (x + 20, y)], BYTES_PER_BLOCK_COLOR)
+        });
+
+    chart.draw_secondary_series(LineSeries::new(
+        costs.iter().enumerate().map(|(x, y)| (x, *y)),
+        RED,
+    )).unwrap().label("Cost Per Block").legend(|(x, y)| {
+        PathElement::new(vec![(x, y), (x + 20, y)], RED)
+    });
+
+    chart
+        .configure_series_labels()
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
+        .draw()
+        .unwrap();
+}
+
 pub fn draw_profit(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     actual_profit: &[i64],

@@ -9,6 +9,7 @@ pub struct SimulationResults {
     pub exec_gas_prices: Vec<u64>,
     pub da_gas_prices: Vec<u64>,
     pub fullness: Vec<(u64, u64)>,
+    pub bytes_and_costs: Vec<(u64, u64)>,
     pub actual_profit: Vec<i64>,
     pub projected_profit: Vec<i64>,
     pub pessimistic_costs: Vec<u64>,
@@ -20,8 +21,8 @@ pub fn run_simulation(
     avg_window: u32,
 ) -> SimulationResults {
     // simulation parameters
-    let size = 1_000;
-    let da_recording_rate = 10;
+    let size = 100;
+    let da_recording_rate = 1;
     let capacity = 30_000_000;
     let gas_per_byte = 63;
     let max_block_bytes = capacity / gas_per_byte;
@@ -40,12 +41,12 @@ pub fn run_simulation(
             (vec![], vec![]),
             |(mut delayed, mut recorded),
              (index, ((_fullness, bytes), cost_per_byte))| {
-                let total_cost = bytes * cost_per_byte;
+                let total_cost = *bytes as f64 * cost_per_byte;
                 let height = index as u32 + 1;
                 let converted = RecordedBlock {
                     height,
                     block_bytes: *bytes,
-                    block_cost: total_cost,
+                    block_cost: total_cost as u64,
                 };
                 delayed.push(converted);
                 if delayed.len() == da_recording_rate {
@@ -107,7 +108,7 @@ pub fn run_simulation(
         }
         // Update L2 block
         updater
-            .update_l2_block_data(height, (*fullness, capacity), *bytes, gas_price)
+            .update_l2_block_data(height, *fullness, capacity.try_into().unwrap(), *bytes, gas_price)
             .unwrap();
         da_gas_prices.push(updater.last_da_gas_price);
         pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
@@ -115,10 +116,9 @@ pub fn run_simulation(
         projected_cost_totals.push(updater.projected_total_da_cost);
     }
 
-    let fullness = fullness_and_bytes
-        .iter()
-        .map(|(fullness, _)| (*fullness, capacity))
-        .collect();
+    let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) = fullness_and_bytes.iter().cloned().unzip();
+    let fullness= fullness_without_capacity.iter().map(|&fullness| (fullness, capacity)).collect();
+    let bytes_and_costs = bytes.iter().zip(da_cost_per_byte.iter()).map(|(bytes, cost_per_byte)| (*bytes, (*bytes as f64 * cost_per_byte) as u64)).collect();
 
     let actual_profit: Vec<i64> = actual_costs
         .iter()
@@ -137,6 +137,7 @@ pub fn run_simulation(
         exec_gas_prices,
         da_gas_prices,
         fullness,
+        bytes_and_costs,
         actual_profit,
         projected_profit,
         pessimistic_costs,
@@ -150,14 +151,6 @@ fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
         / components.len() as f64
 }
 
-fn noisy_eth_price<T: TryInto<f64>>(input: T) -> f64
-where
-    <T as TryInto<f64>>::Error: core::fmt::Debug,
-{
-    const COMPONENTS: &[f64] = &[70.0, 130.0];
-    let input = input.try_into().unwrap();
-    gen_noisy_signal(input, COMPONENTS)
-}
 
 fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
 where
@@ -180,7 +173,7 @@ fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
     let bytes_scale: Vec<_> = std::iter::repeat(())
         .take(size)
         .map(|_| rng.gen_range(0.5..1.0))
-        .map(|x| x * 4.0)
+        .map(|x| x * 0.01)
         .collect();
 
     (0usize..size)
@@ -200,10 +193,22 @@ fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
         .collect()
 }
 
-fn arb_cost_per_byte(size: u32) -> Vec<u64> {
+
+fn noisy_eth_price<T: TryInto<f64>>(input: T) -> f64
+where
+    <T as TryInto<f64>>::Error: core::fmt::Debug,
+{
+    const COMPONENTS: &[f64] = &[70.0, 130.0];
+    let input = input.try_into().unwrap();
+    gen_noisy_signal(input, COMPONENTS)
+}
+
+fn arb_cost_per_byte(size: u32) -> Vec<f64> {
+    let mut rng = StdRng::seed_from_u64(10902);
     (0u32..size)
-        .map(noisy_eth_price)
-        .map(|x| x * 100. + 110.)
-        .map(|x| x as u64)
+        // .map(noisy_eth_price)
+        .map(|_| rng.gen_range(1..5))
+        .map(|x| x as f64 * 10.0_f64.powf(-9.0))
+        // .map(|x| x as u64)
         .collect()
 }
