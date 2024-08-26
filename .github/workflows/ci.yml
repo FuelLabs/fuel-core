@@ -281,14 +281,15 @@ jobs:
     needs:
       - cargo-verifications
       - publish-crates-check
-    runs-on: buildjet-4vcpu-ubuntu-2204
+      - build-docker-images
+    runs-on: ubuntu-latest
     steps:
       - run: echo "pass"
 
   verify-tag-version:
     # Only do this job if publishing a release
     if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
