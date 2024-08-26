@@ -415,7 +415,7 @@ jobs:
     steps:
       - name: Setup environment
         run: |
-          echo "REGISTRY_URL=${REGISTRY@L}/${IMAGE_NAME@L}" >>${GITHUB_ENV}
+          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
 
       - name: Download digests
         uses: actions/download-artifact@v4
