@@ -399,7 +399,7 @@ jobs:
               "home-cargo-registry-index": "/root/.cargo/registry/index",
               "home-cargo-registry-cache": "/root/.cargo/registry/cache",
               "home-cargo-git-db": "/root/.cargo/git/db",
-              "target": "/target"
+              "target": "/build/target"
             }
           skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
