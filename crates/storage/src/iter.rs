@@ -107,6 +107,18 @@ where
         use core::ops::Deref;
         self.deref().iter_store(column, prefix, start, direction)
     }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        use core::ops::Deref;
+        self.deref()
+            .iter_store_keys(column, prefix, start, direction)
+    }
 }
 
 /// A trait for iterating over the `Mappable` table.
