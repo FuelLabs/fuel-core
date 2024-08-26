@@ -64,7 +64,7 @@ pub struct P2PArgs {
 
     /// Max number of blocks/headers in a single headers request response
     #[clap(long = "max-headers-per-request", default_value = "100", env)]
-    pub max_headers_per_request: u32,
+    pub max_headers_per_request: usize,
 
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId within their `Multiaddr`
