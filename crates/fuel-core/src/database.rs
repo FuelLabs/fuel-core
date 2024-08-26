@@ -126,10 +126,14 @@ pub type ReyalerIterableKeyValueView = IterableKeyValueView<ColumnType<Relayer>>
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
 impl OnChainIterableKeyValueView {
-    pub fn latest_height(&self) -> StorageResult<BlockHeight> {
+    pub fn maybe_latest_height(&self) -> StorageResult<Option<BlockHeight>> {
         self.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
             .next()
-            .ok_or(not_found!("BlockHeight"))?
+            .transpose()
+    }
+
+    pub fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.maybe_latest_height()?.ok_or(not_found!("BlockHeight"))
     }
 
     pub fn latest_block(&self) -> StorageResult<CompressedBlock> {

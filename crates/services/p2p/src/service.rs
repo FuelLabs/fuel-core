@@ -327,7 +327,7 @@ pub struct Task<P, V, B> {
     request_sender: mpsc::Sender<TaskRequest>,
     database_processor: HeavyTaskProcessor,
     broadcast: B,
-    max_headers_per_request: u32,
+    max_headers_per_request: usize,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
     heartbeat_max_avg_interval: Duration,
@@ -435,8 +435,24 @@ where
         let instant = Instant::now();
         let timeout = self.response_timeout;
         let response_channel = self.request_sender.clone();
+        let max_len = self.max_headers_per_request;
+
         match request_message {
             RequestMessage::Transactions(range) => {
+                if range.len() > max_len {
+                    tracing::error!(
+                        requested_length = range.len(),
+                        max_len,
+                        "Requested range of blocks is too big"
+                    );
+                    let response = None;
+                    let _ = self.p2p_service.send_response_msg(
+                        request_id,
+                        ResponseMessage::Transactions(response),
+                    );
+                    return Ok(())
+                }
+
                 let view = self.view_provider.latest_view()?;
                 let result = self.database_processor.spawn(move || {
                     if instant.elapsed() > timeout {
@@ -474,13 +490,12 @@ where
                 }
             }
             RequestMessage::SealedHeaders(range) => {
-                let max_len = self
-                    .max_headers_per_request
-                    .try_into()
-                    .expect("u32 should always fit into usize");
                 if range.len() > max_len {
-                    tracing::error!("Requested range of sealed headers is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
-                    // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+                    tracing::error!(
+                        requested_length = range.len(),
+                        max_len,
+                        "Requested range of sealed headers is too big"
+                    ); // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
                     let response = None;
                     let _ = self.p2p_service.send_response_msg(
                         request_id,

@@ -25,6 +25,7 @@ tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 fuel-core-poa = { path = ".", features = ["test-helpers"] }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { path = "./../../../storage", features = ["test-helpers"] }

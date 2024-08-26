@@ -62,9 +62,9 @@ pub struct P2PArgs {
     #[clap(long = "max-block-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_block_size: usize,
 
-    /// Max number of headers in a single headers request response
+    /// Max number of blocks/headers in a single headers request response
     #[clap(long = "max-headers-per-request", default_value = "100", env)]
-    pub max_headers_per_request: u32,
+    pub max_headers_per_request: usize,
 
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId within their `Multiaddr`
@@ -76,7 +76,7 @@ pub struct P2PArgs {
     #[clap(long = "reserved-nodes", value_delimiter = ',', env)]
     pub reserved_nodes: Vec<Multiaddr>,
 
-    /// With this set to `true` you create a guarded node that is only ever connected to trusted, reserved nodes.    
+    /// With this set to `true` you create a guarded node that is only ever connected to trusted, reserved nodes.
     #[clap(long = "reserved-nodes-only-mode", env)]
     pub reserved_nodes_only_mode: bool,
 
