@@ -388,7 +388,7 @@ jobs:
             home-cargo-registry-cache
             home-cargo-git-db
             target
-          key: ${{ matrix.arch.runner }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ env.PLATFORM_PAIR }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Inject cache into docker
         uses: reproducible-containers/buildkit-cache-dance@v3.1.2
