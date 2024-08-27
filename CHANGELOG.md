@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
+- [2116](https://github.com/FuelLabs/fuel-core/pull/2116): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
 
 ## [Version 0.34.0]
 
@@ -31,7 +32,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 #### Breaking
 - [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
-- [2116](https://github.com/FuelLabs/fuel-core/pull/2116): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
 
 ### Fixed
 

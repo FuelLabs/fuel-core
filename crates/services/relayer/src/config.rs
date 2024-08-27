@@ -70,3 +70,21 @@ impl Default for Config {
         }
     }
 }
+
+mod tests {
+
+    #[test]
+    fn conversion_str_h160_bytes() {
+        use std::str::FromStr;
+
+        let bytes20 = fuel_core_types::fuel_types::Bytes20::from_str(
+            "0x03E4538018285e1c03CCce2F92C9538c87606911",
+        )
+        .unwrap();
+        let h160 = ethers_core::types::H160::from_str(
+            "0x03E4538018285e1c03CCce2F92C9538c87606911",
+        )
+        .unwrap();
+        assert_eq!(bytes20.as_slice(), h160.as_bytes());
+    }
+}
