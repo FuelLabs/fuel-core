@@ -7,6 +7,7 @@ mod contract;
 mod message;
 mod subscriptions;
 mod tx;
+mod upgrades;
 
 // TODO: Remove reexporting of everything
 pub use balance::*;
@@ -18,3 +19,4 @@ pub use contract::*;
 pub use message::*;
 pub(crate) use subscriptions::*;
 pub use tx::*;
+pub use upgrades::*;

@@ -36,7 +36,7 @@ use std::{
 };
 
 pub struct ChainInfo;
-pub struct ConsensusParameters(Arc<fuel_tx::ConsensusParameters>);
+pub struct ConsensusParameters(pub Arc<fuel_tx::ConsensusParameters>);
 pub struct TxParameters(fuel_tx::TxParameters);
 pub struct PredicateParameters(fuel_tx::PredicateParameters);
 pub struct ScriptParameters(fuel_tx::ScriptParameters);
@@ -122,78 +122,38 @@ impl ConsensusParameters {
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
-    async fn tx_params(&self, ctx: &Context<'_>) -> async_graphql::Result<TxParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(TxParameters(params.tx_params().to_owned()))
+    async fn tx_params(&self) -> TxParameters {
+        TxParameters(self.0.tx_params().to_owned())
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
-    async fn predicate_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<PredicateParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(PredicateParameters(params.predicate_params().to_owned()))
+    async fn predicate_params(&self) -> PredicateParameters {
+        PredicateParameters(self.0.predicate_params().to_owned())
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
-    async fn script_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<ScriptParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(ScriptParameters(params.script_params().to_owned()))
+    async fn script_params(&self) -> ScriptParameters {
+        ScriptParameters(self.0.script_params().to_owned())
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
-    async fn contract_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<ContractParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(ContractParameters(params.contract_params().to_owned()))
+    async fn contract_params(&self) -> ContractParameters {
+        ContractParameters(self.0.contract_params().to_owned())
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
-    async fn fee_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<FeeParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(FeeParameters(params.fee_params().to_owned()))
+    async fn fee_params(&self) -> FeeParameters {
+        FeeParameters(self.0.fee_params().to_owned())
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read")]
-    async fn base_asset_id(&self, ctx: &Context<'_>) -> async_graphql::Result<AssetId> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(AssetId(*params.base_asset_id()))
+    async fn base_asset_id(&self) -> AssetId {
+        AssetId(*self.0.base_asset_id())
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read")]
-    async fn block_gas_limit(&self, ctx: &Context<'_>) -> async_graphql::Result<U64> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(params.block_gas_limit().into())
+    async fn block_gas_limit(&self) -> U64 {
+        self.0.block_gas_limit().into()
     }
 
     async fn chain_id(&self) -> U64 {
@@ -201,12 +161,8 @@ impl ConsensusParameters {
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
-    async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(GasCosts(params.gas_costs().clone()))
+    async fn gas_costs(&self) -> async_graphql::Result<GasCosts> {
+        Ok(GasCosts(self.0.gas_costs().clone()))
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read")]
