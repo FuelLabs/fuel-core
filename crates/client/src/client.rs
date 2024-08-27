@@ -60,7 +60,10 @@ use fuel_core_types::{
     services::executor::TransactionExecutionStatus,
 };
 #[cfg(feature = "subscriptions")]
-use futures::StreamExt;
+use futures::{
+    Stream,
+    StreamExt,
+};
 use itertools::Itertools;
 use pagination::{
     PageDirection,
@@ -525,6 +528,30 @@ impl FuelClient {
         ))??;
 
         Ok(status)
+    }
+
+    /// Submits the transaction to the `TxPool` and returns a stream of events.
+    /// Compared to the `submit_and_await_commit`, the stream also contains
+    /// `SubmittedStatus` as an intermediate state.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_status(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>>> {
+        use cynic::SubscriptionBuilder;
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
+                let status: TransactionStatus = r?.submit_and_await_status.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        Ok(stream)
     }
 
     pub async fn start_session(&self) -> io::Result<String> {

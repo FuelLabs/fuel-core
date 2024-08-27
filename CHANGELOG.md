@@ -6,10 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2122](https://github.com/FuelLabs/fuel-core/pull/2122): Changed the relayer URI address to be a vector and use a quorum provider. The `relayer` argument now supports multiple URLs to fetch information from different sources.
+
 ### Changed
 - [2113](https://github.com/FuelLabs/fuel-core/pull/2113): Modify the way the gas price service and shared algo is initialized to have some default value based on best guess instead of `None`, and initialize service before graphql.
 - [2112](https://github.com/FuelLabs/fuel-core/pull/2112): Alter the way the sealed blocks are fetched with a given height.
+- [2120](https://github.com/FuelLabs/fuel-core/pull/2120): Added `submitAndAwaitStatus` subscription endpoint which returns the `SubmittedStatus` after the transaction is submitted as well as the `TransactionStatus` subscription.
 - [2115](https://github.com/FuelLabs/fuel-core/pull/2115): Add test for `SignMode` `is_available` method.
+- [2124](https://github.com/FuelLabs/fuel-core/pull/2124): Generalize the way p2p req/res protocol handles requests.
 
 #### Breaking
 
@@ -20,6 +25,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
+- [2116](https://github.com/FuelLabs/fuel-core/pull/2116): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
 
 ## [Version 0.34.0]
 
@@ -30,6 +36,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - [2106](https://github.com/FuelLabs/fuel-core/pull/2106): Remove deadline clock in POA and replace with tokio time functions.
+
+- [2035](https://github.com/FuelLabs/fuel-core/pull/2035): Small code optimizations.
+    - The optimized code specifies the capacity when initializing the HashSet, avoiding potential multiple reallocations of memory during element insertion.
+    - The optimized code uses the return value of HashSet::insert to check if the insertion was successful. If the insertion fails (i.e., the element already exists), it returns an error. This reduces one lookup operation.
+    - The optimized code simplifies the initialization logic of exclude by using the Option::map_or_else method.
 
 #### Breaking
 - [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.

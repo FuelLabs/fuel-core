@@ -28,13 +28,10 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_poa::service::Mode;
-use fuel_core_relayer::{
-    test_helpers::{
-        middleware::MockMiddleware,
-        EvtToLog,
-        LogTestHelper,
-    },
-    H160,
+use fuel_core_relayer::test_helpers::{
+    middleware::MockMiddleware,
+    EvtToLog,
+    LogTestHelper,
 };
 use fuel_core_storage::{
     tables::Messages,
@@ -51,6 +48,7 @@ use fuel_core_types::{
         Nonce,
     },
 };
+use fuel_types::Bytes20;
 use hyper::{
     service::{
         make_service_fn,
@@ -106,12 +104,10 @@ async fn relayer_can_download_logs() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(
-        format!("http://{}", eth_node_handle.address)
-            .as_str()
-            .try_into()
-            .unwrap(),
-    );
+    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
+        .as_str()
+        .try_into()
+        .unwrap()]);
     let db = Database::in_memory();
 
     let srv = FuelService::from_database(db.clone(), config)
@@ -176,12 +172,10 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(
-        format!("http://{}", eth_node_handle.address)
-            .as_str()
-            .try_into()
-            .unwrap(),
-    );
+    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
+        .as_str()
+        .try_into()
+        .unwrap()]);
 
     config.utxo_validation = true;
 
@@ -326,12 +320,10 @@ async fn can_restart_node_with_relayer_data() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(
-        format!("http://{}", eth_node_handle.address)
-            .as_str()
-            .try_into()
-            .unwrap(),
-    );
+    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
+        .as_str()
+        .try_into()
+        .unwrap()]);
 
     let capacity = 1024 * 1024;
     let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -374,7 +366,7 @@ async fn can_restart_node_with_relayer_data() {
 fn make_message_event(
     nonce: Nonce,
     block_number: u64,
-    contract_address: H160,
+    contract_address: Bytes20,
     sender: Option<[u8; 32]>,
     recipient: Option<[u8; 32]>,
     amount: Option<u64>,
@@ -389,7 +381,8 @@ fn make_message_event(
         data: data.map(Into::into).unwrap_or_default(),
     };
     let mut log = message.into_log();
-    log.address = contract_address;
+    log.address =
+        fuel_core_relayer::test_helpers::convert_to_address(contract_address.as_slice());
     log.block_number = Some(block_number.into());
     log.log_index = Some(log_index.into());
     log

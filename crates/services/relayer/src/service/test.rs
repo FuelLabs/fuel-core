@@ -46,6 +46,117 @@ async fn can_download_logs() {
 }
 
 #[tokio::test]
+async fn quorum_agrees_on_logs() {
+    let eth_node = MockMiddleware::default();
+    let logs = vec![
+        Log {
+            address: Default::default(),
+            block_number: Some(3.into()),
+            ..Default::default()
+        },
+        Log {
+            address: Default::default(),
+            block_number: Some(5.into()),
+            ..Default::default()
+        },
+    ];
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+
+    let eth_state = super::state::test_builder::TestDataSource {
+        eth_remote_finalized: 5,
+        eth_local_finalized: Some(1),
+    };
+    let eth_state = state::build_eth(&eth_state).await.unwrap();
+
+    // Given
+    let provider = Provider::new(
+        QuorumProvider::builder()
+            .add_provider(WeightedProvider::new(eth_node.clone()))
+            .add_provider(WeightedProvider::new(eth_node))
+            .quorum(Quorum::Majority)
+            .build(),
+    );
+    let contracts = vec![Default::default()];
+
+    // When
+    let result = download_logs(
+        &eth_state.needs_to_sync_eth().unwrap(),
+        contracts,
+        &provider,
+        DEFAULT_LOG_PAGE_SIZE,
+    )
+    .map_ok(|logs| logs.logs)
+    .try_concat()
+    .await
+    .unwrap();
+
+    // Then
+    assert_eq!(result, logs);
+}
+
+#[tokio::test]
+async fn quorum__disagree_on_logs() {
+    let eth_node_two_logs = MockMiddleware::default();
+    let eth_node_one_log = MockMiddleware::default();
+    let logs = vec![
+        Log {
+            address: Default::default(),
+            block_number: Some(3.into()),
+            ..Default::default()
+        },
+        Log {
+            address: Default::default(),
+            block_number: Some(5.into()),
+            ..Default::default()
+        },
+    ];
+    eth_node_two_logs.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    eth_node_one_log.update_data(|data| data.logs_batch = vec![vec![logs[0].clone()]]);
+
+    let eth_state = super::state::test_builder::TestDataSource {
+        eth_remote_finalized: 5,
+        eth_local_finalized: Some(1),
+    };
+    let eth_state = state::build_eth(&eth_state).await.unwrap();
+
+    // Given
+    let provider = Provider::new(
+        QuorumProvider::builder()
+            // 3 different providers with 3 different logs
+            // 2 logs
+            .add_provider(WeightedProvider::new(eth_node_two_logs))
+            // 0 logs
+            .add_provider(WeightedProvider::new(MockMiddleware::default()))
+            // 1 log
+            .add_provider(WeightedProvider::new(eth_node_one_log))
+            .quorum(Quorum::Percentage(70))
+            .build(),
+    );
+    let contracts = vec![Default::default()];
+
+    // When
+    let provider_error = download_logs(
+        &eth_state.needs_to_sync_eth().unwrap(),
+        contracts,
+        &provider,
+        DEFAULT_LOG_PAGE_SIZE,
+    )
+    .map_ok(|logs| logs.logs)
+    .try_concat()
+    .await;
+    // Then
+
+    match provider_error {
+        Err(ProviderError::JsonRpcClientError(e)) => {
+            assert_eq!(format!("{e}"), "No Quorum reached.");
+        }
+        _ => {
+            panic!("Expected a JsonRpcClientError")
+        }
+    }
+}
+
+#[tokio::test]
 async fn deploy_height_does_not_override() {
     let mut mock_db = crate::mock_db::MockDb::default();
     mock_db
