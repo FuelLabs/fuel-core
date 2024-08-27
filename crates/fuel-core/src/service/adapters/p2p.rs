@@ -20,7 +20,7 @@ impl P2pDb for OnChainIterableKeyValueView {
     fn get_sealed_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Vec<SealedBlockHeader>> {
+    ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
         self.get_sealed_block_headers(block_height_range)
     }
 
