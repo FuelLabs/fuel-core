@@ -151,3 +151,7 @@ fn log_default(address: H160, eth_block: u64, topics: Vec<H256>, data: Bytes) ->
         removed: Some(false),
     }
 }
+
+pub fn convert_to_address(bytes: &[u8]) -> ethereum_types::Address {
+    ethereum_types::Address::from_slice(bytes)
+}

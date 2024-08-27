@@ -25,7 +25,6 @@ aws-config = { version = "1.1.7", features = [
 aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true }
 cynic = { workspace = true }
-ethereum-types = "0.14.1"
 ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "smt",

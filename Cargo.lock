@@ -3634,7 +3634,6 @@ dependencies = [
  "aws-sdk-kms",
  "clap 4.5.13",
  "cynic",
- "ethereum-types",
  "ethers",
  "fuel-core",
  "fuel-core-benches",

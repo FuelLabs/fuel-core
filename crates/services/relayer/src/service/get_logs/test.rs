@@ -50,8 +50,9 @@ fn message(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> 
         ..Default::default()
     };
     let mut log = message.into_log();
-    log.address =
-        ethereum_types::Address::from_slice(u32_to_contract(contract_address).as_slice());
+    log.address = crate::test_helpers::convert_to_address(
+        u32_to_contract(contract_address).as_slice(),
+    );
     log.block_number = Some(block_number.into());
     log.log_index = Some(index.into());
     log
@@ -77,8 +78,9 @@ fn transaction(nonce: u64, block_number: u64, contract_address: u32, index: u64)
         ..Default::default()
     };
     let mut log = transaction.into_log();
-    log.address =
-        ethereum_types::Address::from_slice(u32_to_contract(contract_address).as_slice());
+    log.address = crate::test_helpers::convert_to_address(
+        u32_to_contract(contract_address).as_slice(),
+    );
     log.block_number = Some(block_number.into());
     log.log_index = Some(index.into());
     log

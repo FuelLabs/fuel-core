@@ -284,7 +284,7 @@ impl TestContext {
     }
 
     fn given_logs(&mut self, mut logs: Vec<Log>) {
-        let contract_address = ethereum_types::Address::from_slice(
+        let contract_address = fuel_core_relayer::test_helpers::convert_to_address(
             self.config.eth_v2_listening_contracts[0].as_slice(),
         );
         for log in &mut logs {
