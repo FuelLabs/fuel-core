@@ -601,6 +601,30 @@ impl FuelP2PService {
                                 c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
                             }
                         },
+                        ResponseSender::AllTransactionsIds(c) => match response {
+                            ResponseMessage::AllTransactionsIds(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                        ResponseSender::FullTransactions(c) => match response {
+                            ResponseMessage::FullTransactions(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
                     };
 
                     if !send_ok {
@@ -631,6 +655,12 @@ impl FuelP2PService {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
                         ResponseSender::Transactions(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                        ResponseSender::AllTransactionsIds(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                        ResponseSender::FullTransactions(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
                     };
@@ -1594,8 +1624,11 @@ mod tests {
                                             }
                                         });
                                     }
-                                    _ => {
-                                        panic!("Unexpected RequestMessage type");
+                                    RequestMessage::AllTransactionsIds => {
+                                        unimplemented!()
+                                    }
+                                    RequestMessage::FullTransactions(_) => {
+                                        unimplemented!()
                                     }
                                 }
                             }

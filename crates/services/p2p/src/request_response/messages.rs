@@ -46,6 +46,8 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 pub enum ResponseSender {
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Vec<Transactions>>>),
+    AllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
+    FullTransactions(OnResponse<Option<Vec<Option<Transaction>>>>),
 }
 
 #[derive(Debug, Error)]
