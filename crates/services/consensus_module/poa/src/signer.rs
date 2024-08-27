@@ -115,7 +115,7 @@ async fn sign_with_kms(
     let rec1 = VerifyingKey::recover_from_prehash(&*message, &sig, recid1);
     let rec2 = VerifyingKey::recover_from_prehash(&*message, &sig, recid2);
 
-    let correct_public_key = k256::PublicKey::from_public_key_der(&public_key_bytes)
+    let correct_public_key = k256::PublicKey::from_public_key_der(public_key_bytes)
         .map_err(|_| anyhow!("invalid DER public key from AWS KMS"))?
         .into();
 
