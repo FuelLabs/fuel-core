@@ -106,12 +106,10 @@ async fn relayer_can_download_logs() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(
-        format!("http://{}", eth_node_handle.address)
-            .as_str()
-            .try_into()
-            .unwrap(),
-    );
+    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
+        .as_str()
+        .try_into()
+        .unwrap()]);
     let db = Database::in_memory();
 
     let srv = FuelService::from_database(db.clone(), config)
@@ -176,12 +174,10 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(
-        format!("http://{}", eth_node_handle.address)
-            .as_str()
-            .try_into()
-            .unwrap(),
-    );
+    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
+        .as_str()
+        .try_into()
+        .unwrap()]);
 
     config.utxo_validation = true;
 
@@ -326,12 +322,10 @@ async fn can_restart_node_with_relayer_data() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(
-        format!("http://{}", eth_node_handle.address)
-            .as_str()
-            .try_into()
-            .unwrap(),
-    );
+    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
+        .as_str()
+        .try_into()
+        .unwrap()]);
 
     let capacity = 1024 * 1024;
     let tmp_dir = tempfile::TempDir::new().unwrap();
