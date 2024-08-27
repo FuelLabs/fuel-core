@@ -18,7 +18,6 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY --from=planner /build/recipe.json recipe.json
 # Build our project dependencies, not our application!
 RUN \
-  --mount=type=cache,target=/usr/local/cargo/bin \
   --mount=type=cache,target=/usr/local/cargo/registry/index \
   --mount=type=cache,target=/usr/local/cargo/registry/cache \
   --mount=type=cache,target=/usr/local/cargo/git/db \
@@ -28,7 +27,6 @@ RUN \
 # all layers should be cached.
 COPY . .
 RUN \
-  --mount=type=cache,target=/usr/local/cargo/bin \
   --mount=type=cache,target=/usr/local/cargo/registry/index \
   --mount=type=cache,target=/usr/local/cargo/registry/cache \
   --mount=type=cache,target=/usr/local/cargo/git/db \

@@ -37,7 +37,6 @@ RUN echo $CARGO_PROFILE_RELEASE_DEBUG
 RUN echo $BUILD_FEATURES
 # Build our project dependencies, not our application!
 RUN \
-  --mount=type=cache,target=/usr/local/cargo/bin \
   --mount=type=cache,target=/usr/local/cargo/registry/index \
   --mount=type=cache,target=/usr/local/cargo/registry/cache \
   --mount=type=cache,target=/usr/local/cargo/git/db \
@@ -51,7 +50,6 @@ RUN git clone --depth=1 https://github.com/FuelLabs/chain-configuration.git /cha
 # build application
 # note this puts the builds outside of the cache dirs so the run image can copy them
 RUN \
-  --mount=type=cache,target=/usr/local/cargo/bin \
   --mount=type=cache,target=/usr/local/cargo/registry/index \
   --mount=type=cache,target=/usr/local/cargo/registry/cache \
   --mount=type=cache,target=/usr/local/cargo/git/db \
