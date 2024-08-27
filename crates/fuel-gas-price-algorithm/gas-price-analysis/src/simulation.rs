@@ -76,7 +76,7 @@ pub fn run_simulation(
         max_da_gas_price_change_percent: 100,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
-        latest_da_cost_per_byte: 200,
+        latest_da_cost_per_byte: 10000,
         projected_total_da_cost: 0,
         latest_known_total_da_cost: 0,
         unrecorded_blocks: vec![],
@@ -99,17 +99,52 @@ pub fn run_simulation(
         let gas_price = updater.algorithm().calculate(max_block_bytes);
         gas_prices.push(gas_price);
         // Update DA blocks on the occasion there is one
+
+        fn pretty(input: u64) -> String {
+            let num = input
+                .to_string()
+                .as_bytes()
+                .rchunks(3)
+                .rev()
+                .map(std::str::from_utf8)
+                .collect::<Result<Vec<&str>, _>>()
+                .unwrap()
+                .join(","); // separator
+            num
+        }
+
         if let Some(mut da_blocks) = da_block.clone() {
+            println!("-------------------");
             let mut total_costs = updater.latest_known_total_da_cost;
             for mut block in &mut da_blocks {
                 block.block_cost *= gas_price_factor;
                 total_costs += block.block_cost;
                 actual_costs.push(total_costs);
+                let cost_per_bytes = block.block_cost / block.block_bytes;
+                println!(
+                    "height: {}, bytes: {}, cost: {}, cost_per_bytes: {}",
+                    block.height,
+                    pretty(block.block_bytes),
+                    pretty(block.block_cost),
+                    pretty(cost_per_bytes)
+                );
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
+            println!(
+                "updated cost per bytes: {}",
+                updater.latest_da_cost_per_byte
+            );
             assert_eq!(total_costs, updater.projected_total_da_cost);
             assert_eq!(total_costs, updater.latest_known_total_da_cost);
         }
+        println!("block bytes: {}", bytes);
+        println!(
+            "height: {}, latest: {}, projected: {}, added: {}",
+            height,
+            pretty(updater.latest_known_total_da_cost),
+            pretty(updater.projected_total_da_cost),
+            pretty(bytes * updater.latest_da_cost_per_byte / gas_price_factor)
+        );
         // Update L2 block
         updater
             .update_l2_block_data(
