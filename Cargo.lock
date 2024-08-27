@@ -3542,6 +3542,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "enum-iterator",
+ "ethereum-types",
  "ethers-contract",
  "ethers-core",
  "ethers-providers",

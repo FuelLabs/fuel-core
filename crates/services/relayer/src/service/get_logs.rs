@@ -1,6 +1,7 @@
 use super::*;
 use fuel_core_types::{
     entities::RelayedTransaction,
+    fuel_types::Bytes20,
     services::relayer::Event,
 };
 use futures::TryStreamExt;
@@ -18,7 +19,7 @@ pub struct DownloadedLogs {
 /// Download the logs from the DA layer.
 pub(crate) fn download_logs<'a, P>(
     eth_sync_gap: &state::EthSyncGap,
-    contracts: Vec<H160>,
+    contracts: Vec<Bytes20>,
     eth_node: &'a P,
     page_size: u64,
 ) -> impl futures::Stream<Item = Result<DownloadedLogs, ProviderError>> + 'a
@@ -29,7 +30,10 @@ where
     futures::stream::try_unfold(
         eth_sync_gap.page(page_size),
         move |page: Option<state::EthSyncPage>| {
-            let contracts = contracts.clone();
+            let contracts = contracts
+                .iter()
+                .map(|c| ethereum_types::Address::from_slice(c.as_slice()))
+                .collect();
             async move {
                 match page {
                     None => Ok(None),

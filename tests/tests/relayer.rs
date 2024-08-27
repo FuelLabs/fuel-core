@@ -28,13 +28,10 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_poa::service::Mode;
-use fuel_core_relayer::{
-    test_helpers::{
-        middleware::MockMiddleware,
-        EvtToLog,
-        LogTestHelper,
-    },
-    H160,
+use fuel_core_relayer::test_helpers::{
+    middleware::MockMiddleware,
+    EvtToLog,
+    LogTestHelper,
 };
 use fuel_core_storage::{
     tables::Messages,
@@ -51,6 +48,7 @@ use fuel_core_types::{
         Nonce,
     },
 };
+use fuel_types::Bytes20;
 use hyper::{
     service::{
         make_service_fn,
@@ -368,7 +366,7 @@ async fn can_restart_node_with_relayer_data() {
 fn make_message_event(
     nonce: Nonce,
     block_number: u64,
-    contract_address: H160,
+    contract_address: Bytes20,
     sender: Option<[u8; 32]>,
     recipient: Option<[u8; 32]>,
     amount: Option<u64>,
@@ -383,7 +381,8 @@ fn make_message_event(
         data: data.map(Into::into).unwrap_or_default(),
     };
     let mut log = message.into_log();
-    log.address = contract_address;
+    log.address =
+        fuel_core_relayer::test_helpers::convert_to_address(contract_address.as_slice());
     log.block_number = Some(block_number.into());
     log.log_index = Some(log_index.into());
     log
