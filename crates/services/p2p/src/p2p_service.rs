@@ -1594,6 +1594,9 @@ mod tests {
                                             }
                                         });
                                     }
+                                    _ => {
+                                        panic!("Unexpected RequestMessage type");
+                                    }
                                 }
                             }
                         }
@@ -1614,6 +1617,10 @@ mod tests {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
+                            }
+                            // TODO: Add more cases as needed
+                            _ => {
+                                panic!("Unexpected RequestMessage type");
                             }
                         }
                     }
@@ -1636,6 +1643,33 @@ mod tests {
     async fn request_response_works_with_sealed_headers_range_inclusive() {
         let arbitrary_range = 2..6;
         request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gather_txs_upon_connection() {
+        let mut p2p_config = Config::default_initialized("gather_txs_upon_connection");
+
+        // Node A
+        let mut node_a = build_service_from_config(p2p_config.clone()).await;
+
+        // Node B
+        p2p_config.bootstrap_nodes = node_a.multiaddrs();
+        let mut node_b = build_service_from_config(p2p_config.clone()).await;
+        loop {
+            tokio::select! {
+                node_a_event = node_a.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = node_a_event {
+                        dbg!(peer_id);
+                    }
+                    if let Some(FuelP2PEvent::NewSubscription { .. }) = node_a_event {
+                    }
+                }
+                node_b_event = node_b.next_event() => {
+                    dbg!(node_b_event);
+                }
+            }
+        }
     }
 
     /// We send a request for transactions, but it's responded by only headers

@@ -328,6 +328,7 @@ pub struct Task<P, V, B> {
     database_processor: HeavyTaskProcessor,
     broadcast: B,
     max_headers_per_request: usize,
+    max_txs_per_request: usize,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
     heartbeat_max_avg_interval: Duration,
@@ -435,14 +436,14 @@ where
         let instant = Instant::now();
         let timeout = self.response_timeout;
         let response_channel = self.request_sender.clone();
-        let max_len = self.max_headers_per_request;
+        let max_headers_len = self.max_headers_per_request;
 
         match request_message {
             RequestMessage::Transactions(range) => {
-                if range.len() > max_len {
+                if range.len() > max_headers_len {
                     tracing::error!(
                         requested_length = range.len(),
-                        max_len,
+                        max_headers_len,
                         "Requested range of blocks is too big"
                     );
                     let response = None;
@@ -490,10 +491,10 @@ where
                 }
             }
             RequestMessage::SealedHeaders(range) => {
-                if range.len() > max_len {
+                if range.len() > max_headers_len {
                     tracing::error!(
                         requested_length = range.len(),
-                        max_len,
+                        max_headers_len,
                         "Requested range of sealed headers is too big"
                     ); // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
                     let response = None;
@@ -538,6 +539,14 @@ where
                         ResponseMessage::SealedHeaders(None),
                     );
                 }
+            }
+            RequestMessage::AllTransactionsIds => {
+                // TODO: Implement this.
+                todo!()
+            }
+            RequestMessage::FullTransactions(_) => {
+                // TODO: Implement this.
+                todo!()
             }
         }
         Ok(())
@@ -585,6 +594,7 @@ where
         let Config {
             max_block_size,
             max_headers_per_request,
+            max_txs_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -625,6 +635,7 @@ where
             broadcast,
             database_processor,
             max_headers_per_request,
+            max_txs_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1217,6 +1228,7 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_txs_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1304,6 +1316,7 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_txs_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1363,6 +1376,7 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_txs_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval: Default::default(),
             heartbeat_max_time_since_last: Default::default(),
