@@ -6,6 +6,7 @@ use crate::{
     ports::{
         BlockProducer,
         BlockSigner,
+        GetTime,
         InMemoryPredefinedBlocks,
         MockBlockImporter,
         MockBlockProducer,
@@ -54,7 +55,10 @@ use fuel_core_types::{
         ExecutionResult,
         UncommittedResult,
     },
-    tai64::Tai64,
+    tai64::{
+        Tai64,
+        Tai64N,
+    },
 };
 use rand::{
     prelude::StdRng,
@@ -82,13 +86,17 @@ use tokio::{
 };
 
 mod manually_produce_tests;
+mod test_time;
 mod trigger_tests;
+
+use test_time::TestTime;
 
 struct TestContextBuilder {
     config: Option<Config>,
     txpool: Option<MockTransactionPool>,
     importer: Option<MockBlockImporter>,
     producer: Option<MockBlockProducer>,
+    start_time: Option<Tai64N>,
 }
 
 fn generate_p2p_port() -> MockP2pPort {
@@ -108,6 +116,7 @@ impl TestContextBuilder {
             txpool: None,
             importer: None,
             producer: None,
+            start_time: None,
         }
     }
 
@@ -168,8 +177,15 @@ impl TestContextBuilder {
 
         let predefined_blocks = HashMap::new().into();
 
+        let time = match self.start_time {
+            Some(start_time) => TestTime::new(start_time),
+            None => TestTime::at_unix_epoch(),
+        };
+
+        let watch = time.watch();
+
         let service = new_service(
-            &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
+            &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
             config.clone(),
             txpool,
             producer,
@@ -177,9 +193,10 @@ impl TestContextBuilder {
             p2p_port,
             FakeBlockSigner { succeeds: true },
             predefined_blocks,
+            watch,
         );
         service.start().unwrap();
-        TestContext { service }
+        TestContext { service, time }
     }
 }
 
@@ -211,7 +228,9 @@ struct TestContext {
         MockBlockImporter,
         FakeBlockSigner,
         InMemoryPredefinedBlocks,
+        test_time::Watch,
     >,
+    time: TestTime,
 }
 
 impl TestContext {
@@ -385,6 +404,8 @@ async fn remove_skipped_transactions() {
 
     let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
 
+    let time = TestTime::at_unix_epoch();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -394,6 +415,7 @@ async fn remove_skipped_transactions() {
         p2p_port,
         FakeBlockSigner { succeeds: true },
         predefined_blocks,
+        time.watch(),
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -438,6 +460,8 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
 
+    let time = TestTime::at_unix_epoch();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -447,6 +471,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         p2p_port,
         FakeBlockSigner { succeeds: true },
         predefined_blocks,
+        time.watch(),
     );
 
     // simulate some txpool event to see if any block production is erroneously triggered
@@ -555,6 +580,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
     let task = MainTask::new(
         &last_block,
         config,
@@ -564,6 +590,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(blocks_map),
+        time.watch(),
     );
 
     // when
@@ -617,6 +644,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
     let task = MainTask::new(
         &last_block,
         config,
@@ -626,6 +654,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
+        time.watch(),
     );
 
     // when
