@@ -145,10 +145,9 @@ async fn quorum__disagree_on_logs() {
     .try_concat()
     .await
     // Then
-    .expect_err("Expected an error");
 
     match provider_error {
-        ProviderError::JsonRpcClientError(e) => {
+        Err(ProviderError::JsonRpcClientError(e)) => {
             assert_eq!(format!("{e}"), "No Quorum reached.");
         }
         _ => {
