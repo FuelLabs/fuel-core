@@ -49,6 +49,7 @@ COPY . .
 # download latest chain-configuration repo after cache to ensure most recent version
 RUN git clone --depth=1 https://github.com/FuelLabs/chain-configuration.git /chain-config
 # build application
+# note this puts the builds outside of the cache dirs so the run image can copy them
 RUN \
   --mount=type=cache,target=/root/.cargo/bin \
   --mount=type=cache,target=/root/.cargo/registry/index \
@@ -57,8 +58,8 @@ RUN \
   --mount=type=cache,target=/build/target \
   xx-cargo build --release --no-default-features --features "$BUILD_FEATURES" -p fuel-core-bin \
     && xx-verify ./target/$(xx-cargo --print-target-triple)/release/fuel-core \
-    && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core ./output_fuel-core \
-    && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d ./output_fuel-core.d
+    && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core /root/fuel-core \
+    && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d /root/fuel-core.d
 
 # Stage 2: Run
 FROM ubuntu:22.04 AS run
@@ -81,8 +82,8 @@ RUN apt-get update -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/output_fuel-core ./fuel-core
-COPY --from=builder /build/output_fuel-core.d ./fuel-core.d
+COPY --from=builder /root/fuel-core .
+COPY --from=builder /root/fuel-core.d .
 COPY --from=builder /chain-config ./config
 
 EXPOSE ${PORT}
