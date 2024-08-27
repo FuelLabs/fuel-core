@@ -15,6 +15,7 @@ use fuel_core_types::{
         consensus::Genesis,
         SealedBlockHeader,
     },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
@@ -55,7 +56,18 @@ impl BlockHeightImporter for BlockImporterAdapter {
 }
 
 impl TxPool for TxPoolAdapter {
-    fn get_all_txs_ids(&self) -> Vec<fuel_core_txpool::types::TxId> {
-        self.service.get_all_txs_ids()
+    fn get_all_tx_ids(&self) -> Vec<fuel_core_txpool::types::TxId> {
+        self.service.get_all_tx_ids()
+    }
+
+    fn get_full_txs(
+        &self,
+        tx_ids: Vec<fuel_core_txpool::types::TxId>,
+    ) -> Vec<Option<Transaction>> {
+        self.service
+            .find(tx_ids)
+            .into_iter()
+            .map(|tx_info| tx_info.map(|tx| tx.tx().as_ref().into()))
+            .collect()
     }
 }

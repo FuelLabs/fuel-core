@@ -1,6 +1,9 @@
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
-    fuel_tx::TxId,
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     services::p2p::Transactions,
 };
 use libp2p::{
@@ -34,7 +37,7 @@ pub enum ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
     AllTransactionsIds(Option<Vec<TxId>>),
-    FullTransactions(Option<Vec<Option<Transactions>>>),
+    FullTransactions(Option<Vec<Option<Transaction>>>),
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;

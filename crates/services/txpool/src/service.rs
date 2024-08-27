@@ -413,7 +413,7 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
         )
     }
 
-    pub fn get_all_txs_ids(&self) -> Vec<TxId> {
+    pub fn get_all_tx_ids(&self) -> Vec<TxId> {
         self.txpool
             .lock()
             .txs()

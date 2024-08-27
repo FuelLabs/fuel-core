@@ -40,6 +40,7 @@ use fuel_core_types::{
     blockchain::SealedBlockHeader,
     fuel_tx::{
         Transaction,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::{
@@ -123,6 +124,14 @@ pub enum TaskRequest {
         response: Option<Vec<SealedBlockHeader>>,
         request_id: InboundRequestId,
     },
+    AllTransactionsIds {
+        response: Option<Vec<TxId>>,
+        request_id: InboundRequestId,
+    },
+    FullTransactions {
+        response: Option<Vec<Option<Transaction>>>,
+        request_id: InboundRequestId,
+    },
 }
 
 impl Debug for TaskRequest {
@@ -151,6 +160,12 @@ impl Debug for TaskRequest {
             }
             TaskRequest::DatabaseHeaderLookUp { .. } => {
                 write!(f, "TaskRequest::DatabaseHeaderLookUp")
+            }
+            TaskRequest::AllTransactionsIds { .. } => {
+                write!(f, "TaskRequest::AllTransactionsIds")
+            }
+            TaskRequest::FullTransactions { .. } => {
+                write!(f, "TaskRequest::FullTransactions")
             }
         }
     }
@@ -438,12 +453,10 @@ where
                 self.handle_sealed_headers_request(range, request_id)
             }
             RequestMessage::AllTransactionsIds => {
-                // TODO: Implement this
-                todo!()
+                self.handle_all_transactions_ids_request(request_id)
             }
-            RequestMessage::FullTransactions(_) => {
-                // TODO: Implement this
-                todo!()
+            RequestMessage::FullTransactions(tx_ids) => {
+                self.handle_full_transactions_request(tx_ids, request_id)
             }
         }
     }
@@ -539,6 +552,35 @@ where
             },
             self.max_headers_per_request,
         )
+    }
+
+    fn handle_all_transactions_ids_request(
+        &mut self,
+        request_id: InboundRequestId,
+    ) -> anyhow::Result<()> {
+        let response_channel = self.request_sender.clone();
+
+        let tx_ids = self.tx_pool.get_all_tx_ids();
+        let _ = response_channel.try_send(TaskRequest::AllTransactionsIds {
+            response: Some(tx_ids),
+            request_id,
+        })?;
+        Ok(())
+    }
+
+    fn handle_full_transactions_request(
+        &mut self,
+        tx_ids: Vec<TxId>,
+        request_id: InboundRequestId,
+    ) -> anyhow::Result<()> {
+        let response_channel = self.request_sender.clone();
+
+        let txs = self.tx_pool.get_full_txs(tx_ids);
+        let _ = response_channel.try_send(TaskRequest::FullTransactions {
+            response: Some(txs),
+            request_id,
+        })?;
+        Ok(())
     }
 }
 
@@ -713,6 +755,12 @@ where
                     }
                     Some(TaskRequest::DatabaseHeaderLookUp { response, request_id }) => {
                         let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
+                    }
+                    Some(TaskRequest::AllTransactionsIds { response, request_id }) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::AllTransactionsIds(response));
+                    }
+                    Some(TaskRequest::FullTransactions { response, request_id }) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::FullTransactions(response));
                     }
                     None => {
                         tracing::error!("The P2P `Task` should be holder of the `Sender`");
@@ -1065,8 +1113,12 @@ pub mod tests {
     struct FakeTxPool;
 
     impl TxPool for FakeTxPool {
-        fn get_all_txs_ids(&self) -> Vec<fuel_core_types::fuel_tx::TxId> {
+        fn get_all_tx_ids(&self) -> Vec<fuel_core_types::fuel_tx::TxId> {
             vec![]
+        }
+
+        fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<Transaction>> {
+            tx_ids.iter().map(|_| None).collect()
         }
     }
 
