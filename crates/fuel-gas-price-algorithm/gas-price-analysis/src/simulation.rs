@@ -1,3 +1,4 @@
+use std::iter;
 use super::*;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
@@ -22,12 +23,12 @@ pub fn run_simulation(
 ) -> SimulationResults {
     // simulation parameters
     let size = 100;
-    let da_recording_rate = 1;
+    let da_recording_rate = 12;
     let capacity = 30_000_000;
     let gas_per_byte = 63;
     let max_block_bytes = capacity / gas_per_byte;
     let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
-    let da_cost_per_byte = arb_cost_per_byte(size as u32);
+    let da_cost_per_byte = arb_cost_per_byte(size, da_recording_rate);
 
     let l2_blocks = fullness_and_bytes
         .iter()
@@ -41,7 +42,7 @@ pub fn run_simulation(
             (vec![], vec![]),
             |(mut delayed, mut recorded),
              (index, ((_fullness, bytes), cost_per_byte))| {
-                let total_cost = *bytes as f64 * cost_per_byte;
+                let total_cost = *bytes * cost_per_byte;
                 let height = index as u32 + 1;
                 let converted = RecordedBlock {
                     height,
@@ -118,7 +119,7 @@ pub fn run_simulation(
 
     let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) = fullness_and_bytes.iter().cloned().unzip();
     let fullness= fullness_without_capacity.iter().map(|&fullness| (fullness, capacity)).collect();
-    let bytes_and_costs = bytes.iter().zip(da_cost_per_byte.iter()).map(|(bytes, cost_per_byte)| (*bytes, (*bytes as f64 * cost_per_byte) as u64)).collect();
+    let bytes_and_costs = bytes.iter().zip(da_cost_per_byte.iter()).map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64)).collect();
 
     let actual_profit: Vec<i64> = actual_costs
         .iter()
@@ -144,10 +145,14 @@ pub fn run_simulation(
     }
 }
 
+// Naive Fourier series
 fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
     components
         .iter()
-        .fold(0f64, |acc, &c| acc + f64::sin(input / c))
+        .fold(0f64, |acc, &c| {
+            let a = 100;
+            acc + f64::sin(input / c)
+        })
         / components.len() as f64
 }
 
@@ -198,17 +203,25 @@ fn noisy_eth_price<T: TryInto<f64>>(input: T) -> f64
 where
     <T as TryInto<f64>>::Error: core::fmt::Debug,
 {
-    const COMPONENTS: &[f64] = &[70.0, 130.0];
+    const COMPONENTS: &[f64] = &[7.0, 13.0];
     let input = input.try_into().unwrap();
     gen_noisy_signal(input, COMPONENTS)
 }
 
-fn arb_cost_per_byte(size: u32) -> Vec<f64> {
+fn arb_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
     let mut rng = StdRng::seed_from_u64(10902);
-    (0u32..size)
-        // .map(noisy_eth_price)
-        .map(|_| rng.gen_range(1..5))
-        .map(|x| x as f64 * 10.0_f64.powf(-9.0))
-        // .map(|x| x as u64)
+    let actual_size = size.div_ceil(update_period);
+
+    (0u32..actual_size as u32)
+        .map(noisy_eth_price)
+        // .map(|_| rng.gen_range(1..5))
+        .map(|x| {
+            let a = 0;
+            x * 4.0 + 3.
+        })
+        .map(|x| x as u64)
+        .map(|x| iter::repeat(x).take(update_period as usize))
+        .flatten()
+        .take(size as usize)
         .collect()
 }
