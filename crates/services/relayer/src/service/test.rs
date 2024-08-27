@@ -143,7 +143,7 @@ async fn quorum__disagree_on_logs() {
     )
     .map_ok(|logs| logs.logs)
     .try_concat()
-    .await
+    .await;
     // Then
 
     match provider_error {
