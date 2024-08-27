@@ -36,6 +36,7 @@ pub mod dap;
 pub mod health;
 pub mod message;
 pub mod node_info;
+pub mod upgrades;
 
 pub mod gas_price;
 pub mod scalars;
@@ -60,6 +61,7 @@ pub struct Query(
     gas_price::EstimateGasPriceQuery,
     message::MessageQuery,
     relayed_tx::RelayedTransactionQuery,
+    upgrades::UpgradeQuery,
 );
 
 #[derive(MergedObject, Default)]

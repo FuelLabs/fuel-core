@@ -23,6 +23,7 @@ use crate::client::{
             ContractId,
             UtxoId,
         },
+        upgrades::StateTransitionBytecode,
         RelayedTransactionStatus,
     },
 };
@@ -45,6 +46,7 @@ use fuel_core_types::{
     fuel_tx::{
         BlobId,
         Bytes32,
+        ConsensusParameters,
         Receipt,
         Transaction,
         TxId,
@@ -381,6 +383,59 @@ impl FuelClient {
             let result = r.chain.try_into()?;
             Ok(result)
         })
+    }
+
+    pub async fn consensus_parameters(
+        &self,
+        version: i32,
+    ) -> io::Result<Option<ConsensusParameters>> {
+        let args = schema::upgrades::ConsensusParametersByVersionArgs { version };
+        let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .consensus_parameters
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
+    }
+
+    pub async fn state_transition_byte_code_by_version(
+        &self,
+        version: i32,
+    ) -> io::Result<Option<StateTransitionBytecode>> {
+        let args = schema::upgrades::StateTransitionBytecodeByVersionArgs { version };
+        let query = schema::upgrades::StateTransitionBytecodeByVersionQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .state_transition_bytecode_by_version
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
+    }
+
+    pub async fn state_transition_byte_code_by_root(
+        &self,
+        root: Bytes32,
+    ) -> io::Result<Option<StateTransitionBytecode>> {
+        let args = schema::upgrades::StateTransitionBytecodeByRootArgs {
+            root: HexString(Bytes(root.to_vec())),
+        };
+        let query = schema::upgrades::StateTransitionBytecodeByRootQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .state_transition_bytecode_by_root
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
     }
 
     /// Default dry run, matching the exact configuration as the node
