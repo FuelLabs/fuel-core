@@ -433,6 +433,17 @@ pub struct SubmitAndAwaitSubscription {
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Subscription",
+    variables = "TxArg"
+)]
+pub struct SubmitAndAwaitStatusSubscription {
+    #[arguments(tx: $tx)]
+    pub submit_and_await_status: TransactionStatus,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct AllReceipts {
     pub all_receipts: Vec<Receipt>,
