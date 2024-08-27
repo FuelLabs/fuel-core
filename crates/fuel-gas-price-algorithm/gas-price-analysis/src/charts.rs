@@ -11,44 +11,44 @@ pub fn draw_gas_prices(
     const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
     const DA_GAS_PRICE_COLOR: RGBColor = BLUE;
     let min = 0;
-    let max = *gas_prices.iter().max().unwrap();
+    let max = *da_gas_prices.iter().max().unwrap();
 
     let mut chart = ChartBuilder::on(drawing_area)
         .caption(title, ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(40)
-        .y_label_area_size(60)
-        .right_y_label_area_size(40)
+        .y_label_area_size(100)
+        .right_y_label_area_size(100)
         .build_cartesian_2d(0..gas_prices.len(), min..max)
         .unwrap();
 
     chart
         .configure_mesh()
-        .y_desc("Gas Price")
+        .y_desc("DA Gas Price")
         .x_desc("Block")
         .draw()
         .unwrap();
 
-    chart
-        .draw_series(LineSeries::new(
-            gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            GAS_PRICE_COLOR,
-        ))
-        .unwrap()
-        .label("Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], GAS_PRICE_COLOR));
+    // chart
+    //     .draw_series(LineSeries::new(
+    //         gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
+    //         GAS_PRICE_COLOR,
+    //     ))
+    //     .unwrap()
+    //     .label("Gas Price")
+    //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], GAS_PRICE_COLOR));
 
     // Draw the exec gas prices
-    chart
-        .draw_series(LineSeries::new(
-            exec_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
-            EXEC_GAS_PRICE_COLOR,
-        ))
-        .unwrap()
-        .label("Exec Gas Price")
-        .legend(|(x, y)| {
-            PathElement::new(vec![(x, y), (x + 20, y)], EXEC_GAS_PRICE_COLOR)
-        });
+    // chart
+    //     .draw_series(LineSeries::new(
+    //         exec_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
+    //         EXEC_GAS_PRICE_COLOR,
+    //     ))
+    //     .unwrap()
+    //     .label("Exec Gas Price")
+    //     .legend(|(x, y)| {
+    //         PathElement::new(vec![(x, y), (x + 20, y)], EXEC_GAS_PRICE_COLOR)
+    //     });
 
     // Draw the da gas prices
     chart
@@ -82,8 +82,8 @@ pub fn draw_fullness(
         .caption(title, ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(40)
-        .y_label_area_size(60)
-        .right_y_label_area_size(40)
+        .y_label_area_size(100)
+        .right_y_label_area_size(100)
         .build_cartesian_2d(0..fullness.len(), min..max)
         .unwrap();
 
@@ -121,7 +121,8 @@ pub fn draw_bytes_and_cost_per_block(
     title: &str,
 ) {
     const BYTES_PER_BLOCK_COLOR: RGBColor = BLACK;
-    let (bytes, costs): (Vec<u64>, Vec<u64>) = bytes_and_costs_per_block.iter().cloned().unzip();
+    let (bytes, costs): (Vec<u64>, Vec<u64>) =
+        bytes_and_costs_per_block.iter().cloned().unzip();
 
     let min = 0;
     let max_left = *bytes.iter().max().unwrap();
@@ -131,8 +132,8 @@ pub fn draw_bytes_and_cost_per_block(
         .caption(title, ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(40)
-        .y_label_area_size(60)
-        .right_y_label_area_size(40)
+        .y_label_area_size(100)
+        .right_y_label_area_size(100)
         .build_cartesian_2d(0..bytes_and_costs_per_block.len(), min..max_left)
         .unwrap()
         .set_secondary_coord(0..bytes_and_costs_per_block.len(), min..max_right);
@@ -144,7 +145,11 @@ pub fn draw_bytes_and_cost_per_block(
         .draw()
         .unwrap();
 
-    chart.configure_secondary_axes().y_desc("Cost Per Block").draw().unwrap();
+    chart
+        .configure_secondary_axes()
+        .y_desc("Cost Per Block")
+        .draw()
+        .unwrap();
 
     chart
         .draw_series(LineSeries::new(
@@ -157,12 +162,14 @@ pub fn draw_bytes_and_cost_per_block(
             PathElement::new(vec![(x, y), (x + 20, y)], BYTES_PER_BLOCK_COLOR)
         });
 
-    chart.draw_secondary_series(LineSeries::new(
-        costs.iter().enumerate().map(|(x, y)| (x, *y)),
-        RED,
-    )).unwrap().label("Cost Per Block").legend(|(x, y)| {
-        PathElement::new(vec![(x, y), (x + 20, y)], RED)
-    });
+    chart
+        .draw_secondary_series(LineSeries::new(
+            costs.iter().enumerate().map(|(x, y)| (x, *y)),
+            RED,
+        ))
+        .unwrap()
+        .label("Cost Per Block")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
 
     chart
         .configure_series_labels()
@@ -182,18 +189,29 @@ pub fn draw_profit(
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
-    let min = *actual_profit.iter().min().unwrap();
-    let max = *actual_profit.iter().max().unwrap();
-    println!("min: {}, max: {}", min, max);
+    // let min = *actual_profit.iter().min().unwrap();
+    // let max = *actual_profit.iter().max().unwrap();
+    let min = *std::cmp::min(
+        actual_profit.iter().min().unwrap(),
+        projected_profit.iter().min().unwrap_or(&0),
+    );
+    let max = *std::cmp::max(
+        actual_profit.iter().max().unwrap(),
+        projected_profit.iter().max().unwrap_or(&0),
+    );
 
     let mut chart = ChartBuilder::on(drawing_area)
         .caption(title, ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(40)
-        .y_label_area_size(60)
-        .right_y_label_area_size(40)
+        .y_label_area_size(100)
+        .right_y_label_area_size(100)
         .build_cartesian_2d(0..actual_profit.len(), min..max)
-        .unwrap();
+        .unwrap()
+        .set_secondary_coord(
+            0..actual_profit.len(),
+            0..*pessimistic_block_costs.iter().max().unwrap(),
+        );
 
     chart
         .configure_mesh()
@@ -201,6 +219,8 @@ pub fn draw_profit(
         .x_desc("Block")
         .draw()
         .unwrap();
+
+    chart.configure_secondary_axes().draw().unwrap();
 
     chart
         .draw_series(LineSeries::new(
@@ -226,11 +246,11 @@ pub fn draw_profit(
 
     // draw the block bytes
     chart
-        .draw_series(LineSeries::new(
+        .draw_secondary_series(LineSeries::new(
             pessimistic_block_costs
                 .iter()
                 .enumerate()
-                .map(|(x, y)| (x, *y as i64)),
+                .map(|(x, y)| (x, *y)),
             PESSIMISTIC_BLOCK_COST_COLOR,
         ))
         .unwrap()

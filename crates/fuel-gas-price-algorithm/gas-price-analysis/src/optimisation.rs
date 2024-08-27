@@ -1,14 +1,15 @@
 use super::*;
 
 fn da_pid_factors(size: usize) -> Vec<(i64, i64)> {
-    let mut rng = StdRng::seed_from_u64(10902);
-    (0usize..size)
-        .map(|_| {
-            let p = rng.gen_range(1_000..100_000_000_000);
-            let d = rng.gen_range(1_000..100_000_000_000);
-            (p, d)
-        })
-        .collect()
+    // let mut rng = StdRng::seed_from_u64(10902);
+    // (0usize..size)
+    //     .map(|_| {
+    //         let p = rng.gen_range(0..10_000_000);
+    //         let d = rng.gen_range(0..10_000_000);
+    //         (p, d)
+    //     })
+    //     .collect()
+    vec![(85_000, 0)]
 }
 
 pub fn naive_optimisation(

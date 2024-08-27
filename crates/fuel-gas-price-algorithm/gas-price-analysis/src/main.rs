@@ -9,6 +9,7 @@ use plotters::coord::Shift;
 
 use crate::{
     charts::{
+        draw_bytes_and_cost_per_block,
         draw_fullness,
         draw_gas_prices,
         draw_profit,
@@ -19,7 +20,6 @@ use crate::{
         SimulationResults,
     },
 };
-use crate::charts::draw_bytes_and_cost_per_block;
 
 mod optimisation;
 mod simulation;
@@ -27,7 +27,7 @@ mod simulation;
 mod charts;
 
 fn main() {
-    let optimisation_iterations = 50_000;
+    let optimisation_iterations = 10_000;
     let avg_window = 2;
     let (best, (p_comp, d_comp, avg_window)) =
         naive_optimisation(optimisation_iterations, avg_window);
@@ -42,7 +42,7 @@ fn main() {
         pessimistic_costs,
     } = best;
 
-    let plot_width = 640 * 2;
+    let plot_width = 640 * 2 * 2;
     let plot_height = 480 * 3;
 
     const FILE_PATH: &str = "gas_prices.png";
@@ -56,11 +56,7 @@ fn main() {
 
     draw_fullness(&window_one, &fullness, "Fullness");
 
-    draw_bytes_and_cost_per_block(
-        &window_two,
-        &bytes_and_costs,
-        "Bytes Per Block",
-    );
+    draw_bytes_and_cost_per_block(&window_two, &bytes_and_costs, "Bytes Per Block");
 
     draw_profit(
         &window_three,
@@ -79,7 +75,5 @@ fn main() {
         "Gas Prices",
     );
 
-
     root.present().unwrap();
 }
-

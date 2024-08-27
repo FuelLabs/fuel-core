@@ -1,9 +1,9 @@
-use std::iter;
 use super::*;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     RecordedBlock,
 };
+use std::iter;
 
 pub struct SimulationResults {
     pub gas_prices: Vec<u64>,
@@ -22,10 +22,11 @@ pub fn run_simulation(
     avg_window: u32,
 ) -> SimulationResults {
     // simulation parameters
-    let size = 100;
+    let size = 1000;
     let da_recording_rate = 12;
     let capacity = 30_000_000;
     let gas_per_byte = 63;
+    let gas_price_factor = 100;
     let max_block_bytes = capacity / gas_per_byte;
     let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
     let da_cost_per_byte = arb_cost_per_byte(size, da_recording_rate);
@@ -61,17 +62,18 @@ pub fn run_simulation(
         )
         .1;
 
-    let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
+    let mut blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
 
     let mut updater = AlgorithmUpdaterV1 {
         min_exec_gas_price: 10,
         min_da_gas_price: 10,
-        new_exec_price: 800,
-        last_da_gas_price: 200,
+        new_exec_price: 10 * gas_price_factor,
+        last_da_gas_price: 10 * gas_price_factor,
+        da_gas_price_factor: gas_price_factor,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 50,
         exec_gas_price_change_percent: 2,
-        max_da_gas_price_change_percent: 10,
+        max_da_gas_price_change_percent: 100,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
         latest_da_cost_per_byte: 200,
@@ -96,10 +98,11 @@ pub fn run_simulation(
         exec_gas_prices.push(updater.new_exec_price);
         let gas_price = updater.algorithm().calculate(max_block_bytes);
         gas_prices.push(gas_price);
-        // Update DA blocks
-        if let Some(da_blocks) = da_block {
+        // Update DA blocks on the occasion there is one
+        if let Some(mut da_blocks) = da_block.clone() {
             let mut total_costs = updater.latest_known_total_da_cost;
-            for block in da_blocks {
+            for mut block in &mut da_blocks {
+                block.block_cost *= gas_price_factor;
                 total_costs += block.block_cost;
                 actual_costs.push(total_costs);
             }
@@ -109,7 +112,13 @@ pub fn run_simulation(
         }
         // Update L2 block
         updater
-            .update_l2_block_data(height, *fullness, capacity.try_into().unwrap(), *bytes, gas_price)
+            .update_l2_block_data(
+                height,
+                *fullness,
+                capacity.try_into().unwrap(),
+                *bytes,
+                gas_price,
+            )
             .unwrap();
         da_gas_prices.push(updater.last_da_gas_price);
         pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
@@ -117,9 +126,17 @@ pub fn run_simulation(
         projected_cost_totals.push(updater.projected_total_da_cost);
     }
 
-    let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) = fullness_and_bytes.iter().cloned().unzip();
-    let fullness= fullness_without_capacity.iter().map(|&fullness| (fullness, capacity)).collect();
-    let bytes_and_costs = bytes.iter().zip(da_cost_per_byte.iter()).map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64)).collect();
+    let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) =
+        fullness_and_bytes.iter().cloned().unzip();
+    let fullness = fullness_without_capacity
+        .iter()
+        .map(|&fullness| (fullness, capacity))
+        .collect();
+    let bytes_and_costs = bytes
+        .iter()
+        .zip(da_cost_per_byte.iter())
+        .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64))
+        .collect();
 
     let actual_profit: Vec<i64> = actual_costs
         .iter()
@@ -147,15 +164,11 @@ pub fn run_simulation(
 
 // Naive Fourier series
 fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
-    components
-        .iter()
-        .fold(0f64, |acc, &c| {
-            let a = 100;
-            acc + f64::sin(input / c)
-        })
-        / components.len() as f64
+    components.iter().fold(0f64, |acc, &c| {
+        let a = 100;
+        acc + f64::sin(input / c)
+    }) / components.len() as f64
 }
-
 
 fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
 where
@@ -198,12 +211,11 @@ fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
         .collect()
 }
 
-
 fn noisy_eth_price<T: TryInto<f64>>(input: T) -> f64
 where
     <T as TryInto<f64>>::Error: core::fmt::Debug,
 {
-    const COMPONENTS: &[f64] = &[7.0, 13.0];
+    const COMPONENTS: &[f64] = &[3.0, 4.0];
     let input = input.try_into().unwrap();
     gen_noisy_signal(input, COMPONENTS)
 }
@@ -216,10 +228,10 @@ fn arb_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
         .map(noisy_eth_price)
         // .map(|_| rng.gen_range(1..5))
         .map(|x| {
-            let a = 0;
-            x * 4.0 + 3.
+            x * 5.
         })
         .map(|x| x as u64)
+        .map(|x| std::cmp::max(x, 1))
         .map(|x| iter::repeat(x).take(update_period as usize))
         .flatten()
         .take(size as usize)

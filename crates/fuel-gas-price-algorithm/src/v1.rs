@@ -78,6 +78,11 @@ impl AlgorithmV1 {
         let p = self.p(projected_profit_avg);
         let d = self.d(projected_profit_avg);
         let da_change = self.change(p, d);
+        // let da_change = if projected_profit_avg > 0 {
+        //     self.last_da_price as i64 * -10 / 100
+        // } else {
+        //     self.last_da_price as i64 * 10 / 100
+        // };
 
         self.assemble_price(da_change)
     }
@@ -99,12 +104,14 @@ impl AlgorithmV1 {
 
     fn p(&self, projected_profit_avg: i64) -> i64 {
         let checked_p = projected_profit_avg.checked_div(self.da_p_factor);
+        // If the profit is positive, we want to decrease the gas price
         checked_p.unwrap_or(0).saturating_mul(-1)
     }
 
     fn d(&self, projected_profit_avg: i64) -> i64 {
         let slope = projected_profit_avg.saturating_sub(self.avg_profit);
         let checked_d = slope.checked_div(self.da_d_factor);
+        // if the slope is positive, we want to decrease the gas price
         checked_d.unwrap_or(0).saturating_mul(-1)
     }
 
@@ -142,12 +149,9 @@ impl AlgorithmV1 {
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct AlgorithmUpdaterV1 {
+    // Execution
     /// The gas price to cover the execution of the next block
     pub new_exec_price: u64,
-    /// The gas price for the DA portion of the last block. This can be used to calculate
-    /// the DA portion of the next block
-    pub last_da_gas_price: u64,
-    // Execution
     /// The lowest the algorithm allows the exec gas price to go
     pub min_exec_gas_price: u64,
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
@@ -159,6 +163,11 @@ pub struct AlgorithmUpdaterV1 {
     /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: u64,
     // DA
+    /// The gas price for the DA portion of the last block. This can be used to calculate
+    /// the DA portion of the next block
+    pub last_da_gas_price: u64,
+    /// Scale factor for the DA gas price.
+    pub da_gas_price_factor: u64,
     /// The lowest the algorithm allows the da gas price to go
     pub min_da_gas_price: u64,
     /// The maximum percentage that the DA portion of the gas price can change in a single block
@@ -239,7 +248,9 @@ impl AlgorithmUpdaterV1 {
             // implicitly deduce what our da gas price was for the l2 block
             self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
             self.update_exec_gas_price(used, capacity);
-            let da_reward = used.saturating_mul(self.last_da_gas_price);
+            let da_reward = used
+                .saturating_mul(self.last_da_gas_price)
+                .saturating_div(self.da_gas_price_factor);
             self.total_da_rewards = self.total_da_rewards.saturating_add(da_reward);
             Ok(())
         }
@@ -295,12 +306,17 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
-            let new_cost_per_byte = block_cost.checked_div(block_bytes).ok_or(
-                Error::CouldNotCalculateCostPerByte {
+            let new_cost_per_byte = block_cost
+                .checked_mul(self.da_gas_price_factor)
+                .ok_or(Error::CouldNotCalculateCostPerByte {
                     bytes: block_bytes,
                     cost: block_cost,
-                },
-            )?;
+                })?
+                .checked_div(block_bytes)
+                .ok_or(Error::CouldNotCalculateCostPerByte {
+                    bytes: block_bytes,
+                    cost: block_cost,
+                })?;
             self.da_recorded_block_height = height;
             let new_block_cost =
                 self.latest_known_total_da_cost.saturating_add(block_cost);
