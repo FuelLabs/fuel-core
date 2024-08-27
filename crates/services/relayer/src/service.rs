@@ -19,6 +19,9 @@ use ethers_providers::{
     Middleware,
     Provider,
     ProviderError,
+    Quorum,
+    QuorumProvider,
+    WeightedProvider,
 };
 use fuel_core_services::{
     RunnableService,
@@ -54,7 +57,7 @@ type Synced = watch::Receiver<Option<DaBlockHeight>>;
 type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
 
 /// The alias of runnable relayer service.
-pub type Service<D> = CustomizableService<Provider<Http>, D>;
+pub type Service<D> = CustomizableService<Provider<QuorumProvider<Http>>, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
@@ -347,14 +350,18 @@ pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
     D: RelayerDb + Clone + 'static,
 {
-    let url = config.relayer.clone().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Tried to start Relayer without setting an eth_client in the config"
-        )
-    })?;
-    // TODO: Does this handle https?
-    let http = Http::new(url);
-    let eth_node = Provider::new(http);
+    let urls = config
+        .relayer
+        .clone()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Tried to start Relayer without setting an eth_client in the config"
+            )
+        })?
+        .into_iter()
+        .map(|url| WeightedProvider::new(Http::new(url)));
+
+    let eth_node = Provider::new(QuorumProvider::new(Quorum::Majority, urls));
     let retry_on_error = true;
     Ok(new_service_internal(
         eth_node,

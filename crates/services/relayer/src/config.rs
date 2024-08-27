@@ -22,8 +22,8 @@ pub(crate) static ETH_FORCED_TX: Lazy<H256> =
 pub struct Config {
     /// The da block to which the contract was deployed.
     pub da_deploy_height: DaBlockHeight,
-    /// Uri address to ethereum client.
-    pub relayer: Option<url::Url>,
+    /// Uri addresses to ethereum client.
+    pub relayer: Option<Vec<url::Url>>,
     // TODO: Create `EthAddress` into `fuel_core_types`.
     /// Ethereum contract address.
     pub eth_v2_listening_contracts: Vec<Bytes20>,
