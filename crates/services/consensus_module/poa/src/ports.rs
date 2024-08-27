@@ -31,7 +31,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
@@ -146,5 +146,17 @@ impl InMemoryPredefinedBlocks {
 impl PredefinedBlocks for InMemoryPredefinedBlocks {
     fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>> {
         Ok(self.blocks.get(height).cloned())
+    }
+}
+
+pub trait GetTime: Send + Sync {
+    fn now(&self) -> Tai64;
+}
+
+pub struct SystemTime;
+
+impl GetTime for SystemTime {
+    fn now(&self) -> Tai64 {
+        Tai64::now()
     }
 }

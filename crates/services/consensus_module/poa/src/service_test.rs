@@ -177,6 +177,7 @@ impl TestContextBuilder {
             p2p_port,
             FakeBlockSigner { succeeds: true },
             predefined_blocks,
+            crate::ports::SystemTime, // TODO: Use test time
         );
         service.start().unwrap();
         TestContext { service }
@@ -211,6 +212,7 @@ struct TestContext {
         MockBlockImporter,
         FakeBlockSigner,
         InMemoryPredefinedBlocks,
+        crate::ports::SystemTime, // TODO: Change
     >,
 }
 
@@ -394,6 +396,7 @@ async fn remove_skipped_transactions() {
         p2p_port,
         FakeBlockSigner { succeeds: true },
         predefined_blocks,
+        crate::ports::SystemTime, // TODO: Use test time
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -447,6 +450,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         p2p_port,
         FakeBlockSigner { succeeds: true },
         predefined_blocks,
+        crate::ports::SystemTime, // TODO: Use test time
     );
 
     // simulate some txpool event to see if any block production is erroneously triggered
@@ -564,6 +568,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(blocks_map),
+        crate::ports::SystemTime, // TODO: Use test time
     );
 
     // when
@@ -626,6 +631,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
+        crate::ports::SystemTime, // TODO: Use test time
     );
 
     // when
