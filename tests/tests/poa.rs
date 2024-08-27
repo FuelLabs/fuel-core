@@ -95,6 +95,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 #[tokio::test]
 #[cfg(feature = "aws-kms")]
 async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
+    use fuel_core::producer::block_producer;
     use fuel_core_types::fuel_crypto::PublicKey;
 
     // This test is only enabled if the environment variable is set
@@ -141,7 +142,8 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
 
     let view = db.on_chain().latest_view().unwrap();
 
-    // verify signatures
+    // verify signatures and ensure that the block producer wont change
+    let mut block_producer = None;
     for height in 1..=num_blocks {
         let sealed_block = view
             .get_sealed_block_by_height(&height.into())
@@ -155,6 +157,12 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         signature
             .verify(&poa_public, &block_id.into_message())
             .expect("failed to verify signature");
+        let this_bp = signature.block_producer();
+        if let Some(bp) = block_producer {
+            assert_eq!(bp, this_bp, "Block producer changed");
+        } else {
+            block_producer = Some(this_bp);
+        }
     }
 }
 
