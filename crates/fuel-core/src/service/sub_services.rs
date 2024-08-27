@@ -166,10 +166,11 @@ pub fn init_sub_services(
         ),
     };
 
-    // TODO: Check the unwrap
     #[cfg(feature = "p2p")]
-    let (shared_state, request_receiver) =
-        fuel_core_p2p::service::build_shared_state(config.p2p.clone().unwrap());
+    let p2p_externals = config
+        .p2p
+        .clone()
+        .map(fuel_core_p2p::service::build_shared_state);
 
     #[cfg(feature = "p2p")]
     let p2p_adapter = {
@@ -184,7 +185,10 @@ pub fn init_sub_services(
             missing_transactions: -100.,
             invalid_transactions: -100.,
         };
-        P2PAdapter::new(Some(shared_state.clone()), peer_report_config)
+        P2PAdapter::new(
+            p2p_externals.as_ref().map(|ext| ext.0.clone()),
+            peer_report_config,
+        )
     };
 
     #[cfg(not(feature = "p2p"))]
@@ -220,17 +224,19 @@ pub fn init_sub_services(
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
     #[cfg(feature = "p2p")]
-    let mut network = config.p2p.clone().map(|p2p_config| {
-        fuel_core_p2p::service::new_service(
-            chain_id,
-            p2p_config,
-            shared_state,
-            request_receiver,
-            database.on_chain().clone(),
-            importer_adapter.clone(),
-            tx_pool_adapter.clone(),
-        )
-    });
+    let mut network = config.p2p.clone().zip(p2p_externals).map(
+        |(p2p_config, (shared_state, request_receiver))| {
+            fuel_core_p2p::service::new_service(
+                chain_id,
+                p2p_config,
+                shared_state,
+                request_receiver,
+                database.on_chain().clone(),
+                importer_adapter.clone(),
+                tx_pool_adapter.clone(),
+            )
+        },
+    );
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),

@@ -66,6 +66,10 @@ pub struct P2PArgs {
     #[clap(long = "max-headers-per-request", default_value = "100", env)]
     pub max_headers_per_request: usize,
 
+    /// Max number of txs in a single txs request response
+    #[clap(long = "max-txs-per-request", default_value = "10000", env)]
+    pub max_txs_per_request: usize,
+
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId within their `Multiaddr`
     #[clap(long = "bootstrap-nodes", value_delimiter = ',', env)]
@@ -304,6 +308,7 @@ impl P2PArgs {
             tcp_port: self.peering_port,
             max_block_size: self.max_block_size,
             max_headers_per_request: self.max_headers_per_request,
+            max_txs_per_request: self.max_txs_per_request,
             bootstrap_nodes: self.bootstrap_nodes,
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,

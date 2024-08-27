@@ -27,7 +27,6 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::config;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -333,8 +332,10 @@ pub struct Task<P, V, B, T> {
     request_sender: mpsc::Sender<TaskRequest>,
     database_processor: HeavyTaskProcessor,
     broadcast: B,
+    #[allow(dead_code)]
     tx_pool: T,
     max_headers_per_request: usize,
+    #[allow(dead_code)]
     max_txs_per_request: usize,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
@@ -437,7 +438,7 @@ where
                 self.handle_sealed_headers_request(range, request_id)
             }
             RequestMessage::AllTransactionsIds => {
-                self.handle_all_transactions_ids_request(request_id);
+                // TODO: Implement this
                 todo!()
             }
             RequestMessage::FullTransactions(_) => {
@@ -538,15 +539,6 @@ where
             },
             self.max_headers_per_request,
         )
-    }
-
-    fn handle_all_transactions_ids_request(
-        &mut self,
-        request_id: InboundRequestId,
-    ) -> anyhow::Result<()> {
-        self.tx_pool.get_all_txs_ids();
-        // TODO: Send the information to the peer
-        Ok(())
     }
 }
 
