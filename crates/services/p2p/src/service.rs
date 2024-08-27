@@ -471,6 +471,7 @@ where
                 max_len,
                 "Requested range is too big"
             );
+            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
             let response = None;
             let _ = self
                 .p2p_service
