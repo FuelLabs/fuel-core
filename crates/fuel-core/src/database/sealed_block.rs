@@ -81,14 +81,11 @@ impl OnChainIterableKeyValueView {
     pub fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Vec<SealedBlockHeader>> {
+    ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
         let headers = block_height_range
             .map(BlockHeight::from)
             .map(|height| self.get_sealed_block_header(&height))
-            .collect::<StorageResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
+            .collect::<StorageResult<Option<Vec<_>>>>()?;
         Ok(headers)
     }
 

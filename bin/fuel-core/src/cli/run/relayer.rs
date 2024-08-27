@@ -20,12 +20,12 @@ pub struct RelayerArgs {
     #[clap(long = "enable-relayer", action)]
     pub enable_relayer: bool,
 
-    /// Uri address to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
+    /// Uri addresses to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
     /// If not set relayer will not start.
     #[arg(long = "relayer", env)]
     #[arg(required_if_eq("enable_relayer", "true"))]
     #[arg(requires_if(IsPresent, "enable_relayer"))]
-    pub relayer: Option<url::Url>,
+    pub relayer: Option<Vec<url::Url>>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
     #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, value_delimiter = ',', env)]
