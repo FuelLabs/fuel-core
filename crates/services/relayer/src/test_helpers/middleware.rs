@@ -190,7 +190,7 @@ impl JsonRpcClient for MockMiddleware {
     type Error = ProviderError;
 
     /// Sends a request with the provided JSON-RPC and parameters serialized as JSON
-    async fn request<T, R>(&self, method: &str, _params: T) -> Result<R, Self::Error>
+    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned,
@@ -216,6 +216,24 @@ impl JsonRpcClient for MockMiddleware {
                     ..Default::default()
                 };
                 let res = serde_json::to_value(Some(txn))?;
+                let res: R =
+                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
+                Ok(res)
+            }
+            "eth_getLogs" => {
+                // Decode the filter if T is a vec and the first element is a filter
+                let filter =
+                    match params.serialize(serde_json::value::Serializer).unwrap() {
+                        serde_json::Value::Array(ref arr) => {
+                            let filter = arr.first().unwrap();
+                            serde_json::from_value(filter.clone()).unwrap()
+                        }
+                        _ => panic!("Expected an array"),
+                    };
+
+                let res = serde_json::to_value(self.update_data(|data| {
+                    take_logs_based_on_filter(&data.logs_batch, &filter)
+                }))?;
                 let res: R =
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
