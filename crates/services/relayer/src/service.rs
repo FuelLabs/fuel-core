@@ -360,10 +360,7 @@ where
             )
         })?
         .into_iter()
-        .map(|url| {
-            // TODO: Does this handle https?
-            WeightedProvider::new(Http::new(url))
-        });
+        .map(|url| WeightedProvider::new(Http::new(url)));
 
     let eth_node = Provider::new(QuorumProvider::new(Quorum::Majority, urls));
     let retry_on_error = true;
