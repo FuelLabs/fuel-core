@@ -87,19 +87,20 @@ impl AlgorithmV1 {
         self.assemble_price(da_change)
     }
 
-    fn calculate_avg_profit(&self, block_bytes: u64) -> i64 {
-        let extra_for_this_block =
-            block_bytes.saturating_mul(self.latest_da_cost_per_byte);
-        let pessimistic_cost = self.total_costs.saturating_add(extra_for_this_block);
-        let projected_profit =
-            (self.total_rewards as i64).saturating_sub(pessimistic_cost as i64);
-        projected_profit
-            .saturating_add(
-                self.avg_profit
-                    .saturating_mul((self.avg_window as i64).saturating_sub(1)),
-            )
-            .checked_div(self.avg_window as i64)
-            .unwrap_or(self.avg_profit)
+    fn calculate_avg_profit(&self, _block_bytes: u64) -> i64 {
+        // let extra_for_this_block =
+        //     block_bytes.saturating_mul(self.latest_da_cost_per_byte);
+        // let pessimistic_cost = self.total_costs.saturating_add(extra_for_this_block);
+        // let projected_profit =
+        //     (self.total_rewards as i64).saturating_sub(pessimistic_cost as i64);
+        // projected_profit
+        //     .saturating_add(
+        //         self.avg_profit
+        //             .saturating_mul((self.avg_window as i64).saturating_sub(1)),
+        //     )
+        //     .checked_div(self.avg_window as i64)
+        //     .unwrap_or(self.avg_profit)
+        self.avg_profit
     }
 
     fn p(&self, projected_profit_avg: i64) -> i64 {
@@ -240,8 +241,10 @@ impl AlgorithmUpdaterV1 {
             let last_profit = (self.total_da_rewards as i64)
                 .saturating_sub(self.projected_total_da_cost as i64);
             self.update_profit_avg(last_profit);
-            let new_projected_da_cost =
-                block_bytes.saturating_mul(self.latest_da_cost_per_byte);
+            let new_projected_da_cost = block_bytes
+                .saturating_mul(self.latest_da_cost_per_byte)
+                .saturating_div(self.da_gas_price_factor);
+            // println!("new block cost: {}", new_projected_da_cost);
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(new_projected_da_cost);
