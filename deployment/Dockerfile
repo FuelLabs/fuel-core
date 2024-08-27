@@ -37,10 +37,10 @@ RUN echo $CARGO_PROFILE_RELEASE_DEBUG
 RUN echo $BUILD_FEATURES
 # Build our project dependencies, not our application!
 RUN \
-  --mount=type=cache,target=/root/.cargo/bin \
-  --mount=type=cache,target=/root/.cargo/registry/index \
-  --mount=type=cache,target=/root/.cargo/registry/cache \
-  --mount=type=cache,target=/root/.cargo/git/db \
+  --mount=type=cache,target=/usr/local/cargo/bin \
+  --mount=type=cache,target=/usr/local/cargo/registry/index \
+  --mount=type=cache,target=/usr/local/cargo/registry/cache \
+  --mount=type=cache,target=/usr/local/cargo/git/db \
   --mount=type=cache,target=/build/target \
   xx-cargo chef cook --release --no-default-features --features "${BUILD_FEATURES}" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
@@ -51,10 +51,10 @@ RUN git clone --depth=1 https://github.com/FuelLabs/chain-configuration.git /cha
 # build application
 # note this puts the builds outside of the cache dirs so the run image can copy them
 RUN \
-  --mount=type=cache,target=/root/.cargo/bin \
-  --mount=type=cache,target=/root/.cargo/registry/index \
-  --mount=type=cache,target=/root/.cargo/registry/cache \
-  --mount=type=cache,target=/root/.cargo/git/db \
+  --mount=type=cache,target=/usr/local/cargo/bin \
+  --mount=type=cache,target=/usr/local/cargo/registry/index \
+  --mount=type=cache,target=/usr/local/cargo/registry/cache \
+  --mount=type=cache,target=/usr/local/cargo/git/db \
   --mount=type=cache,target=/build/target \
   xx-cargo build --release --no-default-features --features "$BUILD_FEATURES" -p fuel-core-bin \
     && xx-verify ./target/$(xx-cargo --print-target-triple)/release/fuel-core \

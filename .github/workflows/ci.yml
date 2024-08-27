@@ -201,7 +201,6 @@ jobs:
   cargo-test-kms:
     if: github.event.repository.fork == false
     needs:
-      - cargo-verifications
       - rustfmt
       - check-changelog
     runs-on: buildjet-4vcpu-ubuntu-2204
@@ -282,6 +281,7 @@ jobs:
       - cargo-verifications
       - publish-crates-check
       - build-docker-images
+      - cargo-test-kms
     runs-on: ubuntu-latest
     steps:
       - run: echo "pass"
@@ -395,10 +395,10 @@ jobs:
         with:
           cache-map: |
             {
-              "home-cargo-bin": "/root/.cargo/bin",
-              "home-cargo-registry-index": "/root/.cargo/registry/index",
-              "home-cargo-registry-cache": "/root/.cargo/registry/cache",
-              "home-cargo-git-db": "/root/.cargo/git/db",
+              "home-cargo-bin": "/usr/local/cargo/bin",
+              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
+              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
+              "home-cargo-git-db": "/usr/local/cargo/git/db",
               "target": "/build/target"
             }
           skip-extraction: ${{ steps.cache.outputs.cache-hit }}
@@ -582,10 +582,10 @@ jobs:
         with:
           cache-map: |
             {
-              "home-cargo-bin": "/root/.cargo/bin",
-              "home-cargo-registry-index": "/root/.cargo/registry/index",
-              "home-cargo-registry-cache": "/root/.cargo/registry/cache",
-              "home-cargo-git-db": "/root/.cargo/git/db",
+              "home-cargo-bin": "/usr/local/cargo/bin",
+              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
+              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
+              "home-cargo-git-db": "/usr/local/cargo/git/db",
               "target": "/build/target"
             }
           skip-extraction: ${{ steps.cache.outputs.cache-hit }}
@@ -685,10 +685,10 @@ jobs:
         with:
           cache-map: |
             {
-              "home-cargo-bin": "/root/.cargo/bin",
-              "home-cargo-registry-index": "/root/.cargo/registry/index",
-              "home-cargo-registry-cache": "/root/.cargo/registry/cache",
-              "home-cargo-git-db": "/root/.cargo/git/db",
+              "home-cargo-bin": "/usr/local/cargo/bin",
+              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
+              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
+              "home-cargo-git-db": "/usr/local/cargo/git/db",
               "target": "/build/target"
             }
           skip-extraction: ${{ steps.cache.outputs.cache-hit }}
