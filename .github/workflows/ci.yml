@@ -515,8 +515,30 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Setup environment
+        run: |
+          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_URL }}-debug
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-debug
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
@@ -530,25 +552,6 @@ jobs:
         with:
           registry-type: public
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: |
-            ghcr.io/fuellabs/fuel-core-debug
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/fuel-core-debug
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-          flavor: |
-            latest=${{ github.ref == 'refs/heads/master' }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
       - name: Log in to the ghcr.io registry
         uses: docker/login-action@v1
         with:
@@ -556,8 +559,40 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push the image to ghcr.io
-        uses: docker/build-push-action@v2
+      - name: Log in to the docker.io registry
+        uses: docker/login-action@v2
+        with:
+          username: fuellabs
+          password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
+
+      - name: Setup Rust build cache
+        id: cache
+        uses: buildjet/cache@v3
+        with:
+          path: |
+            home-cargo-bin
+            home-cargo-registry-index
+            home-cargo-registry-cache
+            home-cargo-git-db
+            target
+          key: publish-docker-image-profiling-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Inject cache into docker
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
+        with:
+          cache-map: |
+            {
+              "home-cargo-bin": "/root/.cargo/bin",
+              "home-cargo-registry-index": "/root/.cargo/registry/index",
+              "home-cargo-registry-cache": "/root/.cargo/registry/cache",
+              "home-cargo-git-db": "/root/.cargo/git/db",
+              "target": "/build/target"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+
+      - name: Build & push Docker image
+        id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deployment/Dockerfile
@@ -565,8 +600,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-debug-build-cache:latest
-          cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-debug-build-cache:latest,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest
+          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
@@ -583,8 +618,30 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Setup environment
+        run: |
+          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_URL }}-e2e-client
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-e2e-client
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
@@ -597,25 +654,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
         with:
           registry-type: public
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: |
-            ghcr.io/fuellabs/fuel-core-e2e-client
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/fuel-core-e2e-client
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-          flavor: |
-            latest=${{ github.ref == 'refs/heads/master' }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
 
       - name: Log in to the ghcr.io registry
         uses: docker/login-action@v1
@@ -630,16 +668,42 @@ jobs:
           username: fuellabs
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
 
-      - name: Build and push the image to ghcr.io
-        uses: docker/build-push-action@v2
+      - name: Setup Rust build cache
+        id: cache
+        uses: buildjet/cache@v3
+        with:
+          path: |
+            home-cargo-bin
+            home-cargo-registry-index
+            home-cargo-registry-cache
+            home-cargo-git-db
+            target
+          key: publish-e2e-client-docker-image-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Inject cache into docker
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
+        with:
+          cache-map: |
+            {
+              "home-cargo-bin": "/root/.cargo/bin",
+              "home-cargo-registry-index": "/root/.cargo/registry/index",
+              "home-cargo-registry-cache": "/root/.cargo/registry/cache",
+              "home-cargo-git-db": "/root/.cargo/git/db",
+              "target": "/build/target"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+
+      - name: Build & push Docker image
+        id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deployment/e2e-client.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-e2e-build-cache:latest
-          cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-e2e-build-cache:latest,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest
+          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
