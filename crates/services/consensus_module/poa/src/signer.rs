@@ -168,6 +168,7 @@ mod tests {
             assert!(SignMode::Kms {
                 key_id: kms_arn.to_string(),
                 client: kms_client,
+                cached_public_key_bytes: vec![], // Dummy value is ok for this test
             }
             .is_available())
         };
