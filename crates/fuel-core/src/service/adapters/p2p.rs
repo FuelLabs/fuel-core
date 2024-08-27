@@ -1,8 +1,12 @@
-use super::BlockImporterAdapter;
+use super::{
+    BlockImporterAdapter,
+    TxPoolAdapter,
+};
 use crate::database::OnChainIterableKeyValueView;
 use fuel_core_p2p::ports::{
     BlockHeightImporter,
     P2pDb,
+    TxPool,
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
@@ -47,5 +51,11 @@ impl BlockHeightImporter for BlockImporterAdapter {
                 .filter_map(|result| result.ok())
                 .map(|result| *result.sealed_block.entity.header().height()),
         )
+    }
+}
+
+impl TxPool for TxPoolAdapter {
+    fn get_all_txs_ids(&self) -> Vec<fuel_core_txpool::types::TxId> {
+        self.service.get_all_txs_ids()
     }
 }

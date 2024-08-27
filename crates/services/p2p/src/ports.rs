@@ -5,6 +5,7 @@ use fuel_core_types::{
         consensus::Genesis,
         SealedBlockHeader,
     },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
@@ -27,4 +28,8 @@ pub trait P2pDb: Send + Sync {
 pub trait BlockHeightImporter: Send + Sync {
     /// Creates a stream of next block heights
     fn next_block_height(&self) -> BoxStream<BlockHeight>;
+}
+
+pub trait TxPool: Send + Sync {
+    fn get_all_txs_ids(&self) -> Vec<TxId>;
 }

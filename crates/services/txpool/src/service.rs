@@ -412,6 +412,15 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
             TxStatusMessage::Status(status),
         )
     }
+
+    pub fn get_all_txs_ids(&self) -> Vec<TxId> {
+        self.txpool
+            .lock()
+            .txs()
+            .iter()
+            .map(|tx| TxId::new(**tx.0))
+            .collect()
+    }
 }
 
 impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, View, MP>

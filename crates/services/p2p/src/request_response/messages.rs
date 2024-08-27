@@ -1,5 +1,7 @@
 use fuel_core_types::{
-    blockchain::SealedBlockHeader, fuel_tx::TxId, services::p2p::Transactions
+    blockchain::SealedBlockHeader,
+    fuel_tx::TxId,
+    services::p2p::Transactions,
 };
 use libp2p::{
     request_response::OutboundFailure,
@@ -24,15 +26,15 @@ pub enum RequestMessage {
     SealedHeaders(Range<u32>),
     Transactions(Range<u32>),
     AllTransactionsIds,
-    FullTransactions(Vec<TxId>)
+    FullTransactions(Vec<TxId>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
-    AllTransactionsIds(Vec<TxId>),
-    FullTransactions(Vec<Option<Transactions>>)
+    AllTransactionsIds(Option<Vec<TxId>>),
+    FullTransactions(Option<Vec<Option<Transactions>>>),
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;

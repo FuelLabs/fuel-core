@@ -73,7 +73,7 @@ pub type PoAService = fuel_core_poa::Service<
     InDirectoryPredefinedBlocks,
 >;
 #[cfg(feature = "p2p")]
-pub type P2PService = fuel_core_p2p::service::Service<Database>;
+pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
@@ -166,15 +166,10 @@ pub fn init_sub_services(
         ),
     };
 
+    // TODO: Check the unwrap
     #[cfg(feature = "p2p")]
-    let mut network = config.p2p.clone().map(|p2p_config| {
-        fuel_core_p2p::service::new_service(
-            chain_id,
-            p2p_config,
-            database.on_chain().clone(),
-            importer_adapter.clone(),
-        )
-    });
+    let (shared_state, request_receiver) =
+        fuel_core_p2p::service::build_shared_state(config.p2p.clone().unwrap());
 
     #[cfg(feature = "p2p")]
     let p2p_adapter = {
@@ -189,10 +184,7 @@ pub fn init_sub_services(
             missing_transactions: -100.,
             invalid_transactions: -100.,
         };
-        P2PAdapter::new(
-            network.as_ref().map(|network| network.shared.clone()),
-            peer_report_config,
-        )
+        P2PAdapter::new(Some(shared_state.clone()), peer_report_config)
     };
 
     #[cfg(not(feature = "p2p"))]
@@ -226,6 +218,19 @@ pub fn init_sub_services(
         SharedMemoryPool::new(config.memory_pool_size),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
+
+    #[cfg(feature = "p2p")]
+    let mut network = config.p2p.clone().map(|p2p_config| {
+        fuel_core_p2p::service::new_service(
+            chain_id,
+            p2p_config,
+            shared_state,
+            request_receiver,
+            database.on_chain().clone(),
+            importer_adapter.clone(),
+            tx_pool_adapter.clone(),
+        )
+    });
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),

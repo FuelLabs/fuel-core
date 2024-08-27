@@ -17,6 +17,7 @@ use crate::{
     ports::{
         BlockHeightImporter,
         P2pDb,
+        TxPool,
     },
     request_response::messages::{
         OnResponse,
@@ -26,6 +27,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_chain_config::config;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -76,7 +78,10 @@ use std::{
 use tokio::{
     sync::{
         broadcast,
-        mpsc,
+        mpsc::{
+            self,
+            Receiver,
+        },
         oneshot,
     },
     time::{
@@ -86,9 +91,9 @@ use tokio::{
 };
 use tracing::warn;
 
-pub type Service<V> = ServiceRunner<UninitializedTask<V, SharedState>>;
+pub type Service<V, T> = ServiceRunner<UninitializedTask<V, SharedState, T>>;
 
-enum TaskRequest {
+pub enum TaskRequest {
     // Broadcast requests to p2p network
     BroadcastTransaction(Arc<Transaction>),
     // Request to get information about all connected peers
@@ -304,19 +309,20 @@ impl Broadcast for SharedState {
 }
 
 /// Uninitialized task for the p2p that can be upgraded later into [`Task`].
-pub struct UninitializedTask<V, B> {
+pub struct UninitializedTask<V, B, T> {
     chain_id: ChainId,
     view_provider: V,
     next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     broadcast: B,
+    tx_pool: T,
     config: Config<NotInitialized>,
 }
 
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
-pub struct Task<P, V, B> {
+pub struct Task<P, V, B, T> {
     chain_id: ChainId,
     response_timeout: Duration,
     p2p_service: P,
@@ -327,6 +333,7 @@ pub struct Task<P, V, B> {
     request_sender: mpsc::Sender<TaskRequest>,
     database_processor: HeavyTaskProcessor,
     broadcast: B,
+    tx_pool: T,
     max_headers_per_request: usize,
     max_txs_per_request: usize,
     // milliseconds wait time between peer heartbeat reputation checks
@@ -343,43 +350,31 @@ pub struct HeartbeatPeerReputationConfig {
     low_heartbeat_frequency_penalty: AppScore,
 }
 
-impl<V> UninitializedTask<V, SharedState> {
+impl<V, T: TxPool> UninitializedTask<V, SharedState, T> {
     pub fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
         config: Config<NotInitialized>,
+        shared_state: SharedState,
+        request_receiver: Receiver<TaskRequest>,
         view_provider: V,
         block_importer: B,
+        tx_pool: T,
     ) -> Self {
-        let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
-        let (tx_broadcast, _) = broadcast::channel(1024 * 10);
-        let (block_height_broadcast, _) = broadcast::channel(1024 * 10);
-
-        let (reserved_peers_broadcast, _) = broadcast::channel::<usize>(
-            config
-                .reserved_nodes
-                .len()
-                .saturating_mul(2)
-                .saturating_add(1),
-        );
         let next_block_height = block_importer.next_block_height();
 
         Self {
             chain_id,
             view_provider,
+            tx_pool,
             next_block_height,
             request_receiver,
-            broadcast: SharedState {
-                request_sender,
-                tx_broadcast,
-                reserved_peers_broadcast,
-                block_height_broadcast,
-            },
+            broadcast: shared_state,
             config,
         }
     }
 }
 
-impl<P: TaskP2PService, V, B: Broadcast> Task<P, V, B> {
+impl<P: TaskP2PService, V, B: Broadcast, T: TxPool> Task<P, V, B, T> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_all_peer_info() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
@@ -422,11 +417,12 @@ impl<P: TaskP2PService, V, B: Broadcast> Task<P, V, B> {
     }
 }
 
-impl<P, V, B> Task<P, V, B>
+impl<P, V, B, T> Task<P, V, B, T>
 where
     P: TaskP2PService + 'static,
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
+    T: TxPool + 'static,
 {
     fn process_request(
         &mut self,
@@ -441,7 +437,7 @@ where
                 self.handle_sealed_headers_request(range, request_id)
             }
             RequestMessage::AllTransactionsIds => {
-                // TODO: Implement this
+                self.handle_all_transactions_ids_request(request_id);
                 todo!()
             }
             RequestMessage::FullTransactions(_) => {
@@ -458,6 +454,7 @@ where
         response_sender: ResponseSenderFn,
         db_lookup: DbLookUpFn,
         task_request: TaskRequestFn,
+        max_len: usize,
     ) -> anyhow::Result<()>
     where
         DbLookUpFn:
@@ -469,10 +466,6 @@ where
         let instant = Instant::now();
         let timeout = self.response_timeout;
         let response_channel = self.request_sender.clone();
-        // For now, we only process requests that are smaller than the max_blocks_per_request
-        // If there are other types of data we send over p2p req/res protocol, then this needs
-        // to be generalized
-        let max_len = self.max_headers_per_request;
 
         if range.len() > max_len {
             tracing::error!(
@@ -525,6 +518,7 @@ where
                 response,
                 request_id,
             },
+            self.max_headers_per_request,
         )
     }
 
@@ -542,7 +536,17 @@ where
                 response,
                 request_id,
             },
+            self.max_headers_per_request,
         )
+    }
+
+    fn handle_all_transactions_ids_request(
+        &mut self,
+        request_id: InboundRequestId,
+    ) -> anyhow::Result<()> {
+        self.tx_pool.get_all_txs_ids();
+        // TODO: Send the information to the peer
+        Ok(())
     }
 }
 
@@ -552,15 +556,16 @@ fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
 }
 
 #[async_trait::async_trait]
-impl<V> RunnableService for UninitializedTask<V, SharedState>
+impl<V, T> RunnableService for UninitializedTask<V, SharedState, T>
 where
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
+    T: TxPool + 'static,
 {
     const NAME: &'static str = "P2P";
 
     type SharedData = SharedState;
-    type Task = Task<FuelP2PService, V, SharedState>;
+    type Task = Task<FuelP2PService, V, SharedState, T>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -578,6 +583,7 @@ where
             next_block_height,
             request_receiver,
             broadcast,
+            tx_pool,
             config,
         } = self;
 
@@ -626,6 +632,7 @@ where
             request_sender,
             next_block_height,
             broadcast,
+            tx_pool,
             database_processor,
             max_headers_per_request,
             max_txs_per_request,
@@ -641,12 +648,13 @@ where
 
 // TODO: Add tests https://github.com/FuelLabs/fuel-core/issues/1275
 #[async_trait::async_trait]
-impl<P, V, B> RunnableTask for Task<P, V, B>
+impl<P, V, B, T> RunnableTask for Task<P, V, B, T>
 where
     P: TaskP2PService + 'static,
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
     B: Broadcast + 'static,
+    T: TxPool + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         tracing::debug!("P2P task is running");
@@ -914,19 +922,56 @@ impl SharedState {
     }
 }
 
-pub fn new_service<V, B>(
+pub fn build_shared_state(
+    config: Config<NotInitialized>,
+) -> (SharedState, Receiver<TaskRequest>) {
+    let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
+    let (tx_broadcast, _) = broadcast::channel(1024 * 10);
+    let (block_height_broadcast, _) = broadcast::channel(1024 * 10);
+
+    let (reserved_peers_broadcast, _) = broadcast::channel::<usize>(
+        config
+            .reserved_nodes
+            .len()
+            .saturating_mul(2)
+            .saturating_add(1),
+    );
+
+    (
+        SharedState {
+            request_sender,
+            tx_broadcast,
+            reserved_peers_broadcast,
+            block_height_broadcast,
+        },
+        request_receiver,
+    )
+}
+
+pub fn new_service<V, B, T>(
     chain_id: ChainId,
     p2p_config: Config<NotInitialized>,
+    shared_state: SharedState,
+    request_receiver: Receiver<TaskRequest>,
     view_provider: V,
     block_importer: B,
-) -> Service<V>
+    tx_pool: T,
+) -> Service<V, T>
 where
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
     B: BlockHeightImporter,
+    T: TxPool,
 {
-    let task =
-        UninitializedTask::new(chain_id, p2p_config, view_provider, block_importer);
+    let task = UninitializedTask::new(
+        chain_id,
+        p2p_config,
+        shared_state,
+        request_receiver,
+        view_provider,
+        block_importer,
+        tx_pool,
+    );
     Service::new(task)
 }
 
@@ -1024,11 +1069,28 @@ pub mod tests {
         }
     }
 
+    #[derive(Clone, Debug)]
+    struct FakeTxPool;
+
+    impl TxPool for FakeTxPool {
+        fn get_all_txs_ids(&self) -> Vec<fuel_core_types::fuel_tx::TxId> {
+            vec![]
+        }
+    }
+
     #[tokio::test]
     async fn start_and_stop_awaits_works() {
         let p2p_config = Config::<NotInitialized>::default("start_stop_works");
-        let service =
-            new_service(ChainId::default(), p2p_config, FakeDb, FakeBlockImporter);
+        let (shared_state, request_receiver) = build_shared_state(p2p_config.clone());
+        let service = new_service(
+            ChainId::default(),
+            p2p_config,
+            shared_state,
+            request_receiver,
+            FakeDb,
+            FakeBlockImporter,
+            FakeTxPool,
+        );
 
         // Node with p2p service started
         assert!(service.start_and_await().await.unwrap().started());
@@ -1216,6 +1278,7 @@ pub mod tests {
             p2p_service,
             view_provider: FakeDB,
             next_block_height: FakeBlockImporter.next_block_height(),
+            tx_pool: FakeTxPool,
             request_receiver,
             request_sender,
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
@@ -1303,6 +1366,7 @@ pub mod tests {
             response_timeout: Default::default(),
             p2p_service,
             view_provider: FakeDB,
+            tx_pool: FakeTxPool,
             next_block_height: FakeBlockImporter.next_block_height(),
             request_receiver,
             request_sender,
@@ -1362,6 +1426,7 @@ pub mod tests {
             chain_id: Default::default(),
             response_timeout: Default::default(),
             p2p_service,
+            tx_pool: FakeTxPool,
             view_provider: FakeDB,
             next_block_height,
             request_receiver,
