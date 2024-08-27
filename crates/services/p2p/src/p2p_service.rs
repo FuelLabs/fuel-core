@@ -770,7 +770,10 @@ mod tests {
         fuel_tx::{
             Transaction,
             TransactionBuilder,
+            TxId,
+            UniqueIdentifier,
         },
+        fuel_types::ChainId,
         services::p2p::{
             GossipsubMessageAcceptance,
             Transactions,
@@ -1625,10 +1628,44 @@ mod tests {
                                         });
                                     }
                                     RequestMessage::AllTransactionsIds => {
-                                        unimplemented!()
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::AllTransactionsIds(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok((_, Ok(Some(transaction_ids)))) = response_message {
+                                                let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
+                                                let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
+                                                let _ = tx_test_end.send(check).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
                                     }
-                                    RequestMessage::FullTransactions(_) => {
-                                        unimplemented!()
+                                    RequestMessage::FullTransactions(tx_ids) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::FullTransactions(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
+                                                let txs: Vec<Option<Transaction>> = tx_ids.iter().enumerate().map(|(i, _)| {
+                                                    if i == 0 {
+                                                        None
+                                                    } else {
+                                                        Some(Transaction::default_test_tx())
+                                                    }
+                                                }).collect();
+                                                let check = transactions.len() == tx_ids.len() && transactions.iter().zip(txs.iter()).all(|(a, b)| a == b);
+                                                let _ = tx_test_end.send(check).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
                                     }
                                 }
                             }
@@ -1651,9 +1688,19 @@ mod tests {
                                 let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
                             }
-                            // TODO: Add more cases as needed
-                            _ => {
-                                panic!("Unexpected RequestMessage type");
+                            RequestMessage::AllTransactionsIds => {
+                                let tx_ids = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::AllTransactionsIds(Some(tx_ids)));
+                            }
+                            RequestMessage::FullTransactions(tx_ids) => {
+                                let txs = tx_ids.iter().enumerate().map(|(i, _)| {
+                                    if i == 0 {
+                                        None
+                                    } else {
+                                        Some(Transaction::default_test_tx())
+                                    }
+                                }).collect();
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::FullTransactions(Some(txs)));
                             }
                         }
                     }
@@ -1680,29 +1727,17 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gather_txs_upon_connection() {
-        let mut p2p_config = Config::default_initialized("gather_txs_upon_connection");
+    async fn request_response_works_with_transactions_ids() {
+        request_response_works_with(RequestMessage::AllTransactionsIds).await
+    }
 
-        // Node A
-        let mut node_a = build_service_from_config(p2p_config.clone()).await;
-
-        // Node B
-        p2p_config.bootstrap_nodes = node_a.multiaddrs();
-        let mut node_b = build_service_from_config(p2p_config.clone()).await;
-        loop {
-            tokio::select! {
-                node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = node_a_event {
-                        dbg!(peer_id);
-                    }
-                    if let Some(FuelP2PEvent::NewSubscription { .. }) = node_a_event {
-                    }
-                }
-                node_b_event = node_b.next_event() => {
-                    dbg!(node_b_event);
-                }
-            }
-        }
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_full_transactions() {
+        let tx_ids = (0..10)
+            .map(|_| Transaction::default_test_tx().id(&ChainId::new(1)))
+            .collect();
+        request_response_works_with(RequestMessage::FullTransactions(tx_ids)).await
     }
 
     /// We send a request for transactions, but it's responded by only headers
