@@ -114,12 +114,8 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         .public_key
         .unwrap()
         .into_inner();
-    let poa_public_bytes = spki::SubjectPublicKeyInfoRef::try_from(&*poa_public_der)
-        .expect("invalid DER signature from AWS KMS")
-        .subject_public_key
-        .raw_bytes();
-    let poa_public = k256::ecdsa::VerifyingKey::from_sec1_bytes(poa_public_bytes)
-        .expect("invalid public key");
+    let poa_public = k256::PublicKey::from_public_key_der(&poa_public_der)
+        .expect("invalid DER public key from AWS KMS");
     let poa_public = PublicKey::from(&poa_public);
 
     // start node with the kms enabled and produce some blocks
