@@ -454,7 +454,6 @@ where
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
     T: TxPool + 'static,
-    B: Broadcast + 'static,
 {
     fn process_request(
         &mut self,
@@ -596,65 +595,6 @@ where
             response: Some(txs),
             request_id,
         })?;
-        Ok(())
-    }
-
-    // Ask for all transaction ids from the peer and ask only for full transaction if we don't know them
-    fn get_missing_txs_on_connection(&mut self, peer_id: PeerId) -> anyhow::Result<()> {
-        let request_sender = self.request_sender.clone();
-        let txpool_tx_ids = self.tx_pool.get_all_tx_ids();
-        tokio::spawn(async move {
-            let (sender, receiver) = oneshot::channel();
-
-            let request = TaskRequest::GetAllTxIds {
-                from_peer: peer_id,
-                channel: sender,
-            };
-            request_sender.send(request).await?;
-
-            let (response_from_peer, response) =
-                receiver.await.map_err(|e| anyhow!("{e}"))?;
-            assert_eq!(
-                peer_id, response_from_peer,
-                "Bug: response from non-requested peer"
-            );
-
-            let Some(mut tx_ids) =
-                response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-            else {
-                return Ok(())
-            };
-
-            tx_ids.retain(|tx_id| !txpool_tx_ids.contains(tx_id));
-
-            let (sender, receiver) = oneshot::channel();
-            let request = TaskRequest::GetFullTransactions {
-                tx_ids,
-                from_peer: peer_id,
-                channel: sender,
-            };
-
-            request_sender.send(request).await?;
-
-            let (response_from_peer, response) =
-                receiver.await.map_err(|e| anyhow!("{e}"))?;
-            assert_eq!(
-                peer_id, response_from_peer,
-                "Bug: response from non-requested peer"
-            );
-
-            let Some(txs) =
-                response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-            else {
-                return Ok(())
-            };
-
-            for _tx in txs.into_iter().flatten() {
-                // TODO: Send all the txs to the pool
-            }
-
-            Ok::<(), anyhow::Error>(())
-        });
         Ok(())
     }
 }
@@ -856,11 +796,6 @@ where
             p2p_event = self.p2p_service.next_event() => {
                 should_continue = true;
                 match p2p_event {
-                    Some(FuelP2PEvent::PeerConnected { peer_id, is_outgoing }) => {
-                        if is_outgoing {
-                            self.get_missing_txs_on_connection(peer_id)?;
-                        }
-                    }
                     Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
                         let peer_id: Vec<u8> = peer_id.into();
                         let block_height_data = BlockHeightHeartbeatData {
