@@ -130,7 +130,7 @@ async fn sign_with_kms(
     // Insert the recovery id into the signature
     debug_assert!(
         !recovery_id.is_x_reduced(),
-        "reduced-x form coordinates are cought by the if-else chain above"
+        "reduced-x form coordinates are caught by the if-else chain above"
     );
     let v = recovery_id.is_y_odd() as u8;
     let mut signature = <[u8; 64]>::from(sig.to_bytes());
