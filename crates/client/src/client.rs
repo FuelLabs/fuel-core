@@ -57,10 +57,7 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::{
-        executor::TransactionExecutionStatus,
-        p2p::PeerInfo,
-    },
+    services::executor::TransactionExecutionStatus,
 };
 #[cfg(feature = "subscriptions")]
 use futures::{
@@ -373,7 +370,10 @@ impl FuelClient {
         self.query(query).await.map(|r| r.estimate_gas_price)
     }
 
-    pub async fn connected_peers_info(&self) -> io::Result<Vec<PeerInfo>> {
+    #[cfg(feature = "std")]
+    pub async fn connected_peers_info(
+        &self,
+    ) -> io::Result<Vec<fuel_core_types::services::p2p::PeerInfo>> {
         let query = schema::node_info::QueryPeersInfo::build(());
         self.query(query)
             .await

@@ -3,10 +3,12 @@ use crate::client::schema::{
     U32,
     U64,
 };
+#[cfg(feature = "std")]
 use fuel_core_types::services::p2p::{
     HeartbeatData,
     PeerId,
 };
+#[cfg(feature = "std")]
 use std::{
     str::FromStr,
     time::{
@@ -57,6 +59,7 @@ pub struct PeerInfo {
     pub app_score: f64,
 }
 
+#[cfg(feature = "std")]
 impl From<PeerInfo> for fuel_core_types::services::p2p::PeerInfo {
     fn from(info: PeerInfo) -> Self {
         Self {

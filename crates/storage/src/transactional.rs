@@ -12,15 +12,16 @@ use crate::{
     structured_storage::StructuredStorage,
     Result as StorageResult,
 };
-use std::{
-    borrow::Borrow,
+use core::borrow::Borrow;
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
     collections::{
-        btree_map::Entry,
-        hash_map,
+        btree_map,
         BTreeMap,
-        HashMap,
     },
-    sync::Arc,
+    vec::Vec,
 };
 
 #[cfg(feature = "test-helpers")]
@@ -199,8 +200,14 @@ impl core::ops::DerefMut for ReferenceBytesKey {
     }
 }
 
+#[cfg(not(feature = "std"))]
 /// The type describing the list of changes to the storage.
-pub type Changes = HashMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
+pub type Changes = BTreeMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
+
+#[cfg(feature = "std")]
+/// The type describing the list of changes to the storage.
+pub type Changes =
+    std::collections::HashMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
 
 impl<Storage> From<StorageTransaction<Storage>> for Changes {
     fn from(transaction: StorageTransaction<Storage>) -> Self {
@@ -279,13 +286,18 @@ where
 
 impl<Storage> Modifiable for InMemoryTransaction<Storage> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        #[cfg(not(feature = "std"))]
+        use btree_map::Entry;
+        #[cfg(feature = "std")]
+        use std::collections::hash_map::Entry;
+
         for (column, value) in changes.into_iter() {
             let btree = match self.changes.entry(column) {
-                hash_map::Entry::Vacant(vacant) => {
+                Entry::Vacant(vacant) => {
                     vacant.insert(value);
                     continue;
                 }
-                hash_map::Entry::Occupied(occupied) => occupied.into_mut(),
+                Entry::Occupied(occupied) => occupied.into_mut(),
             };
 
             for (k, v) in value {
@@ -294,14 +306,14 @@ impl<Storage> Modifiable for InMemoryTransaction<Storage> {
                         let entry = btree.entry(k);
 
                         match entry {
-                            Entry::Occupied(occupied) => {
+                            btree_map::Entry::Occupied(occupied) => {
                                 return Err(anyhow::anyhow!(
                                     "Conflicting operation {v:?} for the {:?}",
                                     occupied.key()
                                 )
                                 .into());
                             }
-                            Entry::Vacant(vacant) => {
+                            btree_map::Entry::Vacant(vacant) => {
                                 vacant.insert(v);
                             }
                         }
@@ -427,7 +439,7 @@ where
         let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
-            Entry::Occupied(mut occupied) => {
+            btree_map::Entry::Occupied(mut occupied) => {
                 let old = occupied.insert(WriteOperation::Insert(value));
 
                 match old {
@@ -435,7 +447,7 @@ where
                     WriteOperation::Remove => Ok(None),
                 }
             }
-            Entry::Vacant(vacant) => {
+            btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(WriteOperation::Insert(value));
                 self.storage.get(key, column)
             }
@@ -452,7 +464,7 @@ where
         self.changes
             .entry(column.id())
             .or_default()
-            .insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())));
+            .insert(k, WriteOperation::Insert(Value::new(buf.to_vec())));
         Ok(buf.len())
     }
 
@@ -461,7 +473,7 @@ where
         let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
-            Entry::Occupied(mut occupied) => {
+            btree_map::Entry::Occupied(mut occupied) => {
                 let old = occupied.insert(WriteOperation::Remove);
 
                 match old {
@@ -469,7 +481,7 @@ where
                     WriteOperation::Remove => Ok(None),
                 }
             }
-            Entry::Vacant(vacant) => {
+            btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(WriteOperation::Remove);
                 self.storage.get(key, column)
             }
@@ -546,6 +558,8 @@ mod test {
         tables::Messages,
         StorageAsMut,
     };
+    #[allow(unused_imports)]
+    use std::sync::Arc;
 
     impl<Column> Modifiable for InMemoryStorage<Column> {
         fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {

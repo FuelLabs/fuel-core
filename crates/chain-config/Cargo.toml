@@ -14,8 +14,9 @@ description = "Fuel Chain config types"
 anyhow = { workspace = true }
 bech32 = { version = "0.9.0", default-features = false, optional = true }
 derivative = { workspace = true }
-fuel-core-storage = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
+  "alloc",
   "serde",
 ] }
 itertools = { workspace = true, features = ["use_alloc"] }
@@ -31,6 +32,7 @@ tracing = { version = "0.1", default-features = false, optional = true }
 bytes = { workspace = true }
 fuel-core-chain-config = { path = ".", features = ["parquet", "test-helpers"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
+  "alloc",
   "random",
   "serde",
 ] }

@@ -44,10 +44,16 @@ use crate::{
     StorageSize,
     StorageWrite,
 };
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use core::ops::Deref;
+
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
 pub mod balances;
 pub mod blobs;
