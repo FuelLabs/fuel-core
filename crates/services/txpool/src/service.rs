@@ -167,6 +167,7 @@ impl<P2P, ViewProvider, GasPriceProvider, WasmChecker, ConsensusProvider, MP> Cl
 
 pub struct Task<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
+    new_tx_gossip_subscription: BoxStream<Vec<u8>>,
     committed_block_stream: BoxStream<SharedImportResult>,
     tx_pool_shared_state: SharedState<
         P2P,
@@ -265,6 +266,49 @@ where
                         );
                         *self.tx_pool_shared_state.current_height.lock() = new_height;
                     }
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            }
+
+            // TODO: Refactor this to not block on calls to the peer and verification (need to open issue before merging)
+            new_peer_subscribed = self.new_tx_gossip_subscription.next() => {
+                if let Some(peer_id) = new_peer_subscribed {
+                    // Gathering txs
+                    let peer_tx_ids = self.tx_pool_shared_state.p2p.request_tx_ids(peer_id.clone()).await.unwrap_or_default();
+                    if peer_tx_ids.is_empty() {
+                        return Ok(true);
+                    }
+                    let tx_ids_to_ask = self.tx_pool_shared_state.txpool.lock().filter_existing_tx_ids(peer_tx_ids);
+                    if tx_ids_to_ask.is_empty() {
+                        return Ok(true);
+                    }
+                    let txs: Vec<Arc<Transaction>> = self.tx_pool_shared_state.p2p.request_txs(peer_id, tx_ids_to_ask).await.unwrap_or_default().into_iter().flatten().map(Arc::new).collect();
+                    if txs.is_empty() {
+                        return Ok(true);
+                    }
+                    // Verifying them
+                    let current_height = *self.tx_pool_shared_state.current_height.lock();
+                    let (version, params) = self
+                        .tx_pool_shared_state
+                        .consensus_parameters_provider
+                        .latest_consensus_parameters();
+                    let checked_transactions = check_transactions(
+                        &txs,
+                        current_height,
+                        self.tx_pool_shared_state.utxo_validation,
+                        params.as_ref(),
+                        &self.tx_pool_shared_state.gas_price_provider,
+                        self.tx_pool_shared_state.memory_pool.clone()
+                    ).await.into_iter().flatten().collect::<Vec<_>>();
+
+                    self.tx_pool_shared_state.txpool.lock().insert(
+                        &self.tx_pool_shared_state.tx_status_sender,
+                        version,
+                        checked_transactions
+                    );
+
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -565,6 +609,7 @@ where
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
+    let new_tx_gossip_subscription = p2p.new_tx_subscription();
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -576,6 +621,7 @@ where
     )));
     let task = Task {
         gossiped_tx_stream,
+        new_tx_gossip_subscription,
         committed_block_stream,
         tx_pool_shared_state: SharedState {
             tx_status_sender: TxStatusChange::new(

@@ -311,6 +311,8 @@ pub trait Broadcast: Send {
     ) -> anyhow::Result<()>;
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
+
+    fn new_tx_subscription_broadcast(&self, peer_id: Vec<u8>) -> anyhow::Result<()>;
 }
 
 impl Broadcast for SharedState {
@@ -333,6 +335,11 @@ impl Broadcast for SharedState {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()> {
         self.tx_broadcast.send(transaction)?;
+        Ok(())
+    }
+
+    fn new_tx_subscription_broadcast(&self, peer_id: Vec<u8>) -> anyhow::Result<()> {
+        self.new_tx_subscription_broadcast.send(peer_id)?;
         Ok(())
     }
 }
@@ -818,6 +825,10 @@ where
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         self.process_request(request_message, request_id)?
                     },
+                    Some(FuelP2PEvent::NewSubscription { peer_id, .. }) => {
+                        let peer_id: Vec<u8> = peer_id.into();
+                        let _ = self.broadcast.new_tx_subscription_broadcast(peer_id);
+                    },
                     _ => (),
                 }
             },
@@ -852,6 +863,8 @@ where
 
 #[derive(Clone)]
 pub struct SharedState {
+    /// Sender of p2p with peer gossip subscription (vec<u8> represent the peer_id)
+    new_tx_subscription_broadcast: broadcast::Sender<Vec<u8>>,
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Sender of reserved peers connection updates.
@@ -996,6 +1009,10 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
+    pub fn subscribe_new_tx_subscription(&self) -> broadcast::Receiver<Vec<u8>> {
+        self.new_tx_subscription_broadcast.subscribe()
+    }
+
     pub fn subscribe_tx(&self) -> broadcast::Receiver<TransactionGossipData> {
         self.tx_broadcast.subscribe()
     }
@@ -1042,6 +1059,7 @@ pub fn build_shared_state(
 ) -> (SharedState, Receiver<TaskRequest>) {
     let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
     let (tx_broadcast, _) = broadcast::channel(1024 * 10);
+    let (new_tx_subscription_broadcast, _) = broadcast::channel(1024 * 10);
     let (block_height_broadcast, _) = broadcast::channel(1024 * 10);
 
     let (reserved_peers_broadcast, _) = broadcast::channel::<usize>(
@@ -1055,6 +1073,7 @@ pub fn build_shared_state(
     (
         SharedState {
             request_sender,
+            new_tx_subscription_broadcast,
             tx_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
@@ -1342,6 +1361,10 @@ pub mod tests {
             &self,
             _transaction: TransactionGossipData,
         ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn new_tx_subscription_broadcast(&self, _peer_id: Vec<u8>) -> anyhow::Result<()> {
             todo!()
         }
     }

@@ -65,6 +65,7 @@ impl BlockImporter for BlockImporterAdapter {
 }
 
 #[cfg(feature = "p2p")]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -91,6 +92,21 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
+    fn new_tx_subscription(&self) -> BoxStream<Vec<u8>> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_new_tx_subscription())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
+    }
+
     fn notify_gossip_transaction_validity(
         &self,
         message_info: GossipsubMessageInfo,
@@ -100,6 +116,44 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
             service.notify_gossip_transaction_validity(message_info, validity)
         } else {
             Ok(())
+        }
+    }
+
+    async fn request_tx_ids(
+        &self,
+        peer_id: Vec<u8>,
+    ) -> anyhow::Result<Vec<fuel_core_txpool::types::TxId>> {
+        if let Some(service) = &self.service {
+            match service.get_all_transactions_ids_from_peer(peer_id).await {
+                Ok(txs) => Ok(txs.unwrap_or_default()),
+                Err(e) => {
+                    tracing::error!("Error getting tx ids from peer: {:?}", e);
+                    Ok(vec![])
+                }
+            }
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    async fn request_txs(
+        &self,
+        peer_id: Vec<u8>,
+        tx_ids: Vec<fuel_core_txpool::types::TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+        if let Some(service) = &self.service {
+            match service
+                .get_full_transactions_from_peer(peer_id, tx_ids)
+                .await
+            {
+                Ok(txs) => Ok(txs.unwrap_or_default()),
+                Err(e) => {
+                    tracing::error!("Error getting tx ids from peer: {:?}", e);
+                    Ok(vec![])
+                }
+            }
+        } else {
+            Ok(vec![])
         }
     }
 }

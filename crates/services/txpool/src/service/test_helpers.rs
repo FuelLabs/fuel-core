@@ -128,6 +128,7 @@ impl TestContext {
 mockall::mock! {
     pub P2P {}
 
+    #[async_trait::async_trait]
     impl PeerToPeer for P2P {
         type GossipedTransaction = GossipedTransaction;
 
@@ -140,6 +141,16 @@ mockall::mock! {
             message_info: GossipsubMessageInfo,
             validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()>;
+
+        fn new_tx_subscription(&self) -> BoxStream<Vec<u8>>;
+
+        async fn request_tx_ids(&self, peer_id: Vec<u8>) -> anyhow::Result<Vec<TxId>>;
+
+        async fn request_txs(
+            &self,
+            peer_id: Vec<u8>,
+            tx_ids: Vec<TxId>,
+        ) -> anyhow::Result<Vec<Option<Transaction>>>;
     }
 }
 
