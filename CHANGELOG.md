@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.35.0]
+
 ### Added
 - [2122](https://github.com/FuelLabs/fuel-core/pull/2122): Changed the relayer URI address to be a vector and use a quorum provider. The `relayer` argument now supports multiple URLs to fetch information from different sources.
 - [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
