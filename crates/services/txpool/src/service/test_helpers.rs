@@ -270,6 +270,8 @@ impl TestContextBuilder {
             .returning(move |_, _| Ok(()));
         p2p.expect_broadcast_transaction()
             .returning(move |_| Ok(()));
+        p2p.expect_new_tx_subscription()
+            .returning(|| Box::pin(fuel_core_services::stream::pending()));
 
         let importer = self
             .importer
