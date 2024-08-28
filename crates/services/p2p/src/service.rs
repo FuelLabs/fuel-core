@@ -26,6 +26,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_metrics::p2p_metrics::set_blocks_requested;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -196,9 +197,20 @@ pub trait TaskP2PService: Send {
     ) -> anyhow::Result<()>;
 
     fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()>;
+
+    fn log_metrics<T>(&self, cb: T)
+    where
+        T: FnOnce();
 }
 
 impl TaskP2PService for FuelP2PService {
+    fn log_metrics<T>(&self, cb: T)
+    where
+        T: FnOnce(),
+    {
+        FuelP2PService::log_metrics(self, cb)
+    }
+
     fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
         self.peer_manager().get_all_peers().collect()
     }
@@ -427,6 +439,13 @@ where
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
 {
+    fn log_metrics<T>(&self, cb: T)
+    where
+        T: FnOnce(),
+    {
+        self.p2p_service.log_metrics(cb)
+    }
+
     fn process_request(
         &mut self,
         request_message: RequestMessage,
@@ -464,8 +483,11 @@ where
         // If there are other types of data we send over p2p req/res protocol, then this needs
         // to be generalized
         let max_len = self.max_headers_per_request;
+        let range_len = range.len();
 
-        if range.len() > max_len {
+        self.log_metrics(|| set_blocks_requested(range_len));
+
+        if range_len > max_len {
             tracing::error!(
                 requested_length = range.len(),
                 max_len,
@@ -1031,6 +1053,13 @@ pub mod tests {
     }
 
     impl TaskP2PService for FakeP2PService {
+        fn log_metrics<T>(&self, _: T)
+        where
+            T: FnOnce(),
+        {
+            unimplemented!()
+        }
+
         fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
             self.peer_info.iter().map(|tup| (&tup.0, &tup.1)).collect()
         }
