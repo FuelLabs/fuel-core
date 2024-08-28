@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2122](https://github.com/FuelLabs/fuel-core/pull/2122): Changed the relayer URI address to be a vector and use a quorum provider. The `relayer` argument now supports multiple URLs to fetch information from different sources.
+- [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
+- [2116](https://github.com/FuelLabs/fuel-core/pull/2116): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
 
 ### Changed
 - [2113](https://github.com/FuelLabs/fuel-core/pull/2113): Modify the way the gas price service and shared algo is initialized to have some default value based on best guess instead of `None`, and initialize service before graphql.
@@ -16,9 +18,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2115](https://github.com/FuelLabs/fuel-core/pull/2115): Add test for `SignMode` `is_available` method.
 - [2124](https://github.com/FuelLabs/fuel-core/pull/2124): Generalize the way p2p req/res protocol handles requests.
 
-### Added
-- [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
-- [2116](https://github.com/FuelLabs/fuel-core/pull/2116): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
+### Fixed
+- [2134](https://github.com/FuelLabs/fuel-core/pull/2134): Perform RecoveryID normalization for AWS KMS -generated signatures.
 
 ## [Version 0.34.0]
 
