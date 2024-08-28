@@ -19,7 +19,12 @@ use fuel_core_types::{
         Result as ExecutorResult,
     },
 };
+
+#[cfg(feature = "std")]
 use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
 
 #[cfg(feature = "smt")]
 pub use smt::*;

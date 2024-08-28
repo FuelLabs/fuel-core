@@ -30,7 +30,8 @@ impl FuelService {
             .insert(vec![Arc::new(tx)])
             .await
             .into_iter()
-            .collect::<Result<_, _>>()?;
+            .collect::<Result<_, _>>()
+            .map_err(|e| anyhow::anyhow!(e))?;
         results
             .into_iter()
             .next()

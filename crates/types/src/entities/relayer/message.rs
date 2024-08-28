@@ -24,6 +24,9 @@ use crate::{
     },
 };
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 /// Message sent from DA layer to fuel by relayer bridge.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
