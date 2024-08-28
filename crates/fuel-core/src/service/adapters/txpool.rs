@@ -200,7 +200,6 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     ) -> anyhow::Result<Vec<Option<Transaction>>> {
         Ok(vec![])
     }
-
 }
 
 impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
