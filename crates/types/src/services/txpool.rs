@@ -32,14 +32,12 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
+use core::time::Duration;
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
     fuel_types::BlockHeight,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 use tai64::Tai64;
 
 /// Pool transaction wrapped in an Arc for thread-safe sharing

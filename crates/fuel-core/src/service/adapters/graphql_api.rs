@@ -78,7 +78,7 @@ impl TxPoolPort for TxPoolAdapter {
             .insert(txs)
             .await
             .into_iter()
-            .map(|res| res.map_err(anyhow::Error::from))
+            .map(|res| res.map_err(|e| anyhow::anyhow!(e)))
             .collect()
     }
 

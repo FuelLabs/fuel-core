@@ -4,15 +4,25 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 use anyhow::anyhow;
 use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
+    string::ToString,
+};
 
 pub use fuel_vm_private::{
     fuel_storage::*,
