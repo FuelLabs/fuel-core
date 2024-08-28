@@ -160,7 +160,10 @@ pub enum FuelP2PEvent {
         request_id: InboundRequestId,
         request_message: RequestMessage,
     },
-    PeerConnected(PeerId),
+    PeerConnected {
+        peer_id: PeerId,
+        is_outgoing: bool,
+    },
     PeerDisconnected(PeerId),
     PeerInfoUpdated {
         peer_id: PeerId,
@@ -533,11 +536,17 @@ impl FuelP2PService {
             PeerReportEvent::PerformDecay => {
                 self.peer_manager.batch_update_score_with_decay()
             }
-            PeerReportEvent::PeerConnected { peer_id } => {
+            PeerReportEvent::PeerConnected {
+                peer_id,
+                is_outgoing,
+            } => {
                 if self.peer_manager.handle_peer_connected(&peer_id) {
                     let _ = self.swarm.disconnect_peer_id(peer_id);
                 } else {
-                    return Some(FuelP2PEvent::PeerConnected(peer_id));
+                    return Some(FuelP2PEvent::PeerConnected {
+                        peer_id,
+                        is_outgoing,
+                    });
                 }
             }
             PeerReportEvent::PeerDisconnected { peer_id } => {
@@ -925,7 +934,7 @@ mod tests {
                             }
                         }
                     }
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
+                    if let Some(FuelP2PEvent::PeerConnected{peer_id, ..}) = sentry_node_event {
                         // we connected to the desired reserved node
                         if peer_id == reserved_node_peer_id {
                             break
@@ -991,7 +1000,7 @@ mod tests {
         while instance.elapsed().as_secs() < 5 {
             tokio::select! {
                 event_from_node_a = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_a {
+                    if let Some(FuelP2PEvent::PeerConnected{..}) = event_from_node_a {
                         if node_a.peer_manager().total_peers_connected() > node_a_max_peers_allowed {
                             panic!("The node should only connect to max {node_a_max_peers_allowed} peers");
                         }
@@ -1000,7 +1009,7 @@ mod tests {
                     tracing::info!("Event from the node_a: {:?}", event_from_node_a);
                 },
                 event_from_node_b = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_b {
+                    if let Some(FuelP2PEvent::PeerConnected{..}) = event_from_node_b {
                         if node_b.peer_manager().total_peers_connected() > node_b_max_peers_allowed {
                             panic!("The node should only connect to max {node_b_max_peers_allowed} peers");
                         }
@@ -1083,7 +1092,7 @@ mod tests {
         while instance.elapsed().as_secs() < 5 {
             tokio::select! {
                 event_from_first_guarded = first_guarded_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
+                    if let Some(FuelP2PEvent::PeerConnected{peer_id, ..}) = event_from_first_guarded {
                         if !first_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
@@ -1091,7 +1100,7 @@ mod tests {
                     tracing::info!("Event from the first guarded node: {:?}", event_from_first_guarded);
                 },
                 event_from_second_guarded = second_guarded_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
+                    if let Some(FuelP2PEvent::PeerConnected{peer_id, ..}) = event_from_second_guarded {
                         if !second_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
@@ -1100,7 +1109,7 @@ mod tests {
                 },
                 // Poll one of the reserved, sentry nodes
                 sentry_node_event = single_sentry_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
+                    if let Some(FuelP2PEvent::PeerConnected{peer_id, ..}) = sentry_node_event {
                         sentry_node_connections.insert(peer_id);
                     }
                 }
@@ -1131,7 +1140,7 @@ mod tests {
         loop {
             tokio::select! {
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
+                    if let Some(FuelP2PEvent::PeerConnected{..}) = node_b_event {
                         // successfully connected to Node A
                         break
                     }
@@ -1169,7 +1178,7 @@ mod tests {
                     }
                 },
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
+                    if let Some(FuelP2PEvent::PeerConnected{..}) = node_b_event {
                         panic!("Node B should not connect to Node A!")
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -1206,7 +1215,7 @@ mod tests {
                 },
 
                 node_c_event = node_c.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = node_c_event {
+                    if let Some(FuelP2PEvent::PeerConnected{peer_id, ..}) = node_c_event {
                         // we have connected to Node B!
                         if peer_id == node_b.local_peer_id {
                             break
@@ -1254,7 +1263,7 @@ mod tests {
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
+                    if let Some(FuelP2PEvent::PeerConnected{..}) = node_b_event {
                         // we've connected to Peer A
                         // let's update our BlockHeight
                         node_b.update_block_height(latest_block_height);

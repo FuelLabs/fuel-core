@@ -56,6 +56,7 @@ const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 pub enum PeerReportEvent {
     PeerConnected {
         peer_id: PeerId,
+        is_outgoing: bool,
     },
     PeerDisconnected {
         peer_id: PeerId,
@@ -131,10 +132,14 @@ impl NetworkBehaviour for Behaviour {
                 let ConnectionEstablished {
                     peer_id,
                     connection_id,
+                    endpoint,
                     ..
                 } = connection_established;
                 self.pending_events.push_back(ToSwarm::GenerateEvent(
-                    PeerReportEvent::PeerConnected { peer_id },
+                    PeerReportEvent::PeerConnected {
+                        peer_id,
+                        is_outgoing: endpoint.is_dialer(),
+                    },
                 ));
                 if self.reserved_nodes_multiaddr.contains_key(&peer_id) {
                     self.connected_reserved_nodes.insert(peer_id);
