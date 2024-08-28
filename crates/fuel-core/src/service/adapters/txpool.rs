@@ -159,6 +159,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 }
 
 #[cfg(not(feature = "p2p"))]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -180,6 +181,26 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     ) -> anyhow::Result<()> {
         Ok(())
     }
+
+    fn new_tx_subscription(&self) -> BoxStream<Vec<u8>> {
+        Box::pin(fuel_core_services::stream::pending())
+    }
+
+    async fn request_tx_ids(
+        &self,
+        _peer_id: Vec<u8>,
+    ) -> anyhow::Result<Vec<fuel_core_txpool::types::TxId>> {
+        Ok(vec![])
+    }
+
+    async fn request_txs(
+        &self,
+        _peer_id: Vec<u8>,
+        _tx_ids: Vec<fuel_core_txpool::types::TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+        Ok(vec![])
+    }
+
 }
 
 impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
