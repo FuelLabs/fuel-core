@@ -21,6 +21,10 @@ use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
+    request_response::messages::{
+        RequestMessage,
+        ResponseMessage,
+    },
     service::to_message_acceptance,
 };
 use fuel_core_poa::{
@@ -153,16 +157,30 @@ impl Bootstrap {
                     }
                     event = bootstrap.next_event() => {
                         // The bootstrap node only forwards data without validating it.
-                        if let Some(FuelP2PEvent::GossipsubMessage {
-                            peer_id,
-                            message_id,
-                            ..
-                        }) = event {
-                            bootstrap.report_message_validation_result(
-                                &message_id,
+                        match event {
+                            Some(FuelP2PEvent::GossipsubMessage {
                                 peer_id,
-                                to_message_acceptance(&GossipsubMessageAcceptance::Accept)
-                            )
+                                message_id,
+                                ..
+                            }) => {
+                                bootstrap.report_message_validation_result(
+                                    &message_id,
+                                    peer_id,
+                                    to_message_acceptance(&GossipsubMessageAcceptance::Accept)
+                                )
+                            },
+                            Some(FuelP2PEvent::InboundRequestMessage {
+                                request_id,
+                                request_message
+                            }) => {
+                                if request_message == RequestMessage::AllTransactionsIds {
+                                    let _ = bootstrap.send_response_msg(
+                                        request_id,
+                                        ResponseMessage::AllTransactionsIds(Some(vec![])),
+                                    );
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
