@@ -254,14 +254,14 @@ fn update_l2_block_data__updates_last_da_gas_price() {
 }
 
 #[test]
-fn update_l2_block_data__updates_profit_avg() {
+fn update_l2_block_data__updates_last_and_last_last_profit() {
     // given
-    let starting_profit_avg = 200;
-    let avg_window = 10;
+    let last_last_profit = 0;
     let total_cost = 500;
     let total_rewards = 1000;
+    let last_profit = 200;
     let mut updater = UpdaterBuilder::new()
-        .with_profit_avg(starting_profit_avg, avg_window)
+        .with_last_profit(last_profit, last_last_profit)
         .with_total_rewards(total_rewards)
         .with_projected_total_cost(total_cost)
         .build();
@@ -278,9 +278,11 @@ fn update_l2_block_data__updates_profit_avg() {
         .unwrap();
 
     //  then
-    let last_profit = total_rewards as i64 - total_cost as i64;
-    let expected =
-        (starting_profit_avg * (avg_window as i64 - 1) + last_profit) / avg_window as i64;
-    let actual = updater.profit_avg;
+    let expected = last_profit;
+    let actual = updater.last_last_profit;
+    assert_eq!(actual, expected);
+    // and
+    let expected = total_rewards as i64 - total_cost as i64;
+    let actual = updater.last_profit;
     assert_eq!(actual, expected);
 }

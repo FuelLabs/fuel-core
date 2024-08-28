@@ -68,22 +68,22 @@ pub fn run_simulation(
         min_exec_gas_price: 10,
         min_da_gas_price: 10,
         new_exec_price: 10 * gas_price_factor,
-        last_da_gas_price: 10 * gas_price_factor,
+        last_da_gas_price: 5 * gas_price_factor,
         da_gas_price_factor: gas_price_factor,
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 50,
         exec_gas_price_change_percent: 2,
-        max_da_gas_price_change_percent: 50,
+        max_da_gas_price_change_percent: 10,
         total_da_rewards: 0,
         da_recorded_block_height: 0,
-        latest_da_cost_per_byte: 10000,
+        latest_da_cost_per_byte: 50000,
         projected_total_da_cost: 0,
         latest_known_total_da_cost: 0,
         unrecorded_blocks: vec![],
         da_p_component,
         da_d_component,
-        profit_avg: 0,
-        avg_window,
+        last_profit: 0,
+        last_last_profit: 0,
     };
 
     let mut gas_prices = vec![];
@@ -99,19 +99,6 @@ pub fn run_simulation(
         let gas_price = updater.algorithm().calculate(max_block_bytes);
         gas_prices.push(gas_price);
         // Update DA blocks on the occasion there is one
-
-        fn pretty(input: u64) -> String {
-            let num = input
-                .to_string()
-                .as_bytes()
-                .rchunks(3)
-                .rev()
-                .map(std::str::from_utf8)
-                .collect::<Result<Vec<&str>, _>>()
-                .unwrap()
-                .join(","); // separator
-            num
-        }
 
         if let Some(mut da_blocks) = da_block.clone() {
             // println!("-------------------");
@@ -242,7 +229,7 @@ fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
             let bytes = fullness * bytes_scale;
             (fullness, bytes)
         })
-        .map(|(fullness, bytes)| (fullness as u64, bytes as u64))
+        .map(|(fullness, bytes)| (fullness as u64, std::cmp::max(bytes as u64, 1)))
         .collect()
 }
 
@@ -263,7 +250,7 @@ fn arb_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
         .map(noisy_eth_price)
         // .map(|_| rng.gen_range(1..5))
         .map(|x| {
-            x * 5.
+            x * 5. + 5.
         })
         .map(|x| x as u64)
         .map(|x| std::cmp::max(x, 1))

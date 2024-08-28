@@ -4,12 +4,12 @@ fn da_pid_factors(size: usize) -> Vec<(i64, i64)> {
     let mut rng = StdRng::seed_from_u64(10902);
     (0usize..size)
         .map(|_| {
-            let p = rng.gen_range(0..10_000_000);
-            let d = rng.gen_range(0..10_000_000);
+            let p = rng.gen_range(1000..10_000_000);
+            let d = rng.gen_range(1000..10_000_000);
             (p, d)
         })
         .collect()
-    // vec![(85_000, 0)]
+    // vec![(8_000_000, 500_000)]
 }
 
 pub fn naive_optimisation(

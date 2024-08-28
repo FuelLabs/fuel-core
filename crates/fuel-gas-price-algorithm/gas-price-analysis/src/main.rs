@@ -26,6 +26,19 @@ mod simulation;
 
 mod charts;
 
+pub fn pretty(input: u64) -> String {
+    let num = input
+        .to_string()
+        .as_bytes()
+        .rchunks(3)
+        .rev()
+        .map(std::str::from_utf8)
+        .collect::<Result<Vec<&str>, _>>()
+        .unwrap()
+        .join(","); // separator
+    num
+}
+
 fn main() {
     let optimisation_iterations = 10_000;
     let avg_window = 2;
@@ -41,6 +54,10 @@ fn main() {
         projected_profit,
         pessimistic_costs,
     } = best;
+
+    // let min_actual_profit = pretty(actual_profit.iter().min().unwrap());
+    let max_actual_profit = pretty(*actual_profit.iter().max().unwrap() as u64);
+    println!("max_actual: {max_actual_profit}");
 
     let plot_width = 640 * 2 * 2;
     let plot_height = 480 * 3;
@@ -63,9 +80,7 @@ fn main() {
         &actual_profit,
         &projected_profit,
         &pessimistic_costs,
-        &format!(
-            "Profit p_comp: {p_comp:?}, d_comp: {d_comp:?}, avg window: {avg_window:?}"
-        ),
+        &format!("Profit p_comp: {p_comp:?}, d_comp: {d_comp:?}"),
     );
     draw_gas_prices(
         &window_four,
