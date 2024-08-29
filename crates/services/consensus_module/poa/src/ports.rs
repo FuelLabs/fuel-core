@@ -31,7 +31,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {

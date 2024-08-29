@@ -59,11 +59,12 @@ async fn never_trigger_never_produces_blocks() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
-    let ctx = ctx_builder.build();
+    let mut ctx = ctx_builder.build();
     for tx in txs {
         status_sender.send_replace(Some(tx.id(&ChainId::default())));
     }
 
+    ctx.time.advance_one_second().await; // TODO: Should this be here?
     // Make sure enough time passes for the block to be produced
     time::sleep(Duration::new(10, 0)).await;
 

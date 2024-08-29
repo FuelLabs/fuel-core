@@ -23,11 +23,11 @@ use crate::{
         BlockImporter,
         BlockProducer,
         BlockSigner,
+        GetTime,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
-        GetTime,
     },
     sync::{
         SyncState,
@@ -207,7 +207,10 @@ where
         }
     }
 
-    fn extract_block_info(clock: &C, last_block: &BlockHeader) -> (BlockHeight, Tai64, Instant) {
+    fn extract_block_info(
+        clock: &C,
+        last_block: &BlockHeader,
+    ) -> (BlockHeight, Tai64, Instant) {
         let last_timestamp = last_block.time();
         let duration_since_last_block =
             Duration::from_secs(clock.now().0.saturating_sub(last_timestamp.0));

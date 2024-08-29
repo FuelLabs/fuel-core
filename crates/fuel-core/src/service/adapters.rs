@@ -16,7 +16,8 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     fuel_types::BlockHeight,
-    services::block_importer::SharedImportResult, tai64::Tai64,
+    services::block_importer::SharedImportResult,
+    tai64::Tai64,
 };
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;

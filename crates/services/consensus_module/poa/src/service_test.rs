@@ -54,7 +54,7 @@ use fuel_core_types::{
         ExecutionResult,
         UncommittedResult,
     },
-    tai64::Tai64,
+    tai64::{Tai64, Tai64N},
 };
 use rand::{
     prelude::StdRng,
@@ -83,12 +83,16 @@ use tokio::{
 
 mod manually_produce_tests;
 mod trigger_tests;
+mod test_time;
+
+use test_time::TestTime;
 
 struct TestContextBuilder {
     config: Option<Config>,
     txpool: Option<MockTransactionPool>,
     importer: Option<MockBlockImporter>,
     producer: Option<MockBlockProducer>,
+    start_time: Option<Tai64N>,
 }
 
 fn generate_p2p_port() -> MockP2pPort {
@@ -108,6 +112,7 @@ impl TestContextBuilder {
             txpool: None,
             importer: None,
             producer: None,
+            start_time: None,
         }
     }
 
@@ -130,6 +135,11 @@ impl TestContextBuilder {
         self.producer = Some(producer);
         self
     }
+
+    //fn with_start_time(&mut self, start_time: Tai64N) -> &mut Self {
+    //    self.start_time = Some(start_time);
+    //    self
+    //}
 
     fn build(self) -> TestContext {
         let config = self.config.unwrap_or_default();
@@ -168,6 +178,11 @@ impl TestContextBuilder {
 
         let predefined_blocks = HashMap::new().into();
 
+        let time = match self.start_time {
+            Some(start_time) => TestTime::new(start_time),
+            None => TestTime::at_unix_epoch(),
+        };
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
             config.clone(),
@@ -177,10 +192,10 @@ impl TestContextBuilder {
             p2p_port,
             FakeBlockSigner { succeeds: true },
             predefined_blocks,
-            crate::ports::SystemTime, // TODO: Use test time
+            time.watch(),
         );
         service.start().unwrap();
-        TestContext { service }
+        TestContext { service, time }
     }
 }
 
@@ -212,8 +227,9 @@ struct TestContext {
         MockBlockImporter,
         FakeBlockSigner,
         InMemoryPredefinedBlocks,
-        crate::ports::SystemTime, // TODO: Change
+        test_time::Watch,
     >,
+    time: TestTime,
 }
 
 impl TestContext {
@@ -387,6 +403,8 @@ async fn remove_skipped_transactions() {
 
     let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
 
+    let mut time = TestTime::at_unix_epoch();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -396,8 +414,10 @@ async fn remove_skipped_transactions() {
         p2p_port,
         FakeBlockSigner { succeeds: true },
         predefined_blocks,
-        crate::ports::SystemTime, // TODO: Use test time
+        time.watch(),
     );
+
+    time.advance_one_second().await; // TODO: Remove?
 
     assert!(task.produce_next_block().await.is_ok());
 }
