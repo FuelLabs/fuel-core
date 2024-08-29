@@ -6,6 +6,7 @@ use crate::{
     ports::{
         BlockProducer,
         BlockSigner,
+        GetTime,
         InMemoryPredefinedBlocks,
         MockBlockImporter,
         MockBlockProducer,
@@ -186,8 +187,10 @@ impl TestContextBuilder {
             None => TestTime::at_unix_epoch(),
         };
 
+        let watch = time.watch();
+
         let service = new_service(
-            &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
+            &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
             config.clone(),
             txpool,
             producer,
@@ -195,7 +198,7 @@ impl TestContextBuilder {
             p2p_port,
             FakeBlockSigner { succeeds: true },
             predefined_blocks,
-            time.watch(),
+            watch,
         );
         service.start().unwrap();
         TestContext { service, time }

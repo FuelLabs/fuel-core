@@ -21,15 +21,9 @@ impl TestTime {
         Self { time }
     }
 
-    pub async fn advance(&mut self, duration: Duration) {
+    pub fn advance(&mut self, duration: Duration) {
         self.time
             .send_modify(|timestamp| *timestamp = *timestamp + duration);
-        tokio::time::advance(duration).await;
-    }
-
-    #[allow(dead_code)]
-    pub async fn advance_one_second(&mut self) {
-        self.advance(Duration::from_secs(1)).await
     }
 
     pub fn watch(&self) -> Watch {

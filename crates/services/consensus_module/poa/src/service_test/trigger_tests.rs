@@ -109,7 +109,27 @@ impl DefaultContext {
         importer
             .expect_block_stream()
             .returning(|| Box::pin(tokio_stream::pending()));
+
+        let mut block_producer = MockBlockProducer::default();
+        block_producer
+            .expect_produce_and_execute_block()
+            .returning(|_, time, _| {
+                let mut block = Block::default();
+                block.header_mut().set_time(time);
+                block.header_mut().recalculate_metadata();
+                Ok(UncommittedResult::new(
+                    ExecutionResult {
+                        block,
+                        skipped_transactions: Default::default(),
+                        tx_status: Default::default(),
+                        events: Default::default(),
+                    },
+                    Default::default(),
+                ))
+            });
+        
         ctx_builder.with_importer(importer);
+        ctx_builder.with_producer(block_producer);
 
         let test_ctx = ctx_builder.build();
 
@@ -303,4 +323,96 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     ctx.test_ctx.service.stop_and_await().await?;
 
     Ok(())
+}
+
+#[tokio::test]
+async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
+    // Given
+
+    let block_time = Duration::from_secs(10);
+    let offset = Duration::from_secs(1);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    let start_time = ctx.test_ctx.time.watch().now();
+
+    // When
+
+    // We produce three blocks without advancing real time
+    time::sleep(block_time * 3 + offset).await;
+    let first_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+    let second_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+    let third_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // Then
+
+    // We should only have produced the three blocks
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    // Even though real time is frozen, the blocks should advance into the future
+    assert_eq!(first_block_time, start_time + block_time.as_secs() * 1);
+    assert_eq!(second_block_time, start_time + block_time.as_secs() * 2);
+    assert_eq!(third_block_time, start_time + block_time.as_secs() * 3);
+
+    ctx.test_ctx.service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn interval_trigger_produces_blocks_with_current_time_when_block_production_is_lagging(
+) {
+    // Given
+
+    let block_time = Duration::from_secs(10);
+    let second_block_delay = Duration::from_secs(5);
+    let offset = Duration::from_secs(1);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    let start_time = ctx.test_ctx.time.watch().now();
+
+    // When
+
+    // We produce the first block in real time
+    ctx.test_ctx.time.advance(block_time);
+    time::sleep(block_time + offset).await;
+    let first_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // But we produce second block with a delay relative to real time
+    ctx.test_ctx.time.advance(block_time + second_block_delay);
+    time::sleep(block_time).await;
+    let second_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // And the third block is produced without advancing real time
+    time::sleep(block_time).await;
+    let third_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // Then
+
+    // We should only have produced the three blocks
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    // The fist block should be produced after the given block time
+    assert_eq!(first_block_time, start_time + block_time.as_secs());
+
+    // The second block should have a delay in its timestamp
+    assert_eq!(second_block_time, first_block_time + block_time.as_secs() + second_block_delay.as_secs());
+
+    // The third block should be produced `block_time` in the future relative to the second block time
+    assert_eq!(third_block_time, second_block_time + block_time.as_secs());
+
+    ctx.test_ctx.service.stop_and_await().await.unwrap();
 }
