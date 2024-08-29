@@ -43,7 +43,7 @@ pub fn p2p_metrics() -> &'static P2PMetrics {
     P2P_METRICS.get_or_init(P2PMetrics::new)
 }
 
-pub fn inc_unique_peers() {
+pub fn increment_unique_peers() {
     p2p_metrics().unique_peers.inc();
 }
 

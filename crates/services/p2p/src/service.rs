@@ -198,17 +198,17 @@ pub trait TaskP2PService: Send {
 
     fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()>;
 
-    fn log_metrics<T>(&self, cb: T)
+    fn update_metrics<T>(&self, update_fn: T)
     where
         T: FnOnce();
 }
 
 impl TaskP2PService for FuelP2PService {
-    fn log_metrics<T>(&self, cb: T)
+    fn update_metrics<T>(&self, update_fn: T)
     where
         T: FnOnce(),
     {
-        FuelP2PService::log_metrics(self, cb)
+        FuelP2PService::update_metrics(self, update_fn)
     }
 
     fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
@@ -439,11 +439,11 @@ where
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
 {
-    fn log_metrics<T>(&self, cb: T)
+    fn update_metrics<T>(&self, update_fn: T)
     where
         T: FnOnce(),
     {
-        self.p2p_service.log_metrics(cb)
+        self.p2p_service.update_metrics(update_fn)
     }
 
     fn process_request(
@@ -485,7 +485,7 @@ where
         let max_len = self.max_headers_per_request;
         let range_len = range.len();
 
-        self.log_metrics(|| set_blocks_requested(range_len));
+        self.update_metrics(|| set_blocks_requested(range_len));
 
         if range_len > max_len {
             tracing::error!(
@@ -1053,7 +1053,7 @@ pub mod tests {
     }
 
     impl TaskP2PService for FakeP2PService {
-        fn log_metrics<T>(&self, _: T)
+        fn update_metrics<T>(&self, _: T)
         where
             T: FnOnce(),
         {
