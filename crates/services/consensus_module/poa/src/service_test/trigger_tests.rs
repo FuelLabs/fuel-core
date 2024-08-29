@@ -6,7 +6,7 @@ use tokio::{
 
 use super::*;
 
-#[tokio::test(start_paused = true)] // Run with time paused, start/stop must still work
+#[tokio::test]
 async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
     for trigger in [
         Trigger::Never,
@@ -30,7 +30,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn never_trigger_never_produces_blocks() {
     const TX_COUNT: usize = 10;
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -59,14 +59,18 @@ async fn never_trigger_never_produces_blocks() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
-    let mut ctx = ctx_builder.build();
+    let ctx = ctx_builder.build();
     for tx in txs {
         status_sender.send_replace(Some(tx.id(&ChainId::default())));
     }
 
-    ctx.time.advance_one_second().await; // TODO: Should this be here?
     // Make sure enough time passes for the block to be produced
-    time::sleep(Duration::new(10, 0)).await;
+    //
+    // Note: While this may look like the test case will hang for an extremely long time,
+    // it won't thanks to the auto-advance feature of the tokio runtime.
+    //
+    // Reference: https://docs.rs/tokio/1.39.3/tokio/time/fn.pause.html#auto-advance.
+    time::sleep(Duration::from_secs(10)).await;
 
     // Stop
     assert_eq!(ctx.stop().await, State::Stopped);
@@ -119,7 +123,7 @@ impl DefaultContext {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn instant_trigger_produces_block_instantly() {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Instant,
@@ -136,7 +140,7 @@ async fn instant_trigger_produces_block_instantly() {
     assert_eq!(ctx.test_ctx.stop().await, State::Stopped);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Interval {
@@ -154,7 +158,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a single block is produced, and a bit more
+    // Pause time until a single block is produced, and a bit more
     time::sleep(Duration::new(3, 0)).await;
 
     // Make sure the empty block is actually produced
@@ -168,7 +172,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a the next block is produced
+    // Pause time until a the next block is produced
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure it's produced
@@ -185,7 +189,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a the next block is produced
+    // Pause time until a the next block is produced
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure only one block is produced
@@ -201,7 +205,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second(
 ) -> anyhow::Result<()> {
     // given
@@ -257,7 +261,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
     Ok(())
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Interval {

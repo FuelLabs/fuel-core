@@ -11,7 +11,7 @@ pub struct TestTime {
 
 impl TestTime {
     pub fn at_unix_epoch() -> Self {
-        Self::new(Tai64N::UNIX_EPOCH)        
+        Self::new(Tai64N::UNIX_EPOCH)
     }
 
     pub fn new(start_time: Tai64N) -> Self {
@@ -22,17 +22,25 @@ impl TestTime {
     }
 
     pub async fn advance(&mut self, duration: Duration) {
-        self.time.send_modify(|timestamp| *timestamp = *timestamp + duration);
+        self.time
+            .send_modify(|timestamp| *timestamp = *timestamp + duration);
         tokio::time::advance(duration).await;
     }
 
+    #[allow(dead_code)]
     pub async fn advance_one_second(&mut self) {
         self.advance(Duration::from_secs(1)).await
     }
 
     pub fn watch(&self) -> Watch {
         let time = self.time.subscribe();
-        Watch{ time }
+        Watch { time }
+    }
+}
+
+impl Drop for TestTime {
+    fn drop(&mut self) {
+        tokio::time::resume();
     }
 }
 

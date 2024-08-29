@@ -54,7 +54,10 @@ use fuel_core_types::{
         ExecutionResult,
         UncommittedResult,
     },
-    tai64::{Tai64, Tai64N},
+    tai64::{
+        Tai64,
+        Tai64N,
+    },
 };
 use rand::{
     prelude::StdRng,
@@ -82,8 +85,8 @@ use tokio::{
 };
 
 mod manually_produce_tests;
-mod trigger_tests;
 mod test_time;
+mod trigger_tests;
 
 use test_time::TestTime;
 
@@ -136,7 +139,7 @@ impl TestContextBuilder {
         self
     }
 
-    //fn with_start_time(&mut self, start_time: Tai64N) -> &mut Self {
+    // fn with_start_time(&mut self, start_time: Tai64N) -> &mut Self {
     //    self.start_time = Some(start_time);
     //    self
     //}
@@ -403,7 +406,7 @@ async fn remove_skipped_transactions() {
 
     let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
 
-    let mut time = TestTime::at_unix_epoch();
+    let time = TestTime::at_unix_epoch();
 
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -416,8 +419,6 @@ async fn remove_skipped_transactions() {
         predefined_blocks,
         time.watch(),
     );
-
-    time.advance_one_second().await; // TODO: Remove?
 
     assert!(task.produce_next_block().await.is_ok());
 }
@@ -461,6 +462,8 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
 
+    let time = TestTime::at_unix_epoch();
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -470,7 +473,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         p2p_port,
         FakeBlockSigner { succeeds: true },
         predefined_blocks,
-        crate::ports::SystemTime, // TODO: Use test time
+        time.watch(),
     );
 
     // simulate some txpool event to see if any block production is erroneously triggered
@@ -579,6 +582,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
     let task = MainTask::new(
         &last_block,
         config,
@@ -588,7 +592,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(blocks_map),
-        crate::ports::SystemTime, // TODO: Use test time
+        time.watch(),
     );
 
     // when
@@ -642,6 +646,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
     let task = MainTask::new(
         &last_block,
         config,
@@ -651,7 +656,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true },
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
-        crate::ports::SystemTime, // TODO: Use test time
+        time.watch(),
     );
 
     // when
