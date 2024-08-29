@@ -29,14 +29,21 @@ use fuel_core_types::{
         ChainId,
     },
 };
-use rand::Rng;
+use rand::{
+    rngs::ThreadRng,
+    Rng,
+};
 use std::{
     borrow::Cow,
     path::Path,
 };
 
-pub fn get_random_block_height(block_count: u32) -> BlockHeight {
-    BlockHeight::from(rand::thread_rng().gen_range(0..block_count))
+pub fn thread_rng() -> ThreadRng {
+    rand::thread_rng()
+}
+
+pub fn get_random_block_height(rng: &mut ThreadRng, block_count: u32) -> BlockHeight {
+    BlockHeight::from(rng.gen_range(0..block_count))
 }
 
 pub fn open_db(block_count: u32, tx_count: u32, method: &str) -> Database {

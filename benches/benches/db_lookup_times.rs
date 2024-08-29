@@ -6,6 +6,7 @@ use crate::db_lookup_times_utils::{
         multi_get_block,
         open_db,
         open_raw_rocksdb,
+        thread_rng,
     },
 };
 use criterion::{
@@ -23,16 +24,17 @@ mod db_lookup_times_utils;
 
 pub fn header_and_tx_lookup(c: &mut Criterion) {
     let method = "header_and_tx";
+    let mut rng = thread_rng();
 
     seed_compressed_blocks_and_transactions_matrix(method);
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
         let database = open_db(block_count, tx_count, method);
-        let height = get_random_block_height(block_count);
         let view = database.latest_view().unwrap();
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
+                let height = get_random_block_height(&mut rng, block_count);
                 let block = (&view).get_full_block(&height);
                 assert!(block.is_ok());
                 assert!(block.unwrap().is_some());
@@ -45,15 +47,16 @@ pub fn header_and_tx_lookup(c: &mut Criterion) {
 
 pub fn multi_get_lookup(c: &mut Criterion) {
     let method = "multi_get";
+    let mut rng = thread_rng();
 
     seed_compressed_blocks_and_transactions_matrix(method);
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
         let database = open_raw_rocksdb(block_count, tx_count, method);
-        let height = get_random_block_height(block_count);
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
+                let height = get_random_block_height(&mut rng, block_count);
                 // todo: clean up
                 multi_get_block(&database, height);
             });
@@ -65,16 +68,17 @@ pub fn multi_get_lookup(c: &mut Criterion) {
 
 pub fn full_block_lookup(c: &mut Criterion) {
     let method = "full_block";
+    let mut rng = thread_rng();
 
     seed_full_block_matrix();
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
         let database = open_db(block_count, tx_count, method);
-        let height = get_random_block_height(block_count);
         let view = database.latest_view().unwrap();
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
+                let height = get_random_block_height(&mut rng, block_count);
                 let full_block = get_full_block(&view, &height);
                 assert!(full_block.is_ok());
                 assert!(full_block.unwrap().is_some());
