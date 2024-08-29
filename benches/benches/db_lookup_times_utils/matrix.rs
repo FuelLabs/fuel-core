@@ -1,5 +1,5 @@
-pub const BLOCK_COUNT_MATRIX: [u32; 1] = [1];
-pub const TX_COUNT_MATRIX: [u32; 1] = [1];
+pub const BLOCK_COUNT_MATRIX: [u32; 2] = [10, 100];
+pub const TX_COUNT_MATRIX: [u32; 2] = [100, 1000];
 
 // todo: we can make this lazy loaded
 pub fn matrix() -> Box<dyn Iterator<Item = (u32, u32)>> {

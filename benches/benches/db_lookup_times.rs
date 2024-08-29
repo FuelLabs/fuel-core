@@ -91,7 +91,7 @@ pub fn full_block_lookup(c: &mut Criterion) {
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(10));
+    config = Criterion::default().sample_size(100_000).measurement_time(std::time::Duration::from_secs(100));
     targets = header_and_tx_lookup, multi_get_lookup, full_block_lookup
 }
 criterion_main!(benches);
