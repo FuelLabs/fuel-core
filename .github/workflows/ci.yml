@@ -525,21 +525,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REGISTRY_URL }}-debug
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-debug
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -564,6 +549,21 @@ jobs:
         with:
           username: fuellabs
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_URL }}-debug
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-debug
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Setup Rust build cache
         id: cache
@@ -628,21 +628,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REGISTRY_URL }}-e2e-client
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-e2e-client
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Configure AWS credentials for ECR publishing
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -667,6 +652,21 @@ jobs:
         with:
           username: fuellabs
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_URL }}-e2e-client
+            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-e2e-client
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Setup Rust build cache
         id: cache
