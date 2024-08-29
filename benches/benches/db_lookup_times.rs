@@ -57,8 +57,7 @@ pub fn multi_get_lookup(c: &mut Criterion) {
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                // todo: clean up
-                multi_get_block(&database, height);
+                assert!(multi_get_block(&database, height).is_ok());
             });
         });
     }
