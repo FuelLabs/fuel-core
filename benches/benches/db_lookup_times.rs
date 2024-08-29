@@ -6,7 +6,6 @@ use crate::db_lookup_times_utils::{
         multi_get_block,
         open_db,
         open_raw_rocksdb,
-        thread_rng,
     },
 };
 use criterion::{
@@ -19,6 +18,7 @@ use db_lookup_times_utils::seed::{
     seed_full_block_matrix,
 };
 use fuel_core_storage::transactional::AtomicView;
+use rand::thread_rng;
 
 mod db_lookup_times_utils;
 

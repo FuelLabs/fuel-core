@@ -39,10 +39,6 @@ use std::{
     path::Path,
 };
 
-pub fn thread_rng() -> ThreadRng {
-    rand::thread_rng()
-}
-
 pub fn get_random_block_height(rng: &mut ThreadRng, block_count: u32) -> BlockHeight {
     BlockHeight::from(rng.gen_range(0..block_count))
 }
