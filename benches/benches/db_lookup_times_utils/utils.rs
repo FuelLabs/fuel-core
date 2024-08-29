@@ -91,13 +91,11 @@ pub fn multi_get_block(database: &RocksDb<OnChain>, height: BlockHeight) {
         .unwrap()
         .unwrap();
     let block: CompressedBlock = postcard::from_bytes(raw_block.as_slice()).unwrap();
-    let tx_ids = block.transactions().into_iter();
+    let tx_ids = block.transactions().iter();
     let raw_txs = database
         .multi_get(Column::Transactions.id(), tx_ids)
         .unwrap();
-    for raw_tx in raw_txs {
-        if let Some(tx) = raw_tx {
-            let _: Transaction = postcard::from_bytes(tx.as_slice()).unwrap();
-        }
+    for raw_tx in raw_txs.iter().flatten() {
+        let _: Transaction = postcard::from_bytes(raw_tx.as_slice()).unwrap();
     }
 }

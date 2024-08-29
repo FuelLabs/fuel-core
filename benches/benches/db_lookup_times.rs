@@ -35,7 +35,7 @@ pub fn header_and_tx_lookup(c: &mut Criterion) {
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let block = (&view).get_full_block(&height);
+                let block = view.get_full_block(&height);
                 assert!(block.is_ok());
                 assert!(block.unwrap().is_some());
             });

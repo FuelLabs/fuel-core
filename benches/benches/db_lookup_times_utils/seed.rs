@@ -88,7 +88,7 @@ fn insert_compressed_block(
     let raw_compressed_block = postcard::to_allocvec(&compressed_block).unwrap().to_vec();
     let raw_transactions = block
         .transactions()
-        .into_iter()
+        .iter()
         .map(|tx| {
             (
                 tx.id(&chain_id()),
