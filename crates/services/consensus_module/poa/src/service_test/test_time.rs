@@ -26,6 +26,11 @@ impl TestTime {
             .send_modify(|timestamp| *timestamp = *timestamp + duration);
     }
 
+    pub fn rewind(&mut self, duration: Duration) {
+        self.time
+            .send_modify(|timestamp| *timestamp = *timestamp - duration);
+    }
+
     pub fn watch(&self) -> Watch {
         let time = self.time.subscribe();
         Watch { time }
