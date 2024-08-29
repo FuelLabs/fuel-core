@@ -173,10 +173,10 @@ impl Bootstrap {
                                 request_id,
                                 request_message
                             }) => {
-                                if request_message == RequestMessage::AllTransactionsIds {
+                                if request_message == RequestMessage::TxPoolAllTransactionsIds {
                                     let _ = bootstrap.send_response_msg(
                                         request_id,
-                                        ResponseMessage::AllTransactionsIds(Some(vec![])),
+                                        ResponseMessage::TxPoolAllTransactionsIds(vec![]),
                                     );
                                 }
                             }

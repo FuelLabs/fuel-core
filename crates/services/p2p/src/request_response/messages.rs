@@ -28,16 +28,16 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 pub enum RequestMessage {
     SealedHeaders(Range<u32>),
     Transactions(Range<u32>),
-    AllTransactionsIds,
-    FullTransactions(Vec<TxId>),
+    TxPoolAllTransactionsIds,
+    TxPoolFullTransactions(Vec<TxId>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
-    AllTransactionsIds(Option<Vec<TxId>>),
-    FullTransactions(Option<Vec<Option<Transaction>>>),
+    TxPoolAllTransactionsIds(Vec<TxId>),
+    TxPoolFullTransactions(Vec<Option<Transaction>>),
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
@@ -46,8 +46,8 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 pub enum ResponseSender {
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Vec<Transactions>>>),
-    AllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
-    FullTransactions(OnResponse<Option<Vec<Option<Transaction>>>>),
+    TxPoolAllTransactionsIds(OnResponse<Vec<TxId>>),
+    TxPoolFullTransactions(OnResponse<Vec<Option<Transaction>>>),
 }
 
 #[derive(Debug, Error)]

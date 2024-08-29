@@ -109,14 +109,14 @@ pub enum TaskRequest {
         from_peer: PeerId,
         channel: OnResponse<Option<Vec<Transactions>>>,
     },
-    GetAllTxIds {
+    TxPoolGetAllTxIds {
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<TxId>>>,
+        channel: OnResponse<Vec<TxId>>,
     },
-    GetFullTransactions {
+    TxPoolGetFullTransactions {
         tx_ids: Vec<TxId>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<Option<Transaction>>>>,
+        channel: OnResponse<Vec<Option<Transaction>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -133,12 +133,12 @@ pub enum TaskRequest {
         response: Option<Vec<SealedBlockHeader>>,
         request_id: InboundRequestId,
     },
-    AllTransactionsIds {
-        response: Option<Vec<TxId>>,
+    TxPoolAllTransactionsIds {
+        response: Vec<TxId>,
         request_id: InboundRequestId,
     },
-    FullTransactions {
-        response: Option<Vec<Option<Transaction>>>,
+    TxPoolFullTransactions {
+        response: Vec<Option<Transaction>>,
         request_id: InboundRequestId,
     },
 }
@@ -155,11 +155,11 @@ impl Debug for TaskRequest {
             TaskRequest::GetTransactions { .. } => {
                 write!(f, "TaskRequest::GetTransactions")
             }
-            TaskRequest::GetAllTxIds { .. } => {
-                write!(f, "TaskRequest::GetAllTxIds")
+            TaskRequest::TxPoolGetAllTxIds { .. } => {
+                write!(f, "TaskRequest::TxPoolGetAllTxIds")
             }
-            TaskRequest::GetFullTransactions { .. } => {
-                write!(f, "TaskRequest::GetFullTransactions")
+            TaskRequest::TxPoolGetFullTransactions { .. } => {
+                write!(f, "TaskRequest::TxPoolGetFullTransactions")
             }
             TaskRequest::RespondWithGossipsubMessageReport(_) => {
                 write!(f, "TaskRequest::RespondWithGossipsubMessageReport")
@@ -176,11 +176,11 @@ impl Debug for TaskRequest {
             TaskRequest::DatabaseHeaderLookUp { .. } => {
                 write!(f, "TaskRequest::DatabaseHeaderLookUp")
             }
-            TaskRequest::AllTransactionsIds { .. } => {
-                write!(f, "TaskRequest::AllTransactionsIds")
+            TaskRequest::TxPoolAllTransactionsIds { .. } => {
+                write!(f, "TaskRequest::TxPoolAllTransactionsIds")
             }
-            TaskRequest::FullTransactions { .. } => {
-                write!(f, "TaskRequest::FullTransactions")
+            TaskRequest::TxPoolFullTransactions { .. } => {
+                write!(f, "TaskRequest::TxPoolFullTransactions")
             }
         }
     }
@@ -474,10 +474,10 @@ where
             RequestMessage::SealedHeaders(range) => {
                 self.handle_sealed_headers_request(range, request_id)
             }
-            RequestMessage::AllTransactionsIds => {
+            RequestMessage::TxPoolAllTransactionsIds => {
                 self.handle_all_transactions_ids_request(request_id)
             }
-            RequestMessage::FullTransactions(tx_ids) => {
+            RequestMessage::TxPoolFullTransactions(tx_ids) => {
                 self.handle_full_transactions_request(tx_ids, request_id)
             }
         }
@@ -583,8 +583,8 @@ where
         let response_channel = self.request_sender.clone();
 
         let tx_ids = self.tx_pool.get_all_tx_ids();
-        response_channel.try_send(TaskRequest::AllTransactionsIds {
-            response: Some(tx_ids),
+        response_channel.try_send(TaskRequest::TxPoolAllTransactionsIds {
+            response: tx_ids,
             request_id,
         })?;
         Ok(())
@@ -598,8 +598,8 @@ where
         let response_channel = self.request_sender.clone();
 
         let txs = self.tx_pool.get_full_txs(tx_ids);
-        response_channel.try_send(TaskRequest::FullTransactions {
-            response: Some(txs),
+        response_channel.try_send(TaskRequest::TxPoolFullTransactions {
+            response: txs,
             request_id,
         })?;
         Ok(())
@@ -758,14 +758,14 @@ where
                         let request_msg = RequestMessage::Transactions(block_height_range);
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always a peer here, so send has a target");
                     }
-                    Some(TaskRequest::GetAllTxIds { from_peer, channel }) => {
-                        let channel = ResponseSender::AllTransactionsIds(channel);
-                        let request_msg = RequestMessage::AllTransactionsIds;
+                    Some(TaskRequest::TxPoolGetAllTxIds { from_peer, channel }) => {
+                        let channel = ResponseSender::TxPoolAllTransactionsIds(channel);
+                        let request_msg = RequestMessage::TxPoolAllTransactionsIds;
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always have a peer here, so send has a target");
                     }
-                    Some(TaskRequest::GetFullTransactions { tx_ids, from_peer, channel }) => {
-                        let channel = ResponseSender::FullTransactions(channel);
-                        let request_msg = RequestMessage::FullTransactions(tx_ids);
+                    Some(TaskRequest::TxPoolGetFullTransactions { tx_ids, from_peer, channel }) => {
+                        let channel = ResponseSender::TxPoolFullTransactions(channel);
+                        let request_msg = RequestMessage::TxPoolFullTransactions(tx_ids);
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always have a peer here, so send has a target");
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
@@ -788,11 +788,11 @@ where
                     Some(TaskRequest::DatabaseHeaderLookUp { response, request_id }) => {
                         let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
                     }
-                    Some(TaskRequest::AllTransactionsIds { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::AllTransactionsIds(response));
+                    Some(TaskRequest::TxPoolAllTransactionsIds { response, request_id }) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::TxPoolAllTransactionsIds(response));
                     }
-                    Some(TaskRequest::FullTransactions { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::FullTransactions(response));
+                    Some(TaskRequest::TxPoolFullTransactions { response, request_id }) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::TxPoolFullTransactions(response));
                     }
                     None => {
                         tracing::error!("The P2P `Task` should be holder of the `Sender`");
@@ -943,11 +943,11 @@ impl SharedState {
     pub async fn get_all_transactions_ids_from_peer(
         &self,
         peer_id: Vec<u8>,
-    ) -> anyhow::Result<Option<Vec<TxId>>> {
+    ) -> anyhow::Result<Vec<TxId>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
-        let request = TaskRequest::GetAllTxIds {
+        let request = TaskRequest::TxPoolGetAllTxIds {
             from_peer,
             channel: sender,
         };
@@ -968,11 +968,11 @@ impl SharedState {
         &self,
         peer_id: Vec<u8>,
         tx_ids: Vec<TxId>,
-    ) -> anyhow::Result<Option<Vec<Option<Transaction>>>> {
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
-        let request = TaskRequest::GetFullTransactions {
+        let request = TaskRequest::TxPoolGetFullTransactions {
             tx_ids,
             from_peer,
             channel: sender,

@@ -601,8 +601,8 @@ impl FuelP2PService {
                                 c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
                             }
                         },
-                        ResponseSender::AllTransactionsIds(c) => match response {
-                            ResponseMessage::AllTransactionsIds(v) => {
+                        ResponseSender::TxPoolAllTransactionsIds(c) => match response {
+                            ResponseMessage::TxPoolAllTransactionsIds(v) => {
                                 c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
@@ -613,8 +613,8 @@ impl FuelP2PService {
                                 c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
                             }
                         },
-                        ResponseSender::FullTransactions(c) => match response {
-                            ResponseMessage::FullTransactions(v) => {
+                        ResponseSender::TxPoolFullTransactions(c) => match response {
+                            ResponseMessage::TxPoolFullTransactions(v) => {
                                 c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
@@ -657,10 +657,10 @@ impl FuelP2PService {
                         ResponseSender::Transactions(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
-                        ResponseSender::AllTransactionsIds(c) => {
+                        ResponseSender::TxPoolAllTransactionsIds(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
-                        ResponseSender::FullTransactions(c) => {
+                        ResponseSender::TxPoolFullTransactions(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
                     };
@@ -1627,14 +1627,14 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::AllTransactionsIds => {
+                                    RequestMessage::TxPoolAllTransactionsIds => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::AllTransactionsIds(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolAllTransactionsIds(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(Some(transaction_ids)))) = response_message {
+                                            if let Ok((_, Ok(transaction_ids))) = response_message {
                                                 let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
                                                 let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
                                                 let _ = tx_test_end.send(check).await;
@@ -1644,14 +1644,14 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::FullTransactions(tx_ids) => {
+                                    RequestMessage::TxPoolFullTransactions(tx_ids) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::FullTransactions(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolFullTransactions(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
+                                            if let Ok((_, Ok(transactions))) = response_message {
                                                 let txs: Vec<Option<Transaction>> = tx_ids.iter().enumerate().map(|(i, _)| {
                                                     if i == 0 {
                                                         None
@@ -1688,11 +1688,11 @@ mod tests {
                                 let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
                             }
-                            RequestMessage::AllTransactionsIds => {
+                            RequestMessage::TxPoolAllTransactionsIds => {
                                 let tx_ids = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::AllTransactionsIds(Some(tx_ids)));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolAllTransactionsIds(tx_ids));
                             }
-                            RequestMessage::FullTransactions(tx_ids) => {
+                            RequestMessage::TxPoolFullTransactions(tx_ids) => {
                                 let txs = tx_ids.iter().enumerate().map(|(i, _)| {
                                     if i == 0 {
                                         None
@@ -1700,7 +1700,7 @@ mod tests {
                                         Some(Transaction::default_test_tx())
                                     }
                                 }).collect();
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::FullTransactions(Some(txs)));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolFullTransactions(txs));
                             }
                         }
                     }
@@ -1728,7 +1728,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_transactions_ids() {
-        request_response_works_with(RequestMessage::AllTransactionsIds).await
+        request_response_works_with(RequestMessage::TxPoolAllTransactionsIds).await
     }
 
     #[tokio::test]
@@ -1737,7 +1737,7 @@ mod tests {
         let tx_ids = (0..10)
             .map(|_| Transaction::default_test_tx().id(&ChainId::new(1)))
             .collect();
-        request_response_works_with(RequestMessage::FullTransactions(tx_ids)).await
+        request_response_works_with(RequestMessage::TxPoolFullTransactions(tx_ids)).await
     }
 
     /// We send a request for transactions, but it's responded by only headers

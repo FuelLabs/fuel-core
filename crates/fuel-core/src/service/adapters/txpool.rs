@@ -125,7 +125,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     ) -> anyhow::Result<Vec<fuel_core_txpool::types::TxId>> {
         if let Some(service) = &self.service {
             match service.get_all_transactions_ids_from_peer(peer_id).await {
-                Ok(txs) => Ok(txs.unwrap_or_default()),
+                Ok(txs) => Ok(txs),
                 Err(e) => {
                     tracing::error!("Error getting tx ids from peer: {:?}", e);
                     Ok(vec![])
@@ -146,7 +146,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
                 .get_full_transactions_from_peer(peer_id, tx_ids)
                 .await
             {
-                Ok(txs) => Ok(txs.unwrap_or_default()),
+                Ok(txs) => Ok(txs),
                 Err(e) => {
                     tracing::error!("Error getting tx ids from peer: {:?}", e);
                     Ok(vec![])
