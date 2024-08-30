@@ -21,7 +21,7 @@ fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
 hex = { workspace = true }
 ip_network = "0.4"
-libp2p = { version = "0.53.2", default-features = false, features = [
+libp2p = { version = "0.54.1", default-features = false, features = [
   "dns",
   "gossipsub",
   "identify",
@@ -63,7 +63,7 @@ tracing-attributes = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [dev-dependencies.libp2p-swarm-test]
-version = "0.3.0"
+version = "0.4.0"
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]

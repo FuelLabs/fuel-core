@@ -110,11 +110,10 @@ impl Config {
 
         // kademlia setup
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
-        let mut kademlia_config = kad::Config::default();
         let network = format!("/fuel/kad/{network_name}/kad/1.0.0");
-        kademlia_config.set_protocol_names(vec![
-            StreamProtocol::try_from_owned(network).expect("Invalid kad protocol")
-        ]);
+        let kademlia_config = kad::Config::new(
+            StreamProtocol::try_from_owned(network).expect("Invalid kad protocol"),
+        );
 
         let mut kademlia =
             kad::Behaviour::with_config(local_peer_id, memory_store, kademlia_config);

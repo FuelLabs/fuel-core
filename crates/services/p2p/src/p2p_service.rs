@@ -113,10 +113,10 @@ pub struct FuelP2PService {
     /// to the peer that requested it.
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
-    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
+    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages
     network_codec: PostcardCodec,
 
-    /// Stores additional p2p network info    
+    /// Stores additional p2p network info
     network_metadata: NetworkMetadata,
 
     /// Whether or not metrics collection is enabled
@@ -180,7 +180,7 @@ impl FuelP2PService {
 
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);
-        let tcp_config = tcp::Config::new().port_reuse(true);
+        let tcp_config = tcp::Config::new();
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
         let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
@@ -652,7 +652,7 @@ impl FuelP2PService {
 
     fn handle_identify_event(&mut self, event: identify::Event) -> Option<FuelP2PEvent> {
         match event {
-            identify::Event::Received { peer_id, info } => {
+            identify::Event::Received { peer_id, info, .. } => {
                 self.update_metrics(increment_unique_peers);
 
                 let mut addresses = info.listen_addrs;
@@ -680,8 +680,12 @@ impl FuelP2PService {
             }
             identify::Event::Sent { .. } => {}
             identify::Event::Pushed { .. } => {}
-            identify::Event::Error { peer_id, error } => {
-                debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
+            identify::Event::Error {
+                connection_id,
+                peer_id,
+                error,
+            } => {
+                debug!(target: "fuel-p2p", "Identification with peer {:?} with connection id {:?} failed => {}", peer_id, connection_id, error);
             }
         }
         None
