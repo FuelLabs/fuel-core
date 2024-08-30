@@ -8,7 +8,7 @@ use crate::{
     },
     fuel_types::Bytes32,
 };
-use std::ops::Deref;
+use core::ops::Deref;
 
 /// The event that may come from the relayer.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

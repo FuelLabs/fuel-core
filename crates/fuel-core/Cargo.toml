@@ -36,7 +36,7 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
-fuel-core-types = { workspace = true, features = ["serde"] }
+fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }

@@ -7,6 +7,9 @@ pub use relayer::{
     transaction::RelayedTransaction,
 };
 
+#[cfg(feature = "alloc")]
+use alloc::vec;
+
 pub mod coins;
 pub mod contract;
 pub mod relayer;

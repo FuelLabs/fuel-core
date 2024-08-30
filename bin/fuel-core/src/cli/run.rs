@@ -323,17 +323,21 @@ impl Command {
         if let Some(key_id) = consensus_aws_kms {
             let config = aws_config::load_from_env().await;
             let client = aws_sdk_kms::Client::new(&config);
-            // Ensure that the key is accessible and has the correct type
-            let key = client
-                .get_public_key()
-                .key_id(&key_id)
-                .send()
-                .await?
-                .key_spec;
-            if key != Some(aws_sdk_kms::types::KeySpec::EccSecgP256K1) {
+            // Get the public key, and ensure that the signing key
+            // is accessible and has the correct type.
+            let key = client.get_public_key().key_id(&key_id).send().await?;
+            if key.key_spec != Some(aws_sdk_kms::types::KeySpec::EccSecgP256K1) {
                 anyhow::bail!("The key is not of the correct type, got {:?}", key);
             }
-            consensus_signer = SignMode::Kms { key_id, client };
+            let Some(cached_public_key) = key.public_key() else {
+                anyhow::bail!("AWS KMS did not return a public key when requested");
+            };
+            let cached_public_key_bytes = cached_public_key.clone().into_inner();
+            consensus_signer = SignMode::Kms {
+                key_id,
+                client,
+                cached_public_key_bytes,
+            };
         }
 
         if matches!(consensus_signer, SignMode::Unavailable) {

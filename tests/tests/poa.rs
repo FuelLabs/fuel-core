@@ -96,6 +96,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 #[cfg(feature = "aws-kms")]
 async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
     use fuel_core_types::fuel_crypto::PublicKey;
+    use k256::pkcs8::DecodePublicKey;
 
     // This test is only enabled if the environment variable is set
     let Some(kms_arn) = option_env!("FUEL_CORE_TEST_AWS_KMS_ARN") else {
@@ -114,13 +115,9 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         .public_key
         .unwrap()
         .into_inner();
-    let poa_public_bytes = spki::SubjectPublicKeyInfoRef::try_from(&*poa_public_der)
-        .expect("invalid DER signature from AWS KMS")
-        .subject_public_key
-        .raw_bytes();
-    let poa_public = k256::ecdsa::VerifyingKey::from_sec1_bytes(poa_public_bytes)
-        .expect("invalid public key");
-    let poa_public = PublicKey::from(&poa_public);
+    let poa_public = k256::PublicKey::from_public_key_der(&poa_public_der)
+        .expect("invalid DER public key from AWS KMS");
+    let poa_public = PublicKey::from(poa_public);
 
     // start node with the kms enabled and produce some blocks
     let num_blocks = 100;
@@ -145,7 +142,8 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
 
     let view = db.on_chain().latest_view().unwrap();
 
-    // verify signatures
+    // verify signatures and ensure that the block producer wont change
+    let mut block_producer = None;
     for height in 1..=num_blocks {
         let sealed_block = view
             .get_sealed_block_by_height(&height.into())
@@ -153,12 +151,21 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
             .expect("expected sealed block to be available");
         let block_id = sealed_block.entity.id();
         let signature = match sealed_block.consensus {
-            Consensus::PoA(poa) => poa.signature,
+            Consensus::PoA(ref poa) => poa.signature,
             _ => panic!("Not expected consensus"),
         };
         signature
             .verify(&poa_public, &block_id.into_message())
             .expect("failed to verify signature");
+        let this_bp = sealed_block
+            .consensus
+            .block_producer(&block_id)
+            .expect("Block should have a block producer");
+        if let Some(bp) = block_producer {
+            assert_eq!(bp, this_bp, "Block producer changed");
+        } else {
+            block_producer = Some(this_bp);
+        }
     }
 }
 

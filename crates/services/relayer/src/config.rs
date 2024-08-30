@@ -1,9 +1,9 @@
 use ethers_contract::EthEvent;
-use ethers_core::types::{
-    H160,
-    H256,
+use ethers_core::types::H256;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::Bytes20,
 };
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use once_cell::sync::Lazy;
 use std::{
     str::FromStr,
@@ -22,11 +22,11 @@ pub(crate) static ETH_FORCED_TX: Lazy<H256> =
 pub struct Config {
     /// The da block to which the contract was deployed.
     pub da_deploy_height: DaBlockHeight,
-    /// Uri address to ethereum client.
-    pub relayer: Option<url::Url>,
+    /// Uri addresses to ethereum client.
+    pub relayer: Option<Vec<url::Url>>,
     // TODO: Create `EthAddress` into `fuel_core_types`.
     /// Ethereum contract address.
-    pub eth_v2_listening_contracts: Vec<H160>,
+    pub eth_v2_listening_contracts: Vec<Bytes20>,
     /// Number of pages or blocks containing logs that
     /// should be downloaded in a single call to the da layer
     pub log_page_size: u64,
@@ -58,7 +58,7 @@ impl Default for Config {
         Self {
             da_deploy_height: DaBlockHeight::from(Self::DEFAULT_DA_DEPLOY_HEIGHT),
             relayer: None,
-            eth_v2_listening_contracts: vec![H160::from_str(
+            eth_v2_listening_contracts: vec![Bytes20::from_str(
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
@@ -68,5 +68,23 @@ impl Default for Config {
             syncing_log_frequency: Self::DEFAULT_SYNCING_LOG_FREQ,
             metrics: false,
         }
+    }
+}
+
+mod tests {
+
+    #[test]
+    fn conversion_str_h160_bytes() {
+        use std::str::FromStr;
+
+        let bytes20 = fuel_core_types::fuel_types::Bytes20::from_str(
+            "0x03E4538018285e1c03CCce2F92C9538c87606911",
+        )
+        .unwrap();
+        let h160 = ethers_core::types::H160::from_str(
+            "0x03E4538018285e1c03CCce2F92C9538c87606911",
+        )
+        .unwrap();
+        assert_eq!(bytes20.as_slice(), h160.as_bytes());
     }
 }

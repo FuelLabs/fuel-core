@@ -6,7 +6,12 @@ use crate::codec::{
     Decode,
     Encode,
 };
+
+#[cfg(feature = "std")]
 use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
 
 /// The codec is used for types that are already represented by bytes.
 pub struct Raw;

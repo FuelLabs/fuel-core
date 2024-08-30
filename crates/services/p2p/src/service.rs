@@ -26,6 +26,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_metrics::p2p_metrics::set_blocks_requested;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -196,9 +197,20 @@ pub trait TaskP2PService: Send {
     ) -> anyhow::Result<()>;
 
     fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()>;
+
+    fn update_metrics<T>(&self, update_fn: T)
+    where
+        T: FnOnce();
 }
 
 impl TaskP2PService for FuelP2PService {
+    fn update_metrics<T>(&self, update_fn: T)
+    where
+        T: FnOnce(),
+    {
+        FuelP2PService::update_metrics(self, update_fn)
+    }
+
     fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
         self.peer_manager().get_all_peers().collect()
     }
@@ -427,120 +439,123 @@ where
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
 {
+    fn update_metrics<T>(&self, update_fn: T)
+    where
+        T: FnOnce(),
+    {
+        self.p2p_service.update_metrics(update_fn)
+    }
+
     fn process_request(
         &mut self,
         request_message: RequestMessage,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
+        match request_message {
+            RequestMessage::Transactions(range) => {
+                self.handle_transactions_request(range, request_id)
+            }
+            RequestMessage::SealedHeaders(range) => {
+                self.handle_sealed_headers_request(range, request_id)
+            }
+        }
+    }
+
+    fn handle_request<DbLookUpFn, ResponseSenderFn, TaskRequestFn, R>(
+        &mut self,
+        range: Range<u32>,
+        request_id: InboundRequestId,
+        response_sender: ResponseSenderFn,
+        db_lookup: DbLookUpFn,
+        task_request: TaskRequestFn,
+    ) -> anyhow::Result<()>
+    where
+        DbLookUpFn:
+            Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
+        ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
+        TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
+        R: Send + 'static,
+    {
         let instant = Instant::now();
         let timeout = self.response_timeout;
         let response_channel = self.request_sender.clone();
+        // For now, we only process requests that are smaller than the max_blocks_per_request
+        // If there are other types of data we send over p2p req/res protocol, then this needs
+        // to be generalized
         let max_len = self.max_headers_per_request;
+        let range_len = range.len();
 
-        match request_message {
-            RequestMessage::Transactions(range) => {
-                if range.len() > max_len {
-                    tracing::error!(
-                        requested_length = range.len(),
-                        max_len,
-                        "Requested range of blocks is too big"
-                    );
-                    let response = None;
-                    let _ = self.p2p_service.send_response_msg(
-                        request_id,
-                        ResponseMessage::Transactions(response),
-                    );
-                    return Ok(())
-                }
+        self.update_metrics(|| set_blocks_requested(range_len));
 
-                let view = self.view_provider.latest_view()?;
-                let result = self.database_processor.spawn(move || {
-                    if instant.elapsed() > timeout {
-                        tracing::warn!("Get transactions request timed out");
-                        return;
-                    }
-
-                    let response = view
-                        .get_transactions(range.clone())
-                        .trace_err(
-                            format!(
-                                "Failed to get transactions for the range {:?}",
-                                range
-                            )
-                            .as_str(),
-                        )
-                        .ok()
-                        .flatten();
-
-                    let _ = response_channel
-                        .try_send(TaskRequest::DatabaseTransactionsLookUp {
-                            response,
-                            request_id,
-                        })
-                        .trace_err(
-                            "Failed to send transactions response to the request channel",
-                        );
-                });
-
-                if result.is_err() {
-                    let _ = self.p2p_service.send_response_msg(
-                        request_id,
-                        ResponseMessage::Transactions(None),
-                    );
-                }
-            }
-            RequestMessage::SealedHeaders(range) => {
-                if range.len() > max_len {
-                    tracing::error!(
-                        requested_length = range.len(),
-                        max_len,
-                        "Requested range of sealed headers is too big"
-                    ); // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-                    let response = None;
-                    let _ = self.p2p_service.send_response_msg(
-                        request_id,
-                        ResponseMessage::SealedHeaders(response),
-                    );
-                    return Ok(())
-                }
-
-                let view = self.view_provider.latest_view()?;
-                let result = self.database_processor.spawn(move || {
-                    if instant.elapsed() > timeout {
-                        tracing::warn!("Get headers request timed out");
-                        return;
-                    }
-
-                    let response = view
-                        .get_sealed_headers(range.clone())
-                        .trace_err(
-                            format!(
-                                "Failed to get sealed headers for the range {:?}",
-                                range
-                            )
-                            .as_str(),
-                        )
-                        .ok();
-
-                    let _ = response_channel
-                        .try_send(TaskRequest::DatabaseHeaderLookUp {
-                            response,
-                            request_id,
-                        })
-                        .trace_err(
-                            "Failed to send headers response to the request channel",
-                        );
-                });
-
-                if result.is_err() {
-                    let _ = self.p2p_service.send_response_msg(
-                        request_id,
-                        ResponseMessage::SealedHeaders(None),
-                    );
-                }
-            }
+        if range_len > max_len {
+            tracing::error!(
+                requested_length = range.len(),
+                max_len,
+                "Requested range is too big"
+            );
+            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+            let response = None;
+            let _ = self
+                .p2p_service
+                .send_response_msg(request_id, response_sender(response));
+            return Ok(());
         }
+
+        let view = self.view_provider.latest_view()?;
+        let result = self.database_processor.spawn(move || {
+            if instant.elapsed() > timeout {
+                tracing::warn!("Request timed out");
+                return;
+            }
+
+            let response = db_lookup(&view, range.clone()).ok().flatten();
+
+            let _ = response_channel
+                .try_send(task_request(response, request_id))
+                .trace_err("Failed to send response to the request channel");
+        });
+
+        if result.is_err() {
+            let _ = self
+                .p2p_service
+                .send_response_msg(request_id, response_sender(None));
+        }
+
         Ok(())
+    }
+
+    fn handle_transactions_request(
+        &mut self,
+        range: Range<u32>,
+        request_id: InboundRequestId,
+    ) -> anyhow::Result<()> {
+        self.handle_request(
+            range,
+            request_id,
+            ResponseMessage::Transactions,
+            |view, range| view.get_transactions(range).map_err(anyhow::Error::from),
+            |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
+                response,
+                request_id,
+            },
+        )
+    }
+
+    fn handle_sealed_headers_request(
+        &mut self,
+        range: Range<u32>,
+        request_id: InboundRequestId,
+    ) -> anyhow::Result<()> {
+        self.handle_request(
+            range,
+            request_id,
+            ResponseMessage::SealedHeaders,
+            |view, range| view.get_sealed_headers(range).map_err(anyhow::Error::from),
+            |response, request_id| TaskRequest::DatabaseHeaderLookUp {
+                response,
+                request_id,
+            },
+        )
     }
 }
 
@@ -995,7 +1010,7 @@ pub mod tests {
         fn get_sealed_headers(
             &self,
             _block_height_range: Range<u32>,
-        ) -> StorageResult<Vec<SealedBlockHeader>> {
+        ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
             unimplemented!()
         }
 
@@ -1038,6 +1053,13 @@ pub mod tests {
     }
 
     impl TaskP2PService for FakeP2PService {
+        fn update_metrics<T>(&self, _: T)
+        where
+            T: FnOnce(),
+        {
+            unimplemented!()
+        }
+
         fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
             self.peer_info.iter().map(|tup| (&tup.0, &tup.1)).collect()
         }
@@ -1111,7 +1133,7 @@ pub mod tests {
         fn get_sealed_headers(
             &self,
             _block_height_range: Range<u32>,
-        ) -> StorageResult<Vec<SealedBlockHeader>> {
+        ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
             todo!()
         }
 
