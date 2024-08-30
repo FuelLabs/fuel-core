@@ -177,9 +177,12 @@ impl UpdaterBuilder {
             latest_known_total_da_cost: self.latest_known_total_cost,
             unrecorded_blocks: self.unrecorded_blocks,
             last_profit: self.last_profit,
-            last_last_profit: self.second_to_last_profit,
+            second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
-            da_gas_price_factor: self.da_gas_price_factor,
+            da_gas_price_factor: self
+                .da_gas_price_factor
+                .try_into()
+                .expect("Should never be non-zero"),
         }
     }
 }

@@ -145,7 +145,7 @@ pub struct AlgorithmUpdaterV1 {
     /// the DA portion of the next block
     pub last_da_gas_price: u64,
     /// Scale factor for the DA gas price.
-    pub da_gas_price_factor: u64,
+    pub da_gas_price_factor: NonZeroU64,
     /// The lowest the algorithm allows the da gas price to go
     pub min_da_gas_price: u64,
     /// The maximum percentage that the DA portion of the gas price can change in a single block
@@ -218,18 +218,22 @@ impl AlgorithmUpdaterV1 {
             let last_profit = (self.total_da_rewards as i64)
                 .saturating_sub(self.projected_total_da_cost as i64);
             self.update_last_profit(last_profit);
+            #[allow(clippy::arithmetic_side_effects)]
+            // the `da_gas_price_factor` will never be `0`
             let new_projected_da_cost = block_bytes
                 .saturating_mul(self.latest_da_cost_per_byte)
-                .saturating_div(self.da_gas_price_factor);
+                .saturating_div(self.da_gas_price_factor.into());
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(new_projected_da_cost);
             // implicitly deduce what our da gas price was for the l2 block
             self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
             self.update_exec_gas_price(used, capacity);
+            #[allow(clippy::arithmetic_side_effects)]
+            // the `da_gas_price_factor` will never be `0`
             let da_reward = used
                 .saturating_mul(self.last_da_gas_price)
-                .saturating_div(self.da_gas_price_factor);
+                .saturating_div(self.da_gas_price_factor.into());
             self.total_da_rewards = self.total_da_rewards.saturating_add(da_reward);
             Ok(())
         }
@@ -281,7 +285,7 @@ impl AlgorithmUpdaterV1 {
             })
         } else {
             let new_cost_per_byte = block_cost
-                .checked_mul(self.da_gas_price_factor)
+                .checked_mul(self.da_gas_price_factor.into())
                 .ok_or(Error::CouldNotCalculateCostPerByte {
                     bytes: block_bytes,
                     cost: block_cost,

@@ -279,7 +279,7 @@ fn update_l2_block_data__updates_last_and_last_last_profit() {
 
     //  then
     let expected = last_profit;
-    let actual = updater.last_last_profit;
+    let actual = updater.second_to_last_profit;
     assert_eq!(actual, expected);
     // and
     let expected = total_rewards as i64 - total_cost as i64;

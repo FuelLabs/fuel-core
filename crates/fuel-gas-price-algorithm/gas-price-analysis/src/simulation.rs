@@ -3,7 +3,10 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     RecordedBlock,
 };
-use std::iter;
+use std::{
+    iter,
+    num::NonZeroU64,
+};
 
 pub struct SimulationResults {
     pub gas_prices: Vec<u64>,
@@ -65,7 +68,7 @@ pub fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationRes
         min_da_gas_price: 10,
         new_exec_price: 10 * gas_price_factor,
         last_da_gas_price: 5 * gas_price_factor,
-        da_gas_price_factor: gas_price_factor,
+        da_gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
         l2_block_height: 0,
         l2_block_fullness_threshold_percent: 50,
         exec_gas_price_change_percent: 2,
