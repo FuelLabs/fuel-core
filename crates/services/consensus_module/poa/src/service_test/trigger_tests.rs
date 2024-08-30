@@ -350,7 +350,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
     ));
 
     // Even though real time is frozen, the blocks should advance into the future.
-    assert_eq!(first_block_time, start_time + block_time.as_secs() * 1);
+    assert_eq!(first_block_time, start_time + block_time.as_secs());
     assert_eq!(second_block_time, start_time + block_time.as_secs() * 2);
     assert_eq!(third_block_time, start_time + block_time.as_secs() * 3);
 
