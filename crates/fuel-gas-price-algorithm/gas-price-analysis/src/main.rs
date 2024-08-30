@@ -27,7 +27,7 @@ mod simulation;
 mod charts;
 
 pub fn pretty(input: u64) -> String {
-    let num = input
+    input
         .to_string()
         .as_bytes()
         .rchunks(3)
@@ -35,8 +35,7 @@ pub fn pretty(input: u64) -> String {
         .map(std::str::from_utf8)
         .collect::<Result<Vec<&str>, _>>()
         .unwrap()
-        .join(","); // separator
-    num
+        .join(",") // separator
 }
 
 fn main() {
