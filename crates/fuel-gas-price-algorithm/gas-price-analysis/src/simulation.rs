@@ -227,10 +227,7 @@ fn arb_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
 
     (0u32..actual_size as u32)
         .map(noisy_eth_price)
-        // .map(|_| rng.gen_range(1..5))
-        .map(|x| {
-            x * 5. + 5.
-        })
+        .map(|x| x * 5. + 5.)
         .map(|x| x as u64)
         .map(|x| std::cmp::max(x, 1))
         .map(|x| iter::repeat(x).take(update_period as usize))

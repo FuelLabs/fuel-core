@@ -9,8 +9,8 @@ fn da_pid_factors(size: usize) -> Vec<(i64, i64)> {
     //         (p, d)
     //     })
     //     .collect()
-    // vec![(1_700_000, 50_000)] // Better on short term
-    vec![(1_700_000, 650_000)] // Safe
+    vec![(1_700_000, 50_000)] // Better on short term
+                              // vec![(1_700_000, 650_000)] // Safe
 }
 
 pub fn naive_optimisation(
@@ -23,7 +23,6 @@ pub fn naive_optimisation(
         .min_by_key(|(results, _)| {
             let SimulationResults { actual_profit, .. } = results;
             let err = actual_profit.iter().map(|p| p.abs()).sum::<i64>();
-            // println!("Error: {}", err);
             err
         })
         .unwrap()
