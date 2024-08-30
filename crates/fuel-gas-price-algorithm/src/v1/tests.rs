@@ -35,7 +35,7 @@ pub struct UpdaterBuilder {
     latest_known_total_cost: u64,
     unrecorded_blocks: Vec<BlockBytes>,
     last_profit: i64,
-    last_last_profit: i64,
+    second_to_last_profit: i64,
     da_gas_price_factor: u64,
 }
 
@@ -62,7 +62,7 @@ impl UpdaterBuilder {
             latest_known_total_cost: 0,
             unrecorded_blocks: vec![],
             last_profit: 0,
-            last_last_profit: 0,
+            second_to_last_profit: 0,
             da_gas_price_factor: 1,
         }
     }
@@ -152,7 +152,7 @@ impl UpdaterBuilder {
 
     fn with_last_profit(mut self, last_profit: i64, last_last_profit: i64) -> Self {
         self.last_profit = last_profit;
-        self.last_last_profit = last_last_profit;
+        self.second_to_last_profit = last_last_profit;
         self
     }
 
@@ -177,7 +177,7 @@ impl UpdaterBuilder {
             latest_known_total_da_cost: self.latest_known_total_cost,
             unrecorded_blocks: self.unrecorded_blocks,
             last_profit: self.last_profit,
-            last_last_profit: self.last_last_profit,
+            last_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
             da_gas_price_factor: self.da_gas_price_factor,
         }

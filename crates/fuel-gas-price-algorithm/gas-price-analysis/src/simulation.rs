@@ -16,11 +16,7 @@ pub struct SimulationResults {
     pub pessimistic_costs: Vec<u64>,
 }
 
-pub fn run_simulation(
-    da_p_component: i64,
-    da_d_component: i64,
-    avg_window: u32,
-) -> SimulationResults {
+pub fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults {
     // simulation parameters
     let size = 1000;
     let da_recording_rate = 12;
@@ -62,7 +58,7 @@ pub fn run_simulation(
         )
         .1;
 
-    let mut blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
+    let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
 
     let mut updater = AlgorithmUpdaterV1 {
         min_exec_gas_price: 10,
@@ -102,11 +98,10 @@ pub fn run_simulation(
 
         if let Some(mut da_blocks) = da_block.clone() {
             let mut total_costs = updater.latest_known_total_da_cost;
-            for mut block in &mut da_blocks {
+            for block in &mut da_blocks {
                 block.block_cost *= gas_price_factor;
                 total_costs += block.block_cost;
                 actual_costs.push(total_costs);
-                let cost_per_bytes = block.block_cost / block.block_bytes;
             }
             updater.update_da_record_data(da_blocks.to_owned()).unwrap();
             assert_eq!(total_costs, updater.projected_total_da_cost);
@@ -165,10 +160,10 @@ pub fn run_simulation(
 
 // Naive Fourier series
 fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
-    components.iter().fold(0f64, |acc, &c| {
-        let a = 100;
-        acc + f64::sin(input / c)
-    }) / components.len() as f64
+    components
+        .iter()
+        .fold(0f64, |acc, &c| acc + f64::sin(input / c))
+        / components.len() as f64
 }
 
 fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
@@ -222,7 +217,6 @@ where
 }
 
 fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
-    let mut rng = StdRng::seed_from_u64(10902);
     let actual_size = size.div_ceil(update_period);
 
     (0u32..actual_size as u32)

@@ -40,9 +40,7 @@ pub fn pretty(input: u64) -> String {
 
 fn main() {
     let optimisation_iterations = 10_000;
-    let avg_window = 2;
-    let (best, (p_comp, d_comp, avg_window)) =
-        naive_optimisation(optimisation_iterations, avg_window);
+    let (best, (p_comp, d_comp)) = naive_optimisation(optimisation_iterations);
     let SimulationResults {
         gas_prices,
         exec_gas_prices,

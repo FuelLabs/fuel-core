@@ -3,12 +3,12 @@ use super::*;
 pub fn draw_gas_prices(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     gas_prices: &[u64],
-    exec_gas_prices: &[u64],
+    _exec_gas_prices: &[u64],
     da_gas_prices: &[u64],
     title: &str,
 ) {
-    const GAS_PRICE_COLOR: RGBColor = BLACK;
-    const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
+    // const GAS_PRICE_COLOR: RGBColor = BLACK;
+    // const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
     const DA_GAS_PRICE_COLOR: RGBColor = BLUE;
     let min = 0;
     let max = *da_gas_prices.iter().max().unwrap();

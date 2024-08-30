@@ -68,7 +68,7 @@ pub struct AlgorithmV1 {
     /// The average profit over the last `avg_window` blocks
     last_profit: i64,
     /// the previous profit
-    last_last_profit: i64,
+    second_to_last_profit: i64,
 }
 
 impl AlgorithmV1 {
@@ -87,7 +87,7 @@ impl AlgorithmV1 {
     }
 
     fn d(&self) -> i64 {
-        let slope = self.last_profit.saturating_sub(self.last_last_profit);
+        let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
         let checked_d = slope.checked_div(self.da_d_factor);
         // if the slope is positive, we want to decrease the gas price
         checked_d.unwrap_or(0).saturating_mul(-1)
@@ -236,7 +236,7 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_last_profit(&mut self, new_profit: i64) {
-        self.last_last_profit = self.last_profit;
+        self.second_to_last_profit = self.last_profit;
         self.last_profit = new_profit;
     }
 
@@ -330,7 +330,7 @@ impl AlgorithmUpdaterV1 {
             total_rewards: self.total_da_rewards,
             total_costs: self.projected_total_da_cost,
             last_profit: self.last_profit,
-            last_last_profit: self.last_last_profit,
+            second_to_last_profit: self.second_to_last_profit,
             da_p_factor: self.da_p_component,
             da_d_factor: self.da_d_component,
         }
