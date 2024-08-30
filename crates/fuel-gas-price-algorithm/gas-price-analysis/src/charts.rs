@@ -189,8 +189,6 @@ pub fn draw_profit(
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
-    // let min = *actual_profit.iter().min().unwrap();
-    // let max = *actual_profit.iter().max().unwrap();
     let min = *std::cmp::min(
         actual_profit.iter().min().unwrap(),
         projected_profit.iter().min().unwrap_or(&0),
@@ -220,7 +218,11 @@ pub fn draw_profit(
         .draw()
         .unwrap();
 
-    chart.configure_secondary_axes().draw().unwrap();
+    chart
+        .configure_secondary_axes()
+        .y_desc("Pessimistic cost")
+        .draw()
+        .unwrap();
 
     chart
         .draw_series(LineSeries::new(

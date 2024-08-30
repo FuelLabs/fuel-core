@@ -73,37 +73,12 @@ pub struct AlgorithmV1 {
 
 impl AlgorithmV1 {
     pub fn calculate(&self, _block_bytes: u64) -> u64 {
-        // let projected_profit_avg = self.project_new_profit(block_bytes);
-
         let p = self.p();
         let d = self.d();
         let da_change = self.change(p, d);
-        // let da_change = if projected_profit_avg > 0 {
-        //     self.last_da_price as i64 * -10 / 100
-        // } else {
-        //     self.last_da_price as i64 * 10 / 100
-        // };
 
         self.assemble_price(da_change)
     }
-
-    // fn project_new_profit(&self, _block_bytes: u64) -> i64 {
-    //     // let extra_for_this_block =
-    //     //     block_bytes.saturating_mul(self.latest_da_cost_per_byte);
-    //     // let pessimistic_cost = self.total_costs.saturating_add(extra_for_this_block);
-    //     // let projected_profit =
-    //     //     (self.total_rewards as i64).saturating_sub(pessimistic_cost as i64);
-    //     // projected_profit
-    //     //     .saturating_add(
-    //     //         self.avg_profit
-    //     //             .saturating_mul((self.avg_window as i64).saturating_sub(1)),
-    //     //     )
-    //     //     .checked_div(self.avg_window as i64)
-    //     //     .unwrap_or(self.avg_profit)
-    //     // let block_cost = block_bytes * self.latest_da_cost_per_byte;
-    //     // self.avg_profit - block_cost as i64
-    //     self.last_profit - self.last_last_profit
-    // }
 
     fn p(&self) -> i64 {
         let checked_p = self.last_profit.checked_div(self.da_p_factor);
@@ -124,7 +99,6 @@ impl AlgorithmV1 {
             .last_da_price
             .saturating_mul(self.max_change_percent as u64)
             .saturating_div(100) as i64;
-        // println!("pd_change: {}, max_change: {}", pd_change, max_change);
         let sign = pd_change.signum();
         let signless_da_change = min(max_change, pd_change.abs());
         sign.saturating_mul(signless_da_change)
@@ -247,7 +221,6 @@ impl AlgorithmUpdaterV1 {
             let new_projected_da_cost = block_bytes
                 .saturating_mul(self.latest_da_cost_per_byte)
                 .saturating_div(self.da_gas_price_factor);
-            // println!("new block cost: {}", new_projected_da_cost);
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(new_projected_da_cost);
