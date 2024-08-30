@@ -54,7 +54,6 @@ fn main() {
         pessimistic_costs,
     } = best;
 
-    // let min_actual_profit = pretty(actual_profit.iter().min().unwrap());
     let max_actual_profit = pretty(*actual_profit.iter().max().unwrap() as u64);
     println!("max_actual: {max_actual_profit}");
 

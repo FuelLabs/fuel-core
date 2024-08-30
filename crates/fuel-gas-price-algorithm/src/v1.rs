@@ -166,7 +166,7 @@ pub struct AlgorithmUpdaterV1 {
     /// The last profit
     pub last_profit: i64,
     /// The profit before last
-    pub last_last_profit: i64,
+    pub second_to_last_profit: i64,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u64,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks

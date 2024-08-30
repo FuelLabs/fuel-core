@@ -29,7 +29,7 @@ pub fn run_simulation(
     let gas_price_factor = 100;
     let max_block_bytes = capacity / gas_per_byte;
     let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
-    let da_cost_per_byte = arb_cost_per_byte(size, da_recording_rate);
+    let da_cost_per_byte = arbitrary_cost_per_byte(size, da_recording_rate);
 
     let l2_blocks = fullness_and_bytes
         .iter()
@@ -83,7 +83,7 @@ pub fn run_simulation(
         da_p_component,
         da_d_component,
         last_profit: 0,
-        last_last_profit: 0,
+        second_to_last_profit: 0,
     };
 
     let mut gas_prices = vec![];
@@ -221,7 +221,7 @@ where
     gen_noisy_signal(input, COMPONENTS)
 }
 
-fn arb_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
+fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
     let mut rng = StdRng::seed_from_u64(10902);
     let actual_size = size.div_ceil(update_period);
 
