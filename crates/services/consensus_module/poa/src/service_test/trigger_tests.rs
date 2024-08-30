@@ -404,7 +404,10 @@ async fn interval_trigger_produces_blocks_with_current_time_when_block_productio
     // The second block should have a delay in its timestamp.
     assert_eq!(
         second_block_time,
-        first_block_time + block_time.as_secs() + second_block_delay.as_secs()
+        first_block_time
+            + block_time.as_secs()
+            + offset.as_secs()
+            + second_block_delay.as_secs()
     );
 
     // The third block should be produced `block_time` in the future relative to the second block time.
