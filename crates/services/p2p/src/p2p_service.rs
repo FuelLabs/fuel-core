@@ -35,7 +35,7 @@ use crate::{
     },
     TryPeerId,
 };
-use fuel_core_metrics::p2p_metrics::p2p_metrics;
+use fuel_core_metrics::p2p_metrics::increment_unique_peers;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::AppScore,
@@ -268,6 +268,15 @@ impl FuelP2PService {
             {
                 break;
             }
+        }
+    }
+
+    pub fn update_metrics<T>(&self, update_fn: T)
+    where
+        T: FnOnce(),
+    {
+        if self.metrics {
+            update_fn();
         }
     }
 
@@ -644,9 +653,7 @@ impl FuelP2PService {
     fn handle_identify_event(&mut self, event: identify::Event) -> Option<FuelP2PEvent> {
         match event {
             identify::Event::Received { peer_id, info } => {
-                if self.metrics {
-                    p2p_metrics().unique_peers.inc();
-                }
+                self.update_metrics(increment_unique_peers);
 
                 let mut addresses = info.listen_addrs;
                 let agent_version = info.agent_version;
