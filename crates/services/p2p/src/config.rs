@@ -94,6 +94,10 @@ pub struct Config<State = Initialized> {
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
     pub max_connections_per_peer: u32,
+    /// Max number of concurrent pending incoming connections
+    pub max_pending_incoming_connections: u32,
+    /// Max number of concurrent pending outgoing connections
+    pub max_pending_outgoing_connections: u32,
     /// The interval at which identification requests are sent to
     /// the remote on established connections after the first request
     pub identify_interval: Option<Duration>,
@@ -155,6 +159,8 @@ impl Config<NotInitialized> {
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
             max_connections_per_peer: self.max_connections_per_peer,
+            max_pending_incoming_connections: self.max_pending_incoming_connections,
+            max_pending_outgoing_connections: self.max_pending_outgoing_connections,
             allow_private_addresses: self.allow_private_addresses,
             random_walk: self.random_walk,
             connection_idle_timeout: self.connection_idle_timeout,
@@ -204,6 +210,8 @@ impl Config<NotInitialized> {
             enable_mdns: false,
             max_peers_connected: 50,
             max_connections_per_peer: 3,
+            max_pending_incoming_connections: 100,
+            max_pending_outgoing_connections: 100,
             allow_private_addresses: true,
             random_walk: Some(Duration::from_millis(500)),
             connection_idle_timeout: Some(Duration::from_secs(120)),
