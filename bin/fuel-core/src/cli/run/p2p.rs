@@ -1,30 +1,15 @@
 use anyhow::anyhow;
-use clap::{
-    builder::ArgPredicate::IsPresent,
-    Args,
-};
+use clap::{builder::ArgPredicate::IsPresent, Args};
 use fuel_core::{
     p2p::{
-        config::{
-            convert_to_libp2p_keypair,
-            Config,
-            NotInitialized,
-            MAX_RESPONSE_SIZE,
-        },
+        config::{convert_to_libp2p_keypair, Config, NotInitialized, MAX_RESPONSE_SIZE},
         gossipsub_config::default_gossipsub_builder,
-        heartbeat,
-        Multiaddr,
+        heartbeat, Multiaddr,
     },
-    types::{
-        fuel_crypto,
-        fuel_crypto::SecretKey,
-    },
+    types::{fuel_crypto, fuel_crypto::SecretKey},
 };
 use std::{
-    net::{
-        IpAddr,
-        Ipv4Addr,
-    },
+    net::{IpAddr, Ipv4Addr},
     num::NonZeroU32,
     path::PathBuf,
     str::FromStr,
@@ -319,6 +304,8 @@ impl P2PArgs {
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
             max_connections_per_peer: self.max_connections_per_peer,
+            max_pending_incoming_connections: self.max_pending_incoming_connections,
+            max_pending_outgoing_connections: self.max_pending_outgoing_connections,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(
