@@ -121,7 +121,6 @@ fn insert_full_block(database: &mut RocksDb<OnChain>, height: u32, tx_count: u32
     let height_key = height_key(height);
     let raw_full_block = postcard::to_allocvec(&block).unwrap().to_vec();
 
-    // 3. insert into FullFuelBlocks table
     database
         .put(
             height_key.as_slice(),
