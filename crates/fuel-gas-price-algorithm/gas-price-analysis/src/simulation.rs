@@ -187,10 +187,11 @@ fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
         .map(|val| val * capacity as f64)
         .collect();
 
+    const ROUGH_GAS_TO_BYTE_RATIO: f64 = 0.01;
     let bytes_scale: Vec<_> = std::iter::repeat(())
         .take(size)
         .map(|_| rng.gen_range(0.5..1.0))
-        .map(|x| x * 0.01)
+        .map(|x| x * ROUGH_GAS_TO_BYTE_RATIO)
         .collect();
 
     (0usize..size)
@@ -222,9 +223,11 @@ where
 fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
     let actual_size = size.div_ceil(update_period);
 
+    const ROUGH_COST_AVG: f64 = 5.0;
+
     (0u32..actual_size as u32)
         .map(noisy_eth_price)
-        .map(|x| x * 5. + 5.)
+        .map(|x| x * ROUGH_COST_AVG + ROUGH_COST_AVG) // Sine wave is between -1 and 1, scale and shift
         .map(|x| x as u64)
         .map(|x| std::cmp::max(x, 1))
         .map(|x| iter::repeat(x).take(update_period as usize))
