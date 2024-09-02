@@ -26,7 +26,6 @@ latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin"
   "p2p",
 ] }
 latest-fuel-core-client = { path = "../../crates/client", package = "fuel-core-client" }
-latest-fuel-core-services = { path = "../../crates/services", package = "fuel-core-services" }
 latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
   "wasm-executor",
 ] }

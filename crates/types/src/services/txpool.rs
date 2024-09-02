@@ -13,6 +13,7 @@ use crate::{
             ScriptGasLimit,
             Tip,
         },
+        Blob,
         Cacheable,
         Chargeable,
         Create,
@@ -24,12 +25,6 @@ use crate::{
         TxId,
         Upgrade,
         Upload,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        ContractId,
-        Nonce,
     },
     fuel_vm::{
         checked_transaction::Checked,
@@ -37,26 +32,19 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
+use core::time::Duration;
 use fuel_vm_private::{
-    checked_transaction::{
-        CheckError,
-        CheckedTransaction,
-    },
+    checked_transaction::CheckedTransaction,
     fuel_types::BlockHeight,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 use tai64::Tai64;
 
-/// The alias for transaction pool result.
-pub type Result<T> = core::result::Result<T, Error>;
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
 
-/// Transaction type used by the transaction pool. Transaction pool supports not
-/// all `fuel_tx::Transaction` variants.
+/// Transaction type used by the transaction pool.
+/// Not all `fuel_tx::Transaction` variants are supported by the txpool.
 #[derive(Debug, Eq, PartialEq)]
 pub enum PoolTransaction {
     /// Script
@@ -67,6 +55,8 @@ pub enum PoolTransaction {
     Upgrade(Checked<Upgrade>, ConsensusParametersVersion),
     /// Upload
     Upload(Checked<Upload>, ConsensusParametersVersion),
+    /// Blob
+    Blob(Checked<Blob>, ConsensusParametersVersion),
 }
 
 impl PoolTransaction {
@@ -76,7 +66,8 @@ impl PoolTransaction {
             PoolTransaction::Script(_, version)
             | PoolTransaction::Create(_, version)
             | PoolTransaction::Upgrade(_, version)
-            | PoolTransaction::Upload(_, version) => *version,
+            | PoolTransaction::Upload(_, version)
+            | PoolTransaction::Blob(_, version) => *version,
         }
     }
 
@@ -87,6 +78,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
             PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().metered_bytes_size(),
         }
     }
 
@@ -97,6 +89,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.id(),
             PoolTransaction::Upgrade(tx, _) => tx.id(),
             PoolTransaction::Upload(tx, _) => tx.id(),
+            PoolTransaction::Blob(tx, _) => tx.id(),
         }
     }
 
@@ -107,6 +100,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Blob(tx, _) => tx.metadata().max_gas,
         }
     }
 }
@@ -121,6 +115,7 @@ impl PoolTransaction {
             PoolTransaction::Create(_, _) => None,
             PoolTransaction::Upgrade(_, _) => None,
             PoolTransaction::Upload(_, _) => None,
+            PoolTransaction::Blob(_, _) => None,
         }
     }
 
@@ -130,6 +125,7 @@ impl PoolTransaction {
             Self::Create(tx, _) => tx.transaction().tip(),
             Self::Upload(tx, _) => tx.transaction().tip(),
             Self::Upgrade(tx, _) => tx.transaction().tip(),
+            Self::Blob(tx, _) => tx.transaction().tip(),
         }
     }
 
@@ -139,6 +135,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Upload(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().is_computed(),
         }
     }
 
@@ -148,6 +145,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().inputs(),
         }
     }
 
@@ -157,6 +155,7 @@ impl PoolTransaction {
             PoolTransaction::Create(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Upgrade(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().outputs(),
         }
     }
 }
@@ -176,6 +175,7 @@ impl From<&PoolTransaction> for Transaction {
             PoolTransaction::Upload(tx, _) => {
                 Transaction::Upload(tx.transaction().clone())
             }
+            PoolTransaction::Blob(tx, _) => Transaction::Blob(tx.transaction().clone()),
         }
     }
 }
@@ -187,13 +187,14 @@ impl From<&PoolTransaction> for CheckedTransaction {
             PoolTransaction::Create(tx, _) => CheckedTransaction::Create(tx.clone()),
             PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx.clone()),
             PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx.clone()),
+            PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx.clone()),
         }
     }
 }
 
 /// The `removed` field contains the list of removed transactions during the insertion
 /// of the `inserted` transaction.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InsertionResult {
     /// This was inserted
     pub inserted: ArcPoolTx,
@@ -283,101 +284,5 @@ pub fn from_executor_to_status(
             total_gas,
             total_fee,
         },
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, Clone)]
-#[non_exhaustive]
-pub enum Error {
-    #[error("Gas price not found for block height {0}")]
-    GasPriceNotFound(String),
-    #[error("Failed to calculate max block bytes: {0}")]
-    MaxBlockBytes(String),
-    #[error("TxPool required that transaction contains metadata")]
-    NoMetadata,
-    #[error("TxPool doesn't support this type of transaction.")]
-    NotSupportedTransactionType,
-    #[error("Transaction is not inserted. Hash is already known")]
-    NotInsertedTxKnown,
-    #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
-    NotInsertedLimitHit,
-    #[error("Transaction is not inserted. The gas price is too low.")]
-    NotInsertedGasPriceTooLow,
-    #[error(
-        "Transaction is not inserted. More priced tx {0:#x} already spend this UTXO output: {1:#x}"
-    )]
-    NotInsertedCollision(TxId, UtxoId),
-    #[error(
-        "Transaction is not inserted. More priced tx has created contract with ContractId {0:#x}"
-    )]
-    NotInsertedCollisionContractId(ContractId),
-    #[error(
-        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
-    )]
-    NotInsertedCollisionMessageId(TxId, Nonce),
-    #[error("Transaction is not inserted. UTXO input does not exist: {0:#x}")]
-    NotInsertedOutputDoesNotExist(UtxoId),
-    #[error("Transaction is not inserted. UTXO input contract does not exist or was already spent: {0:#x}")]
-    NotInsertedInputContractDoesNotExist(ContractId),
-    #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
-    NotInsertedContractIdAlreadyTaken(ContractId),
-    #[error("Transaction is not inserted. UTXO does not exist: {0:#x}")]
-    NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
-    #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
-    NotInsertedInputUtxoIdSpent(UtxoId),
-    #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
-    NotInsertedInputMessageUnknown(Nonce),
-    #[error(
-        "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
-    )]
-    NotInsertedContractPricedLower(ContractId),
-    #[error("Transaction is not inserted. Input coin mismatch the values from database")]
-    NotInsertedIoCoinMismatch,
-    #[error("Transaction is not inserted. Input output mismatch. Coin owner is different from expected input")]
-    NotInsertedIoWrongOwner,
-    #[error("Transaction is not inserted. Input output mismatch. Coin output does not match expected input")]
-    NotInsertedIoWrongAmount,
-    #[error("Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs")]
-    NotInsertedIoWrongAssetId,
-    #[error(
-        "Transaction is not inserted. Input message mismatch the values from database"
-    )]
-    NotInsertedIoMessageMismatch,
-    #[error(
-        "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
-    )]
-    NotInsertedIoContractOutput,
-    #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
-    NotInsertedMaxDepth,
-    // small todo for now it can pass but in future we should include better messages
-    #[error("Transaction removed.")]
-    Removed,
-    #[error("Transaction expired because it exceeded the configured time to live `tx-pool-ttl`.")]
-    TTLReason,
-    #[error("Transaction squeezed out because {0}")]
-    SqueezedOut(String),
-    #[error("Invalid transaction data: {0:?}")]
-    ConsensusValidity(CheckError),
-    #[error("Mint transactions are disallowed from the txpool")]
-    MintIsDisallowed,
-    #[error("The UTXO `{0}` is blacklisted")]
-    BlacklistedUTXO(UtxoId),
-    #[error("The owner `{0}` is blacklisted")]
-    BlacklistedOwner(Address),
-    #[error("The contract `{0}` is blacklisted")]
-    BlacklistedContract(ContractId),
-    #[error("The message `{0}` is blacklisted")]
-    BlacklistedMessage(Nonce),
-    #[error("Database error: {0}")]
-    Database(String),
-    // TODO: We need it for now until channels are removed from TxPool.
-    #[error("Got some unexpected error: {0}")]
-    Other(String),
-}
-
-impl From<CheckError> for Error {
-    fn from(e: CheckError) -> Self {
-        Error::ConsensusValidity(e)
     }
 }

@@ -29,6 +29,7 @@ use fuel_core_txpool::{
     types::TxId,
 };
 use fuel_core_types::{
+    blockchain::header::ConsensusParametersVersion,
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
@@ -77,7 +78,7 @@ impl TxPoolPort for TxPoolAdapter {
             .insert(txs)
             .await
             .into_iter()
-            .map(|res| res.map_err(anyhow::Error::from))
+            .map(|res| res.map_err(|e| anyhow::anyhow!(e)))
             .collect()
     }
 
@@ -165,14 +166,21 @@ impl worker::TxPool for TxPoolAdapter {
 
 #[async_trait::async_trait]
 impl GasPriceEstimate for StaticGasPrice {
-    async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
-        self.gas_price
+    async fn worst_case_gas_price(&self, _height: BlockHeight) -> Option<u64> {
+        Some(self.gas_price)
     }
 }
 
 impl ConsensusProvider for ConsensusParametersProvider {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
+    }
+
+    fn consensus_params_at_version(
+        &self,
+        version: &ConsensusParametersVersion,
+    ) -> anyhow::Result<Arc<ConsensusParameters>> {
+        Ok(self.shared_state.get_consensus_parameters(version)?)
     }
 }
 

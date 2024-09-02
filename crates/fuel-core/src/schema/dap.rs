@@ -497,6 +497,9 @@ impl DapMutation {
             CheckedTransaction::Upload(_) => {
                 Err(async_graphql::Error::new("`Upload` is not supported"))
             }
+            CheckedTransaction::Blob(_) => {
+                Err(async_graphql::Error::new("`Blob` is not supported"))
+            }
         }
     }
 

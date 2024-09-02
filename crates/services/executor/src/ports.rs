@@ -13,6 +13,9 @@ use fuel_core_types::{
     services::relayer::Event,
 };
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
@@ -40,6 +43,10 @@ impl MaybeCheckedTransaction {
             ) => tx.id(),
             MaybeCheckedTransaction::CheckedTransaction(
                 CheckedTransaction::Upload(tx),
+                _,
+            ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Blob(tx),
                 _,
             ) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),

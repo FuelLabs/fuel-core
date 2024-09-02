@@ -1,9 +1,9 @@
 use clap::Parser;
-use fuel_core::service::{
-    FuelService,
-    ServiceTrait,
-};
+use fuel_core::service::FuelService;
 use fuel_core_client::client::FuelClient;
+use fuel_core_poa::ports::BlockImporter;
+use fuel_core_types::fuel_types::BlockHeight;
+use std::time::Duration;
 use tempfile::{
     tempdir,
     TempDir,
@@ -62,7 +62,8 @@ impl FuelCoreDriver {
 
         let node = fuel_core_bin::cli::run::get_service(
             fuel_core_bin::cli::run::Command::parse_from(args),
-        )?;
+        )
+        .await?;
 
         node.start_and_await().await?;
 
@@ -79,9 +80,48 @@ impl FuelCoreDriver {
     pub async fn kill(self) -> TempDir {
         println!("Stopping fuel service");
         self.node
-            .stop_and_await()
+            .send_stop_signal_and_await_shutdown()
             .await
             .expect("Failed to stop the node");
         self.db_dir
+    }
+
+    /// Wait for the node to reach the block height.
+    pub async fn wait_for_block_height(&self, block_height: &BlockHeight) {
+        use futures::stream::StreamExt;
+        let mut blocks = self.node.shared.block_importer.block_stream();
+        loop {
+            let last_height = self
+                .node
+                .shared
+                .database
+                .on_chain()
+                .latest_height_from_metadata()
+                .unwrap()
+                .unwrap();
+
+            if last_height >= *block_height {
+                break;
+            }
+
+            tokio::select! {
+                result = blocks.next() => {
+                    result.unwrap();
+                }
+                _ = self.node.await_shutdown() => {
+                    panic!("Got a stop signal")
+                }
+            }
+        }
+    }
+
+    /// Wait for the node to reach the block height 10 seconds.
+    pub async fn wait_for_block_height_10s(&self, block_height: &BlockHeight) {
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            self.wait_for_block_height(block_height),
+        )
+        .await
+        .expect("Timeout waiting for block height");
     }
 }

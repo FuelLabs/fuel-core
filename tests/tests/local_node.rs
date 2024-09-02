@@ -52,8 +52,9 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
     let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config)?
         .trim()
         .to_string();
-    assert_eq!(
-        chain_config, stored_chain_config,
+    pretty_assertions::assert_str_eq!(
+        chain_config,
+        stored_chain_config,
         "Chain config should match the one in the local configuration"
     );
 
@@ -75,8 +76,9 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
         };
         std::fs::read_to_string(generated_state)?.trim().to_string()
     };
-    assert_eq!(
-        stored_state_config, generated_state_config,
+    pretty_assertions::assert_str_eq!(
+        stored_state_config,
+        generated_state_config,
         "State config should match the one in the local configuration"
     );
 

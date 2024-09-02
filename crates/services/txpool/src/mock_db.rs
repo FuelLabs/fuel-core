@@ -12,11 +12,13 @@ use fuel_core_types::{
         relayer::message::Message,
     },
     fuel_tx::{
+        BlobId,
         Contract,
         ContractId,
         UtxoId,
     },
     fuel_types::Nonce,
+    fuel_vm::BlobBytes,
 };
 use std::{
     collections::{
@@ -33,6 +35,7 @@ use std::{
 pub struct Data {
     pub coins: HashMap<UtxoId, CompressedCoin>,
     pub contracts: HashMap<ContractId, Contract>,
+    pub blobs: HashMap<BlobId, BlobBytes>,
     pub messages: HashMap<Nonce, Message>,
     pub spent_messages: HashSet<Nonce>,
 }
@@ -49,6 +52,14 @@ impl MockDb {
             .unwrap()
             .coins
             .insert(coin.utxo_id, coin.compress());
+    }
+
+    pub fn insert_dummy_blob(&self, blob_id: BlobId) {
+        self.data
+            .lock()
+            .unwrap()
+            .blobs
+            .insert(blob_id, vec![123; 123].into());
     }
 
     pub fn insert_message(&self, message: Message) {
@@ -76,6 +87,10 @@ impl TxPoolDb for MockDb {
             .unwrap()
             .contracts
             .contains_key(contract_id))
+    }
+
+    fn blob_exist(&self, blob_id: &BlobId) -> StorageResult<bool> {
+        Ok(self.data.lock().unwrap().blobs.contains_key(blob_id))
     }
 
     fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {

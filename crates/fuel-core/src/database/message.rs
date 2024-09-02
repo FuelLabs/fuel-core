@@ -36,12 +36,12 @@ impl OffChainIterableKeyValueView {
     ) -> impl Iterator<Item = StorageResult<Nonce>> + '_ {
         let start_message_id =
             start_message_id.map(|msg_id| OwnedMessageKey::new(owner, &msg_id));
-        self.iter_all_filtered::<OwnedMessageIds, _>(
+        self.iter_all_filtered_keys::<OwnedMessageIds, _>(
             Some(*owner),
             start_message_id.as_ref(),
             direction,
         )
-        .map(|res| res.map(|(key, _)| *key.nonce()))
+        .map(|res| res.map(|key| *key.nonce()))
     }
 
     pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {

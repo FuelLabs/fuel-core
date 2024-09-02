@@ -3,8 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(unused_must_use)]
 #![deny(warnings)]
+#![allow(clippy::blocks_in_conditions)] // False positives with tracing macros
 
-mod deadline_clock;
 mod sync;
 
 #[cfg(test)]
@@ -13,6 +13,7 @@ mod service_test;
 pub mod config;
 pub mod ports;
 pub mod service;
+pub mod signer;
 pub mod verifier;
 
 pub use config::{

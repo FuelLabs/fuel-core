@@ -175,6 +175,28 @@ query {
             gasPerUnit
           }
         }
+        bsiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        bldd {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
         cfe {
           __typename
           ... on LightOperation {
@@ -231,6 +253,17 @@ query {
           }
         }
         csiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        ed19DependentCost {
           __typename
           ... on LightOperation {
             base

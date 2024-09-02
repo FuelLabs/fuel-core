@@ -5,7 +5,6 @@ use crate::tests_helper::{
     IGNITION_SNAPSHOT,
     POA_SECRET_KEY,
 };
-use latest_fuel_core_services::Service;
 use libp2p::{
     futures::StreamExt,
     identity::{

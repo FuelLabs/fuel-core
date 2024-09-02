@@ -18,9 +18,15 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-executor = { workspace = true, default-features = false }
-fuel-core-storage = { workspace = true, default-features = false }
-fuel-core-types = { workspace = true, default-features = false }
+fuel-core-executor = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
+fuel-core-storage = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
 postcard = { workspace = true }
 serde = { workspace = true }
 
@@ -30,3 +36,4 @@ proptest = { workspace = true }
 [features]
 default = ["std"]
 std = []
+smt = ["fuel-core-storage/smt", "fuel-core-executor/smt"]

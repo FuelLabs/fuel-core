@@ -12,16 +12,22 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+aws-sdk-kms = { version = "1.37.0", optional = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-services = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
+k256 = { version = "0.13.3", features = ["ecdsa-core"], optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 fuel-core-poa = { path = ".", features = ["test-helpers"] }
+fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { path = "./../../../storage", features = ["test-helpers"] }
 fuel-core-types = { path = "./../../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
@@ -30,6 +36,7 @@ test-case = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 
 [features]
+aws-kms = ["dep:aws-sdk-kms", "dep:k256"]
 test-helpers = [
   "fuel-core-storage/test-helpers",
   "fuel-core-types/test-helpers",

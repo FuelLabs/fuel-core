@@ -67,10 +67,6 @@ impl GasCosts {
         self.0.ecr1()
     }
 
-    pub fn ed19(&self) -> Word {
-        self.0.ed19()
-    }
-
     pub fn eq_(&self) -> Word {
         self.0.eq_()
     }
@@ -380,6 +376,10 @@ impl GasCosts {
 
     pub fn csiz(&self) -> DependentCost {
         self.0.csiz().into()
+    }
+
+    pub fn ed19(&self) -> DependentCost {
+        self.0.ed19().into()
     }
 
     pub fn k256(&self) -> DependentCost {

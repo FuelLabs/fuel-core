@@ -2,11 +2,15 @@
 //! libraries. This crate doesn't contain any business logic and is to be such primitive as that
 //! is possible.
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 #![deny(warnings)]
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
 #[doc(no_inline)]
 #[cfg(feature = "da-compression")]
@@ -63,6 +67,10 @@ pub mod fuel_vm {
         storage::ContractsAssetKey,
         storage::ContractsStateKey,
         storage::UploadedBytecode,
+        storage::{
+            BlobBytes,
+            BlobData,
+        },
         util,
     };
 }

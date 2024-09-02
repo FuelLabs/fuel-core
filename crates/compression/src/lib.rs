@@ -1,4 +1,3 @@
-mod block_section;
 pub mod db;
 mod ports;
 mod services {
@@ -6,7 +5,6 @@ mod services {
     pub mod decompress;
 }
 
-use block_section::ChangesPerTable;
 use serde::{
     Deserialize,
     Serialize,
@@ -19,16 +17,12 @@ use fuel_core_types::{
             StateTransitionBytecodeVersion,
         },
         primitives::DaBlockHeight,
-    },
-    fuel_tx::{
-        CompactTransaction,
-        MessageId,
-    },
-    fuel_types::{
+    }, fuel_compression::RawKey, fuel_tx::{
+        Address, CompactTransaction, MessageId
+    }, fuel_types::{
         BlockHeight,
         Bytes32,
-    },
-    tai64::Tai64,
+    }, tai64::Tai64
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,11 +39,16 @@ struct Header {
 #[derive(Clone, Serialize, Deserialize)]
 struct CompressedBlockPayload {
     /// Registration section of the compressed block
-    registrations: ChangesPerTable,
+    registrations: RegistrationsPerTable,
     /// Compressed block header
     header: Header,
     /// Compressed transactions
     transactions: Vec<CompactTransaction>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RegistrationsPerTable {
+    address: Vec<(RawKey, Address)>,
 }
 
 #[cfg(test)]

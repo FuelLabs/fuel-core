@@ -23,6 +23,7 @@ use crate::client::{
             ContractId,
             UtxoId,
         },
+        upgrades::StateTransitionBytecode,
         RelayedTransactionStatus,
     },
 };
@@ -43,24 +44,26 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        BlobId,
         Bytes32,
+        ConsensusParameters,
         Receipt,
         Transaction,
         TxId,
     },
-    fuel_types,
     fuel_types::{
+        self,
         canonical::Serialize,
         BlockHeight,
         Nonce,
     },
-    services::{
-        executor::TransactionExecutionStatus,
-        p2p::PeerInfo,
-    },
+    services::executor::TransactionExecutionStatus,
 };
 #[cfg(feature = "subscriptions")]
-use futures::StreamExt;
+use futures::{
+    Stream,
+    StreamExt,
+};
 use itertools::Itertools;
 use pagination::{
     PageDirection,
@@ -69,6 +72,7 @@ use pagination::{
 };
 use schema::{
     balance::BalanceArgs,
+    blob::BlobByIdArgs,
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
@@ -366,7 +370,10 @@ impl FuelClient {
         self.query(query).await.map(|r| r.estimate_gas_price)
     }
 
-    pub async fn connected_peers_info(&self) -> io::Result<Vec<PeerInfo>> {
+    #[cfg(feature = "std")]
+    pub async fn connected_peers_info(
+        &self,
+    ) -> io::Result<Vec<fuel_core_types::services::p2p::PeerInfo>> {
         let query = schema::node_info::QueryPeersInfo::build(());
         self.query(query)
             .await
@@ -379,6 +386,59 @@ impl FuelClient {
             let result = r.chain.try_into()?;
             Ok(result)
         })
+    }
+
+    pub async fn consensus_parameters(
+        &self,
+        version: i32,
+    ) -> io::Result<Option<ConsensusParameters>> {
+        let args = schema::upgrades::ConsensusParametersByVersionArgs { version };
+        let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .consensus_parameters
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
+    }
+
+    pub async fn state_transition_byte_code_by_version(
+        &self,
+        version: i32,
+    ) -> io::Result<Option<StateTransitionBytecode>> {
+        let args = schema::upgrades::StateTransitionBytecodeByVersionArgs { version };
+        let query = schema::upgrades::StateTransitionBytecodeByVersionQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .state_transition_bytecode_by_version
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
+    }
+
+    pub async fn state_transition_byte_code_by_root(
+        &self,
+        root: Bytes32,
+    ) -> io::Result<Option<StateTransitionBytecode>> {
+        let args = schema::upgrades::StateTransitionBytecodeByRootArgs {
+            root: HexString(Bytes(root.to_vec())),
+        };
+        let query = schema::upgrades::StateTransitionBytecodeByRootQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .state_transition_bytecode_by_root
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
     }
 
     /// Default dry run, matching the exact configuration as the node
@@ -468,6 +528,30 @@ impl FuelClient {
         ))??;
 
         Ok(status)
+    }
+
+    /// Submits the transaction to the `TxPool` and returns a stream of events.
+    /// Compared to the `submit_and_await_commit`, the stream also contains
+    /// `SubmittedStatus` as an intermediate state.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_status(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>>> {
+        use cynic::SubscriptionBuilder;
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
+                let status: TransactionStatus = r?.submit_and_await_status.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        Ok(stream)
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -587,16 +671,17 @@ impl FuelClient {
 
     /// Get the status of a transaction
     pub async fn transaction_status(&self, id: &TxId) -> io::Result<TransactionStatus> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
+        let query =
+            schema::tx::TransactionStatusQuery::build(TxIdArgs { id: (*id).into() });
 
-        let tx = self.query(query).await?.transaction.ok_or_else(|| {
+        let status = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(
                 ErrorKind::NotFound,
                 format!("status not found for transaction {id} "),
             )
         })?;
 
-        let status = tx
+        let status = status
             .status
             .ok_or_else(|| {
                 io::Error::new(
@@ -684,7 +769,8 @@ impl FuelClient {
     }
 
     pub async fn receipts(&self, id: &TxId) -> io::Result<Option<Vec<Receipt>>> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
+        let query =
+            schema::tx::TransactionStatusQuery::build(TxIdArgs { id: (*id).into() });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
@@ -774,6 +860,13 @@ impl FuelClient {
             .transpose()?;
 
         Ok(block)
+    }
+
+    /// Retrieve a blob by its ID
+    pub async fn blob(&self, id: BlobId) -> io::Result<Option<types::Blob>> {
+        let query = schema::blob::BlobByIdQuery::build(BlobByIdArgs { id: id.into() });
+        let blob = self.query(query).await?.blob.map(Into::into);
+        Ok(blob)
     }
 
     /// Retrieve multiple blocks
@@ -1018,6 +1111,11 @@ impl FuelClient {
 
         let transaction = self.query(query).await?.transaction;
 
-        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
+        Ok(transaction
+            .map(|tx| {
+                let response: TransactionResponse = tx.try_into()?;
+                Ok::<_, ConversionError>(response.transaction)
+            })
+            .transpose()?)
     }
 }

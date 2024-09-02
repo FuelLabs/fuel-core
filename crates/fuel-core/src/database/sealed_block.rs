@@ -18,7 +18,6 @@ use fuel_core_types::{
         consensus::{
             Consensus,
             Genesis,
-            Sealed,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -36,10 +35,11 @@ impl OnChainIterableKeyValueView {
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
         // combine the block and consensus metadata into a sealed fuel block type
-        let block = self.get_full_block(height)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(height)?;
 
-        if let (Some(block), Some(consensus)) = (block, consensus) {
+        if let Some(consensus) = consensus {
+            let block = self.get_full_block(height)?.ok_or(not_found!(FuelBlocks))?;
+
             let sealed_block = SealedBlock {
                 entity: block,
                 consensus: consensus.into_owned(),
@@ -52,11 +52,9 @@ impl OnChainIterableKeyValueView {
     }
 
     pub fn genesis_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Ok(self
-            .iter_all::<FuelBlocks>(Some(IterDirection::Forward))
+        self.iter_all_keys::<FuelBlocks>(Some(IterDirection::Forward))
             .next()
-            .transpose()?
-            .map(|(height, _)| height))
+            .transpose()
     }
 
     pub fn genesis_block(&self) -> StorageResult<Option<CompressedBlock>> {
@@ -83,14 +81,11 @@ impl OnChainIterableKeyValueView {
     pub fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Vec<SealedBlockHeader>> {
+    ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
         let headers = block_height_range
             .map(BlockHeight::from)
             .map(|height| self.get_sealed_block_header(&height))
-            .collect::<StorageResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
+            .collect::<StorageResult<Option<Vec<_>>>>()?;
         Ok(headers)
     }
 
@@ -98,10 +93,14 @@ impl OnChainIterableKeyValueView {
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>> {
-        let header = self.storage::<FuelBlocks>().get(height)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(height)?;
 
-        if let (Some(header), Some(consensus)) = (header, consensus) {
+        if let Some(consensus) = consensus {
+            let header = self
+                .storage::<FuelBlocks>()
+                .get(height)?
+                .ok_or(not_found!(FuelBlocks))?; // This shouldn't happen if a block has been sealed
+
             let sealed_block = SealedBlockHeader {
                 entity: header.into_owned().header().clone(),
                 consensus: consensus.into_owned(),
@@ -122,8 +121,8 @@ impl OnChainIterableKeyValueView {
             .map(BlockHeight::from)
             .map(|block_height| {
                 let transactions = self
-                    .get_sealed_block_by_height(&block_height)?
-                    .map(|Sealed { entity: block, .. }| block.into_inner().1)
+                    .get_full_block(&block_height)?
+                    .map(|block| block.into_inner().1)
                     .map(Transactions);
                 Ok(transactions)
             })

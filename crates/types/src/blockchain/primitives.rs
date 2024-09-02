@@ -25,9 +25,12 @@ use secrecy::{
 };
 use zeroize::Zeroize;
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
+/// Empty generated fields.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Empty generated fields.
 pub struct Empty;
 
 /// A cryptographically secure hash, identifying a block.

@@ -4,6 +4,12 @@
 
 use crate::kv_store::StorageColumn;
 
+#[cfg(feature = "alloc")]
+use alloc::string::{
+    String,
+    ToString,
+};
+
 /// Database tables column ids to the corresponding [`crate::Mappable`] table.
 #[repr(u32)]
 #[derive(
@@ -59,10 +65,12 @@ pub enum Column {
     StateTransitionBytecodeVersions = 18,
     /// See [`UploadedBytecodes`](crate::tables::UploadedBytecodes)
     UploadedBytecodes = 19,
+    /// See [`Blobs`](fuel_vm_private::storage::BlobData)
+    Blobs = 20,
 
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 20,
+    GenesisMetadata = 21,
 }
 
 impl Column {

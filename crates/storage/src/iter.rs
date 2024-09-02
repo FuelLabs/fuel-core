@@ -9,15 +9,19 @@ use crate::{
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
     },
     structured_storage::TableWithBlueprint,
     transactional::ReferenceBytesKey,
 };
 use fuel_vm_private::fuel_storage::Mappable;
-use std::{
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
     collections::BTreeMap,
-    sync::Arc,
+    vec::Vec,
 };
 
 // TODO: BoxedIter to be used until RPITIT lands in stable rust.
@@ -67,7 +71,7 @@ impl Default for IterDirection {
 }
 
 /// A trait for iterating over the storage of [`KeyValueInspect`].
-#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>)]
 pub trait IterableStore: KeyValueInspect {
     /// Returns an iterator over the values in the storage.
     fn iter_store(
@@ -77,6 +81,44 @@ pub trait IterableStore: KeyValueInspect {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem>;
+
+    /// Returns an iterator over keys in the storage.
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem>;
+}
+
+#[cfg(feature = "std")]
+impl<T> IterableStore for std::sync::Arc<T>
+where
+    T: IterableStore,
+{
+    fn iter_store(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        use core::ops::Deref;
+        self.deref().iter_store(column, prefix, start, direction)
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        use core::ops::Deref;
+        self.deref()
+            .iter_store_keys(column, prefix, start, direction)
+    }
 }
 
 /// A trait for iterating over the `Mappable` table.
@@ -126,17 +168,15 @@ where
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1997
-        //  We need to add `iter_store_keys` method and use it here to avoid allocation of values.
-        IterableStore::iter_store(
+        IterableStore::iter_store_keys(
             self,
             M::column(),
             prefix.as_ref().map(|p| p.as_ref()),
             start.as_ref().map(|cow| cow.as_ref()),
             direction.unwrap_or_default(),
         )
-        .map(|val| {
-            val.and_then(|(key, _)| {
+        .map(|res| {
+            res.and_then(|key| {
                 let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
                     key.as_slice(),
                 )
@@ -350,5 +390,27 @@ pub fn iterator<'a, V>(
                     .into_boxed()
             }
         }
+    }
+}
+
+/// Returns an iterator over the keys in the `BTreeMap`.
+pub fn keys_iterator<'a, V>(
+    tree: &'a BTreeMap<ReferenceBytesKey, V>,
+    prefix: Option<&[u8]>,
+    start: Option<&[u8]>,
+    direction: IterDirection,
+) -> impl Iterator<Item = &'a ReferenceBytesKey> + 'a {
+    match (prefix, start) {
+        (None, None) => {
+            if direction == IterDirection::Forward {
+                tree.keys().into_boxed()
+            } else {
+                tree.keys().rev().into_boxed()
+            }
+        }
+        // all the other cases require using a range, so we can't use the keys() method
+        (_, _) => iterator(tree, prefix, start, direction)
+            .map(|(key, _)| key)
+            .into_boxed(),
     }
 }
