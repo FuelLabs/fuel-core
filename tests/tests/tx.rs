@@ -147,12 +147,17 @@ async fn dry_run_create() {
 
 #[tokio::test]
 async fn dry_run_above_block_gas_limit() {
-    let config =  Config::local_node();
+    let config = Config::local_node();
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
-    
+
     // Given
-    let gas_limit = client.consensus_parameters(0).await.unwrap().unwrap().block_gas_limit();
+    let gas_limit = client
+        .consensus_parameters(0)
+        .await
+        .unwrap()
+        .unwrap()
+        .block_gas_limit();
     let maturity = Default::default();
 
     let script = [
@@ -176,7 +181,6 @@ async fn dry_run_above_block_gas_limit() {
     client.dry_run(&[tx.clone()]).await
     // Then
     .expect_err("Dry run should return an error because transaction is using too much gas");
-
 }
 
 #[tokio::test]
