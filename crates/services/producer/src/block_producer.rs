@@ -29,7 +29,8 @@ use fuel_core_types::{
         field::{
             InputContract,
             MintGasPrice,
-        }, Chargeable, Transaction
+        },
+        Transaction,
     },
     fuel_types::{
         BlockHeight,
@@ -280,39 +281,6 @@ where
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let view = self.view_provider.latest_view()?;
 
-        // Check that the sum of the gas usable by the transactions is less than the block gas limit.
-        let consensus_params = self.consensus_parameters_provider.consensus_params_at_version(&view.latest_consensus_parameters_version()?)?;
-        let gas_costs = consensus_params.gas_costs();
-        let fee = consensus_params.fee_params();
-        let block_gas_limit = consensus_params.block_gas_limit();
-        let mut max_gas_usable = 0;
-        for transaction in &transactions {
-            match transaction {
-                Transaction::Script(tx) => {
-                    max_gas_usable += tx.max_gas(gas_costs, fee)
-                }
-                Transaction::Create(tx) => {
-                    max_gas_usable += tx.max_gas(gas_costs, fee)
-                }
-                Transaction::Mint(_) => {
-                    // Mint transactions doesn't consume gas and so we will add a flat 10% of the block gas limit
-                    max_gas_usable += block_gas_limit / 10;
-                }
-                Transaction::Upgrade(tx) => {
-                    max_gas_usable += tx.max_gas(gas_costs, fee)
-                }
-                Transaction::Upload(tx) => {
-                    max_gas_usable += tx.max_gas(gas_costs, fee)
-                }
-                Transaction::Blob(tx) => {
-                    max_gas_usable += tx.max_gas(gas_costs, fee)
-                }
-            };
-            if max_gas_usable > block_gas_limit {
-                return Err(anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit"));
-            }
-        }
-    
         let height = height.unwrap_or_else(|| {
             view.latest_height()
                 .unwrap_or_default()
