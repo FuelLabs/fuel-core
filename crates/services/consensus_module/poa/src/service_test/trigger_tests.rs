@@ -134,6 +134,22 @@ impl DefaultContext {
             txs,
         }
     }
+
+    fn now(&self) -> Tai64 {
+        self.test_ctx.time.watch().now()
+    }
+
+    fn advance_time_with_tokio(&mut self) {
+        self.test_ctx.time.advance_with_tokio();
+    }
+
+    fn advance_time(&mut self, duration: Duration) {
+        self.test_ctx.time.advance(duration);
+    }
+
+    fn rewind_time(&mut self, duration: Duration) {
+        self.test_ctx.time.rewind(duration);
+    }
 }
 
 #[tokio::test]
@@ -331,7 +347,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
         ..Default::default()
     });
     ctx.status_sender.send_replace(Some(TxId::zeroed()));
-    let start_time = ctx.test_ctx.time.watch().now();
+    let start_time = ctx.now();
 
     // When
 
@@ -372,17 +388,17 @@ async fn interval_trigger_produces_blocks_with_current_time_when_block_productio
         ..Default::default()
     });
     ctx.status_sender.send_replace(Some(TxId::zeroed()));
-    let start_time = ctx.test_ctx.time.watch().now();
+    let start_time = ctx.now();
 
     // When
 
     // We produce the first block in real time.
     time::sleep(block_time + offset).await;
-    ctx.test_ctx.time.advance_with_tokio();
+    ctx.advance_time_with_tokio();
     let first_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
 
     // But we produce second block with a delay relative to real time.
-    ctx.test_ctx.time.advance(block_time + second_block_delay);
+    ctx.advance_time(block_time + second_block_delay);
     time::sleep(block_time).await;
     let second_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
 
@@ -429,17 +445,17 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
         ..Default::default()
     });
     ctx.status_sender.send_replace(Some(TxId::zeroed()));
-    let start_time = ctx.test_ctx.time.watch().now();
+    let start_time = ctx.now();
 
     // When
 
     // We produce the first block in real time.
     time::sleep(block_time + offset).await;
-    ctx.test_ctx.time.advance_with_tokio();
+    ctx.advance_time_with_tokio();
     let first_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
 
     // And we rewind time before attempting to produce the next block.
-    ctx.test_ctx.time.rewind(block_time);
+    ctx.rewind_time(block_time);
     time::sleep(block_time).await;
     let second_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
 

@@ -167,7 +167,7 @@ where
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
         let (last_height, last_timestamp, last_block_created) =
-            Self::extract_block_info(&clock, last_block);
+            Self::extract_block_info(clock.now(), last_block);
 
         let block_stream = block_importer.block_stream();
         let peer_connections_stream = p2p_port.reserved_peers_count();
@@ -208,12 +208,12 @@ where
     }
 
     fn extract_block_info(
-        clock: &C,
+        now: Tai64,
         last_block: &BlockHeader,
     ) -> (BlockHeight, Tai64, Instant) {
         let last_timestamp = last_block.time();
         let duration_since_last_block =
-            Duration::from_secs(clock.now().0.saturating_sub(last_timestamp.0));
+            Duration::from_secs(now.0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now()
             .checked_sub(duration_since_last_block)
             .unwrap_or(Instant::now());
@@ -466,7 +466,7 @@ where
     }
     fn update_last_block_values(&mut self, block_header: &Arc<BlockHeader>) {
         let (last_height, last_timestamp, last_block_created) =
-            Self::extract_block_info(&self.clock, block_header);
+            Self::extract_block_info(self.clock.now(), block_header);
         if last_height > self.last_height {
             self.last_height = last_height;
             self.last_timestamp = last_timestamp;
