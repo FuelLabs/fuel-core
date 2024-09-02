@@ -92,6 +92,8 @@ use tokio::{
 };
 use tracing::warn;
 
+const CHANNEL_SIZE: usize = 1024 * 10;
+
 pub type Service<V, T> = ServiceRunner<UninitializedTask<V, SharedState, T>>;
 
 pub enum TaskRequest {
@@ -474,9 +476,9 @@ where
     V::LatestView: P2pDb,
     T: TxPool + 'static,
 {
-    fn update_metrics<T>(&self, update_fn: T)
+    fn update_metrics<U>(&self, update_fn: U)
     where
-        T: FnOnce(),
+        U: FnOnce(),
     {
         self.p2p_service.update_metrics(update_fn)
     }
@@ -521,6 +523,7 @@ where
         let instant = Instant::now();
         let timeout = self.response_timeout;
         let response_channel = self.request_sender.clone();
+        let range_len = range.len();
 
         self.update_metrics(|| set_blocks_requested(range_len));
 
@@ -1078,10 +1081,10 @@ impl SharedState {
 pub fn build_shared_state(
     config: Config<NotInitialized>,
 ) -> (SharedState, Receiver<TaskRequest>) {
-    let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
-    let (tx_broadcast, _) = broadcast::channel(1024 * 10);
-    let (new_tx_subscription_broadcast, _) = broadcast::channel(1024 * 10);
-    let (block_height_broadcast, _) = broadcast::channel(1024 * 10);
+    let (request_sender, request_receiver) = mpsc::channel(CHANNEL_SIZE);
+    let (tx_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
+    let (new_tx_subscription_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
+    let (block_height_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
 
     let (reserved_peers_broadcast, _) = broadcast::channel::<usize>(
         config

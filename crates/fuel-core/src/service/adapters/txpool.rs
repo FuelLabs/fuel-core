@@ -28,6 +28,7 @@ use fuel_core_txpool::{
         GasPriceProvider,
         MemoryPool,
     },
+    types::TxId,
     Result as TxPoolResult,
 };
 use fuel_core_types::{
@@ -103,7 +104,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
                     .filter_map(|result| result.ok()),
             )
         } else {
-            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+            Box::pin(fuel_core_services::stream::pending())
         }
     }
 
@@ -119,10 +120,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
-    async fn request_tx_ids(
-        &self,
-        peer_id: Vec<u8>,
-    ) -> anyhow::Result<Vec<fuel_core_txpool::types::TxId>> {
+    async fn request_tx_ids(&self, peer_id: Vec<u8>) -> anyhow::Result<Vec<TxId>> {
         if let Some(service) = &self.service {
             match service.get_all_transactions_ids_from_peer(peer_id).await {
                 Ok(txs) => Ok(txs),
@@ -139,7 +137,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     async fn request_txs(
         &self,
         peer_id: Vec<u8>,
-        tx_ids: Vec<fuel_core_txpool::types::TxId>,
+        tx_ids: Vec<TxId>,
     ) -> anyhow::Result<Vec<Option<Transaction>>> {
         if let Some(service) = &self.service {
             match service
@@ -186,17 +184,14 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         Box::pin(fuel_core_services::stream::pending())
     }
 
-    async fn request_tx_ids(
-        &self,
-        _peer_id: Vec<u8>,
-    ) -> anyhow::Result<Vec<fuel_core_txpool::types::TxId>> {
+    async fn request_tx_ids(&self, _peer_id: Vec<u8>) -> anyhow::Result<Vec<TxId>> {
         Ok(vec![])
     }
 
     async fn request_txs(
         &self,
         _peer_id: Vec<u8>,
-        _tx_ids: Vec<fuel_core_txpool::types::TxId>,
+        _tx_ids: Vec<TxId>,
     ) -> anyhow::Result<Vec<Option<Transaction>>> {
         Ok(vec![])
     }
