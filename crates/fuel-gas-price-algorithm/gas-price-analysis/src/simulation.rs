@@ -197,7 +197,7 @@ fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u64)> {
     (0usize..size)
         .map(|val| val as f64)
         .map(noisy_fullness)
-        .map(|signal| (0.5 * signal + 0.5) * capacity as f64)
+        .map(|signal| (0.5 * signal + 0.5) * capacity as f64) // Scale and shift so it's between 0 and capacity
         .zip(fullness_noise)
         .map(|(fullness, noise)| fullness + noise)
         .map(|x| f64::min(x, capacity as f64))
