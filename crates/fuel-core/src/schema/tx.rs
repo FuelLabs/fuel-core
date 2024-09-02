@@ -49,6 +49,7 @@ use fuel_core_txpool::{
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
+        Chargeable,
         Transaction as FuelTx,
         UniqueIdentifier,
     },
@@ -276,16 +277,43 @@ impl TxMutation {
         gas_price: Option<U64>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
-        let params = ctx
+        let consensus_params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
+        let block_gas_limit = consensus_params.block_gas_limit();
 
+        let mut max_gas_usable = 0;
         let mut transactions = txs
             .iter()
             .map(|tx| FuelTx::from_bytes(&tx.0))
             .collect::<Result<Vec<FuelTx>, _>>()?;
+        let fee = consensus_params.fee_params();
         for transaction in &mut transactions {
-            transaction.precompute(&params.chain_id())?;
+            match transaction {
+                FuelTx::Script(tx) => {
+                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                }
+                FuelTx::Create(tx) => {
+                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                }
+                FuelTx::Mint(_) => {
+                    // Mint transactions doesn't consume gas and so we will add a flat 10% of the block gas limit
+                    max_gas_usable += block_gas_limit / 10;
+                }
+                FuelTx::Upgrade(tx) => {
+                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                }
+                FuelTx::Upload(tx) => {
+                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                }
+                FuelTx::Blob(tx) => {
+                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                }
+            };
+            if max_gas_usable > block_gas_limit {
+                return Err(anyhow::anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit").into());
+            }
+            transaction.precompute(&consensus_params.chain_id())?;
         }
 
         let tx_statuses = block_producer
