@@ -116,7 +116,7 @@ pub trait L2BlockSource: Send + Sync {
 #[derive(Debug, Default)]
 pub struct DaCommitDetails {
     pub l2_block_range: core::ops::Range<u32>,
-    pub blob_bytes: u32,
+    pub blob_size_bytes: u32,
     pub blob_cost_wei: u32,
     pub partial_block_heights: Option<[u32; 2]>,
 }
