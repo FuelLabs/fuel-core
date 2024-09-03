@@ -19,9 +19,8 @@ pub struct SimulationResults {
     pub pessimistic_costs: Vec<u64>,
 }
 
-pub fn run_simulation(da_p_component: i64, da_d_component: i64) -> SimulationResults {
+pub fn run_simulation(da_p_component: i64, da_d_component: i64, size: usize) -> SimulationResults {
     // simulation parameters
-    let size = 1000;
     let da_recording_rate = 12;
     let capacity = 30_000_000;
     let gas_per_byte = 63;

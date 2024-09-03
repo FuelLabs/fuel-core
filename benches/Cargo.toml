@@ -34,6 +34,7 @@ p256 = { version = "0.13", default-features = false, features = [
   "digest",
   "ecdsa",
 ] }
+postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 quanta = "0.12"
 rand = { workspace = true }
@@ -66,3 +67,7 @@ name = "block_target_gas"
 [[bench]]
 harness = false
 name = "transaction_throughput"
+
+[[bench]]
+harness = false
+name = "db_lookup_times"
