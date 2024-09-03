@@ -282,7 +282,7 @@ impl TxMutation {
             .latest_consensus_params();
         let block_gas_limit = consensus_params.block_gas_limit();
 
-        let mut max_gas_usable = 0;
+        let mut max_gas_usable: u64 = 0;
         let mut transactions = txs
             .iter()
             .map(|tx| FuelTx::from_bytes(&tx.0))
@@ -291,27 +291,27 @@ impl TxMutation {
         for transaction in &mut transactions {
             match transaction {
                 FuelTx::Script(tx) => {
-                    max_gas_usable
+                    max_gas_usable = max_gas_usable
                         .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Create(tx) => {
-                    max_gas_usable
+                    max_gas_usable = max_gas_usable
                         .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Mint(_) => {
                     // Mint transactions doesn't consume gas and so we will add a flat 10% of the block gas limit
-                    max_gas_usable.saturating_add(block_gas_limit / 10);
+                    max_gas_usable = max_gas_usable.saturating_add(block_gas_limit / 10);
                 }
                 FuelTx::Upgrade(tx) => {
-                    max_gas_usable
+                    max_gas_usable = max_gas_usable
                         .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Upload(tx) => {
-                    max_gas_usable
+                    max_gas_usable = max_gas_usable
                         .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Blob(tx) => {
-                    max_gas_usable
+                    max_gas_usable = max_gas_usable
                         .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
             };
