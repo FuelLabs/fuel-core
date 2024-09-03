@@ -74,12 +74,14 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         let tx = tx.into();
         client.submit_and_await_commit(&tx).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
-        let ret_tx = client
+        let ret_tx: Transaction = client
             .transaction(&tx.id(&ChainId::default()))
             .await
             .unwrap()
             .unwrap()
-            .transaction;
+            .transaction
+            .try_into()
+            .unwrap();
 
         let transaction_result = client
             .transaction_status(&ret_tx.id(&ChainId::default()))

@@ -1106,7 +1106,7 @@ impl FuelClient {
     pub async fn transparent_transaction(
         &self,
         id: &TxId,
-    ) -> io::Result<Option<Transaction>> {
+    ) -> io::Result<Option<types::TransactionType>> {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
 
         let transaction = self.query(query).await?.transaction;
