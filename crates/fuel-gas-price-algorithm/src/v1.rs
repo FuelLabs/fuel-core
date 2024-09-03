@@ -66,45 +66,30 @@ pub struct AlgorithmV1 {
     /// The D component of the PID control for the DA gas price
     da_d_factor: i64,
     /// The average profit over the last `avg_window` blocks
-    avg_profit: i64,
-    /// The number of blocks to consider when calculating the average profit
-    avg_window: u32,
+    last_profit: i64,
+    /// the previous profit
+    second_to_last_profit: i64,
 }
 
 impl AlgorithmV1 {
-    pub fn calculate(&self, block_bytes: u64) -> u64 {
-        let projected_profit_avg = self.calculate_avg_profit(block_bytes);
-
-        let p = self.p(projected_profit_avg);
-        let d = self.d(projected_profit_avg);
+    pub fn calculate(&self, _block_bytes: u64) -> u64 {
+        let p = self.p();
+        let d = self.d();
         let da_change = self.change(p, d);
 
         self.assemble_price(da_change)
     }
 
-    fn calculate_avg_profit(&self, block_bytes: u64) -> i64 {
-        let extra_for_this_block =
-            block_bytes.saturating_mul(self.latest_da_cost_per_byte);
-        let pessimistic_cost = self.total_costs.saturating_add(extra_for_this_block);
-        let projected_profit =
-            (self.total_rewards as i64).saturating_sub(pessimistic_cost as i64);
-        projected_profit
-            .saturating_add(
-                self.avg_profit
-                    .saturating_mul((self.avg_window as i64).saturating_sub(1)),
-            )
-            .checked_div(self.avg_window as i64)
-            .unwrap_or(self.avg_profit)
-    }
-
-    fn p(&self, projected_profit_avg: i64) -> i64 {
-        let checked_p = projected_profit_avg.checked_div(self.da_p_factor);
+    fn p(&self) -> i64 {
+        let checked_p = self.last_profit.checked_div(self.da_p_factor);
+        // If the profit is positive, we want to decrease the gas price
         checked_p.unwrap_or(0).saturating_mul(-1)
     }
 
-    fn d(&self, projected_profit_avg: i64) -> i64 {
-        let slope = projected_profit_avg.saturating_sub(self.avg_profit);
+    fn d(&self) -> i64 {
+        let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
         let checked_d = slope.checked_div(self.da_d_factor);
+        // if the slope is positive, we want to decrease the gas price
         checked_d.unwrap_or(0).saturating_mul(-1)
     }
 
@@ -142,12 +127,9 @@ impl AlgorithmV1 {
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct AlgorithmUpdaterV1 {
+    // Execution
     /// The gas price to cover the execution of the next block
     pub new_exec_price: u64,
-    /// The gas price for the DA portion of the last block. This can be used to calculate
-    /// the DA portion of the next block
-    pub last_da_gas_price: u64,
-    // Execution
     /// The lowest the algorithm allows the exec gas price to go
     pub min_exec_gas_price: u64,
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
@@ -159,6 +141,11 @@ pub struct AlgorithmUpdaterV1 {
     /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: u64,
     // DA
+    /// The gas price for the DA portion of the last block. This can be used to calculate
+    /// the DA portion of the next block
+    pub last_da_gas_price: u64,
+    /// Scale factor for the DA gas price.
+    pub da_gas_price_factor: NonZeroU64,
     /// The lowest the algorithm allows the da gas price to go
     pub min_da_gas_price: u64,
     /// The maximum percentage that the DA portion of the gas price can change in a single block
@@ -176,10 +163,10 @@ pub struct AlgorithmUpdaterV1 {
     pub da_p_component: i64,
     /// The D component of the PID control for the DA gas price
     pub da_d_component: i64,
-    /// The average profit over the last `avg_window` blocks
-    pub profit_avg: i64,
-    /// The number of blocks to consider when calculating the average profit
-    pub avg_window: u32,
+    /// The last profit
+    pub last_profit: i64,
+    /// The profit before last
+    pub second_to_last_profit: i64,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u64,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
@@ -230,29 +217,31 @@ impl AlgorithmUpdaterV1 {
             let last_exec_price = self.new_exec_price;
             let last_profit = (self.total_da_rewards as i64)
                 .saturating_sub(self.projected_total_da_cost as i64);
-            self.update_profit_avg(last_profit);
-            let new_projected_da_cost =
-                block_bytes.saturating_mul(self.latest_da_cost_per_byte);
+            self.update_last_profit(last_profit);
+            #[allow(clippy::arithmetic_side_effects)]
+            // the `da_gas_price_factor` will never be `0`
+            let new_projected_da_cost = block_bytes
+                .saturating_mul(self.latest_da_cost_per_byte)
+                .saturating_div(self.da_gas_price_factor.into());
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(new_projected_da_cost);
             // implicitly deduce what our da gas price was for the l2 block
             self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
             self.update_exec_gas_price(used, capacity);
-            let da_reward = used.saturating_mul(self.last_da_gas_price);
+            #[allow(clippy::arithmetic_side_effects)]
+            // the `da_gas_price_factor` will never be `0`
+            let da_reward = used
+                .saturating_mul(self.last_da_gas_price)
+                .saturating_div(self.da_gas_price_factor.into());
             self.total_da_rewards = self.total_da_rewards.saturating_add(da_reward);
             Ok(())
         }
     }
 
-    fn update_profit_avg(&mut self, new_profit: i64) {
-        let old_avg = self.profit_avg;
-        let new_avg = old_avg
-            .saturating_mul((self.avg_window as i64).saturating_sub(1))
-            .saturating_add(new_profit)
-            .checked_div(self.avg_window as i64)
-            .unwrap_or(old_avg);
-        self.profit_avg = new_avg;
+    fn update_last_profit(&mut self, new_profit: i64) {
+        self.second_to_last_profit = self.last_profit;
+        self.last_profit = new_profit;
     }
 
     fn update_exec_gas_price(&mut self, used: u64, capacity: NonZeroU64) {
@@ -295,12 +284,17 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
-            let new_cost_per_byte = block_cost.checked_div(block_bytes).ok_or(
-                Error::CouldNotCalculateCostPerByte {
+            let new_cost_per_byte = block_cost
+                .checked_mul(self.da_gas_price_factor.into())
+                .ok_or(Error::CouldNotCalculateCostPerByte {
                     bytes: block_bytes,
                     cost: block_cost,
-                },
-            )?;
+                })?
+                .checked_div(block_bytes)
+                .ok_or(Error::CouldNotCalculateCostPerByte {
+                    bytes: block_bytes,
+                    cost: block_cost,
+                })?;
             self.da_recorded_block_height = height;
             let new_block_cost =
                 self.latest_known_total_da_cost.saturating_add(block_cost);
@@ -339,10 +333,10 @@ impl AlgorithmUpdaterV1 {
             latest_da_cost_per_byte: self.latest_da_cost_per_byte,
             total_rewards: self.total_da_rewards,
             total_costs: self.projected_total_da_cost,
-            avg_profit: self.profit_avg,
+            last_profit: self.last_profit,
+            second_to_last_profit: self.second_to_last_profit,
             da_p_factor: self.da_p_component,
             da_d_factor: self.da_d_component,
-            avg_window: self.avg_window,
         }
     }
 }

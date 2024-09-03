@@ -67,6 +67,9 @@ pub enum Column {
     UploadedBytecodes = 19,
     /// See [`Blobs`](fuel_vm_private::storage::BlobData)
     Blobs = 20,
+    /// See [`FullFuelBlocks`](crate::tables::FullFuelBlocks)
+    /// we don't use this table at the moment, only used for benchmarks
+    FullFuelBlocks = 22,
 
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.

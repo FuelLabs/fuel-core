@@ -3221,6 +3221,7 @@ dependencies = [
  "fuel-core-types",
  "futures",
  "p256",
+ "postcard",
  "primitive-types",
  "quanta",
  "rand",
