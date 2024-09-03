@@ -27,6 +27,7 @@ pub struct FuelGasPriceUpdater<L2, Metadata, DaSource> {
     inner: AlgorithmUpdater,
     l2_block_source: L2,
     metadata_storage: Metadata,
+    #[allow(dead_code)]
     da_source: DaSource,
 }
 
@@ -120,9 +121,8 @@ pub struct DaCommitDetails {
     pub partial_block_heights: Option<[u32; 2]>,
 }
 
-#[async_trait::async_trait]
 pub trait DaCommitSource: Send + Sync {
-    async fn get_da_commit_details(&mut self) -> Result<DaCommitDetails>;
+    fn get_da_commit_details(&mut self) -> Result<Option<DaCommitDetails>>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -273,9 +273,8 @@ where
             AlgorithmUpdater::V0(updater) => {
                 updater.update_l2_block_data(height, gas_used, capacity)?;
             }
-            AlgorithmUpdater::V1(updater) => {
-                updater.update_l2_block_data(height, gas_used, capacity, 0, 0)?;
-                let _da_commit_details = self.da_source.get_da_commit_details().await;
+            AlgorithmUpdater::V1(_) => {
+                return Err(anyhow!("V1 of the gas price algo has not been enabled yet"))
                 // TODO: update the DA record data with data received from the source
                 // updater.update_da_record_data(vec![])?;
             }

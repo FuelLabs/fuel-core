@@ -92,11 +92,10 @@ impl FakeDaSource {
     }
 }
 
-#[async_trait::async_trait]
 impl DaCommitSource for FakeDaSource {
-    async fn get_da_commit_details(&mut self) -> Result<DaCommitDetails> {
+    fn get_da_commit_details(&mut self) -> Result<Option<DaCommitDetails>> {
         *self.called.lock().unwrap() = true;
-        Ok(DaCommitDetails::default())
+        Ok(Some(DaCommitDetails::default()))
     }
 }
 
