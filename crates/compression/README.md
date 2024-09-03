@@ -1,4 +1,4 @@
-# Compression and decompression of fuel-types for the DA layer
+# Compression and decompression of transactions for the DA layer
 
 ## Compressed block header
 

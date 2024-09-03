@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use anyhow::bail;
 use fuel_core_types::{
     fuel_compression::{
         RawKey,
@@ -12,7 +11,6 @@ use fuel_core_types::{
 use crate::{
     db::RocksDb,
     tables::{
-        check_keyspace,
         PerRegistryKeyspace,
         RegistryKeyspace,
     },
@@ -42,60 +40,25 @@ fn registry_prepare<T: serde::Serialize + Default + PartialEq>(
 }
 
 impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for Address {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut PrepareCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_prepare(
-            check_keyspace!(keyspace, RegistryKeyspace::address),
-            self,
-            ctx,
-        )
+    fn substitute(&self, ctx: &mut PrepareCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_prepare(RegistryKeyspace::address, self, ctx)
     }
 }
 
 impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for AssetId {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut PrepareCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_prepare(
-            check_keyspace!(keyspace, RegistryKeyspace::asset_id),
-            self,
-            ctx,
-        )
+    fn substitute(&self, ctx: &mut PrepareCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_prepare(RegistryKeyspace::asset_id, self, ctx)
     }
 }
 
 impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for ContractId {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut PrepareCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_prepare(
-            check_keyspace!(keyspace, RegistryKeyspace::contract_id),
-            self,
-            ctx,
-        )
+    fn substitute(&self, ctx: &mut PrepareCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_prepare(RegistryKeyspace::contract_id, self, ctx)
     }
 }
 
-impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for Vec<u8> {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut PrepareCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_prepare(
-            check_keyspace!(
-                keyspace,
-                RegistryKeyspace::script_code | RegistryKeyspace::witness
-            ),
-            self,
-            ctx,
-        )
+impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for ScriptCode {
+    fn substitute(&self, ctx: &mut PrepareCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_prepare(RegistryKeyspace::script_code, self, ctx)
     }
 }

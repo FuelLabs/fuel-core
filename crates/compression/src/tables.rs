@@ -20,19 +20,6 @@ impl PostcardSerialized {
     }
 }
 
-macro_rules! check_keyspace {
-    ($keyspace:expr, $expected:pat) => {
-        match RegistryKeyspace::from_str($keyspace) {
-            Some(val @ $expected) => val,
-            Some(other) => {
-                bail!("Keyspace {other:?} not valid for {}", stringify!($expected))
-            }
-            None => bail!("Unknown keyspace {:?}", $keyspace),
-        }
-    };
-}
-pub(crate) use check_keyspace;
-
 macro_rules! tables {
     ($($name:ident: $type:ty),*$(,)?) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -163,5 +150,4 @@ tables!(
     asset_id: AssetId,
     contract_id: ContractId,
     script_code: Vec<u8>,
-    witness: Vec<u8>,
 );

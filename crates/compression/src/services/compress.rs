@@ -1,4 +1,7 @@
-use fuel_core_types::fuel_compression::CompressibleBy;
+use fuel_core_types::{
+    fuel_compression::CompressibleBy,
+    fuel_tx::Transaction,
+};
 use tokio::sync::mpsc;
 
 use fuel_core_types::blockchain::block::Block;
@@ -64,7 +67,8 @@ pub fn compress(db: &mut RocksDb, block: Block) -> Result<Vec<u8>, CompressError
         db,
         accessed_keys: PerRegistryKeyspace::default(),
     };
-    let _ = target.compress(&mut prepare_ctx)?;
+    let _ =
+        <Vec<Transaction> as CompressibleBy<_, _>>::compress(&target, &mut prepare_ctx)?;
 
     let mut ctx = CompressCtx {
         db: prepare_ctx.db,

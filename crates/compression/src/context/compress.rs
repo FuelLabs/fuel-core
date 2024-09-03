@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use anyhow::bail;
 use fuel_core_types::{
     fuel_compression::{
         RawKey,
@@ -10,6 +9,7 @@ use fuel_core_types::{
         Address,
         AssetId,
         ContractId,
+        ScriptCode,
     },
 };
 
@@ -17,7 +17,6 @@ use crate::{
     db::RocksDb,
     eviction_policy::CacheEvictor,
     tables::{
-        check_keyspace,
         PerRegistryKeyspace,
         PostcardSerialized,
         RegistryKeyspace,
@@ -51,60 +50,25 @@ fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
 }
 
 impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for Address {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut CompressCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_substitute(
-            check_keyspace!(keyspace, RegistryKeyspace::address),
-            self,
-            ctx,
-        )
+    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_substitute(RegistryKeyspace::address, self, ctx)
     }
 }
 
 impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for AssetId {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut CompressCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_substitute(
-            check_keyspace!(keyspace, RegistryKeyspace::asset_id),
-            self,
-            ctx,
-        )
+    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_substitute(RegistryKeyspace::asset_id, self, ctx)
     }
 }
 
 impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for ContractId {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut CompressCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_substitute(
-            check_keyspace!(keyspace, RegistryKeyspace::contract_id),
-            self,
-            ctx,
-        )
+    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_substitute(RegistryKeyspace::contract_id, self, ctx)
     }
 }
 
-impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for Vec<u8> {
-    fn substitute(
-        &self,
-        keyspace: &str,
-        ctx: &mut CompressCtx<'_>,
-    ) -> anyhow::Result<RawKey> {
-        registry_substitute(
-            check_keyspace!(
-                keyspace,
-                RegistryKeyspace::script_code | RegistryKeyspace::witness
-            ),
-            self,
-            ctx,
-        )
+impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for ScriptCode {
+    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+        registry_substitute(RegistryKeyspace::script_code, self, ctx)
     }
 }
