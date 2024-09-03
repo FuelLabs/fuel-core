@@ -26,7 +26,7 @@ mod simulation;
 
 mod charts;
 
-pub fn pretty(input: u64) -> String {
+pub fn pretty<T: ToString>(input: T) -> String {
     input
         .to_string()
         .as_bytes()
@@ -83,14 +83,16 @@ fn main() {
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
             let Source::Generated { size } = source;
-            println!("Running simulation with P: {p}, D: {d}, and {size} blocks");
+            println!("Running simulation with P: {}, D: {}, and {} blocks", pretty(p), pretty(d), pretty(size));
             let result = run_simulation(p, d, size);
             (result, (p, d))
         },
         Mode::Optimization { iterations, source} => {
             let Source::Generated { size } = source;
             println!("Running optimization with {iterations} iterations and {size} blocks");
-            naive_optimisation(iterations as usize, size)
+            let (results, (p, d)) = naive_optimisation(iterations as usize, size);
+            println!("Optimization results: P: {}, D: {}", pretty(p), pretty(d));
+            (results, (p, d))
         }
     };
 
