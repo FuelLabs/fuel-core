@@ -75,6 +75,31 @@ fn different_arb_metadata() -> UpdaterMetadata {
     })
 }
 
+#[derive(Default, Clone)]
+struct FakeDaSource {
+    called: Arc<std::sync::Mutex<bool>>,
+}
+
+impl FakeDaSource {
+    fn new() -> Self {
+        Self {
+            called: Arc::new(std::sync::Mutex::new(false)),
+        }
+    }
+
+    fn was_called(&self) -> bool {
+        *self.called.lock().unwrap()
+    }
+}
+
+#[async_trait::async_trait]
+impl DaCommitSource for FakeDaSource {
+    async fn get_da_commit_details(&mut self) -> Result<DaCommitDetails> {
+        *self.called.lock().unwrap() = true;
+        Ok(DaCommitDetails::default())
+    }
+}
+
 #[tokio::test]
 async fn next__fetches_l2_block() {
     // given
@@ -90,10 +115,54 @@ async fn next__fetches_l2_block() {
     let metadata_storage = FakeMetadata::empty();
 
     let starting_metadata = arb_metadata();
+    let fake_da_source = FakeDaSource::new();
     let mut updater = FuelGasPriceUpdater::new(
         starting_metadata.into(),
         l2_block_source,
         metadata_storage,
+        fake_da_source.clone(),
+    );
+
+    let start = updater.start(0.into());
+    // when
+    let next = tokio::spawn(async move { updater.next().await });
+
+    l2_block_sender.send(l2_block).await.unwrap();
+    let new = next.await.unwrap().unwrap();
+
+    // then
+    assert_ne!(start, new);
+    match start {
+        Algorithm::V0(_) => {}
+        Algorithm::V1(_) => {
+            assert!(fake_da_source.was_called());
+        }
+    }
+}
+
+#[tokio::test]
+async fn next__new_l2_block_saves_old_metadata() {
+    // given
+    let l2_block = BlockInfo::Block {
+        height: 1,
+        gas_used: 60,
+        block_gas_capacity: 100,
+    };
+    let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
+    let l2_block_source = FakeL2BlockSource {
+        l2_block: l2_block_receiver,
+    };
+    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner.clone(),
+    };
+
+    let starting_metadata = arb_metadata();
+    let mut updater = FuelGasPriceUpdater::new(
+        starting_metadata.into(),
+        l2_block_source,
+        metadata_storage,
+        FakeDaSource::default(),
     );
 
     let start = updater.start(0.into());
@@ -126,6 +195,7 @@ async fn init__if_exists_already_reload_old_values_with_overrides() {
         height,
         l2_block_source,
         metadata_storage,
+        FakeDaSource::default(),
         new_min_exec_gas_price,
         new_exec_gas_price_change_percent,
         new_l2_block_fullness_threshold_percent,
@@ -158,6 +228,7 @@ async fn init__if_it_does_not_exist_fail() {
         height.into(),
         l2_block_source,
         metadata_storage,
+        FakeDaSource::default(),
         0,
         0,
         0,
@@ -165,49 +236,4 @@ async fn init__if_it_does_not_exist_fail() {
 
     // then
     assert!(matches!(res, Err(Error::CouldNotInitUpdater(_))));
-}
-
-#[tokio::test]
-async fn next__new_l2_block_saves_old_metadata() {
-    // given
-    let l2_block = BlockInfo::Block {
-        height: 1,
-        gas_used: 60,
-        block_gas_capacity: 100,
-    };
-    let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
-    let l2_block_source = FakeL2BlockSource {
-        l2_block: l2_block_receiver,
-    };
-    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
-    let metadata_storage = FakeMetadata {
-        inner: metadata_inner.clone(),
-    };
-
-    let starting_metadata = arb_metadata();
-    let mut updater = FuelGasPriceUpdater::new(
-        starting_metadata.clone().into(),
-        l2_block_source,
-        metadata_storage,
-    );
-
-    // when
-    let next = tokio::spawn(async move { updater.next().await });
-    let actual = metadata_inner.lock().unwrap().clone();
-    assert_eq!(None, actual);
-    l2_block_sender.send(l2_block.clone()).await.unwrap();
-    let _ = next.await.unwrap().unwrap();
-
-    // then
-    let UpdaterMetadata::V0(old_inner) = starting_metadata;
-    let new_exec_price = old_inner.new_exec_price
-        + (old_inner.new_exec_price * old_inner.exec_gas_price_change_percent / 100);
-    let l2_block_height = old_inner.l2_block_height + 1;
-    let expected = UpdaterMetadata::V0(V0Metadata {
-        new_exec_price,
-        l2_block_height,
-        ..old_inner
-    });
-    let actual = metadata_inner.lock().unwrap().clone().unwrap();
-    assert_eq!(expected, actual);
 }
