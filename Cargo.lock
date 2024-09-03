@@ -3154,7 +3154,6 @@ dependencies = [
 name = "fuel-compression"
 version = "0.56.0"
 dependencies = [
- "anyhow",
  "fuel-derive",
  "serde",
  "serde-big-array",
@@ -3826,7 +3825,6 @@ version = "0.56.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "regex",
  "syn 2.0.77",
  "synstructure",
 ]
@@ -3861,7 +3859,6 @@ version = "0.56.0"
 name = "fuel-tx"
 version = "0.56.0"
 dependencies = [
- "anyhow",
  "bitflags 2.6.0",
  "derivative",
  "derive_more",
@@ -3884,7 +3881,6 @@ dependencies = [
 name = "fuel-types"
 version = "0.56.0"
 dependencies = [
- "anyhow",
  "fuel-compression",
  "fuel-derive",
  "hex",

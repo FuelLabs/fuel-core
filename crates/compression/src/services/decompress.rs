@@ -84,7 +84,7 @@ pub fn decompress(
 
     let ctx = DecompressCtx { db };
 
-    let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress(
+    let transactions = <Vec<Transaction> as DecompressibleBy<_, _>>::decompress(
         &compressed.transactions,
         &ctx,
     )?;

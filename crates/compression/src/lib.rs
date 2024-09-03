@@ -44,7 +44,7 @@ struct Header {
     pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
-/// Compressed block, without the preceeding version byte.
+/// Compressed block, without the preceding version byte.
 #[derive(Clone, Serialize, Deserialize)]
 struct CompressedBlockPayload {
     /// Registration section of the compressed block

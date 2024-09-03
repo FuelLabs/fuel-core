@@ -41,7 +41,7 @@ fn registry_prepare<T: serde::Serialize + Default + PartialEq>(
     Ok(RawKey::ZERO)
 }
 
-impl RegistrySubstitutableBy<PrepareCtx<'_>> for Address {
+impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for Address {
     fn substitute(
         &self,
         keyspace: &str,
@@ -55,7 +55,7 @@ impl RegistrySubstitutableBy<PrepareCtx<'_>> for Address {
     }
 }
 
-impl RegistrySubstitutableBy<PrepareCtx<'_>> for AssetId {
+impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for AssetId {
     fn substitute(
         &self,
         keyspace: &str,
@@ -69,7 +69,7 @@ impl RegistrySubstitutableBy<PrepareCtx<'_>> for AssetId {
     }
 }
 
-impl RegistrySubstitutableBy<PrepareCtx<'_>> for ContractId {
+impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for ContractId {
     fn substitute(
         &self,
         keyspace: &str,
@@ -83,7 +83,7 @@ impl RegistrySubstitutableBy<PrepareCtx<'_>> for ContractId {
     }
 }
 
-impl RegistrySubstitutableBy<PrepareCtx<'_>> for Vec<u8> {
+impl RegistrySubstitutableBy<PrepareCtx<'_>, anyhow::Error> for Vec<u8> {
     fn substitute(
         &self,
         keyspace: &str,

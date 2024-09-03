@@ -23,7 +23,7 @@ pub struct DecompressCtx<'a> {
     pub db: &'a RocksDb,
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>> for Address {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for Address {
     fn desubstitute(
         c: &RawKey,
         keyspace: &str,
@@ -34,7 +34,7 @@ impl RegistryDesubstitutableBy<DecompressCtx<'_>> for Address {
     }
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>> for AssetId {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for AssetId {
     fn desubstitute(
         c: &RawKey,
         keyspace: &str,
@@ -45,7 +45,7 @@ impl RegistryDesubstitutableBy<DecompressCtx<'_>> for AssetId {
     }
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>> for ContractId {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for ContractId {
     fn desubstitute(
         c: &RawKey,
         keyspace: &str,
@@ -56,7 +56,7 @@ impl RegistryDesubstitutableBy<DecompressCtx<'_>> for ContractId {
     }
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>> for Vec<u8> {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for Vec<u8> {
     fn desubstitute(
         c: &RawKey,
         keyspace: &str,
