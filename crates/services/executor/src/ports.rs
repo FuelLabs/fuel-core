@@ -17,6 +17,7 @@ use fuel_core_types::{
 use alloc::vec::Vec;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
+#[allow(clippy::large_enum_variant)]
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
     Transaction(fuel_tx::Transaction),

@@ -106,6 +106,7 @@ macro_rules! tables {
         }
 
         impl RegistrationsPerTable {
+            #[cfg(test)]
             pub(crate) fn is_empty(&self) -> bool {
                 $(
                     if !self.$name.is_empty() {
@@ -115,7 +116,7 @@ macro_rules! tables {
                 true
             }
 
-            pub(crate) fn write_all_tx(&self, db: &mut RocksDb) -> anyhow::Result<()> {
+            pub(crate) fn write_to_db(&self, db: &mut RocksDb) -> anyhow::Result<()> {
                 let mut batch = WriteBatchWithTransaction::<false>::default();
                 let cf_registry = db.db.cf_handle("temporal").unwrap();
                 let cf_index = db.db.cf_handle("temporal_index").unwrap();

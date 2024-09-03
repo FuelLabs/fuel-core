@@ -50,11 +50,11 @@ fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
     Ok(key)
 }
 
-impl<'a> RegistrySubstitutableBy<CompressCtx<'_>> for Address {
+impl RegistrySubstitutableBy<CompressCtx<'_>> for Address {
     fn substitute(
         &self,
-        ctx: &mut CompressCtx<'_>,
         keyspace: &str,
+        ctx: &mut CompressCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_substitute(
             check_keyspace!(keyspace, RegistryKeyspace::address),
@@ -64,11 +64,11 @@ impl<'a> RegistrySubstitutableBy<CompressCtx<'_>> for Address {
     }
 }
 
-impl<'a> RegistrySubstitutableBy<CompressCtx<'_>> for AssetId {
+impl RegistrySubstitutableBy<CompressCtx<'_>> for AssetId {
     fn substitute(
         &self,
-        ctx: &mut CompressCtx<'_>,
         keyspace: &str,
+        ctx: &mut CompressCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_substitute(
             check_keyspace!(keyspace, RegistryKeyspace::asset_id),
@@ -78,11 +78,11 @@ impl<'a> RegistrySubstitutableBy<CompressCtx<'_>> for AssetId {
     }
 }
 
-impl<'a> RegistrySubstitutableBy<CompressCtx<'_>> for ContractId {
+impl RegistrySubstitutableBy<CompressCtx<'_>> for ContractId {
     fn substitute(
         &self,
-        ctx: &mut CompressCtx<'_>,
         keyspace: &str,
+        ctx: &mut CompressCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_substitute(
             check_keyspace!(keyspace, RegistryKeyspace::contract_id),
@@ -92,11 +92,11 @@ impl<'a> RegistrySubstitutableBy<CompressCtx<'_>> for ContractId {
     }
 }
 
-impl<'a> RegistrySubstitutableBy<CompressCtx<'_>> for Vec<u8> {
+impl RegistrySubstitutableBy<CompressCtx<'_>> for Vec<u8> {
     fn substitute(
         &self,
-        ctx: &mut CompressCtx<'_>,
         keyspace: &str,
+        ctx: &mut CompressCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_substitute(
             check_keyspace!(

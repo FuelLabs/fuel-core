@@ -1,6 +1,6 @@
 pub mod db;
 mod eviction_policy;
-mod ports;
+pub mod ports;
 mod tables;
 pub mod services {
     pub mod compress;

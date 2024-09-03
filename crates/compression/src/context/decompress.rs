@@ -23,44 +23,44 @@ pub struct DecompressCtx<'a> {
     pub db: &'a RocksDb,
 }
 
-impl<'a> RegistryDesubstitutableBy<DecompressCtx<'_>> for Address {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>> for Address {
     fn desubstitute(
         c: &RawKey,
-        ctx: &DecompressCtx,
         keyspace: &str,
+        ctx: &DecompressCtx,
     ) -> anyhow::Result<Self> {
         ctx.db
             .read_registry(check_keyspace!(keyspace, RegistryKeyspace::address), *c)
     }
 }
 
-impl<'a> RegistryDesubstitutableBy<DecompressCtx<'_>> for AssetId {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>> for AssetId {
     fn desubstitute(
         c: &RawKey,
-        ctx: &DecompressCtx,
         keyspace: &str,
+        ctx: &DecompressCtx,
     ) -> anyhow::Result<Self> {
         ctx.db
             .read_registry(check_keyspace!(keyspace, RegistryKeyspace::asset_id), *c)
     }
 }
 
-impl<'a> RegistryDesubstitutableBy<DecompressCtx<'_>> for ContractId {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>> for ContractId {
     fn desubstitute(
         c: &RawKey,
-        ctx: &DecompressCtx,
         keyspace: &str,
+        ctx: &DecompressCtx,
     ) -> anyhow::Result<Self> {
         ctx.db
             .read_registry(check_keyspace!(keyspace, RegistryKeyspace::contract_id), *c)
     }
 }
 
-impl<'a> RegistryDesubstitutableBy<DecompressCtx<'_>> for Vec<u8> {
+impl RegistryDesubstitutableBy<DecompressCtx<'_>> for Vec<u8> {
     fn desubstitute(
         c: &RawKey,
-        ctx: &DecompressCtx,
         keyspace: &str,
+        ctx: &DecompressCtx,
     ) -> anyhow::Result<Vec<u8>> {
         ctx.db.read_registry(
             check_keyspace!(

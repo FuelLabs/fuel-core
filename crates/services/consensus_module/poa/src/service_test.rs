@@ -460,6 +460,7 @@ fn test_signing_key() -> Secret<SecretKeyWrapper> {
 }
 
 #[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 enum FakeProducedBlock {
     Predefined(Block),
     New(BlockHeight, Tai64),

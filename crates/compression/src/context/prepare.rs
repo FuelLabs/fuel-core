@@ -41,11 +41,11 @@ fn registry_prepare<T: serde::Serialize + Default + PartialEq>(
     Ok(RawKey::ZERO)
 }
 
-impl<'a> RegistrySubstitutableBy<PrepareCtx<'a>> for Address {
+impl RegistrySubstitutableBy<PrepareCtx<'_>> for Address {
     fn substitute(
         &self,
-        ctx: &mut PrepareCtx<'a>,
         keyspace: &str,
+        ctx: &mut PrepareCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_prepare(
             check_keyspace!(keyspace, RegistryKeyspace::address),
@@ -55,11 +55,11 @@ impl<'a> RegistrySubstitutableBy<PrepareCtx<'a>> for Address {
     }
 }
 
-impl<'a> RegistrySubstitutableBy<PrepareCtx<'_>> for AssetId {
+impl RegistrySubstitutableBy<PrepareCtx<'_>> for AssetId {
     fn substitute(
         &self,
-        ctx: &mut PrepareCtx<'_>,
         keyspace: &str,
+        ctx: &mut PrepareCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_prepare(
             check_keyspace!(keyspace, RegistryKeyspace::asset_id),
@@ -69,11 +69,11 @@ impl<'a> RegistrySubstitutableBy<PrepareCtx<'_>> for AssetId {
     }
 }
 
-impl<'a> RegistrySubstitutableBy<PrepareCtx<'_>> for ContractId {
+impl RegistrySubstitutableBy<PrepareCtx<'_>> for ContractId {
     fn substitute(
         &self,
-        ctx: &mut PrepareCtx<'_>,
         keyspace: &str,
+        ctx: &mut PrepareCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_prepare(
             check_keyspace!(keyspace, RegistryKeyspace::contract_id),
@@ -83,11 +83,11 @@ impl<'a> RegistrySubstitutableBy<PrepareCtx<'_>> for ContractId {
     }
 }
 
-impl<'a> RegistrySubstitutableBy<PrepareCtx<'_>> for Vec<u8> {
+impl RegistrySubstitutableBy<PrepareCtx<'_>> for Vec<u8> {
     fn substitute(
         &self,
-        ctx: &mut PrepareCtx<'_>,
         keyspace: &str,
+        ctx: &mut PrepareCtx<'_>,
     ) -> anyhow::Result<RawKey> {
         registry_prepare(
             check_keyspace!(
