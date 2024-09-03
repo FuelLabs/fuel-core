@@ -10,15 +10,10 @@ use fuel_core::{
         IterableKeyValueView,
     },
 };
-use fuel_core_storage::{
-    column::Column,
-    kv_store::{
-        KeyValueInspect,
-        StorageColumn,
-    },
-    tables::FullFuelBlocks,
-    StorageAsRef,
-};
+use fuel_core_storage::{column::Column, kv_store::{
+    KeyValueInspect,
+    StorageColumn,
+}, Error, StorageAsMut, StorageAsRef, StorageInspect};
 use fuel_core_types::{
     blockchain::block::{
         Block,
@@ -38,12 +33,18 @@ use std::{
     borrow::Cow,
     path::Path,
 };
+use fuel_core::database::database_description::DatabaseDescription;
+use fuel_core::database::metadata::MetadataTable;
+use crate::db_lookup_times_utils::full_block_table::{FullFuelBlocks, FullFuelBlocksColumns};
 
 pub fn get_random_block_height(rng: &mut ThreadRng, block_count: u32) -> BlockHeight {
     BlockHeight::from(rng.gen_range(0..block_count))
 }
 
-pub fn open_db(block_count: u32, tx_count: u32, method: &str) -> Database {
+pub fn open_db<T: DatabaseDescription>(block_count: u32, tx_count: u32, method: &str) -> Database<T>
+where
+    Database<T>: StorageInspect<MetadataTable<T>, Error = Error>,
+{
     Database::open_rocksdb(
         Path::new(format!("./{block_count}/{method}/{tx_count}").as_str()),
         None, // no caching
@@ -52,11 +53,11 @@ pub fn open_db(block_count: u32, tx_count: u32, method: &str) -> Database {
     .unwrap()
 }
 
-pub fn open_raw_rocksdb(
+pub fn open_raw_rocksdb<T: DatabaseDescription>(
     block_count: u32,
     tx_count: u32,
     method: &str,
-) -> RocksDb<OnChain> {
+) -> RocksDb<T> {
     RocksDb::default_open(
         Path::new(format!("./{block_count}/{method}/{tx_count}").as_str()),
         None,
@@ -69,7 +70,7 @@ pub fn chain_id() -> ChainId {
 }
 
 pub fn get_full_block(
-    view: &IterableKeyValueView<Column>,
+    view: &IterableKeyValueView<FullFuelBlocksColumns>,
     height: &BlockHeight,
 ) -> anyhow::Result<Option<Block>> {
     let db_block = view.storage::<FullFuelBlocks>().get(height)?;

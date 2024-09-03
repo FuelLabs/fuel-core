@@ -6,11 +6,9 @@ use crate::db_lookup_times_utils::{
     },
 };
 use fuel_core::{
-    database::database_description::on_chain::OnChain,
     state::rocks_db::RocksDb,
 };
 use fuel_core_storage::{
-    column::Column,
     kv_store::{
         KeyValueMutate,
         Value,
@@ -34,6 +32,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
+use crate::db_lookup_times_utils::full_block_table::{FullFuelBlockDesc, FullFuelBlocksColumns};
 
 pub fn seed_compressed_blocks_and_transactions_matrix(method: &str) {
     for (block_count, tx_count) in matrix() {
@@ -45,8 +44,8 @@ pub fn seed_compressed_blocks_and_transactions_matrix(method: &str) {
 
 pub fn seed_full_block_matrix() {
     for (block_count, tx_count) in matrix() {
-        let mut database = open_raw_rocksdb(block_count, tx_count, "full_block");
-        seed_full_blocks(&mut database, block_count, tx_count);
+        let mut full_block_db = open_raw_rocksdb(block_count, tx_count, "full_block");
+        seed_full_blocks(&mut full_block_db, block_count, tx_count);
     }
 }
 
@@ -76,7 +75,7 @@ fn height_key(block_height: u32) -> Vec<u8> {
 }
 
 fn insert_compressed_block(
-    database: &mut RocksDb<OnChain>,
+    database: &mut RocksDb<FullFuelBlockDesc>,
     height: u32,
     tx_count: u32,
 ) -> Block {
@@ -101,21 +100,21 @@ fn insert_compressed_block(
     database
         .put(
             height_key.as_slice(),
-            Column::FuelBlocks,
+            FullFuelBlocksColumns::FuelBlocks,
             Value::new(raw_compressed_block),
         )
         .unwrap();
     // 2. insert into Transactions table
     for (tx_id, tx) in raw_transactions {
         database
-            .put(tx_id.as_slice(), Column::Transactions, Value::new(tx))
+            .put(tx_id.as_slice(), FullFuelBlocksColumns::Transactions, Value::new(tx))
             .unwrap();
     }
 
     block
 }
 
-fn insert_full_block(database: &mut RocksDb<OnChain>, height: u32, tx_count: u32) {
+fn insert_full_block(database: &mut RocksDb<FullFuelBlockDesc>, height: u32, tx_count: u32) {
     // we seed compressed blocks and transactions to not affect individual
     // lookup times
     let block = insert_compressed_block(database, height, tx_count);
@@ -126,14 +125,14 @@ fn insert_full_block(database: &mut RocksDb<OnChain>, height: u32, tx_count: u32
     database
         .put(
             height_key.as_slice(),
-            Column::FullFuelBlocks,
+            FullFuelBlocksColumns::FullFuelBlocks,
             Value::new(raw_full_block),
         )
         .unwrap();
 }
 
 fn seed_compressed_blocks_and_transactions(
-    database: &mut RocksDb<OnChain>,
+    database: &mut RocksDb<FullFuelBlockDesc>,
     block_count: u32,
     tx_count: u32,
 ) -> Vec<Block> {
@@ -144,8 +143,8 @@ fn seed_compressed_blocks_and_transactions(
     blocks
 }
 
-fn seed_full_blocks(database: &mut RocksDb<OnChain>, block_count: u32, tx_count: u32) {
+fn seed_full_blocks(full_block_db: &mut RocksDb<FullFuelBlockDesc>, block_count: u32, tx_count: u32) {
     for block_number in 0..block_count {
-        insert_full_block(database, block_number, tx_count);
+        insert_full_block(full_block_db, block_number, tx_count);
     }
 }

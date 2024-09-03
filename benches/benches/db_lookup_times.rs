@@ -19,6 +19,10 @@ use db_lookup_times_utils::seed::{
 };
 use fuel_core_storage::transactional::AtomicView;
 use rand::thread_rng;
+use fuel_core::database::database_description::on_chain::OnChain;
+use fuel_core_storage::{StorageAsMut, StorageAsRef};
+use fuel_core_types::fuel_merkle::storage::StorageMutateInfallible;
+use crate::db_lookup_times_utils::full_block_table::{FullFuelBlockDesc, FullFuelBlocks};
 
 mod db_lookup_times_utils;
 
@@ -30,7 +34,7 @@ pub fn header_and_tx_lookup(c: &mut Criterion) {
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
-        let database = open_db(block_count, tx_count, method);
+        let database = open_db::<OnChain>(block_count, tx_count, method);
         let view = database.latest_view().unwrap();
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
@@ -73,7 +77,7 @@ pub fn full_block_lookup(c: &mut Criterion) {
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
-        let database = open_db(block_count, tx_count, method);
+        let database = open_db::<FullFuelBlockDesc>(block_count, tx_count, method);
         let view = database.latest_view().unwrap();
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
@@ -90,7 +94,7 @@ pub fn full_block_lookup(c: &mut Criterion) {
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().sample_size(100_000).measurement_time(std::time::Duration::from_secs(100));
+    config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(10));
     targets = header_and_tx_lookup, multi_get_lookup, full_block_lookup
 }
 criterion_main!(benches);
