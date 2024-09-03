@@ -11,6 +11,6 @@ impl DaCommitSource for FuelDaSource {
     fn get_da_commit_details(
         &mut self,
     ) -> GasPriceUpdaterResult<Option<DaCommitDetails>> {
-        todo!()
+        todo!() // TODO: pending research on how to get the data from the block committer
     }
 }
