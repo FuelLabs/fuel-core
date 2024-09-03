@@ -275,7 +275,7 @@ where
             }
             AlgorithmUpdater::V1(_) => {
                 return Err(anyhow!("V1 of the gas price algo has not been enabled yet"))
-                // TODO: update the DA record data with data received from the source
+                // TODO(#2139): update the DA record data with data received from the source
                 // updater.update_da_record_data(vec![])?;
             }
         }
