@@ -21,6 +21,7 @@ pub use fuel_gas_price_algorithm::{
 mod tests;
 
 pub mod fuel_core_storage_adapter;
+pub mod fuel_da_source_adapter;
 
 pub struct FuelGasPriceUpdater<L2, Metadata, DaSource> {
     inner: AlgorithmUpdater,

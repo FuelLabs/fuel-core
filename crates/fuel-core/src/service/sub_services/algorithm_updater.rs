@@ -20,6 +20,7 @@ use fuel_core_gas_price_service::{
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
+        fuel_da_source_adapter::FuelDaSource,
         Algorithm,
         AlgorithmUpdater,
         AlgorithmUpdaterV0,
@@ -57,6 +58,7 @@ use fuel_core_types::{
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
     MetadataStorageAdapter,
+    FuelDaSource,
 >;
 
 pub struct InitializeTask {
@@ -77,6 +79,7 @@ type Task = GasPriceService<
     FuelGasPriceUpdater<
         FuelL2BlockSource<ConsensusParametersProvider>,
         MetadataStorageAdapter,
+        FuelDaSource,
     >,
 >;
 
@@ -214,6 +217,7 @@ pub fn get_synced_gas_price_updater(
             default_metadata.into(),
             l2_block_source,
             metadata_storage,
+            FuelDaSource::default(),
         );
         Ok(updater)
     } else {
@@ -231,6 +235,7 @@ pub fn get_synced_gas_price_updater(
             latest_block_height.into(),
             l2_block_source,
             metadata_storage,
+            FuelDaSource::default(),
             config.min_gas_price,
             config.gas_price_change_percent,
             config.gas_price_threshold_percent,
@@ -264,6 +269,9 @@ fn sync_metadata_storage_with_on_chain_storage(
                 updater,
                 metadata_storage,
             )?;
+        }
+        AlgorithmUpdater::V1(_) => {
+            todo!()
         }
     }
     Ok(())
