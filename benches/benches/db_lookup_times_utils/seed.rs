@@ -115,6 +115,8 @@ fn insert_compressed_block(
     block
 }
 
+// we seed compressed blocks and transactions to not affect individual
+// lookup times
 fn insert_full_block(database: &mut RocksDb<OnChain>, height: u32, tx_count: u32) {
     let block = insert_compressed_block(database, height, tx_count);
 
@@ -143,9 +145,6 @@ fn seed_compressed_blocks_and_transactions(
 }
 
 fn seed_full_blocks(database: &mut RocksDb<OnChain>, block_count: u32, tx_count: u32) {
-    // we seed compressed blocks and transactions to not affect individual
-    // lookup times
-
     for block_number in 0..block_count {
         insert_full_block(database, block_number, tx_count);
     }
