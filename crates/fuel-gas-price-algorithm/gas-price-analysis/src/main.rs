@@ -1,3 +1,4 @@
+use crate::simulation::GeneratedDaCost;
 use plotters::prelude::*;
 use rand::{
     rngs::StdRng,
@@ -16,7 +17,7 @@ use crate::{
     },
     optimisation::naive_optimisation,
     simulation::{
-        run_simulation,
+        Simulator,
         SimulationResults,
     },
 };
@@ -81,17 +82,23 @@ enum Source {
 fn main() {
     let args = Arg::parse();
 
+    const UPDATE_PERIOD: usize = 12;
+
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
             let Source::Generated { size } = source;
+            let da_cost_source = GeneratedDaCost { size, update_period: UPDATE_PERIOD };
             println!("Running simulation with P: {}, D: {}, and {} blocks", pretty(p), pretty(d), pretty(size));
-            let result = run_simulation(p, d, size);
+            let simulator = Simulator::new(da_cost_source);
+            let result = simulator.run_simulation(p, d, UPDATE_PERIOD);
             (result, (p, d))
         },
         Mode::Optimization { iterations, source} => {
             let Source::Generated { size } = source;
             println!("Running optimization with {iterations} iterations and {size} blocks");
-            let (results, (p, d)) = naive_optimisation(iterations as usize, size);
+            let da_cost_source = GeneratedDaCost { size, update_period: UPDATE_PERIOD };
+            let simulator = Simulator::new(da_cost_source);
+            let (results, (p, d)) = naive_optimisation(simulator, iterations as usize, UPDATE_PERIOD);
             println!("Optimization results: P: {}, D: {}", pretty(p), pretty(d));
             (results, (p, d))
         }

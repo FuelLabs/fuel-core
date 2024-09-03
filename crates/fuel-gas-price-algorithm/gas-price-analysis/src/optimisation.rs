@@ -1,3 +1,4 @@
+use crate::simulation::{DaCost, GeneratedDaCost};
 use super::*;
 
 fn da_pid_factors(size: usize) -> Vec<(i64, i64)> {
@@ -11,10 +12,10 @@ fn da_pid_factors(size: usize) -> Vec<(i64, i64)> {
         .collect()
 }
 
-pub fn naive_optimisation(iterations: usize, size: usize) -> (SimulationResults, (i64, i64)) {
+pub fn naive_optimisation<T: DaCost>(simulator: Simulator<T>, iterations: usize, da_recording_rate: usize) -> (SimulationResults, (i64, i64)) {
     da_pid_factors(iterations)
         .iter()
-        .map(|(p, d)| (run_simulation(*p, *d, size), (*p, *d)))
+        .map(|(p, d)| (simulator.run_simulation(*p, *d, da_recording_rate), (*p, *d)))
         .min_by_key(|(results, _)| {
             let SimulationResults { actual_profit, .. } = results;
             let err = actual_profit.iter().map(|p| p.abs()).sum::<i64>();

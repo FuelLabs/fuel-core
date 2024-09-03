@@ -1,12 +1,14 @@
-use super::*;
-use fuel_gas_price_algorithm::v1::{
-    AlgorithmUpdaterV1,
-    RecordedBlock,
-};
 use std::{
     iter,
     num::NonZeroU64,
 };
+
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    RecordedBlock,
+};
+
+use super::*;
 
 pub struct SimulationResults {
     pub gas_prices: Vec<u64>,
@@ -19,145 +21,174 @@ pub struct SimulationResults {
     pub pessimistic_costs: Vec<u64>,
 }
 
-pub fn run_simulation(da_p_component: i64, da_d_component: i64, size: usize) -> SimulationResults {
-    // simulation parameters
-    let da_recording_rate = 12;
-    let capacity = 30_000_000;
-    let gas_per_byte = 63;
-    let gas_price_factor = 100;
-    let max_block_bytes = capacity / gas_per_byte;
-    let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
-    let da_cost_per_byte = arbitrary_cost_per_byte(size, da_recording_rate);
 
-    let l2_blocks = fullness_and_bytes
-        .iter()
-        .map(|(fullness, bytes)| (*fullness, *bytes))
-        .collect::<Vec<_>>();
-    let da_blocks = fullness_and_bytes
-        .iter()
-        .zip(da_cost_per_byte.iter())
-        .enumerate()
-        .fold(
-            (vec![], vec![]),
-            |(mut delayed, mut recorded),
-             (index, ((_fullness, bytes), cost_per_byte))| {
-                let total_cost = *bytes * cost_per_byte;
-                let height = index as u32 + 1;
-                let converted = RecordedBlock {
-                    height,
-                    block_bytes: *bytes,
-                    block_cost: total_cost as u64,
-                };
-                delayed.push(converted);
-                if delayed.len() == da_recording_rate {
-                    recorded.push(Some(delayed));
-                    (vec![], recorded)
-                } else {
-                    recorded.push(None);
-                    (delayed, recorded)
-                }
-            },
-        )
-        .1;
+pub trait DaCost {
+    fn get_cost_per_byte(&self) -> Vec<u64>;
+}
 
-    let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
+pub struct GeneratedDaCost {
+    pub size: usize,
+    pub update_period: usize,
+}
 
-    let mut updater = AlgorithmUpdaterV1 {
-        min_exec_gas_price: 10,
-        min_da_gas_price: 10,
-        new_exec_price: 10 * gas_price_factor,
-        last_da_gas_price: 5 * gas_price_factor,
-        da_gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
-        l2_block_height: 0,
-        l2_block_fullness_threshold_percent: 50,
-        exec_gas_price_change_percent: 2,
-        max_da_gas_price_change_percent: 10,
-        total_da_rewards: 0,
-        da_recorded_block_height: 0,
-        latest_da_cost_per_byte: 50000,
-        projected_total_da_cost: 0,
-        latest_known_total_da_cost: 0,
-        unrecorded_blocks: vec![],
-        da_p_component,
-        da_d_component,
-        last_profit: 0,
-        second_to_last_profit: 0,
-    };
+impl DaCost for GeneratedDaCost {
+    fn get_cost_per_byte(&self) -> Vec<u64> {
+        arbitrary_cost_per_byte(self.size, self.update_period)
+    }
+}
 
-    let mut gas_prices = vec![];
-    let mut exec_gas_prices = vec![];
-    let mut da_gas_prices = vec![];
-    let mut actual_reward_totals = vec![];
-    let mut projected_cost_totals = vec![];
-    let mut actual_costs = vec![];
-    let mut pessimistic_costs = vec![];
-    for (index, ((fullness, bytes), da_block)) in blocks {
-        let height = index as u32 + 1;
-        exec_gas_prices.push(updater.new_exec_price);
-        let gas_price = updater.algorithm().calculate(max_block_bytes);
-        gas_prices.push(gas_price);
-        // Update DA blocks on the occasion there is one
+pub struct Simulator<T> {
+    da_cost_source: T
+}
 
-        if let Some(mut da_blocks) = da_block.clone() {
-            let mut total_costs = updater.latest_known_total_da_cost;
-            for block in &mut da_blocks {
-                block.block_cost *= gas_price_factor;
-                total_costs += block.block_cost;
-                actual_costs.push(total_costs);
-            }
-            updater.update_da_record_data(da_blocks.to_owned()).unwrap();
-            assert_eq!(total_costs, updater.projected_total_da_cost);
-            assert_eq!(total_costs, updater.latest_known_total_da_cost);
+impl<T: DaCost> Simulator<T> {
+    pub fn new(da_cost_source: T) -> Self {
+        Simulator {
+            da_cost_source
         }
-        updater
-            .update_l2_block_data(
-                height,
-                *fullness,
-                capacity.try_into().unwrap(),
-                *bytes,
-                gas_price,
+    }
+
+    pub fn run_simulation(&self, da_p_component: i64, da_d_component: i64, da_recording_rate: usize) -> SimulationResults {
+        // simulation parameters
+        let capacity = 30_000_000;
+        let gas_per_byte = 63;
+        let gas_price_factor = 100;
+        let max_block_bytes = capacity / gas_per_byte;
+        let da_cost_per_byte = self.da_cost_source.get_cost_per_byte();
+        let size = da_cost_per_byte.len();
+        let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
+
+        let l2_blocks = fullness_and_bytes
+            .iter()
+            .map(|(fullness, bytes)| (*fullness, *bytes))
+            .collect::<Vec<_>>();
+        let da_blocks = fullness_and_bytes
+            .iter()
+            .zip(da_cost_per_byte.iter())
+            .enumerate()
+            .fold(
+                (vec![], vec![]),
+                |(mut delayed, mut recorded),
+                 (index, ((_fullness, bytes), cost_per_byte))| {
+                    let total_cost = *bytes * cost_per_byte;
+                    let height = index as u32 + 1;
+                    let converted = RecordedBlock {
+                        height,
+                        block_bytes: *bytes,
+                        block_cost: total_cost as u64,
+                    };
+                    delayed.push(converted);
+                    if delayed.len() == da_recording_rate {
+                        recorded.push(Some(delayed));
+                        (vec![], recorded)
+                    } else {
+                        recorded.push(None);
+                        (delayed, recorded)
+                    }
+                },
             )
-            .unwrap();
-        da_gas_prices.push(updater.last_da_gas_price);
-        pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
-        actual_reward_totals.push(updater.total_da_rewards);
-        projected_cost_totals.push(updater.projected_total_da_cost);
+            .1;
+
+        let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
+
+        let mut updater = AlgorithmUpdaterV1 {
+            min_exec_gas_price: 10,
+            min_da_gas_price: 10,
+            new_exec_price: 10 * gas_price_factor,
+            last_da_gas_price: 5 * gas_price_factor,
+            da_gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
+            l2_block_height: 0,
+            l2_block_fullness_threshold_percent: 50,
+            exec_gas_price_change_percent: 2,
+            max_da_gas_price_change_percent: 10,
+            total_da_rewards: 0,
+            da_recorded_block_height: 0,
+            latest_da_cost_per_byte: 50000,
+            projected_total_da_cost: 0,
+            latest_known_total_da_cost: 0,
+            unrecorded_blocks: vec![],
+            da_p_component,
+            da_d_component,
+            last_profit: 0,
+            second_to_last_profit: 0,
+        };
+
+        let mut gas_prices = vec![];
+        let mut exec_gas_prices = vec![];
+        let mut da_gas_prices = vec![];
+        let mut actual_reward_totals = vec![];
+        let mut projected_cost_totals = vec![];
+        let mut actual_costs = vec![];
+        let mut pessimistic_costs = vec![];
+        for (index, ((fullness, bytes), da_block)) in blocks {
+            let height = index as u32 + 1;
+            exec_gas_prices.push(updater.new_exec_price);
+            let gas_price = updater.algorithm().calculate(max_block_bytes);
+            gas_prices.push(gas_price);
+            // Update DA blocks on the occasion there is one
+
+            if let Some(mut da_blocks) = da_block.clone() {
+                let mut total_costs = updater.latest_known_total_da_cost;
+                for block in &mut da_blocks {
+                    block.block_cost *= gas_price_factor;
+                    total_costs += block.block_cost;
+                    actual_costs.push(total_costs);
+                }
+                updater.update_da_record_data(da_blocks.to_owned()).unwrap();
+                assert_eq!(total_costs, updater.projected_total_da_cost);
+                assert_eq!(total_costs, updater.latest_known_total_da_cost);
+            }
+            updater
+                .update_l2_block_data(
+                    height,
+                    *fullness,
+                    capacity.try_into().unwrap(),
+                    *bytes,
+                    gas_price,
+                )
+                .unwrap();
+            da_gas_prices.push(updater.last_da_gas_price);
+            pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
+            actual_reward_totals.push(updater.total_da_rewards);
+            projected_cost_totals.push(updater.projected_total_da_cost);
+        }
+
+        let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) =
+            fullness_and_bytes.iter().cloned().unzip();
+        let fullness = fullness_without_capacity
+            .iter()
+            .map(|&fullness| (fullness, capacity))
+            .collect();
+        let bytes_and_costs = bytes
+            .iter()
+            .zip(da_cost_per_byte.iter())
+            .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64))
+            .collect();
+
+        let actual_profit: Vec<i64> = actual_costs
+            .iter()
+            .zip(actual_reward_totals.iter())
+            .map(|(cost, reward)| *reward as i64 - *cost as i64)
+            .collect();
+
+        let projected_profit: Vec<i64> = projected_cost_totals
+            .iter()
+            .zip(actual_reward_totals.iter())
+            .map(|(cost, reward)| *reward as i64 - *cost as i64)
+            .collect();
+
+        SimulationResults {
+            gas_prices,
+            exec_gas_prices,
+            da_gas_prices,
+            fullness,
+            bytes_and_costs,
+            actual_profit,
+            projected_profit,
+            pessimistic_costs,
+        }
     }
 
-    let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) =
-        fullness_and_bytes.iter().cloned().unzip();
-    let fullness = fullness_without_capacity
-        .iter()
-        .map(|&fullness| (fullness, capacity))
-        .collect();
-    let bytes_and_costs = bytes
-        .iter()
-        .zip(da_cost_per_byte.iter())
-        .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64))
-        .collect();
-
-    let actual_profit: Vec<i64> = actual_costs
-        .iter()
-        .zip(actual_reward_totals.iter())
-        .map(|(cost, reward)| *reward as i64 - *cost as i64)
-        .collect();
-
-    let projected_profit: Vec<i64> = projected_cost_totals
-        .iter()
-        .zip(actual_reward_totals.iter())
-        .map(|(cost, reward)| *reward as i64 - *cost as i64)
-        .collect();
-
-    SimulationResults {
-        gas_prices,
-        exec_gas_prices,
-        da_gas_prices,
-        fullness,
-        bytes_and_costs,
-        actual_profit,
-        projected_profit,
-        pessimistic_costs,
-    }
 }
 
 // Naive Fourier series
