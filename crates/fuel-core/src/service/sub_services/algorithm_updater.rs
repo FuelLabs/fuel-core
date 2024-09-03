@@ -217,7 +217,7 @@ pub fn get_synced_gas_price_updater(
             default_metadata.into(),
             l2_block_source,
             metadata_storage,
-            FuelDaSource::default(),
+            FuelDaSource,
         );
         Ok(updater)
     } else {
@@ -235,7 +235,7 @@ pub fn get_synced_gas_price_updater(
             latest_block_height.into(),
             l2_block_source,
             metadata_storage,
-            FuelDaSource::default(),
+            FuelDaSource,
             config.min_gas_price,
             config.gas_price_change_percent,
             config.gas_price_threshold_percent,
