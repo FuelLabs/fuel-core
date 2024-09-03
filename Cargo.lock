@@ -3154,6 +3154,7 @@ dependencies = [
 name = "fuel-compression"
 version = "0.56.0"
 dependencies = [
+ "anyhow",
  "fuel-derive",
  "serde",
  "serde-big-array",
@@ -3860,6 +3861,7 @@ version = "0.56.0"
 name = "fuel-tx"
 version = "0.56.0"
 dependencies = [
+ "anyhow",
  "bitflags 2.6.0",
  "derivative",
  "derive_more",

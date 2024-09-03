@@ -1,9 +1,3 @@
-use fuel_core_types::fuel_compression::{
-    tables,
-    DecompactionContext,
-    Key,
-    Table,
-};
 use tokio::sync::mpsc;
 
 use fuel_core_types::{
@@ -16,11 +10,12 @@ use fuel_core_types::{
         },
         primitives::Empty,
     },
-    fuel_compression::Compactable,
+    fuel_compression::DecompressibleBy,
     fuel_tx::Transaction,
 };
 
 use crate::{
+    context::decompress::DecompressCtx,
     db::RocksDb,
     CompressedBlockPayload,
 };
@@ -59,7 +54,7 @@ impl From<anyhow::Error> for DecompressError {
     }
 }
 
-async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskRequest>) {
+pub async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskRequest>) {
     while let Some(req) = request_receiver.recv().await {
         match req {
             TaskRequest::Decompress { block, response } => {
@@ -87,12 +82,12 @@ pub fn decompress(
 
     compressed.registrations.write_to_db(db)?;
 
-    let ctx = Ctx { db };
+    let ctx = DecompressCtx { db };
 
-    let mut transactions = Vec::new();
-    for tx in compressed.transactions.into_iter() {
-        transactions.push(Transaction::decompact(tx, &ctx)?);
-    }
+    let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress(
+        &compressed.transactions,
+        &ctx,
+    )?;
 
     Ok(PartialFuelBlock {
         header: PartialBlockHeader {
@@ -115,45 +110,4 @@ pub fn decompress(
         },
         transactions,
     })
-}
-
-pub struct Ctx<'a> {
-    db: &'a RocksDb,
-}
-
-impl DecompactionContext for Ctx<'_> {
-    fn read_AssetId(
-        &self,
-        key: Key<tables::AssetId>,
-    ) -> anyhow::Result<<tables::AssetId as Table>::Type> {
-        self.db.read(key)
-    }
-
-    fn read_Address(
-        &self,
-        key: Key<tables::Address>,
-    ) -> anyhow::Result<<tables::Address as Table>::Type> {
-        self.db.read(key)
-    }
-
-    fn read_ContractId(
-        &self,
-        key: Key<tables::ContractId>,
-    ) -> anyhow::Result<<tables::ContractId as Table>::Type> {
-        self.db.read(key)
-    }
-
-    fn read_ScriptCode(
-        &self,
-        key: Key<tables::ScriptCode>,
-    ) -> anyhow::Result<<tables::ScriptCode as Table>::Type> {
-        self.db.read(key)
-    }
-
-    fn read_Witness(
-        &self,
-        key: Key<tables::Witness>,
-    ) -> anyhow::Result<<tables::Witness as Table>::Type> {
-        self.db.read(key)
-    }
 }

@@ -1,8 +1,15 @@
 pub mod db;
+mod eviction_policy;
 mod ports;
-mod services {
+mod tables;
+pub mod services {
     pub mod compress;
     pub mod decompress;
+}
+mod context {
+    pub mod compress;
+    pub mod decompress;
+    pub mod prepare;
 }
 
 use serde::{
@@ -17,13 +24,15 @@ use fuel_core_types::{
             StateTransitionBytecodeVersion,
         },
         primitives::DaBlockHeight,
-    }, fuel_compression::RawKey, fuel_tx::{
-        Address, CompactTransaction, MessageId
-    }, fuel_types::{
+    },
+    fuel_tx::CompressedTransaction,
+    fuel_types::{
         BlockHeight,
         Bytes32,
-    }, tai64::Tai64
+    },
+    tai64::Tai64,
 };
+use tables::RegistrationsPerTable;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Header {
@@ -43,12 +52,7 @@ struct CompressedBlockPayload {
     /// Compressed block header
     header: Header,
     /// Compressed transactions
-    transactions: Vec<CompactTransaction>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct RegistrationsPerTable {
-    address: Vec<(RawKey, Address)>,
+    transactions: Vec<CompressedTransaction>,
 }
 
 #[cfg(test)]
@@ -82,7 +86,7 @@ mod tests {
     #[test]
     fn postcard_roundtrip() {
         let original = CompressedBlockPayload {
-            registrations: ChangesPerTable::from_start_keys(Default::default()),
+            registrations: RegistrationsPerTable::default(),
             header: Header {
                 da_height: DaBlockHeight::default(),
                 prev_root: Default::default(),
@@ -185,6 +189,7 @@ mod tests {
             .clone()
             .map(|block| services::compress::compress(&mut db, block).unwrap());
 
+        db.db.flush().unwrap();
         drop(tmpdir);
         let tmpdir2 = TempDir::new().unwrap();
         let mut db = RocksDb::open(tmpdir2.path()).unwrap();
