@@ -18,6 +18,7 @@ use fuel_core_types::{
         },
         primitives::SecretKeyWrapper,
     },
+    fuel_tx::Bytes32,
     fuel_vm::Signature,
     secrecy::{
         ExposeSecret,
@@ -67,6 +68,30 @@ impl SignMode {
             } => sign_with_kms(client, key_id, cached_public_key_bytes, message).await?,
         };
         Ok(Consensus::PoA(PoAConsensus::new(poa_signature)))
+    }
+
+    pub fn public_key_address(&self) -> anyhow::Result<Option<Bytes32>> {
+        match self {
+            SignMode::Unavailable => Ok(None),
+            SignMode::Key(secret_key) => {
+                Ok(secret_key.expose_secret().public_key().hash().into())
+            }
+            #[cfg(feature = "aws-kms")]
+            SignMode::Kms {
+                cached_public_key_bytes,
+                ..
+            } => {
+                use fuel_core_types::fuel_crypto::PublicKey;
+                use k256::pkcs8::DecodePublicKey;
+
+                let public_key_bytes: &[u8] = cached_public_key_bytes;
+                let k256_public_key =
+                    k256::PublicKey::from_public_key_der(public_key_bytes)?;
+                let public_key = PublicKey::from(k256_public_key);
+
+                Ok(public_key.hash().into())
+            }
+        }
     }
 }
 
@@ -171,6 +196,26 @@ mod tests {
                 cached_public_key_bytes: vec![], // Dummy value is ok for this test
             }
             .is_available())
+        };
+    }
+
+    #[test]
+    fn public_key_address() {
+        assert_eq!(SignMode::Unavailable.public_key_address().unwrap(), None);
+
+        let mut rng = StdRng::seed_from_u64(2322);
+        let secret_key = SecretKey::random(&mut rng);
+        let public_key_address = SignMode::Key(Secret::new(secret_key.into()))
+            .public_key_address()
+            .unwrap();
+
+        assert!(public_key_address.is_some());
+
+        #[cfg(feature = "aws-kms")]
+        {
+            // Ideally here we want to retrieve the secp256k1 public key from a
+            // key arn and a kms client here.
+            todo!()
         };
     }
 }
