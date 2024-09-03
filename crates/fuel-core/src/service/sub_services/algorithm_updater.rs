@@ -271,7 +271,7 @@ fn sync_metadata_storage_with_on_chain_storage(
             )?;
         }
         AlgorithmUpdater::V1(_) => {
-            todo!()
+            todo!() // TODO(#2140)
         }
     }
     Ok(())
