@@ -1,18 +1,18 @@
 use crate::db_lookup_times_utils::{
+    full_block_table::{
+        FullFuelBlockDesc,
+        FullFuelBlocksColumns,
+    },
     matrix::matrix,
     utils::{
         chain_id,
         open_raw_rocksdb,
     },
 };
-use fuel_core::{
-    state::rocks_db::RocksDb,
-};
-use fuel_core_storage::{
-    kv_store::{
-        KeyValueMutate,
-        Value,
-    },
+use fuel_core::state::rocks_db::RocksDb;
+use fuel_core_storage::kv_store::{
+    KeyValueMutate,
+    Value,
 };
 use fuel_core_types::{
     blockchain::{
@@ -32,7 +32,6 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
-use crate::db_lookup_times_utils::full_block_table::{FullFuelBlockDesc, FullFuelBlocksColumns};
 
 pub fn seed_compressed_blocks_and_transactions_matrix(method: &str) {
     for (block_count, tx_count) in matrix() {
@@ -107,20 +106,30 @@ fn insert_compressed_block(
     // 2. insert into Transactions table
     for (tx_id, tx) in raw_transactions {
         database
-            .put(tx_id.as_slice(), FullFuelBlocksColumns::Transactions, Value::new(tx))
+            .put(
+                tx_id.as_slice(),
+                FullFuelBlocksColumns::Transactions,
+                Value::new(tx),
+            )
             .unwrap();
     }
 
     block
 }
 
-fn insert_full_block(database: &mut RocksDb<FullFuelBlockDesc>, height: u32, tx_count: u32) {
+fn insert_full_block(
+    database: &mut RocksDb<FullFuelBlockDesc>,
+    height: u32,
+    tx_count: u32,
+) {
     // we seed compressed blocks and transactions to not affect individual
     // lookup times
     let block = insert_compressed_block(database, height, tx_count);
 
     let height_key = height_key(height);
+    println!("setting height key to {:?}", &height_key);
     let raw_full_block = postcard::to_allocvec(&block).unwrap().to_vec();
+    println!("raw value: {:?}", &raw_full_block);
 
     database
         .put(
@@ -143,7 +152,11 @@ fn seed_compressed_blocks_and_transactions(
     blocks
 }
 
-fn seed_full_blocks(full_block_db: &mut RocksDb<FullFuelBlockDesc>, block_count: u32, tx_count: u32) {
+fn seed_full_blocks(
+    full_block_db: &mut RocksDb<FullFuelBlockDesc>,
+    block_count: u32,
+    tx_count: u32,
+) {
     for block_number in 0..block_count {
         insert_full_block(full_block_db, block_number, tx_count);
     }

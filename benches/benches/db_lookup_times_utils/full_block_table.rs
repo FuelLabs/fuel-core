@@ -1,12 +1,15 @@
 use fuel_core::database::database_description::DatabaseDescription;
-use fuel_core_storage::blueprint::plain::Plain;
-use fuel_core_storage::codec::postcard::Postcard;
-use fuel_core_storage::kv_store::StorageColumn;
-use fuel_core_storage::Mappable;
-use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::blockchain::block::Block;
-use fuel_core_types::fuel_types::BlockHeight;
-
+use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::postcard::Postcard,
+    kv_store::StorageColumn,
+    structured_storage::TableWithBlueprint,
+    Mappable,
+};
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_types::BlockHeight,
+};
 
 #[repr(u32)]
 #[derive(
@@ -27,7 +30,7 @@ pub enum FullFuelBlocksColumns {
     /// See [`FuelBlocks`](crate::tables::FuelBlocks)
     FuelBlocks = 7,
     FullFuelBlocks = 10902,
-    Metadata = 10903
+    Metadata = 10903,
 }
 
 impl StorageColumn for FullFuelBlocksColumns {
@@ -40,8 +43,6 @@ impl StorageColumn for FullFuelBlocksColumns {
         *self as u32
     }
 }
-
-
 
 /// Full block table. Contains all the information about the block.
 pub struct FullFuelBlocks;

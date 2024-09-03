@@ -17,12 +17,9 @@ use db_lookup_times_utils::seed::{
     seed_compressed_blocks_and_transactions_matrix,
     seed_full_block_matrix,
 };
+use fuel_core::database::database_description::on_chain::OnChain;
 use fuel_core_storage::transactional::AtomicView;
 use rand::thread_rng;
-use fuel_core::database::database_description::on_chain::OnChain;
-use fuel_core_storage::{StorageAsMut, StorageAsRef};
-use fuel_core_types::fuel_merkle::storage::StorageMutateInfallible;
-use crate::db_lookup_times_utils::full_block_table::{FullFuelBlockDesc, FullFuelBlocks};
 
 mod db_lookup_times_utils;
 
@@ -77,12 +74,11 @@ pub fn full_block_lookup(c: &mut Criterion) {
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
-        let database = open_db::<FullFuelBlockDesc>(block_count, tx_count, method);
-        let view = database.latest_view().unwrap();
+        let database = open_raw_rocksdb(block_count, tx_count, method);
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let full_block = get_full_block(&view, &height);
+                let full_block = get_full_block(&database, &height);
                 assert!(full_block.is_ok());
                 assert!(full_block.unwrap().is_some());
             });
