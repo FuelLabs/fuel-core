@@ -194,7 +194,7 @@ impl From<AlgorithmUpdater> for UpdaterMetadata {
                 UpdaterMetadata::V0(metadata)
             }
             AlgorithmUpdater::V1(_v1) => {
-                unimplemented!()
+                unimplemented!() // https://github.com/FuelLabs/fuel-core/issues/2140
             }
         }
     }
