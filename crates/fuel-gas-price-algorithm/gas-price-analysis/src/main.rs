@@ -46,8 +46,9 @@ use clap::{Parser, Subcommand};
 struct Arg {
     #[command(subcommand)]
     mode: Mode,
-    #[arg(short, long, default_value = "gas_prices.png")]
-    file_path: String,
+    /// File path to save the chart to. Will not generate chart if left blank
+    #[arg(short, long)]
+    file_path: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -96,7 +97,10 @@ fn main() {
         }
     };
 
-    draw_chart(results, p_comp, d_comp, &args.file_path);
+    if let Some(file_path) = &args.file_path {
+        draw_chart(results, p_comp, d_comp, file_path);
+
+    }
 }
 
 fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_path: &str) {
