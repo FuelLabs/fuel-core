@@ -291,23 +291,28 @@ impl TxMutation {
         for transaction in &mut transactions {
             match transaction {
                 FuelTx::Script(tx) => {
-                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                    max_gas_usable
+                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Create(tx) => {
-                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                    max_gas_usable
+                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Mint(_) => {
                     // Mint transactions doesn't consume gas and so we will add a flat 10% of the block gas limit
-                    max_gas_usable += block_gas_limit / 10;
+                    max_gas_usable.saturating_add(block_gas_limit / 10);
                 }
                 FuelTx::Upgrade(tx) => {
-                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                    max_gas_usable
+                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Upload(tx) => {
-                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                    max_gas_usable
+                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
                 FuelTx::Blob(tx) => {
-                    max_gas_usable += tx.max_gas(consensus_params.gas_costs(), fee)
+                    max_gas_usable
+                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
                 }
             };
             if max_gas_usable > block_gas_limit {
