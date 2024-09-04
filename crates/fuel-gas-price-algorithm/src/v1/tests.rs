@@ -34,8 +34,9 @@ pub struct UpdaterBuilder {
     project_total_cost: u64,
     latest_known_total_cost: u64,
     unrecorded_blocks: Vec<BlockBytes>,
-    profit_avg: i64,
-    avg_window: u32,
+    last_profit: i64,
+    second_to_last_profit: i64,
+    da_gas_price_factor: u64,
 }
 
 impl UpdaterBuilder {
@@ -60,8 +61,9 @@ impl UpdaterBuilder {
             project_total_cost: 0,
             latest_known_total_cost: 0,
             unrecorded_blocks: vec![],
-            profit_avg: 0,
-            avg_window: 1,
+            last_profit: 0,
+            second_to_last_profit: 0,
+            da_gas_price_factor: 1,
         }
     }
 
@@ -90,7 +92,7 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_max_change_percent(mut self, max_change_percent: u8) -> Self {
+    fn with_da_max_change_percent(mut self, max_change_percent: u8) -> Self {
         self.max_change_percent = max_change_percent;
         self
     }
@@ -148,9 +150,9 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_profit_avg(mut self, profit_avg: i64, window: u32) -> Self {
-        self.profit_avg = profit_avg;
-        self.avg_window = window;
+    fn with_last_profit(mut self, last_profit: i64, last_last_profit: i64) -> Self {
+        self.last_profit = last_profit;
+        self.second_to_last_profit = last_last_profit;
         self
     }
 
@@ -174,9 +176,13 @@ impl UpdaterBuilder {
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost: self.latest_known_total_cost,
             unrecorded_blocks: self.unrecorded_blocks,
-            profit_avg: self.profit_avg,
-            avg_window: self.avg_window,
+            last_profit: self.last_profit,
+            second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
+            da_gas_price_factor: self
+                .da_gas_price_factor
+                .try_into()
+                .expect("Should never be non-zero"),
         }
     }
 }
