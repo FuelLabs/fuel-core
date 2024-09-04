@@ -23,15 +23,11 @@ use fuel_core_storage::{
         KVItem,
         KeyItem,
         KeyValueInspect,
-        KeyValueMutate,
         StorageColumn,
         Value,
         WriteOperation,
     },
-    transactional::{
-        Changes,
-        ReadTransaction,
-    },
+    transactional::Changes,
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -831,30 +827,38 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
 }
 
 #[cfg(feature = "test-helpers")]
-impl<Description> KeyValueMutate for RocksDb<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn write(
-        &mut self,
-        key: &[u8],
-        column: Self::Column,
-        buf: &[u8],
-    ) -> StorageResult<usize> {
-        let mut transaction = self.read_transaction();
-        let len = transaction.write(key, column, buf)?;
-        let changes = transaction.into_changes();
-        self.commit_changes(&changes)?;
+pub mod test_helpers {
+    use super::*;
+    use fuel_core_storage::{
+        kv_store::KeyValueMutate,
+        transactional::ReadTransaction,
+    };
 
-        Ok(len)
-    }
+    impl<Description> KeyValueMutate for RocksDb<Description>
+    where
+        Description: DatabaseDescription,
+    {
+        fn write(
+            &mut self,
+            key: &[u8],
+            column: Self::Column,
+            buf: &[u8],
+        ) -> StorageResult<usize> {
+            let mut transaction = self.read_transaction();
+            let len = transaction.write(key, column, buf)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(&changes)?;
 
-    fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-        let mut transaction = self.read_transaction();
-        transaction.delete(key, column)?;
-        let changes = transaction.into_changes();
-        self.commit_changes(&changes)?;
-        Ok(())
+            Ok(len)
+        }
+
+        fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+            let mut transaction = self.read_transaction();
+            transaction.delete(key, column)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(&changes)?;
+            Ok(())
+        }
     }
 }
 
