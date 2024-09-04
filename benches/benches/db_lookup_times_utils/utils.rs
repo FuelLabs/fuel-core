@@ -35,14 +35,24 @@ pub fn get_random_block_height(rng: &mut ThreadRng, block_count: u32) -> BlockHe
     BlockHeight::from(rng.gen_range(0..block_count))
 }
 
+fn get_base_path() -> PathBuf {
+    PathBuf::from("./db_benchmarks")
+}
+
+pub fn get_base_path_from_method(method: &str) -> PathBuf {
+    get_base_path().join(PathBuf::from(format!("{method}").as_str()))
+}
+
 pub fn open_rocks_db<T: DatabaseDescription>(
     block_count: u32,
     tx_count: u32,
     method: &str,
-) -> Result<(RocksDb<T>, PathBuf)> {
-    let path = PathBuf::from(format!("./{block_count}/{method}/{tx_count}").as_str());
+) -> Result<RocksDb<T>> {
+    let path = get_base_path_from_method(method).join(PathBuf::from(
+        format!("./{block_count}/{tx_count}").as_str(),
+    ));
     let db = RocksDb::default_open(&path, None)?;
-    Ok((db, path))
+    Ok(db)
 }
 
 pub fn chain_id() -> ChainId {

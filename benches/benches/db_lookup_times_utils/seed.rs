@@ -6,6 +6,7 @@ use crate::db_lookup_times_utils::{
     matrix::matrix,
     utils::{
         chain_id,
+        get_base_path_from_method,
         open_rocks_db,
         Result as DbLookupBenchResult,
     },
@@ -41,38 +42,31 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::fs;
 
-fn seed_matrix<SeedClosure, Description>(
-    method: &str,
+fn seed_matrix<'a, SeedClosure, Description>(
+    method: &'a str,
     seed_closure: SeedClosure,
-) -> DbLookupBenchResult<impl FnOnce()>
+) -> DbLookupBenchResult<impl FnOnce() + 'a>
 where
     SeedClosure: Fn(&mut RocksDb<Description>, u32, u32) -> DbLookupBenchResult<()>,
     Description: DatabaseDescription,
 {
-    let mut databases = vec![];
-
     for (block_count, tx_count) in matrix() {
-        let (mut database, path) = open_rocks_db(block_count, tx_count, method)?;
+        let mut database = open_rocks_db(block_count, tx_count, method)?;
         seed_closure(&mut database, block_count, tx_count)?;
-        databases.push(path);
     }
 
-    Ok(|| {
-        for path in databases {
-            fs::remove_dir_all(path).unwrap();
-        }
-    })
+    Ok(move || fs::remove_dir_all(get_base_path_from_method(method)).unwrap())
 }
 
-pub fn seed_compressed_blocks_and_transactions_matrix(
-    method: &str,
-) -> DbLookupBenchResult<impl FnOnce()> {
+pub fn seed_compressed_blocks_and_transactions_matrix<'a>(
+    method: &'a str,
+) -> DbLookupBenchResult<impl FnOnce() + 'a> {
     seed_matrix(method, |database, block_count, tx_count| {
         seed_compressed_blocks_and_transactions(database, block_count, tx_count)
     })
 }
 
-pub fn seed_full_block_matrix() -> DbLookupBenchResult<impl FnOnce()> {
+pub fn seed_full_block_matrix<'a>() -> DbLookupBenchResult<impl FnOnce() + 'a> {
     seed_matrix("full_block", |database, block_count, tx_count| {
         seed_full_blocks(database, block_count, tx_count)
     })
@@ -86,19 +80,19 @@ fn generate_bench_block(height: u32, tx_count: u32) -> DbLookupBenchResult<Block
             ..Default::default()
         },
     };
-    let txes = generate_bench_transactions(tx_count);
-    let block = PartialFuelBlock::new(header, txes);
+    let txs = generate_bench_transactions(tx_count);
+    let block = PartialFuelBlock::new(header, txs);
     block
         .generate(&[], Default::default())
         .map_err(|err| anyhow!(err))
 }
 
 fn generate_bench_transactions(tx_count: u32) -> Vec<Transaction> {
-    let mut txes = vec![];
+    let mut txs = vec![];
     for _ in 0..tx_count {
-        txes.push(Transaction::default_test_tx());
+        txs.push(Transaction::default_test_tx());
     }
-    txes
+    txs
 }
 
 fn height_key(block_height: u32) -> Vec<u8> {
