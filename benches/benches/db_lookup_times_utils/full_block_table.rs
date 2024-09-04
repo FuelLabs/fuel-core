@@ -1,15 +1,6 @@
 use fuel_core::database::database_description::DatabaseDescription;
-use fuel_core_storage::{
-    blueprint::plain::Plain,
-    codec::postcard::Postcard,
-    kv_store::StorageColumn,
-    structured_storage::TableWithBlueprint,
-    Mappable,
-};
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_types::BlockHeight,
-};
+use fuel_core_storage::kv_store::StorageColumn;
+use fuel_core_types::fuel_types::BlockHeight;
 
 #[repr(u32)]
 #[derive(
@@ -41,25 +32,6 @@ impl StorageColumn for BenchDbColumn {
 
     fn id(&self) -> u32 {
         *self as u32
-    }
-}
-
-/// Full block table. Contains all the information about the block.
-pub struct FullFuelBlocks;
-
-impl Mappable for FullFuelBlocks {
-    type Key = Self::OwnedKey;
-    type OwnedKey = BlockHeight;
-    type Value = Self::OwnedValue;
-    type OwnedValue = Block;
-}
-
-impl TableWithBlueprint for FullFuelBlocks {
-    type Blueprint = Plain<Postcard, Postcard>;
-    type Column = BenchDbColumn;
-
-    fn column() -> Self::Column {
-        Self::Column::FullFuelBlocks
     }
 }
 
