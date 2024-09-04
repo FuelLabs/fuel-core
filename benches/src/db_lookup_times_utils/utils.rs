@@ -32,8 +32,11 @@ use strum_macros::AsRefStr;
 
 pub type Result<T> = core::result::Result<T, anyhow::Error>;
 
-pub fn get_random_block_height(rng: &mut ThreadRng, block_count: u32) -> BlockHeight {
-    BlockHeight::from(rng.gen_range(0..block_count))
+pub fn get_random_block_height(
+    rng: &mut ThreadRng,
+    block_count: BlockHeight,
+) -> BlockHeight {
+    BlockHeight::from(rng.gen_range(0..block_count.into()))
 }
 
 fn get_base_path() -> PathBuf {
@@ -45,7 +48,7 @@ pub fn get_base_path_from_method(method: &LookupMethod) -> PathBuf {
 }
 
 pub fn open_rocks_db<Description: DatabaseDescription>(
-    block_count: u32,
+    block_count: BlockHeight,
     tx_count: u32,
     method: &LookupMethod,
 ) -> Result<RocksDb<Description>> {
@@ -68,10 +71,10 @@ pub enum LookupMethod {
 }
 
 impl LookupMethod {
-    pub(crate) fn get_block(
+    pub fn get_block(
         &self,
         database: &RocksDb<BenchDatabase>,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> Result<Block> {
         match self {
             LookupMethod::FullBlock => get_block_full_block_method(database, height),
@@ -85,7 +88,7 @@ impl LookupMethod {
 
 fn get_block_full_block_method(
     database: &RocksDb<BenchDatabase>,
-    height: &BlockHeight,
+    height: BlockHeight,
 ) -> Result<Block> {
     let height_key = height.to_bytes();
     let raw_block = database
@@ -98,7 +101,7 @@ fn get_block_full_block_method(
 
 fn get_block_multi_get_method(
     database: &RocksDb<BenchDatabase>,
-    height: &BlockHeight,
+    height: BlockHeight,
 ) -> Result<Block> {
     let height_key = height.to_bytes();
 
@@ -119,7 +122,7 @@ fn get_block_multi_get_method(
 
 fn get_block_headers_and_tx_method(
     database: &RocksDb<BenchDatabase>,
-    height: &BlockHeight,
+    height: BlockHeight,
 ) -> Result<Block> {
     let height_key = height.to_bytes();
 

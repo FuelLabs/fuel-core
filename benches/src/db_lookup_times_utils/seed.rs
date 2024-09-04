@@ -48,7 +48,8 @@ fn seed_matrix<SeedClosure, Description>(
     seed_closure: SeedClosure,
 ) -> DbLookupBenchResult<impl FnOnce()>
 where
-    SeedClosure: Fn(&mut RocksDb<Description>, u32, u32) -> DbLookupBenchResult<()>,
+    SeedClosure:
+        Fn(&mut RocksDb<Description>, BlockHeight, u32) -> DbLookupBenchResult<()>,
     Description: DatabaseDescription,
 {
     for (block_count, tx_count) in matrix() {
@@ -76,11 +77,14 @@ pub fn seed_full_block_matrix() -> DbLookupBenchResult<impl FnOnce()> {
     )
 }
 
-fn generate_bench_block(height: u32, tx_count: u32) -> DbLookupBenchResult<Block> {
+fn generate_bench_block(
+    height: BlockHeight,
+    tx_count: u32,
+) -> DbLookupBenchResult<Block> {
     let header = PartialBlockHeader {
         application: Default::default(),
         consensus: ConsensusHeader::<Empty> {
-            height: BlockHeight::from(height),
+            height,
             ..Default::default()
         },
     };
@@ -99,13 +103,13 @@ fn generate_bench_transactions(tx_count: u32) -> Vec<Transaction> {
     txs
 }
 
-fn height_key(block_height: u32) -> Vec<u8> {
-    BlockHeight::from(block_height).to_bytes().to_vec()
+fn height_key(block_height: BlockHeight) -> Vec<u8> {
+    block_height.to_bytes().to_vec()
 }
 
-fn insert_compressed_block(
+pub fn insert_compressed_block(
     database: &mut RocksDb<BenchDatabase>,
-    height: u32,
+    height: BlockHeight,
     tx_count: u32,
 ) -> DbLookupBenchResult<Block> {
     let block = generate_bench_block(height, tx_count)?;
@@ -142,11 +146,11 @@ fn insert_compressed_block(
     Ok(block)
 }
 
-fn insert_full_block(
+pub fn insert_full_block(
     database: &mut RocksDb<BenchDatabase>,
-    height: u32,
+    height: BlockHeight,
     tx_count: u32,
-) -> DbLookupBenchResult<()> {
+) -> DbLookupBenchResult<Block> {
     // we seed compressed blocks and transactions to not affect individual
     // lookup times
     let block = insert_compressed_block(database, height, tx_count)?;
@@ -160,16 +164,18 @@ fn insert_full_block(
             BenchDbColumn::FullFuelBlocks,
             Value::new(raw_full_block),
         )
-        .map_err(|err| anyhow!(err))
+        .map_err(|err| anyhow!(err))?;
+
+    Ok(block)
 }
 
 fn seed_compressed_blocks_and_transactions(
     database: &mut RocksDb<BenchDatabase>,
-    block_count: u32,
+    block_count: BlockHeight,
     tx_count: u32,
 ) -> DbLookupBenchResult<()> {
-    for block_number in 0..block_count {
-        insert_compressed_block(database, block_number, tx_count)?;
+    for block_number in 0..block_count.into() {
+        insert_compressed_block(database, block_number.into(), tx_count)?;
     }
 
     Ok(())
@@ -177,11 +183,11 @@ fn seed_compressed_blocks_and_transactions(
 
 fn seed_full_blocks(
     full_block_db: &mut RocksDb<BenchDatabase>,
-    block_count: u32,
+    block_count: BlockHeight,
     tx_count: u32,
 ) -> DbLookupBenchResult<()> {
-    for block_number in 0..block_count {
-        insert_full_block(full_block_db, block_number, tx_count)?;
+    for block_number in 0..block_count.into() {
+        insert_full_block(full_block_db, block_number.into(), tx_count)?;
     }
 
     Ok(())

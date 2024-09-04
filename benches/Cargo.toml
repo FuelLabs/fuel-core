@@ -50,6 +50,9 @@ test-helpers = { path = "../tests/test-helpers" }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
+[dev-dependencies]
+tempdir = "0.3.7"
+
 [[bench]]
 harness = false
 name = "import"

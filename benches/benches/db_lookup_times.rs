@@ -1,8 +1,17 @@
-use crate::db_lookup_times_utils::{
+use criterion::{
+    criterion_group,
+    criterion_main,
+    Criterion,
+};
+use fuel_core_benches::db_lookup_times_utils::{
     full_block_table::BenchDatabase,
     matrix::{
         matrix,
         should_clean,
+    },
+    seed::{
+        seed_compressed_blocks_and_transactions_matrix,
+        seed_full_block_matrix,
     },
     utils::{
         get_random_block_height,
@@ -11,18 +20,8 @@ use crate::db_lookup_times_utils::{
         Result as DbLookupBenchResult,
     },
 };
-use criterion::{
-    criterion_group,
-    criterion_main,
-    Criterion,
-};
-use db_lookup_times_utils::seed::{
-    seed_compressed_blocks_and_transactions_matrix,
-    seed_full_block_matrix,
-};
-use rand::thread_rng;
 
-mod db_lookup_times_utils;
+use rand::thread_rng;
 
 pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
     let method = LookupMethod::HeaderAndTx;
@@ -36,7 +35,7 @@ pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnc
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let block = method.get_block(&database, &height);
+                let block = method.get_block(&database, height);
                 assert!(block.is_ok());
             });
         });
@@ -58,7 +57,7 @@ pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()>
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let block = method.get_block(&database, &height);
+                let block = method.get_block(&database, height);
                 assert!(block.is_ok());
             });
         });
@@ -80,7 +79,7 @@ pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let full_block = method.get_block(&database, &height);
+                let full_block = method.get_block(&database, height);
                 assert!(full_block.is_ok());
             });
         });
