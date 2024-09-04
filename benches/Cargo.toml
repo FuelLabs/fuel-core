@@ -51,7 +51,7 @@ tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-tempdir = "0.3.7"
+tempfile = { workspace = true }
 
 [[bench]]
 harness = false

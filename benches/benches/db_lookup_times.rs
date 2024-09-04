@@ -31,7 +31,7 @@ pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnc
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let database = open_rocks_db::<BenchDatabase>(block_count, tx_count, &method)?;
+        let database = open_rocks_db::<BenchDatabase>(block_count, tx_count, method)?;
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
@@ -53,7 +53,7 @@ pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()>
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let database = open_rocks_db(block_count, tx_count, &method)?;
+        let database = open_rocks_db(block_count, tx_count, method)?;
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
@@ -75,7 +75,7 @@ pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let database = open_rocks_db(block_count, tx_count, &method)?;
+        let database = open_rocks_db(block_count, tx_count, method)?;
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);

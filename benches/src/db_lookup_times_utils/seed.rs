@@ -41,7 +41,6 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use std::fs;
 
 fn seed_matrix<SeedClosure, Description>(
     method: LookupMethod,
@@ -53,11 +52,11 @@ where
     Description: DatabaseDescription,
 {
     for (block_count, tx_count) in matrix() {
-        let mut database = open_rocks_db(block_count, tx_count, &method)?;
+        let mut database = open_rocks_db(block_count, tx_count, method)?;
         seed_closure(&mut database, block_count, tx_count)?;
     }
 
-    Ok(move || fs::remove_dir_all(get_base_path_from_method(&method)).unwrap())
+    Ok(move || std::fs::remove_dir_all(get_base_path_from_method(method)).unwrap())
 }
 
 pub fn seed_compressed_blocks_and_transactions_matrix(

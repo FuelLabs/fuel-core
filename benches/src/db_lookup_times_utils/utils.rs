@@ -43,14 +43,14 @@ fn get_base_path() -> PathBuf {
     PathBuf::from("./db_benchmarks")
 }
 
-pub fn get_base_path_from_method(method: &LookupMethod) -> PathBuf {
+pub fn get_base_path_from_method(method: LookupMethod) -> PathBuf {
     get_base_path().join(PathBuf::from(method.as_ref()))
 }
 
 pub fn open_rocks_db<Description: DatabaseDescription>(
     block_count: BlockHeight,
     tx_count: u32,
-    method: &LookupMethod,
+    method: LookupMethod,
 ) -> Result<RocksDb<Description>> {
     let path = get_base_path_from_method(method).join(PathBuf::from(
         format!("./{block_count}/{tx_count}").as_str(),
