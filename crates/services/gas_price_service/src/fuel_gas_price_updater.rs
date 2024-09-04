@@ -113,12 +113,11 @@ pub trait L2BlockSource: Send + Sync {
     async fn get_l2_block(&mut self, height: BlockHeight) -> Result<BlockInfo>;
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DaCommitDetails {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
     pub blob_cost_wei: u32,
-    pub partial_block_heights: Option<[u32; 2]>,
 }
 
 pub trait DaCommitSource: Send + Sync {

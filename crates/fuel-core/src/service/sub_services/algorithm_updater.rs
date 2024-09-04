@@ -12,6 +12,7 @@ use crate::{
         Config,
     },
 };
+use std::time::Duration;
 
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
@@ -20,7 +21,10 @@ use fuel_core_gas_price_service::{
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
-        fuel_da_source_adapter::FuelDaSource,
+        fuel_da_source_adapter::{
+            dummy_ingestor::DummyIngestor,
+            FuelDaSourceService,
+        },
         Algorithm,
         AlgorithmUpdater,
         AlgorithmUpdaterV0,
@@ -58,7 +62,8 @@ use fuel_core_types::{
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
     MetadataStorageAdapter,
-    FuelDaSource,
+    // todo(#2139): replace DummyIngestor with BlockCommitterIngestor
+    FuelDaSourceService<DummyIngestor>,
 >;
 
 pub struct InitializeTask {
@@ -79,7 +84,8 @@ type Task = GasPriceService<
     FuelGasPriceUpdater<
         FuelL2BlockSource<ConsensusParametersProvider>,
         MetadataStorageAdapter,
-        FuelDaSource,
+        // todo(#2139): replace DummyIngestor with BlockCommitterIngestor
+        FuelDaSourceService<DummyIngestor>,
     >,
 >;
 
@@ -212,12 +218,14 @@ pub fn get_synced_gas_price_updater(
     let l2_block_source =
         FuelL2BlockSource::new(genesis_block_height, settings.clone(), block_stream);
 
+    let da_source = FuelDaSourceService::new(DummyIngestor, Duration::from_secs(5))?;
+
     if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
         let updater = FuelGasPriceUpdater::new(
             default_metadata.into(),
             l2_block_source,
             metadata_storage,
-            FuelDaSource,
+            da_source,
         );
         Ok(updater)
     } else {
@@ -235,7 +243,7 @@ pub fn get_synced_gas_price_updater(
             latest_block_height.into(),
             l2_block_source,
             metadata_storage,
-            FuelDaSource,
+            da_source,
             config.min_gas_price,
             config.gas_price_change_percent,
             config.gas_price_threshold_percent,
