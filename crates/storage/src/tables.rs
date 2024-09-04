@@ -4,9 +4,7 @@
 use crate::Mappable;
 use fuel_core_types::{
     blockchain::{
-        block::{
-            CompressedBlock,
-        },
+        block::CompressedBlock,
         consensus::Consensus,
         header::{
             ConsensusParametersVersion,
