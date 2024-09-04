@@ -1,30 +1,15 @@
 use crate::db_lookup_times_utils::full_block_table::{
-    FullFuelBlockDesc,
-    FullFuelBlocksColumns,
+    BenchDatabase,
+    BenchDbColumn,
 };
 use anyhow::anyhow;
 use fuel_core::{
-    database::{
-        database_description::{
-            on_chain::OnChain,
-            DatabaseDescription,
-        },
-        metadata::MetadataTable,
-        Database,
-    },
-    state::{
-        historical_rocksdb::StateRewindPolicy,
-        rocks_db::RocksDb,
-    },
+    database::database_description::DatabaseDescription,
+    state::rocks_db::RocksDb,
 };
-use fuel_core_storage::{
-    column::Column,
-    kv_store::{
-        KeyValueInspect,
-        StorageColumn,
-    },
-    Error as StorageError,
-    StorageInspect,
+use fuel_core_storage::kv_store::{
+    KeyValueInspect,
+    StorageColumn,
 };
 use fuel_core_types::{
     blockchain::block::{
@@ -37,42 +22,27 @@ use fuel_core_types::{
         ChainId,
     },
 };
+use itertools::Itertools;
 use rand::{
     rngs::ThreadRng,
     Rng,
 };
-use std::path::Path;
+use std::path::PathBuf;
+
+pub type Result<T> = core::result::Result<T, anyhow::Error>;
 
 pub fn get_random_block_height(rng: &mut ThreadRng, block_count: u32) -> BlockHeight {
     BlockHeight::from(rng.gen_range(0..block_count))
 }
 
-pub fn open_db<T: DatabaseDescription>(
+pub fn open_rocks_db<T: DatabaseDescription>(
     block_count: u32,
     tx_count: u32,
     method: &str,
-) -> Database<T>
-where
-    Database<T>: StorageInspect<MetadataTable<T>, Error = StorageError>,
-{
-    Database::open_rocksdb(
-        Path::new(format!("./{block_count}/{method}/{tx_count}").as_str()),
-        None, // no caching
-        StateRewindPolicy::NoRewind,
-    )
-    .unwrap()
-}
-
-pub fn open_raw_rocksdb<T: DatabaseDescription>(
-    block_count: u32,
-    tx_count: u32,
-    method: &str,
-) -> RocksDb<T> {
-    RocksDb::default_open(
-        Path::new(format!("./{block_count}/{method}/{tx_count}").as_str()),
-        None,
-    )
-    .unwrap()
+) -> Result<(RocksDb<T>, PathBuf)> {
+    let path = PathBuf::from(format!("./{block_count}/{method}/{tx_count}").as_str());
+    let db = RocksDb::default_open(&path, None)?;
+    Ok((db, path))
 }
 
 pub fn chain_id() -> ChainId {
@@ -80,12 +50,12 @@ pub fn chain_id() -> ChainId {
 }
 
 pub fn get_full_block(
-    database: &RocksDb<FullFuelBlockDesc>,
+    database: &RocksDb<BenchDatabase>,
     height: &BlockHeight,
-) -> anyhow::Result<Option<Block>> {
+) -> Result<Option<Block>> {
     let height_key = height.to_bytes();
     let raw_block = database
-        .get(&height_key, FullFuelBlocksColumns::FullFuelBlocks)?
+        .get(&height_key, BenchDbColumn::FullFuelBlocks)?
         .ok_or(anyhow!("empty raw full block"))?;
 
     let block: Block = postcard::from_bytes(raw_block.as_slice())?;
@@ -93,20 +63,49 @@ pub fn get_full_block(
 }
 
 pub fn multi_get_block(
-    database: &RocksDb<OnChain>,
+    database: &RocksDb<BenchDatabase>,
     height: BlockHeight,
-) -> anyhow::Result<()> {
+) -> Result<Block> {
     let height_key = height.to_bytes();
 
     let raw_block = database
-        .get(&height_key, Column::FuelBlocks)?
+        .get(&height_key, BenchDbColumn::FuelBlocks)?
         .ok_or(anyhow!("empty raw block"))?;
     let block: CompressedBlock = postcard::from_bytes(raw_block.as_slice())?;
     let tx_ids = block.transactions().iter();
-    let raw_txs = database.multi_get(Column::Transactions.id(), tx_ids)?;
-    for raw_tx in raw_txs.iter().flatten() {
-        let _: Transaction = postcard::from_bytes(raw_tx.as_slice())?;
-    }
+    let raw_txs = database.multi_get(BenchDbColumn::Transactions.id(), tx_ids)?;
+    let txs: Vec<Transaction> = raw_txs
+        .iter()
+        .flatten()
+        .into_iter()
+        .map(|raw_tx| postcard::from_bytes::<Transaction>(raw_tx.as_slice()))
+        .try_collect()?;
 
-    Ok(())
+    Ok(block.uncompress(txs))
+}
+
+pub fn headers_and_tx_get_block(
+    database: &RocksDb<BenchDatabase>,
+    height: BlockHeight,
+) -> Result<Block> {
+    let height_key = height.to_bytes();
+
+    let raw_block = database
+        .get(&height_key, BenchDbColumn::FuelBlocks)?
+        .ok_or(anyhow!("empty raw block"))?;
+    let block: CompressedBlock = postcard::from_bytes(raw_block.as_slice())?;
+
+    let txs: Vec<Transaction> = block
+        .transactions()
+        .iter()
+        .map(|tx_id| {
+            let raw_tx = database
+                .get(tx_id.as_slice(), BenchDbColumn::Transactions)?
+                .ok_or(anyhow!("empty transaction"))?;
+            postcard::from_bytes::<Transaction>(raw_tx.as_slice())
+                .map_err(|err| anyhow!(err))
+        })
+        .try_collect()?;
+
+    Ok(block.uncompress(txs))
 }

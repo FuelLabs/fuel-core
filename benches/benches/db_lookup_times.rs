@@ -1,11 +1,16 @@
 use crate::db_lookup_times_utils::{
-    matrix::matrix,
+    full_block_table::BenchDatabase,
+    matrix::{
+        matrix,
+        should_clean,
+    },
     utils::{
         get_full_block,
         get_random_block_height,
+        headers_and_tx_get_block,
         multi_get_block,
-        open_db,
-        open_raw_rocksdb,
+        open_rocks_db,
+        Result as DbLookupBenchResult,
     },
 };
 use criterion::{
@@ -17,44 +22,42 @@ use db_lookup_times_utils::seed::{
     seed_compressed_blocks_and_transactions_matrix,
     seed_full_block_matrix,
 };
-use fuel_core::database::database_description::on_chain::OnChain;
-use fuel_core_storage::transactional::AtomicView;
 use rand::thread_rng;
 
 mod db_lookup_times_utils;
 
-pub fn header_and_tx_lookup(c: &mut Criterion) {
+pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
     let method = "header_and_tx";
     let mut rng = thread_rng();
 
-    seed_compressed_blocks_and_transactions_matrix(method);
+    let cleaner = seed_compressed_blocks_and_transactions_matrix(method)?;
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
-        let database = open_db::<OnChain>(block_count, tx_count, method);
-        let view = database.latest_view().unwrap();
+        let (database, _) =
+            open_rocks_db::<BenchDatabase>(block_count, tx_count, method)?;
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let block = view.get_full_block(&height);
+                let block = headers_and_tx_get_block(&database, height);
                 assert!(block.is_ok());
-                assert!(block.unwrap().is_some());
             });
         });
     }
 
     group.finish();
+    Ok(cleaner)
 }
 
-pub fn multi_get_lookup(c: &mut Criterion) {
+pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
     let method = "multi_get";
     let mut rng = thread_rng();
 
-    seed_compressed_blocks_and_transactions_matrix(method);
+    let cleaner = seed_compressed_blocks_and_transactions_matrix(method)?;
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
-        let database = open_raw_rocksdb(block_count, tx_count, method);
+        let (database, _) = open_rocks_db(block_count, tx_count, method)?;
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
@@ -64,17 +67,18 @@ pub fn multi_get_lookup(c: &mut Criterion) {
     }
 
     group.finish();
+    Ok(cleaner)
 }
 
-pub fn full_block_lookup(c: &mut Criterion) {
+pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
     let method = "full_block";
     let mut rng = thread_rng();
 
-    seed_full_block_matrix();
+    let cleaner = seed_full_block_matrix()?;
     let mut group = c.benchmark_group(method);
 
     for (block_count, tx_count) in matrix() {
-        let database = open_raw_rocksdb(block_count, tx_count, method);
+        let (database, _) = open_rocks_db(block_count, tx_count, method)?;
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
@@ -86,11 +90,24 @@ pub fn full_block_lookup(c: &mut Criterion) {
     }
 
     group.finish();
+    Ok(cleaner)
+}
+
+fn construct_and_run_benchmarks(c: &mut Criterion) {
+    let header_and_tx_cleaner = header_and_tx_lookup(c).unwrap();
+    let multi_get_cleaner = multi_get_lookup(c).unwrap();
+    let full_block_cleaner = full_block_lookup(c).unwrap();
+
+    if should_clean() {
+        header_and_tx_cleaner();
+        multi_get_cleaner();
+        full_block_cleaner();
+    }
 }
 
 criterion_group! {
     name = benches;
     config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(10));
-    targets = header_and_tx_lookup, multi_get_lookup, full_block_lookup
+    targets = construct_and_run_benchmarks
 }
 criterion_main!(benches);

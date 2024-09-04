@@ -3221,6 +3221,7 @@ dependencies = [
  "fuel-core-sync",
  "fuel-core-types",
  "futures",
+ "itertools 0.12.1",
  "num_enum",
  "p256",
  "postcard",

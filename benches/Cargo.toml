@@ -48,6 +48,7 @@ strum_macros = { workspace = true }
 num_enum = { workspace = true }
 enum-iterator = { workspace = true }
 strum =  { workspace = true }
+itertools = {workspace = true}
 
 [[bench]]
 harness = false

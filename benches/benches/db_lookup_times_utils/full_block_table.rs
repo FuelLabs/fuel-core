@@ -24,7 +24,7 @@ use fuel_core_types::{
     Hash,
     num_enum::TryFromPrimitive,
 )]
-pub enum FullFuelBlocksColumns {
+pub enum BenchDbColumn {
     /// See [`Transactions`](crate::tables::Transactions)
     Transactions = 6,
     /// See [`FuelBlocks`](crate::tables::FuelBlocks)
@@ -33,7 +33,7 @@ pub enum FullFuelBlocksColumns {
     Metadata = 10903,
 }
 
-impl StorageColumn for FullFuelBlocksColumns {
+impl StorageColumn for BenchDbColumn {
     fn name(&self) -> String {
         let str: &str = self.into();
         str.to_string()
@@ -56,7 +56,7 @@ impl Mappable for FullFuelBlocks {
 
 impl TableWithBlueprint for FullFuelBlocks {
     type Blueprint = Plain<Postcard, Postcard>;
-    type Column = FullFuelBlocksColumns;
+    type Column = BenchDbColumn;
 
     fn column() -> Self::Column {
         Self::Column::FullFuelBlocks
@@ -64,10 +64,10 @@ impl TableWithBlueprint for FullFuelBlocks {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct FullFuelBlockDesc;
+pub struct BenchDatabase;
 
-impl DatabaseDescription for FullFuelBlockDesc {
-    type Column = FullFuelBlocksColumns;
+impl DatabaseDescription for BenchDatabase {
+    type Column = BenchDbColumn;
     type Height = BlockHeight;
 
     fn version() -> u32 {
@@ -75,7 +75,7 @@ impl DatabaseDescription for FullFuelBlockDesc {
     }
 
     fn name() -> String {
-        "full_fuel_blocks".to_string()
+        "bench_database".to_string()
     }
 
     fn metadata_column() -> Self::Column {
