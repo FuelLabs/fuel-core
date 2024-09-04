@@ -21,30 +21,25 @@ pub struct SimulationResults {
     pub pessimistic_costs: Vec<u64>,
 }
 
-
-pub trait DaCost {
-    fn get_cost_per_byte(&self) -> Vec<u64>;
+pub struct Simulator {
+    da_cost_per_byte: Vec<u64>
 }
 
-pub struct GeneratedDaCost {
-    pub size: usize,
-    pub update_period: usize,
-}
-
-impl DaCost for GeneratedDaCost {
-    fn get_cost_per_byte(&self) -> Vec<u64> {
-        arbitrary_cost_per_byte(self.size, self.update_period)
+pub fn get_da_cost_per_byte_from_source(source: Source, update_period: usize) -> Vec<u64> {
+    match source {
+        Source::Generated { size } => {
+            arbitrary_cost_per_byte(size, update_period)
+        },
+        Source::Predefined { file_path } => {
+            todo!()
+        }
     }
 }
 
-pub struct Simulator<T> {
-    da_cost_source: T
-}
-
-impl<T: DaCost> Simulator<T> {
-    pub fn new(da_cost_source: T) -> Self {
+impl Simulator {
+    pub fn new(da_cost_per_byte: Vec<u64>) -> Self {
         Simulator {
-            da_cost_source
+            da_cost_per_byte
         }
     }
 
@@ -54,17 +49,16 @@ impl<T: DaCost> Simulator<T> {
         let gas_per_byte = 63;
         let gas_price_factor = 100;
         let max_block_bytes = capacity / gas_per_byte;
-        let da_cost_per_byte = self.da_cost_source.get_cost_per_byte();
-        let size = da_cost_per_byte.len();
+        let size = self.da_cost_per_byte.len();
         let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
 
         let l2_blocks = fullness_and_bytes
             .iter()
             .map(|(fullness, bytes)| (*fullness, *bytes))
             .collect::<Vec<_>>();
-        let da_blocks = fullness_and_bytes
+        let (_, da_blocks) = fullness_and_bytes
             .iter()
-            .zip(da_cost_per_byte.iter())
+            .zip(self.da_cost_per_byte.iter())
             .enumerate()
             .fold(
                 (vec![], vec![]),
@@ -86,8 +80,7 @@ impl<T: DaCost> Simulator<T> {
                         (delayed, recorded)
                     }
                 },
-            )
-            .1;
+            );
 
         let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
 
@@ -161,7 +154,7 @@ impl<T: DaCost> Simulator<T> {
             .collect();
         let bytes_and_costs = bytes
             .iter()
-            .zip(da_cost_per_byte.iter())
+            .zip(self.da_cost_per_byte.iter())
             .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64))
             .collect();
 
@@ -250,7 +243,7 @@ where
     gen_noisy_signal(input, COMPONENTS)
 }
 
-fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
+pub fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
     let actual_size = size.div_ceil(update_period);
 
     const ROUGH_COST_AVG: f64 = 5.0;
