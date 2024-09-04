@@ -126,7 +126,8 @@ impl FuelBehaviour {
                 ))
                 .with_max_pending_outgoing(Some(
                     p2p_config.max_pending_outgoing_connections,
-                )),
+                ))
+                .with_max_established(Some(p2p_config.max_established_connections)),
         );
 
         let req_res_protocol =

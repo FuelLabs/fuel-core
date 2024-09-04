@@ -104,6 +104,10 @@ pub struct P2PArgs {
     #[clap(long = "max-pending-outgoing-connections", default_value = "100", env)]
     pub max_pending_outgoing_connections: u32,
 
+    /// Max number of established connections
+    #[clap(long = "max-established-connections", default_value = "100", env)]
+    pub max_established_connections: u32,
+
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
     /// Also if `reserved_nodes_only_mode` is set to `true`,
@@ -321,6 +325,7 @@ impl P2PArgs {
             max_connections_per_peer: self.max_connections_per_peer,
             max_pending_incoming_connections: self.max_pending_incoming_connections,
             max_pending_outgoing_connections: self.max_pending_outgoing_connections,
+            max_established_connections: self.max_established_connections,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(
