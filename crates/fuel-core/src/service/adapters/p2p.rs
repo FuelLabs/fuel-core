@@ -10,6 +10,7 @@ use fuel_core_p2p::ports::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
+use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     blockchain::{
         consensus::Genesis,
@@ -56,14 +57,11 @@ impl BlockHeightImporter for BlockImporterAdapter {
 }
 
 impl TxPool for TxPoolAdapter {
-    fn get_all_tx_ids(&self) -> Vec<fuel_core_txpool::types::TxId> {
+    fn get_all_tx_ids(&self) -> Vec<TxId> {
         self.service.get_all_tx_ids()
     }
 
-    fn get_full_txs(
-        &self,
-        tx_ids: Vec<fuel_core_txpool::types::TxId>,
-    ) -> Vec<Option<Transaction>> {
+    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<Transaction>> {
         self.service
             .find(tx_ids)
             .into_iter()
