@@ -3171,6 +3171,7 @@ dependencies = [
  "fuel-core-sync",
  "fuel-core-trace",
  "fuel-core-txpool",
+ "fuel-core-txpool-v2",
  "fuel-core-types",
  "fuel-core-upgradable-executor",
  "futures",
@@ -3720,6 +3721,17 @@ dependencies = [
  "tokio-rayon",
  "tokio-stream",
  "tracing",
+]
+
+[[package]]
+name = "fuel-core-txpool-v2"
+version = "0.35.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-services",
+ "fuel-core-types",
+ "tokio",
 ]
 
 [[package]]

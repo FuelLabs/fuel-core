@@ -1,0 +1,19 @@
+[package]
+name = "fuel-core-txpool-v2"
+version = { workspace = true }
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Transaction pool v2"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-types = { path = "../../types", features = ["test-helpers"] }
+tokio = { workspace = true, default-features = false, features = ["sync"] }
+

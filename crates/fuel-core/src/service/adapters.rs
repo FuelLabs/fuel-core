@@ -35,6 +35,8 @@ use crate::{
     },
 };
 
+use super::sub_services::TxPoolV2SharedState;
+
 pub mod block_importer;
 pub mod consensus_module;
 pub mod consensus_parameters_provider;
@@ -87,6 +89,17 @@ pub struct TxPoolAdapter {
 impl TxPoolAdapter {
     pub fn new(service: TxPoolSharedState) -> Self {
         Self { service }
+    }
+}
+
+#[derive(Clone)]
+pub struct TxPoolV2Adapter {
+    _service: TxPoolV2SharedState
+}
+
+impl TxPoolV2Adapter {
+    pub fn new(service: TxPoolV2SharedState) -> Self {
+        Self { _service: service }
     }
 }
 

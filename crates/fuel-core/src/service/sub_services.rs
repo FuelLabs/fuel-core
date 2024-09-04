@@ -3,7 +3,7 @@
 use super::{
     adapters::{
         FuelBlockSigner,
-        P2PAdapter,
+        P2PAdapter, TxPoolV2Adapter,
     },
     genesis::create_genesis_block,
 };
@@ -82,6 +82,7 @@ pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     ConsensusParametersProvider,
     SharedMemoryPool,
 >;
+pub type TxPoolV2SharedState = fuel_core_txpool_v2::SharedState;
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
@@ -226,6 +227,9 @@ pub fn init_sub_services(
         SharedMemoryPool::new(config.memory_pool_size),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
+
+    let txpool_v2 = fuel_core_txpool_v2::new_service();
+    let _txpool_v2_adapter = TxPoolV2Adapter::new(txpool_v2.shared.clone());
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
