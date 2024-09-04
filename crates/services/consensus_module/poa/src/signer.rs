@@ -18,7 +18,11 @@ use fuel_core_types::{
         },
         primitives::SecretKeyWrapper,
     },
-    fuel_tx::Bytes32,
+    fuel_crypto::PublicKey,
+    fuel_tx::{
+        Address,
+        Input,
+    },
     fuel_vm::Signature,
     secrecy::{
         ExposeSecret,
@@ -70,28 +74,32 @@ impl SignMode {
         Ok(Consensus::PoA(PoAConsensus::new(poa_signature)))
     }
 
-    pub fn public_key_address(&self) -> anyhow::Result<Option<Bytes32>> {
+    /// Returns the public key of the block producer, if any
+    pub fn public_key(&self) -> anyhow::Result<Option<PublicKey>> {
         match self {
             SignMode::Unavailable => Ok(None),
             SignMode::Key(secret_key) => {
-                Ok(secret_key.expose_secret().public_key().hash().into())
+                Ok(Some(secret_key.expose_secret().public_key()))
             }
+
             #[cfg(feature = "aws-kms")]
             SignMode::Kms {
                 cached_public_key_bytes,
                 ..
             } => {
-                use fuel_core_types::fuel_crypto::PublicKey;
                 use k256::pkcs8::DecodePublicKey;
 
-                let public_key_bytes: &[u8] = cached_public_key_bytes;
                 let k256_public_key =
-                    k256::PublicKey::from_public_key_der(public_key_bytes)?;
-                let public_key = PublicKey::from(k256_public_key);
-
-                Ok(public_key.hash().into())
+                    k256::PublicKey::from_public_key_der(cached_public_key_bytes)?;
+                Ok(Some(PublicKey::from(k256_public_key)))
             }
         }
+    }
+
+    /// Returns the address of the block producer, if any
+    pub fn address(&self) -> anyhow::Result<Option<Address>> {
+        let address = self.public_key()?.as_ref().map(Input::owner);
+        Ok(address)
     }
 }
 
@@ -165,6 +173,8 @@ async fn sign_with_kms(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::{
@@ -199,23 +209,50 @@ mod tests {
         };
     }
 
+    // The tests are against a keypair generated using fuel-core-keygen, which has
+    // been tweaked to display the public key associated with a keypair.
+    // The keypair used in these tests is the following:
+    // {
+    //    "address:"e2f3f5109c56eec359c124cbf25f35dcc1495b0bbdac5848e0ff37a86fe69a6d",
+    //    "public_key":"9ab6229de634056cdc67dfba26e6a06e4ba082693ea30395e5994b113ab6c6e3189a12a10d8fb08d1d28f7117ca34f6b16c5132acd9570de6e7a005f6bbd8f3d",
+    //    "secret":"2708b7bad8b5b52d031e5795c1d1995660185f464900cbd593328eb433bdb7f6","type":"block-production"
+    // }
     #[test]
-    fn public_key_address() {
-        assert_eq!(SignMode::Unavailable.public_key_address().unwrap(), None);
+    fn public_key() {
+        assert_eq!(SignMode::Unavailable.public_key().unwrap(), None);
 
-        let mut rng = StdRng::seed_from_u64(2322);
-        let secret_key = SecretKey::random(&mut rng);
-        let public_key_address = SignMode::Key(Secret::new(secret_key.into()))
-            .public_key_address()
-            .unwrap();
+        let secret_key = SecretKey::from_str(
+            "2708b7bad8b5b52d031e5795c1d1995660185f464900cbd593328eb433bdb7f6",
+        )
+        .expect("Secret key construction should not fail");
 
-        assert!(public_key_address.is_some());
+        let public_key = "9ab6229de634056cdc67dfba26e6a06e4ba082693ea30395e5994b113ab6c6e3189a12a10d8fb08d1d28f7117ca34f6b16c5132acd9570de6e7a005f6bbd8f3d";
 
-        #[cfg(feature = "aws-kms")]
-        {
-            // Ideally here we want to retrieve the secp256k1 public key from a
-            // key arn and a kms client here.
-            todo!()
-        };
+        let derived_public_key = SignMode::Key(Secret::new(secret_key.into()))
+            .public_key()
+            .expect("Public key derivation should not fail")
+            .expect("Public key derivation should yield a defined value")
+            .to_string();
+
+        assert_eq!(public_key, &derived_public_key);
+    }
+
+    #[test]
+    fn address() {
+        assert_eq!(SignMode::Unavailable.address().unwrap(), None);
+
+        let secret_key = SecretKey::from_str(
+            "2708b7bad8b5b52d031e5795c1d1995660185f464900cbd593328eb433bdb7f6",
+        )
+        .expect("Secret key construction should not fail");
+
+        let address = "e2f3f5109c56eec359c124cbf25f35dcc1495b0bbdac5848e0ff37a86fe69a6d";
+        let derived_address = SignMode::Key(Secret::new(secret_key.into()))
+            .address()
+            .expect("Address derivation should not fail")
+            .expect("Address derivation should yield a defined value")
+            .to_string();
+
+        assert_eq!(address, &derived_address);
     }
 }

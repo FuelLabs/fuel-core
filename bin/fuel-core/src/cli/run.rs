@@ -356,11 +356,11 @@ impl Command {
             }
         };
 
-        if let Ok(signer_public_key_address) = consensus_signer.public_key_address() {
-            if let Some(public_key_address) = signer_public_key_address {
+        if let Ok(signer_address) = consensus_signer.address() {
+            if let Some(address) = signer_address {
                 info!(
-                    "Consensus signer is specified and its public key address is {}",
-                    public_key_address
+                    "Consensus signer is specified and its address is {}",
+                    address
                 );
             }
         } else {
