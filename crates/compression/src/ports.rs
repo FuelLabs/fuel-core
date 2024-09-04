@@ -6,9 +6,13 @@ use fuel_core_types::fuel_tx::{
 };
 
 #[async_trait::async_trait]
-pub trait TxIdRelationTxPointer {
-    async fn lookup_by_txid(&self, tx_id: TxId) -> anyhow::Result<TxPointer>;
-    async fn lookup_by_txpointer(&self, tx_pointer: TxPointer) -> anyhow::Result<TxId>;
+pub trait TxIdToPointer {
+    async fn lookup(&self, tx_id: TxId) -> anyhow::Result<TxPointer>;
+}
+
+#[async_trait::async_trait]
+pub trait TxPointerToId {
+    async fn lookup(&self, tx_pointer: TxPointer) -> anyhow::Result<TxId>;
 }
 
 // Exposed interfaces: where should these live?

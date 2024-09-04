@@ -17,6 +17,7 @@ use fuel_core_types::{
 use crate::{
     context::decompress::DecompressCtx,
     db::RocksDb,
+    ports::TxPointerToId,
     CompressedBlockPayload,
 };
 
@@ -54,11 +55,16 @@ impl From<anyhow::Error> for DecompressError {
     }
 }
 
-pub async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskRequest>) {
+pub async fn run(
+    mut db: RocksDb,
+    tx_lookup: Box<dyn TxPointerToId>,
+
+    mut request_receiver: mpsc::Receiver<TaskRequest>,
+) {
     while let Some(req) = request_receiver.recv().await {
         match req {
             TaskRequest::Decompress { block, response } => {
-                let reply = decompress(&mut db, block).await;
+                let reply = decompress(&mut db, &*tx_lookup, block).await;
                 response.send(reply).await.expect("Failed to respond");
             }
         }
@@ -67,6 +73,7 @@ pub async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskReque
 
 pub async fn decompress(
     db: &mut RocksDb,
+    tx_lookup: &dyn TxPointerToId,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {
     if block.is_empty() || block[0] != 0 {
@@ -82,7 +89,7 @@ pub async fn decompress(
 
     compressed.registrations.write_to_db(db)?;
 
-    let ctx = DecompressCtx { db };
+    let ctx = DecompressCtx { db, tx_lookup };
 
     let transactions = <Vec<Transaction> as DecompressibleBy<_, _>>::decompress(
         &compressed.transactions,

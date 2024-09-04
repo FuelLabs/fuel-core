@@ -64,7 +64,7 @@ impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for ScriptCode {
 }
 
 impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for CompressibleTxId {
-    async fn compress(&self, ctx: &mut PrepareCtx<'a>) -> anyhow::Result<TxPointer> {
+    async fn compress(&self, _ctx: &mut PrepareCtx<'a>) -> anyhow::Result<TxPointer> {
         Ok(TxPointer::default())
     }
 }

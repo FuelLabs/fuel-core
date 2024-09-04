@@ -15,11 +15,13 @@ use fuel_core_types::{
 
 use crate::{
     db::RocksDb,
+    ports::TxPointerToId,
     tables::RegistryKeyspace,
 };
 
 pub struct DecompressCtx<'a> {
     pub db: &'a RocksDb,
+    pub tx_lookup: &'a dyn TxPointerToId,
 }
 
 impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Address {
@@ -60,6 +62,6 @@ impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for ScriptCode {
 
 impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for CompressibleTxId {
     async fn decompress(c: &TxPointer, ctx: &DecompressCtx<'a>) -> anyhow::Result<Self> {
-        todo!();
+        Ok(ctx.tx_lookup.lookup(*c).await?.into())
     }
 }

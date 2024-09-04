@@ -13,6 +13,7 @@ use crate::{
     },
     db::RocksDb,
     eviction_policy::CacheEvictor,
+    ports::TxIdToPointer,
     tables::{
         PerRegistryKeyspace,
         RegistrationsPerTable,
@@ -45,18 +46,26 @@ impl From<anyhow::Error> for CompressError {
     }
 }
 
-pub async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskRequest>) {
+pub async fn run(
+    mut db: RocksDb,
+    tx_lookup: Box<dyn TxIdToPointer>,
+    mut request_receiver: mpsc::Receiver<TaskRequest>,
+) {
     while let Some(req) = request_receiver.recv().await {
         match req {
             TaskRequest::Compress { block, response } => {
-                let reply = compress(&mut db, block).await;
+                let reply = compress(&mut db, &*tx_lookup, block).await;
                 response.send(reply).await.expect("Failed to respond");
             }
         }
     }
 }
 
-pub async fn compress(db: &mut RocksDb, block: Block) -> Result<Vec<u8>, CompressError> {
+pub async fn compress(
+    db: &mut RocksDb,
+    tx_lookup: &dyn TxIdToPointer,
+    block: Block,
+) -> Result<Vec<u8>, CompressError> {
     if *block.header().height() != db.next_block_height()? {
         return Err(CompressError::NotLatest);
     }
@@ -73,6 +82,7 @@ pub async fn compress(db: &mut RocksDb, block: Block) -> Result<Vec<u8>, Compres
 
     let mut ctx = CompressCtx {
         db: prepare_ctx.db,
+        tx_lookup,
         cache_evictor: CacheEvictor {
             keep_keys: prepare_ctx.accessed_keys,
         },
