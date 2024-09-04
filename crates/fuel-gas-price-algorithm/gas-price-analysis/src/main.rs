@@ -1,6 +1,5 @@
 use crate::charts::draw_chart;
 use crate::simulation::get_da_cost_per_byte_from_source;
-use crate::simulation::{arbitrary_cost_per_byte,};
 use plotters::prelude::*;
 use rand::{
     rngs::StdRng,

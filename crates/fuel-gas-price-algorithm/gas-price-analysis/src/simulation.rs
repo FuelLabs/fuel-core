@@ -31,9 +31,33 @@ pub fn get_da_cost_per_byte_from_source(source: Source, update_period: usize) ->
             arbitrary_cost_per_byte(size, update_period)
         },
         Source::Predefined { file_path } => {
-            todo!()
+            get_costs_from_csv_file(&file_path)
         }
     }
+}
+
+// block_number,excess_blob_gas,blob_gas_used,blob_fee_wei,blob_fee_wei_for_1_blob,blob_fee_wei_for_2_blobs,blob_fee_wei_for_3_blobs
+#[derive(Debug, serde::Deserialize)]
+struct Record {
+    block_number: u64,
+    excess_blob_gas: u64,
+    blob_gas_used: u64,
+    blob_fee_wei: u64,
+    blob_fee_wei_for_1_blob: u64,
+    blob_fee_wei_for_2_blobs: u64,
+    blob_fee_wei_for_3_blobs: u64,
+}
+
+fn get_costs_from_csv_file(file_path: &str) -> Vec<u64> {
+    let mut rdr = csv::ReaderBuilder::new().has_headers(true).from_path(file_path).unwrap();
+    let mut costs = vec![];
+    let headers = csv::StringRecord::from(vec!["block_number", "excess_blob_gas", "blob_gas_used", "blob_fee_wei", "blob_fee_wei_for_1_blob", "blob_fee_wei_for_2_blobs", "blob_fee_wei_for_3_blobs"]);
+    for record in rdr.records().skip(1) {
+        let record: Record = record.unwrap().deserialize(Some(&headers)).unwrap();
+        let cost = record.blob_fee_wei;
+        costs.push(cost);
+    }
+    costs
 }
 
 impl Simulator {
@@ -243,7 +267,7 @@ where
     gen_noisy_signal(input, COMPONENTS)
 }
 
-pub fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
+fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
     let actual_size = size.div_ceil(update_period);
 
     const ROUGH_COST_AVG: f64 = 5.0;
