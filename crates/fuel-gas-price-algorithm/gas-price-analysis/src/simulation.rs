@@ -16,9 +16,9 @@ pub struct SimulationResults {
     pub da_gas_prices: Vec<u64>,
     pub fullness: Vec<(u64, u64)>,
     pub bytes_and_costs: Vec<(u64, u64)>,
-    pub actual_profit: Vec<i64>,
-    pub projected_profit: Vec<i64>,
-    pub pessimistic_costs: Vec<u64>,
+    pub actual_profit: Vec<i128>,
+    pub projected_profit: Vec<i128>,
+    pub pessimistic_costs: Vec<u128>,
 }
 
 pub struct Simulator {
@@ -52,11 +52,16 @@ fn get_costs_from_csv_file(file_path: &str) -> Vec<u64> {
     let mut rdr = csv::ReaderBuilder::new().has_headers(true).from_path(file_path).unwrap();
     let mut costs = vec![];
     let headers = csv::StringRecord::from(vec!["block_number", "excess_blob_gas", "blob_gas_used", "blob_fee_wei", "blob_fee_wei_for_1_blob", "blob_fee_wei_for_2_blobs", "blob_fee_wei_for_3_blobs"]);
+    let mut max_cost = 0;
     for record in rdr.records().skip(1) {
         let record: Record = record.unwrap().deserialize(Some(&headers)).unwrap();
         let cost = record.blob_fee_wei;
+        if cost > max_cost {
+            max_cost = cost;
+        }
         costs.push(cost);
     }
+    println!("Max cost: {}", max_cost);
     costs
 }
 
@@ -148,7 +153,7 @@ impl Simulator {
                 let mut total_costs = updater.latest_known_total_da_cost;
                 for block in &mut da_blocks {
                     block.block_cost *= gas_price_factor;
-                    total_costs += block.block_cost;
+                    total_costs += block.block_cost as u128;
                     actual_costs.push(total_costs);
                 }
                 updater.update_da_record_data(da_blocks.to_owned()).unwrap();
@@ -165,7 +170,7 @@ impl Simulator {
                 )
                 .unwrap();
             da_gas_prices.push(updater.last_da_gas_price);
-            pessimistic_costs.push(max_block_bytes * updater.latest_da_cost_per_byte);
+            pessimistic_costs.push(max_block_bytes as u128 * updater.latest_da_cost_per_byte);
             actual_reward_totals.push(updater.total_da_rewards);
             projected_cost_totals.push(updater.projected_total_da_cost);
         }
@@ -182,16 +187,16 @@ impl Simulator {
             .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64))
             .collect();
 
-        let actual_profit: Vec<i64> = actual_costs
+        let actual_profit: Vec<i128> = actual_costs
             .iter()
             .zip(actual_reward_totals.iter())
-            .map(|(cost, reward)| *reward as i64 - *cost as i64)
+            .map(|(cost, reward)| *reward as i128 - *cost as i128)
             .collect();
 
-        let projected_profit: Vec<i64> = projected_cost_totals
+        let projected_profit: Vec<i128> = projected_cost_totals
             .iter()
             .zip(actual_reward_totals.iter())
-            .map(|(cost, reward)| *reward as i64 - *cost as i64)
+            .map(|(cost, reward)| *reward as i128- *cost as i128)
             .collect();
 
         SimulationResults {

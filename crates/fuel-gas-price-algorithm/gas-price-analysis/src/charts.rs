@@ -12,8 +12,9 @@ pub fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_pat
         pessimistic_costs,
     } = results;
 
-    let max_actual_profit = pretty(*actual_profit.iter().max().unwrap() as u64);
-    println!("max_actual: {max_actual_profit}");
+    let max_actual_profit = *actual_profit.iter().max().unwrap() as u64;
+    let eth = max_actual_profit as f64 / (10_f64).powf(18.);
+    println!("max_actual: {} ETH", eth);
 
     let plot_width = 640 * 2 * 2;
     let plot_height = 480 * 3;
@@ -34,7 +35,7 @@ pub fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_pat
         &actual_profit,
         &projected_profit,
         &pessimistic_costs,
-        &format!("Profit p_comp: {p_comp:?}, d_comp: {d_comp:?}"),
+        &format!("Profit p_comp: {}, d_comp: {}", pretty(p_comp), pretty(d_comp)),
     );
     draw_gas_prices(
         &window_four,
@@ -228,9 +229,9 @@ pub fn draw_bytes_and_cost_per_block(
 
 pub fn draw_profit(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    actual_profit: &[i64],
-    projected_profit: &[i64],
-    pessimistic_block_costs: &[u64],
+    actual_profit: &[i128],
+    projected_profit: &[i128],
+    pessimistic_block_costs: &[u128],
     title: &str,
 ) {
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;

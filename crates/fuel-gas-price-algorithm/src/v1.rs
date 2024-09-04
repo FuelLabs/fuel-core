@@ -56,11 +56,11 @@ pub struct AlgorithmV1 {
     /// The maximum percentage that the DA portion of the gas price can change in a single block
     max_change_percent: u8,
     /// The latest known cost per byte for recording blocks on the DA chain
-    latest_da_cost_per_byte: u64,
+    latest_da_cost_per_byte: u128,
     /// The cumulative reward from the DA portion of the gas price
     total_rewards: u64,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    total_costs: u64,
+    total_costs: u128,
     /// The P component of the PID control for the DA gas price
     da_p_factor: i64,
     /// The D component of the PID control for the DA gas price
@@ -155,10 +155,10 @@ pub struct AlgorithmUpdaterV1 {
     /// The height of the las L2 block recorded on the DA chain
     pub da_recorded_block_height: u32,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    pub latest_known_total_da_cost: u64,
+    pub latest_known_total_da_cost: u128,
     /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
     /// (This value is added on top of the `latest_known_total_da_cost` if the L2 height is higher)
-    pub projected_total_da_cost: u64,
+    pub projected_total_da_cost: u128,
     /// The P component of the PID control for the DA gas price
     pub da_p_component: i64,
     /// The D component of the PID control for the DA gas price
@@ -168,7 +168,7 @@ pub struct AlgorithmUpdaterV1 {
     /// The profit before last
     pub second_to_last_profit: i64,
     /// The latest known cost per byte for recording blocks on the DA chain
-    pub latest_da_cost_per_byte: u64,
+    pub latest_da_cost_per_byte: u128,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: Vec<BlockBytes>,
 }
@@ -220,9 +220,9 @@ impl AlgorithmUpdaterV1 {
             self.update_last_profit(last_profit);
             #[allow(clippy::arithmetic_side_effects)]
             // the `da_gas_price_factor` will never be `0`
-            let new_projected_da_cost = block_bytes
+            let new_projected_da_cost = (block_bytes as u128)
                 .saturating_mul(self.latest_da_cost_per_byte)
-                .saturating_div(self.da_gas_price_factor.into());
+                .saturating_div(u64::from(self.da_gas_price_factor) as u128);
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(new_projected_da_cost);
@@ -284,20 +284,20 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
-            let new_cost_per_byte = block_cost
-                .checked_mul(self.da_gas_price_factor.into())
+            let new_cost_per_byte: u128 = (block_cost as u128)
+                .checked_mul(u64::from(self.da_gas_price_factor) as u128)
                 .ok_or(Error::CouldNotCalculateCostPerByte {
                     bytes: block_bytes,
                     cost: block_cost,
                 })?
-                .checked_div(block_bytes)
+                .checked_div(block_bytes as u128)
                 .ok_or(Error::CouldNotCalculateCostPerByte {
                     bytes: block_bytes,
                     cost: block_cost,
                 })?;
             self.da_recorded_block_height = height;
             let new_block_cost =
-                self.latest_known_total_da_cost.saturating_add(block_cost);
+                self.latest_known_total_da_cost.saturating_add(block_cost as u128);
             self.latest_known_total_da_cost = new_block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
@@ -309,12 +309,12 @@ impl AlgorithmUpdaterV1 {
         self.unrecorded_blocks
             .retain(|block| block.height > self.da_recorded_block_height);
         // add the cost of the remaining blocks
-        let projection_portion: u64 = self
+        let projection_portion: u128 = self
             .unrecorded_blocks
             .iter()
             .map(|block| {
-                block
-                    .block_bytes
+                (block
+                    .block_bytes as u128)
                     .saturating_mul(self.latest_da_cost_per_byte)
             })
             .sum();

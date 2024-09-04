@@ -17,7 +17,7 @@ pub fn naive_optimisation(simulator: Simulator, iterations: usize, da_recording_
         .map(|(p, d)| (simulator.run_simulation(*p, *d, da_recording_rate), (*p, *d)))
         .min_by_key(|(results, _)| {
             let SimulationResults { actual_profit, .. } = results;
-            let err = actual_profit.iter().map(|p| p.abs()).sum::<i64>();
+            let err = actual_profit.iter().map(|p| p.abs()).sum::<i128>();
             err
         })
         .unwrap()
