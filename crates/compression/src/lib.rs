@@ -57,8 +57,6 @@ struct CompressedBlockPayload {
 
 #[cfg(test)]
 mod tests {
-    use std::array;
-
     use db::RocksDb;
     use fuel_core_types::{
         blockchain::{
@@ -83,8 +81,8 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn postcard_roundtrip() {
+    #[tokio::test]
+    async fn postcard_roundtrip() {
         let original = CompressedBlockPayload {
             registrations: RegistrationsPerTable::default(),
             header: Header {
@@ -113,15 +111,16 @@ mod tests {
         assert!(transactions.is_empty());
     }
 
-    #[test]
-    fn same_compact_tx_is_smaller_in_next_block() {
+    #[tokio::test]
+    async fn same_compact_tx_is_smaller_in_next_block() {
         let tx = Transaction::default_test_tx();
 
         let tmpdir = TempDir::new().unwrap();
         let mut db = RocksDb::open(tmpdir.path()).unwrap();
 
-        let sizes: [usize; 3] = array::from_fn(|h| {
-            services::compress::compress(
+        let mut sizes = Vec::new();
+        for i in 0..3 {
+            let compressed = services::compress::compress(
                 &mut db,
                 Block::new(
                     PartialBlockHeader {
@@ -133,7 +132,7 @@ mod tests {
                         },
                         consensus: ConsensusHeader {
                             prev_root: Bytes32::default(),
-                            height: (h as u32).into(),
+                            height: i.into(),
                             time: Tai64::UNIX_EPOCH,
                             generated: Empty,
                         },
@@ -144,9 +143,10 @@ mod tests {
                 )
                 .expect("Invalid block header"),
             )
-            .unwrap()
-            .len()
-        });
+            .await
+            .unwrap();
+            sizes.push(compressed.len());
+        }
 
         assert!(sizes[0] > sizes[1], "Size must decrease after first block");
         assert!(
@@ -155,15 +155,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn compress_decompress_roundtrip() {
+    #[tokio::test]
+    async fn compress_decompress_roundtrip() {
         let tx = Transaction::default_test_tx();
 
         let tmpdir = TempDir::new().unwrap();
         let mut db = RocksDb::open(tmpdir.path()).unwrap();
 
-        let original_blocks: [Block; 3] = array::from_fn(|h| {
-            Block::new(
+        let mut original_blocks = Vec::new();
+        let mut compressed_blocks = Vec::new();
+
+        for i in 0..3 {
+            let block = Block::new(
                 PartialBlockHeader {
                     application: ApplicationHeader {
                         da_height: DaBlockHeight::default(),
@@ -173,7 +176,7 @@ mod tests {
                     },
                     consensus: ConsensusHeader {
                         prev_root: Bytes32::default(),
-                        height: (h as u32).into(),
+                        height: i.into(),
                         time: Tai64::UNIX_EPOCH,
                         generated: Empty,
                     },
@@ -182,27 +185,28 @@ mod tests {
                 &[],
                 Bytes32::default(),
             )
-            .expect("Invalid block header")
-        });
-
-        let compressed_bytes: [Vec<u8>; 3] = original_blocks
-            .clone()
-            .map(|block| services::compress::compress(&mut db, block).unwrap());
+            .expect("Invalid block header");
+            original_blocks.push(block.clone());
+            compressed_blocks.push(
+                services::compress::compress(&mut db, block)
+                    .await
+                    .expect("Failed to compress"),
+            );
+        }
 
         db.db.flush().unwrap();
         drop(tmpdir);
         let tmpdir2 = TempDir::new().unwrap();
         let mut db = RocksDb::open(tmpdir2.path()).unwrap();
 
-        let decompressed_blocks: [PartialFuelBlock; 3] = array::from_fn(|h| {
-            services::decompress::decompress(&mut db, compressed_bytes[h].clone())
-                .expect("Decompression failed")
-        });
-
-        for (original, decompressed) in
-            original_blocks.iter().zip(decompressed_blocks.iter())
+        for (original, compressed) in original_blocks
+            .into_iter()
+            .zip(compressed_blocks.into_iter())
         {
-            assert_eq!(PartialFuelBlock::from(original.clone()), *decompressed);
+            let decompressed = services::decompress::decompress(&mut db, compressed)
+                .await
+                .expect("Decompression failed");
+            assert_eq!(PartialFuelBlock::from(original), decompressed);
         }
     }
 }

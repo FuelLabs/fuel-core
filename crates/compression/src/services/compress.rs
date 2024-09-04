@@ -49,14 +49,14 @@ pub async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskReque
     while let Some(req) = request_receiver.recv().await {
         match req {
             TaskRequest::Compress { block, response } => {
-                let reply = compress(&mut db, block);
+                let reply = compress(&mut db, block).await;
                 response.send(reply).await.expect("Failed to respond");
             }
         }
     }
 }
 
-pub fn compress(db: &mut RocksDb, block: Block) -> Result<Vec<u8>, CompressError> {
+pub async fn compress(db: &mut RocksDb, block: Block) -> Result<Vec<u8>, CompressError> {
     if *block.header().height() != db.next_block_height()? {
         return Err(CompressError::NotLatest);
     }
@@ -68,7 +68,8 @@ pub fn compress(db: &mut RocksDb, block: Block) -> Result<Vec<u8>, CompressError
         accessed_keys: PerRegistryKeyspace::default(),
     };
     let _ =
-        <Vec<Transaction> as CompressibleBy<_, _>>::compress(&target, &mut prepare_ctx)?;
+        <Vec<Transaction> as CompressibleBy<_, _>>::compress(&target, &mut prepare_ctx)
+            .await?;
 
     let mut ctx = CompressCtx {
         db: prepare_ctx.db,
@@ -77,7 +78,7 @@ pub fn compress(db: &mut RocksDb, block: Block) -> Result<Vec<u8>, CompressError
         },
         changes: Default::default(),
     };
-    let transactions = target.compress(&mut ctx)?;
+    let transactions = target.compress(&mut ctx).await?;
     let registrations = ctx.changes;
     let registrations = RegistrationsPerTable::try_from(registrations)?;
 

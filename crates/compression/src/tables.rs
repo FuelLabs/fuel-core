@@ -1,6 +1,6 @@
 use super::db::RocksDb;
 use fuel_core_types::{
-    fuel_compression::RawKey,
+    fuel_compression::RegistryKey,
     fuel_tx::{
         Address,
         AssetId,
@@ -75,13 +75,13 @@ macro_rules! tables {
 
         #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
         pub struct RegistrationsPerTable {
-            $(pub $name: Vec<(RawKey, $type)>,)*
+            $(pub $name: Vec<(RegistryKey, $type)>,)*
         }
 
-        impl TryFrom<PerRegistryKeyspace<HashMap<RawKey, PostcardSerialized>>> for RegistrationsPerTable {
+        impl TryFrom<PerRegistryKeyspace<HashMap<RegistryKey, PostcardSerialized>>> for RegistrationsPerTable {
             type Error = anyhow::Error;
 
-            fn try_from(value: PerRegistryKeyspace<HashMap<RawKey, PostcardSerialized>>) -> Result<Self, Self::Error> {
+            fn try_from(value: PerRegistryKeyspace<HashMap<RegistryKey, PostcardSerialized>>) -> Result<Self, Self::Error> {
                 let mut result = Self::default();
                 $(
                     for (key, value) in value.$name.into_iter() {

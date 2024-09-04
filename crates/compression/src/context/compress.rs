@@ -2,14 +2,16 @@ use std::collections::HashMap;
 
 use fuel_core_types::{
     fuel_compression::{
-        RawKey,
-        RegistrySubstitutableBy,
+        CompressibleBy,
+        RegistryKey,
     },
     fuel_tx::{
         Address,
         AssetId,
+        CompressibleTxId,
         ContractId,
         ScriptCode,
+        TxPointer,
     },
 };
 
@@ -27,16 +29,16 @@ pub struct CompressCtx<'a> {
     pub db: &'a mut RocksDb,
     pub cache_evictor: CacheEvictor,
     /// Changes to the temporary registry, to be included in the compressed block header
-    pub changes: PerRegistryKeyspace<HashMap<RawKey, PostcardSerialized>>,
+    pub changes: PerRegistryKeyspace<HashMap<RegistryKey, PostcardSerialized>>,
 }
 
 fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
     keyspace: RegistryKeyspace,
     value: &T,
     ctx: &mut CompressCtx<'_>,
-) -> anyhow::Result<RawKey> {
+) -> anyhow::Result<RegistryKey> {
     if *value == T::default() {
-        return Ok(RawKey::DEFAULT_VALUE);
+        return Ok(RegistryKey::DEFAULT_VALUE);
     }
 
     if let Some(found) = ctx.db.registry_index_lookup(keyspace, value)? {
@@ -49,26 +51,32 @@ fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
     Ok(key)
 }
 
-impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for Address {
-    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for Address {
+    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::address, self, ctx)
     }
 }
 
-impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for AssetId {
-    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for AssetId {
+    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::asset_id, self, ctx)
     }
 }
 
-impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for ContractId {
-    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ContractId {
+    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::contract_id, self, ctx)
     }
 }
 
-impl RegistrySubstitutableBy<CompressCtx<'_>, anyhow::Error> for ScriptCode {
-    fn substitute(&self, ctx: &mut CompressCtx<'_>) -> anyhow::Result<RawKey> {
+impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ScriptCode {
+    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::script_code, self, ctx)
+    }
+}
+
+impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for CompressibleTxId {
+    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<TxPointer> {
+        todo!();
     }
 }

@@ -58,14 +58,14 @@ pub async fn run(mut db: RocksDb, mut request_receiver: mpsc::Receiver<TaskReque
     while let Some(req) = request_receiver.recv().await {
         match req {
             TaskRequest::Decompress { block, response } => {
-                let reply = decompress(&mut db, block);
+                let reply = decompress(&mut db, block).await;
                 response.send(reply).await.expect("Failed to respond");
             }
         }
     }
 }
 
-pub fn decompress(
+pub async fn decompress(
     db: &mut RocksDb,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {
@@ -87,7 +87,8 @@ pub fn decompress(
     let transactions = <Vec<Transaction> as DecompressibleBy<_, _>>::decompress(
         &compressed.transactions,
         &ctx,
-    )?;
+    )
+    .await?;
 
     Ok(PartialFuelBlock {
         header: PartialBlockHeader {

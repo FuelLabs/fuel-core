@@ -2,12 +2,13 @@ use std::path::Path;
 
 use anyhow::bail;
 use fuel_core_types::{
-    fuel_compression::RawKey,
+    fuel_compression::RegistryKey,
     fuel_types::BlockHeight,
 };
 
 use crate::tables::RegistryKeyspace;
 
+/// Database that holds data needed by the block compression only
 pub struct RocksDb {
     pub(crate) db: rocksdb::DB,
 }
@@ -46,12 +47,12 @@ impl RocksDb {
     pub fn read_registry<T>(
         &self,
         keyspace: RegistryKeyspace,
-        key: RawKey,
+        key: RegistryKey,
     ) -> anyhow::Result<T>
     where
         T: serde::de::DeserializeOwned + Default,
     {
-        if key == RawKey::DEFAULT_VALUE {
+        if key == RegistryKey::DEFAULT_VALUE {
             return Ok(T::default());
         }
 
@@ -72,7 +73,7 @@ impl RocksDb {
         &self,
         keyspace: RegistryKeyspace,
         value: V,
-    ) -> anyhow::Result<Option<RawKey>> {
+    ) -> anyhow::Result<Option<RegistryKey>> {
         let db_key: Vec<u8> =
             keyspace.name().bytes().chain(core::iter::once(0)).collect();
         let db_key = postcard::to_extend(&value, db_key).expect("Never fails");

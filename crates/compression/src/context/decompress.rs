@@ -1,13 +1,15 @@
 use fuel_core_types::{
     fuel_compression::{
-        RawKey,
-        RegistryDesubstitutableBy,
+        DecompressibleBy,
+        RegistryKey,
     },
     fuel_tx::{
         Address,
         AssetId,
+        CompressibleTxId,
         ContractId,
         ScriptCode,
+        TxPointer,
     },
 };
 
@@ -20,26 +22,44 @@ pub struct DecompressCtx<'a> {
     pub db: &'a RocksDb,
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for Address {
-    fn desubstitute(c: &RawKey, ctx: &DecompressCtx) -> anyhow::Result<Self> {
+impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Address {
+    async fn decompress(
+        c: &RegistryKey,
+        ctx: &DecompressCtx<'a>,
+    ) -> anyhow::Result<Self> {
         ctx.db.read_registry(RegistryKeyspace::address, *c)
     }
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for AssetId {
-    fn desubstitute(c: &RawKey, ctx: &DecompressCtx) -> anyhow::Result<Self> {
+impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for AssetId {
+    async fn decompress(
+        c: &RegistryKey,
+        ctx: &DecompressCtx<'a>,
+    ) -> anyhow::Result<Self> {
         ctx.db.read_registry(RegistryKeyspace::asset_id, *c)
     }
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for ContractId {
-    fn desubstitute(c: &RawKey, ctx: &DecompressCtx) -> anyhow::Result<Self> {
+impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for ContractId {
+    async fn decompress(
+        c: &RegistryKey,
+        ctx: &DecompressCtx<'a>,
+    ) -> anyhow::Result<Self> {
         ctx.db.read_registry(RegistryKeyspace::contract_id, *c)
     }
 }
 
-impl RegistryDesubstitutableBy<DecompressCtx<'_>, anyhow::Error> for ScriptCode {
-    fn desubstitute(c: &RawKey, ctx: &DecompressCtx) -> anyhow::Result<Self> {
+impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for ScriptCode {
+    async fn decompress(
+        c: &RegistryKey,
+        ctx: &DecompressCtx<'a>,
+    ) -> anyhow::Result<Self> {
         ctx.db.read_registry(RegistryKeyspace::script_code, *c)
+    }
+}
+
+impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for CompressibleTxId {
+    async fn decompress(c: &TxPointer, ctx: &DecompressCtx<'a>) -> anyhow::Result<Self> {
+        todo!();
     }
 }

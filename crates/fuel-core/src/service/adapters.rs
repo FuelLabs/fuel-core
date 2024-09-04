@@ -38,6 +38,7 @@ use crate::{
 pub mod block_importer;
 pub mod consensus_module;
 pub mod consensus_parameters_provider;
+pub mod da_compression;
 pub mod executor;
 pub mod fuel_gas_price_provider;
 pub mod gas_price_adapters;
