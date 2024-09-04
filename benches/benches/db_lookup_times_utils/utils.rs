@@ -64,15 +64,23 @@ pub fn chain_id() -> ChainId {
 pub enum LookupMethod {
     FullBlockMethod,
     MultiGetMethod,
-    HeadersAndTxMethod
+    HeadersAndTxMethod,
 }
 
 impl LookupMethod {
-    pub(crate) fn get_block(&self, database: &RocksDb<BenchDatabase>, height: &BlockHeight) -> Result<Block> {
+    pub(crate) fn get_block(
+        &self,
+        database: &RocksDb<BenchDatabase>,
+        height: &BlockHeight,
+    ) -> Result<Block> {
         match self {
-            LookupMethod::FullBlockMethod => get_block_full_block_method(database, height),
+            LookupMethod::FullBlockMethod => {
+                get_block_full_block_method(database, height)
+            }
             LookupMethod::MultiGetMethod => get_block_multi_get_method(database, height),
-            LookupMethod::HeadersAndTxMethod => get_block_headers_and_tx_method(database, height)
+            LookupMethod::HeadersAndTxMethod => {
+                get_block_headers_and_tx_method(database, height)
+            }
         }
     }
 }

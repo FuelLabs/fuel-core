@@ -1,4 +1,3 @@
-use crate::db_lookup_times_utils::utils::LookupMethod;
 use crate::db_lookup_times_utils::{
     full_block_table::BenchDatabase,
     matrix::{
@@ -8,6 +7,7 @@ use crate::db_lookup_times_utils::{
     utils::{
         get_random_block_height,
         open_rocks_db,
+        LookupMethod,
         Result as DbLookupBenchResult,
     },
 };

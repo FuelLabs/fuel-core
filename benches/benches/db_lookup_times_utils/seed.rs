@@ -8,6 +8,7 @@ use crate::db_lookup_times_utils::{
         chain_id,
         get_base_path_from_method,
         open_rocks_db,
+        LookupMethod,
         Result as DbLookupBenchResult,
     },
 };
@@ -41,12 +42,11 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use std::fs;
-use crate::db_lookup_times_utils::utils::LookupMethod;
 
 fn seed_matrix<SeedClosure, Description>(
     method: LookupMethod,
     seed_closure: SeedClosure,
-) -> DbLookupBenchResult<impl FnOnce() + 'static>
+) -> DbLookupBenchResult<impl FnOnce()>
 where
     SeedClosure: Fn(&mut RocksDb<Description>, u32, u32) -> DbLookupBenchResult<()>,
     Description: DatabaseDescription,
@@ -61,16 +61,19 @@ where
 
 pub fn seed_compressed_blocks_and_transactions_matrix(
     method: LookupMethod,
-) -> DbLookupBenchResult<impl FnOnce() + 'static> {
+) -> DbLookupBenchResult<impl FnOnce()> {
     seed_matrix(method, |database, block_count, tx_count| {
         seed_compressed_blocks_and_transactions(database, block_count, tx_count)
     })
 }
 
-pub fn seed_full_block_matrix<'a>() -> DbLookupBenchResult<impl FnOnce() + 'a> {
-    seed_matrix(LookupMethod::FullBlockMethod, |database, block_count, tx_count| {
-        seed_full_blocks(database, block_count, tx_count)
-    })
+pub fn seed_full_block_matrix() -> DbLookupBenchResult<impl FnOnce()> {
+    seed_matrix(
+        LookupMethod::FullBlockMethod,
+        |database, block_count, tx_count| {
+            seed_full_blocks(database, block_count, tx_count)
+        },
+    )
 }
 
 fn generate_bench_block(height: u32, tx_count: u32) -> DbLookupBenchResult<Block> {
@@ -89,7 +92,7 @@ fn generate_bench_block(height: u32, tx_count: u32) -> DbLookupBenchResult<Block
 }
 
 fn generate_bench_transactions(tx_count: u32) -> Vec<Transaction> {
-    let mut txs = vec![];
+    let mut txs = Vec::with_capacity(tx_count as usize);
     for _ in 0..tx_count {
         txs.push(Transaction::default_test_tx());
     }
