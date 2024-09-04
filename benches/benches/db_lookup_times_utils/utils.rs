@@ -43,11 +43,11 @@ pub fn get_base_path_from_method(method: &str) -> PathBuf {
     get_base_path().join(PathBuf::from(method))
 }
 
-pub fn open_rocks_db<T: DatabaseDescription>(
+pub fn open_rocks_db<Description: DatabaseDescription>(
     block_count: u32,
     tx_count: u32,
     method: &str,
-) -> Result<RocksDb<T>> {
+) -> Result<RocksDb<Description>> {
     let path = get_base_path_from_method(method).join(PathBuf::from(
         format!("./{block_count}/{tx_count}").as_str(),
     ));
