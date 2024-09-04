@@ -28,6 +28,7 @@ use rand::{
     Rng,
 };
 use std::path::PathBuf;
+use strum_macros::AsRefStr;
 
 pub type Result<T> = core::result::Result<T, anyhow::Error>;
 
@@ -39,14 +40,14 @@ fn get_base_path() -> PathBuf {
     PathBuf::from("./db_benchmarks")
 }
 
-pub fn get_base_path_from_method(method: &str) -> PathBuf {
-    get_base_path().join(PathBuf::from(method))
+pub fn get_base_path_from_method(method: &LookupMethod) -> PathBuf {
+    get_base_path().join(PathBuf::from(method.as_ref()))
 }
 
 pub fn open_rocks_db<Description: DatabaseDescription>(
     block_count: u32,
     tx_count: u32,
-    method: &str,
+    method: &LookupMethod,
 ) -> Result<RocksDb<Description>> {
     let path = get_base_path_from_method(method).join(PathBuf::from(
         format!("./{block_count}/{tx_count}").as_str(),
@@ -59,7 +60,24 @@ pub fn chain_id() -> ChainId {
     ChainId::default()
 }
 
-pub fn get_block_full_block_method(
+#[derive(Copy, Clone, AsRefStr)]
+pub enum LookupMethod {
+    FullBlockMethod,
+    MultiGetMethod,
+    HeadersAndTxMethod
+}
+
+impl LookupMethod {
+    pub(crate) fn get_block(&self, database: &RocksDb<BenchDatabase>, height: &BlockHeight) -> Result<Block> {
+        match self {
+            LookupMethod::FullBlockMethod => get_block_full_block_method(database, height),
+            LookupMethod::MultiGetMethod => get_block_multi_get_method(database, height),
+            LookupMethod::HeadersAndTxMethod => get_block_headers_and_tx_method(database, height)
+        }
+    }
+}
+
+fn get_block_full_block_method(
     database: &RocksDb<BenchDatabase>,
     height: &BlockHeight,
 ) -> Result<Block> {
@@ -72,9 +90,9 @@ pub fn get_block_full_block_method(
     Ok(block)
 }
 
-pub fn get_block_multi_get_method(
+fn get_block_multi_get_method(
     database: &RocksDb<BenchDatabase>,
-    height: BlockHeight,
+    height: &BlockHeight,
 ) -> Result<Block> {
     let height_key = height.to_bytes();
 
@@ -93,9 +111,9 @@ pub fn get_block_multi_get_method(
     Ok(block.uncompress(txs))
 }
 
-pub fn get_block_headers_and_tx_method(
+fn get_block_headers_and_tx_method(
     database: &RocksDb<BenchDatabase>,
-    height: BlockHeight,
+    height: &BlockHeight,
 ) -> Result<Block> {
     let height_key = height.to_bytes();
 
