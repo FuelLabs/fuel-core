@@ -830,6 +830,7 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     None
 }
 
+#[cfg(feature = "test-helpers")]
 impl<Description> KeyValueMutate for RocksDb<Description>
 where
     Description: DatabaseDescription,
