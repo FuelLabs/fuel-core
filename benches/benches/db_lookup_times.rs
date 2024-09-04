@@ -25,7 +25,7 @@ use rand::thread_rng;
 mod db_lookup_times_utils;
 
 pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
-    let method = LookupMethod::HeadersAndTxMethod;
+    let method = LookupMethod::HeaderAndTx;
     let mut rng = thread_rng();
 
     let cleaner = seed_compressed_blocks_and_transactions_matrix(method)?;
@@ -47,7 +47,7 @@ pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnc
 }
 
 pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
-    let method = LookupMethod::MultiGetMethod;
+    let method = LookupMethod::MultiGet;
     let mut rng = thread_rng();
 
     let cleaner = seed_compressed_blocks_and_transactions_matrix(method)?;
@@ -69,7 +69,7 @@ pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()>
 }
 
 pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
-    let method = LookupMethod::FullBlockMethod;
+    let method = LookupMethod::FullBlock;
     let mut rng = thread_rng();
 
     let cleaner = seed_full_block_matrix()?;

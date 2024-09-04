@@ -62,9 +62,9 @@ pub fn chain_id() -> ChainId {
 
 #[derive(Copy, Clone, AsRefStr)]
 pub enum LookupMethod {
-    FullBlockMethod,
-    MultiGetMethod,
-    HeadersAndTxMethod,
+    FullBlock,
+    MultiGet,
+    HeaderAndTx,
 }
 
 impl LookupMethod {
@@ -74,11 +74,9 @@ impl LookupMethod {
         height: &BlockHeight,
     ) -> Result<Block> {
         match self {
-            LookupMethod::FullBlockMethod => {
-                get_block_full_block_method(database, height)
-            }
-            LookupMethod::MultiGetMethod => get_block_multi_get_method(database, height),
-            LookupMethod::HeadersAndTxMethod => {
+            LookupMethod::FullBlock => get_block_full_block_method(database, height),
+            LookupMethod::MultiGet => get_block_multi_get_method(database, height),
+            LookupMethod::HeaderAndTx => {
                 get_block_headers_and_tx_method(database, height)
             }
         }

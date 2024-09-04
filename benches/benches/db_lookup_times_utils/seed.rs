@@ -69,7 +69,7 @@ pub fn seed_compressed_blocks_and_transactions_matrix(
 
 pub fn seed_full_block_matrix() -> DbLookupBenchResult<impl FnOnce()> {
     seed_matrix(
-        LookupMethod::FullBlockMethod,
+        LookupMethod::FullBlock,
         |database, block_count, tx_count| {
             seed_full_blocks(database, block_count, tx_count)
         },
