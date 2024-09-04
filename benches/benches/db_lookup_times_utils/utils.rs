@@ -59,20 +59,20 @@ pub fn chain_id() -> ChainId {
     ChainId::default()
 }
 
-pub fn get_full_block(
+pub fn get_block_full_block_method(
     database: &RocksDb<BenchDatabase>,
     height: &BlockHeight,
-) -> Result<Option<Block>> {
+) -> Result<Block> {
     let height_key = height.to_bytes();
     let raw_block = database
         .get(&height_key, BenchDbColumn::FullFuelBlocks)?
         .ok_or(anyhow!("empty raw full block"))?;
 
     let block: Block = postcard::from_bytes(raw_block.as_slice())?;
-    Ok(Some(block))
+    Ok(block)
 }
 
-pub fn multi_get_block(
+pub fn get_block_multi_get_method(
     database: &RocksDb<BenchDatabase>,
     height: BlockHeight,
 ) -> Result<Block> {
@@ -93,7 +93,7 @@ pub fn multi_get_block(
     Ok(block.uncompress(txs))
 }
 
-pub fn headers_and_tx_get_block(
+pub fn get_block_headers_and_tx_method(
     database: &RocksDb<BenchDatabase>,
     height: BlockHeight,
 ) -> Result<Block> {

@@ -5,10 +5,10 @@ use crate::db_lookup_times_utils::{
         should_clean,
     },
     utils::{
-        get_full_block,
+        get_block_full_block_method,
+        get_block_headers_and_tx_method,
+        get_block_multi_get_method,
         get_random_block_height,
-        headers_and_tx_get_block,
-        multi_get_block,
         open_rocks_db,
         Result as DbLookupBenchResult,
     },
@@ -38,7 +38,7 @@ pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnc
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let block = headers_and_tx_get_block(&database, height);
+                let block = get_block_headers_and_tx_method(&database, height);
                 assert!(block.is_ok());
             });
         });
@@ -60,7 +60,7 @@ pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()>
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                assert!(multi_get_block(&database, height).is_ok());
+                assert!(get_block_multi_get_method(&database, height).is_ok());
             });
         });
     }
@@ -81,7 +81,7 @@ pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
-                let full_block = get_full_block(&database, &height);
+                let full_block = get_block_full_block_method(&database, &height);
                 assert!(full_block.is_ok());
                 assert!(full_block.unwrap().is_some());
             });
