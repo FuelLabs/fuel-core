@@ -5,7 +5,7 @@ pub const DB_CLEAN_UP: bool = true;
 
 pub fn should_clean() -> bool {
     // Override cleaning up databases if env var is set
-    std::env::var_os("DB_CLEAN")
+    std::env::var_os("DB_CLEAN_UP")
         .map(|value| {
             let value = value.to_str().unwrap();
             let value = value.parse::<bool>().unwrap();
