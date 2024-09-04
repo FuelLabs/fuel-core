@@ -40,7 +40,7 @@ fn get_base_path() -> PathBuf {
 }
 
 pub fn get_base_path_from_method(method: &str) -> PathBuf {
-    get_base_path().join(PathBuf::from(format!("{method}").as_str()))
+    get_base_path().join(PathBuf::from(method))
 }
 
 pub fn open_rocks_db<T: DatabaseDescription>(
@@ -51,7 +51,7 @@ pub fn open_rocks_db<T: DatabaseDescription>(
     let path = get_base_path_from_method(method).join(PathBuf::from(
         format!("./{block_count}/{tx_count}").as_str(),
     ));
-    let db = RocksDb::default_open(&path, None)?;
+    let db = RocksDb::default_open(path, None)?;
     Ok(db)
 }
 
@@ -87,7 +87,6 @@ pub fn multi_get_block(
     let txs: Vec<Transaction> = raw_txs
         .iter()
         .flatten()
-        .into_iter()
         .map(|raw_tx| postcard::from_bytes::<Transaction>(raw_tx.as_slice()))
         .try_collect()?;
 

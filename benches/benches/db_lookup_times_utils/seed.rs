@@ -42,10 +42,10 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::fs;
 
-fn seed_matrix<'a, SeedClosure, Description>(
-    method: &'a str,
+fn seed_matrix<SeedClosure, Description>(
+    method: &str,
     seed_closure: SeedClosure,
-) -> DbLookupBenchResult<impl FnOnce() + 'a>
+) -> DbLookupBenchResult<impl FnOnce() + '_>
 where
     SeedClosure: Fn(&mut RocksDb<Description>, u32, u32) -> DbLookupBenchResult<()>,
     Description: DatabaseDescription,
@@ -58,9 +58,9 @@ where
     Ok(move || fs::remove_dir_all(get_base_path_from_method(method)).unwrap())
 }
 
-pub fn seed_compressed_blocks_and_transactions_matrix<'a>(
-    method: &'a str,
-) -> DbLookupBenchResult<impl FnOnce() + 'a> {
+pub fn seed_compressed_blocks_and_transactions_matrix(
+    method: &str,
+) -> DbLookupBenchResult<impl FnOnce() + '_> {
     seed_matrix(method, |database, block_count, tx_count| {
         seed_compressed_blocks_and_transactions(database, block_count, tx_count)
     })
