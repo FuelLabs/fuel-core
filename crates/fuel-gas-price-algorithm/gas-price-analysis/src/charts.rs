@@ -12,9 +12,6 @@ pub fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_pat
         pessimistic_costs,
     } = results;
 
-    let max_actual_profit = *actual_profit.iter().max().unwrap() as u64;
-    let eth = max_actual_profit as f64 / (10_f64).powf(18.);
-    println!("max_actual: {} ETH", eth);
 
     let plot_width = 640 * 2 * 2;
     let plot_height = 480 * 3;

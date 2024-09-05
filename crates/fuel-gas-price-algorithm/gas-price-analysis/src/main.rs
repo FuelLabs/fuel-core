@@ -1,5 +1,7 @@
-use crate::charts::draw_chart;
-use crate::simulation::get_da_cost_per_byte_from_source;
+use crate::{
+    charts::draw_chart,
+    simulation::get_da_cost_per_byte_from_source,
+};
 use plotters::prelude::*;
 use rand::{
     rngs::StdRng,
@@ -10,16 +12,10 @@ use rand::{
 use plotters::coord::Shift;
 
 use crate::{
-    charts::{
-        draw_bytes_and_cost_per_block,
-        draw_fullness,
-        draw_gas_prices,
-        draw_profit,
-    },
     optimisation::naive_optimisation,
     simulation::{
-        Simulator,
         SimulationResults,
+        Simulator,
     },
 };
 
@@ -28,9 +24,10 @@ mod simulation;
 
 mod charts;
 
-
-
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser,
+    Subcommand,
+};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -61,13 +58,20 @@ enum Mode {
         source: Source,
         /// Number of iterations to run the optimization for
         iterations: u64,
-    }
+    },
 }
 
 #[derive(Subcommand)]
 enum Source {
-    Generated { size: usize },
-    Predefined { file_path: String }
+    Generated {
+        size: usize,
+    },
+    Predefined {
+        file_path: String,
+        /// The number of L2 blocks to include from source
+        #[arg(short, long)]
+        sample_size: Option<usize>,
+    },
 }
 
 fn main() {
@@ -77,28 +81,108 @@ fn main() {
 
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
-            let da_cost_per_byte = get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
+            let da_cost_per_byte =
+                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
             let size = da_cost_per_byte.len();
-            println!("Running simulation with P: {}, D: {}, and {} blocks", pretty(p), pretty(d), pretty(size));
+            println!(
+                "Running simulation with P: {}, D: {}, and {} blocks",
+                pretty(p),
+                pretty(d),
+                pretty(size)
+            );
             let simulator = Simulator::new(da_cost_per_byte);
             let result = simulator.run_simulation(p, d, UPDATE_PERIOD);
             (result, (p, d))
-        },
-        Mode::Optimization { iterations, source} => {
-            let da_cost_per_byte = get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
+        }
+        Mode::Optimization { iterations, source } => {
+            let da_cost_per_byte =
+                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
             let size = da_cost_per_byte.len();
-            println!("Running optimization with {iterations} iterations and {size} blocks");
+            println!(
+                "Running optimization with {iterations} iterations and {size} blocks"
+            );
             let simulator = Simulator::new(da_cost_per_byte);
-            let (results, (p, d)) = naive_optimisation(simulator, iterations as usize, UPDATE_PERIOD);
+            let (results, (p, d)) =
+                naive_optimisation(simulator, iterations as usize, UPDATE_PERIOD);
             println!("Optimization results: P: {}, D: {}", pretty(p), pretty(d));
             (results, (p, d))
         }
     };
 
+    print_info(&results);
+
     if let Some(file_path) = &args.file_path {
         draw_chart(results, p_comp, d_comp, file_path);
-
     }
+}
+
+fn print_info(results: &SimulationResults) {
+    let SimulationResults {
+        da_gas_prices,
+        actual_profit,
+        projected_profit,
+        ..
+    } = results;
+
+    // Max actual profit
+    let (index, max_actual_profit) = actual_profit
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *max_actual_profit as f64 / (10_f64).powf(18.);
+    println!("max actual profit: {} ETH at {}", eth, index);
+
+    // Max projected profit
+    let (index, max_projected_profit) = projected_profit
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *max_projected_profit as f64 / (10_f64).powf(18.);
+    println!("max projected profit: {} ETH at {}", eth, index);
+
+    // Min actual profit
+    let (index, min_actual_profit) = actual_profit
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *min_actual_profit as f64 / (10_f64).powf(18.);
+    println!("min actual profit: {} ETH at {}", eth, index);
+
+    // Min projected profit
+    let (index, min_projected_profit) = projected_profit
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *min_projected_profit as f64 / (10_f64).powf(18.);
+    println!("min projected profit: {} ETH at {}", eth, index);
+
+    // Max DA Gas Price
+    let (index, max_da_gas_price) = da_gas_prices
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *max_da_gas_price as f64 / (10_f64).powf(18.);
+    println!(
+        "max DA gas price: {} Wei ({} ETH) at {}",
+        max_da_gas_price, eth, index
+    );
+
+    // Min Da Gas Price
+    let (index, min_da_gas_price) = da_gas_prices
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *min_da_gas_price as f64 / (10_f64).powf(18.);
+    println!(
+        "min DA gas price: {} Wei ({} ETH) at {}",
+        min_da_gas_price, eth, index
+    );
 }
 
 pub fn pretty<T: ToString>(input: T) -> String {
