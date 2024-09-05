@@ -17,7 +17,7 @@ use fuel_core_types::{
 use crate::{
     context::decompress::DecompressCtx,
     db::RocksDb,
-    ports::TxPointerToId,
+    ports::TxPointerToUtxoId,
     CompressedBlockPayload,
 };
 
@@ -57,7 +57,7 @@ impl From<anyhow::Error> for DecompressError {
 
 pub async fn run(
     mut db: RocksDb,
-    tx_lookup: Box<dyn TxPointerToId>,
+    tx_lookup: Box<dyn TxPointerToUtxoId>,
 
     mut request_receiver: mpsc::Receiver<TaskRequest>,
 ) {
@@ -73,7 +73,7 @@ pub async fn run(
 
 pub async fn decompress(
     db: &mut RocksDb,
-    tx_lookup: &dyn TxPointerToId,
+    tx_lookup: &dyn TxPointerToUtxoId,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {
     if block.is_empty() || block[0] != 0 {

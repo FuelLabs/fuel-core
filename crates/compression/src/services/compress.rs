@@ -13,7 +13,7 @@ use crate::{
     },
     db::RocksDb,
     eviction_policy::CacheEvictor,
-    ports::TxIdToPointer,
+    ports::UtxoIdToPointer,
     tables::{
         PerRegistryKeyspace,
         RegistrationsPerTable,
@@ -48,7 +48,7 @@ impl From<anyhow::Error> for CompressError {
 
 pub async fn run(
     mut db: RocksDb,
-    tx_lookup: Box<dyn TxIdToPointer>,
+    tx_lookup: Box<dyn UtxoIdToPointer>,
     mut request_receiver: mpsc::Receiver<TaskRequest>,
 ) {
     while let Some(req) = request_receiver.recv().await {
@@ -63,7 +63,7 @@ pub async fn run(
 
 pub async fn compress(
     db: &mut RocksDb,
-    tx_lookup: &dyn TxIdToPointer,
+    tx_lookup: &dyn UtxoIdToPointer,
     block: Block,
 ) -> Result<Vec<u8>, CompressError> {
     if *block.header().height() != db.next_block_height()? {

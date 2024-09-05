@@ -1,18 +1,18 @@
 //! Ports this service requires to function.
 
 use fuel_core_types::fuel_tx::{
-    TxId,
     TxPointer,
+    UtxoId,
 };
 
 #[async_trait::async_trait]
-pub trait TxIdToPointer {
-    async fn lookup(&self, tx_id: TxId) -> anyhow::Result<TxPointer>;
+pub trait UtxoIdToPointer {
+    async fn lookup(&self, utxo_id: UtxoId) -> anyhow::Result<(TxPointer, u16)>;
 }
 
 #[async_trait::async_trait]
-pub trait TxPointerToId {
-    async fn lookup(&self, tx_pointer: TxPointer) -> anyhow::Result<TxId>;
+pub trait TxPointerToUtxoId {
+    async fn lookup(&self, tx_pointer: TxPointer, index: u16) -> anyhow::Result<UtxoId>;
 }
 
 // Exposed interfaces: where should these live?

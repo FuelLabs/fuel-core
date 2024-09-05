@@ -12,8 +12,9 @@ use fuel_core_types::{
         Transaction,
     },
     fuel_types::{
+        AssetId,
         BlockHeight,
-        *,
+        ContractId,
     },
     tai64::Tai64,
 };

@@ -8,17 +8,17 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         AssetId,
-        CompressibleTxId,
         ContractId,
         ScriptCode,
         TxPointer,
+        UtxoId,
     },
 };
 
 use crate::{
     db::RocksDb,
     eviction_policy::CacheEvictor,
-    ports::TxIdToPointer,
+    ports::UtxoIdToPointer,
     tables::{
         PerRegistryKeyspace,
         PostcardSerialized,
@@ -28,7 +28,7 @@ use crate::{
 
 pub struct CompressCtx<'a> {
     pub db: &'a mut RocksDb,
-    pub tx_lookup: &'a dyn TxIdToPointer,
+    pub tx_lookup: &'a dyn UtxoIdToPointer,
     pub cache_evictor: CacheEvictor,
     /// Changes to the temporary registry, to be included in the compressed block header
     pub changes: PerRegistryKeyspace<HashMap<RegistryKey, PostcardSerialized>>,
@@ -77,8 +77,11 @@ impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ScriptCode {
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for CompressibleTxId {
-    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<TxPointer> {
-        ctx.tx_lookup.lookup(**self).await
+impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for UtxoId {
+    async fn compress(
+        &self,
+        ctx: &mut CompressCtx<'a>,
+    ) -> anyhow::Result<(TxPointer, u16)> {
+        ctx.tx_lookup.lookup(*self).await
     }
 }

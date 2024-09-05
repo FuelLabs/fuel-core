@@ -23,8 +23,8 @@ use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         Transaction,
-        TxId,
         TxPointer,
+        UtxoId,
     },
     tai64::Tai64,
 };
@@ -33,8 +33,8 @@ use tempfile::TempDir;
 use crate::{
     db::RocksDb,
     ports::{
-        TxIdToPointer,
-        TxPointerToId,
+        TxPointerToUtxoId,
+        UtxoIdToPointer,
     },
     services,
 };
@@ -42,28 +42,33 @@ use crate::{
 /// Just stores the looked-up tx pointers in a map, instead of actually looking them up.
 #[derive(Default)]
 pub struct MockTxDb {
-    mapping: Arc<Mutex<BiMap<TxId, TxPointer>>>,
+    mapping: Arc<Mutex<BiMap<UtxoId, (TxPointer, u16)>>>,
 }
 
 #[async_trait::async_trait]
-impl TxIdToPointer for MockTxDb {
-    async fn lookup(&self, tx_id: TxId) -> anyhow::Result<TxPointer> {
+impl UtxoIdToPointer for MockTxDb {
+    async fn lookup(&self, utxo_id: UtxoId) -> anyhow::Result<(TxPointer, u16)> {
         let mut g = self.mapping.lock().unwrap();
-        if !g.contains_left(&tx_id) {
+        if !g.contains_left(&utxo_id) {
             let key = g.len() as u32; // Just obtain an unique key
-            g.insert(tx_id, TxPointer::new(key.into(), 0));
+            g.insert(utxo_id, (TxPointer::new(key.into(), 0), 0));
         }
-        Ok(g.get_by_left(&tx_id).cloned().unwrap())
+        Ok(g.get_by_left(&utxo_id).cloned().unwrap())
     }
 }
 
 #[async_trait::async_trait]
-impl TxPointerToId for MockTxDb {
-    async fn lookup(&self, tx_pointer: TxPointer) -> anyhow::Result<TxId> {
+impl TxPointerToUtxoId for MockTxDb {
+    async fn lookup(&self, tx_pointer: TxPointer, index: u16) -> anyhow::Result<UtxoId> {
         let g = self.mapping.lock().unwrap();
-        g.get_by_right(&tx_pointer).cloned().ok_or_else(|| {
-            anyhow::anyhow!("TxPointer not found in mock db: {:?}", tx_pointer)
-        })
+        g.get_by_right(&(tx_pointer, index))
+            .cloned()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "(TxPointer, index) not found in mock db: {:?}",
+                    (tx_pointer, index)
+                )
+            })
     }
 }
 

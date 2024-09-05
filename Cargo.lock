@@ -3161,8 +3161,8 @@ name = "fuel-compression"
 version = "0.56.0"
 dependencies = [
  "fuel-derive",
+ "fuel-types",
  "serde",
- "serde-big-array",
 ]
 
 [[package]]
@@ -3889,7 +3889,6 @@ dependencies = [
 name = "fuel-types"
 version = "0.56.0"
 dependencies = [
- "fuel-compression",
  "fuel-derive",
  "hex",
  "rand",
@@ -7927,15 +7926,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99fce0ffe7310761ca6bf9faf5115afbc19688edd00171d81b1bb1b116c63e09"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde-big-array"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
-dependencies = [
- "serde",
 ]
 
 [[package]]
