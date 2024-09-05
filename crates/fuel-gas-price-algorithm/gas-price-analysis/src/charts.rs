@@ -1,4 +1,8 @@
 use super::*;
+use std::{
+    fs,
+    path::PathBuf,
+};
 
 pub fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_path: &str) {
     let SimulationResults {
@@ -12,10 +16,19 @@ pub fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_pat
         pessimistic_costs,
     } = results;
 
-
     let plot_width = 640 * 2 * 2;
     let plot_height = 480 * 3;
 
+    let path: PathBuf = file_path.into();
+
+    if path.is_dir() {
+        println!("Creating chart at: {}", file_path);
+        fs::create_dir_all(file_path).unwrap();
+    } else {
+        let new_path = path.parent().unwrap();
+        println!("Creating chart at: {}", new_path.display());
+        fs::create_dir_all(new_path).unwrap();
+    }
     let root =
         BitMapBackend::new(file_path, (plot_width, plot_height)).into_drawing_area();
     root.fill(&WHITE).unwrap();
@@ -32,7 +45,11 @@ pub fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_pat
         &actual_profit,
         &projected_profit,
         &pessimistic_costs,
-        &format!("Profit p_comp: {}, d_comp: {}", pretty(p_comp), pretty(d_comp)),
+        &format!(
+            "Profit p_comp: {}, d_comp: {}",
+            pretty(p_comp),
+            pretty(d_comp)
+        ),
     );
     draw_gas_prices(
         &window_four,
