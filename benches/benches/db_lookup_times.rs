@@ -4,11 +4,7 @@ use criterion::{
     Criterion,
 };
 use fuel_core_benches::db_lookup_times_utils::{
-    full_block_table::BenchDatabase,
-    matrix::{
-        matrix,
-        should_clean,
-    },
+    matrix::matrix,
     seed::{
         seed_compressed_blocks_and_transactions_matrix,
         seed_full_block_matrix,
@@ -21,17 +17,24 @@ use fuel_core_benches::db_lookup_times_utils::{
     },
 };
 
+use fuel_core_benches::db_lookup_times_utils::utils::get_db_path;
 use rand::thread_rng;
 
-pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
+pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<()> {
     let method = LookupMethod::HeaderAndTx;
     let mut rng = thread_rng();
 
-    let cleaner = seed_compressed_blocks_and_transactions_matrix(method)?;
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let database = open_rocks_db::<BenchDatabase>(block_count, tx_count, method)?;
+        let db_path = get_db_path(method, block_count, tx_count);
+        let mut database = open_rocks_db(db_path.path())?;
+        seed_compressed_blocks_and_transactions_matrix(
+            &mut database,
+            block_count,
+            tx_count,
+        )?;
+
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
@@ -42,18 +45,24 @@ pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnc
     }
 
     group.finish();
-    Ok(cleaner)
+    Ok(())
 }
 
-pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
+pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<()> {
     let method = LookupMethod::MultiGet;
     let mut rng = thread_rng();
 
-    let cleaner = seed_compressed_blocks_and_transactions_matrix(method)?;
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let database = open_rocks_db(block_count, tx_count, method)?;
+        let db_path = get_db_path(method, block_count, tx_count);
+        let mut database = open_rocks_db(db_path.path())?;
+        seed_compressed_blocks_and_transactions_matrix(
+            &mut database,
+            block_count,
+            tx_count,
+        )?;
+
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
@@ -64,18 +73,20 @@ pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()>
     }
 
     group.finish();
-    Ok(cleaner)
+    Ok(())
 }
 
-pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()> {
+pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<()> {
     let method = LookupMethod::FullBlock;
     let mut rng = thread_rng();
 
-    let cleaner = seed_full_block_matrix()?;
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let database = open_rocks_db(block_count, tx_count, method)?;
+        let db_path = get_db_path(method, block_count, tx_count);
+        let mut database = open_rocks_db(db_path.path())?;
+        seed_full_block_matrix(&mut database, block_count, tx_count)?;
+
         group.bench_function(format!("{block_count}/{tx_count}"), |b| {
             b.iter(|| {
                 let height = get_random_block_height(&mut rng, block_count);
@@ -86,19 +97,13 @@ pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<impl FnOnce()
     }
 
     group.finish();
-    Ok(cleaner)
+    Ok(())
 }
 
 fn construct_and_run_benchmarks(c: &mut Criterion) {
-    let header_and_tx_cleaner = header_and_tx_lookup(c).unwrap();
-    let multi_get_cleaner = multi_get_lookup(c).unwrap();
-    let full_block_cleaner = full_block_lookup(c).unwrap();
-
-    if should_clean() {
-        header_and_tx_cleaner();
-        multi_get_cleaner();
-        full_block_cleaner();
-    }
+    header_and_tx_lookup(c).unwrap();
+    multi_get_lookup(c).unwrap();
+    full_block_lookup(c).unwrap();
 }
 
 criterion_group! {

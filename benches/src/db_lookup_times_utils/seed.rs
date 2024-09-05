@@ -3,20 +3,13 @@ use crate::db_lookup_times_utils::{
         BenchDatabase,
         BenchDbColumn,
     },
-    matrix::matrix,
     utils::{
         chain_id,
-        get_base_path_from_method,
-        open_rocks_db,
-        LookupMethod,
         Result as DbLookupBenchResult,
     },
 };
 use anyhow::anyhow;
-use fuel_core::{
-    database::database_description::DatabaseDescription,
-    state::rocks_db::RocksDb,
-};
+use fuel_core::state::rocks_db::RocksDb;
 use fuel_core_storage::kv_store::{
     KeyValueMutate,
     Value,
@@ -42,38 +35,20 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-fn seed_matrix<SeedClosure, Description>(
-    method: LookupMethod,
-    seed_closure: SeedClosure,
-) -> DbLookupBenchResult<impl FnOnce()>
-where
-    SeedClosure:
-        Fn(&mut RocksDb<Description>, BlockHeight, u32) -> DbLookupBenchResult<()>,
-    Description: DatabaseDescription,
-{
-    for (block_count, tx_count) in matrix() {
-        let mut database = open_rocks_db(block_count, tx_count, method)?;
-        seed_closure(&mut database, block_count, tx_count)?;
-    }
-
-    Ok(move || std::fs::remove_dir_all(get_base_path_from_method(method)).unwrap())
-}
-
 pub fn seed_compressed_blocks_and_transactions_matrix(
-    method: LookupMethod,
-) -> DbLookupBenchResult<impl FnOnce()> {
-    seed_matrix(method, |database, block_count, tx_count| {
-        seed_compressed_blocks_and_transactions(database, block_count, tx_count)
-    })
+    database: &mut RocksDb<BenchDatabase>,
+    block_count: BlockHeight,
+    tx_count: u32,
+) -> DbLookupBenchResult<()> {
+    seed_compressed_blocks_and_transactions(database, block_count, tx_count)
 }
 
-pub fn seed_full_block_matrix() -> DbLookupBenchResult<impl FnOnce()> {
-    seed_matrix(
-        LookupMethod::FullBlock,
-        |database, block_count, tx_count| {
-            seed_full_blocks(database, block_count, tx_count)
-        },
-    )
+pub fn seed_full_block_matrix(
+    database: &mut RocksDb<BenchDatabase>,
+    block_count: BlockHeight,
+    tx_count: u32,
+) -> DbLookupBenchResult<()> {
+    seed_full_blocks(database, block_count, tx_count)
 }
 
 fn generate_bench_block(

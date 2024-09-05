@@ -1,6 +1,9 @@
-use crate::db_lookup_times_utils::full_block_table::{
-    BenchDatabase,
-    BenchDbColumn,
+use crate::db_lookup_times_utils::{
+    full_block_table::{
+        BenchDatabase,
+        BenchDbColumn,
+    },
+    matrix::should_clean,
 };
 use anyhow::anyhow;
 use fuel_core::{
@@ -27,7 +30,10 @@ use rand::{
     rngs::ThreadRng,
     Rng,
 };
-use std::path::PathBuf;
+use std::path::{
+    Path,
+    PathBuf,
+};
 use strum_macros::AsRefStr;
 
 pub type Result<T> = core::result::Result<T, anyhow::Error>;
@@ -39,22 +45,43 @@ pub fn get_random_block_height(
     BlockHeight::from(rng.gen_range(0..block_count.into()))
 }
 
-fn get_base_path() -> PathBuf {
-    PathBuf::from("./db_benchmarks")
+pub struct ConditionalTempDir {
+    path_buf: PathBuf,
 }
 
-pub fn get_base_path_from_method(method: LookupMethod) -> PathBuf {
-    get_base_path().join(PathBuf::from(method.as_ref()))
+impl ConditionalTempDir {
+    pub fn path(&self) -> &Path {
+        self.path_buf.as_path()
+    }
+}
+
+impl Drop for ConditionalTempDir {
+    fn drop(&mut self) {
+        if should_clean() {
+            let _ = std::fs::remove_dir_all(&self.path_buf);
+        }
+    }
+}
+
+pub fn get_db_path(
+    method: LookupMethod,
+    block_count: BlockHeight,
+    tx_count: u32,
+) -> ConditionalTempDir {
+    ConditionalTempDir {
+        path_buf: PathBuf::from(
+            format!(
+                "./db_benchmarks/{}/{block_count}/{tx_count}",
+                method.as_ref()
+            )
+            .as_str(),
+        ),
+    }
 }
 
 pub fn open_rocks_db<Description: DatabaseDescription>(
-    block_count: BlockHeight,
-    tx_count: u32,
-    method: LookupMethod,
+    path: &Path,
 ) -> Result<RocksDb<Description>> {
-    let path = get_base_path_from_method(method).join(PathBuf::from(
-        format!("./{block_count}/{tx_count}").as_str(),
-    ));
     let db = RocksDb::default_open(path, None)?;
     Ok(db)
 }
