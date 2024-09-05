@@ -34,7 +34,17 @@ impl ShallowTempDir {
 
 impl Drop for ShallowTempDir {
     fn drop(&mut self) {
-        // Ignore errors
-        let _ = std::fs::remove_dir_all(&self.path);
+        let default_db_clean_up = true;
+        // Check if DB_CLEAN_UP is set and correctly parsed to a boolean, defaulting to true
+        let should_clean_up = env::var("DB_CLEAN_UP").map_or(default_db_clean_up, |v| {
+            v.parse::<bool>().unwrap_or(default_db_clean_up)
+        });
+
+        if should_clean_up {
+            // Ignore errors during cleanup
+            if let Err(e) = std::fs::remove_dir_all(&self.path) {
+                eprintln!("Failed to remove directory {:?}: {}", self.path, e);
+            }
+        }
     }
 }
