@@ -1,4 +1,9 @@
-use fuel_core_services::{RunnableService, RunnableTask, ServiceRunner, StateWatcher};
+use fuel_core_services::{
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+};
 use fuel_core_types::fuel_tx::Transaction;
 
 #[derive(Clone)]
@@ -14,18 +19,17 @@ impl SharedState {
 pub type Service = ServiceRunner<Task>;
 
 pub struct Task {
-    shared_state: SharedState
+    shared_state: SharedState,
 }
 
 #[async_trait::async_trait]
 impl RunnableService for Task {
-
     const NAME: &'static str = "TxPoolv2";
 
     type SharedData = SharedState;
 
     type Task = Task;
-     
+
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -44,10 +48,13 @@ impl RunnableService for Task {
 #[async_trait::async_trait]
 impl RunnableTask for Task {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        // tokio::select! {
-
-        // }
-        Ok(true)
+        let should_continue;
+        tokio::select! {
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
+        }
+        Ok(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -55,9 +62,8 @@ impl RunnableTask for Task {
     }
 }
 
-
 pub fn new_service() -> Service {
     Service::new(Task {
-        shared_state: SharedState
+        shared_state: SharedState,
     })
 }

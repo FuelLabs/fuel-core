@@ -94,7 +94,7 @@ impl TxPoolAdapter {
 
 #[derive(Clone)]
 pub struct TxPoolV2Adapter {
-    _service: TxPoolV2SharedState
+    _service: TxPoolV2SharedState,
 }
 
 impl TxPoolV2Adapter {

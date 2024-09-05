@@ -3729,9 +3729,12 @@ version = "0.35.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "derive_more",
  "fuel-core-services",
  "fuel-core-types",
+ "indextree",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4773,6 +4776,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "indextree"
+version = "4.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d6f1b8dbc8f1e5a0f45e05b9293c42cbab79086baeb3e914d3936f8149edc4f"
+dependencies = [
+ "indextree-macros",
+]
+
+[[package]]
+name = "indextree-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "357230c23ee6024223892ce0de19888a04139ca5bb94f5becb04d38b75a4bccf"
+dependencies = [
+ "either",
+ "itertools 0.13.0",
+ "proc-macro2",
+ "quote",
+ "strum 0.26.3",
+ "syn 2.0.77",
+ "thiserror",
+]
+
+[[package]]
 name = "indicatif"
 version = "0.17.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4896,6 +4923,15 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
