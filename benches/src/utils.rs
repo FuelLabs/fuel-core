@@ -106,11 +106,30 @@ mod tests {
         assert!(!path.exists());
     }
 
+    fn shalow_temp_dir__drops_if_env_var_malformed() {
+        // given
+        env::set_var(DB_CLEAN_UP_ENV_VAR, "bing_bong");
+        let path;
+        {
+            let dir = ShallowTempDir::new();
+            path = dir.path().clone();
+            std::fs::create_dir_all(&path).expect("Failed to create temp directory");
+        }
+        // when: out of scope, dropped
+
+        // then
+        assert!(!path.exists());
+
+        // clean up
+        env::remove_var(DB_CLEAN_UP_ENV_VAR);
+    }
+
     #[test]
     fn test_shallow_temp_dir_behaviour() {
         // run tests sequentially to avoid conflicts due to env var usage
         shallow_temp_dir__drops_if_env_var_is_set();
         shallow_temp_dir__does_not_drop_if_env_var_is_set();
         shallow_temp_dir__drops_if_env_var_is_not_set();
+        shalow_temp_dir__drops_if_env_var_malformed();
     }
 }
