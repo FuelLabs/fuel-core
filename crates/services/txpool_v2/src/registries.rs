@@ -1,5 +1,7 @@
 use std::collections::{
-    hash_map::Entry, HashMap, HashSet
+    hash_map::Entry,
+    HashMap,
+    HashSet,
 };
 
 use fuel_core_types::{
@@ -81,10 +83,15 @@ impl Registries {
     }
 
     pub fn extend(&mut self, registries: Registries) {
-        self.coins_creators.extend(registries.coins_creators.into_iter());
-        self.coins_spenders.extend(registries.coins_spenders.into_iter());
-        self.contracts_creators.extend(registries.contracts_creators.into_iter());
-        self.blobs_creators.extend(registries.blobs_creators.into_iter());
-        self.messages_spenders.extend(registries.messages_spenders.into_iter());
+        self.coins_creators
+            .extend(registries.coins_creators.into_iter());
+        self.coins_spenders
+            .extend(registries.coins_spenders.into_iter());
+        self.contracts_creators
+            .extend(registries.contracts_creators.into_iter());
+        self.blobs_creators
+            .extend(registries.blobs_creators.into_iter());
+        self.messages_spenders
+            .extend(registries.messages_spenders.into_iter());
     }
 }

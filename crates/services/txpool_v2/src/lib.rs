@@ -1,6 +1,7 @@
 mod config;
 mod error;
 mod pool;
+mod ports;
 mod registries;
 mod service;
 

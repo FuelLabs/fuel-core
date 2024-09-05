@@ -14,8 +14,9 @@ description = "Transaction pool v2"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
-indextree = "4.7.2"
+petgraph = "0.6.5"
 fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tracing = { workspace = true }

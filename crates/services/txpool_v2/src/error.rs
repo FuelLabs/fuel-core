@@ -1,4 +1,4 @@
-#[derive(derive_more::Display)]
+#[derive(Debug, derive_more::Display)]
 pub enum Error {
     #[display(fmt = "Transaction not found: {_0}")]
     TransactionNotFound(String),

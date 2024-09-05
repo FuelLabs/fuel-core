@@ -12,6 +12,7 @@ pub struct SharedState;
 impl SharedState {
     // TODO: Correct output.
     fn insert(&mut self, transactions: Vec<Transaction>) -> Vec<()> {
+        // Move verif of wasm there
         vec![]
     }
 }
