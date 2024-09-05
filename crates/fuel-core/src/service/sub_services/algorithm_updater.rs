@@ -218,7 +218,7 @@ pub fn get_synced_gas_price_updater(
     let l2_block_source =
         FuelL2BlockSource::new(genesis_block_height, settings.clone(), block_stream);
 
-    let da_source = FuelDaSourceService::new(DummyIngestor, Duration::from_secs(5))?;
+    let da_source = FuelDaSourceService::new(DummyIngestor, None)?;
 
     if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
         let updater = FuelGasPriceUpdater::new(

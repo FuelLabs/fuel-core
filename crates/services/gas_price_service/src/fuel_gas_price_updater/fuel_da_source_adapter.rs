@@ -22,6 +22,8 @@ pub mod block_committer_ingestor;
 pub mod dummy_ingestor;
 mod service;
 
+const POLLING_INTERVAL_MS: u64 = 10_000;
+
 // Exists to help merge the ServiceRunner and DaCommitSource traits into one type impl
 pub struct FuelDaSourceService<T: DaMetadataGetter + Send + Sync + 'static>(
     ServiceRunner<DaSourceService<T>>,
@@ -67,8 +69,11 @@ impl<T> FuelDaSourceService<T>
 where
     T: DaMetadataGetter + Send + Sync,
 {
-    pub fn new(ingestor: T, polling_interval: Duration) -> anyhow::Result<Self> {
-        let service = DaSourceService::new(ingestor, polling_interval);
+    pub fn new(ingestor: T, polling_interval: Option<Duration>) -> anyhow::Result<Self> {
+        let service = DaSourceService::new(
+            ingestor,
+            polling_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
+        );
         let service_runner = ServiceRunner::new(service);
         Ok(Self(service_runner))
     }
@@ -101,7 +106,8 @@ mod tests {
     async fn test_service_sets_cache_when_request_succeeds() {
         // given
         let mut service =
-            FuelDaSourceService::new(DummyIngestor, Duration::from_millis(1)).unwrap();
+            FuelDaSourceService::new(DummyIngestor, Some(Duration::from_millis(1)))
+                .unwrap();
 
         // when
         service.start().unwrap();
@@ -117,7 +123,8 @@ mod tests {
     async fn test_service_invalidates_cache() {
         // given
         let mut service =
-            FuelDaSourceService::new(DummyIngestor, Duration::from_millis(1)).unwrap();
+            FuelDaSourceService::new(DummyIngestor, Some(Duration::from_millis(1)))
+                .unwrap();
 
         // when
         service.start().unwrap();
@@ -135,7 +142,7 @@ mod tests {
         // given
         let mut service = FuelDaSourceService::new(
             FakeErroringMetadataIngestor,
-            Duration::from_millis(1),
+            Some(Duration::from_millis(1)),
         )
         .unwrap();
 
