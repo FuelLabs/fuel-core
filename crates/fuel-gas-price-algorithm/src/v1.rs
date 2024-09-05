@@ -17,6 +17,8 @@ pub enum Error {
     SkippedDABlock { expected: u32, got: u32 },
     #[error("Could not calculate cost per byte: {bytes:?} bytes, {cost:?} cost")]
     CouldNotCalculateCostPerByte { bytes: u64, cost: u64 },
+    #[error("Failed to include L2 block data: {0}")]
+    FailedTooIncludeL2BlockData(String),
 }
 
 /// An algorithm for calculating the gas price for the next block
@@ -111,10 +113,6 @@ impl AlgorithmV1 {
             .try_into()
             .unwrap_or(self.min_da_gas_price);
         let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
-        // println!(
-        //     "exec price: {}, da price: {}",
-        //     self.new_exec_price, new_da_gas_price
-        // );
         self.new_exec_price.saturating_add(new_da_gas_price)
     }
 }
@@ -218,13 +216,22 @@ impl AlgorithmUpdaterV1 {
             })
         } else {
             self.l2_block_height = height;
+            // `gas_price_factor` will never be zero
+            #[allow(clippy::arithmetic_side_effects)]
             let last_exec_price = self
                 .new_scaled_exec_price
                 .saturating_div(self.gas_price_factor.into());
-            let last_profit = (self.total_da_rewards as i64)
-                .saturating_sub(self.projected_total_da_cost as i64);
+            // TODO: fix this nonsense when we fix the types https://github.com/FuelLabs/fuel-core/issues/2147
+            let projected_total_da_cost = i64::try_from(self.projected_total_da_cost)
+                .map_err(|_| {
+                    Error::FailedTooIncludeL2BlockData(format!(
+                        "Converting {:?} to an i64 from u256",
+                        self.projected_total_da_cost
+                    ))
+                })?;
+            let last_profit =
+                (self.total_da_rewards as i64).saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
-            #[allow(clippy::arithmetic_side_effects)]
             let block_projected_da_cost =
                 (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
             self.projected_total_da_cost = self
@@ -232,18 +239,8 @@ impl AlgorithmUpdaterV1 {
                 .saturating_add(block_projected_da_cost);
             // implicitly deduce what our da gas price was for the l2 block
             self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
-            // println!(
-            //     "gas price: {}, last exec price: {}, implicit da gas price: {}",
-            //     gas_price, last_exec_price, self.last_da_gas_price
-            // );
             self.update_exec_gas_price(used, capacity);
-            #[allow(clippy::arithmetic_side_effects)]
-            // the `da_gas_price_factor` will never be `0`
             let block_da_reward = used.saturating_mul(self.last_da_gas_price);
-            // println!(
-            //     "block project cost: {}, block reward: {}",
-            //     block_projected_da_cost, block_da_reward
-            // );
             self.total_da_rewards = self.total_da_rewards.saturating_add(block_da_reward);
             Ok(())
         }
@@ -295,7 +292,7 @@ impl AlgorithmUpdaterV1 {
             })
         } else {
             let new_cost_per_byte: u128 = (block_cost as u128)
-                .checked_div(u64::from(block_bytes) as u128)
+                .checked_div(block_bytes as u128)
                 .ok_or(Error::CouldNotCalculateCostPerByte {
                     bytes: block_bytes,
                     cost: block_cost,
@@ -330,6 +327,8 @@ impl AlgorithmUpdaterV1 {
     pub fn algorithm(&self) -> AlgorithmV1 {
         AlgorithmV1 {
             min_da_gas_price: self.min_da_gas_price,
+            #[allow(clippy::arithmetic_side_effects)]
+            // `gas_price_factor` will never be zero
             new_exec_price: self
                 .new_scaled_exec_price
                 .saturating_div(self.gas_price_factor.into()),

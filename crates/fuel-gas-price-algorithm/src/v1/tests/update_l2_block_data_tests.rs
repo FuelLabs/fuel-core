@@ -78,7 +78,7 @@ fn update_l2_block_data__updates_projected_cost() {
     // then
     let expected = block_bytes as u128 * da_cost_per_byte;
     let actual = updater.projected_total_da_cost;
-    assert_eq!(actual, expected as u128);
+    assert_eq!(actual, expected);
 }
 
 #[test]
