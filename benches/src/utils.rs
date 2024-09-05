@@ -44,8 +44,9 @@ impl Drop for ShallowTempDir {
             });
 
         if should_clean_up {
-            // Ignore errors when removing the directory
-            let _ = std::fs::remove_dir_all(&self.path);
+            if let Err(e) = std::fs::remove_dir_all(&self.path) {
+                eprintln!("Failed to remove temp directory: {:?}", e);
+            }
         }
     }
 }
