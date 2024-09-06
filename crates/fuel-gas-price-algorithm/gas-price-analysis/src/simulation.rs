@@ -63,21 +63,26 @@ impl Simulator {
         da_p_component: i64,
         da_d_component: i64,
     ) -> AlgorithmUpdaterV1 {
+        // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
         let updater = AlgorithmUpdaterV1 {
             min_exec_gas_price: 10,
             min_da_gas_price: 10,
+            // Change to adjust where the gas price starts on block 0
             new_scaled_exec_price: 10 * gas_price_factor,
-            // last_da_gas_price: *starting_da_gas_price,
+            // Change to adjust where the gas price starts on block 0
             last_da_gas_price: 100,
             gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
             l2_block_height: 0,
+            // Choose the ideal fullness percentage for the L2 block
             l2_block_fullness_threshold_percent: 50,
+            // Increase to make the exec price change faster
             exec_gas_price_change_percent: 2,
+            // Increase to make the da price change faster
             max_da_gas_price_change_percent: 10,
             total_da_rewards_excess: 0,
             da_recorded_block_height: 0,
-            // latest_da_cost_per_byte: *starting_da_gas_price as u128,
+            // Change to adjust the cost per byte of the DA on block 0
             latest_da_cost_per_byte: 0,
             projected_total_da_cost: 0,
             latest_known_total_da_cost_excess: 0,
