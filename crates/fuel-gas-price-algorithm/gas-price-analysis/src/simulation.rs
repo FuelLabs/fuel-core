@@ -48,14 +48,11 @@ impl Simulator {
         let size = self.da_cost_per_byte.len();
         let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
 
-        let l2_blocks = fullness_and_bytes
-            .iter()
-            .map(|(fullness, bytes)| (*fullness, *bytes))
-            .collect::<Vec<_>>();
+        let l2_blocks = fullness_and_bytes.clone().into_iter();
         let da_blocks =
             self.zip_l2_blocks_with_da_blocks(da_recording_rate, &fullness_and_bytes);
 
-        let blocks = l2_blocks.iter().zip(da_blocks.iter()).enumerate();
+        let blocks = l2_blocks.zip(da_blocks.iter()).enumerate();
 
         let updater = self.build_updater(da_p_component, da_d_component);
 
@@ -100,12 +97,13 @@ impl Simulator {
         updater
     }
 
-    fn execute_simulation(
+    fn execute_simulation<'a>(
         &self,
         capacity: u64,
         max_block_bytes: u64,
         fullness_and_bytes: Vec<(u64, u64)>,
-        blocks: Enumerate<Zip<Iter<(u64, u64)>, Iter<Option<Vec<RecordedBlock>>>>>,
+        // blocks: Enumerate<Zip<Iter<(u64, u64)>, Iter<Option<Vec<RecordedBlock>>>>>,
+        blocks: impl Iterator<Item = (usize, ((u64, u64), &'a Option<Vec<RecordedBlock>>))>,
         mut updater: AlgorithmUpdaterV1,
     ) -> SimulationResults {
         let mut gas_prices = vec![];
@@ -135,9 +133,9 @@ impl Simulator {
             updater
                 .update_l2_block_data(
                     height,
-                    *fullness,
+                    fullness,
                     capacity.try_into().unwrap(),
-                    *bytes,
+                    bytes,
                     gas_price,
                 )
                 .unwrap();

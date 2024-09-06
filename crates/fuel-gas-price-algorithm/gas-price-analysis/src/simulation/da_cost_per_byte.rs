@@ -1,5 +1,5 @@
 use crate::{
-    pretty,
+    prettify_number,
     simulation::gen_noisy_signal,
     Source,
 };
@@ -65,7 +65,7 @@ fn get_costs_from_csv_file(file_path: &str, sample_size: Option<usize>) -> Vec<u
         }
         costs.push(cost);
     }
-    println!("Max cost: {}", pretty(max_cost));
+    println!("Max cost: {}", prettify_number(max_cost));
     costs
 }
 

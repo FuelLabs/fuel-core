@@ -86,9 +86,9 @@ fn main() -> anyhow::Result<()> {
             let size = da_cost_per_byte.len();
             println!(
                 "Running simulation with P: {}, D: {}, and {} blocks",
-                pretty(p),
-                pretty(d),
-                pretty(size)
+                prettify_number(p),
+                prettify_number(d),
+                prettify_number(size)
             );
             let simulator = Simulator::new(da_cost_per_byte);
             let result = simulator.run_simulation(p, d, UPDATE_PERIOD);
@@ -103,8 +103,12 @@ fn main() -> anyhow::Result<()> {
             );
             let simulator = Simulator::new(da_cost_per_byte);
             let (results, (p, d)) =
-                naive_optimisation(simulator, iterations as usize, UPDATE_PERIOD);
-            println!("Optimization results: P: {}, D: {}", pretty(p), pretty(d));
+                naive_optimisation(&simulator, iterations as usize, UPDATE_PERIOD);
+            println!(
+                "Optimization results: P: {}, D: {}",
+                prettify_number(p),
+                prettify_number(d)
+            );
             (results, (p, d))
         }
     };
@@ -187,7 +191,7 @@ fn print_info(results: &SimulationResults) {
     );
 }
 
-pub fn pretty<T: ToString>(input: T) -> String {
+pub fn prettify_number<T: std::fmt::Display>(input: T) -> String {
     input
         .to_string()
         .as_bytes()

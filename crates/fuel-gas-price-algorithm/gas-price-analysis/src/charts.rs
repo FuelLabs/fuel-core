@@ -52,8 +52,8 @@ pub fn draw_chart(
         &pessimistic_costs,
         &format!(
             "Profit p_comp: {}, d_comp: {}",
-            pretty(p_comp),
-            pretty(d_comp)
+            prettify_number(p_comp),
+            prettify_number(d_comp)
         ),
     )?;
     draw_gas_prices(
