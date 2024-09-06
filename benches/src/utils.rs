@@ -107,7 +107,7 @@ mod tests {
         assert!(!path.exists());
     }
 
-    fn shalow_temp_dir__drops_if_env_var_malformed() {
+    fn shallow_temp_dir__drops_if_env_var_malformed() {
         // given
         env::set_var(DB_CLEAN_UP_ENV_VAR, "bing_bong");
         let path;
@@ -131,6 +131,6 @@ mod tests {
         shallow_temp_dir__drops_if_env_var_is_set();
         shallow_temp_dir__does_not_drop_if_env_var_is_set();
         shallow_temp_dir__drops_if_env_var_is_not_set();
-        shalow_temp_dir__drops_if_env_var_malformed();
+        shallow_temp_dir__drops_if_env_var_malformed();
     }
 }
