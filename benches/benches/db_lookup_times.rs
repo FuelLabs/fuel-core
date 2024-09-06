@@ -27,7 +27,7 @@ pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<()> {
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let db_path = get_db_path(method, block_count, tx_count);
+        let db_path = get_db_path();
         let mut database = open_rocks_db(db_path.path())?;
         seed_compressed_blocks_and_transactions_matrix(
             &mut database,
@@ -55,7 +55,7 @@ pub fn multi_get_lookup(c: &mut Criterion) -> DbLookupBenchResult<()> {
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let db_path = get_db_path(method, block_count, tx_count);
+        let db_path = get_db_path();
         let mut database = open_rocks_db(db_path.path())?;
         seed_compressed_blocks_and_transactions_matrix(
             &mut database,
@@ -83,7 +83,7 @@ pub fn full_block_lookup(c: &mut Criterion) -> DbLookupBenchResult<()> {
     let mut group = c.benchmark_group(method.as_ref());
 
     for (block_count, tx_count) in matrix() {
-        let db_path = get_db_path(method, block_count, tx_count);
+        let db_path = get_db_path();
         let mut database = open_rocks_db(db_path.path())?;
         seed_full_block_matrix(&mut database, block_count, tx_count)?;
 
