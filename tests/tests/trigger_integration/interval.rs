@@ -29,7 +29,7 @@ use rand::{
 };
 use std::time::Duration;
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn poa_interval_produces_empty_blocks_at_correct_rate() {
     let rounds = 64;
     let round_time_seconds = 2;
@@ -92,7 +92,7 @@ async fn poa_interval_produces_empty_blocks_at_correct_rate() {
     );
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
     let rounds = 64;
     let round_time_seconds = 2;
