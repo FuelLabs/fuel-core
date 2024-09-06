@@ -105,7 +105,7 @@ fn update_l2_block_data__updates_the_total_reward_value() {
     // then
     let expected_new_da_price = new_gas_price - starting_exec_gas_price;
     let expected = gas_used * expected_new_da_price;
-    let actual = updater.total_da_rewards;
+    let actual = updater.total_da_rewards_excess;
     assert_eq!(actual, expected);
 }
 

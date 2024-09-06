@@ -169,12 +169,12 @@ impl UpdaterBuilder {
 
             l2_block_height: self.l2_block_height,
             l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,
-            total_da_rewards: self.total_rewards,
+            total_da_rewards_excess: self.total_rewards,
 
             da_recorded_block_height: self.da_recorded_block_height,
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_da_cost: self.project_total_cost,
-            latest_known_total_da_cost: self.latest_known_total_cost,
+            latest_known_total_da_cost_excess: self.latest_known_total_cost,
             unrecorded_blocks: self.unrecorded_blocks,
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,

@@ -153,11 +153,11 @@ pub struct AlgorithmUpdaterV1 {
     /// The maximum percentage that the DA portion of the gas price can change in a single block
     pub max_da_gas_price_change_percent: u8,
     /// The cumulative reward from the DA portion of the gas price
-    pub total_da_rewards: u64,
+    pub total_da_rewards_excess: u64,
     /// The height of the las L2 block recorded on the DA chain
     pub da_recorded_block_height: u32,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    pub latest_known_total_da_cost: u128,
+    pub latest_known_total_da_cost_excess: u128,
     /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
     /// (This value is added on top of the `latest_known_total_da_cost` if the L2 height is higher)
     pub projected_total_da_cost: u128,
@@ -197,6 +197,7 @@ impl AlgorithmUpdaterV1 {
             self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
         }
         self.recalculate_projected_cost();
+        self.normalize_rewards_and_costs();
         Ok(())
     }
 
@@ -229,8 +230,8 @@ impl AlgorithmUpdaterV1 {
                         self.projected_total_da_cost
                     ))
                 })?;
-            let last_profit =
-                (self.total_da_rewards as i64).saturating_sub(projected_total_da_cost);
+            let last_profit = (self.total_da_rewards_excess as i64)
+                .saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
             let block_projected_da_cost =
                 (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
@@ -241,7 +242,8 @@ impl AlgorithmUpdaterV1 {
             self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
             self.update_exec_gas_price(used, capacity);
             let block_da_reward = used.saturating_mul(self.last_da_gas_price);
-            self.total_da_rewards = self.total_da_rewards.saturating_add(block_da_reward);
+            self.total_da_rewards_excess =
+                self.total_da_rewards_excess.saturating_add(block_da_reward);
             Ok(())
         }
     }
@@ -299,9 +301,9 @@ impl AlgorithmUpdaterV1 {
                 })?;
             self.da_recorded_block_height = height;
             let new_block_cost = self
-                .latest_known_total_da_cost
+                .latest_known_total_da_cost_excess
                 .saturating_add(block_cost as u128);
-            self.latest_known_total_da_cost = new_block_cost;
+            self.latest_known_total_da_cost_excess = new_block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
         }
@@ -320,7 +322,7 @@ impl AlgorithmUpdaterV1 {
             })
             .sum();
         self.projected_total_da_cost = self
-            .latest_known_total_da_cost
+            .latest_known_total_da_cost_excess
             .saturating_add(projection_portion);
     }
 
@@ -336,12 +338,30 @@ impl AlgorithmUpdaterV1 {
             max_change_percent: self.max_da_gas_price_change_percent,
 
             latest_da_cost_per_byte: self.latest_da_cost_per_byte,
-            total_rewards: self.total_da_rewards,
+            total_rewards: self.total_da_rewards_excess,
             total_costs: self.projected_total_da_cost,
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,
             da_p_factor: self.da_p_component,
             da_d_factor: self.da_d_component,
+        }
+    }
+
+    // We only need to track the difference between the rewards and costs after we have true DA data
+    // Normalize, or zero out the lower value and subtract it from the higher value
+    fn normalize_rewards_and_costs(&mut self) {
+        let total_rewards = self.total_da_rewards_excess;
+        let total_costs = self.latest_known_total_da_cost_excess as u64;
+        if total_rewards > total_costs {
+            let excess = total_rewards - total_costs;
+            self.projected_total_da_cost -= total_costs as u128;
+            self.total_da_rewards_excess = excess;
+            self.latest_known_total_da_cost_excess = 0;
+        } else {
+            let excess = total_costs - total_rewards;
+            self.projected_total_da_cost -= total_rewards as u128;
+            self.total_da_rewards_excess = 0;
+            self.latest_known_total_da_cost_excess = excess as u128;
         }
     }
 }

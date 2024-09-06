@@ -131,7 +131,7 @@ fn update_da_record_data__updates_known_total_cost() {
     updater.update_da_record_data(blocks).unwrap();
 
     // then
-    let actual = updater.latest_known_total_da_cost;
+    let actual = updater.latest_known_total_da_cost_excess;
     let expected = known_total_cost + (3 * block_cost as u128);
     assert_eq!(actual, expected);
 }
@@ -199,12 +199,13 @@ fn update_da_record_data__if_da_height_matches_l2_height_prjected_and_known_matc
     assert_eq!(updater.l2_block_height, updater.da_recorded_block_height);
     assert_eq!(
         updater.projected_total_da_cost,
-        updater.latest_known_total_da_cost
+        updater.latest_known_total_da_cost_excess
     );
 }
 
 #[test]
-fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top() {
+fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_guesses_on_top(
+) {
     // given
     let da_cost_per_byte = 20;
     let da_recorded_block_height = 10;
@@ -282,4 +283,55 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
         .sum();
     let expected = new_known_total_cost + guessed_part;
     assert_eq!(actual, expected as u128);
+}
+
+#[test]
+fn update_da_record_data__when_reward_is_greater_than_cost_will_zero_reward_and_subtract_from_cost(
+) {
+    // given
+    let da_cost_per_byte = 20;
+    let da_recorded_block_height = 10;
+    let l2_block_height = 15;
+    let known_total_cost = 1500;
+    let total_rewards = 2000;
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte)
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_l2_block_height(l2_block_height)
+        .with_known_total_cost(known_total_cost)
+        .with_total_rewards(total_rewards)
+        .build();
+
+    let block_bytes = 1000;
+    let block_cost = 100;
+    let blocks = vec![
+        RecordedBlock {
+            height: 11,
+            block_bytes,
+            block_cost,
+        },
+        RecordedBlock {
+            height: 12,
+            block_bytes,
+            block_cost,
+        },
+        RecordedBlock {
+            height: 13,
+            block_bytes,
+            block_cost,
+        },
+    ];
+    let new_costs = blocks.iter().map(|block| block.block_cost).sum::<u64>();
+
+    // when
+    updater.update_da_record_data(blocks).unwrap();
+
+    // then
+    let expected = total_rewards - new_costs - known_total_cost as u64;
+    let actual = updater.total_da_rewards_excess;
+    assert_eq!(actual, expected);
+
+    let expected = 0;
+    let actual = updater.latest_known_total_da_cost_excess;
+    assert_eq!(actual, expected);
 }
