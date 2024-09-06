@@ -17,11 +17,11 @@ use fuel_core_types::fuel_types::BlockHeight;
 )]
 pub enum BenchDbColumn {
     /// See [`Transactions`](crate::tables::Transactions)
-    Transactions = 6,
+    Transactions = 0,
     /// See [`FuelBlocks`](crate::tables::FuelBlocks)
-    FuelBlocks = 7,
-    FullFuelBlocks = 10902,
-    Metadata = 10903,
+    FuelBlocks = 1,
+    FullFuelBlocks = 2,
+    Metadata = 3,
 }
 
 impl StorageColumn for BenchDbColumn {
