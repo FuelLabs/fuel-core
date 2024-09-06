@@ -17,6 +17,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
+    tai64::Tai64,
 };
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
@@ -258,5 +259,13 @@ impl SharedMemoryPool {
         Self {
             memory_pool: MemoryPool::new(number_of_instances),
         }
+    }
+}
+
+pub struct SystemTime;
+
+impl fuel_core_poa::ports::GetTime for SystemTime {
+    fn now(&self) -> Tai64 {
+        Tai64::now()
     }
 }
