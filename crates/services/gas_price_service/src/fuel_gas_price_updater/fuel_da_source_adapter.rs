@@ -55,12 +55,9 @@ impl From<DaMetadataResponse> for DaCommitDetails {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fuel_gas_price_updater::fuel_da_source_adapter::{
-        dummy_ingestor::DummyIngestor,
-        service::{
-            DaMetadataGetter,
-            DaSourceService,
-        },
+    use crate::fuel_gas_price_updater::fuel_da_source_adapter::service::{
+        DaMetadataGetter,
+        DaSourceService,
     };
     use fuel_core_services::{
         RunnableService,
@@ -68,6 +65,16 @@ mod tests {
         ServiceRunner,
     };
     use std::time::Duration;
+
+    #[derive(Default)]
+    struct FakeMetadataIngestor;
+
+    #[async_trait::async_trait]
+    impl DaMetadataGetter for FakeMetadataIngestor {
+        async fn get_da_metadata(&mut self) -> anyhow::Result<DaMetadataResponse> {
+            Ok(DaMetadataResponse::default())
+        }
+    }
 
     #[derive(Default)]
     struct FakeErroringMetadataIngestor;
@@ -82,7 +89,8 @@ mod tests {
     #[tokio::test]
     async fn test_service_sets_cache_when_request_succeeds() {
         // given
-        let service = DaSourceService::new(DummyIngestor, Some(Duration::from_millis(1)));
+        let service =
+            DaSourceService::new(FakeMetadataIngestor, Some(Duration::from_millis(1)));
 
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
@@ -93,14 +101,15 @@ mod tests {
         service.stop();
 
         // then
-        let data_availability_metadata = shared_state.get_da_commit_details().unwrap();
-        assert!(data_availability_metadata.is_some());
+        let da_commit_details = shared_state.get_da_commit_details().unwrap();
+        assert!(da_commit_details.is_some());
     }
 
     #[tokio::test]
     async fn test_service_invalidates_cache() {
         // given
-        let service = DaSourceService::new(DummyIngestor, Some(Duration::from_millis(1)));
+        let service =
+            DaSourceService::new(FakeMetadataIngestor, Some(Duration::from_millis(1)));
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
 
@@ -111,8 +120,8 @@ mod tests {
         let _ = shared_state.get_da_commit_details().unwrap();
 
         // then
-        let data_availability_metadata = shared_state.get_da_commit_details().unwrap();
-        assert!(data_availability_metadata.is_none());
+        let da_commit_details = shared_state.get_da_commit_details().unwrap();
+        assert!(da_commit_details.is_none());
     }
 
     #[tokio::test]
@@ -131,7 +140,7 @@ mod tests {
         service.stop();
 
         // then
-        let data_availability_metadata = shared_state.get_da_commit_details().unwrap();
-        assert!(data_availability_metadata.is_none());
+        let da_commit_details = shared_state.get_da_commit_details().unwrap();
+        assert!(da_commit_details.is_none());
     }
 }

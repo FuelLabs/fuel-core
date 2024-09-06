@@ -96,9 +96,8 @@ where
     /// described by the DaSourceService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let continue_running;
-        let interval = tokio::time::interval(self.poll_interval);
+        let mut interval = tokio::time::interval(self.poll_interval);
 
-        tokio::pin!(interval);
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
