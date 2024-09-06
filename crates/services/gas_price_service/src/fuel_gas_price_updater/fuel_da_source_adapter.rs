@@ -55,9 +55,12 @@ impl From<DaMetadataResponse> for DaCommitDetails {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fuel_gas_price_updater::fuel_da_source_adapter::service::{
-        DaMetadataGetter,
-        DaSourceService,
+    use crate::fuel_gas_price_updater::fuel_da_source_adapter::{
+        dummy_ingestor::DummyIngestor,
+        service::{
+            DaMetadataGetter,
+            DaSourceService,
+        },
     };
     use fuel_core_services::{
         RunnableService,
@@ -65,16 +68,6 @@ mod tests {
         ServiceRunner,
     };
     use std::time::Duration;
-
-    #[derive(Default)]
-    struct FakeMetadataIngestor;
-
-    #[async_trait::async_trait]
-    impl DaMetadataGetter for FakeMetadataIngestor {
-        async fn get_da_metadata(&mut self) -> anyhow::Result<DaMetadataResponse> {
-            Ok(DaMetadataResponse::default())
-        }
-    }
 
     #[derive(Default)]
     struct FakeErroringMetadataIngestor;
@@ -89,15 +82,14 @@ mod tests {
     #[tokio::test]
     async fn test_service_sets_cache_when_request_succeeds() {
         // given
-        let service =
-            DaSourceService::new(FakeMetadataIngestor, Some(Duration::from_millis(1)));
+        let service = DaSourceService::new(DummyIngestor, Some(Duration::from_millis(1)));
 
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
 
         // when
         service.start().unwrap();
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
         service.stop();
 
         // then
@@ -108,14 +100,13 @@ mod tests {
     #[tokio::test]
     async fn test_service_invalidates_cache() {
         // given
-        let service =
-            DaSourceService::new(FakeMetadataIngestor, Some(Duration::from_millis(1)));
+        let service = DaSourceService::new(DummyIngestor, Some(Duration::from_millis(1)));
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
 
         // when
         service.start().unwrap();
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
         service.stop();
         let _ = shared_state.get_da_commit_details().unwrap();
 
@@ -136,7 +127,7 @@ mod tests {
 
         // when
         service.start().unwrap();
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
         service.stop();
 
         // then

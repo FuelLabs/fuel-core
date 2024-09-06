@@ -65,10 +65,7 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 mod algorithm_updater;
@@ -212,8 +209,7 @@ pub fn init_sub_services(
     let block_stream = importer_adapter.events_shared_result();
 
     // todo(#2139): replace dummy ingestor with the block committer ingestor
-    let da_source_service =
-        DaSourceService::new(DummyIngestor, Some(Duration::from_secs(10)));
+    let da_source_service = DaSourceService::new(DummyIngestor, None);
     let da_source_state = da_source_service.shared_data();
     let da_source_service_runner = ServiceRunner::new(da_source_service);
 

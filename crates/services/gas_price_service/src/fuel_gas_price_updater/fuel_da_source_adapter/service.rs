@@ -15,7 +15,13 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::Mutex;
+use tokio::{
+    sync::Mutex,
+    time::{
+        interval,
+        Interval,
+    },
+};
 
 /// This struct is used to denote the data returned
 /// by da metadata providers, this can be the block committer, or some
@@ -30,13 +36,12 @@ pub struct DaMetadataResponse {
 /// This struct houses the shared_state, polling interval
 /// and a metadata_ingestor, which does the actual fetching of the data
 /// we expect the ingestor to perform all the serde required
-#[derive(Clone, Default)]
 pub struct DaSourceService<T>
 where
     T: DaMetadataGetter,
 {
     shared_state: DaSharedState,
-    poll_interval: Duration,
+    poll_interval: Interval,
     metadata_ingestor: T,
 }
 
@@ -47,8 +52,9 @@ where
     pub fn new(metadata_ingestor: T, poll_interval: Option<Duration>) -> Self {
         Self {
             shared_state: Arc::new(Mutex::new(None)),
-            poll_interval: poll_interval
-                .unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
+            poll_interval: interval(
+                poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
+            ),
             metadata_ingestor,
         }
     }
@@ -66,7 +72,7 @@ impl<T> RunnableService for DaSourceService<T>
 where
     T: DaMetadataGetter + Send + Sync,
 {
-    const NAME: &'static str = "DataAvailabilitySource";
+    const NAME: &'static str = "DaSourceService";
 
     type SharedData = DaSharedState;
 
@@ -83,6 +89,7 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        self.poll_interval.reset();
         Ok(self)
     }
 }
@@ -96,14 +103,13 @@ where
     /// described by the DaSourceService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let continue_running;
-        let mut interval = tokio::time::interval(self.poll_interval);
 
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
                 continue_running = false;
             }
-            _ = interval.tick() => {
+            _ = self.poll_interval.tick() => {
                 let metadata_response = self.metadata_ingestor.get_da_metadata().await?;
                 let mut cached_metadata_response = self.shared_state.lock().await;
                 *cached_metadata_response = Some(metadata_response);
