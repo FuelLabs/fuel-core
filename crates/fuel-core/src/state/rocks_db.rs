@@ -7,6 +7,11 @@ use crate::{
     },
     state::IterDirection,
 };
+
+use super::rocks_db_key_iterator::{
+    ExtractItem,
+    RocksDBKeyIterator,
+};
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
     iter::{
@@ -18,15 +23,18 @@ use fuel_core_storage::{
         KVItem,
         KeyItem,
         KeyValueInspect,
+        KeyValueMutate,
         StorageColumn,
         Value,
         WriteOperation,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        ReadTransaction,
+    },
     Result as StorageResult,
 };
 use itertools::Itertools;
-use rand::RngCore;
 use rocksdb::{
     BlockBasedOptions,
     BoundColumnFamily,
@@ -46,7 +54,6 @@ use rocksdb::{
 use std::{
     cmp,
     collections::BTreeMap,
-    env,
     fmt,
     fmt::Formatter,
     iter,
@@ -58,47 +65,7 @@ use std::{
 };
 use tempfile::TempDir;
 
-use super::rocks_db_key_iterator::{
-    ExtractItem,
-    RocksDBKeyIterator,
-};
-
 type DB = DBWithThreadMode<MultiThreaded>;
-
-/// Reimplementation of `tempdir::TempDir` that allows creating a new
-/// instance without actually creating a new directory on the filesystem.
-/// This is needed since rocksdb requires empty directory for checkpoints.
-pub struct ShallowTempDir {
-    path: PathBuf,
-}
-
-impl Default for ShallowTempDir {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ShallowTempDir {
-    /// Creates a random directory.
-    pub fn new() -> Self {
-        let mut rng = rand::thread_rng();
-        let mut path = env::temp_dir();
-        path.push(format!("fuel-core-shallow-{}", rng.next_u64()));
-        Self { path }
-    }
-
-    /// Returns the path of the directory.
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-}
-
-impl Drop for ShallowTempDir {
-    fn drop(&mut self) {
-        // Ignore errors
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
 
 type DropFn = Box<dyn FnOnce() + Send + Sync>;
 #[derive(Default)]
@@ -863,6 +830,33 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     None
 }
 
+impl<Description> KeyValueMutate for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn write(
+        &mut self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
+        let mut transaction = self.read_transaction();
+        let len = transaction.write(key, column, buf)?;
+        let changes = transaction.into_changes();
+        self.commit_changes(&changes)?;
+
+        Ok(len)
+    }
+
+    fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+        let mut transaction = self.read_transaction();
+        transaction.delete(key, column)?;
+        let changes = transaction.into_changes();
+        self.commit_changes(&changes)?;
+        Ok(())
+    }
+}
+
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
@@ -871,40 +865,12 @@ mod tests {
     use fuel_core_storage::{
         column::Column,
         kv_store::KeyValueMutate,
-        transactional::ReadTransaction,
     };
     use std::collections::{
         BTreeMap,
         HashMap,
     };
     use tempfile::TempDir;
-
-    impl<Description> KeyValueMutate for RocksDb<Description>
-    where
-        Description: DatabaseDescription,
-    {
-        fn write(
-            &mut self,
-            key: &[u8],
-            column: Self::Column,
-            buf: &[u8],
-        ) -> StorageResult<usize> {
-            let mut transaction = self.read_transaction();
-            let len = transaction.write(key, column, buf)?;
-            let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
-
-            Ok(len)
-        }
-
-        fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-            let mut transaction = self.read_transaction();
-            transaction.delete(key, column)?;
-            let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
-            Ok(())
-        }
-    }
 
     fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();

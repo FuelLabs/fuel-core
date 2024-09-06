@@ -354,7 +354,18 @@ impl Command {
                 );
                 consensus_signer = SignMode::Key(Secret::new(key.into()));
             }
-        }
+        };
+
+        if let Ok(signer_address) = consensus_signer.address() {
+            if let Some(address) = signer_address {
+                info!(
+                    "Consensus signer is specified and its address is {}",
+                    address
+                );
+            }
+        } else {
+            warn!("Consensus Signer is specified but it was not possible to retrieve its address");
+        };
 
         if consensus_signer.is_available() && trigger == Trigger::Never {
             warn!("Consensus key configured but block production is disabled!");

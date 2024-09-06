@@ -38,6 +38,7 @@ use std::{
 
 pub mod default_gas_costs;
 pub mod import;
+pub mod utils;
 
 pub use fuel_core_storage::vm_storage::VmStorage;
 pub use rand::Rng;
