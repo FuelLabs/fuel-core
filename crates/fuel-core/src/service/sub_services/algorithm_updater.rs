@@ -12,7 +12,6 @@ use crate::{
         Config,
     },
 };
-use std::time::Duration;
 
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
@@ -21,10 +20,7 @@ use fuel_core_gas_price_service::{
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
-        fuel_da_source_adapter::{
-            dummy_ingestor::DummyIngestor,
-            FuelDaSourceService,
-        },
+        fuel_da_source_adapter::DaSharedState,
         Algorithm,
         AlgorithmUpdater,
         AlgorithmUpdaterV0,
@@ -62,8 +58,7 @@ use fuel_core_types::{
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
     MetadataStorageAdapter,
-    // todo(#2139): replace DummyIngestor with BlockCommitterIngestor
-    FuelDaSourceService<DummyIngestor>,
+    DaSharedState,
 >;
 
 pub struct InitializeTask {
@@ -74,20 +69,13 @@ pub struct InitializeTask {
     pub on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     pub block_stream: BoxStream<SharedImportResult>,
     pub shared_algo: SharedGasPriceAlgo<Algorithm>,
+    pub da_source: DaSharedState,
 }
 
 type MetadataStorageAdapter =
     StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>;
 
-type Task = GasPriceService<
-    Algorithm,
-    FuelGasPriceUpdater<
-        FuelL2BlockSource<ConsensusParametersProvider>,
-        MetadataStorageAdapter,
-        // todo(#2139): replace DummyIngestor with BlockCommitterIngestor
-        FuelDaSourceService<DummyIngestor>,
-    >,
->;
+type Task = GasPriceService<Algorithm, Updater>;
 
 impl InitializeTask {
     pub fn new(
@@ -97,6 +85,7 @@ impl InitializeTask {
         block_stream: BoxStream<SharedImportResult>,
         gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
         on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+        da_source: DaSharedState,
     ) -> anyhow::Result<Self> {
         let latest_block_height = on_chain_db
             .latest_height()
@@ -113,6 +102,7 @@ impl InitializeTask {
             on_chain_db,
             block_stream,
             shared_algo,
+            da_source,
         };
         Ok(task)
     }
@@ -174,6 +164,7 @@ impl RunnableService for InitializeTask {
             self.gas_price_db,
             self.on_chain_db,
             self.block_stream,
+            self.da_source,
         )?;
         let inner_service =
             GasPriceService::new(starting_height, updater, self.shared_algo).await;
@@ -188,6 +179,7 @@ pub fn get_synced_gas_price_updater(
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     block_stream: BoxStream<SharedImportResult>,
+    da_source: DaSharedState,
 ) -> anyhow::Result<Updater> {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
@@ -217,8 +209,6 @@ pub fn get_synced_gas_price_updater(
     let mut metadata_storage = StructuredStorage::new(gas_price_db);
     let l2_block_source =
         FuelL2BlockSource::new(genesis_block_height, settings.clone(), block_stream);
-
-    let da_source = FuelDaSourceService::new(DummyIngestor, None)?;
 
     if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
         let updater = FuelGasPriceUpdater::new(

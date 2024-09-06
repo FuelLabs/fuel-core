@@ -1,3 +1,7 @@
+use crate::fuel_gas_price_updater::fuel_da_source_adapter::{
+    DaSharedState,
+    POLLING_INTERVAL_MS,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -23,8 +27,6 @@ pub struct DaMetadataResponse {
     pub blob_cost: u32,
 }
 
-type DaSharedState = Arc<Mutex<Option<DaMetadataResponse>>>;
-
 /// This struct houses the shared_state, polling interval
 /// and a metadata_ingestor, which does the actual fetching of the data
 /// we expect the ingestor to perform all the serde required
@@ -42,10 +44,11 @@ impl<T> DaSourceService<T>
 where
     T: DaMetadataGetter,
 {
-    pub fn new(metadata_ingestor: T, poll_interval: Duration) -> Self {
+    pub fn new(metadata_ingestor: T, poll_interval: Option<Duration>) -> Self {
         Self {
             shared_state: Arc::new(Mutex::new(None)),
-            poll_interval,
+            poll_interval: poll_interval
+                .unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             metadata_ingestor,
         }
     }
