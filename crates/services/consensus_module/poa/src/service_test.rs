@@ -177,10 +177,7 @@ impl TestContextBuilder {
 
         let predefined_blocks = HashMap::new().into();
 
-        let time = match self.start_time {
-            Some(start_time) => TestTime::new(start_time),
-            None => TestTime::at_unix_epoch(),
-        };
+        let time = self.start_time.map(TestTime::new).unwrap_or_default();
 
         let watch = time.watch();
 

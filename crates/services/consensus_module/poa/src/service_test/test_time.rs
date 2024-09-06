@@ -64,6 +64,12 @@ impl TestTime {
     }
 }
 
+impl Default for TestTime {
+    fn default() -> Self {
+        Self::at_unix_epoch()
+    }
+}
+
 impl Drop for TestTime {
     fn drop(&mut self) {
         tokio::time::resume();
