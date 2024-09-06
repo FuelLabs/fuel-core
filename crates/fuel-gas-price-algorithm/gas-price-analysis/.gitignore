@@ -1,4 +1,4 @@
 Cargo.lock
 gas-prices.png
-/predefined_data
-/charts
+predefined_data/
+charts/

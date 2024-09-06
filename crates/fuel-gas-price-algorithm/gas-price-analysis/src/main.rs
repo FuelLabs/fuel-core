@@ -74,7 +74,7 @@ enum Source {
     },
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Arg::parse();
 
     const UPDATE_PERIOD: usize = 12;
@@ -112,8 +112,10 @@ fn main() {
     print_info(&results);
 
     if let Some(file_path) = &args.file_path {
-        draw_chart(results, p_comp, d_comp, file_path);
+        draw_chart(results, p_comp, d_comp, file_path)?;
     }
+
+    Ok(())
 }
 
 fn print_info(results: &SimulationResults) {
