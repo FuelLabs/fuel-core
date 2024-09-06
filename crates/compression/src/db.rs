@@ -60,8 +60,6 @@ impl RocksDb {
             keyspace.name().bytes().chain(core::iter::once(0)).collect();
         let db_key = postcard::to_extend(&key, db_key).expect("Never fails");
 
-        println!("read_registry {:?}", &db_key);
-
         let cf = self.db.cf_handle("temporal").unwrap();
         let Some(bytes) = self.db.get_cf(&cf, &db_key)? else {
             bail!("Key {keyspace:?}:{key:?} not found");

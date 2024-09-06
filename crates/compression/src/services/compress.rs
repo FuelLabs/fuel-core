@@ -76,9 +76,11 @@ pub async fn compress(
         db,
         accessed_keys: PerRegistryKeyspace::default(),
     };
-    let _ =
-        <Vec<Transaction> as CompressibleBy<_, _>>::compress(&target, &mut prepare_ctx)
-            .await?;
+    let _ = <Vec<Transaction> as CompressibleBy<_, _>>::compress_with(
+        &target,
+        &mut prepare_ctx,
+    )
+    .await?;
 
     let mut ctx = CompressCtx {
         db: prepare_ctx.db,
@@ -88,7 +90,7 @@ pub async fn compress(
         },
         changes: Default::default(),
     };
-    let transactions = target.compress(&mut ctx).await?;
+    let transactions = target.compress_with(&mut ctx).await?;
     let registrations = ctx.changes;
     let registrations = RegistrationsPerTable::try_from(registrations)?;
 

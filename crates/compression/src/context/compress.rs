@@ -6,11 +6,12 @@ use fuel_core_types::{
         RegistryKey,
     },
     fuel_tx::{
+        input::PredicateCode,
         Address,
         AssetId,
+        CompressedUtxoId,
         ContractId,
         ScriptCode,
-        TxPointer,
         UtxoId,
     },
 };
@@ -54,34 +55,55 @@ fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
 }
 
 impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for Address {
-    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut CompressCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::address, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for AssetId {
-    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut CompressCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::asset_id, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ContractId {
-    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut CompressCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::contract_id, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ScriptCode {
-    async fn compress(&self, ctx: &mut CompressCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut CompressCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
+        registry_substitute(RegistryKeyspace::script_code, self, ctx)
+    }
+}
+
+impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for PredicateCode {
+    async fn compress_with(
+        &self,
+        ctx: &mut CompressCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::script_code, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for UtxoId {
-    async fn compress(
+    async fn compress_with(
         &self,
         ctx: &mut CompressCtx<'a>,
-    ) -> anyhow::Result<(TxPointer, u16)> {
+    ) -> anyhow::Result<CompressedUtxoId> {
         ctx.tx_lookup.lookup(*self).await
     }
 }

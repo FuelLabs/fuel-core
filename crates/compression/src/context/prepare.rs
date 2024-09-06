@@ -7,6 +7,7 @@ use fuel_core_types::{
     },
     fuel_tx::*,
 };
+use input::PredicateCode;
 
 use crate::{
     db::RocksDb,
@@ -40,34 +41,58 @@ fn registry_prepare<T: serde::Serialize + Default + PartialEq>(
 }
 
 impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for Address {
-    async fn compress(&self, ctx: &mut PrepareCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut PrepareCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_prepare(RegistryKeyspace::address, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for AssetId {
-    async fn compress(&self, ctx: &mut PrepareCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut PrepareCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_prepare(RegistryKeyspace::asset_id, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for ContractId {
-    async fn compress(&self, ctx: &mut PrepareCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut PrepareCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_prepare(RegistryKeyspace::contract_id, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for ScriptCode {
-    async fn compress(&self, ctx: &mut PrepareCtx<'a>) -> anyhow::Result<RegistryKey> {
+    async fn compress_with(
+        &self,
+        ctx: &mut PrepareCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
+        registry_prepare(RegistryKeyspace::script_code, self, ctx)
+    }
+}
+
+impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for PredicateCode {
+    async fn compress_with(
+        &self,
+        ctx: &mut PrepareCtx<'a>,
+    ) -> anyhow::Result<RegistryKey> {
         registry_prepare(RegistryKeyspace::script_code, self, ctx)
     }
 }
 
 impl<'a> CompressibleBy<PrepareCtx<'a>, anyhow::Error> for UtxoId {
-    async fn compress(
+    async fn compress_with(
         &self,
         _ctx: &mut PrepareCtx<'a>,
-    ) -> anyhow::Result<(TxPointer, u16)> {
-        Ok((TxPointer::default(), 0))
+    ) -> anyhow::Result<CompressedUtxoId> {
+        Ok(CompressedUtxoId {
+            tx_pointer: TxPointer::default(),
+            output_index: 0,
+        })
     }
 }

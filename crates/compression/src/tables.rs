@@ -121,8 +121,6 @@ macro_rules! tables {
                         let db_key: Vec<u8> = key_table_prefix.iter().copied().chain(raw_key.clone()).collect();
                         let db_value = postcard::to_stdvec(&value).expect("Never fails");
 
-                        println!("write_to_db {:?}", &db_key);
-
                         batch.put_cf(&cf_registry, db_key.clone(), db_value.clone());
 
                         // Remove the overwritten value from index, if any
