@@ -16,12 +16,15 @@ use fuel_core_types::{
         SeedableRng,
     },
     fuel_tx::{
-        input::Input,
         field::Inputs,
-        input::{coin::{
-            CoinPredicate,
-            CoinSigned,
-        }, contract::Contract as ContractInput},
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            contract::Contract as ContractInput,
+            Input,
+        },
         Bytes32,
         ConsensusParameters,
         Contract,
@@ -141,7 +144,7 @@ impl PoolContext {
     pub(crate) fn build(self) -> Pool {
         Pool::new(
             self.config.unwrap_or_default(),
-            //MockDBProvider(self.mock_db),
+            // MockDBProvider(self.mock_db),
         )
     }
 

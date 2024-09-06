@@ -1,25 +1,27 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    config::Config,
+    error::Error,
     ports::WasmValidityError,
     tests::context::{
-        TEST_COIN_AMOUNT,
-        PoolContext,
-        IntoEstimated,
         create_coin_output,
         create_contract_input,
         create_contract_output,
         create_message_predicate_from_message,
+        IntoEstimated,
+        PoolContext,
+        TEST_COIN_AMOUNT,
     },
-    config::Config,
-    error::Error,
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusParametersVersion, fuel_asm::{
+    blockchain::header::ConsensusParametersVersion,
+    fuel_asm::{
         op,
         RegId,
         Word,
-    }, fuel_tx::{
+    },
+    fuel_tx::{
         input::coin::CoinPredicate,
         Address,
         AssetId,
@@ -39,15 +41,20 @@ use fuel_core_types::{
         UniqueIdentifier,
         UpgradePurpose,
         UtxoId,
-    }, fuel_types::ChainId, fuel_vm::{
+    },
+    fuel_types::ChainId,
+    fuel_vm::{
         checked_transaction::{
-            CheckError, Checked, CheckedTransaction, IntoChecked
+            CheckError,
+            Checked,
+            CheckedTransaction,
+            IntoChecked,
         },
         interpreter::MemoryInstance,
-    }, services::txpool::PoolTransaction
+    },
+    services::txpool::PoolTransaction,
 };
 use std::vec;
-
 
 const GAS_LIMIT: Word = 100000;
 
@@ -99,14 +106,24 @@ const GAS_LIMIT: Word = 100000;
 //     .await
 // }
 
-//TODO: Move out of tests
+// TODO: Move out of tests
 fn check_tx_to_pool(checked_tx: Checked<Transaction>) -> PoolTransaction {
     match checked_tx.into() {
-        CheckedTransaction::Blob(tx) => PoolTransaction::Blob(tx, ConsensusParametersVersion::MIN),
-        CheckedTransaction::Create(tx) => PoolTransaction::Create(tx, ConsensusParametersVersion::MIN),
-        CheckedTransaction::Script(tx) => PoolTransaction::Script(tx, ConsensusParametersVersion::MIN),
-        CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx, ConsensusParametersVersion::MIN),
-        CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx, ConsensusParametersVersion::MIN),
+        CheckedTransaction::Blob(tx) => {
+            PoolTransaction::Blob(tx, ConsensusParametersVersion::MIN)
+        }
+        CheckedTransaction::Create(tx) => {
+            PoolTransaction::Create(tx, ConsensusParametersVersion::MIN)
+        }
+        CheckedTransaction::Script(tx) => {
+            PoolTransaction::Script(tx, ConsensusParametersVersion::MIN)
+        }
+        CheckedTransaction::Upgrade(tx) => {
+            PoolTransaction::Upgrade(tx, ConsensusParametersVersion::MIN)
+        }
+        CheckedTransaction::Upload(tx) => {
+            PoolTransaction::Upload(tx, ConsensusParametersVersion::MIN)
+        }
         _ => panic!("Unexpected transaction type"),
     }
 }
@@ -125,8 +142,7 @@ async fn insert_simple_tx_succeeds() {
 
     let mut txpool = context.build();
 
-    for result in txpool
-        .insert(vec![check_tx_to_pool(tx)]) {
+    for result in txpool.insert(vec![check_tx_to_pool(tx)]) {
         result.expect("Tx should be Ok, got Err");
     }
 }

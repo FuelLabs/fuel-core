@@ -11,6 +11,7 @@ repository = { workspace = true }
 description = "Transaction pool v2"
 
 [dependencies]
+num-rational = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }

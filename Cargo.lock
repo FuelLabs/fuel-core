@@ -3733,6 +3733,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
+ "num-rational",
  "petgraph",
  "tokio",
  "tracing",
