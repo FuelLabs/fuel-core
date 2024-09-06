@@ -68,6 +68,7 @@ mod tests {
         ServiceRunner,
     };
     use std::time::Duration;
+    use tokio::time::sleep;
 
     #[derive(Default)]
     struct FakeErroringMetadataIngestor;
@@ -89,7 +90,7 @@ mod tests {
 
         // when
         service.start().unwrap();
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         service.stop();
 
         // then
@@ -106,7 +107,7 @@ mod tests {
 
         // when
         service.start().unwrap();
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         service.stop();
         let _ = shared_state.get_da_commit_details().unwrap();
 
@@ -127,7 +128,7 @@ mod tests {
 
         // when
         service.start().unwrap();
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         service.stop();
 
         // then
