@@ -45,7 +45,9 @@ impl Drop for ShallowTempDir {
 
         if should_clean_up {
             if let Err(e) = std::fs::remove_dir_all(&self.path) {
-                eprintln!("Failed to remove temp directory: {:?}", e);
+                if !std::thread::panicking() {
+                    panic!("Failed to remove ShallowTempDir: {}", e);
+                }
             }
         }
     }
@@ -125,6 +127,24 @@ mod tests {
         env::remove_var(DB_CLEAN_UP_ENV_VAR);
     }
 
+    fn shallow_temp_dir__panics_while_dropping_if_not_panicking() {
+        // given
+        env::set_var(DB_CLEAN_UP_ENV_VAR, "true");
+
+        let result = std::panic::catch_unwind(|| {
+            let _ = ShallowTempDir::new();
+            // when: out of scope, tries to drop
+            // it will panic when trying to drop, since there
+            // are no other panics
+        });
+
+        // then
+        assert!(result.is_err());
+
+        // clean up
+        env::remove_var(DB_CLEAN_UP_ENV_VAR);
+    }
+
     #[test]
     fn test_shallow_temp_dir_behaviour() {
         // run tests sequentially to avoid conflicts due to env var usage
@@ -132,5 +152,6 @@ mod tests {
         shallow_temp_dir__does_not_drop_if_env_var_is_set();
         shallow_temp_dir__drops_if_env_var_is_not_set();
         shallow_temp_dir__drops_if_env_var_malformed();
+        shallow_temp_dir__panics_while_dropping_if_not_panicking();
     }
 }
