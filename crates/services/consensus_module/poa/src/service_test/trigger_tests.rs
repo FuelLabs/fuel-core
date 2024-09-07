@@ -6,7 +6,7 @@ use tokio::{
 
 use super::*;
 
-#[tokio::test(start_paused = true)] // Run with time paused, start/stop must still work
+#[tokio::test]
 async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
     for trigger in [
         Trigger::Never,
@@ -30,7 +30,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn never_trigger_never_produces_blocks() {
     const TX_COUNT: usize = 10;
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -104,7 +104,25 @@ impl DefaultContext {
         importer
             .expect_block_stream()
             .returning(|| Box::pin(tokio_stream::pending()));
+
+        let mut block_producer = MockBlockProducer::default();
+        block_producer
+            .expect_produce_and_execute_block()
+            .returning(|_, time, _| {
+                let mut block = Block::default();
+                block.header_mut().set_time(time);
+                block.header_mut().recalculate_metadata();
+                Ok(UncommittedResult::new(
+                    ExecutionResult {
+                        block,
+                        ..Default::default()
+                    },
+                    Default::default(),
+                ))
+            });
+
         ctx_builder.with_importer(importer);
+        ctx_builder.with_producer(block_producer);
 
         let test_ctx = ctx_builder.build();
 
@@ -116,9 +134,25 @@ impl DefaultContext {
             txs,
         }
     }
+
+    fn now(&self) -> Tai64 {
+        self.test_ctx.time.watch().now()
+    }
+
+    fn advance_time_with_tokio(&mut self) {
+        self.test_ctx.time.advance_with_tokio();
+    }
+
+    fn advance_time(&mut self, duration: Duration) {
+        self.test_ctx.time.advance(duration);
+    }
+
+    fn rewind_time(&mut self, duration: Duration) {
+        self.test_ctx.time.rewind(duration);
+    }
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn instant_trigger_produces_block_instantly() {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Instant,
@@ -135,7 +169,7 @@ async fn instant_trigger_produces_block_instantly() {
     assert_eq!(ctx.test_ctx.stop().await, State::Stopped);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Interval {
@@ -153,7 +187,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a single block is produced, and a bit more
+    // Pause time until a single block is produced, and a bit more
     time::sleep(Duration::new(3, 0)).await;
 
     // Make sure the empty block is actually produced
@@ -167,7 +201,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a the next block is produced
+    // Pause time until a the next block is produced
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure it's produced
@@ -184,7 +218,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Pass time until a the next block is produced
+    // Pause time until a the next block is produced
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure only one block is produced
@@ -200,7 +234,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second(
 ) -> anyhow::Result<()> {
     // given
@@ -256,7 +290,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
     Ok(())
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Interval {
@@ -298,4 +332,145 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     ctx.test_ctx.service.stop_and_await().await?;
 
     Ok(())
+}
+
+#[tokio::test]
+async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
+    // Given
+
+    let block_time = Duration::from_secs(10);
+    let offset = Duration::from_secs(1);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    let start_time = ctx.now();
+
+    // When
+
+    // We produce three blocks without advancing real time.
+    time::sleep(block_time * 3 + offset).await;
+    let first_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+    let second_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+    let third_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // Then
+
+    // We should only have produced the three blocks.
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    // Even though real time is frozen, the blocks should advance into the future.
+    assert_eq!(first_block_time, start_time + block_time.as_secs());
+    assert_eq!(second_block_time, start_time + block_time.as_secs() * 2);
+    assert_eq!(third_block_time, start_time + block_time.as_secs() * 3);
+
+    ctx.test_ctx.service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn interval_trigger_produces_blocks_with_current_time_when_block_production_is_lagging(
+) {
+    // Given
+
+    let block_time = Duration::from_secs(10);
+    let second_block_delay = Duration::from_secs(5);
+    let offset = Duration::from_secs(1);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    let start_time = ctx.now();
+
+    // When
+
+    // We produce the first block in real time.
+    time::sleep(block_time + offset).await;
+    ctx.advance_time_with_tokio();
+    let first_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // But we produce second block with a delay relative to real time.
+    ctx.advance_time(block_time + second_block_delay);
+    time::sleep(block_time).await;
+    let second_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // And the third block is produced without advancing real time.
+    time::sleep(block_time).await;
+    let third_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // Then
+
+    // We should only have produced the three blocks.
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    // The fist block should be produced after the given block time.
+    assert_eq!(first_block_time, start_time + block_time.as_secs());
+
+    // The second block should have a delay in its timestamp.
+    assert_eq!(
+        second_block_time,
+        first_block_time
+            + block_time.as_secs()
+            + offset.as_secs()
+            + second_block_delay.as_secs()
+    );
+
+    // The third block should be produced `block_time` in the future relative to the second block time.
+    assert_eq!(third_block_time, second_block_time + block_time.as_secs());
+
+    ctx.test_ctx.service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
+    // Given
+
+    let block_time = Duration::from_secs(10);
+    let offset = Duration::from_secs(1);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    let start_time = ctx.now();
+
+    // When
+
+    // We produce the first block in real time.
+    time::sleep(block_time + offset).await;
+    ctx.advance_time_with_tokio();
+    let first_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // And we rewind time before attempting to produce the next block.
+    ctx.rewind_time(block_time);
+    time::sleep(block_time).await;
+    let second_block_time = ctx.block_import.try_recv().unwrap().entity.header().time();
+
+    // Then
+
+    // We should only have produced two blocks.
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    // The fist block should be produced after the given block time.
+    assert_eq!(first_block_time, start_time + block_time.as_secs());
+
+    // Even though the real time clock rewinded, the second block is produced with a future timestamp
+    // similarly to how it works when time is lagging.
+    assert_eq!(second_block_time, start_time + block_time.as_secs() * 2);
 }

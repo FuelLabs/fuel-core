@@ -148,3 +148,7 @@ impl PredefinedBlocks for InMemoryPredefinedBlocks {
         Ok(self.blocks.get(height).cloned())
     }
 }
+
+pub trait GetTime: Send + Sync {
+    fn now(&self) -> Tai64;
+}
