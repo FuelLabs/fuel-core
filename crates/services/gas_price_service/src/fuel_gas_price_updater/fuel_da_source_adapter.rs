@@ -63,7 +63,6 @@ mod tests {
         DaGasPriceProviderService,
         DaGasPriceSource,
         DummyDaGasPriceSource,
-        RawDaGasPrice,
     };
     use fuel_core_services::{
         RunnableService,
@@ -78,7 +77,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl DaGasPriceSource for ErroringSource {
-        async fn get(&mut self) -> DaGasPriceSourceResult<RawDaGasPrice> {
+        async fn get(&mut self) -> DaGasPriceSourceResult<DaGasPrice> {
             Err(anyhow!("boo!"))
         }
     }

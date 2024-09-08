@@ -8,10 +8,6 @@ use fuel_core_services::{
     RunnableTask,
     StateWatcher,
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
 use std::time::Duration;
 use tokio::time::{
     interval,
@@ -19,16 +15,6 @@ use tokio::time::{
 };
 
 pub type Result<T> = core::result::Result<T, anyhow::Error>;
-
-/// This struct is used to denote the data returned
-/// by da metadata providers, this can be the block committer, or some
-/// other provider
-#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
-pub struct RawDaGasPrice {
-    pub l2_block_range: core::ops::Range<u32>,
-    pub blob_size_bytes: u32,
-    pub blob_cost: u32,
-}
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
@@ -62,7 +48,7 @@ where
 /// da metadata in a way they see fit
 #[async_trait::async_trait]
 pub trait DaGasPriceSource: Send + Sync {
-    async fn get(&mut self) -> Result<RawDaGasPrice>;
+    async fn get(&mut self) -> Result<DaGasPrice>;
 }
 
 #[async_trait::async_trait]
@@ -93,18 +79,6 @@ where
     }
 }
 
-// we decouple the DaGasPriceCommit that the algorithm uses with
-// the responses we get from the sources.
-impl From<RawDaGasPrice> for DaGasPrice {
-    fn from(value: RawDaGasPrice) -> Self {
-        DaGasPrice {
-            l2_block_range: value.l2_block_range,
-            blob_size_bytes: value.blob_size_bytes,
-            blob_cost_wei: value.blob_cost,
-        }
-    }
-}
-
 #[async_trait::async_trait]
 impl<Source, Sink> RunnableTask for DaGasPriceProviderService<Source, Sink>
 where
@@ -122,8 +96,8 @@ where
                 continue_running = false;
             }
             _ = self.poll_interval.tick() => {
-                let metadata_response = self.source.get().await?;
-                self.sink.set(metadata_response.into())?;
+                let gas_price = self.source.get().await?;
+                self.sink.set(gas_price)?;
                 continue_running = true;
             }
         }
