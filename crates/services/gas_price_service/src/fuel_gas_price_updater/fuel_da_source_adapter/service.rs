@@ -1,6 +1,6 @@
 use crate::fuel_gas_price_updater::{
     fuel_da_source_adapter::POLLING_INTERVAL_MS,
-    DaGasPriceCommit,
+    DaGasPrice,
     SetDaGasPriceToSink,
 };
 use fuel_core_services::{
@@ -24,7 +24,7 @@ pub type Result<T> = core::result::Result<T, anyhow::Error>;
 /// by da metadata providers, this can be the block committer, or some
 /// other provider
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
-pub struct DaGasPriceSourceResponse {
+pub struct RawDaGasPrice {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
     pub blob_cost: u32,
@@ -62,7 +62,7 @@ where
 /// da metadata in a way they see fit
 #[async_trait::async_trait]
 pub trait DaGasPriceSource: Send + Sync {
-    async fn get_da_gas_price(&mut self) -> Result<DaGasPriceSourceResponse>;
+    async fn get(&mut self) -> Result<RawDaGasPrice>;
 }
 
 #[async_trait::async_trait]
@@ -95,9 +95,9 @@ where
 
 // we decouple the DaGasPriceCommit that the algorithm uses with
 // the responses we get from the sources.
-impl From<DaGasPriceSourceResponse> for DaGasPriceCommit {
-    fn from(value: DaGasPriceSourceResponse) -> Self {
-        DaGasPriceCommit {
+impl From<RawDaGasPrice> for DaGasPrice {
+    fn from(value: RawDaGasPrice) -> Self {
+        DaGasPrice {
             l2_block_range: value.l2_block_range,
             blob_size_bytes: value.blob_size_bytes,
             blob_cost_wei: value.blob_cost,
@@ -122,8 +122,8 @@ where
                 continue_running = false;
             }
             _ = self.poll_interval.tick() => {
-                let metadata_response = self.source.get_da_gas_price().await?;
-                self.sink.set_da_commit(metadata_response.into())?;
+                let metadata_response = self.source.get().await?;
+                self.sink.set(metadata_response.into())?;
                 continue_running = true;
             }
         }

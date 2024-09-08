@@ -1,5 +1,5 @@
 use crate::fuel_gas_price_updater::{
-    DaGasPriceCommit,
+    DaGasPrice,
     Error::CouldNotFetchDARecord,
     GetDaGasPriceFromSink,
     Result as GasPriceUpdaterResult,
@@ -19,10 +19,10 @@ pub use service::*;
 
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
-pub type DaGasPriceProvider = Arc<Mutex<Option<DaGasPriceCommit>>>;
+pub type DaGasPriceProvider = Arc<Mutex<Option<DaGasPrice>>>;
 
 impl GetDaGasPriceFromSink for DaGasPriceProvider {
-    fn get_da_commit(&mut self) -> GasPriceUpdaterResult<Option<DaGasPriceCommit>> {
+    fn get(&mut self) -> GasPriceUpdaterResult<Option<DaGasPrice>> {
         let mut metadata_guard = self.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
                 "Failed to lock shared da commit state: {:?}",
@@ -41,10 +41,7 @@ impl GetDaGasPriceFromSink for DaGasPriceProvider {
 }
 
 impl SetDaGasPriceToSink for DaGasPriceProvider {
-    fn set_da_commit(
-        &mut self,
-        da_commit_details: DaGasPriceCommit,
-    ) -> GasPriceUpdaterResult<()> {
+    fn set(&mut self, da_commit_details: DaGasPrice) -> GasPriceUpdaterResult<()> {
         let mut metadata_guard = self.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
                 "Failed to lock shared metadata state: {:?}",
@@ -65,8 +62,8 @@ mod tests {
         fuel_da_source_adapter::service::Result as DaGasPriceSourceResult,
         DaGasPriceProviderService,
         DaGasPriceSource,
-        DaGasPriceSourceResponse,
         DummyDaGasPriceSource,
+        RawDaGasPrice,
     };
     use fuel_core_services::{
         RunnableService,
@@ -81,9 +78,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl DaGasPriceSource for ErroringSource {
-        async fn get_da_gas_price(
-            &mut self,
-        ) -> DaGasPriceSourceResult<DaGasPriceSourceResponse> {
+        async fn get(&mut self) -> DaGasPriceSourceResult<RawDaGasPrice> {
             Err(anyhow!("boo!"))
         }
     }
@@ -108,7 +103,7 @@ mod tests {
         service.stop();
 
         // then
-        let da_commit_details = shared_state.get_da_commit().unwrap();
+        let da_commit_details = shared_state.get().unwrap();
         assert!(da_commit_details.is_some());
     }
 
@@ -124,10 +119,10 @@ mod tests {
         service.start().unwrap();
         sleep(Duration::from_millis(10)).await;
         service.stop();
-        let _ = shared_state.get_da_commit().unwrap();
+        let _ = shared_state.get().unwrap();
 
         // then
-        let da_commit_details = shared_state.get_da_commit().unwrap();
+        let da_commit_details = shared_state.get().unwrap();
         assert!(da_commit_details.is_none());
     }
 
@@ -145,7 +140,7 @@ mod tests {
         service.stop();
 
         // then
-        let da_commit_details = shared_state.get_da_commit().unwrap();
+        let da_commit_details = shared_state.get().unwrap();
         assert!(da_commit_details.is_none());
     }
 }

@@ -1,7 +1,7 @@
 use crate::fuel_gas_price_updater::{
     service::Result as DaGasPriceSourceResult,
     DaGasPriceSource,
-    DaGasPriceSourceResponse,
+    RawDaGasPrice,
 };
 use anyhow::anyhow;
 use reqwest::Url;
@@ -25,15 +25,13 @@ impl BlockCommitterDaGasPriceSource {
 
 #[async_trait::async_trait]
 impl DaGasPriceSource for BlockCommitterDaGasPriceSource {
-    async fn get_da_gas_price(
-        &mut self,
-    ) -> DaGasPriceSourceResult<DaGasPriceSourceResponse> {
+    async fn get(&mut self) -> DaGasPriceSourceResult<RawDaGasPrice> {
         let response = self.client.get(self.url.clone()).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!("failed with response: {}", response.status()));
         }
         response
-            .json::<DaGasPriceSourceResponse>()
+            .json::<RawDaGasPrice>()
             .await
             .map_err(|err| anyhow!(err))
     }
