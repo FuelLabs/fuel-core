@@ -27,12 +27,12 @@ pub mod fuel_da_source_adapter;
 pub use fuel_core_storage_adapter::*;
 pub use fuel_da_source_adapter::*;
 
-pub struct FuelGasPriceUpdater<L2, Metadata, DaSource> {
+pub struct FuelGasPriceUpdater<L2, Metadata, DaGasPrice> {
     inner: AlgorithmUpdater,
     l2_block_source: L2,
     metadata_storage: Metadata,
     #[allow(dead_code)]
-    da_source: DaSource,
+    da_gas_price: DaGasPrice,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,18 +57,18 @@ impl AlgorithmUpdater {
     }
 }
 
-impl<L2, Metadata, DaSource> FuelGasPriceUpdater<L2, Metadata, DaSource> {
+impl<L2, Metadata, DaGasPrice> FuelGasPriceUpdater<L2, Metadata, DaGasPrice> {
     pub fn new(
         inner: AlgorithmUpdater,
         l2_block_source: L2,
         metadata_storage: Metadata,
-        da_source: DaSource,
+        da_gas_price: DaGasPrice,
     ) -> Self {
         Self {
             inner,
             l2_block_source,
             metadata_storage,
-            da_source,
+            da_gas_price,
         }
     }
 }
@@ -210,16 +210,16 @@ pub trait MetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
-impl<L2, Metadata, DaSource> FuelGasPriceUpdater<L2, Metadata, DaSource>
+impl<L2, Metadata, DaGasPrice> FuelGasPriceUpdater<L2, Metadata, DaGasPrice>
 where
     Metadata: MetadataStorage,
-    DaSource: DaGasPriceSink,
+    DaGasPrice: DaGasPriceSink,
 {
     pub fn init(
         target_block_height: BlockHeight,
         l2_block_source: L2,
         metadata_storage: Metadata,
-        da_source: DaSource,
+        da_gas_price: DaGasPrice,
         min_exec_gas_price: u64,
         exec_gas_price_change_percent: u64,
         l2_block_fullness_threshold_percent: u64,
@@ -246,7 +246,7 @@ where
             inner,
             l2_block_source,
             metadata_storage,
-            da_source,
+            da_gas_price,
         };
         Ok(updater)
     }
@@ -310,12 +310,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L2, Metadata, DaSource> UpdateAlgorithm
-    for FuelGasPriceUpdater<L2, Metadata, DaSource>
+impl<L2, Metadata, DaGasPrice> UpdateAlgorithm
+    for FuelGasPriceUpdater<L2, Metadata, DaGasPrice>
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
-    DaSource: DaGasPriceSink,
+    DaGasPrice: DaGasPriceSink,
 {
     type Algorithm = Algorithm;
 

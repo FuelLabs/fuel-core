@@ -48,7 +48,7 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     V0Metadata,
 };
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    DaGasPriceProviderSharedState,
+    DaGasPriceProviderSink,
     DummyDaGasPriceSource,
 };
 use fuel_core_poa::{
@@ -99,7 +99,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
 pub type DaGasPriceProviderService =
     fuel_core_gas_price_service::fuel_gas_price_updater::DaGasPriceProviderService<
         DummyDaGasPriceSource,
-        DaGasPriceProviderSharedState,
+        DaGasPriceProviderSink,
     >;
 
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;

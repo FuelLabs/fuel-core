@@ -18,9 +18,9 @@ pub use service::*;
 
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
-pub type DaGasPriceProviderSharedState = Arc<Mutex<Option<DaGasPriceCommit>>>;
+pub type DaGasPriceProviderSink = Arc<Mutex<Option<DaGasPriceCommit>>>;
 
-impl DaGasPriceSink for DaGasPriceProviderSharedState {
+impl DaGasPriceSink for DaGasPriceProviderSink {
     fn get_da_commit(&mut self) -> GasPriceUpdaterResult<Option<DaGasPriceCommit>> {
         let mut metadata_guard = self.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
@@ -86,11 +86,9 @@ mod tests {
     }
 
     type TestValidService =
-        DaGasPriceProviderService<DummyDaGasPriceSource, DaGasPriceProviderSharedState>;
-    type TestErroringService = DaGasPriceProviderService<
-        FakeErroringMetadataIngestor,
-        DaGasPriceProviderSharedState,
-    >;
+        DaGasPriceProviderService<DummyDaGasPriceSource, DaGasPriceProviderSink>;
+    type TestErroringService =
+        DaGasPriceProviderService<FakeErroringMetadataIngestor, DaGasPriceProviderSink>;
 
     #[tokio::test]
     async fn test_service_sets_cache_when_request_succeeds() {
