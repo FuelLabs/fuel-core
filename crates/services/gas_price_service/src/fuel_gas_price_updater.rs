@@ -21,7 +21,11 @@ pub use fuel_gas_price_algorithm::{
 mod tests;
 
 pub mod fuel_core_storage_adapter;
+
 pub mod fuel_da_source_adapter;
+
+pub use fuel_core_storage_adapter::*;
+pub use fuel_da_source_adapter::*;
 
 pub struct FuelGasPriceUpdater<L2, Metadata, DaSource> {
     inner: AlgorithmUpdater,
@@ -114,14 +118,15 @@ pub trait L2BlockSource: Send + Sync {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct DaCommitDetails {
+pub struct DaGasPriceCommit {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
     pub blob_cost_wei: u32,
 }
 
-pub trait DaCommitSource: Send + Sync {
-    fn get_da_commit_details(&mut self) -> Result<Option<DaCommitDetails>>;
+pub trait DaGasPriceSink: Send + Sync + Default + Clone {
+    fn get_da_commit(&mut self) -> Result<Option<DaGasPriceCommit>>;
+    fn set_da_commit(&mut self, da_commit: DaGasPriceCommit) -> Result<()>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -208,7 +213,7 @@ pub trait MetadataStorage: Send + Sync {
 impl<L2, Metadata, DaSource> FuelGasPriceUpdater<L2, Metadata, DaSource>
 where
     Metadata: MetadataStorage,
-    DaSource: DaCommitSource,
+    DaSource: DaGasPriceSink,
 {
     pub fn init(
         target_block_height: BlockHeight,
@@ -310,7 +315,7 @@ impl<L2, Metadata, DaSource> UpdateAlgorithm
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
-    DaSource: DaCommitSource,
+    DaSource: DaGasPriceSink,
 {
     type Algorithm = Algorithm;
 

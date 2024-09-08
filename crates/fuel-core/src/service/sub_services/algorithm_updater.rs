@@ -20,7 +20,7 @@ use fuel_core_gas_price_service::{
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
-        fuel_da_source_adapter::DaSharedState,
+        fuel_da_source_adapter::DaGasPriceProviderSharedState,
         Algorithm,
         AlgorithmUpdater,
         AlgorithmUpdaterV0,
@@ -58,7 +58,7 @@ use fuel_core_types::{
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
     MetadataStorageAdapter,
-    DaSharedState,
+    DaGasPriceProviderSharedState,
 >;
 
 pub struct InitializeTask {
@@ -69,7 +69,7 @@ pub struct InitializeTask {
     pub on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     pub block_stream: BoxStream<SharedImportResult>,
     pub shared_algo: SharedGasPriceAlgo<Algorithm>,
-    pub da_source: DaSharedState,
+    pub da_source: DaGasPriceProviderSharedState,
 }
 
 type MetadataStorageAdapter =
@@ -85,7 +85,7 @@ impl InitializeTask {
         block_stream: BoxStream<SharedImportResult>,
         gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
         on_chain_db: Database<OnChain, RegularStage<OnChain>>,
-        da_source: DaSharedState,
+        da_source: DaGasPriceProviderSharedState,
     ) -> anyhow::Result<Self> {
         let latest_block_height = on_chain_db
             .latest_height()
@@ -179,7 +179,7 @@ pub fn get_synced_gas_price_updater(
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     block_stream: BoxStream<SharedImportResult>,
-    da_source: DaSharedState,
+    da_source: DaGasPriceProviderSharedState,
 ) -> anyhow::Result<Updater> {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
