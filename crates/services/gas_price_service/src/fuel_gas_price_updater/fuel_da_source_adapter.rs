@@ -74,10 +74,10 @@ mod tests {
     use tokio::time::sleep;
 
     #[derive(Default)]
-    struct FakeErroringMetadataIngestor;
+    struct ErroringSource;
 
     #[async_trait::async_trait]
-    impl DaGasPriceSource for FakeErroringMetadataIngestor {
+    impl DaGasPriceSource for ErroringSource {
         async fn get_da_gas_price(
             &mut self,
         ) -> DaGasPriceSourceResult<DaGasPriceSourceResponse> {
@@ -88,7 +88,7 @@ mod tests {
     type TestValidService =
         DaGasPriceProviderService<DummyDaGasPriceSource, DaGasPriceProviderSink>;
     type TestErroringService =
-        DaGasPriceProviderService<FakeErroringMetadataIngestor, DaGasPriceProviderSink>;
+        DaGasPriceProviderService<ErroringSource, DaGasPriceProviderSink>;
 
     #[tokio::test]
     async fn test_service_sets_cache_when_request_succeeds() {
@@ -131,10 +131,8 @@ mod tests {
     #[tokio::test]
     async fn test_service_does_not_set_cache_when_request_fails() {
         // given
-        let service = TestErroringService::new(
-            FakeErroringMetadataIngestor,
-            Some(Duration::from_millis(1)),
-        );
+        let service =
+            TestErroringService::new(ErroringSource, Some(Duration::from_millis(1)));
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
 

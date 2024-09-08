@@ -214,7 +214,7 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    // todo(#2139): replace dummy ingestor with the block committer ingestor
+    // todo(#2139): replace dummy source with the block committer source
     let da_gas_price_provider_service =
         DaGasPriceProviderService::new(DummyDaGasPriceSource, None);
     let da_gas_price_provider_data = da_gas_price_provider_service.shared_data();

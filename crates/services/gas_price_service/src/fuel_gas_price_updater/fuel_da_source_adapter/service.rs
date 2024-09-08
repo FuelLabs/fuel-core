@@ -31,16 +31,15 @@ pub struct DaGasPriceSourceResponse {
 }
 
 /// This struct houses the shared_state, polling interval
-/// and a metadata_ingestor, which does the actual fetching of the data
-/// we expect the ingestor to perform all the serde required
+/// and a source, which does the actual fetching of the data
 pub struct DaGasPriceProviderService<Source, Sink>
 where
     Source: DaGasPriceSource,
     Sink: DaGasPriceSink,
 {
-    shared_state: Sink,
+    sink: Sink,
     poll_interval: Interval,
-    metadata_ingestor: Source,
+    source: Source,
 }
 
 impl<Source, Sink> DaGasPriceProviderService<Source, Sink>
@@ -48,18 +47,18 @@ where
     Source: DaGasPriceSource,
     Sink: DaGasPriceSink,
 {
-    pub fn new(metadata_ingestor: Source, poll_interval: Option<Duration>) -> Self {
+    pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
         Self {
-            shared_state: Sink::default(),
+            sink: Sink::default(),
             poll_interval: interval(
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
-            metadata_ingestor,
+            source,
         }
     }
 }
 
-/// This trait is implemented by metadata_ingestors to obtain the
+/// This trait is implemented by the sources to obtain the
 /// da metadata in a way they see fit
 #[async_trait::async_trait]
 pub trait DaGasPriceSource: Send + Sync {
@@ -81,7 +80,7 @@ where
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.shared_state.clone()
+        self.sink.clone()
     }
 
     async fn into_task(
@@ -94,8 +93,8 @@ where
     }
 }
 
-// we decouple the DaCommitDetails that the algorithm uses with
-// the responses we get from the ingestors.
+// we decouple the DaGasPriceCommit that the algorithm uses with
+// the responses we get from the sources.
 impl From<DaGasPriceSourceResponse> for DaGasPriceCommit {
     fn from(value: DaGasPriceSourceResponse) -> Self {
         DaGasPriceCommit {
@@ -112,7 +111,7 @@ where
     Source: DaGasPriceSource,
     Sink: DaGasPriceSink,
 {
-    /// This function polls the metadata ingestor according to a polling interval
+    /// This function polls the source according to a polling interval
     /// described by the DaSourceService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> Result<bool> {
         let continue_running;
@@ -123,15 +122,15 @@ where
                 continue_running = false;
             }
             _ = self.poll_interval.tick() => {
-                let metadata_response = self.metadata_ingestor.get_da_gas_price().await?;
-                self.shared_state.set_da_commit(metadata_response.into())?;
+                let metadata_response = self.source.get_da_gas_price().await?;
+                self.sink.set_da_commit(metadata_response.into())?;
                 continue_running = true;
             }
         }
         Ok(continue_running)
     }
 
-    /// There are no shutdown hooks required by the metadata ingestors *yet*
+    /// There are no shutdown hooks required by the sources  *yet*
     /// and they should be added here if so, in the future.
     async fn shutdown(self) -> Result<()> {
         Ok(())
