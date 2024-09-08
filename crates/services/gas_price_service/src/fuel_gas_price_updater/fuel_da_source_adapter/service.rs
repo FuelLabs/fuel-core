@@ -45,7 +45,7 @@ where
 }
 
 /// This trait is implemented by the sources to obtain the
-/// da metadata in a way they see fit
+/// da gas price in a way they see fit
 #[async_trait::async_trait]
 pub trait DaGasPriceSource: Send + Sync {
     async fn get(&mut self) -> Result<DaGasPrice>;

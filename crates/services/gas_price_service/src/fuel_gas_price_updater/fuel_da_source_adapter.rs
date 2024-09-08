@@ -23,33 +23,33 @@ pub type DaGasPriceProvider = Arc<Mutex<Option<DaGasPrice>>>;
 
 impl GetDaGasPriceFromSink for DaGasPriceProvider {
     fn get(&mut self) -> GasPriceUpdaterResult<Option<DaGasPrice>> {
-        let mut metadata_guard = self.try_lock().map_err(|err| {
+        let mut gas_price_guard = self.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
-                "Failed to lock shared da commit state: {:?}",
+                "Failed to lock shared gas price state: {:?}",
                 err
             ))
         })?;
 
-        let commit_details = metadata_guard.clone();
+        let da_gas_price = gas_price_guard.clone();
 
         // now mark it as consumed because we don't want to serve the same data
         // multiple times
-        *metadata_guard = None;
+        *gas_price_guard = None;
 
-        Ok(commit_details)
+        Ok(da_gas_price)
     }
 }
 
 impl SetDaGasPriceToSink for DaGasPriceProvider {
-    fn set(&mut self, da_commit_details: DaGasPrice) -> GasPriceUpdaterResult<()> {
-        let mut metadata_guard = self.try_lock().map_err(|err| {
+    fn set(&mut self, value: DaGasPrice) -> GasPriceUpdaterResult<()> {
+        let mut gas_price_guard = self.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
-                "Failed to lock shared metadata state: {:?}",
+                "Failed to lock shared gas price state: {:?}",
                 err
             ))
         })?;
 
-        *metadata_guard = Some(da_commit_details);
+        *gas_price_guard = Some(value);
 
         Ok(())
     }
@@ -102,8 +102,8 @@ mod tests {
         service.stop();
 
         // then
-        let da_commit_details = shared_state.get().unwrap();
-        assert!(da_commit_details.is_some());
+        let da_gas_price_opt = shared_state.get().unwrap();
+        assert!(da_gas_price_opt.is_some());
     }
 
     #[tokio::test]
@@ -121,8 +121,8 @@ mod tests {
         let _ = shared_state.get().unwrap();
 
         // then
-        let da_commit_details = shared_state.get().unwrap();
-        assert!(da_commit_details.is_none());
+        let da_gas_price_opt = shared_state.get().unwrap();
+        assert!(da_gas_price_opt.is_none());
     }
 
     #[tokio::test]
@@ -139,7 +139,7 @@ mod tests {
         service.stop();
 
         // then
-        let da_commit_details = shared_state.get().unwrap();
-        assert!(da_commit_details.is_none());
+        let da_gas_price_opt = shared_state.get().unwrap();
+        assert!(da_gas_price_opt.is_none());
     }
 }
