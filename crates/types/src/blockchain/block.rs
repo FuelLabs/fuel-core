@@ -152,7 +152,7 @@ impl<T> Block<T> {
 }
 
 impl CompressedBlock {
-    /// Convert from a compressed block back to a the full block.
+    /// Convert from a compressed block back to the full block.
     pub fn uncompress(self, transactions: Vec<Transaction>) -> Block<Transaction> {
         // TODO: should we perform an extra validation step to ensure the provided
         //  txs match the expected ones in the block?
