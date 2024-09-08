@@ -1,7 +1,7 @@
 use crate::fuel_gas_price_updater::{
     fuel_da_source_adapter::POLLING_INTERVAL_MS,
     DaGasPriceCommit,
-    DaGasPriceSink,
+    SetDaGasPriceToSink,
 };
 use fuel_core_services::{
     RunnableService,
@@ -35,7 +35,7 @@ pub struct DaGasPriceSourceResponse {
 pub struct DaGasPriceProviderService<Source, Sink>
 where
     Source: DaGasPriceSource,
-    Sink: DaGasPriceSink,
+    Sink: SetDaGasPriceToSink,
 {
     sink: Sink,
     poll_interval: Interval,
@@ -45,7 +45,7 @@ where
 impl<Source, Sink> DaGasPriceProviderService<Source, Sink>
 where
     Source: DaGasPriceSource,
-    Sink: DaGasPriceSink,
+    Sink: SetDaGasPriceToSink,
 {
     pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
         Self {
@@ -69,7 +69,7 @@ pub trait DaGasPriceSource: Send + Sync {
 impl<Source, Sink> RunnableService for DaGasPriceProviderService<Source, Sink>
 where
     Source: DaGasPriceSource,
-    Sink: DaGasPriceSink,
+    Sink: SetDaGasPriceToSink,
 {
     const NAME: &'static str = "DaGasPriceProviderService";
 
@@ -109,7 +109,7 @@ impl From<DaGasPriceSourceResponse> for DaGasPriceCommit {
 impl<Source, Sink> RunnableTask for DaGasPriceProviderService<Source, Sink>
 where
     Source: DaGasPriceSource,
-    Sink: DaGasPriceSink,
+    Sink: SetDaGasPriceToSink,
 {
     /// This function polls the source according to a polling interval
     /// described by the DaSourceService

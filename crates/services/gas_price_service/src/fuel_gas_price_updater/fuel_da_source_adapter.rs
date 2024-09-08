@@ -1,8 +1,9 @@
 use crate::fuel_gas_price_updater::{
     DaGasPriceCommit,
-    DaGasPriceSink,
     Error::CouldNotFetchDARecord,
+    GetDaGasPriceFromSink,
     Result as GasPriceUpdaterResult,
+    SetDaGasPriceToSink,
 };
 use anyhow::anyhow;
 use std::sync::Arc;
@@ -18,9 +19,9 @@ pub use service::*;
 
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
-pub type DaGasPriceProviderSink = Arc<Mutex<Option<DaGasPriceCommit>>>;
+pub type DaGasPriceProvider = Arc<Mutex<Option<DaGasPriceCommit>>>;
 
-impl DaGasPriceSink for DaGasPriceProviderSink {
+impl GetDaGasPriceFromSink for DaGasPriceProvider {
     fn get_da_commit(&mut self) -> GasPriceUpdaterResult<Option<DaGasPriceCommit>> {
         let mut metadata_guard = self.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
@@ -37,7 +38,9 @@ impl DaGasPriceSink for DaGasPriceProviderSink {
 
         Ok(commit_details)
     }
+}
 
+impl SetDaGasPriceToSink for DaGasPriceProvider {
     fn set_da_commit(
         &mut self,
         da_commit_details: DaGasPriceCommit,
@@ -86,9 +89,9 @@ mod tests {
     }
 
     type TestValidService =
-        DaGasPriceProviderService<DummyDaGasPriceSource, DaGasPriceProviderSink>;
+        DaGasPriceProviderService<DummyDaGasPriceSource, DaGasPriceProvider>;
     type TestErroringService =
-        DaGasPriceProviderService<ErroringSource, DaGasPriceProviderSink>;
+        DaGasPriceProviderService<ErroringSource, DaGasPriceProvider>;
 
     #[tokio::test]
     async fn test_service_sets_cache_when_request_succeeds() {

@@ -124,8 +124,14 @@ pub struct DaGasPriceCommit {
     pub blob_cost_wei: u32,
 }
 
-pub trait DaGasPriceSink: Send + Sync + Default + Clone {
+pub trait GetDaGasPriceFromSink: Send + Sync + Default + Clone {
     fn get_da_commit(&mut self) -> Result<Option<DaGasPriceCommit>>;
+}
+
+// ensures that the da gas price is set to the sink only by
+// selected impls. we don't want the algo updater to have
+// access to this method.
+pub trait SetDaGasPriceToSink: Send + Sync + Default + Clone {
     fn set_da_commit(&mut self, da_commit: DaGasPriceCommit) -> Result<()>;
 }
 
@@ -213,7 +219,7 @@ pub trait MetadataStorage: Send + Sync {
 impl<L2, Metadata, DaGasPrice> FuelGasPriceUpdater<L2, Metadata, DaGasPrice>
 where
     Metadata: MetadataStorage,
-    DaGasPrice: DaGasPriceSink,
+    DaGasPrice: GetDaGasPriceFromSink,
 {
     pub fn init(
         target_block_height: BlockHeight,
@@ -315,7 +321,7 @@ impl<L2, Metadata, DaGasPrice> UpdateAlgorithm
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
-    DaGasPrice: DaGasPriceSink,
+    DaGasPrice: GetDaGasPriceFromSink,
 {
     type Algorithm = Algorithm;
 

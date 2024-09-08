@@ -92,14 +92,10 @@ impl FakeDaSource {
     }
 }
 
-impl DaGasPriceSink for FakeDaSource {
+impl GetDaGasPriceFromSink for FakeDaSource {
     fn get_da_commit(&mut self) -> Result<Option<DaGasPriceCommit>> {
         *self.called.lock().unwrap() = true;
         Ok(Some(DaGasPriceCommit::default()))
-    }
-
-    fn set_da_commit(&mut self, _da_commit: DaGasPriceCommit) -> Result<()> {
-        Ok(())
     }
 }
 
