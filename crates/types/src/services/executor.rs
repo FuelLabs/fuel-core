@@ -51,6 +51,7 @@ pub type UncommittedValidationResult<DatabaseTransaction> =
     Uncommitted<ValidationResult, DatabaseTransaction>;
 
 /// The result of transactions execution for block production.
+#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
 pub struct ExecutionResult {

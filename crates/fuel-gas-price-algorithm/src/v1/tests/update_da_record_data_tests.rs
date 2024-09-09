@@ -87,7 +87,7 @@ fn update_da_record_data__updates_cost_per_byte() {
     updater.update_da_record_data(blocks).unwrap();
 
     // then
-    let expected = new_cost_per_byte;
+    let expected = new_cost_per_byte as u128;
     let actual = updater.latest_da_cost_per_byte;
     assert_eq!(actual, expected);
 }
@@ -132,7 +132,7 @@ fn update_da_record_data__updates_known_total_cost() {
 
     // then
     let actual = updater.latest_known_total_da_cost;
-    let expected = known_total_cost + 3 * block_cost;
+    let expected = known_total_cost + (3 * block_cost as u128);
     assert_eq!(actual, expected);
 }
 
@@ -164,11 +164,11 @@ fn update_da_record_data__if_da_height_matches_l2_height_prjected_and_known_matc
         .sum();
     let projected_total_cost = known_total_cost + guessed_cost;
     let mut updater = UpdaterBuilder::new()
-        .with_da_cost_per_byte(da_cost_per_byte)
+        .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_recorded_block_height(da_recorded_block_height)
         .with_l2_block_height(l2_block_height)
-        .with_projected_total_cost(projected_total_cost)
-        .with_known_total_cost(known_total_cost)
+        .with_projected_total_cost(projected_total_cost as u128)
+        .with_known_total_cost(known_total_cost as u128)
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
@@ -242,11 +242,11 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
         .sum();
     let projected_total_cost = known_total_cost + guessed_cost;
     let mut updater = UpdaterBuilder::new()
-        .with_da_cost_per_byte(da_cost_per_byte)
+        .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_recorded_block_height(da_recorded_block_height)
         .with_l2_block_height(l2_block_height)
-        .with_projected_total_cost(projected_total_cost)
-        .with_known_total_cost(known_total_cost)
+        .with_projected_total_cost(projected_total_cost as u128)
+        .with_known_total_cost(known_total_cost as u128)
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
@@ -281,5 +281,5 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
         .map(|block| block.block_bytes * new_cost_per_byte)
         .sum();
     let expected = new_known_total_cost + guessed_part;
-    assert_eq!(actual, expected);
+    assert_eq!(actual, expected as u128);
 }
