@@ -15,12 +15,12 @@ use crate::{
 
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
+        da_source_adapter::DaBlockCostsProvider,
         fuel_core_storage_adapter::{
             storage::GasPriceMetadata,
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
-        fuel_da_source_adapter::DaBlockCostsProvider,
         Algorithm,
         AlgorithmUpdater,
         AlgorithmUpdaterV0,

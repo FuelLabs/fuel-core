@@ -12,15 +12,11 @@ pub mod block_committer_costs;
 pub mod dummy_costs;
 pub mod service;
 
-pub use block_committer_costs::BlockCommitterDaBlockCosts;
-pub use dummy_costs::DummyDaBlockCosts;
-pub use service::*;
-
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Default, Clone)]
 pub struct DaBlockCostsProvider {
-    state: Arc<Mutex<Option<DaBlockCosts>>>
+    state: Arc<Mutex<Option<DaBlockCosts>>>,
 }
 
 impl GetDaBlockCosts for DaBlockCostsProvider {
@@ -46,11 +42,13 @@ impl GetDaBlockCosts for DaBlockCostsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fuel_gas_price_updater::{
-        fuel_da_source_adapter::service::Result as DaBlockCostsResult,
-        DaBlockCostsService,
-        DaBlockCostsSource,
-        DummyDaBlockCosts,
+    use crate::fuel_gas_price_updater::da_source_adapter::{
+        dummy_costs::DummyDaBlockCosts,
+        service::{
+            DaBlockCostsService,
+            DaBlockCostsSource,
+            Result as DaBlockCostsResult,
+        },
     };
     use fuel_core_services::{
         RunnableService,

@@ -1,7 +1,9 @@
 use crate::fuel_gas_price_updater::{
-    service::Result as DaBlockCostsResult,
+    da_source_adapter::service::{
+        DaBlockCostsSource,
+        Result as DaBlockCostsResult,
+    },
     DaBlockCosts,
-    DaBlockCostsSource,
 };
 
 pub struct DummyDaBlockCosts;

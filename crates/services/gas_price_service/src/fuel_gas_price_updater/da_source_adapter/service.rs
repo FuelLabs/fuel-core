@@ -1,7 +1,9 @@
 use crate::fuel_gas_price_updater::{
-    fuel_da_source_adapter::POLLING_INTERVAL_MS,
+    da_source_adapter::{
+        DaBlockCostsProvider,
+        POLLING_INTERVAL_MS,
+    },
     DaBlockCosts,
-    DaBlockCostsProvider,
     Error::CouldNotFetchDARecord,
 };
 use anyhow::anyhow;

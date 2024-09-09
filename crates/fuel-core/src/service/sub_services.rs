@@ -38,6 +38,10 @@ use crate::{
         SubServices,
     },
 };
+use fuel_core_gas_price_service::fuel_gas_price_updater::da_source_adapter::{
+    dummy_costs::DummyDaBlockCosts,
+    service::DaBlockCostsService,
+};
 #[allow(unused_imports)]
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
     fuel_core_storage_adapter::FuelL2BlockSource,
@@ -46,10 +50,6 @@ use fuel_core_gas_price_service::fuel_gas_price_updater::{
     FuelGasPriceUpdater,
     UpdaterMetadata,
     V0Metadata,
-};
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    DaBlockCostsService,
-    DummyDaBlockCosts,
 };
 use fuel_core_poa::{
     signer::SignMode,
