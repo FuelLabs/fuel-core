@@ -27,7 +27,7 @@ use rand::{
 use std::path::Path;
 use strum_macros::AsRefStr;
 
-pub type Result<T> = core::result::Result<T, anyhow::Error>;
+pub use anyhow::Result;
 
 pub fn get_random_block_height(
     rng: &mut ThreadRng,
