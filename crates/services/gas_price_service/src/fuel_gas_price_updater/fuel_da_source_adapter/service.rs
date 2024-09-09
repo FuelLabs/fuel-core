@@ -95,7 +95,7 @@ where
             }
             _ = self.poll_interval.tick() => {
                 let da_block_costs = self.source.request_da_block_cost().await?;
-                let mut da_block_costs_guard = self.block_cost_provider.try_lock().map_err(|err| {
+                let mut da_block_costs_guard = self.block_cost_provider.state.try_lock().map_err(|err| {
                     CouldNotFetchDARecord(anyhow!(
                         "Failed to lock da block costs state: {:?}",
                      err

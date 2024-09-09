@@ -18,11 +18,14 @@ pub use service::*;
 
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
-pub type DaBlockCostsProvider = Arc<Mutex<Option<DaBlockCosts>>>;
+#[derive(Default, Clone)]
+pub struct DaBlockCostsProvider {
+    state: Arc<Mutex<Option<DaBlockCosts>>>
+}
 
 impl GetDaBlockCosts for DaBlockCostsProvider {
     fn get(&mut self) -> GasPriceUpdaterResult<Option<DaBlockCosts>> {
-        let mut da_block_costs_guard = self.try_lock().map_err(|err| {
+        let mut da_block_costs_guard = self.state.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
                 "Failed to lock shared gas price state: {:?}",
                 err
