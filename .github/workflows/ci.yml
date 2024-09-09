@@ -108,8 +108,8 @@ jobs:
     strategy:
       matrix:
         include:
-          # - command: clippy
-          #   args: -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features
+          - command: clippy
+            args: -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features
           - command: clippy
             args: --all-targets --all-features
           - command: check
@@ -121,7 +121,7 @@ jobs:
           - command: test
             args: --workspace
           - command: test
-            args: --all-features --workspace -- --nocapture
+            args: --all-features --workspace
           - command: test
             args: -p fuel-core --no-default-features
           - command: test
@@ -137,17 +137,17 @@ jobs:
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
 
-          # # WASM compatibility checks
-          # - command: check
-          #   args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features --features alloc
-          # - command: check
-          #   args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features --features alloc
-          # - command: check
-          #   args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
-          # - command: check
-          #   args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
-          # - command: check
-          #   args: -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc
+          # WASM compatibility checks
+          - command: check
+            args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features --features alloc
+          - command: check
+            args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features --features alloc
+          - command: check
+            args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc
 
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
