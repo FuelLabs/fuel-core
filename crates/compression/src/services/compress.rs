@@ -30,17 +30,17 @@ pub struct Task {
 pub enum TaskRequest {
     Compress {
         block: Block,
-        response: mpsc::Sender<Result<Vec<u8>, CompressError>>,
+        response: mpsc::Sender<Result<Vec<u8>, Error>>,
     },
 }
 
 #[derive(Debug)]
-pub enum CompressError {
+pub enum Error {
     /// Only the next sequential block can be compressed
     NotLatest,
     Other(anyhow::Error),
 }
-impl From<anyhow::Error> for CompressError {
+impl From<anyhow::Error> for Error {
     fn from(err: anyhow::Error) -> Self {
         Self::Other(err)
     }
@@ -65,9 +65,9 @@ pub async fn compress(
     db: &mut RocksDb,
     tx_lookup: &dyn UtxoIdToPointer,
     block: Block,
-) -> Result<Vec<u8>, CompressError> {
+) -> Result<Vec<u8>, Error> {
     if *block.header().height() != db.next_block_height()? {
-        return Err(CompressError::NotLatest);
+        return Err(Error::NotLatest);
     }
 
     let target = block.transactions().to_vec();
@@ -76,11 +76,9 @@ pub async fn compress(
         db,
         accessed_keys: PerRegistryKeyspace::default(),
     };
-    let _ = <Vec<Transaction> as CompressibleBy<_, _>>::compress_with(
-        &target,
-        &mut prepare_ctx,
-    )
-    .await?;
+    let _ =
+        <Vec<Transaction> as CompressibleBy<_>>::compress_with(&target, &mut prepare_ctx)
+            .await?;
 
     let mut ctx = CompressCtx {
         db: prepare_ctx.db,

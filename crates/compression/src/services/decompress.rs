@@ -91,7 +91,7 @@ pub async fn decompress(
 
     let ctx = DecompressCtx { db, lookup };
 
-    let transactions = <Vec<Transaction> as DecompressibleBy<_, _>>::decompress_with(
+    let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress_with(
         &compressed.transactions,
         &ctx,
     )

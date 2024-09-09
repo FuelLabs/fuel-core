@@ -1,26 +1,24 @@
 use fuel_core_types::{
-    fuel_asm::Word,
     fuel_compression::{
+        Compressible,
+        ContextError,
+        Decompress,
         DecompressibleBy,
         RegistryKey,
     },
     fuel_tx::{
         input::{
-            self,
             coin::{
-                self,
                 Coin,
-                CompressedCoin,
+                CoinSpecification,
             },
             message::{
-                self,
-                CompressedMessage,
                 Message,
+                MessageSpecification,
             },
-            Empty,
+            AsField,
             PredicateCode,
         },
-        output,
         Address,
         AssetId,
         CompressedUtxoId,
@@ -43,7 +41,11 @@ pub struct DecompressCtx<'a> {
     pub lookup: &'a dyn HistoryLookup,
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Address {
+impl<'a> ContextError for DecompressCtx<'a> {
+    type Error = anyhow::Error;
+}
+
+impl<'a> DecompressibleBy<DecompressCtx<'a>> for Address {
     async fn decompress_with(
         c: &RegistryKey,
         ctx: &DecompressCtx<'a>,
@@ -52,7 +54,7 @@ impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Address {
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for AssetId {
+impl<'a> DecompressibleBy<DecompressCtx<'a>> for AssetId {
     async fn decompress_with(
         c: &RegistryKey,
         ctx: &DecompressCtx<'a>,
@@ -61,7 +63,7 @@ impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for AssetId {
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for ContractId {
+impl<'a> DecompressibleBy<DecompressCtx<'a>> for ContractId {
     async fn decompress_with(
         c: &RegistryKey,
         ctx: &DecompressCtx<'a>,
@@ -70,7 +72,7 @@ impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for ContractId {
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for ScriptCode {
+impl<'a> DecompressibleBy<DecompressCtx<'a>> for ScriptCode {
     async fn decompress_with(
         c: &RegistryKey,
         ctx: &DecompressCtx<'a>,
@@ -79,7 +81,7 @@ impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for ScriptCode {
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for PredicateCode {
+impl<'a> DecompressibleBy<DecompressCtx<'a>> for PredicateCode {
     async fn decompress_with(
         c: &RegistryKey,
         ctx: &DecompressCtx<'a>,
@@ -88,7 +90,7 @@ impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for PredicateCode {
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for UtxoId {
+impl<'a> DecompressibleBy<DecompressCtx<'a>> for UtxoId {
     async fn decompress_with(
         c: &CompressedUtxoId,
         ctx: &DecompressCtx<'a>,
@@ -97,254 +99,88 @@ impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for UtxoId {
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Mint {
+impl<'a, Specification> DecompressibleBy<DecompressCtx<'a>> for Coin<Specification>
+where
+    Specification: CoinSpecification,
+    Specification::Predicate: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::PredicateData: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::PredicateGasUsed: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::Witness: DecompressibleBy<DecompressCtx<'a>>,
+{
+    async fn decompress_with(
+        c: &<Coin<Specification> as Compressible>::Compressed,
+        ctx: &DecompressCtx<'a>,
+    ) -> anyhow::Result<Coin<Specification>> {
+        let utxo_id = UtxoId::decompress_with(&c.utxo_id, ctx).await?;
+        let coin_info = ctx.lookup.coin(&utxo_id).await?;
+        let witness_index = c.witness_index.decompress(ctx).await?;
+        let predicate_gas_used = c.predicate_gas_used.decompress(ctx).await?;
+        let predicate = c.predicate.decompress(ctx).await?;
+        let predicate_data = c.predicate_data.decompress(ctx).await?;
+        Ok(Self {
+            utxo_id,
+            owner: coin_info.owner,
+            amount: coin_info.amount,
+            asset_id: coin_info.asset_id,
+            tx_pointer: Default::default(),
+            witness_index,
+            predicate_gas_used,
+            predicate,
+            predicate_data,
+        })
+    }
+}
+
+impl<'a, Specification> DecompressibleBy<DecompressCtx<'a>> for Message<Specification>
+where
+    Specification: MessageSpecification,
+    Specification::Data: DecompressibleBy<DecompressCtx<'a>> + Default,
+    Specification::Predicate: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::PredicateData: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::PredicateGasUsed: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::Witness: DecompressibleBy<DecompressCtx<'a>>,
+{
+    async fn decompress_with(
+        c: &<Message<Specification> as Compressible>::Compressed,
+        ctx: &DecompressCtx<'a>,
+    ) -> anyhow::Result<Message<Specification>> {
+        let msg = ctx.lookup.message(&c.nonce).await?;
+        let witness_index = c.witness_index.decompress(ctx).await?;
+        let predicate_gas_used = c.predicate_gas_used.decompress(ctx).await?;
+        let predicate = c.predicate.decompress(ctx).await?;
+        let predicate_data = c.predicate_data.decompress(ctx).await?;
+        let mut message: Message<Specification> = Message {
+            sender: msg.sender,
+            recipient: msg.recipient,
+            amount: msg.amount,
+            nonce: c.nonce,
+            witness_index,
+            predicate_gas_used,
+            data: Default::default(),
+            predicate,
+            predicate_data,
+        };
+
+        if let Some(data) = message.data.as_mut_field() {
+            data.clone_from(&msg.data)
+        }
+
+        Ok(message)
+    }
+}
+
+impl<'a> DecompressibleBy<DecompressCtx<'a>> for Mint {
     async fn decompress_with(
         c: &Self::Compressed,
         ctx: &DecompressCtx<'a>,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> anyhow::Result<Self> {
         Ok(Transaction::mint(
             Default::default(), // TODO: what should this we do with this?
-            <input::contract::Contract as DecompressibleBy<_, anyhow::Error>>::decompress_with(
-                &c.input_contract,
-                ctx,
-            )
-            .await?,
-            <output::contract::Contract as DecompressibleBy<_, anyhow::Error>>::decompress_with(
-                &c.output_contract,
-                ctx,
-            )
-            .await?,
-            <Word as DecompressibleBy<_, anyhow::Error>>::decompress_with(&c.mint_amount, ctx).await?,
-            <AssetId as DecompressibleBy<_, anyhow::Error>>::decompress_with(&c.mint_asset_id, ctx).await?,
-            <Word as DecompressibleBy<_, anyhow::Error>>::decompress_with(&c.gas_price, ctx).await?,
+            c.input_contract.decompress(ctx).await?,
+            c.output_contract.decompress(ctx).await?,
+            c.mint_amount.decompress(ctx).await?,
+            c.mint_asset_id.decompress(ctx).await?,
+            c.gas_price.decompress(ctx).await?,
         ))
-    }
-}
-
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Coin<coin::Full> {
-    async fn decompress_with(
-        c: &CompressedCoin<coin::Full>,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<Coin<coin::Full>, anyhow::Error> {
-        let utxo_id = UtxoId::decompress_with(&c.utxo_id, ctx).await?;
-        let coin_info = ctx.lookup.coin(&utxo_id).await?;
-        Ok(Coin {
-            utxo_id,
-            owner: coin_info.owner,
-            amount: coin_info.amount,
-            asset_id: coin_info.asset_id,
-            tx_pointer: Default::default(),
-            witness_index: c.witness_index,
-            predicate_gas_used: c.predicate_gas_used,
-            predicate:
-                <coin::Full as coin::CoinSpecification>::Predicate::decompress_with(
-                    &c.predicate,
-                    ctx,
-                )
-                .await?,
-            predicate_data: c.predicate_data.clone(),
-        })
-    }
-}
-
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Coin<coin::Signed> {
-    async fn decompress_with(
-        c: &CompressedCoin<coin::Signed>,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<Coin<coin::Signed>, anyhow::Error> {
-        let utxo_id = UtxoId::decompress_with(&c.utxo_id, ctx).await?;
-        let coin_info = ctx.lookup.coin(&utxo_id).await?;
-        Ok(Coin {
-            utxo_id,
-            owner: coin_info.owner,
-            amount: coin_info.amount,
-            asset_id: coin_info.asset_id,
-            tx_pointer: Default::default(),
-            witness_index: c.witness_index,
-            predicate_gas_used: Empty::default(),
-            predicate: Empty::default(),
-            predicate_data: Empty::default(),
-        })
-    }
-}
-
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error> for Coin<coin::Predicate> {
-    async fn decompress_with(
-        c: &CompressedCoin<coin::Predicate>,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<Coin<coin::Predicate>, anyhow::Error> {
-        let utxo_id = UtxoId::decompress_with(&c.utxo_id, ctx).await?;
-        let coin_info = ctx.lookup.coin(&utxo_id).await?;
-        Ok(Coin {
-            utxo_id,
-            owner: coin_info.owner,
-            amount: coin_info.amount,
-            asset_id: coin_info.asset_id,
-            tx_pointer: Default::default(),
-            witness_index: Empty::default(),
-            predicate_gas_used: c.predicate_gas_used,
-            predicate:
-                <coin::Full as coin::CoinSpecification>::Predicate::decompress_with(
-                    &c.predicate,
-                    ctx,
-                )
-                .await?,
-            predicate_data: c.predicate_data.clone(),
-        })
-    }
-}
-
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error>
-    for Message<message::specifications::Full>
-{
-    async fn decompress_with(
-        c: &CompressedMessage<message::specifications::Full>,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<Message<message::specifications::Full>, anyhow::Error> {
-        let msg = ctx.lookup.message(&c.nonce).await?;
-        Ok(Message {
-            sender: msg.sender,
-            recipient: msg.recipient,
-            amount: msg.amount,
-            nonce: c.nonce,
-            witness_index: c.witness_index,
-            predicate_gas_used: c.predicate_gas_used,
-            data: msg.data.clone(),
-            predicate:
-                <message::specifications::Full as message::MessageSpecification>::Predicate::decompress_with(
-                    &c.predicate,
-                    ctx,
-                )
-                .await?,
-            predicate_data: c.predicate_data.clone(),
-        })
-    }
-}
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error>
-    for Message<message::specifications::MessageData<message::specifications::Signed>>
-{
-    async fn decompress_with(
-        c: &CompressedMessage<
-            message::specifications::MessageData<message::specifications::Signed>,
-        >,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<
-        Message<message::specifications::MessageData<message::specifications::Signed>>,
-        anyhow::Error,
-    > {
-        let msg = ctx.lookup.message(&c.nonce).await?;
-        Ok(Message {
-            sender: msg.sender,
-            recipient: msg.recipient,
-            amount: msg.amount,
-            nonce: c.nonce,
-            witness_index: c.witness_index,
-            predicate_gas_used: Empty::default(),
-            data: msg.data.clone(),
-            predicate: <<message::specifications::MessageData<
-                message::specifications::Signed,
-            > as message::MessageSpecification>::Predicate as DecompressibleBy<
-                _,
-                anyhow::Error,
-            >>::decompress_with(&c.predicate, ctx)
-            .await?,
-            predicate_data: Empty::default(),
-        })
-    }
-}
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error>
-    for Message<message::specifications::MessageData<message::specifications::Predicate>>
-{
-    async fn decompress_with(
-        c: &CompressedMessage<
-            message::specifications::MessageData<message::specifications::Predicate>,
-        >,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<
-        Message<message::specifications::MessageData<message::specifications::Predicate>>,
-        anyhow::Error,
-    > {
-        let msg = ctx.lookup.message(&c.nonce).await?;
-        Ok(Message {
-            sender: msg.sender,
-            recipient: msg.recipient,
-            amount: msg.amount,
-            nonce: c.nonce,
-            witness_index: Empty::default(),
-            predicate_gas_used: c.predicate_gas_used,
-            data: msg.data.clone(),
-            predicate: <message::specifications::MessageData<
-                message::specifications::Predicate,
-            > as message::MessageSpecification>::Predicate::decompress_with(
-                &c.predicate,
-                ctx,
-            )
-            .await?,
-            predicate_data: c.predicate_data.clone(),
-        })
-    }
-}
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error>
-    for Message<message::specifications::MessageCoin<message::specifications::Signed>>
-{
-    async fn decompress_with(
-        c: &CompressedMessage<
-            message::specifications::MessageCoin<message::specifications::Signed>,
-        >,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<
-        Message<message::specifications::MessageCoin<message::specifications::Signed>>,
-        anyhow::Error,
-    > {
-        let msg = ctx.lookup.message(&c.nonce).await?;
-        Ok(Message {
-            sender: msg.sender,
-            recipient: msg.recipient,
-            amount: msg.amount,
-            nonce: c.nonce,
-            witness_index: c.witness_index,
-            predicate_gas_used: Empty::default(),
-            data: Empty::default(),
-            predicate: <<message::specifications::MessageCoin<
-                message::specifications::Signed,
-            > as message::MessageSpecification>::Predicate as DecompressibleBy<
-                _,
-                anyhow::Error,
-            >>::decompress_with(&c.predicate, ctx)
-            .await?,
-            predicate_data: Empty::default(),
-        })
-    }
-}
-impl<'a> DecompressibleBy<DecompressCtx<'a>, anyhow::Error>
-    for Message<message::specifications::MessageCoin<message::specifications::Predicate>>
-{
-    async fn decompress_with(
-        c: &CompressedMessage<
-            message::specifications::MessageCoin<message::specifications::Predicate>,
-        >,
-        ctx: &DecompressCtx<'a>,
-    ) -> Result<
-        Message<message::specifications::MessageCoin<message::specifications::Predicate>>,
-        anyhow::Error,
-    > {
-        let msg = ctx.lookup.message(&c.nonce).await?;
-        Ok(Message {
-            sender: msg.sender,
-            recipient: msg.recipient,
-            amount: msg.amount,
-            nonce: c.nonce,
-            witness_index: Empty::default(),
-            predicate_gas_used: c.predicate_gas_used,
-            data: Empty::default(),
-            predicate: <message::specifications::MessageCoin<
-                message::specifications::Predicate,
-            > as message::MessageSpecification>::Predicate::decompress_with(
-                &c.predicate,
-                ctx,
-            )
-            .await?,
-            predicate_data: c.predicate_data.clone(),
-        })
     }
 }

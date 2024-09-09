@@ -100,7 +100,7 @@ impl HistoryLookup for MockTxDb {
             .ok_or_else(|| anyhow::anyhow!("Coin not found in mock db: {:?}", utxo_id))
     }
 
-    async fn message(&self, nonce: &Nonce) -> anyhow::Result<MessageInfo> {
+    async fn message(&self, _nonce: &Nonce) -> anyhow::Result<MessageInfo> {
         todo!();
     }
 }
@@ -159,10 +159,7 @@ async fn same_compact_tx_is_smaller_in_next_block() {
 
 #[tokio::test]
 async fn compress_decompress_roundtrip() {
-    use rand::{
-        Rng,
-        SeedableRng,
-    };
+    use rand::SeedableRng;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     let tmpdir = TempDir::new().unwrap();

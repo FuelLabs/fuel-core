@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use fuel_core_types::{
     fuel_compression::{
         CompressibleBy,
+        ContextError,
         RegistryKey,
     },
     fuel_tx::{
@@ -35,6 +36,10 @@ pub struct CompressCtx<'a> {
     pub changes: PerRegistryKeyspace<HashMap<RegistryKey, PostcardSerialized>>,
 }
 
+impl ContextError for CompressCtx<'_> {
+    type Error = anyhow::Error;
+}
+
 fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
     keyspace: RegistryKeyspace,
     value: &T,
@@ -54,7 +59,7 @@ fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
     Ok(key)
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for Address {
+impl<'a> CompressibleBy<CompressCtx<'a>> for Address {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<'a>,
@@ -63,7 +68,7 @@ impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for Address {
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for AssetId {
+impl<'a> CompressibleBy<CompressCtx<'a>> for AssetId {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<'a>,
@@ -72,7 +77,7 @@ impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for AssetId {
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ContractId {
+impl<'a> CompressibleBy<CompressCtx<'a>> for ContractId {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<'a>,
@@ -81,7 +86,7 @@ impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ContractId {
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ScriptCode {
+impl<'a> CompressibleBy<CompressCtx<'a>> for ScriptCode {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<'a>,
@@ -90,7 +95,7 @@ impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for ScriptCode {
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for PredicateCode {
+impl<'a> CompressibleBy<CompressCtx<'a>> for PredicateCode {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<'a>,
@@ -99,7 +104,7 @@ impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for PredicateCode {
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>, anyhow::Error> for UtxoId {
+impl<'a> CompressibleBy<CompressCtx<'a>> for UtxoId {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<'a>,
