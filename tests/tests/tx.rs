@@ -166,10 +166,7 @@ async fn dry_run_above_block_gas_limit() {
         op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
         op::ret(RegId::ONE),
     ];
-    let script: Vec<u8> = script
-        .iter()
-        .flat_map(|op| u32::from(*op).to_be_bytes())
-        .collect();
+    let script = script.into_iter().collect();
 
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)

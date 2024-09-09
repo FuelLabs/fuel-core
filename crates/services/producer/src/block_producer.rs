@@ -280,7 +280,6 @@ where
         gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let view = self.view_provider.latest_view()?;
-
         let height = height.unwrap_or_else(|| {
             view.latest_height()
                 .unwrap_or_default()
