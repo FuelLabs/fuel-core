@@ -30,6 +30,7 @@ use crate::{
             MaybeRelayerAdapter,
             PoAAdapter,
             SharedMemoryPool,
+            SystemTime,
             TxPoolAdapter,
             VerifierAdapter,
         },
@@ -72,6 +73,7 @@ pub type PoAService = fuel_core_poa::Service<
     BlockImporterAdapter,
     SignMode,
     InDirectoryPredefinedBlocks,
+    SystemTime,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
@@ -264,6 +266,7 @@ pub fn init_sub_services(
             p2p_adapter.clone(),
             FuelBlockSigner::new(config.consensus_signer.clone()),
             predefined_blocks,
+            SystemTime,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
