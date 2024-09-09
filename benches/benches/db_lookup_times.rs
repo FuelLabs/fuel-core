@@ -17,7 +17,7 @@ use fuel_core_benches::db_lookup_times_utils::{
     },
 };
 
-use fuel_core_benches::db_lookup_times_utils::utils::get_db_path;
+use fuel_core_benches::utils::ShallowTempDir;
 use rand::thread_rng;
 
 pub fn header_and_tx_lookup(c: &mut Criterion) -> DbLookupBenchResult<()> {
