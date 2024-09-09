@@ -226,6 +226,7 @@ where
         new_tx_ratio > collision_tx_ratio
     }
 
+    // TODO: Use block space also
     pub fn extract_transactions_for_block(
         &mut self,
     ) -> Result<Vec<PoolTransaction>, Error> {
@@ -245,7 +246,7 @@ where
             if gas_used.saturating_add(node.transaction.max_gas())
                 > self.config.max_block_gas
             {
-                break;
+                continue;
             }
             // Get all nodes linked with outgoing edges
             for edge in self.graph.edges_directed(node_id, Direction::Outgoing) {
