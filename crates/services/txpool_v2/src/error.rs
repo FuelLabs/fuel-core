@@ -12,6 +12,10 @@ pub enum Error {
         fmt = "Transaction is not inserted. Input coin does not match the values from database"
     )]
     NotInsertedIoCoinMismatch,
+    #[display(
+        fmt = "Transaction is not inserted. Transaction chain dependency is already too big"
+    )]
+    NotInsertedChainDependencyTooBig,
     // TODO: Make more specific errors
     #[display(fmt = "Transaction collided: {_0}")]
     Collided(String),

@@ -1,8 +1,4 @@
-use std::collections::{
-    hash_map::Entry,
-    HashMap,
-    HashSet,
-};
+use std::collections::HashMap;
 
 use fuel_core_types::{
     fuel_tx::{
@@ -11,7 +7,6 @@ use fuel_core_types::{
                 CoinPredicate,
                 CoinSigned,
             },
-            contract::Contract,
             message::{
                 MessageCoinPredicate,
                 MessageCoinSigned,
@@ -23,7 +18,6 @@ use fuel_core_types::{
         ContractId,
         Input,
         Output,
-        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
@@ -37,14 +31,13 @@ use crate::{
         CollisionReason,
         Collisions,
         Parents,
-        TxGraph,
     },
     ports::TxPoolDb,
 };
 
 // TODO: change both to be nodeindex
-type Spender = TxId;
-type Creator = TxId;
+type Spender = NodeIndex;
+type Creator = NodeIndex;
 
 pub struct Registries {
     /// Coins -> Transaction that crurrently create the UTXO
@@ -82,14 +75,15 @@ impl Registries {
         &self,
         tx: &PoolTransaction,
     ) -> Result<Collisions, Error> {
-        let mut collisions = HashMap::default();
+        let mut collisions = Collisions::new();
         for input in tx.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // Check if the utxo is already spent by another transaction in the pool
-                    if let Some(tx_id) = self.coins_spenders.get(utxo_id) {
-                        collisions.insert(CollisionReason::Coin(*utxo_id), *tx_id);
+                    if let Some(node_id) = self.coins_spenders.get(utxo_id) {
+                        collisions.reasons.insert(CollisionReason::Coin(*utxo_id));
+                        collisions.colliding_txs.push(*node_id);
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
@@ -97,8 +91,9 @@ impl Registries {
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // Check if the message is already spent by another transaction in the pool
-                    if let Some(tx_id) = self.messages_spenders.get(nonce) {
-                        collisions.insert(CollisionReason::Message(*nonce), *tx_id);
+                    if let Some(node_id) = self.messages_spenders.get(nonce) {
+                        collisions.reasons.insert(CollisionReason::Message(*nonce));
+                        collisions.colliding_txs.push(*node_id);
                     }
                 }
                 // No collision for contract inputs
@@ -111,7 +106,9 @@ impl Registries {
                 // Check if the contract is already created by another transaction in the pool
                 if let Some(tx_id) = self.contracts_creators.get(contract_id) {
                     collisions
-                        .insert(CollisionReason::ContractCreation(*contract_id), *tx_id);
+                        .reasons
+                        .insert(CollisionReason::ContractCreation(*contract_id));
+                    collisions.colliding_txs.push(*tx_id);
                 }
             }
         }
@@ -124,12 +121,10 @@ impl Registries {
         &self,
         tx: &PoolTransaction,
         collisions: Collisions,
-        graph: &TxGraph,
-        tx_to_node: &HashMap<TxId, NodeIndex>,
         db: &impl TxPoolDb,
         utxo_validation: bool,
     ) -> Result<Parents, Error> {
-        //TODO: Finish the function
+        // TODO: Finish the function
         let mut pool_parents = Vec::new();
         for input in tx.inputs() {
             match input {
@@ -138,18 +133,16 @@ impl Registries {
                     // If the utxo collides it means we already made the verifications
                     // If the utxo is created in the pool, need to check if we don't spend too much (utxo can still be unresolved)
                     // If the utxo_validation is active, we need to check if the utxo exists in the database and is valid
-                    if collisions.get(&CollisionReason::Coin(*utxo_id)).is_some() {
+                    if collisions
+                        .reasons
+                        .get(&CollisionReason::Coin(*utxo_id))
+                        .is_some()
+                    {
                         continue;
                     }
-                    if let Some(tx_id) = self.coins_creators.get(utxo_id) {
-                        let output_tx =
-                            graph
-                                .node_weight(*tx_to_node.get(tx_id).expect(
-                                    "Transaction always should exist in `tx_info`",
-                                ))
-                                .expect("Transaction always should exist in `tx_info`");
+                    if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         // TODO: Other checks
-                        pool_parents.push(*tx_id);
+                        pool_parents.push(*node_id);
                     }
                     if utxo_validation {
                         let Some(coin) = db
@@ -166,8 +159,7 @@ impl Registries {
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
-                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                }
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {}
                 _ => {}
             }
         }
@@ -177,6 +169,7 @@ impl Registries {
     pub fn insert_outputs_in_registry(
         &mut self,
         tx: &PoolTransaction,
+        node_id: NodeIndex,
     ) -> Result<(), Error> {
         for (index, output) in tx.outputs().iter().enumerate() {
             let index = u16::try_from(index).map_err(|_| {
@@ -185,15 +178,14 @@ impl Registries {
                     tx.id()
                 ))
             })?;
-            let tx_id = tx.id();
             match output {
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
                     let utxo_id = UtxoId::new(tx.id(), index);
-                    self.coins_creators.insert(utxo_id, tx_id);
+                    self.coins_creators.insert(utxo_id, node_id);
                 }
                 Output::ContractCreated { contract_id, .. } => {
                     // insert contract
-                    self.contracts_creators.insert(*contract_id, tx_id);
+                    self.contracts_creators.insert(*contract_id, node_id);
                 }
                 Output::Contract(_) => {
                     // do nothing, this contract is already found in dependencies.
