@@ -46,7 +46,7 @@ impl BlockCommitterDaBlockCosts {
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for BlockCommitterDaBlockCosts {
-    async fn get(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
+    async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
         let response = self.client.get(self.url.clone()).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!("failed with response: {}", response.status()));

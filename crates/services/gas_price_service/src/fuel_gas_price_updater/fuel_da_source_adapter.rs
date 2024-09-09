@@ -62,7 +62,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl DaBlockCostsSource for ErroringSource {
-        async fn get(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
+        async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
             Err(anyhow!("boo!"))
         }
     }

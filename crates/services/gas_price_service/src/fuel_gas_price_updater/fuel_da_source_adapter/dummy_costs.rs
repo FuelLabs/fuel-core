@@ -8,7 +8,7 @@ pub struct DummyDaBlockCosts;
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for DummyDaBlockCosts {
-    async fn get(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
+    async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
         Ok(DaBlockCosts::default())
     }
 }

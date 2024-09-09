@@ -48,7 +48,7 @@ where
 /// da block costs in a way they see fit
 #[async_trait::async_trait]
 pub trait DaBlockCostsSource: Send + Sync {
-    async fn get(&mut self) -> Result<DaBlockCosts>;
+    async fn request_da_block_cost(&mut self) -> Result<DaBlockCosts>;
 }
 
 #[async_trait::async_trait]
@@ -94,7 +94,7 @@ where
                 continue_running = false;
             }
             _ = self.poll_interval.tick() => {
-                let da_block_costs = self.source.get().await?;
+                let da_block_costs = self.source.request_da_block_cost().await?;
                 let mut da_block_costs_guard = self.block_cost_provider.try_lock().map_err(|err| {
                     CouldNotFetchDARecord(anyhow!(
                         "Failed to lock da block costs state: {:?}",
