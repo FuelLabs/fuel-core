@@ -191,7 +191,7 @@ pub struct BlockBytes {
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
-        blocks: Vec<RecordedBlock>,
+        blocks: &[RecordedBlock],
     ) -> Result<(), Error> {
         for block in blocks {
             self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
@@ -353,15 +353,21 @@ impl AlgorithmUpdaterV1 {
         let total_rewards = self.total_da_rewards_excess;
         let total_costs = self.latest_known_total_da_cost_excess as u64;
         if total_rewards > total_costs {
-            let excess = total_rewards - total_costs;
-            self.projected_total_da_cost -= total_costs as u128;
+            let excess = total_rewards.saturating_sub(total_costs);
+            let projected_cost_excess = self
+                .projected_total_da_cost
+                .saturating_sub(total_costs as u128);
+            self.projected_total_da_cost = projected_cost_excess;
             self.total_da_rewards_excess = excess;
             self.latest_known_total_da_cost_excess = 0;
         } else {
-            let excess = total_costs - total_rewards;
-            self.projected_total_da_cost -= total_rewards as u128;
+            let excess = total_costs.saturating_sub(total_rewards) as u128;
+            let projected_cost_excess = self
+                .projected_total_da_cost
+                .saturating_sub(total_rewards as u128);
+            self.projected_total_da_cost = projected_cost_excess;
             self.total_da_rewards_excess = 0;
-            self.latest_known_total_da_cost_excess = excess as u128;
+            self.latest_known_total_da_cost_excess = excess;
         }
     }
 }
