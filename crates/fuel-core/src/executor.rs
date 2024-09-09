@@ -2936,6 +2936,7 @@ mod tests {
         let expensive_consensus_parameters_version = 0;
         let mut expensive_consensus_parameters = ConsensusParameters::default();
         expensive_consensus_parameters.set_gas_costs(gas_costs.into());
+        expensive_consensus_parameters.set_block_gas_limit(10_000_000_000);
         let config = Config {
             consensus_parameters: expensive_consensus_parameters.clone(),
             ..Default::default()
@@ -2975,7 +2976,6 @@ mod tests {
 
         // Then
         assert_eq!(skipped_transactions.len(), 1);
-        dbg!(&skipped_transactions);
         assert!(matches!(
             skipped_transactions[0].1,
             ExecutorError::InvalidTransaction(_)
