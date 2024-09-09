@@ -22,7 +22,6 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
-        ChainId,
     },
 };
 use itertools::Itertools;
@@ -51,10 +50,6 @@ pub fn open_rocks_db<Description: DatabaseDescription>(
 ) -> Result<RocksDb<Description>> {
     let db = RocksDb::default_open(path, None)?;
     Ok(db)
-}
-
-pub fn chain_id() -> ChainId {
-    ChainId::default()
 }
 
 #[derive(Copy, Clone, AsRefStr)]

@@ -3,10 +3,7 @@ use crate::db_lookup_times_utils::{
         BenchDatabase,
         BenchDbColumn,
     },
-    utils::{
-        chain_id,
-        Result as DbLookupBenchResult,
-    },
+    utils::Result as DbLookupBenchResult,
 };
 use anyhow::anyhow;
 use fuel_core::state::rocks_db::RocksDb;
@@ -31,7 +28,10 @@ use fuel_core_types::{
         Transaction,
         UniqueIdentifier,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
 };
 use itertools::Itertools;
 
@@ -88,7 +88,7 @@ pub fn insert_compressed_block(
 ) -> DbLookupBenchResult<Block> {
     let block = generate_bench_block(height, tx_count)?;
 
-    let compressed_block = block.compress(&chain_id());
+    let compressed_block = block.compress(&ChainId::default());
     let height_key = height_key(height);
 
     let raw_compressed_block = postcard::to_allocvec(&compressed_block)?.to_vec();
@@ -96,7 +96,7 @@ pub fn insert_compressed_block(
         .transactions()
         .iter()
         .map(|tx| -> DbLookupBenchResult<(Bytes32, Vec<u8>)> {
-            let tx_id = tx.id(&chain_id());
+            let tx_id = tx.id(&ChainId::default());
             let raw_tx = postcard::to_allocvec(tx)?.to_vec();
             Ok((tx_id, raw_tx))
         })
