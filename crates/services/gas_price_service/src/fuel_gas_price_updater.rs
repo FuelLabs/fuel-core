@@ -32,7 +32,7 @@ pub struct FuelGasPriceUpdater<L2, Metadata, DaGasPriceGetter> {
     l2_block_source: L2,
     metadata_storage: Metadata,
     #[allow(dead_code)]
-    da_gas_price: DaGasPriceGetter,
+    da_block_costs: DaGasPriceGetter,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,18 +57,18 @@ impl AlgorithmUpdater {
     }
 }
 
-impl<L2, Metadata, DaGasPriceGetter> FuelGasPriceUpdater<L2, Metadata, DaGasPriceGetter> {
+impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
     pub fn new(
         inner: AlgorithmUpdater,
         l2_block_source: L2,
         metadata_storage: Metadata,
-        da_gas_price: DaGasPriceGetter,
+        da_block_costs: DaBlockCosts,
     ) -> Self {
         Self {
             inner,
             l2_block_source,
             metadata_storage,
-            da_gas_price,
+            da_block_costs,
         }
     }
 }
@@ -118,21 +118,14 @@ pub trait L2BlockSource: Send + Sync {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct DaGasPrice {
+pub struct DaBlockCosts {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
     pub blob_cost_wei: u32,
 }
 
-pub trait GetDaGasPriceFromSink: Send + Sync + Default + Clone {
-    fn get(&mut self) -> Result<Option<DaGasPrice>>;
-}
-
-// ensures that the da gas price is set to the sink only by
-// selected impls. we don't want the algo updater to have
-// access to this method.
-pub trait SetDaGasPriceToSink: Send + Sync + Default + Clone {
-    fn set(&mut self, value: DaGasPrice) -> Result<()>;
+pub trait GetDaBlockCosts: Send + Sync + Default + Clone {
+    fn get(&mut self) -> Result<Option<DaBlockCosts>>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -216,16 +209,16 @@ pub trait MetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
-impl<L2, Metadata, DaGasPriceGetter> FuelGasPriceUpdater<L2, Metadata, DaGasPriceGetter>
+impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
     Metadata: MetadataStorage,
-    DaGasPriceGetter: GetDaGasPriceFromSink,
+    DaBlockCosts: GetDaBlockCosts,
 {
     pub fn init(
         target_block_height: BlockHeight,
         l2_block_source: L2,
         metadata_storage: Metadata,
-        da_gas_price: DaGasPriceGetter,
+        da_block_costs: DaBlockCosts,
         min_exec_gas_price: u64,
         exec_gas_price_change_percent: u64,
         l2_block_fullness_threshold_percent: u64,
@@ -252,7 +245,7 @@ where
             inner,
             l2_block_source,
             metadata_storage,
-            da_gas_price,
+            da_block_costs,
         };
         Ok(updater)
     }
@@ -321,7 +314,7 @@ impl<L2, Metadata, DaGasPriceGetter> UpdateAlgorithm
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
-    DaGasPriceGetter: GetDaGasPriceFromSink,
+    DaGasPriceGetter: GetDaBlockCosts,
 {
     type Algorithm = Algorithm;
 

@@ -1,7 +1,7 @@
 use crate::fuel_gas_price_updater::{
     service::Result as DaGasPriceSourceResult,
-    DaGasPrice,
-    DaGasPriceSource,
+    DaBlockCosts,
+    DaBlockCostsSource,
 };
 use anyhow::anyhow;
 use reqwest::Url;
@@ -12,7 +12,7 @@ use serde::{
 
 /// This struct is used to denote the block committer da gas price source,,
 /// which receives data from the block committer (only http api for now)
-pub struct BlockCommitterDaGasPriceSource {
+pub struct BlockCommitterDaBlockCosts {
     client: reqwest::Client,
     url: Url,
 }
@@ -24,9 +24,9 @@ struct RawDaGasPrice {
     pub blob_cost: u32,
 }
 
-impl From<RawDaGasPrice> for DaGasPrice {
+impl From<RawDaGasPrice> for DaBlockCosts {
     fn from(raw: RawDaGasPrice) -> Self {
-        DaGasPrice {
+        DaBlockCosts {
             l2_block_range: raw.l2_block_range,
             blob_size_bytes: raw.blob_size_bytes,
             blob_cost_wei: raw.blob_cost,
@@ -34,7 +34,7 @@ impl From<RawDaGasPrice> for DaGasPrice {
     }
 }
 
-impl BlockCommitterDaGasPriceSource {
+impl BlockCommitterDaBlockCosts {
     /// Create a new instance of the block committer da gas price source
     pub fn new(url: String) -> Self {
         Self {
@@ -45,8 +45,8 @@ impl BlockCommitterDaGasPriceSource {
 }
 
 #[async_trait::async_trait]
-impl DaGasPriceSource for BlockCommitterDaGasPriceSource {
-    async fn get(&mut self) -> DaGasPriceSourceResult<DaGasPrice> {
+impl DaBlockCostsSource for BlockCommitterDaBlockCosts {
+    async fn get(&mut self) -> DaGasPriceSourceResult<DaBlockCosts> {
         let response = self.client.get(self.url.clone()).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!("failed with response: {}", response.status()));

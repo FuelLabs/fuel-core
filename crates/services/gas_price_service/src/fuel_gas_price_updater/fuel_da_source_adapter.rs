@@ -1,68 +1,53 @@
 use crate::fuel_gas_price_updater::{
-    DaGasPrice,
+    DaBlockCosts,
     Error::CouldNotFetchDARecord,
-    GetDaGasPriceFromSink,
+    GetDaBlockCosts,
     Result as GasPriceUpdaterResult,
-    SetDaGasPriceToSink,
 };
 use anyhow::anyhow;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub mod block_committer_source;
-pub mod dummy_source;
+pub mod block_committer_costs;
+pub mod dummy_costs;
 pub mod service;
 
-pub use block_committer_source::BlockCommitterDaGasPriceSource;
-pub use dummy_source::DummyDaGasPriceSource;
+pub use block_committer_costs::BlockCommitterDaBlockCosts;
+pub use dummy_costs::DummyDaBlockCosts;
 pub use service::*;
 
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
-pub type DaGasPriceProvider = Arc<Mutex<Option<DaGasPrice>>>;
+pub type DaBlockCostsProvider = Arc<Mutex<Option<DaBlockCosts>>>;
 
-impl GetDaGasPriceFromSink for DaGasPriceProvider {
-    fn get(&mut self) -> GasPriceUpdaterResult<Option<DaGasPrice>> {
-        let mut gas_price_guard = self.try_lock().map_err(|err| {
+impl GetDaBlockCosts for DaBlockCostsProvider {
+    fn get(&mut self) -> GasPriceUpdaterResult<Option<DaBlockCosts>> {
+        let mut da_block_costs_guard = self.try_lock().map_err(|err| {
             CouldNotFetchDARecord(anyhow!(
                 "Failed to lock shared gas price state: {:?}",
                 err
             ))
         })?;
 
-        let da_gas_price = gas_price_guard.clone();
+        let da_block_costs = da_block_costs_guard.clone();
 
         // now mark it as consumed because we don't want to serve the same data
         // multiple times
-        *gas_price_guard = None;
+        *da_block_costs_guard = None;
 
-        Ok(da_gas_price)
+        Ok(da_block_costs)
     }
 }
 
-impl SetDaGasPriceToSink for DaGasPriceProvider {
-    fn set(&mut self, value: DaGasPrice) -> GasPriceUpdaterResult<()> {
-        let mut gas_price_guard = self.try_lock().map_err(|err| {
-            CouldNotFetchDARecord(anyhow!(
-                "Failed to lock shared gas price state: {:?}",
-                err
-            ))
-        })?;
-
-        *gas_price_guard = Some(value);
-
-        Ok(())
-    }
-}
-
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fuel_gas_price_updater::{
         fuel_da_source_adapter::service::Result as DaGasPriceSourceResult,
-        DaGasPriceProviderService,
-        DaGasPriceSource,
-        DummyDaGasPriceSource,
+        DaBlockCostsService,
+        DaBlockCostsSource,
+        DummyDaBlockCosts,
     };
     use fuel_core_services::{
         RunnableService,
@@ -76,22 +61,17 @@ mod tests {
     struct ErroringSource;
 
     #[async_trait::async_trait]
-    impl DaGasPriceSource for ErroringSource {
-        async fn get(&mut self) -> DaGasPriceSourceResult<DaGasPrice> {
+    impl DaBlockCostsSource for ErroringSource {
+        async fn get(&mut self) -> DaGasPriceSourceResult<DaBlockCosts> {
             Err(anyhow!("boo!"))
         }
     }
 
-    type TestValidService =
-        DaGasPriceProviderService<DummyDaGasPriceSource, DaGasPriceProvider>;
-    type TestErroringService =
-        DaGasPriceProviderService<ErroringSource, DaGasPriceProvider>;
-
     #[tokio::test]
-    async fn test_service_sets_cache_when_request_succeeds() {
+    async fn run__when_da_block_cost_source_gives_value_shared_value_is_updated() {
         // given
         let service =
-            TestValidService::new(DummyDaGasPriceSource, Some(Duration::from_millis(1)));
+            DaBlockCostsService::new(DummyDaBlockCosts, Some(Duration::from_millis(1)));
 
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
@@ -102,15 +82,15 @@ mod tests {
         service.stop();
 
         // then
-        let da_gas_price_opt = shared_state.get().unwrap();
-        assert!(da_gas_price_opt.is_some());
+        let da_block_costs_opt = shared_state.get().unwrap();
+        assert!(da_block_costs_opt.is_some());
     }
 
     #[tokio::test]
-    async fn test_service_invalidates_cache() {
+    async fn run__when_da_block_cost_source_gives_value_shared_value_is_marked_stale() {
         // given
         let service =
-            TestValidService::new(DummyDaGasPriceSource, Some(Duration::from_millis(1)));
+            DaBlockCostsService::new(DummyDaBlockCosts, Some(Duration::from_millis(1)));
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
 
@@ -121,15 +101,15 @@ mod tests {
         let _ = shared_state.get().unwrap();
 
         // then
-        let da_gas_price_opt = shared_state.get().unwrap();
-        assert!(da_gas_price_opt.is_none());
+        let da_block_costs_opt = shared_state.get().unwrap();
+        assert!(da_block_costs_opt.is_none());
     }
 
     #[tokio::test]
-    async fn test_service_does_not_set_cache_when_request_fails() {
+    async fn run__when_da_block_cost_source_errors_shared_value_is_not_updated() {
         // given
         let service =
-            TestErroringService::new(ErroringSource, Some(Duration::from_millis(1)));
+            DaBlockCostsService::new(ErroringSource, Some(Duration::from_millis(1)));
         let mut shared_state = service.shared_data();
         let service = ServiceRunner::new(service);
 
@@ -139,7 +119,7 @@ mod tests {
         service.stop();
 
         // then
-        let da_gas_price_opt = shared_state.get().unwrap();
-        assert!(da_gas_price_opt.is_none());
+        let da_block_costs_opt = shared_state.get().unwrap();
+        assert!(da_block_costs_opt.is_none());
     }
 }

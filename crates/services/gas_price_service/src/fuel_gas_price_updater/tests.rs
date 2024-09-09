@@ -92,10 +92,10 @@ impl FakeDaSource {
     }
 }
 
-impl GetDaGasPriceFromSink for FakeDaSource {
-    fn get(&mut self) -> Result<Option<DaGasPrice>> {
+impl GetDaBlockCosts for FakeDaSource {
+    fn get(&mut self) -> Result<Option<DaBlockCosts>> {
         *self.called.lock().unwrap() = true;
-        Ok(Some(DaGasPrice::default()))
+        Ok(Some(DaBlockCosts::default()))
     }
 }
 
