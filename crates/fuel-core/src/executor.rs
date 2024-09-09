@@ -2975,6 +2975,11 @@ mod tests {
 
         // Then
         assert_eq!(skipped_transactions.len(), 1);
+        dbg!(skipped_transactions);
+        assert!(matches!(
+            skipped_transactions[0].1,
+            ExecutorError::GasOverflow
+        ));
         assert!(matches!(
             skipped_transactions[0].1,
             ExecutorError::InvalidTransaction(_)

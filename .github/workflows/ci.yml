@@ -121,7 +121,7 @@ jobs:
           - command: test
             args: --workspace
           - command: test
-            args: --all-features --workspace
+            args: --all-features --workspace -- --nocapture
           - command: test
             args: -p fuel-core --no-default-features
           - command: test

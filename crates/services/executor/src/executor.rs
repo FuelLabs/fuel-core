@@ -572,7 +572,9 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
-                if transaction.max_gas(&self.consensus_params) > remaining_gas_limit {
+                if dbg!(transaction.max_gas(&self.consensus_params))
+                    > dbg!(remaining_gas_limit)
+                {
                     data.skipped_transactions
                         .push((tx_id, ExecutorError::GasOverflow));
                     continue;
