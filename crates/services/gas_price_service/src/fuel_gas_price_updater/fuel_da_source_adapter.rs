@@ -77,9 +77,9 @@ mod tests {
         let service = ServiceRunner::new(service);
 
         // when
-        service.start().unwrap();
+        service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
-        service.stop();
+        service.stop_and_await().await.unwrap();
 
         // then
         let da_block_costs_opt = shared_state.get().unwrap();
@@ -95,9 +95,9 @@ mod tests {
         let service = ServiceRunner::new(service);
 
         // when
-        service.start().unwrap();
+        service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
-        service.stop();
+        service.stop_and_await().await.unwrap();
         let _ = shared_state.get().unwrap();
 
         // then
@@ -114,9 +114,9 @@ mod tests {
         let service = ServiceRunner::new(service);
 
         // when
-        service.start().unwrap();
+        service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
-        service.stop();
+        service.stop_and_await().await.unwrap();
 
         // then
         let da_block_costs_opt = shared_state.get().unwrap();
