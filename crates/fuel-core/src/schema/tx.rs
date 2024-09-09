@@ -50,6 +50,8 @@ use fuel_core_types::{
     fuel_tx::{
         Cacheable,
         Chargeable,
+        FeeParameters,
+        GasCosts,
         Transaction as FuelTx,
         UniqueIdentifier,
     },
@@ -282,44 +284,20 @@ impl TxMutation {
             .latest_consensus_params();
         let block_gas_limit = consensus_params.block_gas_limit();
 
-        let mut max_gas_usable: u64 = 0;
         let mut transactions = txs
             .iter()
             .map(|tx| FuelTx::from_bytes(&tx.0))
             .collect::<Result<Vec<FuelTx>, _>>()?;
         let fee = consensus_params.fee_params();
-        for transaction in &mut transactions {
-            match transaction {
-                FuelTx::Script(tx) => {
-                    max_gas_usable = max_gas_usable
-                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
-                }
-                FuelTx::Create(tx) => {
-                    max_gas_usable = max_gas_usable
-                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
-                }
-                FuelTx::Mint(_) => {
-                    // Mint transactions doesn't consume gas and so we will add a flat 10% of the block gas limit
-                    max_gas_usable = max_gas_usable.saturating_add(block_gas_limit / 10);
-                }
-                FuelTx::Upgrade(tx) => {
-                    max_gas_usable = max_gas_usable
-                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
-                }
-                FuelTx::Upload(tx) => {
-                    max_gas_usable = max_gas_usable
-                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
-                }
-                FuelTx::Blob(tx) => {
-                    max_gas_usable = max_gas_usable
-                        .saturating_add(tx.max_gas(consensus_params.gas_costs(), fee));
-                }
-            };
-            if max_gas_usable > block_gas_limit {
+        transactions.iter_mut().try_fold::<_, _, async_graphql::Result<u64>>(0u64, |acc, tx| {
+            let gas = max_gas(tx, &consensus_params.gas_costs(), fee)?;
+            tx.precompute(&consensus_params.chain_id())?;
+            let gas = gas.saturating_add(acc);
+            if gas > block_gas_limit {
                 return Err(anyhow::anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit").into());
             }
-            transaction.precompute(&consensus_params.chain_id())?;
-        }
+            Ok(gas)
+        })?;
 
         let tx_statuses = block_producer
             .dry_run_txs(
@@ -434,6 +412,24 @@ impl TxStatusSubscription {
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
         submit_and_await_status(ctx, tx).await
+    }
+}
+
+fn max_gas(
+    tx: &FuelTx,
+    gas_costs: &GasCosts,
+    fee: &FeeParameters,
+) -> async_graphql::Result<u64> {
+    match tx {
+        FuelTx::Script(tx) => Ok(tx.max_gas(gas_costs, fee)),
+        FuelTx::Create(tx) => Ok(tx.max_gas(gas_costs, fee)),
+        FuelTx::Mint(_) => Err(anyhow::anyhow!(
+            "Mint transactions can't be executed in a dry-run"
+        )
+        .into()),
+        FuelTx::Upgrade(tx) => Ok(tx.max_gas(gas_costs, fee)),
+        FuelTx::Upload(tx) => Ok(tx.max_gas(gas_costs, fee)),
+        FuelTx::Blob(tx) => Ok(tx.max_gas(gas_costs, fee)),
     }
 }
 

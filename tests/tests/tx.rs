@@ -175,9 +175,10 @@ async fn dry_run_above_block_gas_limit() {
         .finalize_as_transaction();
 
     // When
-    client.dry_run(&[tx.clone()]).await
-    // Then
-    .expect_err("Dry run should return an error because transaction is using too much gas");
+    match client.dry_run(&[tx.clone()]).await {
+        Ok(_) => panic!("Expected error"),
+        Err(e) => assert_eq!(e.to_string(), "Response errors; The sum of the gas usable by the transactions is greater than the block gas limit".to_owned()),
+    }
 }
 
 #[tokio::test]
