@@ -44,7 +44,7 @@ impl GetDaBlockCosts for DaBlockCostsProvider {
 mod tests {
     use super::*;
     use crate::fuel_gas_price_updater::{
-        fuel_da_source_adapter::service::Result as DaGasPriceSourceResult,
+        fuel_da_source_adapter::service::Result as DaBlockCostsResult,
         DaBlockCostsService,
         DaBlockCostsSource,
         DummyDaBlockCosts,
@@ -62,7 +62,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl DaBlockCostsSource for ErroringSource {
-        async fn get(&mut self) -> DaGasPriceSourceResult<DaBlockCosts> {
+        async fn get(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
             Err(anyhow!("boo!"))
         }
     }

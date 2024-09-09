@@ -1,5 +1,5 @@
 use crate::fuel_gas_price_updater::{
-    service::Result as DaGasPriceSourceResult,
+    service::Result as DaBlockCostsResult,
     DaBlockCosts,
     DaBlockCostsSource,
 };
@@ -18,14 +18,14 @@ pub struct BlockCommitterDaBlockCosts {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
-struct RawDaGasPrice {
+struct RawDaBlockCosts {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
     pub blob_cost: u32,
 }
 
-impl From<RawDaGasPrice> for DaBlockCosts {
-    fn from(raw: RawDaGasPrice) -> Self {
+impl From<RawDaBlockCosts> for DaBlockCosts {
+    fn from(raw: RawDaBlockCosts) -> Self {
         DaBlockCosts {
             l2_block_range: raw.l2_block_range,
             blob_size_bytes: raw.blob_size_bytes,
@@ -46,13 +46,13 @@ impl BlockCommitterDaBlockCosts {
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for BlockCommitterDaBlockCosts {
-    async fn get(&mut self) -> DaGasPriceSourceResult<DaBlockCosts> {
+    async fn get(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
         let response = self.client.get(self.url.clone()).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!("failed with response: {}", response.status()));
         }
         let response = response
-            .json::<RawDaGasPrice>()
+            .json::<RawDaBlockCosts>()
             .await
             .map_err(|err| anyhow!(err))?;
         Ok(response.into())

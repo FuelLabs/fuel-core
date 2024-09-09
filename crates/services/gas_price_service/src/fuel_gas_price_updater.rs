@@ -27,12 +27,12 @@ pub mod fuel_da_source_adapter;
 pub use fuel_core_storage_adapter::*;
 pub use fuel_da_source_adapter::*;
 
-pub struct FuelGasPriceUpdater<L2, Metadata, DaGasPriceGetter> {
+pub struct FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
     inner: AlgorithmUpdater,
     l2_block_source: L2,
     metadata_storage: Metadata,
     #[allow(dead_code)]
-    da_block_costs: DaGasPriceGetter,
+    da_block_costs: DaBlockCosts,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -309,12 +309,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L2, Metadata, DaGasPriceGetter> UpdateAlgorithm
-    for FuelGasPriceUpdater<L2, Metadata, DaGasPriceGetter>
+impl<L2, Metadata, DaBlockCosts> UpdateAlgorithm
+    for FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
-    DaGasPriceGetter: GetDaBlockCosts,
+    DaBlockCosts: GetDaBlockCosts,
 {
     type Algorithm = Algorithm;
 
