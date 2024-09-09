@@ -27,6 +27,7 @@ pub struct SimulationResults {
     pub pessimistic_costs: Vec<u128>,
 }
 
+#[derive(Clone, Debug)]
 pub struct Simulator {
     da_cost_per_byte: Vec<u64>,
 }
@@ -118,8 +119,6 @@ impl Simulator {
             exec_gas_prices.push(updater.new_scaled_exec_price);
             let gas_price = updater.algorithm().calculate(max_block_bytes);
             gas_prices.push(gas_price);
-            // Update DA blocks on the occasion there is one
-
             updater
                 .update_l2_block_data(
                     height,
@@ -134,6 +133,8 @@ impl Simulator {
                 .push(max_block_bytes as u128 * updater.latest_da_cost_per_byte);
             actual_reward_totals.push(updater.total_da_rewards_excess);
             projected_cost_totals.push(updater.projected_total_da_cost);
+
+            // Update DA blocks on the occasion there is one
             if let Some(da_blocks) = &da_block {
                 let mut total_cost = updater.latest_known_total_da_cost_excess;
                 for block in da_blocks {
@@ -142,14 +143,6 @@ impl Simulator {
                 }
                 updater.update_da_record_data(&da_blocks).unwrap();
             }
-            println!("height: {}, latest_known_cost: {}, predicted_cost: {}, reward: {}, last_profit: {}, DA block: {}",
-                prettify_number(height),
-                prettify_number(updater.latest_known_total_da_cost_excess),
-                prettify_number(updater.projected_total_da_cost),
-                prettify_number(updater.total_da_rewards_excess),
-                prettify_number(updater.last_profit),
-                da_block.is_some()
-            );
         }
         let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) =
             fullness_and_bytes.iter().cloned().unzip();
