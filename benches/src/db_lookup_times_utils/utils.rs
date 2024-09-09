@@ -1,9 +1,6 @@
-use crate::{
-    db_lookup_times_utils::full_block_table::{
-        BenchDatabase,
-        BenchDbColumn,
-    },
-    utils::ShallowTempDir,
+use crate::db_lookup_times_utils::full_block_table::{
+    BenchDatabase,
+    BenchDbColumn,
 };
 use anyhow::anyhow;
 use fuel_core::{
@@ -20,9 +17,7 @@ use fuel_core_types::{
         CompressedBlock,
     },
     fuel_tx::Transaction,
-    fuel_types::{
-        BlockHeight,
-    },
+    fuel_types::BlockHeight,
 };
 use itertools::Itertools;
 use rand::{
@@ -39,10 +34,6 @@ pub fn get_random_block_height(
     block_count: BlockHeight,
 ) -> BlockHeight {
     BlockHeight::from(rng.gen_range(0..block_count.into()))
-}
-
-pub fn get_db_path() -> ShallowTempDir {
-    ShallowTempDir::new()
 }
 
 pub fn open_rocks_db<Description: DatabaseDescription>(

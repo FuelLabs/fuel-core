@@ -14,19 +14,19 @@ mod tests {
     };
     use fuel_core::state::rocks_db::RocksDb;
 
-    use crate::db_lookup_times_utils::{
-        seed::{
+    use crate::{
+        db_lookup_times_utils::seed::{
             insert_compressed_block,
             insert_full_block,
         },
-        utils::get_db_path,
+        utils::ShallowTempDir,
     };
 
     const TEST_HEIGHT: u32 = 1;
     const TEST_TX_COUNT: u32 = 10;
 
     fn setup_test_db() -> RocksDb<BenchDatabase> {
-        let temp_dir = get_db_path();
+        let temp_dir = ShallowTempDir::new();
         RocksDb::default_open(temp_dir.path(), None).unwrap()
     }
 
