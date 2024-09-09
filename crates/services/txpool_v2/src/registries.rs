@@ -120,7 +120,7 @@ impl Registries {
     pub fn check_and_gather_parent_txs(
         &self,
         tx: &PoolTransaction,
-        collisions: Collisions,
+        collisions: &Collisions,
         db: &impl TxPoolDb,
         utxo_validation: bool,
     ) -> Result<Parents, Error> {

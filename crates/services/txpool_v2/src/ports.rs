@@ -11,6 +11,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::Nonce,
+    tai64::Tai64,
 };
 
 pub trait TxPoolDb: Send + Sync {
@@ -21,6 +22,10 @@ pub trait TxPoolDb: Send + Sync {
     fn blob_exist(&self, blob_id: &BlobId) -> StorageResult<bool>;
 
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
+}
+
+pub trait GetTime: Send + Sync {
+    fn now(&self) -> Tai64;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

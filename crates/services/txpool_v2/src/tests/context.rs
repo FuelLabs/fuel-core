@@ -141,10 +141,10 @@ impl PoolContext {
         }
     }
 
-    pub(crate) fn build(self) -> Pool {
+    pub(crate) fn build(self) -> Pool<MockDBProvider> {
         Pool::new(
+            MockDBProvider(self.mock_db),
             self.config.unwrap_or_default(),
-            // MockDBProvider(self.mock_db),
         )
     }
 

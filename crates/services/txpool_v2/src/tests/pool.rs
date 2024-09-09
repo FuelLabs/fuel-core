@@ -142,7 +142,7 @@ async fn insert_simple_tx_succeeds() {
 
     let mut txpool = context.build();
 
-    for result in txpool.insert(vec![check_tx_to_pool(tx)]) {
+    for result in txpool.insert(vec![check_tx_to_pool(tx)]).unwrap() {
         result.expect("Tx should be Ok, got Err");
     }
 }
