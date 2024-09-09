@@ -186,7 +186,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 
     async fn request_tx_ids(&self, _peer_id: PeerId) -> Vec<TxId> {
-        Ok(vec![])
+        vec![]
     }
 
     async fn request_txs(
@@ -194,7 +194,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         _peer_id: PeerId,
         _tx_ids: Vec<TxId>,
     ) -> Vec<Option<Transaction>> {
-        Ok(vec![])
+        vec![]
     }
 }
 
