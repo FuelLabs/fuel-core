@@ -121,7 +121,7 @@ pub trait L2BlockSource: Send + Sync {
 pub struct DaBlockCosts {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
-    pub blob_cost_wei: u32,
+    pub blob_cost_wei: u128,
 }
 
 pub trait GetDaBlockCosts: Send + Sync + Default + Clone {

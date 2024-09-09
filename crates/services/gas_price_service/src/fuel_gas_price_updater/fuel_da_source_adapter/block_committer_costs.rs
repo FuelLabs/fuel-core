@@ -21,7 +21,7 @@ pub struct BlockCommitterDaBlockCosts {
 struct RawDaBlockCosts {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
-    pub blob_cost: u32,
+    pub blob_cost: u128,
 }
 
 impl From<RawDaBlockCosts> for DaBlockCosts {
