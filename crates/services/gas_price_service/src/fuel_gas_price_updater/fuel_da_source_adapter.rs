@@ -29,7 +29,7 @@ impl GetDaBlockCosts for DaBlockCostsProvider {
             ))
         })?;
 
-        let da_block_costs = da_block_costs_guard.clone();
+        let da_block_costs = da_block_costs_guard.take();
 
         // now mark it as consumed because we don't want to serve the same data
         // multiple times
