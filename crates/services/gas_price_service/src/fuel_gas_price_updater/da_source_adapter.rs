@@ -45,16 +45,12 @@ mod tests {
     use crate::fuel_gas_price_updater::da_source_adapter::{
         dummy_costs::DummyDaBlockCosts,
         service::{
-            DaBlockCostsService,
+            new_service,
             DaBlockCostsSource,
             Result as DaBlockCostsResult,
         },
     };
-    use fuel_core_services::{
-        RunnableService,
-        Service,
-        ServiceRunner,
-    };
+    use fuel_core_services::Service;
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -71,11 +67,8 @@ mod tests {
     #[tokio::test]
     async fn run__when_da_block_cost_source_gives_value_shared_value_is_updated() {
         // given
-        let service =
-            DaBlockCostsService::new(DummyDaBlockCosts, Some(Duration::from_millis(1)));
-
-        let mut shared_state = service.shared_data();
-        let service = ServiceRunner::new(service);
+        let service = new_service(DummyDaBlockCosts, Some(Duration::from_millis(1)));
+        let mut shared_state = service.shared.clone();
 
         // when
         service.start_and_await().await.unwrap();
@@ -90,10 +83,8 @@ mod tests {
     #[tokio::test]
     async fn run__when_da_block_cost_source_gives_value_shared_value_is_marked_stale() {
         // given
-        let service =
-            DaBlockCostsService::new(DummyDaBlockCosts, Some(Duration::from_millis(1)));
-        let mut shared_state = service.shared_data();
-        let service = ServiceRunner::new(service);
+        let service = new_service(DummyDaBlockCosts, Some(Duration::from_millis(1)));
+        let mut shared_state = service.shared.clone();
 
         // when
         service.start_and_await().await.unwrap();
@@ -109,10 +100,8 @@ mod tests {
     #[tokio::test]
     async fn run__when_da_block_cost_source_errors_shared_value_is_not_updated() {
         // given
-        let service =
-            DaBlockCostsService::new(ErroringSource, Some(Duration::from_millis(1)));
-        let mut shared_state = service.shared_data();
-        let service = ServiceRunner::new(service);
+        let service = new_service(ErroringSource, Some(Duration::from_millis(1)));
+        let mut shared_state = service.shared.clone();
 
         // when
         service.start_and_await().await.unwrap();

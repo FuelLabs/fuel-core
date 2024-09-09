@@ -10,6 +10,7 @@ use anyhow::anyhow;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
+    ServiceRunner,
     StateWatcher,
 };
 use std::time::Duration;
@@ -117,4 +118,11 @@ where
     async fn shutdown(self) -> Result<()> {
         Ok(())
     }
+}
+
+pub fn new_service<S: DaBlockCostsSource>(
+    da_source: S,
+    poll_interval: Option<Duration>,
+) -> ServiceRunner<DaBlockCostsService<S>> {
+    ServiceRunner::new(DaBlockCostsService::new(da_source, poll_interval))
 }
