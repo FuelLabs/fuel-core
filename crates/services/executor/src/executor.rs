@@ -577,9 +577,7 @@ where
                     dbg!(&transaction.max_gas(&self.consensus_params));
                     dbg!(remaining_gas_limit);
                 }
-                if transaction.max_gas(&self.consensus_params)
-                    > remaining_gas_limit
-                {
+                if transaction.max_gas(&self.consensus_params) > remaining_gas_limit {
                     data.skipped_transactions
                         .push((tx_id, ExecutorError::GasOverflow));
                     continue;
