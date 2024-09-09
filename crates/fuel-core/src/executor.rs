@@ -1438,6 +1438,59 @@ mod tests {
     }
 
     #[test]
+    fn transaction_consuming_too_much_gas_are_skipped() {
+        // Gather the gas consumption of the transaction
+        let mut executor = create_executor(Default::default(), Default::default());
+        let block: PartialFuelBlock = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(100_000_000)
+                .add_random_fee_input()
+                .script_gas_limit(0)
+                .tip(123)
+                .finalize_as_transaction()],
+        };
+
+        // When
+        let ExecutionResult { tx_status, .. } =
+            executor.produce_and_commit(block).unwrap();
+        let tx_gas_usage = tx_status[0].result.total_gas();
+
+        // Given
+        let mut txs = vec![];
+        for i in 0..10 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(100_000_000)
+                .add_random_fee_input()
+                .script_gas_limit(0)
+                .tip(i * 100)
+                .finalize_as_transaction();
+            txs.push(tx);
+        }
+        let mut config: Config = Default::default();
+        // Each TX consumes `tx_gas_usage` gas and so set the block gas limit to execute only 9 transactions.
+        config
+            .consensus_parameters
+            .set_block_gas_limit(tx_gas_usage * 9);
+        let mut executor = create_executor(Default::default(), config);
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: txs,
+        };
+
+        // When
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor.produce_and_commit(block).unwrap();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(skipped_transactions[0].1, ExecutorError::GasOverflow);
+    }
+
+    #[test]
     fn skipped_txs_not_affect_order() {
         // `tx1` is invalid because it doesn't have inputs for max fee.
         // `tx2` is a `Create` transaction with some code inside.

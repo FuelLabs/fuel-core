@@ -290,7 +290,7 @@ impl TxMutation {
             .collect::<Result<Vec<FuelTx>, _>>()?;
         let fee = consensus_params.fee_params();
         transactions.iter_mut().try_fold::<_, _, async_graphql::Result<u64>>(0u64, |acc, tx| {
-            let gas = max_gas(tx, &consensus_params.gas_costs(), fee)?;
+            let gas = max_gas(tx, consensus_params.gas_costs(), fee)?;
             tx.precompute(&consensus_params.chain_id())?;
             let gas = gas.saturating_add(acc);
             if gas > block_gas_limit {

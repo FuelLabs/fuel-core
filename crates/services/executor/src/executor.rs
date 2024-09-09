@@ -563,7 +563,7 @@ where
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
 
-        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+        let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
         let mut regular_tx_iter = l2_tx_source
             .next(remaining_gas_limit)
@@ -572,6 +572,11 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
+                if transaction.max_gas(&self.consensus_params) > remaining_gas_limit {
+                    data.skipped_transactions
+                        .push((tx_id, ExecutorError::GasOverflow));
+                    continue;
+                }
                 match self.execute_transaction_and_commit(
                     block,
                     storage_tx,
@@ -586,12 +591,11 @@ where
                         data.skipped_transactions.push((tx_id, err));
                     }
                 }
+                remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
             }
 
-            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
             regular_tx_iter = l2_tx_source
-                .next(new_remaining_gas_limit)
+                .next(remaining_gas_limit)
                 .into_iter()
                 .peekable();
         }
