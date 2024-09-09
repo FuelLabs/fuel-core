@@ -35,6 +35,7 @@ use fuel_core_types::{
             GossipData,
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
+            PeerId,
             TransactionGossipData,
         },
         txpool::{
@@ -167,7 +168,7 @@ impl<P2P, ViewProvider, GasPriceProvider, WasmChecker, ConsensusProvider, MP> Cl
 
 pub struct Task<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
-    new_tx_gossip_subscription: BoxStream<Vec<u8>>,
+    new_tx_gossip_subscription: BoxStream<PeerId>,
     committed_block_stream: BoxStream<SharedImportResult>,
     tx_pool_shared_state: SharedState<
         P2P,
@@ -276,7 +277,7 @@ where
             new_peer_subscribed = self.new_tx_gossip_subscription.next() => {
                 if let Some(peer_id) = new_peer_subscribed {
                     // Gathering txs
-                    let peer_tx_ids = self.tx_pool_shared_state.p2p.request_tx_ids(peer_id.clone()).await.unwrap_or_default();
+                    let peer_tx_ids = self.tx_pool_shared_state.p2p.request_tx_ids(peer_id.clone()).await;
                     if peer_tx_ids.is_empty() {
                         return Ok(true);
                     }
@@ -284,7 +285,7 @@ where
                     if tx_ids_to_ask.is_empty() {
                         return Ok(true);
                     }
-                    let txs: Vec<Arc<Transaction>> = self.tx_pool_shared_state.p2p.request_txs(peer_id, tx_ids_to_ask).await.unwrap_or_default().into_iter().flatten().map(Arc::new).collect();
+                    let txs: Vec<Arc<Transaction>> = self.tx_pool_shared_state.p2p.request_txs(peer_id, tx_ids_to_ask).await.into_iter().flatten().map(Arc::new).collect();
                     if txs.is_empty() {
                         return Ok(true);
                     }

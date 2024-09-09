@@ -43,7 +43,7 @@ async fn test_new_subscription_p2p() {
         // Return a boxstream that yield one element
         Box::pin(fuel_core_services::stream::unfold(0, |state| async move {
             if state == 0 {
-                Some((vec![1, 2], state + 1))
+                Some((PeerId::from(vec![1, 2]), state + 1))
             } else {
                 None
             }
@@ -52,17 +52,17 @@ async fn test_new_subscription_p2p() {
     let tx1_clone = tx1.clone();
     let tx2_clone = tx2.clone();
     p2p.expect_request_tx_ids().return_once(move |peer_id| {
-        assert_eq!(peer_id, vec![1, 2]);
-        Ok(vec![
+        assert_eq!(peer_id, PeerId::from(vec![1, 2]));
+        vec![
             tx1_clone.id(&ChainId::default()),
             tx2_clone.id(&ChainId::default()),
-        ])
+        ]
     });
     let tx1_clone = tx1.clone();
     let tx2_clone = tx2.clone();
     p2p.expect_request_txs()
         .return_once(move |peer_id, tx_ids| {
-            assert_eq!(peer_id, vec![1, 2]);
+            assert_eq!(peer_id, PeerId::from(vec![1, 2]));
             assert_eq!(
                 tx_ids,
                 vec![
@@ -71,7 +71,7 @@ async fn test_new_subscription_p2p() {
                 ]
             );
             notifier.notify_one();
-            Ok(vec![Some(tx1_clone), Some(tx2_clone)])
+            vec![Some(tx1_clone), Some(tx2_clone)]
         });
     ctx_builder.with_p2p(p2p);
     let ctx = ctx_builder.build();
@@ -117,7 +117,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
         Box::pin(fuel_core_services::stream::unfold(0, |state| async move {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             if state == 0 {
-                Some((vec![1, 2], state + 1))
+                Some((PeerId::from(vec![1, 2]), state + 1))
             } else {
                 None
             }
@@ -126,20 +126,20 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     let tx1_clone = tx1.clone();
     let tx2_clone = tx2.clone();
     p2p.expect_request_tx_ids().returning(move |peer_id| {
-        assert_eq!(peer_id, vec![1, 2]);
-        Ok(vec![
+        assert_eq!(peer_id, PeerId::from(vec![1, 2]));
+        vec![
             tx1_clone.id(&ChainId::default()),
             tx2_clone.id(&ChainId::default()),
-        ])
+        ]
     });
     let tx1_clone = tx1.clone();
     let tx2_clone = tx2.clone();
     p2p.expect_request_txs()
         .return_once(move |peer_id, tx_ids| {
-            assert_eq!(peer_id, vec![1, 2]);
+            assert_eq!(peer_id, PeerId::from(vec![1, 2]));
             assert_eq!(tx_ids, vec![tx2_clone.id(&ChainId::default())]);
             notifier.notify_one();
-            Ok(vec![Some(tx1_clone), Some(tx2_clone)])
+            vec![Some(tx1_clone), Some(tx2_clone)]
         });
     ctx_builder.with_p2p(p2p);
     let ctx = ctx_builder.build();

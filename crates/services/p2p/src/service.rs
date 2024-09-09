@@ -326,7 +326,7 @@ pub trait Broadcast: Send {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
 
-    fn new_tx_subscription_broadcast(&self, peer_id: Vec<u8>) -> anyhow::Result<()>;
+    fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
 }
 
 impl Broadcast for SharedState {
@@ -352,7 +352,7 @@ impl Broadcast for SharedState {
         Ok(())
     }
 
-    fn new_tx_subscription_broadcast(&self, peer_id: Vec<u8>) -> anyhow::Result<()> {
+    fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()> {
         self.new_tx_subscription_broadcast.send(peer_id)?;
         Ok(())
     }
@@ -850,8 +850,7 @@ where
                         self.process_request(request_message, request_id)?
                     },
                     Some(FuelP2PEvent::NewSubscription { peer_id, .. }) => {
-                        let peer_id: Vec<u8> = peer_id.into();
-                        let _ = self.broadcast.new_tx_subscription_broadcast(peer_id);
+                        let _ = self.broadcast.new_tx_subscription_broadcast(FuelPeerId::from(peer_id.to_bytes()));
                     },
                     _ => (),
                 }
@@ -888,7 +887,7 @@ where
 #[derive(Clone)]
 pub struct SharedState {
     /// Sender of p2p with peer gossip subscription (vec<u8> represent the peer_id)
-    new_tx_subscription_broadcast: broadcast::Sender<Vec<u8>>,
+    new_tx_subscription_broadcast: broadcast::Sender<FuelPeerId>,
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Sender of reserved peers connection updates.
@@ -940,11 +939,11 @@ impl SharedState {
 
     pub async fn get_transactions_from_peer(
         &self,
-        peer_id: Vec<u8>,
+        peer_id: FuelPeerId,
         range: Range<u32>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
+        let from_peer = PeerId::from_bytes(peer_id.as_ref()).expect("Valid PeerId");
 
         let request = TaskRequest::GetTransactions {
             block_height_range: range,
@@ -956,7 +955,7 @@ impl SharedState {
         let (response_from_peer, response) =
             receiver.await.map_err(|e| anyhow!("{e}"))?;
         assert_eq!(
-            peer_id,
+            peer_id.as_ref(),
             response_from_peer.to_bytes(),
             "Bug: response from non-requested peer"
         );
@@ -966,11 +965,10 @@ impl SharedState {
 
     pub async fn get_all_transactions_ids_from_peer(
         &self,
-        peer_id: Vec<u8>,
+        peer_id: FuelPeerId,
     ) -> anyhow::Result<Vec<TxId>> {
         let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
-
+        let from_peer = PeerId::from_bytes(peer_id.as_ref()).expect("Valid PeerId");
         let request = TaskRequest::TxPoolGetAllTxIds {
             from_peer,
             channel: sender,
@@ -980,7 +978,7 @@ impl SharedState {
         let (response_from_peer, response) =
             receiver.await.map_err(|e| anyhow!("{e}"))?;
         assert_eq!(
-            peer_id,
+            peer_id.as_ref(),
             response_from_peer.to_bytes(),
             "Bug: response from non-requested peer"
         );
@@ -990,12 +988,11 @@ impl SharedState {
 
     pub async fn get_full_transactions_from_peer(
         &self,
-        peer_id: Vec<u8>,
+        peer_id: FuelPeerId,
         tx_ids: Vec<TxId>,
     ) -> anyhow::Result<Vec<Option<Transaction>>> {
         let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
-
+        let from_peer = PeerId::from_bytes(peer_id.as_ref()).expect("Valid PeerId");
         let request = TaskRequest::TxPoolGetFullTransactions {
             tx_ids,
             from_peer,
@@ -1006,7 +1003,7 @@ impl SharedState {
         let (response_from_peer, response) =
             receiver.await.map_err(|e| anyhow!("{e}"))?;
         assert_eq!(
-            peer_id,
+            peer_id.as_ref(),
             response_from_peer.to_bytes(),
             "Bug: response from non-requested peer"
         );
@@ -1033,7 +1030,7 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
-    pub fn subscribe_new_tx_subscription(&self) -> broadcast::Receiver<Vec<u8>> {
+    pub fn subscribe_new_tx_subscription(&self) -> broadcast::Receiver<FuelPeerId> {
         self.new_tx_subscription_broadcast.subscribe()
     }
 
@@ -1395,7 +1392,10 @@ pub mod tests {
             todo!()
         }
 
-        fn new_tx_subscription_broadcast(&self, _peer_id: Vec<u8>) -> anyhow::Result<()> {
+        fn new_tx_subscription_broadcast(
+            &self,
+            _peer_id: FuelPeerId,
+        ) -> anyhow::Result<()> {
             todo!()
         }
     }

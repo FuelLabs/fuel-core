@@ -53,6 +53,7 @@ use fuel_core_types::{
         p2p::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
+            PeerId,
             TransactionGossipData,
         },
     },
@@ -93,7 +94,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
-    fn new_tx_subscription(&self) -> BoxStream<Vec<u8>> {
+    fn new_tx_subscription(&self) -> BoxStream<PeerId> {
         use tokio_stream::{
             wrappers::BroadcastStream,
             StreamExt,
@@ -120,38 +121,38 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
-    async fn request_tx_ids(&self, peer_id: Vec<u8>) -> anyhow::Result<Vec<TxId>> {
+    async fn request_tx_ids(&self, peer_id: PeerId) -> Vec<TxId> {
         if let Some(service) = &self.service {
             match service.get_all_transactions_ids_from_peer(peer_id).await {
-                Ok(txs) => Ok(txs),
+                Ok(txs) => txs,
                 Err(e) => {
                     tracing::error!("Error getting tx ids from peer: {:?}", e);
-                    Ok(vec![])
+                    vec![]
                 }
             }
         } else {
-            Ok(vec![])
+            vec![]
         }
     }
 
     async fn request_txs(
         &self,
-        peer_id: Vec<u8>,
+        peer_id: PeerId,
         tx_ids: Vec<TxId>,
-    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+    ) -> Vec<Option<Transaction>> {
         if let Some(service) = &self.service {
             match service
                 .get_full_transactions_from_peer(peer_id, tx_ids)
                 .await
             {
-                Ok(txs) => Ok(txs),
+                Ok(txs) => txs,
                 Err(e) => {
                     tracing::error!("Error getting tx ids from peer: {:?}", e);
-                    Ok(vec![])
+                    vec![]
                 }
             }
         } else {
-            Ok(vec![])
+            vec![]
         }
     }
 }
@@ -180,19 +181,19 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         Ok(())
     }
 
-    fn new_tx_subscription(&self) -> BoxStream<Vec<u8>> {
+    fn new_tx_subscription(&self) -> BoxStream<PeerId> {
         Box::pin(fuel_core_services::stream::pending())
     }
 
-    async fn request_tx_ids(&self, _peer_id: Vec<u8>) -> anyhow::Result<Vec<TxId>> {
+    async fn request_tx_ids(&self, _peer_id: PeerId) -> Vec<TxId> {
         Ok(vec![])
     }
 
     async fn request_txs(
         &self,
-        _peer_id: Vec<u8>,
+        _peer_id: PeerId,
         _tx_ids: Vec<TxId>,
-    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+    ) -> Vec<Option<Transaction>> {
         Ok(vec![])
     }
 }

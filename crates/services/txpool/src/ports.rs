@@ -29,6 +29,7 @@ use fuel_core_types::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             NetworkData,
+            PeerId,
         },
     },
 };
@@ -46,7 +47,7 @@ pub trait PeerToPeer: Send + Sync {
 
     /// Creates a stream that is filled with the peer_id when they subscribe to
     /// our transactions gossip.
-    fn new_tx_subscription(&self) -> BoxStream<Vec<u8>>;
+    fn new_tx_subscription(&self) -> BoxStream<PeerId>;
 
     /// Creates a stream of next transactions gossiped from the network.
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
@@ -59,14 +60,14 @@ pub trait PeerToPeer: Send + Sync {
     ) -> anyhow::Result<()>;
 
     // Asks the network to gather all tx ids of a specific peer
-    async fn request_tx_ids(&self, peer_id: Vec<u8>) -> anyhow::Result<Vec<TxId>>;
+    async fn request_tx_ids(&self, peer_id: PeerId) -> Vec<TxId>;
 
     // Asks the network to gather specific transactions from a specific peer
     async fn request_txs(
         &self,
-        peer_id: Vec<u8>,
+        peer_id: PeerId,
         tx_ids: Vec<TxId>,
-    ) -> anyhow::Result<Vec<Option<Transaction>>>;
+    ) -> Vec<Option<Transaction>>;
 }
 
 pub trait BlockImporter: Send + Sync {

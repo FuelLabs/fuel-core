@@ -142,15 +142,15 @@ mockall::mock! {
             validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()>;
 
-        fn new_tx_subscription(&self) -> BoxStream<Vec<u8>>;
+        fn new_tx_subscription(&self) -> BoxStream<PeerId>;
 
-        async fn request_tx_ids(&self, peer_id: Vec<u8>) -> anyhow::Result<Vec<TxId>>;
+        async fn request_tx_ids(&self, peer_id: PeerId) -> Vec<TxId>;
 
         async fn request_txs(
             &self,
-            peer_id: Vec<u8>,
+            peer_id: PeerId,
             tx_ids: Vec<TxId>,
-        ) -> anyhow::Result<Vec<Option<Transaction>>>;
+        ) -> Vec<Option<Transaction>>;
     }
 }
 
