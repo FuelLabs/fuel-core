@@ -4,9 +4,7 @@ use crate::fuel_gas_price_updater::{
         POLLING_INTERVAL_MS,
     },
     DaBlockCosts,
-    Error::CouldNotFetchDARecord,
 };
-use anyhow::anyhow;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -98,12 +96,7 @@ where
             }
             _ = self.poll_interval.tick() => {
                 let da_block_costs = self.source.request_da_block_cost().await?;
-                let mut da_block_costs_guard = self.block_cost_provider.state.try_lock().map_err(|err| {
-                    CouldNotFetchDARecord(anyhow!(
-                        "Failed to lock da block costs state: {:?}",
-                     err
-                     ))
-                     })?;
+                let mut da_block_costs_guard = self.block_cost_provider.state.lock().await;
 
                 *da_block_costs_guard = Some(da_block_costs);
 
