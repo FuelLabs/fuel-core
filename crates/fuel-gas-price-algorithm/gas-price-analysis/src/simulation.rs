@@ -3,13 +3,7 @@ use fuel_gas_price_algorithm::v1::{
     RecordedBlock,
 };
 use std::{
-    iter,
-    iter::{
-        Enumerate,
-        Zip,
-    },
     num::NonZeroU64,
-    slice::Iter,
 };
 
 use super::*;
