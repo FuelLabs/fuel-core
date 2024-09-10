@@ -43,7 +43,7 @@ pub struct BasicCollisionManager<S: Storage> {
     messages_spenders: HashMap<Nonce, S::StorageIndex>,
     /// Coins -> Transaction that currently use the UTXO
     coins_spenders: HashMap<UtxoId, S::StorageIndex>,
-    /// Contract -> Transaction that currenty create the contract
+    /// Contract -> Transaction that currently create the contract
     contracts_creators: HashMap<ContractId, S::StorageIndex>,
     /// Blob -> Transaction that currently create the blob
     blobs_users: HashMap<BlobId, S::StorageIndex>,

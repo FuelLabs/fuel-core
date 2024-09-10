@@ -11,14 +11,14 @@ repository = { workspace = true }
 description = "Transaction pool v2"
 
 [dependencies]
-num-rational = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
-petgraph = "0.6.5"
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
+num-rational = { workspace = true }
+petgraph = "0.6.5"
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }

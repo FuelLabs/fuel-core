@@ -3,9 +3,9 @@ use fuel_core_types::services::txpool::PoolTransaction;
 use tracing::instrument;
 
 #[cfg(test)]
-use std::collections::HashMap;
-#[cfg(test)]
 use fuel_core_types::fuel_tx::TxId;
+#[cfg(test)]
+use std::collections::HashMap;
 
 use crate::{
     collision_manager::CollisionManager,

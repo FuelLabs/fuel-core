@@ -1422,11 +1422,11 @@ async fn insert_single__blob_tx_fails_if_blob_already_inserted_and_lower_tip() {
     let same_blob_tx = check_unwrap_tx(same_blob_tx, &txpool.config).await;
 
     // When
-    let resuls = txpool
+    let results = txpool
         .insert(vec![check_tx_to_pool(same_blob_tx.clone())])
         .unwrap();
-    assert_eq!(resuls.len(), 1);
-    let err = resuls[0].as_ref().expect_err("Tx should be Err, got Ok");
+    assert_eq!(results.len(), 1);
+    let err = results[0].as_ref().expect_err("Tx should be Err, got Ok");
 
     // Then
     assert!(matches!(err, Error::Collided(_)));
