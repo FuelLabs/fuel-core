@@ -105,9 +105,8 @@ impl AlgorithmV1 {
             .saturating_mul(upcast_percent)
             .saturating_div(100)
             .into();
-        let sign = pd_change.signum();
-        let signless_da_change = min(max_change, pd_change.abs());
-        sign.saturating_mul(signless_da_change)
+        let clamped_change = pd_change.abs().min(max_change);
+        pd_change.signum().saturating_mul(clamped_change)
     }
 
     fn assemble_price(&self, change: i128) -> u64 {
