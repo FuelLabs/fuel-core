@@ -75,7 +75,7 @@ impl Simulator {
             gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
             l2_block_height: 0,
             // Choose the ideal fullness percentage for the L2 block
-            l2_block_fullness_threshold_percent: 50,
+            l2_block_fullness_threshold_percent: 50u8.into(),
             // Increase to make the exec price change faster
             exec_gas_price_change_percent: 2,
             // Increase to make the da price change faster

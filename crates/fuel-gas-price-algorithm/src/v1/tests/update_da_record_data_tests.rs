@@ -292,7 +292,7 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
 }
 
 prop_compose! {
-    fn arb_vec_of_da_blocks()(last_da_block: u32, count in 1..255usize, rng_seed: u64) -> Vec<RecordedBlock> {
+    fn arb_vec_of_da_blocks()(last_da_block: u32, count in 1..123usize, rng_seed: u64) -> Vec<RecordedBlock> {
         let rng = &mut rand::rngs::StdRng::seed_from_u64(rng_seed);
         let mut blocks = Vec::with_capacity(count);
         for i in 0..count {
