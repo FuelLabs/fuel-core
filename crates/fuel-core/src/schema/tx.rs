@@ -37,6 +37,7 @@ use async_graphql::{
     Object,
     Subscription,
 };
+use fuel_core_executor::ports::TransactionExt;
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
@@ -49,9 +50,6 @@ use fuel_core_txpool::{
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
-        Chargeable,
-        FeeParameters,
-        GasCosts,
         Transaction as FuelTx,
         UniqueIdentifier,
     },
@@ -288,9 +286,8 @@ impl TxMutation {
             .iter()
             .map(|tx| FuelTx::from_bytes(&tx.0))
             .collect::<Result<Vec<FuelTx>, _>>()?;
-        let fee = consensus_params.fee_params();
         transactions.iter_mut().try_fold::<_, _, async_graphql::Result<u64>>(0u64, |acc, tx| {
-            let gas = max_gas(tx, consensus_params.gas_costs(), fee)?;
+            let gas = tx.max_gas(&consensus_params)?;
             tx.precompute(&consensus_params.chain_id())?;
             let gas = gas.saturating_add(acc);
             if gas > block_gas_limit {
@@ -412,24 +409,6 @@ impl TxStatusSubscription {
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
         submit_and_await_status(ctx, tx).await
-    }
-}
-
-fn max_gas(
-    tx: &FuelTx,
-    gas_costs: &GasCosts,
-    fee: &FeeParameters,
-) -> async_graphql::Result<u64> {
-    match tx {
-        FuelTx::Script(tx) => Ok(tx.max_gas(gas_costs, fee)),
-        FuelTx::Create(tx) => Ok(tx.max_gas(gas_costs, fee)),
-        FuelTx::Mint(_) => Err(anyhow::anyhow!(
-            "Mint transactions can't be executed in a dry-run"
-        )
-        .into()),
-        FuelTx::Upgrade(tx) => Ok(tx.max_gas(gas_costs, fee)),
-        FuelTx::Upload(tx) => Ok(tx.max_gas(gas_costs, fee)),
-        FuelTx::Blob(tx) => Ok(tx.max_gas(gas_costs, fee)),
     }
 }
 

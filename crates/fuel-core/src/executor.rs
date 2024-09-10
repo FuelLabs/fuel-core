@@ -2936,7 +2936,8 @@ mod tests {
         let expensive_consensus_parameters_version = 0;
         let mut expensive_consensus_parameters = ConsensusParameters::default();
         expensive_consensus_parameters.set_gas_costs(gas_costs.into());
-        expensive_consensus_parameters.set_block_gas_limit(10_000_000_000);
+        // The block gas limit should cover `vm_initialization` cost
+        expensive_consensus_parameters.set_block_gas_limit(u64::MAX);
         let config = Config {
             consensus_parameters: expensive_consensus_parameters.clone(),
             ..Default::default()

@@ -153,6 +153,7 @@ use std::borrow::Cow;
 #[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
 
+use crate::ports::TransactionExt;
 #[cfg(feature = "alloc")]
 use alloc::{
     format,
@@ -572,7 +573,7 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
-                if transaction.max_gas(&self.consensus_params) > remaining_gas_limit {
+                if transaction.max_gas(&self.consensus_params)? > remaining_gas_limit {
                     data.skipped_transactions
                         .push((tx_id, ExecutorError::GasOverflow));
                     continue;
@@ -948,18 +949,9 @@ where
         consensus_params: &ConsensusParameters,
     ) -> Result<(), ForcedTransactionFailure> {
         let claimed_max_gas = relayed_tx.max_gas();
-        let gas_costs = consensus_params.gas_costs();
-        let fee_params = consensus_params.fee_params();
-        let actual_max_gas = match tx {
-            Transaction::Script(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Create(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Mint(_) => {
-                return Err(ForcedTransactionFailure::InvalidTransactionType)
-            }
-            Transaction::Upgrade(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Upload(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Blob(tx) => tx.max_gas(gas_costs, fee_params),
-        };
+        let actual_max_gas = tx
+            .max_gas(consensus_params)
+            .map_err(|_| ForcedTransactionFailure::InvalidTransactionType)?;
         if actual_max_gas > claimed_max_gas {
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
                 claimed_max_gas,
