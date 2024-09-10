@@ -58,11 +58,6 @@ pub trait Storage {
         utxo_validation: bool,
     ) -> Result<Vec<Self::StorageIndex>, Error>;
 
-    fn remove_transaction_and_dependents(
-        &mut self,
-        index: Self::StorageIndex,
-    ) -> Result<(), Error>;
-
     fn remove_transaction(
         &mut self,
         index: Self::StorageIndex,

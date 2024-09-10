@@ -1,6 +1,7 @@
 use fuel_core_types::{
     fuel_tx::{
         Address,
+        BlobId,
         ContractId,
         TxId,
         UtxoId,
@@ -70,6 +71,8 @@ pub enum Error {
     NotInsertedInputMessageUnknown(Nonce),
     #[display(fmt = "Transaction is not inserted. UTXO input does not exist: {_0:#x}")]
     NotInsertedInputContractDoesNotExist(ContractId),
+    #[display(fmt = "Transaction is not inserted. BlobId is already taken {_0:#x}")]
+    NotInsertedBlobIdAlreadyTaken(BlobId),
     #[display(
         fmt = "Transaction is not inserted. Pool limit is hit, try to increase gas_price"
     )]

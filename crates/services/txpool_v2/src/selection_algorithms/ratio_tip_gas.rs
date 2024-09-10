@@ -25,7 +25,7 @@ use super::{
 
 pub type RatioTipGas = Ratio<u64>;
 
-#[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Key {
     ratio: RatioTipGas,
     creation_instant: Instant,
@@ -45,6 +45,12 @@ impl Ord for Key {
         } else {
             cmp
         }
+    }
+}
+
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 

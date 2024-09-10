@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use fuel_core_types::{
     fuel_tx::{
+        field::BlobId as _,
         input::{
             coin::{
                 CoinPredicate,
@@ -27,6 +28,7 @@ use num_rational::Ratio;
 
 use crate::{
     error::Error,
+    ports::TxPoolDb,
     storage::Storage,
 };
 
@@ -44,7 +46,7 @@ pub struct BasicCollisionManager<S: Storage> {
     /// Contract -> Transaction that currenty create the contract
     contracts_creators: HashMap<ContractId, S::StorageIndex>,
     /// Blob -> Transaction that currently create the blob
-    blobs_creators: HashMap<BlobId, S::StorageIndex>,
+    blobs_users: HashMap<BlobId, S::StorageIndex>,
 }
 
 impl<S: Storage> BasicCollisionManager<S> {
@@ -53,7 +55,7 @@ impl<S: Storage> BasicCollisionManager<S> {
             messages_spenders: HashMap::new(),
             coins_spenders: HashMap::new(),
             contracts_creators: HashMap::new(),
-            blobs_creators: HashMap::new(),
+            blobs_users: HashMap::new(),
         }
     }
 }
@@ -68,8 +70,23 @@ impl<S: Storage> BasicCollisionManager<S> {
     fn gather_colliding_txs(
         &self,
         tx: &PoolTransaction,
+        db: &impl TxPoolDb,
     ) -> Result<Collisions<S::StorageIndex>, Error> {
         let mut collisions = Collisions::new();
+        if let PoolTransaction::Blob(checked_tx, _) = tx {
+            let blob_id = checked_tx.transaction().blob_id();
+            if db
+                .blob_exist(blob_id)
+                .map_err(|e| Error::Database(format!("{:?}", e)))?
+            {
+                return Err(Error::NotInsertedBlobIdAlreadyTaken(*blob_id))
+            }
+
+            if let Some(state) = self.blobs_users.get(blob_id) {
+                collisions.reasons.insert(CollisionReason::Blob(*blob_id));
+                collisions.colliding_txs.push(*state);
+            }
+        }
         for input in tx.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
@@ -139,9 +156,10 @@ impl<S: Storage> CollisionManager<S> for BasicCollisionManager<S> {
         &self,
         transaction: &PoolTransaction,
         storage: &S,
+        db: &impl TxPoolDb,
     ) -> Result<Collisions<S::StorageIndex>, Error> {
-        let collisions = self.gather_colliding_txs(transaction)?;
-        if collisions.reasons.is_empty() {
+        let collisions = self.gather_colliding_txs(transaction, db)?;
+        if collisions.colliding_txs.is_empty() {
             Ok(Collisions::new())
         } else if self.is_better_than_collisions(transaction, &collisions, storage) {
             Ok(collisions)
@@ -158,6 +176,10 @@ impl<S: Storage> CollisionManager<S> for BasicCollisionManager<S> {
         transaction: &PoolTransaction,
         transaction_storage_id: S::StorageIndex,
     ) -> Result<(), Error> {
+        if let PoolTransaction::Blob(checked_tx, _) = transaction {
+            let blob_id = checked_tx.transaction().blob_id();
+            self.blobs_users.insert(*blob_id, transaction_storage_id);
+        }
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })

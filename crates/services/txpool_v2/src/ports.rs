@@ -57,7 +57,7 @@ pub enum WasmValidityError {
     /// The supposedly-uploaded wasm was not found.
     NotFound,
     /// The uploaded bytecode was found but it's is not valid wasm.
-    NotValid,
+    Validity,
 }
 
 pub trait WasmChecker {

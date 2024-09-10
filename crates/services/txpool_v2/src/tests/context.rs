@@ -342,7 +342,7 @@ pub async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transa
     check_unwrap_tx_with_gas_price(tx, config, gas_price).await
 }
 
-async fn check_unwrap_tx_with_gas_price(
+pub async fn check_unwrap_tx_with_gas_price(
     tx: Transaction,
     config: &Config,
     gas_price: GasPrice,
@@ -360,7 +360,7 @@ async fn check_unwrap_tx_with_gas_price(
     .expect("Transaction should be checked")
 }
 
-async fn check_tx(
+pub async fn check_tx(
     tx: Transaction,
     config: &Config,
 ) -> Result<Checked<Transaction>, Error> {
@@ -368,7 +368,7 @@ async fn check_tx(
     check_tx_with_gas_price(tx, config, gas_price).await
 }
 
-async fn check_tx_with_gas_price(
+pub async fn check_tx_with_gas_price(
     tx: Transaction,
     config: &Config,
     gas_price: GasPrice,

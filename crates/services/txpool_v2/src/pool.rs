@@ -2,6 +2,11 @@ use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::services::txpool::PoolTransaction;
 use tracing::instrument;
 
+#[cfg(test)]
+use std::collections::HashMap;
+#[cfg(test)]
+use fuel_core_types::fuel_tx::TxId;
+
 use crate::{
     collision_manager::CollisionManager,
     config::Config,
@@ -14,15 +19,17 @@ use crate::{
     storage::Storage,
 };
 
-pub struct Pool<DB, S, CM, SA> {
+pub struct Pool<DB, S: Storage, CM, SA> {
+    pub config: Config,
     storage: S,
     collision_manager: CM,
     selection_algorithm: SA,
     db: DB,
-    pub config: Config,
+    #[cfg(test)]
+    tx_id_to_storage_id: HashMap<TxId, S::StorageIndex>,
 }
 
-impl<DB, S, CM, SA> Pool<DB, S, CM, SA> {
+impl<DB, S: Storage, CM, SA> Pool<DB, S, CM, SA> {
     pub fn new(
         database: DB,
         storage: S,
@@ -36,6 +43,8 @@ impl<DB, S, CM, SA> Pool<DB, S, CM, SA> {
             selection_algorithm,
             db: database,
             config,
+            #[cfg(test)]
+            tx_id_to_storage_id: HashMap::new(),
         }
     }
 }
@@ -60,13 +69,17 @@ where
         Ok(transactions
             .into_iter()
             .map(|tx| {
+                #[cfg(test)]
+                let tx_id = tx.id();
                 if self.storage.count() >= self.config.max_txs {
                     return Err(Error::NotInsertedLimitHit);
                 }
                 self.config.black_list.check_blacklisting(&tx)?;
-                let collisions = self
-                    .collision_manager
-                    .collect_tx_collisions(&tx, &self.storage)?;
+                let collisions = self.collision_manager.collect_tx_collisions(
+                    &tx,
+                    &self.storage,
+                    &db_view,
+                )?;
                 let dependencies = self.storage.collect_dependencies_transactions(
                     &tx,
                     collisions.reasons,
@@ -79,6 +92,10 @@ where
                     dependencies,
                     collisions.colliding_txs,
                 )?;
+                #[cfg(test)]
+                {
+                    self.tx_id_to_storage_id.insert(tx_id, storage_id);
+                }
                 // No dependencies directly in the graph and the sorted transactions
                 if !has_dependencies {
                     self.selection_algorithm
@@ -90,6 +107,10 @@ where
                     .map(|tx| {
                         self.collision_manager.on_removed_transaction(&tx)?;
                         self.selection_algorithm.on_removed_transaction(&tx)?;
+                        #[cfg(test)]
+                        {
+                            self.tx_id_to_storage_id.remove(&tx.id());
+                        }
                         Ok(tx)
                     })
                     .collect();
@@ -101,6 +122,23 @@ where
     }
 
     // TODO: Use block space also
+    #[cfg(test)]
+    pub fn extract_transactions_for_block(
+        &mut self,
+    ) -> Result<Vec<PoolTransaction>, Error> {
+        let txs = self.selection_algorithm.gather_best_txs(
+            Constraints {
+                max_gas: self.config.max_block_gas,
+            },
+            &mut self.storage,
+        )?;
+        for tx in &txs {
+            self.tx_id_to_storage_id.remove(&tx.id());
+        }
+        Ok(txs)
+    }
+
+    #[cfg(not(test))]
     pub fn extract_transactions_for_block(
         &mut self,
     ) -> Result<Vec<PoolTransaction>, Error> {
@@ -114,5 +152,13 @@ where
 
     pub fn prune(&mut self) -> Result<Vec<PoolTransaction>, Error> {
         Ok(vec![])
+    }
+
+    #[cfg(test)]
+    pub fn find_one(&self, tx_id: &TxId) -> Option<&PoolTransaction> {
+        self.storage
+            .get(self.tx_id_to_storage_id.get(tx_id)?)
+            .map(|data| &data.transaction)
+            .ok()
     }
 }

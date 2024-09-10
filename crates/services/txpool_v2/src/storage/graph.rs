@@ -51,7 +51,7 @@ pub struct GraphStorage {
     graph: StableDiGraph<StorageData, ()>,
     /// Coins -> Transaction that crurrently create the UTXO
     coins_creators: HashMap<UtxoId, NodeIndex>,
-    /// Contract -> Transaction that currenty create the contract
+    /// Contract -> Transaction that currently create the contract
     contracts_creators: HashMap<ContractId, NodeIndex>,
 }
 
@@ -95,7 +95,9 @@ impl GraphStorage {
         let (gas_removed, tip_removed, removed_transactions) = to_remove.iter().fold(
             (0, 0, vec![]),
             |(gas, tip, mut removed_transactions), node_id| {
-                let node = self.graph.remove_node(*node_id).unwrap();
+                let Some(node) = self.graph.remove_node(*node_id) else {
+                    return (gas, tip, removed_transactions);
+                };
                 removed_transactions.push(node.transaction);
                 (
                     gas + node.cumulative_gas,
@@ -377,28 +379,18 @@ impl Storage for GraphStorage {
                 Input::Contract(Contract { contract_id, .. }) => {
                     if let Some(node_id) = self.contracts_creators.get(contract_id) {
                         pool_parents.push(*node_id);
-                    } else {
-                        if !db
-                            .contract_exist(contract_id)
-                            .map_err(|e| Error::Database(format!("{:?}", e)))?
-                        {
-                            return Err(Error::NotInsertedInputContractDoesNotExist(
-                                *contract_id,
-                            ));
-                        }
+                    } else if !db
+                        .contract_exist(contract_id)
+                        .map_err(|e| Error::Database(format!("{:?}", e)))?
+                    {
+                        return Err(Error::NotInsertedInputContractDoesNotExist(
+                            *contract_id,
+                        ));
                     }
                 }
             }
         }
         Ok(pool_parents)
-    }
-
-    fn remove_transaction_and_dependents(
-        &mut self,
-        index: Self::StorageIndex,
-    ) -> Result<(), Error> {
-        self.remove_node_and_dependent_sub_graph(index);
-        Ok(())
     }
 
     fn remove_transaction(

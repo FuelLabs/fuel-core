@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use fuel_core_types::{
     fuel_tx::{
+        BlobId,
         ContractId,
         UtxoId,
     },
@@ -11,6 +12,7 @@ use fuel_core_types::{
 
 use crate::{
     error::Error,
+    ports::TxPoolDb,
     storage::Storage,
 };
 
@@ -19,6 +21,7 @@ pub mod basic;
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum CollisionReason {
     Coin(UtxoId),
+    Blob(BlobId),
     Message(Nonce),
     ContractCreation(ContractId),
 }
@@ -44,6 +47,7 @@ pub trait CollisionManager<S: Storage> {
         &self,
         transaction: &PoolTransaction,
         storage: &S,
+        db: &impl TxPoolDb,
     ) -> Result<Collisions<S::StorageIndex>, Error>;
 
     fn on_stored_transaction(
