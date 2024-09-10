@@ -1,7 +1,54 @@
-use fuel_core_types::fuel_tx::Output;
+use std::collections::HashSet;
 
-use crate::error::Error;
+use fuel_core_types::{
+    fuel_tx::{
+        ContractId,
+        UtxoId,
+    },
+    fuel_types::Nonce,
+    services::txpool::PoolTransaction,
+};
 
-pub trait CollisionManager {
-    fn add_outputs_transaction(&mut self, transaction: &Vec<Output>, ) -> Result<(), Error>;
+use crate::{
+    error::Error,
+    storage::Storage,
+};
+
+pub mod basic;
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum CollisionReason {
+    Coin(UtxoId),
+    Message(Nonce),
+    ContractCreation(ContractId),
+}
+
+#[derive(Default)]
+pub struct Collisions<Idx> {
+    pub reasons: HashSet<CollisionReason>,
+    pub colliding_txs: Vec<Idx>,
+}
+
+impl<Idx> Collisions<Idx> {
+    pub fn new() -> Self {
+        Self {
+            reasons: HashSet::default(),
+            colliding_txs: vec![],
+        }
+    }
+}
+
+pub trait CollisionManager<S: Storage> {
+    // Error in case of our transaction is less worthy than the collided one
+    fn collect_tx_collisions(
+        &self,
+        transaction: &PoolTransaction,
+        storage: &S,
+    ) -> Result<Collisions<S::StorageIndex>, Error>;
+
+    fn on_stored_transaction(
+        &mut self,
+        transaction: &PoolTransaction,
+        transaction_id: S::StorageIndex,
+    ) -> Result<(), Error>;
 }

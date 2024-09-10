@@ -1,11 +1,10 @@
-mod config;
 mod collision_manager;
+mod config;
 mod error;
 mod pool;
 mod ports;
-mod registries;
-mod service;
 mod selection_algorithms;
+mod service;
 mod storage;
 
 #[cfg(test)]

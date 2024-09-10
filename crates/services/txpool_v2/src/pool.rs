@@ -1,106 +1,52 @@
-use std::{
-    collections::{
-        BTreeMap,
-        HashMap,
-        HashSet,
-        VecDeque,
-    },
-    time::{
-        Duration,
-        Instant,
-    },
-};
-
-use fuel_core_storage::{
-    structured_storage::transactions,
-    transactional::AtomicView,
-};
-use fuel_core_types::{
-    fuel_tx::{
-        ContractId,
-        TxId,
-        UtxoId,
-    },
-    fuel_types::Nonce,
-    services::txpool::PoolTransaction,
-};
-use num_rational::Ratio;
-use petgraph::{
-    graph::NodeIndex,
-    prelude::StableGraph,
-    visit::EdgeRef,
-    Direction,
-};
+use fuel_core_storage::transactional::AtomicView;
+use fuel_core_types::services::txpool::PoolTransaction;
 use tracing::instrument;
 
 use crate::{
+    collision_manager::CollisionManager,
     config::Config,
     error::Error,
     ports::TxPoolDb,
-    registries::Registries,
+    selection_algorithms::{
+        Constraints,
+        SelectionAlgorithm,
+    },
+    storage::Storage,
 };
 
-struct GraphNode {
-    transaction: PoolTransaction,
-    /// The cumulative tip of a transaction and all of its children.
-    cumulative_tip: u64,
-    /// The cumulative gas of a transaction and all of its children.
-    cumulative_gas: u64,
-    /// Number of dependents
-    number_dependents: u64,
-}
-
-pub type TxGraph = StableGraph<GraphNode, ()>;
-pub type Parents = Vec<NodeIndex>;
-pub type RatioTipGas = Ratio<u64>;
-
-#[derive(Default)]
-pub struct Collisions {
-    pub reasons: HashSet<CollisionReason>,
-    pub colliding_txs: Vec<NodeIndex>,
-}
-
-impl Collisions {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum CollisionReason {
-    Coin(UtxoId),
-    Message(Nonce),
-    ContractCreation(ContractId),
-}
-
-pub struct Pool<Database> {
-    // TODO: Abstraction Storage trait
-    graph: TxGraph,
-    db: Database,
-    // TODO: Move it to the service and use time port
-    transactions_sorted_time: VecDeque<(NodeIndex, Instant)>,
-    transactions_sorted_tip_gas_ratio: BTreeMap<RatioTipGas, NodeIndex>,
-    registries: Registries,
+pub struct Pool<DB, S, CM, SA> {
+    storage: S,
+    collision_manager: CM,
+    selection_algorithm: SA,
+    db: DB,
     config: Config,
 }
 
-impl<Database> Pool<Database> {
-    pub fn new(database: Database, config: Config) -> Self {
+impl<DB, S, CM, SA> Pool<DB, S, CM, SA> {
+    pub fn new(
+        database: DB,
+        storage: S,
+        collision_manager: CM,
+        selection_algorithm: SA,
+        config: Config,
+    ) -> Self {
         Pool {
-            graph: TxGraph::new(),
+            storage,
+            collision_manager,
+            selection_algorithm,
             db: database,
-            registries: Default::default(),
-            transactions_sorted_time: Default::default(),
-            transactions_sorted_tip_gas_ratio: Default::default(),
             config,
         }
     }
 }
 
-impl<Database, View> Pool<Database>
+impl<DB, View, S, CM, SA> Pool<DB, S, CM, SA>
 where
-    Database: AtomicView<LatestView = View>,
+    DB: AtomicView<LatestView = View>,
     View: TxPoolDb,
+    S: Storage,
+    CM: CollisionManager<S>,
+    SA: SelectionAlgorithm<S>,
 {
     #[instrument(skip(self))]
     pub fn insert(
@@ -114,165 +60,41 @@ where
         Ok(transactions
             .into_iter()
             .map(|tx| {
-                let collisions = self.registries.gather_colliding_txs(&tx)?;
-                if !self.is_better_than_collisions(&tx, &collisions) {
-                    return Err(Error::Collided("TODO".to_string()));
-                }
-                let parents = self.registries.check_and_gather_parent_txs(
+                let collisions = self
+                    .collision_manager
+                    .collect_tx_collisions(&tx, &self.storage)?;
+                let dependencies = self.storage.collect_dependencies_transactions(
                     &tx,
-                    &collisions,
+                    collisions.reasons,
                     &db_view,
                     self.config.utxo_validation,
                 )?;
-                // No parents insert directly in the graph and the sorted transactions
-                if parents.is_empty() {
-                    let tip = tx.tip();
-                    let max_gas = tx.max_gas();
-                    let node = GraphNode {
-                        cumulative_tip: tx.tip(),
-                        cumulative_gas: tx.max_gas(),
-                        transaction: tx,
-                        number_dependents: 0,
-                    };
-                    let node_id = self.graph.add_node(node);
-                    self.transactions_sorted_time
-                        .push_back((node_id, Instant::now()));
-                    self.transactions_sorted_tip_gas_ratio
-                        .insert(Ratio::new(tip, max_gas), node_id);
-                    return Ok(());
+                let has_dependencies = !dependencies.is_empty();
+                let storage_id = self.storage.store_transaction(
+                    tx,
+                    dependencies,
+                    collisions.colliding_txs,
+                )?;
+                // No dependencies directly in the graph and the sorted transactions
+                if !has_dependencies {
+                    self.selection_algorithm
+                        .new_executable_transactions(vec![storage_id], &self.storage)?;
                 }
-                // Remove collisions and their dependencies from the graph
-                let mut to_remove = vec![];
-                let mut to_check = collisions.colliding_txs;
-                while to_check.len() > 0 {
-                    let node_id = to_check.pop().unwrap();
-                    to_remove.push(node_id);
-                    for edge in self
-                        .graph
-                        .edges_directed(node_id, petgraph::Direction::Outgoing)
-                    {
-                        to_check.push(edge.target());
-                    }
-                }
-                for node_id in to_remove {
-                    self.graph.remove_node(node_id);
-                }
-                // Add the new transaction to the graph and update the others in consequence
-                let tip = tx.tip();
-                let gas = tx.max_gas();
-                let node = GraphNode {
-                    cumulative_tip: 0,
-                    cumulative_gas: 0,
-                    transaction: tx,
-                    number_dependents: 0,
-                };
-                // Used to check if the chain dependency is too big and then update cumulative gas
-                let mut whole_tx_chain = vec![];
-                let mut to_check = parents.clone();
-                while to_check.len() > 0 {
-                    let node_id = to_check.pop().unwrap();
-                    let parent_node = self.graph.node_weight(node_id).unwrap();
-                    if parent_node.number_dependents >= self.config.max_txs_per_chain {
-                        return Err(Error::NotInsertedChainDependencyTooBig);
-                    }
-                    whole_tx_chain.push(node_id);
-                    for edge in self
-                        .graph
-                        .edges_directed(node_id, petgraph::Direction::Incoming)
-                    {
-                        to_check.push(edge.source());
-                    }
-                }
-                let node_id = self.graph.add_node(node);
-                whole_tx_chain.push(node_id);
-                for parent in parents {
-                    self.graph.add_edge(parent, node_id, ());
-                }
-                // Update the cumulative tip and gas of the parents and recursively their parents, etc.
-                while whole_tx_chain.len() > 0 {
-                    let node_id = whole_tx_chain.pop().unwrap();
-                    let node = self.graph.node_weight_mut(node_id).unwrap();
-                    node.cumulative_tip = node.cumulative_tip.saturating_add(tip);
-                    node.cumulative_gas = node.cumulative_gas.saturating_add(gas);
-                }
-                self.transactions_sorted_time
-                    .push_back((node_id, Instant::now()));
                 Ok(())
             })
             .collect())
-    }
-
-    fn is_better_than_collisions(
-        &mut self,
-        tx: &PoolTransaction,
-        collisions: &Collisions,
-    ) -> bool {
-        let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
-        let (total_tip, total_gas) = collisions.colliding_txs.iter().fold(
-            (0u64, 0u64),
-            |(total_tip, total_gas), node_id| {
-                let dependent_tx = self
-                    .graph
-                    .node_weight(*node_id)
-                    .expect("Transaction always should exist in `tx_info`");
-                let total_tip = total_tip.saturating_add(dependent_tx.cumulative_tip);
-                let total_gas = total_gas.saturating_add(dependent_tx.cumulative_gas);
-                (total_tip, total_gas)
-            },
-        );
-
-        let collision_tx_ratio = Ratio::new(total_tip, total_gas);
-
-        new_tx_ratio > collision_tx_ratio
     }
 
     // TODO: Use block space also
     pub fn extract_transactions_for_block(
         &mut self,
     ) -> Result<Vec<PoolTransaction>, Error> {
-        let mut transactions = vec![];
-        let mut gas_used = 0;
-        while gas_used < self.config.max_block_gas
-            && !self.transactions_sorted_tip_gas_ratio.is_empty()
-        {
-            // SAFETY: We are sure that the first element exists because we checked if the map is empty
-            let (_, node_id) =
-                self.transactions_sorted_tip_gas_ratio.pop_first().unwrap();
-            // Test if we can add the transaction to the block
-            let node = self
-                .graph
-                .node_weight(node_id)
-                .expect("Transaction always should exist in `tx_info`");
-            if gas_used.saturating_add(node.transaction.max_gas())
-                > self.config.max_block_gas
-            {
-                continue;
-            }
-            // Get all nodes linked with outgoing edges
-            for edge in self.graph.edges_directed(node_id, Direction::Outgoing) {
-                let dependent_node = self
-                    .graph
-                    .node_weight(edge.target())
-                    .expect("Transaction always should exist in `tx_info`");
-                let dependent_ratio = Ratio::new(
-                    dependent_node.cumulative_tip,
-                    dependent_node.cumulative_gas,
-                );
-                self.transactions_sorted_tip_gas_ratio
-                    .insert(dependent_ratio, edge.target());
-            }
-            // Remove the node
-            let node =
-                self.graph
-                    .remove_node(node_id)
-                    .ok_or(Error::TransactionNotFound(format!(
-                        "Node with id {:?} not found in the graph",
-                        node_id
-                    )))?;
-            gas_used = gas_used.saturating_add(node.transaction.max_gas());
-            transactions.push(node.transaction);
-        }
-        return Ok(transactions);
+        self.selection_algorithm.gather_best_txs(
+            Constraints {
+                max_gas: self.config.max_block_gas,
+            },
+            &mut self.storage,
+        )
     }
 
     pub fn prune(&mut self) -> Result<Vec<PoolTransaction>, Error> {

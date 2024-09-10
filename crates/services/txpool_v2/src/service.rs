@@ -11,6 +11,7 @@ pub struct SharedState;
 
 impl SharedState {
     // TODO: Correct output.
+    // TODO: manage transaction creration time and use time port
     fn insert(&mut self, transactions: Vec<Transaction>) -> Vec<()> {
         // Move verif of wasm there
         vec![]

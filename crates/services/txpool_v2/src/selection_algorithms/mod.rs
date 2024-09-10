@@ -1,11 +1,26 @@
 use fuel_core_types::services::txpool::PoolTransaction;
 
-use crate::storage::Storage;
+use crate::{
+    error::Error,
+    storage::Storage,
+};
 
-pub trait SelectionAlgorithm {
-    type Storage: Storage;
+pub mod ratio_tip_gas;
 
-    fn select(&mut self) -> Vec<Storage::StorageIndex>;
+pub struct Constraints {
+    pub max_gas: u64,
+}
 
-    fn new_executable_transactions(&mut self, transactions: Vec<Storage::StorageIndex>);
+pub trait SelectionAlgorithm<S: Storage> {
+    fn gather_best_txs(
+        &mut self,
+        constraints: Constraints,
+        storage: &mut S,
+    ) -> Result<Vec<PoolTransaction>, Error>;
+
+    fn new_executable_transactions(
+        &mut self,
+        transactions_ids: Vec<S::StorageIndex>,
+        storage: &S,
+    ) -> Result<(), Error>;
 }

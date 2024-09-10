@@ -46,11 +46,17 @@ use fuel_core_types::{
 };
 
 use crate::{
+    collision_manager::basic::BasicCollisionManager,
     config::Config,
     pool::Pool,
     ports::{
         WasmChecker,
         WasmValidityError,
+    },
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
+    storage::graph::{
+        GraphConfig,
+        GraphStorage,
     },
     tests::mock_db::{
         MockDBProvider,
@@ -141,9 +147,21 @@ impl PoolContext {
         }
     }
 
-    pub(crate) fn build(self) -> Pool<MockDBProvider> {
+    pub(crate) fn build(
+        self,
+    ) -> Pool<
+        MockDBProvider,
+        GraphStorage,
+        BasicCollisionManager<GraphStorage>,
+        RatioTipGasSelection<GraphStorage>,
+    > {
         Pool::new(
             MockDBProvider(self.mock_db),
+            GraphStorage::new(GraphConfig {
+                max_txs_per_chain: 100,
+            }),
+            BasicCollisionManager::new(),
+            RatioTipGasSelection::new(),
             self.config.unwrap_or_default(),
         )
     }
