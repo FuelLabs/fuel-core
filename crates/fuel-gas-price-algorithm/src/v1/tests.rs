@@ -30,12 +30,13 @@ pub struct UpdaterBuilder {
 
     total_rewards: u64,
     da_recorded_block_height: u32,
-    da_cost_per_byte: u64,
-    project_total_cost: u64,
-    latest_known_total_cost: u64,
+    da_cost_per_byte: u128,
+    project_total_cost: u128,
+    latest_known_total_cost: u128,
     unrecorded_blocks: Vec<BlockBytes>,
-    profit_avg: i64,
-    avg_window: u32,
+    last_profit: i64,
+    second_to_last_profit: i64,
+    da_gas_price_factor: u64,
 }
 
 impl UpdaterBuilder {
@@ -60,8 +61,9 @@ impl UpdaterBuilder {
             project_total_cost: 0,
             latest_known_total_cost: 0,
             unrecorded_blocks: vec![],
-            profit_avg: 0,
-            avg_window: 1,
+            last_profit: 0,
+            second_to_last_profit: 0,
+            da_gas_price_factor: 1,
         }
     }
 
@@ -90,7 +92,7 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_max_change_percent(mut self, max_change_percent: u8) -> Self {
+    fn with_da_max_change_percent(mut self, max_change_percent: u8) -> Self {
         self.max_change_percent = max_change_percent;
         self
     }
@@ -128,17 +130,17 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_da_cost_per_byte(mut self, da_cost_per_byte: u64) -> Self {
+    fn with_da_cost_per_byte(mut self, da_cost_per_byte: u128) -> Self {
         self.da_cost_per_byte = da_cost_per_byte;
         self
     }
 
-    fn with_projected_total_cost(mut self, projected_total_cost: u64) -> Self {
+    fn with_projected_total_cost(mut self, projected_total_cost: u128) -> Self {
         self.project_total_cost = projected_total_cost;
         self
     }
 
-    fn with_known_total_cost(mut self, latest_known_total_cost: u64) -> Self {
+    fn with_known_total_cost(mut self, latest_known_total_cost: u128) -> Self {
         self.latest_known_total_cost = latest_known_total_cost;
         self
     }
@@ -148,16 +150,16 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_profit_avg(mut self, profit_avg: i64, window: u32) -> Self {
-        self.profit_avg = profit_avg;
-        self.avg_window = window;
+    fn with_last_profit(mut self, last_profit: i64, last_last_profit: i64) -> Self {
+        self.last_profit = last_profit;
+        self.second_to_last_profit = last_last_profit;
         self
     }
 
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
             min_exec_gas_price: self.min_exec_gas_price,
-            new_exec_price: self.starting_exec_gas_price,
+            new_scaled_exec_price: self.starting_exec_gas_price,
             last_da_gas_price: self.starting_da_gas_price,
             exec_gas_price_change_percent: self.exec_gas_price_change_percent,
             max_da_gas_price_change_percent: self.max_change_percent,
@@ -174,9 +176,13 @@ impl UpdaterBuilder {
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost: self.latest_known_total_cost,
             unrecorded_blocks: self.unrecorded_blocks,
-            profit_avg: self.profit_avg,
-            avg_window: self.avg_window,
+            last_profit: self.last_profit,
+            second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
+            gas_price_factor: self
+                .da_gas_price_factor
+                .try_into()
+                .expect("Should never be non-zero"),
         }
     }
 }

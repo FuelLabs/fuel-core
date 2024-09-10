@@ -20,10 +20,7 @@ use fuel_core::{
         GenesisDatabase,
     },
     service::Config,
-    state::{
-        historical_rocksdb::HistoricalRocksDB,
-        rocks_db::ShallowTempDir,
-    },
+    state::historical_rocksdb::HistoricalRocksDB,
 };
 use fuel_core_benches::*;
 use fuel_core_storage::{
@@ -67,12 +64,12 @@ use rand::{
 pub struct BenchDb {
     db: GenesisDatabase,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
-    _tmp_dir: ShallowTempDir,
+    _tmp_dir: utils::ShallowTempDir,
 }
 
 impl BenchDb {
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
-        let tmp_dir = ShallowTempDir::new();
+        let tmp_dir = utils::ShallowTempDir::new();
 
         let db = HistoricalRocksDB::<OnChain>::default_open(
             tmp_dir.path(),

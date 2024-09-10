@@ -17,7 +17,10 @@ use crate::{
         FuelBlocks,
     },
 };
-use fuel_core_types::blockchain::block::CompressedBlock;
+use fuel_core_types::blockchain::block::{
+    Block,
+    CompressedBlock,
+};
 use fuel_vm_private::fuel_tx::Bytes32;
 
 /// The encoder of `CompressedBlock` for the `FuelBlocks` table.
@@ -27,6 +30,15 @@ impl Encode<CompressedBlock> for BlockEncoder {
     type Encoder<'a> = [u8; Bytes32::LEN];
 
     fn encode(value: &CompressedBlock) -> Self::Encoder<'_> {
+        let bytes: Bytes32 = value.id().into();
+        bytes.into()
+    }
+}
+
+impl Encode<Block> for BlockEncoder {
+    type Encoder<'a> = [u8; Bytes32::LEN];
+
+    fn encode(value: &Block) -> Self::Encoder<'_> {
         let bytes: Bytes32 = value.id().into();
         bytes.into()
     }
