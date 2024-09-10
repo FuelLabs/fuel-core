@@ -355,23 +355,26 @@ impl AlgorithmUpdaterV1 {
 
     // We only need to track the difference between the rewards and costs after we have true DA data
     // Normalize, or zero out the lower value and subtract it from the higher value
-    fn normalize_rewards_and_costs(&mut self) {
-        let total_rewards = self.total_da_rewards_excess;
-        let total_costs = self.latest_known_total_da_cost_excess;
-        if total_rewards > total_costs {
-            let excess = total_rewards.saturating_sub(total_costs);
-            let projected_cost_excess =
-                self.projected_total_da_cost.saturating_sub(total_costs);
-            self.projected_total_da_cost = projected_cost_excess;
-            self.total_da_rewards_excess = excess;
-            self.latest_known_total_da_cost_excess = 0;
-        } else {
-            let excess = total_costs.saturating_sub(total_rewards);
-            let projected_cost_excess =
-                self.projected_total_da_cost.saturating_sub(total_rewards);
-            self.projected_total_da_cost = projected_cost_excess;
-            self.total_da_rewards_excess = 0;
-            self.latest_known_total_da_cost_excess = excess;
-        }
-    }
+  fn normalize_rewards_and_costs(&mut self) {
+      let (excess, projected_cost_excess) = if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
+          (
+              self.total_da_rewards_excess.saturating_sub(self.latest_known_total_da_cost_excess),
+              self.projected_total_da_cost.saturating_sub(self.latest_known_total_da_cost_excess),
+          )
+      } else {
+          (
+              self.latest_known_total_da_cost_excess.saturating_sub(self.total_da_rewards_excess),
+              self.projected_total_da_cost.saturating_sub(self.total_da_rewards_excess),
+          )
+      };
+  
+      self.projected_total_da_cost = projected_cost_excess;
+      if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
+          self.total_da_rewards_excess = excess;
+          self.latest_known_total_da_cost_excess = 0;
+      } else {
+          self.total_da_rewards_excess = 0;
+          self.latest_known_total_da_cost_excess = excess;
+      }
+  }
 }
