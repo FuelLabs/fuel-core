@@ -1,9 +1,11 @@
 use fuel_core::database::GenesisDatabase;
-use fuel_core_storage::transactional::{
-    IntoTransaction,
-    StorageTransaction,
+use fuel_core_storage::{
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
+    StorageAsMut,
 };
-use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
     fuel_asm::{
         op,

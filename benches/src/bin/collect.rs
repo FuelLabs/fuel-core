@@ -642,7 +642,7 @@ fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
 }
 
 fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> DependentCost {
-    const NEAR_LINEAR: f64 = 0.1;
+    const NEAR_LINEAR: f64 = 0.2;
 
     #[derive(PartialEq, Eq)]
     enum Type {
