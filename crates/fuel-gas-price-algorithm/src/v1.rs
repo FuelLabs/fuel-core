@@ -55,8 +55,9 @@ pub struct AlgorithmV1 {
     new_exec_price: u64,
     /// The gas price for the DA portion of the last block. This can be used to calculate
     last_da_price: u64,
-    /// The maximum percentage that the DA portion of the gas price can change in a single block
-    max_change_percent: u8,
+    /// The maximum percentage that the DA portion of the gas price can change in a single block.
+    ///   Using `u16` because it can go above 100% and possibly over 255%
+    max_change_percent: u16,
     /// The latest known cost per byte for recording blocks on the DA chain
     latest_da_cost_per_byte: u128,
     /// The cumulative reward from the DA portion of the gas price
@@ -140,8 +141,9 @@ pub struct AlgorithmUpdaterV1 {
     /// The lowest the algorithm allows the exec gas price to go
     pub min_exec_gas_price: u64,
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
-    /// based on the fullness of the last L2 block
-    pub exec_gas_price_change_percent: u8,
+    /// based on the fullness of the last L2 block. Using `u16` because it can go above 100% and
+    /// possibly over 255%
+    pub exec_gas_price_change_percent: u16,
     /// The height of the next L2 block
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
@@ -156,7 +158,8 @@ pub struct AlgorithmUpdaterV1 {
     /// The lowest the algorithm allows the da gas price to go
     pub min_da_gas_price: u64,
     /// The maximum percentage that the DA portion of the gas price can change in a single block
-    pub max_da_gas_price_change_percent: u8,
+    ///   Using `u16` because it can go above 100% and possibly over 255%
+    pub max_da_gas_price_change_percent: u16,
     /// The cumulative reward from the DA portion of the gas price
     pub total_da_rewards_excess: u128,
     /// The height of the las L2 block recorded on the DA chain

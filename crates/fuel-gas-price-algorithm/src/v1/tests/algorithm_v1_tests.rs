@@ -95,7 +95,7 @@ fn calculate__positive_profit_decrease_gas_price() {
         .with_projected_total_cost(starting_cost as u128)
         .with_da_cost_per_byte(latest_gas_per_byte as u128)
         .with_last_profit(last_profit, last_last_profit)
-        .with_da_max_change_percent(u8::MAX)
+        .with_da_max_change_percent(u16::MAX)
         .with_exec_gas_price_change_percent(0)
         .build();
 

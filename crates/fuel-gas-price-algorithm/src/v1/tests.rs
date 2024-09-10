@@ -19,8 +19,8 @@ pub struct UpdaterBuilder {
     min_da_gas_price: u64,
     starting_exec_gas_price: u64,
     starting_da_gas_price: u64,
-    exec_gas_price_change_percent: u8,
-    max_change_percent: u8,
+    exec_gas_price_change_percent: u16,
+    max_change_percent: u16,
 
     da_p_component: i64,
     da_d_component: i64,
@@ -47,7 +47,7 @@ impl UpdaterBuilder {
             starting_exec_gas_price: 0,
             starting_da_gas_price: 0,
             exec_gas_price_change_percent: 0,
-            max_change_percent: u8::MAX,
+            max_change_percent: u16::MAX,
 
             da_p_component: 0,
             da_d_component: 0,
@@ -87,12 +87,12 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_exec_gas_price_change_percent(mut self, percent: u8) -> Self {
+    fn with_exec_gas_price_change_percent(mut self, percent: u16) -> Self {
         self.exec_gas_price_change_percent = percent;
         self
     }
 
-    fn with_da_max_change_percent(mut self, max_change_percent: u8) -> Self {
+    fn with_da_max_change_percent(mut self, max_change_percent: u16) -> Self {
         self.max_change_percent = max_change_percent;
         self
     }
