@@ -109,19 +109,17 @@ impl AlgorithmV1 {
         pd_change.signum().saturating_mul(clamped_change)
     }
 
-    fn assemble_price(&self, change: i128) -> u64 {
-        let maybe_new_da_gas_price = if change.is_positive() {
-            let upcast_last_da_price: i128 = self.last_da_price.into();
-            let new_price_oversized = upcast_last_da_price.saturating_add(change);
-            new_price_oversized.try_into().unwrap_or(u64::MAX)
-        } else {
-            let upcast_last_da_price: i128 = self.last_da_price.into();
-            let new_price_oversized = upcast_last_da_price.saturating_add(change);
-            new_price_oversized.try_into().unwrap_or(0)
-        };
-        let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
-        self.new_exec_price.saturating_add(new_da_gas_price)
-    }
+fn assemble_price(&self, change: i128) -> u64 {
+    let upcast_last_da_price: i128 = self.last_da_price.into();
+    let new_price_oversized = upcast_last_da_price.saturating_add(change);
+
+    let maybe_new_da_gas_price: u64 = new_price_oversized
+        .try_into()
+        .unwrap_or(if change.is_positive() { u64::MAX } else { 0 });
+
+    let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
+    self.new_exec_price.saturating_add(new_da_gas_price)
+}
 }
 
 /// The state of the algorithm used to update the gas price algorithm for each block
