@@ -37,6 +37,7 @@ use async_graphql::{
     Object,
     Subscription,
 };
+use fuel_core_executor::ports::TransactionExt;
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
@@ -276,17 +277,24 @@ impl TxMutation {
         gas_price: Option<U64>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
-        let params = ctx
+        let consensus_params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
+        let block_gas_limit = consensus_params.block_gas_limit();
 
         let mut transactions = txs
             .iter()
             .map(|tx| FuelTx::from_bytes(&tx.0))
             .collect::<Result<Vec<FuelTx>, _>>()?;
-        for transaction in &mut transactions {
-            transaction.precompute(&params.chain_id())?;
-        }
+        transactions.iter_mut().try_fold::<_, _, async_graphql::Result<u64>>(0u64, |acc, tx| {
+            let gas = tx.max_gas(&consensus_params)?;
+            let gas = gas.saturating_add(acc);
+            if gas > block_gas_limit {
+                return Err(anyhow::anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit").into());
+            }
+            tx.precompute(&consensus_params.chain_id())?;
+            Ok(gas)
+        })?;
 
         let tx_statuses = block_producer
             .dry_run_txs(
