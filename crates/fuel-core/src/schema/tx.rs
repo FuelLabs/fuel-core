@@ -288,11 +288,11 @@ impl TxMutation {
             .collect::<Result<Vec<FuelTx>, _>>()?;
         transactions.iter_mut().try_fold::<_, _, async_graphql::Result<u64>>(0u64, |acc, tx| {
             let gas = tx.max_gas(&consensus_params)?;
-            tx.precompute(&consensus_params.chain_id())?;
             let gas = gas.saturating_add(acc);
             if gas > block_gas_limit {
                 return Err(anyhow::anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit").into());
             }
+            tx.precompute(&consensus_params.chain_id())?;
             Ok(gas)
         })?;
 
