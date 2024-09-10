@@ -2,9 +2,7 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     RecordedBlock,
 };
-use std::{
-    num::NonZeroU64,
-};
+use std::num::NonZeroU64;
 
 use super::*;
 

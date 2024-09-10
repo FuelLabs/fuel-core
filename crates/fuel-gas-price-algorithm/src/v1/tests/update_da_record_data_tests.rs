@@ -327,7 +327,7 @@ fn update_da_record_data__when_reward_is_greater_than_cost_will_zero_reward_and_
     updater.update_da_record_data(&blocks).unwrap();
 
     // then
-    let expected = total_rewards as u128 - new_costs as u128 - known_total_cost;
+    let expected = total_rewards - new_costs as u128 - known_total_cost;
     let actual = updater.total_da_rewards_excess;
     assert_eq!(actual, expected);
 

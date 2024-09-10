@@ -377,9 +377,8 @@ impl AlgorithmUpdaterV1 {
             self.latest_known_total_da_cost_excess = 0;
         } else {
             let excess = total_costs.saturating_sub(total_rewards);
-            let projected_cost_excess = self
-                .projected_total_da_cost
-                .saturating_sub(total_rewards as u128);
+            let projected_cost_excess =
+                self.projected_total_da_cost.saturating_sub(total_rewards);
             self.projected_total_da_cost = projected_cost_excess;
             self.total_da_rewards_excess = 0;
             self.latest_known_total_da_cost_excess = excess;
