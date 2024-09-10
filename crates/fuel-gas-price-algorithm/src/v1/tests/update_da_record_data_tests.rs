@@ -382,6 +382,7 @@ proptest! {
         )
     }
 }
+
 fn _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
     known_total_cost: u128,
     total_rewards: u128,
