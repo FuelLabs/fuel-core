@@ -91,10 +91,9 @@ mod tests {
         service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
         service.stop_and_await().await.unwrap();
+        let _ = shared_state.get().unwrap();
 
         // then
-        // drain the channel
-        while let Ok(Some(_)) = shared_state.get() {}
         let da_block_costs_opt = shared_state.get().unwrap();
         assert!(da_block_costs_opt.is_none());
     }

@@ -114,7 +114,7 @@ pub trait L2BlockSource: Send + Sync {
     async fn get_l2_block(&mut self, height: BlockHeight) -> Result<BlockInfo>;
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
 pub struct DaBlockCosts {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,

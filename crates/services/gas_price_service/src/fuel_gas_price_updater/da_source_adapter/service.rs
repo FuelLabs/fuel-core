@@ -11,7 +11,10 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use std::time::Duration;
+use std::{
+    collections::HashSet,
+    time::Duration,
+};
 use tokio::{
     sync::mpsc::Sender,
     time::{
@@ -20,7 +23,9 @@ use tokio::{
     },
 };
 
-pub type Result<T> = core::result::Result<T, anyhow::Error>;
+pub use anyhow::Result;
+
+const CACHE_COUNT: usize = 10;
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
@@ -32,6 +37,7 @@ where
     poll_interval: Interval,
     source: Source,
     sender: Sender<DaBlockCosts>,
+    cache: HashSet<DaBlockCosts>,
 }
 
 impl<Source> DaBlockCostsService<Source>
@@ -39,7 +45,10 @@ where
     Source: DaBlockCostsSource,
 {
     pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1024);
+        #[allow(clippy::arithmetic_side_effects)]
+        let (sender, receiver) = tokio::sync::mpsc::channel(
+            core::mem::size_of::<DaBlockCosts>() * CACHE_COUNT,
+        );
         let block_cost_provider = DaBlockCostsProvider::from_receiver(receiver);
         Self {
             sender,
@@ -48,6 +57,7 @@ where
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
             source,
+            cache: Default::default(),
         }
     }
 }
@@ -103,7 +113,10 @@ where
             }
             _ = self.poll_interval.tick() => {
                 let da_block_costs = self.source.request_da_block_cost().await?;
-                self.sender.send(da_block_costs).await?;
+                if !self.cache.contains(&da_block_costs) {
+                    self.cache.insert(da_block_costs.clone());
+                    self.sender.send(da_block_costs).await?;
+                }
                 continue_running = true;
             }
         }
