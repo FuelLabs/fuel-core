@@ -16,5 +16,6 @@ path = "src/lib.rs"
 
 [dependencies]
 proptest = { workspace = true }
+rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }

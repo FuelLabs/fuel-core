@@ -111,13 +111,6 @@ impl AlgorithmV1 {
     }
 
     fn assemble_price(&self, change: i128) -> u64 {
-        // let last_da_gas_price = self.last_da_price as i128;
-        // let maybe_new_da_gas_price = last_da_gas_price
-        //     .saturating_add(change as i128)
-        //     .try_into()
-        //     .unwrap_or(self.min_da_gas_price);
-        // let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
-        // self.new_exec_price.saturating_add(new_da_gas_price)
         let maybe_new_da_gas_price = if change.is_positive() {
             let upcast_last_da_price: i128 = self.last_da_price.into();
             let new_price_oversized = upcast_last_da_price.saturating_add(change);
