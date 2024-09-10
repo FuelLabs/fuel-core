@@ -12,9 +12,12 @@ use fuel_core_services::{
     StateWatcher,
 };
 use std::time::Duration;
-use tokio::time::{
-    interval,
-    Interval,
+use tokio::{
+    sync::mpsc::Sender,
+    time::{
+        interval,
+        Interval,
+    },
 };
 
 pub type Result<T> = core::result::Result<T, anyhow::Error>;
@@ -28,6 +31,7 @@ where
     block_cost_provider: DaBlockCostsProvider,
     poll_interval: Interval,
     source: Source,
+    sender: Sender<DaBlockCosts>,
 }
 
 impl<Source> DaBlockCostsService<Source>
@@ -35,8 +39,11 @@ where
     Source: DaBlockCostsSource,
 {
     pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1024);
+        let block_cost_provider = DaBlockCostsProvider::from_receiver(receiver);
         Self {
-            block_cost_provider: DaBlockCostsProvider::default(),
+            sender,
+            block_cost_provider,
             poll_interval: interval(
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
@@ -96,10 +103,7 @@ where
             }
             _ = self.poll_interval.tick() => {
                 let da_block_costs = self.source.request_da_block_cost().await?;
-                let mut da_block_costs_guard = self.block_cost_provider.state.lock().await;
-
-                *da_block_costs_guard = Some(da_block_costs);
-
+                self.sender.send(da_block_costs).await?;
                 continue_running = true;
             }
         }

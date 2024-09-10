@@ -121,7 +121,7 @@ pub struct DaBlockCosts {
     pub blob_cost_wei: u128,
 }
 
-pub trait GetDaBlockCosts: Send + Sync + Default + Clone {
+pub trait GetDaBlockCosts: Send + Sync + Clone {
     fn get(&mut self) -> Result<Option<DaBlockCosts>>;
 }
 

@@ -1,12 +1,13 @@
 use crate::fuel_gas_price_updater::{
     DaBlockCosts,
-    Error::CouldNotFetchDARecord,
     GetDaBlockCosts,
     Result as GasPriceUpdaterResult,
 };
-use anyhow::anyhow;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{
+    mpsc,
+    Mutex,
+};
 
 pub mod block_committer_costs;
 pub mod dummy_costs;
@@ -14,27 +15,27 @@ pub mod service;
 
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct DaBlockCostsProvider {
-    state: Arc<Mutex<Option<DaBlockCosts>>>,
+    receiver: Arc<Mutex<mpsc::Receiver<DaBlockCosts>>>,
+}
+
+impl DaBlockCostsProvider {
+    fn from_receiver(receiver: mpsc::Receiver<DaBlockCosts>) -> Self {
+        Self {
+            receiver: Arc::new(Mutex::new(receiver)),
+        }
+    }
 }
 
 impl GetDaBlockCosts for DaBlockCostsProvider {
     fn get(&mut self) -> GasPriceUpdaterResult<Option<DaBlockCosts>> {
-        let mut da_block_costs_guard = self.state.try_lock().map_err(|err| {
-            CouldNotFetchDARecord(anyhow!(
-                "Failed to lock shared gas price state: {:?}",
-                err
-            ))
-        })?;
-
-        let da_block_costs = da_block_costs_guard.take();
-
-        // now mark it as consumed because we don't want to serve the same data
-        // multiple times
-        *da_block_costs_guard = None;
-
-        Ok(da_block_costs)
+        if let Ok(mut guard) = self.receiver.try_lock() {
+            if let Ok(da_block_costs) = guard.try_recv() {
+                return Ok(Some(da_block_costs));
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -60,7 +61,7 @@ mod tests {
     #[async_trait::async_trait]
     impl DaBlockCostsSource for ErroringSource {
         async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
-            Err(anyhow!("boo!"))
+            Err(anyhow::anyhow!("boo!"))
         }
     }
 
@@ -90,9 +91,10 @@ mod tests {
         service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
         service.stop_and_await().await.unwrap();
-        let _ = shared_state.get().unwrap();
 
         // then
+        // drain the channel
+        while let Ok(Some(_)) = shared_state.get() {}
         let da_block_costs_opt = shared_state.get().unwrap();
         assert!(da_block_costs_opt.is_none());
     }
