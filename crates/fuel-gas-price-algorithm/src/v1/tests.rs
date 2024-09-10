@@ -26,7 +26,7 @@ pub struct UpdaterBuilder {
     da_d_component: i64,
 
     l2_block_height: u32,
-    l2_block_capacity_threshold: u64,
+    l2_block_capacity_threshold: u8,
 
     total_rewards: u128,
     da_recorded_block_height: u32,
@@ -114,7 +114,7 @@ impl UpdaterBuilder {
 
     fn with_l2_block_capacity_threshold(
         mut self,
-        l2_block_capacity_threshold: u64,
+        l2_block_capacity_threshold: u8,
     ) -> Self {
         self.l2_block_capacity_threshold = l2_block_capacity_threshold;
         self
@@ -168,7 +168,7 @@ impl UpdaterBuilder {
             da_d_component: self.da_d_component,
 
             l2_block_height: self.l2_block_height,
-            l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,
+            l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold.into(),
             total_da_rewards_excess: self.total_rewards,
 
             da_recorded_block_height: self.da_recorded_block_height,

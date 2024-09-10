@@ -1,8 +1,5 @@
 use std::{
-    cmp::{
-        max,
-        min,
-    },
+    cmp::max,
     num::NonZeroU64,
 };
 
@@ -110,17 +107,17 @@ impl AlgorithmV1 {
         pd_change.signum().saturating_mul(clamped_change)
     }
 
-fn assemble_price(&self, change: i128) -> u64 {
-    let upcast_last_da_price: i128 = self.last_da_price.into();
-    let new_price_oversized = upcast_last_da_price.saturating_add(change);
+    fn assemble_price(&self, change: i128) -> u64 {
+        let upcast_last_da_price: i128 = self.last_da_price.into();
+        let new_price_oversized = upcast_last_da_price.saturating_add(change);
 
-    let maybe_new_da_gas_price: u64 = new_price_oversized
-        .try_into()
-        .unwrap_or(if change.is_positive() { u64::MAX } else { 0 });
+        let maybe_new_da_gas_price: u64 = new_price_oversized
+            .try_into()
+            .unwrap_or(if change.is_positive() { u64::MAX } else { 0 });
 
-    let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
-    self.new_exec_price.saturating_add(new_da_gas_price)
-}
+        let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
+        self.new_exec_price.saturating_add(new_da_gas_price)
+    }
 }
 
 /// The state of the algorithm used to update the gas price algorithm for each block
@@ -148,7 +145,7 @@ pub struct AlgorithmUpdaterV1 {
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
     /// This is a percentage of the total capacity of the L2 block
-    pub l2_block_fullness_threshold_percent: u64,
+    pub l2_block_fullness_threshold_percent: ClampedPercentage,
     // DA
     /// The gas price for the DA portion of the last block. This can be used to calculate
     /// the DA portion of the next block
@@ -181,6 +178,34 @@ pub struct AlgorithmUpdaterV1 {
     pub latest_da_cost_per_byte: u128,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: Vec<BlockBytes>,
+}
+
+/// A value that represents a value between 0 and 100. Higher values are clamped to 100
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct ClampedPercentage {
+    value: u8,
+}
+
+impl ClampedPercentage {
+    pub fn new(maybe_value: u8) -> Self {
+        Self {
+            value: maybe_value.min(100),
+        }
+    }
+}
+
+impl From<u8> for ClampedPercentage {
+    fn from(value: u8) -> Self {
+        Self::new(value)
+    }
+}
+
+impl core::ops::Deref for ClampedPercentage {
+    type Target = u8;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -263,13 +288,14 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_exec_gas_price(&mut self, used: u64, capacity: NonZeroU64) {
+        let threshold = *self.l2_block_fullness_threshold_percent as u64;
         let mut exec_gas_price = self.new_scaled_exec_price;
         let fullness_percent = used
             .saturating_mul(100)
             .checked_div(capacity.into())
-            .unwrap_or(self.l2_block_fullness_threshold_percent);
+            .unwrap_or(threshold);
 
-        match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {
+        match fullness_percent.cmp(&threshold) {
             std::cmp::Ordering::Greater => {
                 let change_amount = self.change_amount(exec_gas_price);
                 exec_gas_price = exec_gas_price.saturating_add(change_amount);
@@ -358,26 +384,31 @@ impl AlgorithmUpdaterV1 {
 
     // We only need to track the difference between the rewards and costs after we have true DA data
     // Normalize, or zero out the lower value and subtract it from the higher value
-  fn normalize_rewards_and_costs(&mut self) {
-      let (excess, projected_cost_excess) = if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
-          (
-              self.total_da_rewards_excess.saturating_sub(self.latest_known_total_da_cost_excess),
-              self.projected_total_da_cost.saturating_sub(self.latest_known_total_da_cost_excess),
-          )
-      } else {
-          (
-              self.latest_known_total_da_cost_excess.saturating_sub(self.total_da_rewards_excess),
-              self.projected_total_da_cost.saturating_sub(self.total_da_rewards_excess),
-          )
-      };
-  
-      self.projected_total_da_cost = projected_cost_excess;
-      if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
-          self.total_da_rewards_excess = excess;
-          self.latest_known_total_da_cost_excess = 0;
-      } else {
-          self.total_da_rewards_excess = 0;
-          self.latest_known_total_da_cost_excess = excess;
-      }
-  }
+    fn normalize_rewards_and_costs(&mut self) {
+        let (excess, projected_cost_excess) =
+            if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
+                (
+                    self.total_da_rewards_excess
+                        .saturating_sub(self.latest_known_total_da_cost_excess),
+                    self.projected_total_da_cost
+                        .saturating_sub(self.latest_known_total_da_cost_excess),
+                )
+            } else {
+                (
+                    self.latest_known_total_da_cost_excess
+                        .saturating_sub(self.total_da_rewards_excess),
+                    self.projected_total_da_cost
+                        .saturating_sub(self.total_da_rewards_excess),
+                )
+            };
+
+        self.projected_total_da_cost = projected_cost_excess;
+        if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
+            self.total_da_rewards_excess = excess;
+            self.latest_known_total_da_cost_excess = 0;
+        } else {
+            self.total_da_rewards_excess = 0;
+            self.latest_known_total_da_cost_excess = excess;
+        }
+    }
 }
