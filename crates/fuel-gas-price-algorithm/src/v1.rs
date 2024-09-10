@@ -60,7 +60,7 @@ pub struct AlgorithmV1 {
     /// The latest known cost per byte for recording blocks on the DA chain
     latest_da_cost_per_byte: u128,
     /// The cumulative reward from the DA portion of the gas price
-    total_rewards: u64,
+    total_rewards: u128,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
     total_costs: u128,
     /// The P component of the PID control for the DA gas price
@@ -68,9 +68,9 @@ pub struct AlgorithmV1 {
     /// The D component of the PID control for the DA gas price
     da_d_factor: i64,
     /// The average profit over the last `avg_window` blocks
-    last_profit: i64,
+    last_profit: i128,
     /// the previous profit
-    second_to_last_profit: i64,
+    second_to_last_profit: i128,
 }
 
 impl AlgorithmV1 {
@@ -82,36 +82,51 @@ impl AlgorithmV1 {
         self.assemble_price(da_change)
     }
 
-    fn p(&self) -> i64 {
-        let checked_p = self.last_profit.checked_div(self.da_p_factor);
+    fn p(&self) -> i128 {
+        let upcast_p: i128 = self.da_p_factor.into();
+        let checked_p = self.last_profit.checked_div(upcast_p);
         // If the profit is positive, we want to decrease the gas price
         checked_p.unwrap_or(0).saturating_mul(-1)
     }
 
-    fn d(&self) -> i64 {
+    fn d(&self) -> i128 {
+        let upcast_d: i128 = self.da_d_factor.into();
         let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
-        let checked_d = slope.checked_div(self.da_d_factor);
+        let checked_d = slope.checked_div(upcast_d);
         // if the slope is positive, we want to decrease the gas price
         checked_d.unwrap_or(0).saturating_mul(-1)
     }
 
-    fn change(&self, p: i64, d: i64) -> i64 {
+    fn change(&self, p: i128, d: i128) -> i128 {
         let pd_change = p.saturating_add(d);
+        let upcast_percent = self.max_change_percent.into();
         let max_change = self
             .last_da_price
-            .saturating_mul(self.max_change_percent as u64)
-            .saturating_div(100) as i64;
+            .saturating_mul(upcast_percent)
+            .saturating_div(100)
+            .into();
         let sign = pd_change.signum();
         let signless_da_change = min(max_change, pd_change.abs());
         sign.saturating_mul(signless_da_change)
     }
 
-    fn assemble_price(&self, change: i64) -> u64 {
-        let last_da_gas_price = self.last_da_price as i128;
-        let maybe_new_da_gas_price = last_da_gas_price
-            .saturating_add(change as i128)
-            .try_into()
-            .unwrap_or(self.min_da_gas_price);
+    fn assemble_price(&self, change: i128) -> u64 {
+        // let last_da_gas_price = self.last_da_price as i128;
+        // let maybe_new_da_gas_price = last_da_gas_price
+        //     .saturating_add(change as i128)
+        //     .try_into()
+        //     .unwrap_or(self.min_da_gas_price);
+        // let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
+        // self.new_exec_price.saturating_add(new_da_gas_price)
+        let maybe_new_da_gas_price = if change.is_positive() {
+            let upcast_last_da_price: i128 = self.last_da_price.into();
+            let new_price_oversized = upcast_last_da_price.saturating_add(change);
+            new_price_oversized.try_into().unwrap_or(u64::MAX)
+        } else {
+            let upcast_last_da_price: i128 = self.last_da_price.into();
+            let new_price_oversized = upcast_last_da_price.saturating_add(change);
+            new_price_oversized.try_into().unwrap_or(0)
+        };
         let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
         self.new_exec_price.saturating_add(new_da_gas_price)
     }
@@ -136,7 +151,7 @@ pub struct AlgorithmUpdaterV1 {
     pub min_exec_gas_price: u64,
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
     /// based on the fullness of the last L2 block
-    pub exec_gas_price_change_percent: u64,
+    pub exec_gas_price_change_percent: u8,
     /// The height of the next L2 block
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
@@ -153,7 +168,7 @@ pub struct AlgorithmUpdaterV1 {
     /// The maximum percentage that the DA portion of the gas price can change in a single block
     pub max_da_gas_price_change_percent: u8,
     /// The cumulative reward from the DA portion of the gas price
-    pub total_da_rewards_excess: u64,
+    pub total_da_rewards_excess: u128,
     /// The height of the las L2 block recorded on the DA chain
     pub da_recorded_block_height: u32,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
@@ -166,9 +181,9 @@ pub struct AlgorithmUpdaterV1 {
     /// The D component of the PID control for the DA gas price
     pub da_d_component: i64,
     /// The last profit
-    pub last_profit: i64,
+    pub last_profit: i128,
     /// The profit before last
-    pub second_to_last_profit: i64,
+    pub second_to_last_profit: i128,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u128,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
@@ -223,15 +238,15 @@ impl AlgorithmUpdaterV1 {
                 .new_scaled_exec_price
                 .saturating_div(self.gas_price_factor.into());
             // TODO: fix this nonsense when we fix the types https://github.com/FuelLabs/fuel-core/issues/2147
-            let projected_total_da_cost = i64::try_from(self.projected_total_da_cost)
+            let projected_total_da_cost = i128::try_from(self.projected_total_da_cost)
                 .map_err(|_| {
                     Error::FailedTooIncludeL2BlockData(format!(
                         "Converting {:?} to an i64 from u256",
                         self.projected_total_da_cost
                     ))
                 })?;
-            let last_profit = (self.total_da_rewards_excess as i64)
-                .saturating_sub(projected_total_da_cost);
+            let rewards = self.total_da_rewards_excess.try_into().unwrap_or(i128::MAX);
+            let last_profit = rewards.saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
             let block_projected_da_cost =
                 (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
@@ -242,13 +257,14 @@ impl AlgorithmUpdaterV1 {
             self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
             self.update_exec_gas_price(used, capacity);
             let block_da_reward = used.saturating_mul(self.last_da_gas_price);
-            self.total_da_rewards_excess =
-                self.total_da_rewards_excess.saturating_add(block_da_reward);
+            self.total_da_rewards_excess = self
+                .total_da_rewards_excess
+                .saturating_add(block_da_reward.into());
             Ok(())
         }
     }
 
-    fn update_last_profit(&mut self, new_profit: i64) {
+    fn update_last_profit(&mut self, new_profit: i128) {
         self.second_to_last_profit = self.last_profit;
         self.last_profit = new_profit;
     }
@@ -276,7 +292,7 @@ impl AlgorithmUpdaterV1 {
 
     fn change_amount(&self, principle: u64) -> u64 {
         principle
-            .saturating_mul(self.exec_gas_price_change_percent)
+            .saturating_mul(self.exec_gas_price_change_percent as u64)
             .saturating_div(100)
     }
 
@@ -351,17 +367,16 @@ impl AlgorithmUpdaterV1 {
     // Normalize, or zero out the lower value and subtract it from the higher value
     fn normalize_rewards_and_costs(&mut self) {
         let total_rewards = self.total_da_rewards_excess;
-        let total_costs = self.latest_known_total_da_cost_excess as u64;
+        let total_costs = self.latest_known_total_da_cost_excess;
         if total_rewards > total_costs {
             let excess = total_rewards.saturating_sub(total_costs);
-            let projected_cost_excess = self
-                .projected_total_da_cost
-                .saturating_sub(total_costs as u128);
+            let projected_cost_excess =
+                self.projected_total_da_cost.saturating_sub(total_costs);
             self.projected_total_da_cost = projected_cost_excess;
             self.total_da_rewards_excess = excess;
             self.latest_known_total_da_cost_excess = 0;
         } else {
-            let excess = total_costs.saturating_sub(total_rewards) as u128;
+            let excess = total_costs.saturating_sub(total_rewards);
             let projected_cost_excess = self
                 .projected_total_da_cost
                 .saturating_sub(total_rewards as u128);

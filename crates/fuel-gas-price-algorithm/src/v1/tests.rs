@@ -19,7 +19,7 @@ pub struct UpdaterBuilder {
     min_da_gas_price: u64,
     starting_exec_gas_price: u64,
     starting_da_gas_price: u64,
-    exec_gas_price_change_percent: u64,
+    exec_gas_price_change_percent: u8,
     max_change_percent: u8,
 
     da_p_component: i64,
@@ -28,14 +28,14 @@ pub struct UpdaterBuilder {
     l2_block_height: u32,
     l2_block_capacity_threshold: u64,
 
-    total_rewards: u64,
+    total_rewards: u128,
     da_recorded_block_height: u32,
     da_cost_per_byte: u128,
     project_total_cost: u128,
     latest_known_total_cost: u128,
     unrecorded_blocks: Vec<BlockBytes>,
-    last_profit: i64,
-    second_to_last_profit: i64,
+    last_profit: i128,
+    second_to_last_profit: i128,
     da_gas_price_factor: u64,
 }
 
@@ -87,7 +87,7 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_exec_gas_price_change_percent(mut self, percent: u64) -> Self {
+    fn with_exec_gas_price_change_percent(mut self, percent: u8) -> Self {
         self.exec_gas_price_change_percent = percent;
         self
     }
@@ -120,7 +120,7 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_total_rewards(mut self, total_rewards: u64) -> Self {
+    fn with_total_rewards(mut self, total_rewards: u128) -> Self {
         self.total_rewards = total_rewards;
         self
     }
@@ -150,7 +150,7 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_last_profit(mut self, last_profit: i64, last_last_profit: i64) -> Self {
+    fn with_last_profit(mut self, last_profit: i128, last_last_profit: i128) -> Self {
         self.last_profit = last_profit;
         self.second_to_last_profit = last_last_profit;
         self

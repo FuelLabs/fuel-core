@@ -27,7 +27,7 @@ fn update_da_record_data__increases_block() {
     ];
 
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     let expected = 2;
@@ -57,7 +57,7 @@ fn update_da_record_data__throws_error_if_out_of_order() {
     ];
 
     // when
-    let actual_error = updater.update_da_record_data(blocks).unwrap_err();
+    let actual_error = updater.update_da_record_data(&blocks).unwrap_err();
 
     // then
     let expected_error = Error::SkippedDABlock {
@@ -84,7 +84,7 @@ fn update_da_record_data__updates_cost_per_byte() {
         block_cost,
     }];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     let expected = new_cost_per_byte as u128;
@@ -128,7 +128,7 @@ fn update_da_record_data__updates_known_total_cost() {
         },
     ];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     let actual = updater.latest_known_total_da_cost_excess;
@@ -193,7 +193,7 @@ fn update_da_record_data__if_da_height_matches_l2_height_prjected_and_known_matc
         },
     ];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     assert_eq!(updater.l2_block_height, updater.da_recorded_block_height);
@@ -272,7 +272,7 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
         },
     ];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     let actual = updater.projected_total_da_cost;
@@ -324,10 +324,10 @@ fn update_da_record_data__when_reward_is_greater_than_cost_will_zero_reward_and_
     let new_costs = blocks.iter().map(|block| block.block_cost).sum::<u64>();
 
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
-    let expected = total_rewards - new_costs - known_total_cost as u64;
+    let expected = total_rewards as u128 - new_costs as u128 - known_total_cost;
     let actual = updater.total_da_rewards_excess;
     assert_eq!(actual, expected);
 
