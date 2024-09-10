@@ -11,7 +11,13 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::Nonce,
+    fuel_vm::interpreter::Memory,
     tai64::Tai64,
+};
+
+use crate::{
+    error::Error,
+    GasPrice,
 };
 
 pub trait TxPoolDb: Send + Sync {
@@ -22,6 +28,22 @@ pub trait TxPoolDb: Send + Sync {
     fn blob_exist(&self, blob_id: &BlobId) -> StorageResult<bool>;
 
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
+}
+
+#[async_trait::async_trait]
+/// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
+pub trait GasPriceProvider {
+    /// Calculate gas price for the next block with a given size `block_bytes`.
+    async fn next_gas_price(&self) -> Result<GasPrice, Error>;
+}
+
+/// Trait for getting VM memory.
+#[async_trait::async_trait]
+pub trait MemoryPool {
+    type Memory: Memory + Send + Sync + 'static;
+
+    /// Get the memory instance.
+    async fn get_memory(&self) -> Self::Memory;
 }
 
 pub trait GetTime: Send + Sync {

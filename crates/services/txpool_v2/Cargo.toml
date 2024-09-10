@@ -20,4 +20,5 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
+tokio-rayon = { workspace = true }
 tracing = { workspace = true }

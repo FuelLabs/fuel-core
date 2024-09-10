@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     fmt::Debug,
+    time::Instant,
 };
 
 use crate::{
@@ -12,6 +13,7 @@ use fuel_core_types::services::txpool::PoolTransaction;
 
 pub mod graph;
 
+#[derive(Debug)]
 pub struct StorageData {
     pub transaction: PoolTransaction,
     /// The cumulative tip of a transaction and all of its children.
@@ -19,8 +21,12 @@ pub struct StorageData {
     /// The cumulative gas of a transaction and all of its children.
     pub cumulative_gas: u64,
     /// Number of dependents
-    pub number_dependents: u64,
+    pub number_txs_in_chain: u64,
+    /// Submitted time
+    pub submitted_time: Instant,
 }
+
+pub type RemovedTransactions = Vec<PoolTransaction>;
 
 pub trait Storage {
     type StorageIndex: Copy + Debug;
@@ -30,7 +36,7 @@ pub trait Storage {
         transaction: PoolTransaction,
         dependencies: Vec<Self::StorageIndex>,
         collided_transactions: Vec<Self::StorageIndex>,
-    ) -> Result<Self::StorageIndex, Error>;
+    ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
 
@@ -61,4 +67,6 @@ pub trait Storage {
         &mut self,
         index: Self::StorageIndex,
     ) -> Result<StorageData, Error>;
+
+    fn count(&self) -> u64;
 }

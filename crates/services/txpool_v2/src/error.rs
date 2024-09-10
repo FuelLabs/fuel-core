@@ -1,7 +1,18 @@
-use fuel_core_types::fuel_tx::UtxoId;
+use fuel_core_types::{
+    fuel_tx::{
+        Address,
+        ContractId,
+        TxId,
+        UtxoId,
+    },
+    fuel_types::Nonce,
+    fuel_vm::checked_transaction::CheckError,
+};
 
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
+    #[display(fmt = "Gas price not found for block height {_0}")]
+    GasPriceNotFound(String),
     #[display(fmt = "Database error: {_0}")]
     Database(String),
     #[display(fmt = "Transaction not found: {_0}")]
@@ -21,4 +32,52 @@ pub enum Error {
     Collided(String),
     #[display(fmt = "Utxo not found: {_0}")]
     UtxoNotFound(UtxoId),
+    #[display(fmt = "The UTXO `{_0}` is blacklisted")]
+    BlacklistedUTXO(UtxoId),
+    #[display(fmt = "The owner `{_0}` is blacklisted")]
+    BlacklistedOwner(Address),
+    #[display(fmt = "The contract `{_0}` is blacklisted")]
+    BlacklistedContract(ContractId),
+    #[display(fmt = "The message `{_0}` is blacklisted")]
+    BlacklistedMessage(Nonce),
+    #[display(fmt = "The transaction type is not supported")]
+    NotSupportedTransactionType,
+    #[display(fmt = "Invalid transaction data: {_0:?}")]
+    ConsensusValidity(CheckError),
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Coin owner is different from expected input"
+    )]
+    NotInsertedIoWrongOwner,
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Coin output does not match expected input"
+    )]
+    NotInsertedIoWrongAmount,
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs"
+    )]
+    NotInsertedIoWrongAssetId,
+    #[display(
+        fmt = "Transaction is not inserted. Input message does not match the values from database"
+    )]
+    NotInsertedIoMessageMismatch,
+    #[display(
+        fmt = "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
+    )]
+    NotInsertedIoContractOutput,
+    #[display(
+        fmt = "Transaction is not inserted. Message id {_0:#x} does not match any received message from the DA layer."
+    )]
+    NotInsertedInputMessageUnknown(Nonce),
+    #[display(fmt = "Transaction is not inserted. UTXO input does not exist: {_0:#x}")]
+    NotInsertedInputContractDoesNotExist(ContractId),
+    #[display(
+        fmt = "Transaction is not inserted. Pool limit is hit, try to increase gas_price"
+    )]
+    NotInsertedLimitHit,
+}
+
+impl From<CheckError> for Error {
+    fn from(e: CheckError) -> Self {
+        Error::ConsensusValidity(e)
+    }
 }

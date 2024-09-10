@@ -23,4 +23,9 @@ pub trait SelectionAlgorithm<S: Storage> {
         transactions_ids: Vec<S::StorageIndex>,
         storage: &S,
     ) -> Result<(), Error>;
+
+    fn on_removed_transaction(
+        &mut self,
+        transaction: &PoolTransaction,
+    ) -> Result<(), Error>;
 }

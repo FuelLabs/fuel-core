@@ -31,6 +31,7 @@ use fuel_core_types::{
         ContractId,
         Finalizable,
         Output,
+        Transaction,
         TransactionBuilder,
         TxId,
         UtxoId,
@@ -40,7 +41,10 @@ use fuel_core_types::{
         Word,
     },
     fuel_vm::{
-        checked_transaction::EstimatePredicates,
+        checked_transaction::{
+            Checked,
+            EstimatePredicates,
+        },
         interpreter::MemoryInstance,
     },
 };
@@ -48,8 +52,10 @@ use fuel_core_types::{
 use crate::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
+    error::Error,
     pool::Pool,
     ports::{
+        GasPriceProvider,
         WasmChecker,
         WasmValidityError,
     },
@@ -62,7 +68,10 @@ use crate::{
         MockDBProvider,
         MockDb,
     },
+    transaction_conversion::check_single_tx,
+    GasPrice,
 };
+// TDOO: Reorganize this file
 
 pub(crate) fn create_message_predicate_from_message(
     amount: Word,
@@ -122,7 +131,7 @@ pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 pub(crate) struct PoolContext {
     mock_db: MockDb,
     rng: StdRng,
-    config: Option<Config>,
+    pub(crate) config: Config,
 }
 
 impl Default for PoolContext {
@@ -130,7 +139,7 @@ impl Default for PoolContext {
         Self {
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(0),
-            config: None,
+            config: Default::default(),
         }
     }
 }
@@ -141,10 +150,7 @@ impl PoolContext {
     }
 
     pub(crate) fn config(self, config: Config) -> Self {
-        Self {
-            config: Some(config),
-            ..self
-        }
+        Self { config, ..self }
     }
 
     pub(crate) fn build(
@@ -158,11 +164,11 @@ impl PoolContext {
         Pool::new(
             MockDBProvider(self.mock_db),
             GraphStorage::new(GraphConfig {
-                max_txs_per_chain: 100,
+                max_txs_per_chain: self.config.max_txs_per_chain,
             }),
             BasicCollisionManager::new(),
             RatioTipGasSelection::new(),
-            self.config.unwrap_or_default(),
+            self.config,
         )
     }
 
@@ -304,4 +310,77 @@ impl IntoEstimated for Input {
         let _ = tx.estimate_predicates(&params.into(), MemoryInstance::new());
         tx.inputs()[0].clone()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct MockTxPoolGasPrice {
+    pub gas_price: Option<GasPrice>,
+}
+
+impl MockTxPoolGasPrice {
+    pub fn new(gas_price: GasPrice) -> Self {
+        Self {
+            gas_price: Some(gas_price),
+        }
+    }
+
+    pub fn new_none() -> Self {
+        Self { gas_price: None }
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceProvider for MockTxPoolGasPrice {
+    async fn next_gas_price(&self) -> Result<GasPrice, Error> {
+        self.gas_price
+            .ok_or(Error::GasPriceNotFound("Gas price not found".to_string()))
+    }
+}
+
+pub async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transaction> {
+    let gas_price = 0;
+    check_unwrap_tx_with_gas_price(tx, config, gas_price).await
+}
+
+async fn check_unwrap_tx_with_gas_price(
+    tx: Transaction,
+    config: &Config,
+    gas_price: GasPrice,
+) -> Checked<Transaction> {
+    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+    check_single_tx(
+        tx,
+        Default::default(),
+        config.utxo_validation,
+        &ConsensusParameters::default(),
+        &gas_price_provider,
+        MemoryInstance::new(),
+    )
+    .await
+    .expect("Transaction should be checked")
+}
+
+async fn check_tx(
+    tx: Transaction,
+    config: &Config,
+) -> Result<Checked<Transaction>, Error> {
+    let gas_price = 0;
+    check_tx_with_gas_price(tx, config, gas_price).await
+}
+
+async fn check_tx_with_gas_price(
+    tx: Transaction,
+    config: &Config,
+    gas_price: GasPrice,
+) -> Result<Checked<Transaction>, Error> {
+    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+    check_single_tx(
+        tx,
+        Default::default(),
+        config.utxo_validation,
+        &ConsensusParameters::default(),
+        &gas_price_provider,
+        MemoryInstance::new(),
+    )
+    .await
 }

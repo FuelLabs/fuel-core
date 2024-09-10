@@ -23,7 +23,7 @@ pub enum CollisionReason {
     ContractCreation(ContractId),
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Collisions<Idx> {
     pub reasons: HashSet<CollisionReason>,
     pub colliding_txs: Vec<Idx>,
@@ -50,5 +50,10 @@ pub trait CollisionManager<S: Storage> {
         &mut self,
         transaction: &PoolTransaction,
         transaction_id: S::StorageIndex,
+    ) -> Result<(), Error>;
+
+    fn on_removed_transaction(
+        &mut self,
+        transaction: &PoolTransaction,
     ) -> Result<(), Error>;
 }

@@ -19,7 +19,7 @@ pub struct Pool<DB, S, CM, SA> {
     collision_manager: CM,
     selection_algorithm: SA,
     db: DB,
-    config: Config,
+    pub config: Config,
 }
 
 impl<DB, S, CM, SA> Pool<DB, S, CM, SA> {
@@ -52,7 +52,7 @@ where
     pub fn insert(
         &mut self,
         transactions: Vec<PoolTransaction>,
-    ) -> Result<Vec<Result<(), Error>>, Error> {
+    ) -> Result<Vec<Result<Vec<PoolTransaction>, Error>>, Error> {
         let db_view = self
             .db
             .latest_view()
@@ -60,6 +60,10 @@ where
         Ok(transactions
             .into_iter()
             .map(|tx| {
+                if self.storage.count() >= self.config.max_txs {
+                    return Err(Error::NotInsertedLimitHit);
+                }
+                self.config.black_list.check_blacklisting(&tx)?;
                 let collisions = self
                     .collision_manager
                     .collect_tx_collisions(&tx, &self.storage)?;
@@ -70,7 +74,7 @@ where
                     self.config.utxo_validation,
                 )?;
                 let has_dependencies = !dependencies.is_empty();
-                let storage_id = self.storage.store_transaction(
+                let (storage_id, removed_transactions) = self.storage.store_transaction(
                     tx,
                     dependencies,
                     collisions.colliding_txs,
@@ -80,7 +84,18 @@ where
                     self.selection_algorithm
                         .new_executable_transactions(vec![storage_id], &self.storage)?;
                 }
-                Ok(())
+                let tx = self.storage.get(&storage_id)?;
+                let result = removed_transactions
+                    .into_iter()
+                    .map(|tx| {
+                        self.collision_manager.on_removed_transaction(&tx)?;
+                        self.selection_algorithm.on_removed_transaction(&tx)?;
+                        Ok(tx)
+                    })
+                    .collect();
+                self.collision_manager
+                    .on_stored_transaction(&tx.transaction, storage_id)?;
+                result
             })
             .collect())
     }

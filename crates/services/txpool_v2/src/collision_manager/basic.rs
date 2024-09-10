@@ -14,6 +14,7 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
+        BlobId,
         ContractId,
         Input,
         Output,
@@ -42,6 +43,8 @@ pub struct BasicCollisionManager<S: Storage> {
     coins_spenders: HashMap<UtxoId, S::StorageIndex>,
     /// Contract -> Transaction that currenty create the contract
     contracts_creators: HashMap<ContractId, S::StorageIndex>,
+    /// Blob -> Transaction that currently create the blob
+    blobs_creators: HashMap<BlobId, S::StorageIndex>,
 }
 
 impl<S: Storage> BasicCollisionManager<S> {
@@ -50,6 +53,7 @@ impl<S: Storage> BasicCollisionManager<S> {
             messages_spenders: HashMap::new(),
             coins_spenders: HashMap::new(),
             contracts_creators: HashMap::new(),
+            blobs_creators: HashMap::new(),
         }
     }
 }
@@ -182,6 +186,42 @@ impl<S: Storage> CollisionManager<S> for BasicCollisionManager<S> {
                     // insert contract
                     self.contracts_creators
                         .insert(*contract_id, transaction_storage_id);
+                }
+            };
+        }
+        Ok(())
+    }
+
+    fn on_removed_transaction(
+        &mut self,
+        transaction: &PoolTransaction,
+    ) -> Result<(), Error> {
+        for input in transaction.inputs() {
+            match input {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                    // remove coin
+                    self.coins_spenders.remove(utxo_id);
+                }
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
+                    // remove message
+                    self.messages_spenders.remove(nonce);
+                }
+                _ => {}
+            }
+        }
+        for output in transaction.outputs().iter() {
+            match output {
+                Output::Coin { .. }
+                | Output::Change { .. }
+                | Output::Variable { .. }
+                | Output::Contract(_) => {}
+                Output::ContractCreated { contract_id, .. } => {
+                    // remove contract
+                    self.contracts_creators.remove(contract_id);
                 }
             };
         }

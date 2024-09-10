@@ -3736,6 +3736,7 @@ dependencies = [
  "num-rational",
  "petgraph",
  "tokio",
+ "tokio-rayon",
  "tracing",
 ]
 

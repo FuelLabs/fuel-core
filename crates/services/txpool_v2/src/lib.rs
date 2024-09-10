@@ -6,10 +6,14 @@ mod ports;
 mod selection_algorithms;
 mod service;
 mod storage;
+mod transaction_conversion;
+
+type GasPrice = Word;
 
 #[cfg(test)]
 mod tests;
 
+use fuel_core_types::fuel_asm::Word;
 pub use service::{
     new_service,
     Service,

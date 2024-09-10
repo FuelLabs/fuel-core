@@ -5,6 +5,7 @@ use crate::{
     error::Error,
     ports::WasmValidityError,
     tests::context::{
+        check_unwrap_tx,
         create_coin_output,
         create_contract_input,
         create_contract_output,
@@ -58,54 +59,6 @@ use std::vec;
 
 const GAS_LIMIT: Word = 100000;
 
-// async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transaction> {
-//     let gas_price = 0;
-//     check_unwrap_tx_with_gas_price(tx, config, gas_price).await
-// }
-
-// async fn check_unwrap_tx_with_gas_price(
-//     tx: Transaction,
-//     config: &Config,
-//     gas_price: GasPrice,
-// ) -> Checked<Transaction> {
-//     let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-//     check_single_tx(
-//         tx,
-//         Default::default(),
-//         config.utxo_validation,
-//         &ConsensusParameters::default(),
-//         &gas_price_provider,
-//         MemoryInstance::new(),
-//     )
-//     .await
-//     .expect("Transaction should be checked")
-// }
-
-// async fn check_tx(
-//     tx: Transaction,
-//     config: &Config,
-// ) -> Result<Checked<Transaction>, Error> {
-//     let gas_price = 0;
-//     check_tx_with_gas_price(tx, config, gas_price).await
-// }
-
-// async fn check_tx_with_gas_price(
-//     tx: Transaction,
-//     config: &Config,
-//     gas_price: GasPrice,
-// ) -> Result<Checked<Transaction>, Error> {
-//     let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-//     check_single_tx(
-//         tx,
-//         Default::default(),
-//         config.utxo_validation,
-//         &ConsensusParameters::default(),
-//         &gas_price_provider,
-//         MemoryInstance::new(),
-//     )
-//     .await
-// }
-
 // TODO: Move out of tests
 fn check_tx_to_pool(checked_tx: Checked<Transaction>) -> PoolTransaction {
     match checked_tx.into() {
@@ -147,397 +100,398 @@ async fn insert_simple_tx_succeeds() {
     }
 }
 
-// #[tokio::test]
-// async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin.clone())
-//         .finalize_as_transaction();
-//     let mut txpool = context.build();
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-//     let utxo_id = *gas_coin.utxo_id().unwrap();
-
-//     // Given
-//     txpool.config_mut().blacklist.coins.insert(utxo_id);
-
-//     // When
-//     let result = txpool.insert_single(tx);
-
-//     // Then
-//     assert!(result.is_err());
-//     assert!(result
-//         .unwrap_err()
-//         .to_string()
-//         .contains(format!("The UTXO `{}` is blacklisted", utxo_id).as_str()));
-// }
-
-// #[tokio::test]
-// async fn insert_simple_tx_with_blacklisted_owner_fails() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin.clone())
-//         .finalize_as_transaction();
-//     let mut txpool = context.build();
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-//     let owner = *gas_coin.input_owner().unwrap();
-
-//     // Given
-//     txpool.config_mut().blacklist.owners.insert(owner);
-
-//     // When
-//     let result = txpool.insert_single(tx);
-
-//     // Then
-//     assert!(result.is_err());
-//     assert!(result
-//         .unwrap_err()
-//         .to_string()
-//         .contains(format!("The owner `{}` is blacklisted", owner).as_str()));
-// }
-
-// #[tokio::test]
-// async fn insert_simple_tx_with_blacklisted_contract_fails() {
-//     let mut context = PoolContext::default();
-//     let contract_id = Contract::EMPTY_CONTRACT_ID;
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin.clone())
-//         .add_input(create_contract_input(
-//             Default::default(),
-//             Default::default(),
-//             contract_id,
-//         ))
-//         .add_output(Output::contract(1, Default::default(), Default::default()))
-//         .finalize_as_transaction();
-//     let mut txpool = context.build();
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-
-//     // Given
-//     txpool.config_mut().blacklist.contracts.insert(contract_id);
-
-//     // When
-//     let result = txpool.insert_single(tx);
-
-//     // Then
-//     assert!(result.is_err());
-//     assert!(result
-//         .unwrap_err()
-//         .to_string()
-//         .contains(format!("The contract `{}` is blacklisted", contract_id).as_str()));
-// }
-
-// #[tokio::test]
-// async fn insert_simple_tx_with_blacklisted_message_fails() {
-//     let (message, input) = create_message_predicate_from_message(5000, 0);
-
-//     let tx = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input)
-//         .finalize_as_transaction();
-
-//     let nonce = *message.nonce();
-//     let mut context = PoolContext::default();
-//     context.database_mut().insert_message(message);
-//     let mut txpool = context.build();
-
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-
-//     // Given
-//     txpool.config_mut().blacklist.messages.insert(nonce);
-
-//     // When
-//     let result = txpool.insert_single(tx);
-
-//     // Then
-//     assert!(result.is_err());
-//     assert!(result
-//         .unwrap_err()
-//         .to_string()
-//         .contains(format!("The message `{}` is blacklisted", nonce).as_str()));
-// }
-
-// #[tokio::test]
-// async fn insert_simple_tx_dependency_chain_succeeds() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let (output, unset_input) = context.create_output_and_input(1);
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(1)
-//         .max_fee_limit(1)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .add_output(output)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(1)
-//         .max_fee_limit(1)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be OK, got Err");
-//     txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 dependent should be OK, got Err");
-// }
-
-// #[tokio::test]
-// async fn faulty_t2_collided_on_contract_id_from_tx1() {
-//     let mut context = PoolContext::default();
-
-//     let contract_id = Contract::EMPTY_CONTRACT_ID;
-
-//     // contract creation tx
-//     let (_, gas_coin) = context.setup_coin();
-//     let (output, unset_input) = context.create_output_and_input(10);
-//     let tx = TransactionBuilder::create(
-//         Default::default(),
-//         Default::default(),
-//         Default::default(),
-//     )
-//     .tip(10)
-//     .max_fee_limit(10)
-//     .add_input(gas_coin)
-//     .add_output(create_contract_output(contract_id))
-//     .add_output(output)
-//     .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let input = unset_input.into_input(UtxoId::new(tx.id(&Default::default()), 1));
-
-//     // attempt to insert a different creation tx with a valid dependency on the first tx,
-//     // but with a conflicting output contract id
-//     let tx_faulty = TransactionBuilder::create(
-//         Default::default(),
-//         Default::default(),
-//         Default::default(),
-//     )
-//     .tip(9)
-//     .max_fee_limit(9)
-//     .add_input(gas_coin)
-//     .add_input(input)
-//     .add_output(create_contract_output(contract_id))
-//     .add_output(output)
-//     .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-//     txpool.insert_single(tx).expect("Tx1 should be Ok, got Err");
-
-//     let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config).await;
-
-//     let err = txpool
-//         .insert_single(tx_faulty)
-//         .expect_err("Tx2 should be Err, got Ok");
-//     assert!(matches!(
-//         err,
-//         Error::NotInsertedCollisionContractId(id) if id == contract_id
-//     ));
-// }
-
-// #[tokio::test]
-// async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
-//     let mut context = PoolContext::default();
-
-//     let contract_id = Contract::EMPTY_CONTRACT_ID;
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx_faulty = TransactionBuilder::create(
-//         Default::default(),
-//         Default::default(),
-//         Default::default(),
-//     )
-//     .add_input(gas_coin)
-//     .add_output(create_contract_output(contract_id))
-//     .finalize_as_transaction();
-
-//     // create a second transaction with utxo id referring to
-//     // the wrong type of utxo (contract instead of coin)
-//     let tx = TransactionBuilder::script(vec![], vec![])
-//         .tip(1)
-//         .max_fee_limit(1)
-//         .max_fee_limit(1)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(context.random_predicate(
-//             AssetId::BASE,
-//             TEST_COIN_AMOUNT,
-//             Some(UtxoId::new(tx_faulty.id(&Default::default()), 0)),
-//         ))
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx_faulty_id = tx_faulty.id(&ChainId::default());
-//     let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx_faulty.clone())
-//         .expect("Tx1 should be Ok, got Err");
-
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-
-//     let err = txpool
-//         .insert_single(tx)
-//         .expect_err("Tx2 should be Err, got Ok");
-//     assert!(matches!(
-//         err,
-//         Error::NotInsertedInputUtxoIdNotDoesNotExist(id) if id == UtxoId::new(tx_faulty_id, 0)
-//     ));
-// }
-
-// #[tokio::test]
-// async fn not_inserted_known_tx() {
-//     let config = Config {
-//         utxo_validation: false,
-//         ..Default::default()
-//     };
-//     let context = PoolContext::default().config(config);
-//     let mut txpool = context.build();
-
-//     let tx = TransactionBuilder::script(vec![], vec![])
-//         .add_random_fee_input()
-//         .finalize()
-//         .into();
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx.clone())
-//         .expect("Tx1 should be Ok, got Err");
-
-//     let err = txpool
-//         .insert_single(tx)
-//         .expect_err("Second insertion of Tx1 should be Err, got Ok");
-//     assert!(matches!(err, Error::NotInsertedTxKnown));
-// }
-
-// #[tokio::test]
-// async fn try_to_insert_tx2_missing_utxo() {
-//     let mut context = PoolContext::default();
-
-//     let input = context.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
-//     let tx = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input)
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx = check_unwrap_tx(tx, &txpool.config).await;
-
-//     let err = txpool
-//         .insert_single(tx)
-//         .expect_err("Tx should be Err, got Ok");
-//     assert!(matches!(
-//         err,
-//         Error::NotInsertedInputUtxoIdNotDoesNotExist(_)
-//     ));
-// }
-
-// #[tokio::test]
-// async fn higher_priced_tx_removes_lower_priced_tx() {
-//     let mut context = PoolContext::default();
-
-//     let (_, coin_input) = context.setup_coin();
-
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(coin_input.clone())
-//         .finalize_as_transaction();
-
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(20)
-//         .max_fee_limit(20)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(coin_input)
-//         .finalize_as_transaction();
-
-//     let tx1_id = tx1.id(&ChainId::default());
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1.clone())
-//         .expect("Tx1 should be Ok, got Err");
-
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-
-//     let vec = txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be Ok, got Err");
-//     assert_eq!(vec.removed[0].id(), tx1_id, "Tx1 id should be removed");
-// }
-
-// #[tokio::test]
-// async fn underpriced_tx1_not_included_coin_collision() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let (output, unset_input) = context.create_output_and_input(20);
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(20)
-//         .max_fee_limit(20)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .add_output(output)
-//         .finalize_as_transaction();
-
-//     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(20)
-//         .max_fee_limit(20)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input.clone())
-//         .finalize_as_transaction();
-
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input)
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx1_checked = check_unwrap_tx(tx1.clone(), txpool.config()).await;
-//     txpool
-//         .insert_single(tx1_checked)
-//         .expect("Tx1 should be Ok, got Err");
-
-//     let tx2_checked = check_unwrap_tx(tx2.clone(), txpool.config()).await;
-//     txpool
-//         .insert_single(tx2_checked)
-//         .expect("Tx2 should be Ok, got Err");
-
-//     let tx3_checked = check_unwrap_tx(tx3, txpool.config()).await;
-//     let err = txpool
-//         .insert_single(tx3_checked)
-//         .expect_err("Tx3 should be Err, got Ok");
-//     assert!(matches!(
-//         err,
-//         Error::NotInsertedCollision(id, utxo_id) if id == tx2.id(&Default::default()) && utxo_id == UtxoId::new(tx1.id(&Default::default()), 0)
-//     ));
-// }
-
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+
+    // Given
+    let tx = check_unwrap_tx(tx, &context.config).await;
+    let utxo_id = *gas_coin.utxo_id().unwrap();
+    context.config.black_list.coins.insert(utxo_id);
+
+    let mut txpool = context.build();
+
+    // When
+    let results = txpool.insert(vec![check_tx_to_pool(tx)]).unwrap();
+
+    // Then
+    for result in results {
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains(format!("The UTXO `{}` is blacklisted", utxo_id).as_str()));
+    }
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_owner_fails() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+
+    // Given
+    let tx = check_unwrap_tx(tx, &context.config).await;
+    let owner = *gas_coin.input_owner().unwrap();
+    context.config.black_list.owners.insert(owner);
+
+    let mut txpool = context.build();
+
+    // When
+    let results = txpool.insert(vec![check_tx_to_pool(tx)]).unwrap();
+
+    // Then
+    for result in results {
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains(format!("The owner `{}` is blacklisted", owner).as_str()));
+    }
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_contract_fails() {
+    let mut context = PoolContext::default();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .add_input(create_contract_input(
+            Default::default(),
+            Default::default(),
+            contract_id,
+        ))
+        .add_output(Output::contract(1, Default::default(), Default::default()))
+        .finalize_as_transaction();
+    // Given
+    let tx = check_unwrap_tx(tx, &context.config).await;
+    context.config.black_list.contracts.insert(contract_id);
+
+    let mut txpool = context.build();
+
+    // When
+    let results = txpool.insert(vec![check_tx_to_pool(tx)]).unwrap();
+
+    // Then
+    for result in results {
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains(format!("The contract `{}` is blacklisted", contract_id).as_str()));
+    }
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_message_fails() {
+    let mut context = PoolContext::default();
+    let (message, input) = create_message_predicate_from_message(5000, 0);
+
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .finalize_as_transaction();
+
+    let nonce = *message.nonce();
+    // Given
+    let tx = check_unwrap_tx(tx, &context.config).await;
+    context.config.black_list.messages.insert(nonce);
+
+    let mut txpool = context.build();
+
+    // When
+    let results = txpool.insert(vec![check_tx_to_pool(tx)]).unwrap();
+
+    // Then
+    for result in results {
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains(format!("The message `{}` is blacklisted", nonce).as_str()));
+    }
+}
+
+#[tokio::test]
+async fn insert_simple_tx_dependency_chain_succeeds() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let (output, unset_input) = context.create_output_and_input(1);
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(1)
+        .max_fee_limit(1)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .add_output(output)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(1)
+        .max_fee_limit(1)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+
+    for result in txpool
+        .insert(vec![check_tx_to_pool(tx1), check_tx_to_pool(tx2)])
+        .unwrap()
+    {
+        result.expect("Tx should be Ok, got Err");
+    }
+}
+
+#[tokio::test]
+async fn faulty_t2_collided_on_contract_id_from_tx1() {
+    let mut context = PoolContext::default();
+
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
+
+    // contract creation tx
+    let (_, gas_coin) = context.setup_coin();
+    let (output, unset_input) = context.create_output_and_input(10);
+    let tx = TransactionBuilder::create(
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    )
+    .tip(10)
+    .max_fee_limit(10)
+    .add_input(gas_coin)
+    .add_output(create_contract_output(contract_id))
+    .add_output(output)
+    .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let input = unset_input.into_input(UtxoId::new(tx.id(&Default::default()), 1));
+
+    // attempt to insert a different creation tx with a valid dependency on the first tx,
+    // but with a conflicting output contract id
+    let tx_faulty = TransactionBuilder::create(
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    )
+    .tip(9)
+    .max_fee_limit(9)
+    .add_input(gas_coin)
+    .add_input(input)
+    .add_output(create_contract_output(contract_id))
+    .add_output(output)
+    .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![check_tx_to_pool(tx), check_tx_to_pool(tx_faulty)])
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    let err = results[1].as_ref().expect_err("Tx2 should be Err, got Ok");
+    assert!(matches!(err, Error::Collided(_)));
+}
+
+#[tokio::test]
+async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
+    let mut context = PoolContext::default();
+
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
+    let (_, gas_coin) = context.setup_coin();
+    let tx_faulty = TransactionBuilder::create(
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    )
+    .add_input(gas_coin)
+    .add_output(create_contract_output(contract_id))
+    .finalize_as_transaction();
+
+    // create a second transaction with utxo id referring to
+    // the wrong type of utxo (contract instead of coin)
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .tip(1)
+        .max_fee_limit(1)
+        .max_fee_limit(1)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(context.random_predicate(
+            AssetId::BASE,
+            TEST_COIN_AMOUNT,
+            Some(UtxoId::new(tx_faulty.id(&Default::default()), 0)),
+        ))
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx_faulty_id = tx_faulty.id(&ChainId::default());
+    let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![check_tx_to_pool(tx_faulty), check_tx_to_pool(tx)])
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    let err = results[1].as_ref().expect_err("Tx should be Err, got Ok");
+    assert!(matches!(
+        err,
+        Error::UtxoNotFound(id) if id == &UtxoId::new(tx_faulty_id, 0)
+    ));
+}
+
+#[tokio::test]
+async fn not_inserted_known_tx() {
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let context = PoolContext::default().config(config);
+    let mut txpool = context.build();
+
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .add_random_fee_input()
+        .finalize()
+        .into();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![check_tx_to_pool(tx.clone()), check_tx_to_pool(tx)])
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    let err = results[1].as_ref().expect_err("Tx should be Err, got Ok");
+    assert!(matches!(err, Error::Collided(_)));
+}
+
+#[tokio::test]
+async fn try_to_insert_tx2_missing_utxo() {
+    let mut context = PoolContext::default();
+
+    let input = context.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    let results = txpool.insert(vec![check_tx_to_pool(tx)]).unwrap();
+    assert_eq!(results.len(), 1);
+    let err = results[0].as_ref().expect_err("Tx should be Err, got Ok");
+    assert!(matches!(err, Error::UtxoNotFound(_)));
+}
+
+#[tokio::test]
+async fn higher_priced_tx_removes_lower_priced_tx() {
+    let mut context = PoolContext::default();
+
+    let (_, coin_input) = context.setup_coin();
+
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(coin_input.clone())
+        .finalize_as_transaction();
+
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(20)
+        .max_fee_limit(20)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(coin_input)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    let vec = results[1].as_ref().unwrap();
+    assert_eq!(vec[0].id(), tx1_id, "Tx1 id should be removed");
+}
+
+#[tokio::test]
+async fn underpriced_tx1_not_included_coin_collision() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let (output, unset_input) = context.create_output_and_input(20);
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(20)
+        .max_fee_limit(20)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .add_output(output)
+        .finalize_as_transaction();
+
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
+
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(20)
+        .max_fee_limit(20)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input.clone())
+        .finalize_as_transaction();
+
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx1_checked = check_unwrap_tx(tx1.clone(), &txpool.config).await;
+    let tx2_checked = check_unwrap_tx(tx2.clone(), &txpool.config).await;
+    let tx3_checked = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1_checked),
+            check_tx_to_pool(tx2_checked),
+            check_tx_to_pool(tx3_checked),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    let err = results[2].as_ref().expect_err("Tx3 should be Err, got Ok");
+
+    assert!(matches!(err, Error::Collided(_)));
+}
+
+// TODO: Why this should error ?
 // #[tokio::test]
 // async fn overpriced_tx_contract_input_not_inserted() {
 //     let mut context = PoolContext::default();
@@ -571,486 +525,491 @@ async fn insert_simple_tx_succeeds() {
 
 //     let mut txpool = context.build();
 //     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be Ok, got err");
-
 //     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let err = txpool
-//         .insert_single(tx2)
-//         .expect_err("Tx2 should be Err, got Ok");
-//     assert!(
-//         matches!(
-//             err,
-//             Error::NotInsertedContractPricedLower(id) if id == contract_id
-//         ),
-//         "wrong err {err:?}"
-//     );
+
+//     let results = txpool
+//         .insert(vec![check_tx_to_pool(tx1), check_tx_to_pool(tx2)])
+//         .unwrap();
+//     assert_eq!(results.len(), 2);
+//     assert!(results[0].is_ok());
+//     let err = results[1].as_ref().expect_err("Tx2 should be Err, got Ok");
 // }
 
-// #[tokio::test]
-// async fn dependent_contract_input_inserted() {
-//     let mut context = PoolContext::default();
-
-//     let contract_id = Contract::EMPTY_CONTRACT_ID;
-//     let (_, gas_funds) = context.setup_coin();
-//     let tx1 = TransactionBuilder::create(
-//         Default::default(),
-//         Default::default(),
-//         Default::default(),
-//     )
-//     .tip(10)
-//     .max_fee_limit(10)
-//     .add_input(gas_funds)
-//     .add_output(create_contract_output(contract_id))
-//     .finalize_as_transaction();
-
-//     let (_, gas_funds) = context.setup_coin();
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_funds)
-//         .add_input(create_contract_input(
-//             Default::default(),
-//             Default::default(),
-//             contract_id,
-//         ))
-//         .add_output(Output::contract(1, Default::default(), Default::default()))
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be Ok, got Err");
-// }
-
-// #[tokio::test]
-// async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-
-//     let (output, unset_input) = context.create_output_and_input(10);
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin.clone())
-//         .add_output(output)
-//         .finalize_as_transaction();
-
-//     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(9)
-//         .max_fee_limit(9)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input)
-//         .finalize_as_transaction();
-
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .tip(20)
-//         .max_fee_limit(20)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let tx1_id = tx1.id(&ChainId::default());
-//     let tx2_id = tx2.id(&ChainId::default());
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1.clone())
-//         .expect("Tx1 should be OK, got Err");
-//     txpool
-//         .insert_single(tx2.clone())
-//         .expect("Tx2 should be OK, got Err");
-//     let vec = txpool
-//         .insert_single(tx3)
-//         .expect("Tx3 should be OK, got Err");
-//     assert_eq!(
-//         vec.removed.len(),
-//         2,
-//         "Tx1 and Tx2 should be removed:{vec:?}",
-//     );
-//     assert_eq!(vec.removed[0].id(), tx1_id, "Tx1 id should be removed");
-//     assert_eq!(vec.removed[1].id(), tx2_id, "Tx2 id should be removed");
-// }
-
-// #[tokio::test]
-// async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin.clone())
-//         .finalize_as_transaction();
-
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(11)
-//         .max_fee_limit(11)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin.clone())
-//         .finalize_as_transaction();
-
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .tip(12)
-//         .max_fee_limit(12)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be OK, got Err");
-//     let squeezed = txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be OK, got Err");
-//     assert_eq!(squeezed.removed.len(), 1);
-//     let squeezed = txpool
-//         .insert_single(tx3)
-//         .expect("Tx3 should be OK, got Err");
-//     assert_eq!(
-//         squeezed.removed.len(),
-//         1,
-//         "Tx2 should be removed:{squeezed:?}"
-//     );
-// }
-
-// #[tokio::test]
-// async fn tx_limit_hit() {
-//     let mut context = PoolContext::default().config(Config {
-//         max_tx: 1,
-//         ..Default::default()
-//     });
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .add_output(create_coin_output())
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be Ok, got Err");
-
-//     let err = txpool
-//         .insert_single(tx2)
-//         .expect_err("Tx2 should be Err, got Ok");
-//     assert!(matches!(err, Error::NotInsertedLimitHit));
-// }
-
-// #[tokio::test]
-// async fn tx_depth_hit() {
-//     let mut context = PoolContext::default().config(Config {
-//         max_depth: 2,
-//         ..Default::default()
-//     });
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let (output, unset_input) = context.create_output_and_input(10_000);
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .add_output(output)
-//         .finalize_as_transaction();
-
-//     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-//     let (output, unset_input) = context.create_output_and_input(5_000);
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input)
-//         .add_output(output)
-//         .finalize_as_transaction();
-
-//     let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(input)
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be OK, got Err");
-//     txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be OK, got Err");
-
-//     let err = txpool
-//         .insert_single(tx3)
-//         .expect_err("Tx3 should be Err, got Ok");
-//     assert!(matches!(err, Error::NotInsertedMaxDepth));
-// }
-
-// #[tokio::test]
-// async fn sorted_out_tx1_2_3() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(9)
-//         .max_fee_limit(9)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .tip(20)
-//         .max_fee_limit(20)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let tx1_id = tx1.id(&ChainId::default());
-//     let tx2_id = tx2.id(&ChainId::default());
-//     let tx3_id = tx3.id(&ChainId::default());
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx3)
-//         .expect("Tx3 should be Ok, got Err");
-
-//     let txs = txpool.sorted_includable().collect::<Vec<_>>();
-
-//     assert_eq!(txs.len(), 3, "Should have 3 txs");
-//     assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
-//     assert_eq!(txs[1].id(), tx1_id, "Second should be tx1");
-//     assert_eq!(txs[2].id(), tx2_id, "Third should be tx2");
-// }
-
-// #[tokio::test]
-// async fn sorted_out_tx_same_tips() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT / 2)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .tip(10)
-//         .max_fee_limit(10)
-//         .script_gas_limit(GAS_LIMIT / 4)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let tx1_id = tx1.id(&ChainId::default());
-//     let tx2_id = tx2.id(&ChainId::default());
-//     let tx3_id = tx3.id(&ChainId::default());
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx3)
-//         .expect("Tx4 should be Ok, got Err");
-
-//     let txs = txpool.sorted_includable().collect::<Vec<_>>();
-
-//     assert_eq!(txs.len(), 3, "Should have 3 txs");
-//     assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
-//     assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
-//     assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
-// }
-
-// #[tokio::test]
-// async fn sorted_out_tx_profitable_ratios() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(4)
-//         .max_fee_limit(4)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(2)
-//         .max_fee_limit(2)
-//         .script_gas_limit(GAS_LIMIT / 10)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .tip(1)
-//         .max_fee_limit(1)
-//         .script_gas_limit(GAS_LIMIT / 100)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let tx1_id = tx1.id(&ChainId::default());
-//     let tx2_id = tx2.id(&ChainId::default());
-//     let tx3_id = tx3.id(&ChainId::default());
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx3)
-//         .expect("Tx4 should be Ok, got Err");
-
-//     let txs = txpool.sorted_includable().collect::<Vec<_>>();
-
-//     assert_eq!(txs.len(), 3, "Should have 3 txs");
-//     assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
-//     assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
-//     assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
-// }
-
-// #[tokio::test]
-// async fn sorted_out_tx_by_creation_instant() {
-//     let mut context = PoolContext::default();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx1 = TransactionBuilder::script(vec![], vec![])
-//         .tip(4)
-//         .max_fee_limit(4)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(4)
-//         .max_fee_limit(4)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx3 = TransactionBuilder::script(vec![], vec![])
-//         .tip(4)
-//         .max_fee_limit(4)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let (_, gas_coin) = context.setup_coin();
-//     let tx4 = TransactionBuilder::script(vec![], vec![])
-//         .tip(4)
-//         .max_fee_limit(4)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_coin)
-//         .finalize_as_transaction();
-
-//     let tx1_id = tx1.id(&ChainId::default());
-//     let tx2_id = tx2.id(&ChainId::default());
-//     let tx3_id = tx3.id(&ChainId::default());
-//     let tx4_id = tx4.id(&ChainId::default());
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-//     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-//     let tx4 = check_unwrap_tx(tx4, &txpool.config).await;
-
-//     txpool
-//         .insert_single(tx1)
-//         .expect("Tx1 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx2)
-//         .expect("Tx2 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx3)
-//         .expect("Tx4 should be Ok, got Err");
-//     txpool
-//         .insert_single(tx4)
-//         .expect("Tx4 should be Ok, got Err");
-
-//     let txs = txpool.sorted_includable().collect::<Vec<_>>();
-
-//     // This order doesn't match the lexicographical order of the tx ids
-//     // and so it verifies that the txs are sorted by creation instant
-//     // The newest tx should be first
-//     assert_eq!(txs.len(), 4, "Should have 4 txs");
-//     assert_eq!(txs[0].id(), tx1_id, "First should be tx1");
-//     assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
-//     assert_eq!(txs[2].id(), tx3_id, "Third should be tx3");
-//     assert_eq!(txs[3].id(), tx4_id, "Fourth should be tx4");
-// }
+#[tokio::test]
+async fn dependent_contract_input_inserted() {
+    let mut context = PoolContext::default();
+
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
+    let (_, gas_funds) = context.setup_coin();
+    let tx1 = TransactionBuilder::create(
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    )
+    .tip(10)
+    .max_fee_limit(10)
+    .add_input(gas_funds)
+    .add_output(create_contract_output(contract_id))
+    .finalize_as_transaction();
+
+    let (_, gas_funds) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_funds)
+        .add_input(create_contract_input(
+            Default::default(),
+            Default::default(),
+            contract_id,
+        ))
+        .add_output(Output::contract(1, Default::default(), Default::default()))
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![check_tx_to_pool(tx1), check_tx_to_pool(tx2)])
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+}
+
+#[tokio::test]
+async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+
+    let (output, unset_input) = context.create_output_and_input(10);
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .add_output(output)
+        .finalize_as_transaction();
+
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
+
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(9)
+        .max_fee_limit(9)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .finalize_as_transaction();
+
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(20)
+        .max_fee_limit(20)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    let removed_transactions = results[2].as_ref().unwrap();
+    assert_eq!(removed_transactions.len(), 2);
+    assert_eq!(
+        removed_transactions[0].id(),
+        tx1_id,
+        "Tx1 id should be removed"
+    );
+    assert_eq!(
+        removed_transactions[1].id(),
+        tx2_id,
+        "Tx2 id should be removed"
+    );
+}
+
+#[tokio::test]
+async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(11)
+        .max_fee_limit(11)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(12)
+        .max_fee_limit(12)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    let removed_transactions = results[1].as_ref().unwrap();
+    assert_eq!(removed_transactions.len(), 1);
+    let removed_transactions = results[2].as_ref().unwrap();
+    assert_eq!(removed_transactions.len(), 1);
+}
+
+#[tokio::test]
+async fn tx_limit_hit() {
+    let mut context = PoolContext::default().config(Config {
+        max_txs: 1,
+        ..Default::default()
+    });
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .add_output(create_coin_output())
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let results = txpool
+        .insert(vec![check_tx_to_pool(tx1), check_tx_to_pool(tx2)])
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    let err = results[1].as_ref().expect_err("Tx2 should be Err, got Ok");
+    assert!(matches!(err, Error::NotInsertedLimitHit));
+}
+
+#[tokio::test]
+async fn tx_chain_length_hit() {
+    let mut context = PoolContext::default().config(Config {
+        max_txs_per_chain: 2,
+        ..Default::default()
+    });
+
+    let (_, gas_coin) = context.setup_coin();
+    let (output, unset_input) = context.create_output_and_input(10_000);
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .add_output(output)
+        .finalize_as_transaction();
+
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
+    let (output, unset_input) = context.create_output_and_input(5_000);
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .add_output(output)
+        .finalize_as_transaction();
+
+    let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .finalize_as_transaction();
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    let err = results[2].as_ref().expect_err("Tx3 should be Err, got Ok");
+    assert!(matches!(err, Error::NotInsertedChainDependencyTooBig));
+}
+
+#[tokio::test]
+async fn sorted_out_tx1_2_3() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(9)
+        .max_fee_limit(9)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(20)
+        .max_fee_limit(20)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    assert!(results[2].is_ok());
+
+    let txs = txpool.extract_transactions_for_block().unwrap();
+
+    assert_eq!(txs.len(), 3, "Should have 3 txs");
+    assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
+    assert_eq!(txs[1].id(), tx1_id, "Second should be tx1");
+    assert_eq!(txs[2].id(), tx2_id, "Third should be tx2");
+}
+
+#[tokio::test]
+async fn sorted_out_tx_same_tips() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT / 2)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(10)
+        .script_gas_limit(GAS_LIMIT / 4)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    assert!(results[2].is_ok());
+
+    let txs = txpool.extract_transactions_for_block().unwrap();
+    assert_eq!(txs.len(), 3, "Should have 3 txs");
+
+    assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
+}
+
+#[tokio::test]
+async fn sorted_out_tx_profitable_ratios() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(2)
+        .max_fee_limit(2)
+        .script_gas_limit(GAS_LIMIT / 10)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(1)
+        .max_fee_limit(1)
+        .script_gas_limit(GAS_LIMIT / 100)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    assert!(results[2].is_ok());
+
+    let txs = txpool.extract_transactions_for_block().unwrap();
+    assert_eq!(txs.len(), 3, "Should have 3 txs");
+
+    assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
+}
+
+#[tokio::test]
+async fn sorted_out_tx_by_creation_instant() {
+    let mut context = PoolContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx4 = TransactionBuilder::script(vec![], vec![])
+        .tip(4)
+        .max_fee_limit(4)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+    let tx4_id = tx4.id(&ChainId::default());
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx4 = check_unwrap_tx(tx4, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+            check_tx_to_pool(tx4.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 4);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    assert!(results[2].is_ok());
+    assert!(results[3].is_ok());
+
+    let txs = txpool.extract_transactions_for_block().unwrap();
+
+    // This order doesn't match the lexicographical order of the tx ids
+    // and so it verifies that the txs are sorted by creation instant
+    // The newest tx should be first
+    assert_eq!(txs.len(), 4, "Should have 4 txs");
+    assert_eq!(txs[0].id(), tx1_id, "First should be tx1");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx3_id, "Third should be tx3");
+    assert_eq!(txs[3].id(), tx4_id, "Fourth should be tx4");
+}
 
 // #[tokio::test]
 // async fn tx_at_least_min_gas_price_is_insertable() {
