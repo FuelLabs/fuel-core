@@ -133,7 +133,7 @@ where
             .collect())
     }
 
-    // TODO: Use block space also
+    // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
     /// based on the constraints given in the configuration and the selection algorithm used.

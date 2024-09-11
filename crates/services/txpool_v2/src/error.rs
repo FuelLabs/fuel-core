@@ -28,7 +28,7 @@ pub enum Error {
         fmt = "Transaction is not inserted. Transaction chain dependency is already too big"
     )]
     NotInsertedChainDependencyTooBig,
-    // TODO: Make more specific errors
+    // TODO: Make more specific errors: https://github.com/FuelLabs/fuel-core/issues/2185
     #[display(fmt = "Transaction collided: {_0}")]
     Collided(String),
     #[display(fmt = "Utxo not found: {_0}")]
@@ -69,6 +69,10 @@ pub enum Error {
         fmt = "Transaction is not inserted. Message id {_0:#x} does not match any received message from the DA layer."
     )]
     NotInsertedInputMessageUnknown(Nonce),
+    #[display(
+        fmt = "Transaction is not inserted. Input dependent on a Change or Variable output"
+    )]
+    NotInsertedInputDependentOnChangeOrVariable,
     #[display(fmt = "Transaction is not inserted. UTXO input does not exist: {_0:#x}")]
     NotInsertedInputContractDoesNotExist(ContractId),
     #[display(fmt = "Transaction is not inserted. BlobId is already taken {_0:#x}")]

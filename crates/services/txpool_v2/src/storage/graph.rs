@@ -130,7 +130,7 @@ impl GraphStorage {
         Ok(removed_transactions)
     }
 
-    /// Check if the input has the right data to spend the output.
+    /// Check if the input has the right data to spend the output present in pool.
     fn check_if_coin_input_can_spend_output(
         output: &Output,
         input: &Input,
@@ -168,16 +168,11 @@ impl GraphStorage {
                     }
                 }
                 Output::Contract(_) => return Err(Error::NotInsertedIoContractOutput),
-                Output::Change { to, asset_id, .. } => {
-                    if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner);
-                    }
-                    if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId);
-                    }
+                Output::Change { .. } => {
+                    return Err(Error::NotInsertedInputDependentOnChangeOrVariable)
                 }
                 Output::Variable { .. } => {
-                    // everything is variable and can be only check on execution
+                    return Err(Error::NotInsertedInputDependentOnChangeOrVariable)
                 }
                 Output::ContractCreated { .. } => {
                     return Err(Error::NotInsertedIoContractOutput)

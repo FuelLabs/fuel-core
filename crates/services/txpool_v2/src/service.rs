@@ -10,8 +10,7 @@ use fuel_core_types::fuel_tx::Transaction;
 pub struct SharedState;
 
 impl SharedState {
-    // TODO: Correct output.
-    // TODO: manage transaction creration time and use time port
+    // TODO: Implement conversion from `Transaction` to `PoolTransaction`. (with all the verifications that it implies): https://github.com/FuelLabs/fuel-core/issues/2186
     fn insert(&mut self, transactions: Vec<Transaction>) -> Vec<()> {
         // Move verif of wasm there
         vec![]
