@@ -15,7 +15,13 @@ use crate::{
 
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
-        da_source_adapter::DaBlockCostsProvider,
+        da_source_adapter::{
+            dummy_costs::DummyDaBlockCosts,
+            service::{
+                DaBlockCostsService,
+            },
+            DaBlockCostsProvider,
+        },
         fuel_core_storage_adapter::{
             storage::GasPriceMetadata,
             FuelL2BlockSource,
@@ -69,7 +75,7 @@ pub struct InitializeTask {
     pub on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     pub block_stream: BoxStream<SharedImportResult>,
     pub shared_algo: SharedGasPriceAlgo<Algorithm>,
-    pub da_block_costs: DaBlockCostsProvider,
+    pub da_block_costs_service: DaBlockCostsService<DummyDaBlockCosts>,
 }
 
 type MetadataStorageAdapter =
@@ -85,7 +91,6 @@ impl InitializeTask {
         block_stream: BoxStream<SharedImportResult>,
         gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
         on_chain_db: Database<OnChain, RegularStage<OnChain>>,
-        da_block_costs: DaBlockCostsProvider,
     ) -> anyhow::Result<Self> {
         let latest_block_height = on_chain_db
             .latest_height()
@@ -94,6 +99,8 @@ impl InitializeTask {
         let default_metadata = get_default_metadata(&config, latest_block_height);
         let algo = get_best_algo(&gas_price_db, default_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
+        let da_block_costs_service = DaBlockCostsService::new(DummyDaBlockCosts, None);
+
         let task = Self {
             config,
             genesis_block_height,
@@ -102,7 +109,7 @@ impl InitializeTask {
             on_chain_db,
             block_stream,
             shared_algo,
-            da_block_costs,
+            da_block_costs_service,
         };
         Ok(task)
     }
@@ -164,10 +171,15 @@ impl RunnableService for InitializeTask {
             self.gas_price_db,
             self.on_chain_db,
             self.block_stream,
-            self.da_block_costs,
+            self.da_block_costs_service.shared_data(),
         )?;
-        let inner_service =
-            GasPriceService::new(starting_height, updater, self.shared_algo).await;
+        let inner_service = GasPriceService::new(
+            starting_height,
+            updater,
+            self.shared_algo,
+            self.da_block_costs_service,
+        )
+        .await;
         Ok(inner_service)
     }
 }

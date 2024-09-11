@@ -38,10 +38,6 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_gas_price_service::fuel_gas_price_updater::da_source_adapter::{
-    dummy_costs::DummyDaBlockCosts,
-    service::new_service as new_da_block_costs_service,
-};
 #[allow(unused_imports)]
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
     fuel_core_storage_adapter::FuelL2BlockSource,
@@ -208,9 +204,6 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    // todo(#2139): replace dummy source with the block committer source
-    let da_block_costs_service = new_da_block_costs_service(DummyDaBlockCosts, None);
-
     let gas_price_init = algorithm_updater::InitializeTask::new(
         config.clone(),
         genesis_block_height,
@@ -218,7 +211,6 @@ pub fn init_sub_services(
         block_stream,
         database.gas_price().clone(),
         database.on_chain().clone(),
-        da_block_costs_service.shared.clone(),
     )?;
     let next_algo = gas_price_init.shared_data();
     let gas_price_service = ServiceRunner::new(gas_price_init);
@@ -343,7 +335,6 @@ pub fn init_sub_services(
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
-        Box::new(da_block_costs_service),
         Box::new(gas_price_service),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),

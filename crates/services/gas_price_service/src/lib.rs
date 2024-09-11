@@ -7,12 +7,18 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
+    Service,
+    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::FutureExt;
 use std::sync::Arc;
 
+use crate::fuel_gas_price_updater::da_source_adapter::{
+    dummy_costs::DummyDaBlockCosts,
+    service::DaBlockCostsService,
+};
 use tokio::sync::RwLock;
 
 pub mod static_updater;
@@ -25,6 +31,8 @@ pub struct GasPriceService<A, U> {
     next_block_algorithm: SharedGasPriceAlgo<A>,
     /// The code that is run to update your specific algorithm
     update_algorithm: U,
+    // The da block cost sub service
+    da_block_costs_task_handle: ServiceRunner<DaBlockCostsService<DummyDaBlockCosts>>,
 }
 
 impl<A, U> GasPriceService<A, U>
@@ -36,12 +44,15 @@ where
         starting_block_height: BlockHeight,
         update_algorithm: U,
         mut shared_algo: SharedGasPriceAlgo<A>,
+        da_block_costs_task_service: DaBlockCostsService<DummyDaBlockCosts>,
     ) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
         shared_algo.update(algorithm).await;
+        let da_block_costs_task_handle = ServiceRunner::new(da_block_costs_task_service);
         Self {
             next_block_algorithm: shared_algo,
             update_algorithm,
+            da_block_costs_task_handle,
         }
     }
 
@@ -134,6 +145,7 @@ where
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        self.da_block_costs_task_handle.start_and_await().await?;
         Ok(self)
     }
 }
@@ -168,6 +180,7 @@ where
             tracing::debug!("Updating gas price algorithm");
             self.update(new_algo).await;
         }
+        self.da_block_costs_task_handle.stop_and_await().await?;
         Ok(())
     }
 }
@@ -177,6 +190,12 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
+        fuel_gas_price_updater::da_source_adapter::{
+            dummy_costs::DummyDaBlockCosts,
+            service::{
+                DaBlockCostsService,
+            },
+        },
         GasPriceAlgorithm,
         GasPriceService,
         SharedGasPriceAlgo,
@@ -237,7 +256,10 @@ mod tests {
             price_source: price_receiver,
         };
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(start_algo);
-        let service = GasPriceService::new(0.into(), updater, shared_algo).await;
+        let da_block_costs_service = DaBlockCostsService::new(DummyDaBlockCosts, None);
+        let service =
+            GasPriceService::new(0.into(), updater, shared_algo, da_block_costs_service)
+                .await;
         let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
         let task = service.into_task(&watcher, ()).await.unwrap();
