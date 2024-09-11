@@ -25,7 +25,7 @@ use tokio::{
 
 pub use anyhow::Result;
 
-const CACHE_COUNT: usize = 10;
+const CHANNEL_BUFFER_SIZE: usize = 10;
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
@@ -46,9 +46,7 @@ where
 {
     pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
         #[allow(clippy::arithmetic_side_effects)]
-        let (sender, receiver) = tokio::sync::mpsc::channel(
-            core::mem::size_of::<DaBlockCosts>() * CACHE_COUNT,
-        );
+        let (sender, receiver) = tokio::sync::mpsc::channel(CHANNEL_BUFFER_SIZE);
         let block_cost_provider = DaBlockCostsProvider::from_receiver(receiver);
         Self {
             sender,
