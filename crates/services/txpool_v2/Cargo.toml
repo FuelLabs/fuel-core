@@ -16,7 +16,7 @@ async-trait = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
-fuel-core-types = { path = "../../types", features = ["test-helpers"] }
+fuel-core-types = { workspace = true, features = ["test-helpers"] }
 num-rational = { workspace = true }
 petgraph = "0.6.5"
 tokio = { workspace = true, default-features = false, features = ["sync"] }
