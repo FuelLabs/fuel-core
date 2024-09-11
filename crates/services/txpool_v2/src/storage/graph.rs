@@ -74,7 +74,7 @@ impl GraphStorage {
     fn remove_node_and_dependent_sub_graph(
         &mut self,
         root: NodeIndex,
-    ) -> Vec<PoolTransaction> {
+    ) -> Result<Vec<PoolTransaction>, Error> {
         let mut to_traverse = vec![root];
         let mut to_remove = vec![];
         while let Some(node_id) = to_traverse.pop() {
@@ -112,12 +112,17 @@ impl GraphStorage {
                 self.graph
                     .neighbors_directed(node_id, petgraph::Direction::Incoming),
             );
-            let node = self.graph.node_weight_mut(node_id).unwrap();
+            let Some(node) = self.graph.node_weight_mut(node_id) else {
+                return Err(Error::Storage(format!(
+                    "Node with id {:?} not found",
+                    node_id
+                )));
+            };
             node.cumulative_gas = node.cumulative_gas.saturating_sub(gas_removed);
             node.cumulative_tip = node.cumulative_tip.saturating_sub(tip_removed);
             node.number_txs_in_chain -= nb_removed;
         }
-        removed_transactions
+        Ok(removed_transactions)
     }
 
     fn check_if_coin_input_can_spend_output(
@@ -178,8 +183,8 @@ impl GraphStorage {
 
     fn cache_tx_infos(
         &mut self,
-        outputs: Vec<Output>,
-        tx_id: TxId,
+        outputs: &[Output],
+        tx_id: &TxId,
         node_id: NodeIndex,
     ) -> Result<(), Error> {
         for (index, output) in outputs.iter().enumerate() {
@@ -189,7 +194,7 @@ impl GraphStorage {
                     tx_id
                 ))
             })?;
-            let utxo_id = UtxoId::new(tx_id, index);
+            let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
                     self.coins_creators.insert(utxo_id, node_id);
@@ -202,6 +207,23 @@ impl GraphStorage {
         }
         Ok(())
     }
+
+    fn clear_cache(&mut self, outputs: &[Output], tx_id: &TxId) {
+        for (index, output) in outputs.iter().enumerate() {
+            let index = u16::try_from(index)
+                .expect("The number of outputs in a transaction is less than `u8::max`");
+            let utxo_id = UtxoId::new(*tx_id, index);
+            match output {
+                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                    self.coins_creators.remove(&utxo_id);
+                }
+                Output::ContractCreated { contract_id, .. } => {
+                    self.contracts_creators.remove(contract_id);
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 impl Storage for GraphStorage {
@@ -213,38 +235,18 @@ impl Storage for GraphStorage {
         dependencies: Vec<Self::StorageIndex>,
         collided_transactions: Vec<Self::StorageIndex>,
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error> {
-        // TODO: Try to avoid this clone
-        let outputs = transaction.outputs().clone();
         let tx_id = transaction.id();
 
-        // No parents insert directly in the graph
-        // TODO: Less code duplication
-        if dependencies.is_empty() {
-            let node = StorageData {
-                cumulative_tip: transaction.tip(),
-                cumulative_gas: transaction.max_gas(),
-                transaction,
-                number_txs_in_chain: 1,
-                submitted_time: Instant::now(),
-            };
-            let node_id = self.graph.add_node(node);
-            self.cache_tx_infos(outputs, tx_id, node_id)?;
-            let mut removed_transactions = vec![];
-            for collision in collided_transactions {
-                removed_transactions
-                    .extend(self.remove_node_and_dependent_sub_graph(collision));
-            }
-            return Ok((node_id, removed_transactions));
-        }
         // Remove collisions and their dependencies from the graph
         let mut removed_transactions = vec![];
         for collision in collided_transactions {
             removed_transactions
-                .extend(self.remove_node_and_dependent_sub_graph(collision));
+                .extend(self.remove_node_and_dependent_sub_graph(collision)?);
         }
         // Add the new transaction to the graph and update the others in consequence
         let tip = transaction.tip();
         let gas = transaction.max_gas();
+        let outputs = transaction.outputs().clone();
         let node = StorageData {
             cumulative_tip: tip,
             cumulative_gas: gas,
@@ -258,8 +260,13 @@ impl Storage for GraphStorage {
         // Check if the dependency chain is too big
         let mut to_check = dependencies.clone();
         while let Some(node_id) = to_check.pop() {
-            let parent_node = self.graph.node_weight(node_id).unwrap();
-            if parent_node.number_txs_in_chain >= self.config.max_txs_per_chain {
+            let Some(dependency_node) = self.graph.node_weight(node_id) else {
+                return Err(Error::Storage(format!(
+                    "Node with id {:?} not found",
+                    node_id
+                )));
+            };
+            if dependency_node.number_txs_in_chain >= self.config.max_txs_per_chain {
                 return Err(Error::NotInsertedChainDependencyTooBig);
             }
             whole_tx_chain.push(node_id);
@@ -273,18 +280,23 @@ impl Storage for GraphStorage {
 
         // Add the transaction to the graph
         let node_id = self.graph.add_node(node);
-        for parent in dependencies {
-            self.graph.add_edge(parent, node_id, ());
+        for dependency in dependencies {
+            self.graph.add_edge(dependency, node_id, ());
         }
+        self.cache_tx_infos(&outputs, &tx_id, node_id)?;
 
-        // Update the cumulative tip and gas of the parents and recursively their parents, etc.
+        // Update the cumulative tip and gas of the dependencies transactions and recursively their dependencies, etc.
         for node_id in whole_tx_chain {
-            let node = self.graph.node_weight_mut(node_id).unwrap();
+            let Some(node) = self.graph.node_weight_mut(node_id) else {
+                return Err(Error::Storage(format!(
+                    "Node with id {:?} not found",
+                    node_id
+                )));
+            };
             node.number_txs_in_chain = node.number_txs_in_chain.saturating_add(1);
             node.cumulative_tip = node.cumulative_tip.saturating_add(tip);
             node.cumulative_gas = node.cumulative_gas.saturating_add(gas);
         }
-        self.cache_tx_infos(outputs, tx_id, node_id)?;
         Ok((node_id, removed_transactions))
     }
 
@@ -324,8 +336,7 @@ impl Storage for GraphStorage {
         db: &impl TxPoolDb,
         utxo_validation: bool,
     ) -> Result<Vec<Self::StorageIndex>, Error> {
-        // TODO: Finish the function
-        let mut pool_parents = Vec::new();
+        let mut pool_dependencies = Vec::new();
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
@@ -336,11 +347,16 @@ impl Storage for GraphStorage {
                     if collisions.contains(&CollisionReason::Coin(*utxo_id)) {
                         continue;
                     } else if let Some(node_id) = self.coins_creators.get(utxo_id) {
-                        let node = self.graph.node_weight(*node_id).unwrap();
+                        let Some(node) = self.graph.node_weight(*node_id) else {
+                            return Err(Error::Storage(format!(
+                                "Node with id {:?} not found",
+                                node_id
+                            )));
+                        };
                         let output =
                             &node.transaction.outputs()[utxo_id.output_index() as usize];
                         Self::check_if_coin_input_can_spend_output(output, input)?;
-                        pool_parents.push(*node_id);
+                        pool_dependencies.push(*node_id);
                     } else if utxo_validation {
                         let Some(coin) = db
                             .utxo(utxo_id)
@@ -358,7 +374,7 @@ impl Storage for GraphStorage {
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // since message id is derived, we don't need to double check all the fields
-                    // TODO: Maybe this should be on an other function as it's not a parent finder but just a test
+                    // Maybe this should be on an other function as it's not a dependency finder but just a test
                     if utxo_validation {
                         if let Some(db_message) = db
                             .message(nonce)
@@ -378,7 +394,7 @@ impl Storage for GraphStorage {
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
                     if let Some(node_id) = self.contracts_creators.get(contract_id) {
-                        pool_parents.push(*node_id);
+                        pool_dependencies.push(*node_id);
                     } else if !db
                         .contract_exist(contract_id)
                         .map_err(|e| Error::Database(format!("{:?}", e)))?
@@ -390,7 +406,7 @@ impl Storage for GraphStorage {
                 }
             }
         }
-        Ok(pool_parents)
+        Ok(pool_dependencies)
     }
 
     fn remove_transaction(
@@ -403,6 +419,9 @@ impl Storage for GraphStorage {
                 "Transaction with index {:?} not found",
                 index
             )))
+            .inspect(|node| {
+                self.clear_cache(node.transaction.outputs(), &node.transaction.id());
+            })
     }
 
     fn count(&self) -> u64 {

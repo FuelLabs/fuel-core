@@ -15,8 +15,8 @@ pub trait SelectionAlgorithm<S: Storage> {
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,
-        storage: &mut S,
-    ) -> Result<Vec<PoolTransaction>, Error>;
+        storage: &S,
+    ) -> Result<Vec<S::StorageIndex>, Error>;
 
     fn new_executable_transactions(
         &mut self,

@@ -25,7 +25,7 @@ use super::{
 
 pub type RatioTipGas = Ratio<u64>;
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub struct Key {
     ratio: RatioTipGas,
     creation_instant: Instant,
@@ -76,8 +76,8 @@ impl<S: Storage> SelectionAlgorithm<S> for RatioTipGasSelection<S> {
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,
-        storage: &mut S,
-    ) -> Result<Vec<PoolTransaction>, Error> {
+        storage: &S,
+    ) -> Result<Vec<S::StorageIndex>, Error> {
         let mut gas_left = constraints.max_gas;
         let mut best_transactions = Vec::new();
 
@@ -96,9 +96,9 @@ impl<S: Storage> SelectionAlgorithm<S> for RatioTipGasSelection<S> {
                 };
                 if enough_gas {
                     new_executables.extend(storage.get_dependents(*storage_id)?);
-                    let stored_tx = storage.remove_transaction(*storage_id)?;
+                    let stored_tx = storage.get(storage_id)?;
                     gas_left -= stored_tx.transaction.max_gas();
-                    best_transaction = Some((key.clone(), stored_tx.transaction));
+                    best_transaction = Some((*key, *storage_id));
                     break;
                 }
             }

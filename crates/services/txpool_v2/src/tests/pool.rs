@@ -1512,6 +1512,67 @@ async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
     ));
 }
 
+#[tokio::test]
+async fn poc_txpool_dos() {
+    let mut context = PoolContext::default();
+
+    // tx1 {inputs: {}, outputs: {coinA}, tip: 1}
+    let (_, gas_coin) = context.setup_coin();
+    let (output_a, unset_input) = context.create_output_and_input(1);
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(1)
+        .max_fee_limit(1)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .add_output(output_a)
+        .finalize_as_transaction();
+
+    // tx2 {inputs: {coinA}, outputs: {coinB}, tip: 1}
+    let (_, gas_coin) = context.setup_coin();
+    let input_a = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
+    let (output_b, unset_input) = context.create_output_and_input(1);
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(1)
+        .max_fee_limit(1)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input_a.clone())
+        .add_input(gas_coin)
+        .add_output(output_b)
+        .finalize_as_transaction();
+
+    // tx3 {inputs: {coinA, coinB}, outputs:{}, tip: 20}
+    let (_, gas_coin) = context.setup_coin();
+    let input_b = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(20)
+        .max_fee_limit(20)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input_a)
+        .add_input(input_b.clone())
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = context.setup_coin();
+
+    let mut txpool = context.build();
+    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+
+    let results = txpool
+        .insert(vec![
+            check_tx_to_pool(tx1.clone()),
+            check_tx_to_pool(tx2.clone()),
+            check_tx_to_pool(tx3.clone()),
+        ])
+        .unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_ok());
+    let err = results[2].as_ref().expect_err("Tx3 should be Err, got Ok");
+    assert!(matches!(err, Error::Storage(_)));
+}
+
 // TODO: Place it elsewhere
 // #[tokio::test]
 // async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {

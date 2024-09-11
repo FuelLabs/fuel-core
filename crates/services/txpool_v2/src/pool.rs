@@ -122,32 +122,31 @@ where
     }
 
     // TODO: Use block space also
-    #[cfg(test)]
     pub fn extract_transactions_for_block(
         &mut self,
     ) -> Result<Vec<PoolTransaction>, Error> {
-        let txs = self.selection_algorithm.gather_best_txs(
-            Constraints {
-                max_gas: self.config.max_block_gas,
-            },
-            &mut self.storage,
-        )?;
-        for tx in &txs {
-            self.tx_id_to_storage_id.remove(&tx.id());
-        }
-        Ok(txs)
-    }
-
-    #[cfg(not(test))]
-    pub fn extract_transactions_for_block(
-        &mut self,
-    ) -> Result<Vec<PoolTransaction>, Error> {
-        self.selection_algorithm.gather_best_txs(
-            Constraints {
-                max_gas: self.config.max_block_gas,
-            },
-            &mut self.storage,
-        )
+        self.selection_algorithm
+            .gather_best_txs(
+                Constraints {
+                    max_gas: self.config.max_block_gas,
+                },
+                &self.storage,
+            )?
+            .into_iter()
+            .map(|storage_id| {
+                let storage_data = self.storage.remove_transaction(storage_id)?;
+                self.collision_manager
+                    .on_removed_transaction(&storage_data.transaction)?;
+                self.selection_algorithm
+                    .on_removed_transaction(&storage_data.transaction)?;
+                #[cfg(test)]
+                {
+                    self.tx_id_to_storage_id
+                        .remove(&storage_data.transaction.id());
+                }
+                Ok(storage_data.transaction)
+            })
+            .collect()
     }
 
     pub fn prune(&mut self) -> Result<Vec<PoolTransaction>, Error> {

@@ -77,6 +77,8 @@ pub enum Error {
         fmt = "Transaction is not inserted. Pool limit is hit, try to increase gas_price"
     )]
     NotInsertedLimitHit,
+    #[display(fmt = "Storage error: {_0}")]
+    Storage(String),
 }
 
 impl From<CheckError> for Error {
