@@ -3,7 +3,7 @@
 use super::{
     adapters::{
         FuelBlockSigner,
-        P2PAdapter
+        P2PAdapter,
     },
     genesis::create_genesis_block,
 };
