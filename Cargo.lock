@@ -3172,7 +3172,6 @@ dependencies = [
  "fuel-core-sync",
  "fuel-core-trace",
  "fuel-core-txpool",
- "fuel-core-txpool-v2",
  "fuel-core-types",
  "fuel-core-upgradable-executor",
  "futures",
