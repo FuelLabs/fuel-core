@@ -186,9 +186,17 @@ impl OnceTransactionsSource {
 }
 
 impl TransactionsSource for OnceTransactionsSource {
-    fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
+    fn next(
+        &self,
+        _: u64,
+        transactions_limit: u16,
+        _: u32,
+    ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
-        core::mem::take(lock.as_mut())
+        let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
+        // Avoid panicking if we request more transactions than there are in the vector
+        let transactions_limit = (transactions_limit as usize).min(transactions.len());
+        transactions.drain(..transactions_limit).collect()
     }
 }
 
@@ -565,10 +573,15 @@ where
         let block_gas_limit = self.consensus_params.block_gas_limit();
 
         let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-        // TODO: Handle `remaining_tx_count` https://github.com/FuelLabs/fuel-core/issues/2114
-        let remaining_tx_count = u16::MAX;
         // TODO: Handle `remaining_size` https://github.com/FuelLabs/fuel-core/issues/2133
         let remaining_size = u32::MAX;
+
+        // We allow at most u64::MAX transactions in a block, including the mint transaction.
+        // When processing l2 transactions, we must take into account transactions from the l1
+        // that have been included in the block already (stored in `data.tx_count`), as well
+        // as the final mint transaction.
+        let max_tx_count = u16::MAX.saturating_sub(1);
+        let mut remaining_tx_count = max_tx_count.saturating_sub(data.tx_count);
 
         let mut regular_tx_iter = l2_tx_source
             .next(remaining_gas_limit, remaining_tx_count, remaining_size)
@@ -597,6 +610,7 @@ where
                     }
                 }
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+                remaining_tx_count = max_tx_count.saturating_sub(data.tx_count);
             }
 
             regular_tx_iter = l2_tx_source

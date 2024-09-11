@@ -2983,6 +2983,41 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn block_producer_never_includes_more_than_u16_max_transactions() {
+        let block_height = 1u32;
+        let block_da_height = 2u64;
+
+        let mut consensus_parameters = ConsensusParameters::default();
+
+        // Given
+        let transactions_in_tx_source = u16::MAX as usize + 10;
+        consensus_parameters.set_block_gas_limit(u64::MAX);
+        let config = Config {
+            consensus_parameters,
+            ..Default::default()
+        };
+
+        // When
+        let block = test_block(
+            block_height.into(),
+            block_da_height.into(),
+            transactions_in_tx_source,
+        );
+        let partial_fuel_block: PartialFuelBlock = block.into();
+
+        let producer = create_executor(Database::default(), config);
+        let (result, _) = producer
+            .produce_without_commit(partial_fuel_block)
+            .unwrap()
+            .into();
+
+        // Then
+        // u16::MAX -1 transactions have been included from the transaction source, plus the mint transaction
+        // In total we expect to see u16::MAX transactions in the block
+        assert_eq!(result.block.transactions().len(), (u16::MAX) as usize);
+    }
+
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
