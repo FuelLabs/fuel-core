@@ -2,62 +2,32 @@
 
 use crate::{
     block_producer::{
-        gas_price::{
-            GasPriceProvider,
-            MockConsensusParametersProvider,
-        },
-        Bytes32,
-        Error,
+        gas_price::{GasPriceProvider, MockConsensusParametersProvider},
+        Bytes32, Error,
     },
     mocks::{
-        FailingMockExecutor,
-        MockDb,
-        MockExecutor,
-        MockExecutorWithCapture,
-        MockRelayer,
+        FailingMockExecutor, MockDb, MockExecutor, MockExecutorWithCapture, MockRelayer,
         MockTxPool,
     },
-    Config,
-    Producer,
+    Config, Producer,
 };
 use fuel_core_producer as _;
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-            PartialFuelBlock,
-        },
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
+        block::{Block, CompressedBlock, PartialFuelBlock},
+        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
         primitives::DaBlockHeight,
     },
     fuel_tx,
-    fuel_tx::{
-        field::InputContract,
-        ConsensusParameters,
-        Mint,
-        Script,
-        Transaction,
-    },
+    fuel_tx::{field::InputContract, ConsensusParameters, Mint, Script, Transaction},
     fuel_types::BlockHeight,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
 };
-use rand::{
-    rngs::StdRng,
-    Rng,
-    SeedableRng,
-};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{
     collections::HashMap,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
 pub struct MockProducerGasPrice {
@@ -391,6 +361,52 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
+    async fn will_only_advance_da_height_if_enough_transactions_remaining() {
+        // given
+        let prev_da_height = 100;
+        let prev_height = 1u32.into();
+        // 0 + 15_000 + 15_000 + 15_000 + 21_000 = 66_000 > 65_535
+        let latest_blocks_with_gas_costs = vec![
+            (prev_da_height, 0u64),
+            (prev_da_height + 1, 15_000),
+            (prev_da_height + 2, 15_000),
+            (prev_da_height + 3, 15_000),
+            (prev_da_height + 4, 21_000),
+        ]
+        .into_iter()
+        .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
+
+        let ctx = TestContextBuilder::new()
+            .with_latest_block_height((prev_da_height + 4u64).into())
+            .with_latest_blocks_with_transactions(latest_blocks_with_gas_costs)
+            .with_prev_da_height(prev_da_height.into())
+            .with_prev_height(prev_height)
+            .build();
+
+        let producer = ctx.producer();
+        let next_height = prev_height
+            .succ()
+            .expect("The block height should be valid");
+
+        // when
+        let res = producer
+            .produce_and_execute_block_txpool(next_height, Tai64::now())
+            .await
+            .unwrap();
+
+        // then
+        let expected = prev_da_height + 3;
+        let actual: u64 = res
+            .into_result()
+            .block
+            .header()
+            .application()
+            .da_height
+            .into();
+        assert_eq!(expected, actual);
+    }
+
+    #[tokio::test]
     async fn if_each_block_is_full_then_only_advance_one_at_a_time() {
         // given
         let prev_da_height = 100;
@@ -544,10 +560,7 @@ mod produce_and_execute_block_txpool {
 }
 
 use fuel_core_types::fuel_tx::field::MintGasPrice;
-use proptest::{
-    prop_compose,
-    proptest,
-};
+use proptest::{prop_compose, proptest};
 
 prop_compose! {
     fn arb_block()(height in 1..255u8, da_height in 1..255u64, gas_price: u64, coinbase_recipient: [u8; 32], num_txs in 0..100u32) -> Block {
@@ -801,6 +814,7 @@ impl<Executor> TestContext<Executor> {
 struct TestContextBuilder {
     latest_block_height: DaBlockHeight,
     blocks_with_gas_costs: HashMap<DaBlockHeight, u64>,
+    blocks_with_transactions: HashMap<DaBlockHeight, u64>,
     prev_da_height: DaBlockHeight,
     block_gas_limit: Option<u64>,
     prev_height: BlockHeight,
@@ -811,6 +825,7 @@ impl TestContextBuilder {
         Self {
             latest_block_height: 0u64.into(),
             blocks_with_gas_costs: HashMap::new(),
+            blocks_with_transactions: HashMap::new(),
             prev_da_height: 1u64.into(),
             block_gas_limit: None,
             prev_height: 0u32.into(),
@@ -828,6 +843,15 @@ impl TestContextBuilder {
     ) -> Self {
         self.blocks_with_gas_costs
             .extend(latest_blocks_with_gas_costs);
+        self
+    }
+
+    fn with_latest_blocks_with_transactions(
+        mut self,
+        latest_blocks_with_transactions: impl Iterator<Item = (DaBlockHeight, u64)>,
+    ) -> Self {
+        self.blocks_with_transactions
+            .extend(latest_blocks_with_transactions);
         self
     }
 
@@ -878,6 +902,7 @@ impl TestContextBuilder {
         let mock_relayer = MockRelayer {
             latest_block_height: self.latest_block_height,
             latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
+            latest_da_blocks_with_transactions: self.blocks_with_transactions.clone(),
             ..Default::default()
         };
 
@@ -920,6 +945,7 @@ impl TestContextBuilder {
         let mock_relayer = MockRelayer {
             latest_block_height: self.latest_block_height,
             latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
+            latest_da_blocks_with_transactions: self.blocks_with_transactions.clone(),
             ..Default::default()
         };
 

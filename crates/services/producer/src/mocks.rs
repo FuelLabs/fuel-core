@@ -1,42 +1,21 @@
-use crate::ports::{
-    BlockProducer,
-    BlockProducerDatabase,
-    Relayer,
-    TxPool,
-};
+use crate::ports::{BlockProducer, BlockProducerDatabase, Relayer, TxPool};
 use fuel_core_storage::{
     not_found,
-    transactional::{
-        AtomicView,
-        Changes,
-    },
+    transactional::{AtomicView, Changes},
     Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
-        header::{
-            ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
-        },
+        block::{Block, CompressedBlock},
+        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
         primitives::DaBlockHeight,
     },
     fuel_tx::Transaction,
-    fuel_types::{
-        Address,
-        BlockHeight,
-        Bytes32,
-        ChainId,
-    },
+    fuel_types::{Address, BlockHeight, Bytes32, ChainId},
     services::{
         block_producer::Components,
         executor::{
-            Error as ExecutorError,
-            ExecutionResult,
-            Result as ExecutorResult,
+            Error as ExecutorError, ExecutionResult, Result as ExecutorResult,
             UncommittedResult,
         },
         txpool::ArcPoolTx,
@@ -46,10 +25,7 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     ops::Deref,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 // TODO: Replace mocks with `mockall`.
 
@@ -58,6 +34,7 @@ pub struct MockRelayer {
     pub block_production_key: Address,
     pub latest_block_height: DaBlockHeight,
     pub latest_da_blocks_with_costs: HashMap<DaBlockHeight, u64>,
+    pub latest_da_blocks_with_transactions: HashMap<DaBlockHeight, u64>,
 }
 
 #[async_trait::async_trait]
@@ -73,6 +50,18 @@ impl Relayer for MockRelayer {
     async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
         let cost = self
             .latest_da_blocks_with_costs
+            .get(height)
+            .cloned()
+            .unwrap_or_default();
+        Ok(cost)
+    }
+
+    async fn get_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<u64> {
+        let cost = self
+            .latest_da_blocks_with_transactions
             .get(height)
             .cloned()
             .unwrap_or_default();
