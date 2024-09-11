@@ -252,7 +252,9 @@ mod tests {
             price_source: price_receiver,
         };
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(start_algo);
-        let da_block_costs_service = DaBlockCostsService::new(DummyDaBlockCosts, None);
+        let da_block_costs_source = DummyDaBlockCosts::new(Ok(Default::default()));
+        let da_block_costs_service =
+            DaBlockCostsService::new(da_block_costs_source, None);
         let service =
             GasPriceService::new(0.into(), updater, shared_algo, da_block_costs_service)
                 .await;

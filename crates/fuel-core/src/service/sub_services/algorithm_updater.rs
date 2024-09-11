@@ -97,7 +97,11 @@ impl InitializeTask {
         let default_metadata = get_default_metadata(&config, latest_block_height);
         let algo = get_best_algo(&gas_price_db, default_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
-        let da_block_costs_service = DaBlockCostsService::new(DummyDaBlockCosts, None);
+        // there's no use of this source yet, so we can safely return an error
+        let da_block_costs_source =
+            DummyDaBlockCosts::new(Err(anyhow::anyhow!("Not used")));
+        let da_block_costs_service =
+            DaBlockCostsService::new(da_block_costs_source, None);
 
         let task = Self {
             config,
