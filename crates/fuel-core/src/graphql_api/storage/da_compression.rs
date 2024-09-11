@@ -73,8 +73,6 @@ impl TableWithBlueprint for DaCompressionTemporalRegistryIndex {
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_types::fuel_crypto::coins_bip32::ecdsa::signature::digest::typenum::Pow;
-
     use super::*;
 
     fn generate_registry_key(
@@ -82,7 +80,7 @@ mod tests {
     ) -> (RegistryKeyspace, RegistryKey) {
         let keyspace: RegistryKeyspace = rng.gen();
 
-        let raw_key: u32 = rng.gen_range(0..2u32.pow(32) - 2);
+        let raw_key: u32 = rng.gen_range(0..2u32.pow(24) - 2);
         let key = RegistryKey::try_from(raw_key).unwrap();
 
         (keyspace, key)

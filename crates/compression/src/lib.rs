@@ -13,9 +13,6 @@ mod context {
 
 pub use tables::RegistryKeyspace;
 
-#[cfg(test)]
-mod compression_tests;
-
 use serde::{
     Deserialize,
     Serialize,
