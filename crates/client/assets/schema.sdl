@@ -198,6 +198,7 @@ type ConsensusParameters {
 	feeParams: FeeParameters!
 	baseAssetId: AssetId!
 	blockGasLimit: U64!
+	blockTransactionSizeLimit: U64!
 	chainId: U64!
 	gasCosts: GasCosts!
 	privilegedAddress: Address!
@@ -210,6 +211,7 @@ type ConsensusParametersPurpose {
 
 enum ConsensusParametersVersion {
 	V1
+	V2
 }
 
 type Contract {

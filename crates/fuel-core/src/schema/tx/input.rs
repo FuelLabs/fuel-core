@@ -196,7 +196,8 @@ impl From<&fuel_tx::Input> for Input {
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
-                predicate: HexString(predicate.clone()),
+                // TODO[RC]: Not yet sure why these are needed?
+                predicate: HexString(predicate.to_vec()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
             fuel_tx::Input::Contract(contract) => Input::Contract(contract.into()),
@@ -239,7 +240,7 @@ impl From<&fuel_tx::Input> for Input {
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
                 data: HexString(Default::default()),
-                predicate: HexString(predicate.clone()),
+                predicate: HexString(predicate.to_vec()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
             fuel_tx::Input::MessageDataSigned(
@@ -283,7 +284,7 @@ impl From<&fuel_tx::Input> for Input {
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
                 data: HexString(data.clone()),
-                predicate: HexString(predicate.clone()),
+                predicate: HexString(predicate.to_vec()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
         }

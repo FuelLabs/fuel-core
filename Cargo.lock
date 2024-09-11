@@ -3134,8 +3134,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "122c27ab46707017063bf1c6e0b4f3de881e22e81b4059750a0dc95033d9cc26"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types",
@@ -3777,8 +3776,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33548590131674e8f272a3e056be4dbaa1de7cb364eab2b17987cd5c0dc31cb0"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3798,8 +3796,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f49fdbfc1615d88d2849650afc2b0ac2fecd69661ebadd31a073d8416747764"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3820,8 +3817,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf17ce8ee5e8b573ea584c223635ff09f1288ad022bcf662954fdccb907602eb"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3835,14 +3831,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 
 [[package]]
 name = "fuel-tx"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13aae44611588d199dd119e4a0ebd8eb7ae4cde6bf8b4d12715610b1f5e5b731"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -3864,8 +3858,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b6fb26bcb408b6897e603f68cf60bbbaf6d15381c99f54a69ea743a58235ac1"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3876,8 +3869,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64fc4695efac9207276f6229f2dd9811848b328a13604a698f7bce1d452bd986"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7834,9 +7826,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.26.0"
+version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4124a35fe33ae14259c490fd70fa199a32b9ce9502f2ee6bc4f81ec06fa65894"
+checksum = "9465315bc9d4566e1724f0fffcbcc446268cb522e60f9a27bcded6b19c108113"
 dependencies = [
  "rand",
  "secp256k1-sys",
@@ -7844,9 +7836,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1-sys"
-version = "0.8.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
+checksum = "1433bd67156263443f14d603720b082dd3121779323fce20cba2aa07b874bc1b"
 dependencies = [
  "cc",
 ]
