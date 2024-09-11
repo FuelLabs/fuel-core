@@ -3181,6 +3181,7 @@ dependencies = [
  "enum-iterator",
  "fuel-core",
  "fuel-core-chain-config",
+ "fuel-core-compression",
  "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
@@ -3368,9 +3369,9 @@ dependencies = [
  "fuel-core-types",
  "postcard",
  "rand",
- "rocksdb",
  "serde",
  "tempfile",
+ "thiserror",
  "tokio",
 ]
 

@@ -31,88 +31,104 @@ use fuel_core_types::{
 };
 
 use crate::{
-    db::RocksDb,
-    ports::HistoryLookup,
+    services::decompress::{
+        DecompressDb,
+        DecompressError,
+    },
     tables::RegistryKeyspace,
 };
 
-pub struct DecompressCtx<'a> {
-    pub db: &'a RocksDb,
-    pub lookup: &'a dyn HistoryLookup,
+pub struct DecompressCtx<D> {
+    pub db: D,
 }
 
-impl<'a> ContextError for DecompressCtx<'a> {
-    type Error = anyhow::Error;
+impl<D: DecompressDb> ContextError for DecompressCtx<D> {
+    type Error = DecompressError;
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>> for Address {
+fn registry_desubstitute<
+    D: DecompressDb,
+    T: serde::de::DeserializeOwned + Default + PartialEq,
+>(
+    keyspace: RegistryKeyspace,
+    key: RegistryKey,
+    ctx: &DecompressCtx<D>,
+) -> Result<T, DecompressError> {
+    if key == RegistryKey::DEFAULT_VALUE {
+        return Ok(T::default());
+    }
+    Ok(postcard::from_bytes(&ctx.db.read_registry(keyspace, key)?)?)
+}
+
+impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for Address {
     async fn decompress_with(
         c: &RegistryKey,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Self> {
-        ctx.db.read_registry(RegistryKeyspace::address, *c)
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Self, DecompressError> {
+        registry_desubstitute(RegistryKeyspace::address, *c, ctx)
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>> for AssetId {
+impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for AssetId {
     async fn decompress_with(
         c: &RegistryKey,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Self> {
-        ctx.db.read_registry(RegistryKeyspace::asset_id, *c)
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Self, DecompressError> {
+        registry_desubstitute(RegistryKeyspace::asset_id, *c, ctx)
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>> for ContractId {
+impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for ContractId {
     async fn decompress_with(
         c: &RegistryKey,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Self> {
-        ctx.db.read_registry(RegistryKeyspace::contract_id, *c)
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Self, DecompressError> {
+        registry_desubstitute(RegistryKeyspace::contract_id, *c, ctx)
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>> for ScriptCode {
+impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for ScriptCode {
     async fn decompress_with(
         c: &RegistryKey,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Self> {
-        ctx.db.read_registry(RegistryKeyspace::script_code, *c)
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Self, DecompressError> {
+        registry_desubstitute(RegistryKeyspace::script_code, *c, ctx)
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>> for PredicateCode {
+impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for PredicateCode {
     async fn decompress_with(
         c: &RegistryKey,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Self> {
-        ctx.db.read_registry(RegistryKeyspace::script_code, *c)
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Self, DecompressError> {
+        registry_desubstitute(RegistryKeyspace::predicate_code, *c, ctx)
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>> for UtxoId {
+impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for UtxoId {
     async fn decompress_with(
         c: &CompressedUtxoId,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Self> {
-        ctx.lookup.utxo_id(c).await
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Self, DecompressError> {
+        Ok(ctx.db.utxo_id(c)?)
     }
 }
 
-impl<'a, Specification> DecompressibleBy<DecompressCtx<'a>> for Coin<Specification>
+impl<D, Specification> DecompressibleBy<DecompressCtx<D>> for Coin<Specification>
 where
+    D: DecompressDb,
     Specification: CoinSpecification,
-    Specification::Predicate: DecompressibleBy<DecompressCtx<'a>>,
-    Specification::PredicateData: DecompressibleBy<DecompressCtx<'a>>,
-    Specification::PredicateGasUsed: DecompressibleBy<DecompressCtx<'a>>,
-    Specification::Witness: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::Predicate: DecompressibleBy<DecompressCtx<D>>,
+    Specification::PredicateData: DecompressibleBy<DecompressCtx<D>>,
+    Specification::PredicateGasUsed: DecompressibleBy<DecompressCtx<D>>,
+    Specification::Witness: DecompressibleBy<DecompressCtx<D>>,
 {
     async fn decompress_with(
         c: &<Coin<Specification> as Compressible>::Compressed,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Coin<Specification>> {
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Coin<Specification>, DecompressError> {
         let utxo_id = UtxoId::decompress_with(&c.utxo_id, ctx).await?;
-        let coin_info = ctx.lookup.coin(&utxo_id).await?;
+        let coin_info = ctx.db.coin(&utxo_id)?;
         let witness_index = c.witness_index.decompress(ctx).await?;
         let predicate_gas_used = c.predicate_gas_used.decompress(ctx).await?;
         let predicate = c.predicate.decompress(ctx).await?;
@@ -131,20 +147,21 @@ where
     }
 }
 
-impl<'a, Specification> DecompressibleBy<DecompressCtx<'a>> for Message<Specification>
+impl<D, Specification> DecompressibleBy<DecompressCtx<D>> for Message<Specification>
 where
+    D: DecompressDb,
     Specification: MessageSpecification,
-    Specification::Data: DecompressibleBy<DecompressCtx<'a>> + Default,
-    Specification::Predicate: DecompressibleBy<DecompressCtx<'a>>,
-    Specification::PredicateData: DecompressibleBy<DecompressCtx<'a>>,
-    Specification::PredicateGasUsed: DecompressibleBy<DecompressCtx<'a>>,
-    Specification::Witness: DecompressibleBy<DecompressCtx<'a>>,
+    Specification::Data: DecompressibleBy<DecompressCtx<D>> + Default,
+    Specification::Predicate: DecompressibleBy<DecompressCtx<D>>,
+    Specification::PredicateData: DecompressibleBy<DecompressCtx<D>>,
+    Specification::PredicateGasUsed: DecompressibleBy<DecompressCtx<D>>,
+    Specification::Witness: DecompressibleBy<DecompressCtx<D>>,
 {
     async fn decompress_with(
         c: &<Message<Specification> as Compressible>::Compressed,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Message<Specification>> {
-        let msg = ctx.lookup.message(&c.nonce).await?;
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Message<Specification>, DecompressError> {
+        let msg = ctx.db.message(&c.nonce)?;
         let witness_index = c.witness_index.decompress(ctx).await?;
         let predicate_gas_used = c.predicate_gas_used.decompress(ctx).await?;
         let predicate = c.predicate.decompress(ctx).await?;
@@ -169,11 +186,11 @@ where
     }
 }
 
-impl<'a> DecompressibleBy<DecompressCtx<'a>> for Mint {
+impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for Mint {
     async fn decompress_with(
         c: &Self::Compressed,
-        ctx: &DecompressCtx<'a>,
-    ) -> anyhow::Result<Self> {
+        ctx: &DecompressCtx<D>,
+    ) -> Result<Self, DecompressError> {
         Ok(Transaction::mint(
             Default::default(), // TODO: what should this we do with this?
             c.input_contract.decompress(ctx).await?,

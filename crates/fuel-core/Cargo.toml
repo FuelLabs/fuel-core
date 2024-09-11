@@ -23,6 +23,7 @@ derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-consensus-module = { workspace = true }
+fuel-core-compression = { workspace = true }
 fuel-core-database = { workspace = true }
 fuel-core-executor = { workspace = true, features = ["std"] }
 fuel-core-gas-price-service = { workspace = true }
@@ -95,6 +96,7 @@ test-helpers = [
   "fuel-core-p2p?/test-helpers",
   "fuel-core-storage/test-helpers",
   "fuel-core-chain-config/test-helpers",
+  "fuel-core-compression/test-helpers",
   "fuel-core-txpool/test-helpers",
   "fuel-core-services/test-helpers",
   "fuel-core-importer/test-helpers",

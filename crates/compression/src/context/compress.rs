@@ -18,9 +18,8 @@ use fuel_core_types::{
 };
 
 use crate::{
-    db::RocksDb,
     eviction_policy::CacheEvictor,
-    ports::UtxoIdToPointer,
+    services::compress::CompressDb,
     tables::{
         PerRegistryKeyspace,
         PostcardSerialized,
@@ -28,28 +27,28 @@ use crate::{
     },
 };
 
-pub struct CompressCtx<'a> {
-    pub db: &'a mut RocksDb,
-    pub tx_lookup: &'a dyn UtxoIdToPointer,
+pub struct CompressCtx<D> {
+    pub db: D,
     pub cache_evictor: CacheEvictor,
     /// Changes to the temporary registry, to be included in the compressed block header
     pub changes: PerRegistryKeyspace<HashMap<RegistryKey, PostcardSerialized>>,
 }
 
-impl ContextError for CompressCtx<'_> {
+impl<D> ContextError for CompressCtx<D> {
     type Error = anyhow::Error;
 }
 
-fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
+fn registry_substitute<D: CompressDb, T: serde::Serialize + Default + PartialEq>(
     keyspace: RegistryKeyspace,
     value: &T,
-    ctx: &mut CompressCtx<'_>,
+    ctx: &mut CompressCtx<D>,
 ) -> anyhow::Result<RegistryKey> {
     if *value == T::default() {
         return Ok(RegistryKey::DEFAULT_VALUE);
     }
 
-    if let Some(found) = ctx.db.registry_index_lookup(keyspace, value)? {
+    let ser_value = postcard::to_stdvec(value)?;
+    if let Some(found) = ctx.db.registry_index_lookup(keyspace, ser_value)? {
         return Ok(found);
     }
 
@@ -59,56 +58,56 @@ fn registry_substitute<T: serde::Serialize + Default + PartialEq>(
     Ok(key)
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>> for Address {
+impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for Address {
     async fn compress_with(
         &self,
-        ctx: &mut CompressCtx<'a>,
+        ctx: &mut CompressCtx<D>,
     ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::address, self, ctx)
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>> for AssetId {
+impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for AssetId {
     async fn compress_with(
         &self,
-        ctx: &mut CompressCtx<'a>,
+        ctx: &mut CompressCtx<D>,
     ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::asset_id, self, ctx)
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>> for ContractId {
+impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for ContractId {
     async fn compress_with(
         &self,
-        ctx: &mut CompressCtx<'a>,
+        ctx: &mut CompressCtx<D>,
     ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::contract_id, self, ctx)
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>> for ScriptCode {
+impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for ScriptCode {
     async fn compress_with(
         &self,
-        ctx: &mut CompressCtx<'a>,
+        ctx: &mut CompressCtx<D>,
     ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::script_code, self, ctx)
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>> for PredicateCode {
+impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for PredicateCode {
     async fn compress_with(
         &self,
-        ctx: &mut CompressCtx<'a>,
+        ctx: &mut CompressCtx<D>,
     ) -> anyhow::Result<RegistryKey> {
         registry_substitute(RegistryKeyspace::script_code, self, ctx)
     }
 }
 
-impl<'a> CompressibleBy<CompressCtx<'a>> for UtxoId {
+impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for UtxoId {
     async fn compress_with(
         &self,
-        ctx: &mut CompressCtx<'a>,
+        ctx: &mut CompressCtx<D>,
     ) -> anyhow::Result<CompressedUtxoId> {
-        ctx.tx_lookup.lookup(*self).await
+        ctx.db.lookup(*self)
     }
 }

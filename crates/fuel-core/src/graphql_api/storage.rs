@@ -39,6 +39,7 @@ use statistic::StatisticTable;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
+pub mod da_compression;
 pub mod messages;
 pub mod old;
 pub mod statistic;
@@ -93,6 +94,17 @@ pub enum Column {
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](messages::SpentMessages)
     SpentMessages = 13,
+    /// DA compression and postcard serialized blocks.
+    /// See [`DaCompressedBlocks`](da_compressed::DaCompressedBlocks)
+    DaCompressedBlocks = 14,
+    /// DA compression metadata.
+    DaCompressionMetadata = 15,
+    /// Temporal registry for DA compression.
+    /// See [`DaCompressionTemporalRegistry`](da_compression::DaCompressionTemporalRegistry)
+    DaCompressionTemporalRegistry = 16,
+    /// Temporal registry lookup index for DA compression.
+    /// See [`DaCompressionTemporalRegistryIndex`](da_compression::DaCompressionTemporalRegistryIndex)
+    DaCompressionTemporalRegistryIndex = 17,
 }
 
 impl Column {

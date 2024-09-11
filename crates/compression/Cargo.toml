@@ -15,18 +15,16 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde", "da-compression"] }
 postcard = { version = "1.0", features = ["use-std"] }
-rocksdb = { version = "0.21", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"] }
-tokio = { workspace = true, features = ["sync"] }
+thiserror = { workspace = true }
+rand = { workspace = true, optional = true}
 
 [dev-dependencies]
 bimap = { version = "0.6" }
 bincode = { version = "1.3" }
 fuel-core-compression = { workspace = true, features = ["test-helpers"] }
-rand = { workspace = true }
 tempfile = "3"
+tokio = { workspace = true, features = ["sync"] }
 
 [features]
-default = ["rocksdb"]
-rocksdb = ["dep:rocksdb"]
-test-helpers = ["fuel-core-types/test-helpers", "fuel-core-types/random", "fuel-core-types/std"]
+test-helpers = ["dep:rand", "fuel-core-types/test-helpers", "fuel-core-types/random", "fuel-core-types/std"]

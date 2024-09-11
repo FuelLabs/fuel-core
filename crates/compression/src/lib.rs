@@ -1,4 +1,3 @@
-pub mod db;
 mod eviction_policy;
 pub mod ports;
 mod tables;
@@ -11,6 +10,8 @@ mod context {
     pub mod decompress;
     pub mod prepare;
 }
+
+pub use tables::RegistryKeyspace;
 
 #[cfg(test)]
 mod compression_tests;

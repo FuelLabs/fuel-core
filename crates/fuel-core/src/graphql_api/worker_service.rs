@@ -5,8 +5,10 @@ use super::storage::old::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        ports,
-        ports::worker::OffChainDatabaseTransaction,
+        ports::{
+            self,
+            worker::OffChainDatabaseTransaction,
+        },
         storage::{
             blocks::FuelBlockIdsToHeights,
             coins::{
@@ -21,7 +23,22 @@ use crate::{
             },
         },
     },
-    graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
+    graphql_api::storage::{
+        da_compression::{
+            DaCompressedBlocks,
+            DaCompressionTemporalRegistry,
+            DaCompressionTemporalRegistryIndex,
+        },
+        relayed_transactions::RelayedTransactionStatuses,
+    },
+};
+use fuel_core_compression::{
+    ports::{
+        TemporalRegistry,
+        UtxoIdToPointer,
+    },
+    services::compress::compress,
+    RegistryKeyspace,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
@@ -33,9 +50,12 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    not_found,
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
@@ -134,7 +154,7 @@ where
         let height = block.header().height();
         let block_id = block.id();
         transaction
-            .storage::<FuelBlockIdsToHeights>()
+            .storage_as_mut::<FuelBlockIdsToHeights>()
             .insert(&block_id, height)?;
 
         let total_tx_count = transaction
@@ -145,6 +165,8 @@ where
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
         )?;
+
+        da_compress_block(&block, &result.events, &mut transaction)?;
 
         transaction.commit()?;
 
@@ -159,6 +181,100 @@ where
 
         Ok(())
     }
+}
+
+fn da_compress_block<T>(
+    block: &Block,
+    events: &[Event],
+    transaction: &mut T,
+) -> anyhow::Result<()>
+where
+    T: OffChainDatabaseTransaction,
+    T: StorageInspect<DaCompressionTemporalRegistry>,
+{
+    struct DbTx<'a, Tx>(&'a mut Tx, &'a [Event]);
+
+    impl<'a, Tx> TemporalRegistry for DbTx<'a, Tx>
+    where
+        Tx: OffChainDatabaseTransaction,
+        Tx: StorageInspect<DaCompressionTemporalRegistry>,
+    {
+        fn read_registry(
+            &self,
+            keyspace: RegistryKeyspace,
+            key: fuel_core_types::fuel_compression::RegistryKey,
+        ) -> anyhow::Result<Vec<u8>> {
+            Ok(self
+                .0
+                .storage_as_ref::<DaCompressionTemporalRegistry>()
+                .get(&(keyspace, key))?
+                .ok_or(not_found!(DaCompressionTemporalRegistry))?
+                .into_owned())
+        }
+
+        fn write_registry(
+            &mut self,
+            keyspace: RegistryKeyspace,
+            key: fuel_core_types::fuel_compression::RegistryKey,
+            value: Vec<u8>,
+        ) -> anyhow::Result<()> {
+            // Write the actual value
+            self.0
+                .storage_as_mut::<DaCompressionTemporalRegistry>()
+                .insert(&(keyspace, key), &value)?;
+
+            // Remove the overwritten value from index, if any
+            self.0
+                .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                .remove(&(keyspace, value.clone()))?;
+
+            // Add the new value to the index
+            self.0
+                .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                .insert(&(keyspace, value), &key)?;
+
+            Ok(())
+        }
+
+        fn registry_index_lookup(
+            &self,
+            keyspace: RegistryKeyspace,
+            value: Vec<u8>,
+        ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+        {
+            Ok(self
+                .0
+                .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
+                .get(&(keyspace, value))?
+                .map(|v| v.into_owned()))
+        }
+
+        fn next_block_height(&self) -> anyhow::Result<BlockHeight> {
+            todo!()
+        }
+    }
+
+    impl<'a, Tx> UtxoIdToPointer for DbTx<'a, Tx>
+    where
+        Tx: OffChainDatabaseTransaction,
+    {
+        fn lookup(
+            &self,
+            _utxo_id: fuel_core_types::fuel_tx::UtxoId,
+        ) -> anyhow::Result<fuel_core_types::fuel_tx::CompressedUtxoId> {
+            todo!();
+        }
+    }
+
+    let compressed = compress(DbTx(transaction, events), block)
+        .now_or_never()
+        .expect("The current implementation resolved all futures instantly")?;
+
+    transaction
+        .storage_as_mut::<DaCompressedBlocks>()
+        .insert(&block.header().consensus().height, &compressed)?;
+
+    Ok(())
 }
 
 /// Process the executor events and update the indexes for the messages and coins.

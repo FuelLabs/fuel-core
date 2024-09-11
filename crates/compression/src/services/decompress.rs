@@ -1,5 +1,3 @@
-use tokio::sync::mpsc;
-
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
@@ -16,64 +14,31 @@ use fuel_core_types::{
 
 use crate::{
     context::decompress::DecompressCtx,
-    db::RocksDb,
-    ports::HistoryLookup,
+    ports::{
+        HistoryLookup,
+        TemporalRegistry,
+    },
     CompressedBlockPayload,
 };
 
-/// Task handle
-pub struct Task {
-    request_receiver: mpsc::Receiver<TaskRequest>,
-}
-
-pub enum TaskRequest {
-    Decompress {
-        block: Vec<u8>,
-        response: mpsc::Sender<Result<PartialFuelBlock, DecompressError>>,
-    },
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum DecompressError {
-    /// Only the next sequential block can be decompressed
+    #[error("Only the next sequential block can be decompressed")]
     NotLatest,
-    /// Unknown compression version
+    #[error("Unknown compression version")]
     UnknownVersion,
-    /// Deserialization error
-    Postcard(postcard::Error),
+    #[error("Deserialization error: {0}")]
+    Postcard(#[from] postcard::Error),
     /// Other errors
-    Other(anyhow::Error),
-}
-impl From<postcard::Error> for DecompressError {
-    fn from(err: postcard::Error) -> Self {
-        Self::Postcard(err)
-    }
-}
-impl From<anyhow::Error> for DecompressError {
-    fn from(err: anyhow::Error) -> Self {
-        Self::Other(err)
-    }
+    #[error("Unknown error: {0}")]
+    Other(#[from] anyhow::Error),
 }
 
-pub async fn run(
-    mut db: RocksDb,
-    lookup: Box<dyn HistoryLookup>,
+pub trait DecompressDb: TemporalRegistry + HistoryLookup {}
+impl<T> DecompressDb for T where T: TemporalRegistry + HistoryLookup {}
 
-    mut request_receiver: mpsc::Receiver<TaskRequest>,
-) {
-    while let Some(req) = request_receiver.recv().await {
-        match req {
-            TaskRequest::Decompress { block, response } => {
-                let reply = decompress(&mut db, &*lookup, block).await;
-                response.send(reply).await.expect("Failed to respond");
-            }
-        }
-    }
-}
-
-pub async fn decompress(
-    db: &mut RocksDb,
-    lookup: &dyn HistoryLookup,
+pub async fn decompress<D: DecompressDb + TemporalRegistry>(
+    mut db: D,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {
     if block.is_empty() || block[0] != 0 {
@@ -87,9 +52,9 @@ pub async fn decompress(
     //     return Err(DecompressError::NotLatest);
     // }
 
-    compressed.registrations.write_to_db(db)?;
+    compressed.registrations.write_to_registry(&mut db)?;
 
-    let ctx = DecompressCtx { db, lookup };
+    let ctx = DecompressCtx { db };
 
     let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress_with(
         &compressed.transactions,

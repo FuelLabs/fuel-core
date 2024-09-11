@@ -60,6 +60,7 @@ pub struct BlockV1<TransactionRepresentation = Transaction> {
 }
 
 /// Fuel `Block` with transactions represented by their id only.
+/// Note that this is different from the DA compressed blocks.
 pub type CompressedBlock = Block<TxId>;
 
 /// Fuel block with all transaction data included

@@ -1,19 +1,19 @@
 use fuel_core_types::{
+    blockchain::block::Block,
     fuel_compression::CompressibleBy,
     fuel_tx::Transaction,
 };
-use tokio::sync::mpsc;
-
-use fuel_core_types::blockchain::block::Block;
 
 use crate::{
     context::{
         compress::CompressCtx,
         prepare::PrepareCtx,
     },
-    db::RocksDb,
     eviction_policy::CacheEvictor,
-    ports::UtxoIdToPointer,
+    ports::{
+        TemporalRegistry,
+        UtxoIdToPointer,
+    },
     tables::{
         PerRegistryKeyspace,
         RegistrationsPerTable,
@@ -22,50 +22,18 @@ use crate::{
     Header,
 };
 
-/// Task handle
-pub struct Task {
-    request_receiver: mpsc::Receiver<TaskRequest>,
-}
-
-pub enum TaskRequest {
-    Compress {
-        block: Block,
-        response: mpsc::Sender<Result<Vec<u8>, Error>>,
-    },
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Only the next sequential block can be compressed
+    #[error("Only the next sequential block can be compressed")]
     NotLatest,
-    Other(anyhow::Error),
-}
-impl From<anyhow::Error> for Error {
-    fn from(err: anyhow::Error) -> Self {
-        Self::Other(err)
-    }
+    #[error("Unknown compression error")]
+    Other(#[from] anyhow::Error),
 }
 
-pub async fn run(
-    mut db: RocksDb,
-    tx_lookup: Box<dyn UtxoIdToPointer>,
-    mut request_receiver: mpsc::Receiver<TaskRequest>,
-) {
-    while let Some(req) = request_receiver.recv().await {
-        match req {
-            TaskRequest::Compress { block, response } => {
-                let reply = compress(&mut db, &*tx_lookup, block).await;
-                response.send(reply).await.expect("Failed to respond");
-            }
-        }
-    }
-}
+pub trait CompressDb: TemporalRegistry + UtxoIdToPointer {}
+impl<T> CompressDb for T where T: TemporalRegistry + UtxoIdToPointer {}
 
-pub async fn compress(
-    db: &mut RocksDb,
-    tx_lookup: &dyn UtxoIdToPointer,
-    block: Block,
-) -> Result<Vec<u8>, Error> {
+pub async fn compress<D: CompressDb>(db: D, block: &Block) -> Result<Vec<u8>, Error> {
     if *block.header().height() != db.next_block_height()? {
         return Err(Error::NotLatest);
     }
@@ -82,7 +50,6 @@ pub async fn compress(
 
     let mut ctx = CompressCtx {
         db: prepare_ctx.db,
-        tx_lookup,
         cache_evictor: CacheEvictor {
             keep_keys: prepare_ctx.accessed_keys,
         },
@@ -93,9 +60,7 @@ pub async fn compress(
     let registrations = RegistrationsPerTable::try_from(registrations)?;
 
     // Apply changes to the db
-    // TODO: these two operations should be atomic together
-    registrations.write_to_db(db)?;
-    db.increment_block_height()?;
+    registrations.write_to_registry(&mut ctx.db)?;
 
     // Construct the actual compacted block
     let compact = CompressedBlockPayload {

@@ -1,6 +1,7 @@
 //! Ports this service requires to function.
 
 use fuel_core_types::{
+    fuel_compression::RegistryKey,
     fuel_tx::{
         Address,
         AssetId,
@@ -8,19 +9,53 @@ use fuel_core_types::{
         UtxoId,
         Word,
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
 };
 
-#[async_trait::async_trait]
-pub trait UtxoIdToPointer {
-    async fn lookup(&self, utxo_id: UtxoId) -> anyhow::Result<CompressedUtxoId>;
+use crate::tables::RegistryKeyspace;
+
+/// Rolling cache for compression.
+/// Holds the latest state which can be event sourced from the compressed blocks.
+/// The changes done using this trait in a single call to `compress` or `decompress`
+/// must be committed atomically, after which block height must be incremented.
+pub trait TemporalRegistry {
+    /// Reads a value from the registry at its current height.
+    fn read_registry(
+        &self,
+        keyspace: RegistryKeyspace,
+        key: RegistryKey,
+    ) -> anyhow::Result<Vec<u8>>;
+
+    /// Reads a value from the registry at its current height.
+    fn write_registry(
+        &mut self,
+        keyspace: RegistryKeyspace,
+        key: RegistryKey,
+        value: Vec<u8>,
+    ) -> anyhow::Result<()>;
+
+    /// Lookup registry key by the value.
+    fn registry_index_lookup(
+        &self,
+        keyspace: RegistryKeyspace,
+        value: Vec<u8>,
+    ) -> anyhow::Result<Option<RegistryKey>>;
+
+    /// Get the block height for the next block, i.e. the block currently being processed.
+    fn next_block_height(&self) -> anyhow::Result<BlockHeight>;
 }
 
-#[async_trait::async_trait]
+pub trait UtxoIdToPointer {
+    fn lookup(&self, utxo_id: UtxoId) -> anyhow::Result<CompressedUtxoId>;
+}
+
 pub trait HistoryLookup {
-    async fn utxo_id(&self, c: &CompressedUtxoId) -> anyhow::Result<UtxoId>;
-    async fn coin(&self, utxo_id: &UtxoId) -> anyhow::Result<CoinInfo>;
-    async fn message(&self, nonce: &Nonce) -> anyhow::Result<MessageInfo>;
+    fn utxo_id(&self, c: &CompressedUtxoId) -> anyhow::Result<UtxoId>;
+    fn coin(&self, utxo_id: &UtxoId) -> anyhow::Result<CoinInfo>;
+    fn message(&self, nonce: &Nonce) -> anyhow::Result<MessageInfo>;
 }
 
 #[derive(Debug, Clone)]

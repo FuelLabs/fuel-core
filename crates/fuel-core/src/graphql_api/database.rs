@@ -69,6 +69,8 @@ use std::{
     sync::Arc,
 };
 
+use super::ports::DatabaseDaCompressedBlocks;
+
 mod arc_wrapper;
 
 /// The on-chain view of the database used by the [`ReadView`] to fetch on-chain data.
@@ -210,6 +212,16 @@ impl DatabaseBlocks for ReadView {
     }
 }
 
+impl DatabaseDaCompressedBlocks for ReadView {
+    fn da_compressed_block(&self, id: &BlockHeight) -> StorageResult<Vec<u8>> {
+        self.off_chain.da_compressed_block(id)
+    }
+
+    fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.on_chain.latest_height()
+    }
+}
+
 impl<M> StorageInspect<M> for ReadView
 where
     M: Mappable,
@@ -284,6 +296,10 @@ impl OnChainDatabase for ReadView {}
 impl OffChainDatabase for ReadView {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
         self.off_chain.block_height(block_id)
+    }
+
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
+        self.off_chain.da_compressed_block(height)
     }
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {

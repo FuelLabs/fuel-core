@@ -15,10 +15,13 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
+    graphql_api::storage::{
+        da_compression::DaCompressedBlocks,
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use fuel_core_storage::{
@@ -67,6 +70,13 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
         self.get_block_height(id)
             .and_then(|height| height.ok_or(not_found!("BlockHeight")))
+    }
+
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
+        self.storage_as_ref::<DaCompressedBlocks>()
+            .get(height)?
+            .ok_or_else(|| not_found!("DaCompressedBlock"))
+            .map(std::borrow::Cow::into_owned)
     }
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {

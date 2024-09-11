@@ -1,4 +1,3 @@
-use super::db::RocksDb;
 use fuel_core_types::{
     fuel_compression::RegistryKey,
     fuel_tx::{
@@ -9,7 +8,7 @@ use fuel_core_types::{
 };
 use std::collections::HashMap;
 
-use rocksdb::WriteBatchWithTransaction;
+use crate::ports::TemporalRegistry;
 
 /// Type-erased (serialized) data
 #[derive(Debug, Clone)]
@@ -22,7 +21,8 @@ impl PostcardSerialized {
 
 macro_rules! tables {
     ($($name:ident: $type:ty),*$(,)?) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[doc = "RegistryKey namespaces"]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
         #[allow(non_camel_case_types)] // Match names in structs exactly
         pub enum RegistryKeyspace {
             $(
@@ -46,7 +46,6 @@ macro_rules! tables {
                 }
             }
         }
-
 
         #[derive(Debug, Clone, Default)]
         pub struct PerRegistryKeyspace<T> {
@@ -103,40 +102,13 @@ macro_rules! tables {
                 true
             }
 
-            pub(crate) fn write_to_db(&self, db: &mut RocksDb) -> anyhow::Result<()> {
-                let mut batch = WriteBatchWithTransaction::<false>::default();
-                let cf_registry = db.db.cf_handle("temporal").unwrap();
-                let cf_index = db.db.cf_handle("temporal_index").unwrap();
-
+            pub(crate) fn write_to_registry<R: TemporalRegistry>(&self, registry: &mut R) -> anyhow::Result<()> {
                 $(
-                    let mut key_table_prefix: Vec<u8> = stringify!($name).bytes().collect();
-                    key_table_prefix.reserve(4);
-                    key_table_prefix.push(0);
-
                     for (key, value) in self.$name.iter() {
-                        // Get key bytes
-                        let raw_key = postcard::to_stdvec(&key).expect("Never fails");
-
-                        // Write new value
-                        let db_key: Vec<u8> = key_table_prefix.iter().copied().chain(raw_key.clone()).collect();
-                        let db_value = postcard::to_stdvec(&value).expect("Never fails");
-
-                        batch.put_cf(&cf_registry, db_key.clone(), db_value.clone());
-
-                        // Remove the overwritten value from index, if any
-                        if let Some(old_value) = db.db.get_cf(&cf_registry, db_key.clone())? {
-                            let index_value: Vec<u8> = key_table_prefix.iter().copied().chain(old_value).collect();
-                            batch.delete_cf(&cf_index, index_value);
-                        }
-
-                        // Add the new value to the index
-                        let index_key: Vec<u8> = key_table_prefix.iter().copied().chain(db_value).collect();
-                        batch.put_cf(&cf_index, index_key, raw_key);
+                        registry.write_registry(RegistryKeyspace::$name, *key, postcard::to_stdvec(value)?)?;
                     }
-
                 )*
 
-                db.db.write(batch)?;
                 Ok(())
             }
         }
@@ -148,4 +120,19 @@ tables!(
     asset_id: AssetId,
     contract_id: ContractId,
     script_code: Vec<u8>,
+    predicate_code: Vec<u8>,
 );
+
+// TODO: move inside the macro when this stabilizes: https://github.com/rust-lang/rust/pull/122808
+#[cfg(any(test, feature = "test-helpers"))]
+impl rand::prelude::Distribution<RegistryKeyspace> for rand::distributions::Standard {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> RegistryKeyspace {
+        match rng.gen_range(0..5) {
+            0 => RegistryKeyspace::address,
+            1 => RegistryKeyspace::asset_id,
+            2 => RegistryKeyspace::contract_id,
+            3 => RegistryKeyspace::script_code,
+            _ => RegistryKeyspace::predicate_code,
+        }
+    }
+}
