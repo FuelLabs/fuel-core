@@ -1,8 +1,5 @@
 use crate::fuel_gas_price_updater::{
-    da_source_adapter::{
-        DaBlockCostsProvider,
-        POLLING_INTERVAL_MS,
-    },
+    da_source_adapter::POLLING_INTERVAL_MS,
     DaBlockCosts,
 };
 use fuel_core_services::{
@@ -25,15 +22,12 @@ use tokio::{
 
 pub use anyhow::Result;
 
-const CHANNEL_BUFFER_SIZE: usize = 10;
-
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
 pub struct DaBlockCostsService<Source>
 where
     Source: DaBlockCostsSource,
 {
-    block_cost_provider: DaBlockCostsProvider,
     poll_interval: Interval,
     source: Source,
     sender: Sender<DaBlockCosts>,
@@ -44,13 +38,14 @@ impl<Source> DaBlockCostsService<Source>
 where
     Source: DaBlockCostsSource,
 {
-    pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
+    pub fn new(
+        source: Source,
+        sender: Sender<DaBlockCosts>,
+        poll_interval: Option<Duration>,
+    ) -> Self {
         #[allow(clippy::arithmetic_side_effects)]
-        let (sender, receiver) = tokio::sync::mpsc::channel(CHANNEL_BUFFER_SIZE);
-        let block_cost_provider = DaBlockCostsProvider::from_receiver(receiver);
         Self {
             sender,
-            block_cost_provider,
             poll_interval: interval(
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
@@ -74,15 +69,13 @@ where
 {
     const NAME: &'static str = "DaBlockCostsService";
 
-    type SharedData = DaBlockCostsProvider;
+    type SharedData = ();
 
     type Task = Self;
 
     type TaskParams = ();
 
-    fn shared_data(&self) -> Self::SharedData {
-        self.block_cost_provider.clone()
-    }
+    fn shared_data(&self) -> Self::SharedData {}
 
     async fn into_task(
         mut self,
@@ -100,7 +93,7 @@ where
     Source: DaBlockCostsSource,
 {
     /// This function polls the source according to a polling interval
-    /// described by the DaSourceService
+    /// described by the DaBlockCostsService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> Result<bool> {
         let continue_running;
 
@@ -130,7 +123,8 @@ where
 
 pub fn new_service<S: DaBlockCostsSource>(
     da_source: S,
+    sender: Sender<DaBlockCosts>,
     poll_interval: Option<Duration>,
 ) -> ServiceRunner<DaBlockCostsService<S>> {
-    ServiceRunner::new(DaBlockCostsService::new(da_source, poll_interval))
+    ServiceRunner::new(DaBlockCostsService::new(da_source, sender, poll_interval))
 }

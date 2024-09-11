@@ -1,9 +1,18 @@
 use crate::fuel_gas_price_updater::{
+    da_source_adapter::service::{
+        new_service,
+        DaBlockCostsService,
+        DaBlockCostsSource,
+    },
     DaBlockCosts,
     GetDaBlockCosts,
     Result as GasPriceUpdaterResult,
 };
-use std::sync::Arc;
+use fuel_core_services::ServiceRunner;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::{
     mpsc,
     Mutex,
@@ -16,21 +25,42 @@ pub mod service;
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Clone)]
-pub struct DaBlockCostsProvider {
-    receiver: Arc<Mutex<mpsc::Receiver<DaBlockCosts>>>,
+pub struct DaBlockCostsSharedState {
+    inner: Arc<Mutex<mpsc::Receiver<DaBlockCosts>>>,
 }
 
-impl DaBlockCostsProvider {
-    fn from_receiver(receiver: mpsc::Receiver<DaBlockCosts>) -> Self {
+impl DaBlockCostsSharedState {
+    fn new(receiver: mpsc::Receiver<DaBlockCosts>) -> Self {
         Self {
-            receiver: Arc::new(Mutex::new(receiver)),
+            inner: Arc::new(Mutex::new(receiver)),
         }
     }
 }
 
-impl GetDaBlockCosts for DaBlockCostsProvider {
+pub struct DaBlockCostsProvider<T: DaBlockCostsSource + 'static> {
+    pub service: ServiceRunner<DaBlockCostsService<T>>,
+    pub shared_state: DaBlockCostsSharedState,
+}
+
+const CHANNEL_BUFFER_SIZE: usize = 10;
+
+impl<T> DaBlockCostsProvider<T>
+where
+    T: DaBlockCostsSource,
+{
+    pub fn new(source: T, polling_interval: Option<Duration>) -> Self {
+        let (sender, receiver) = mpsc::channel(CHANNEL_BUFFER_SIZE);
+        let service = new_service(source, sender, polling_interval);
+        Self {
+            shared_state: DaBlockCostsSharedState::new(receiver),
+            service,
+        }
+    }
+}
+
+impl GetDaBlockCosts for DaBlockCostsSharedState {
     fn get(&mut self) -> GasPriceUpdaterResult<Option<DaBlockCosts>> {
-        if let Ok(mut guard) = self.receiver.try_lock() {
+        if let Ok(mut guard) = self.inner.try_lock() {
             if let Ok(da_block_costs) = guard.try_recv() {
                 return Ok(Some(da_block_costs));
             }
@@ -43,10 +73,7 @@ impl GetDaBlockCosts for DaBlockCostsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fuel_gas_price_updater::da_source_adapter::{
-        dummy_costs::DummyDaBlockCosts,
-        service::new_service,
-    };
+    use crate::fuel_gas_price_updater::da_source_adapter::dummy_costs::DummyDaBlockCosts;
     use fuel_core_services::Service;
     use std::time::Duration;
     use tokio::time::sleep;
@@ -60,13 +87,16 @@ mod tests {
             blob_cost_wei: 2,
         };
         let da_block_costs_source = DummyDaBlockCosts::new(Ok(expected_da_cost.clone()));
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
-        let mut shared_state = service.shared.clone();
+        let provider = DaBlockCostsProvider::new(
+            da_block_costs_source,
+            Some(Duration::from_millis(1)),
+        );
+        let mut shared_state = provider.shared_state.clone();
 
         // when
-        service.start_and_await().await.unwrap();
+        provider.service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
-        service.stop_and_await().await.unwrap();
+        provider.service.stop_and_await().await.unwrap();
 
         // then
         let da_block_costs_opt = shared_state.get().unwrap();
@@ -83,13 +113,16 @@ mod tests {
             blob_cost_wei: 1,
         };
         let da_block_costs_source = DummyDaBlockCosts::new(Ok(expected_da_cost.clone()));
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
-        let mut shared_state = service.shared.clone();
+        let provider = DaBlockCostsProvider::new(
+            da_block_costs_source,
+            Some(Duration::from_millis(1)),
+        );
+        let mut shared_state = provider.shared_state.clone();
 
         // when
-        service.start_and_await().await.unwrap();
+        provider.service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
-        service.stop_and_await().await.unwrap();
+        provider.service.stop_and_await().await.unwrap();
         let da_block_costs_opt = shared_state.get().unwrap();
         assert!(da_block_costs_opt.is_some());
         assert_eq!(da_block_costs_opt.unwrap(), expected_da_cost);
@@ -103,13 +136,16 @@ mod tests {
     async fn run__when_da_block_cost_source_errors_shared_value_is_not_updated() {
         // given
         let da_block_costs_source = DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")));
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
-        let mut shared_state = service.shared.clone();
+        let provider = DaBlockCostsProvider::new(
+            da_block_costs_source,
+            Some(Duration::from_millis(1)),
+        );
+        let mut shared_state = provider.shared_state.clone();
 
         // when
-        service.start_and_await().await.unwrap();
+        provider.service.start_and_await().await.unwrap();
         sleep(Duration::from_millis(10)).await;
-        service.stop_and_await().await.unwrap();
+        provider.service.stop_and_await().await.unwrap();
 
         // then
         let da_block_costs_opt = shared_state.get().unwrap();

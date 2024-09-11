@@ -17,8 +17,8 @@ use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
         da_source_adapter::{
             dummy_costs::DummyDaBlockCosts,
-            service::DaBlockCostsService,
             DaBlockCostsProvider,
+            DaBlockCostsSharedState,
         },
         fuel_core_storage_adapter::{
             storage::GasPriceMetadata,
@@ -39,6 +39,7 @@ use fuel_core_gas_price_service::{
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
+    Service,
     StateWatcher,
 };
 use fuel_core_storage::{
@@ -62,7 +63,7 @@ use fuel_core_types::{
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
     MetadataStorageAdapter,
-    DaBlockCostsProvider,
+    DaBlockCostsSharedState,
 >;
 
 pub struct InitializeTask {
@@ -73,7 +74,7 @@ pub struct InitializeTask {
     pub on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     pub block_stream: BoxStream<SharedImportResult>,
     pub shared_algo: SharedGasPriceAlgo<Algorithm>,
-    pub da_block_costs_service: DaBlockCostsService<DummyDaBlockCosts>,
+    pub da_block_costs_provider: DaBlockCostsProvider<DummyDaBlockCosts>,
 }
 
 type MetadataStorageAdapter =
@@ -100,8 +101,8 @@ impl InitializeTask {
         // there's no use of this source yet, so we can safely return an error
         let da_block_costs_source =
             DummyDaBlockCosts::new(Err(anyhow::anyhow!("Not used")));
-        let da_block_costs_service =
-            DaBlockCostsService::new(da_block_costs_source, None);
+        let da_block_costs_provider =
+            DaBlockCostsProvider::new(da_block_costs_source, None);
 
         let task = Self {
             config,
@@ -111,7 +112,7 @@ impl InitializeTask {
             on_chain_db,
             block_stream,
             shared_algo,
-            da_block_costs_service,
+            da_block_costs_provider,
         };
         Ok(task)
     }
@@ -173,15 +174,15 @@ impl RunnableService for InitializeTask {
             self.gas_price_db,
             self.on_chain_db,
             self.block_stream,
-            self.da_block_costs_service.shared_data(),
+            self.da_block_costs_provider.shared_state,
         )?;
-        let inner_service = GasPriceService::new(
-            starting_height,
-            updater,
-            self.shared_algo,
-            self.da_block_costs_service,
-        )
-        .await;
+
+        self.da_block_costs_provider
+            .service
+            .start_and_await()
+            .await?;
+        let inner_service =
+            GasPriceService::new(starting_height, updater, self.shared_algo).await;
         Ok(inner_service)
     }
 }
@@ -193,7 +194,7 @@ pub fn get_synced_gas_price_updater(
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     block_stream: BoxStream<SharedImportResult>,
-    da_block_costs: DaBlockCostsProvider,
+    da_block_costs: DaBlockCostsSharedState,
 ) -> anyhow::Result<Updater> {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
