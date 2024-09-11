@@ -140,6 +140,13 @@ impl Instance<Created> {
         let peek_next_txs_size = self.peek_next_txs_size(source.clone());
         self.add_method("peek_next_txs_size", peek_next_txs_size)?;
 
+        let peek_next_txs_size_with_limit =
+            self.peek_next_txs_size_with_limit(source.clone());
+        self.add_method(
+            "peek_next_txs_size_with_limit",
+            peek_next_txs_size_with_limit,
+        )?;
+
         let consume_next_txs = self.consume_next_txs();
         self.add_method("consume_next_txs", consume_next_txs)?;
 
@@ -154,6 +161,13 @@ impl Instance<Created> {
         let peek_next_txs_size = self.no_source_peek_next_txs_size();
         self.add_method("peek_next_txs_size", peek_next_txs_size)?;
 
+        let peek_next_txs_size_with_limit =
+            self.no_source_peek_next_txs_size_with_limit();
+
+        self.add_method(
+            "peek_next_txs_size_with_limit",
+            peek_next_txs_size_with_limit,
+        )?;
         let consume_next_txs = self.consume_next_txs();
         self.add_method("consume_next_txs", consume_next_txs)?;
 
@@ -213,9 +227,73 @@ impl Instance<Created> {
         Func::wrap(&mut self.store, closure)
     }
 
+    fn peek_next_txs_size_with_limit<TxSource>(
+        &mut self,
+        source: Option<Arc<TxSource>>,
+    ) -> Func
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let closure = move |mut caller: Caller<'_, ExecutionState>,
+                            gas_limit: u64,
+                            _: u32|
+              -> anyhow::Result<u32> {
+            let Some(source) = source.clone() else {
+                return Ok(0);
+            };
+
+            // AC - TODO
+
+            let txs: Vec<_> = source
+                .next(gas_limit)
+                .into_iter()
+                .map(|tx| match tx {
+                    MaybeCheckedTransaction::CheckedTransaction(checked, _) => {
+                        let checked: Checked<Transaction> = checked.into();
+                        let (tx, _) = checked.into();
+                        tx
+                    }
+                    MaybeCheckedTransaction::Transaction(tx) => tx,
+                })
+                .collect();
+
+            let encoded_txs = postcard::to_allocvec(&txs).map_err(|e| {
+                ExecutorError::Other(format!(
+                    "Failed encoding of the transactions for `peek_next_txs_size` function: {}",
+                    e
+                ))
+            })?;
+            let encoded_size = u32::try_from(encoded_txs.len()).map_err(|e| {
+                ExecutorError::Other(format!(
+                    "The encoded transactions are more than `u32::MAX`. We support only wasm32: {}",
+                    e
+                ))
+            })?;
+
+            caller
+                .data_mut()
+                .next_transactions
+                .entry(encoded_size)
+                .or_default()
+                .push(encoded_txs);
+            Ok(encoded_size)
+        };
+
+        Func::wrap(&mut self.store, closure)
+    }
+
     fn no_source_peek_next_txs_size(&mut self) -> Func {
         let closure =
             move |_: Caller<'_, ExecutionState>, _: u64| -> anyhow::Result<u32> { Ok(0) };
+
+        Func::wrap(&mut self.store, closure)
+    }
+
+    fn no_source_peek_next_txs_size_with_limit(&mut self) -> Func {
+        let closure = move |_: Caller<'_, ExecutionState>,
+                            _: u64,
+                            _: u32|
+              -> anyhow::Result<u32> { Ok(0) };
 
         Func::wrap(&mut self.store, closure)
     }

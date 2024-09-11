@@ -84,9 +84,17 @@ mod host {
 
         // TxSource API
 
+        #[allow(unused)]
         /// Returns the size of the next encoded transactions.
         /// If the size is 0, there are no more transactions.
         pub(crate) fn peek_next_txs_size(gas_limit: u64) -> u32;
+
+        /// Returns the size of up to `transactions_limit` next encoded transactions,
+        /// If the size is 0, there are no more transactions.
+        pub(crate) fn peek_next_txs_size_with_limit(
+            gas_limit: u64,
+            transactions_limit: u32,
+        ) -> u32;
 
         /// Consumes the next transactions from the host.
         /// Calling this function before `peek_next_txs_size` do nothing.
@@ -149,7 +157,11 @@ pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
 
 /// Gets the next transactions by using the host function.
 pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
-    let next_size = unsafe { host::peek_next_txs_size(gas_limit) };
+    // TODO - AC: Make this an argument
+    let transactions_limit = u16::MAX as u32;
+
+    let next_size =
+        unsafe { host::peek_next_txs_size_with_limit(gas_limit, transactions_limit) };
 
     if next_size == 0 {
         return Ok(Vec::new());
