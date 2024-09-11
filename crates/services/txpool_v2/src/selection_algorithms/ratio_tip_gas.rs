@@ -25,6 +25,8 @@ use super::{
 
 pub type RatioTipGas = Ratio<u64>;
 
+/// Key used to sort transactions by tip/gas ratio.
+/// It first compares the tip/gas ratio, then the creation instant and finally the transaction id.
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub struct Key {
     ratio: RatioTipGas,
@@ -54,6 +56,7 @@ impl PartialOrd for Key {
     }
 }
 
+/// The selection algorithm that selects transactions based on the tip/gas ratio.
 pub struct RatioTipGasSelection<S: Storage> {
     transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
 }

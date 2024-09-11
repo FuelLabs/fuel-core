@@ -56,10 +56,12 @@ pub struct GraphStorage {
 }
 
 pub struct GraphConfig {
+    /// The maximum number of transactions per dependency chain
     pub max_txs_per_chain: u64,
 }
 
 impl GraphStorage {
+    /// Create a new graph storage
     pub fn new(config: GraphConfig) -> Self {
         Self {
             config,
@@ -71,6 +73,9 @@ impl GraphStorage {
 }
 
 impl GraphStorage {
+    /// Remove a node and all its dependent sub-graph.
+    /// Edit the data of dependencies transactions accordingly.
+    /// Returns the removed transactions.
     fn remove_node_and_dependent_sub_graph(
         &mut self,
         root: NodeIndex,
@@ -125,6 +130,7 @@ impl GraphStorage {
         Ok(removed_transactions)
     }
 
+    /// Check if the input has the right data to spend the output.
     fn check_if_coin_input_can_spend_output(
         output: &Output,
         input: &Input,
@@ -181,6 +187,8 @@ impl GraphStorage {
         Ok(())
     }
 
+    /// Cache the transaction information in the storage caches.
+    /// This is used to speed up the verification/dependencies searches of the transactions.
     fn cache_tx_infos(
         &mut self,
         outputs: &[Output],
@@ -208,10 +216,15 @@ impl GraphStorage {
         Ok(())
     }
 
-    fn clear_cache(&mut self, outputs: &[Output], tx_id: &TxId) {
+    /// Clear the caches of the storage when a transaction is removed.
+    fn clear_cache(&mut self, outputs: &[Output], tx_id: &TxId) -> Result<(), Error> {
         for (index, output) in outputs.iter().enumerate() {
-            let index = u16::try_from(index)
-                .expect("The number of outputs in a transaction is less than `u8::max`");
+            let index = u16::try_from(index).map_err(|_| {
+                Error::WrongOutputNumber(format!(
+                    "The number of outputs in `{}` is more than `u8::max`",
+                    tx_id
+                ))
+            })?;
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
@@ -223,6 +236,7 @@ impl GraphStorage {
                 _ => {}
             }
         }
+        Ok(())
     }
 }
 
@@ -419,8 +433,9 @@ impl Storage for GraphStorage {
                 "Transaction with index {:?} not found",
                 index
             )))
-            .inspect(|node| {
-                self.clear_cache(node.transaction.outputs(), &node.transaction.id());
+            .and_then(|node| {
+                self.clear_cache(node.transaction.outputs(), &node.transaction.id())?;
+                Ok(node)
             })
     }
 

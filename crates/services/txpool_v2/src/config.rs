@@ -41,6 +41,7 @@ pub struct BlackList {
 }
 
 impl BlackList {
+    /// Create a new blacklist.
     pub fn new(
         owners: Vec<Address>,
         utxo_ids: Vec<UtxoId>,
@@ -55,6 +56,7 @@ impl BlackList {
         }
     }
 
+    /// Check if the transaction has blacklisted inputs.
     pub fn check_blacklisting(&self, tx: &PoolTransaction) -> Result<(), Error> {
         for input in tx.inputs() {
             match input {
@@ -114,12 +116,19 @@ impl BlackList {
 }
 
 pub struct Config {
+    /// Enable UTXO validation (will check if UTXO exists in the database and has correct data).
     pub utxo_validation: bool,
+    /// Maximum block size in bytes.
     pub max_block_size: u64,
+    /// Maximum gas per block.
     pub max_block_gas: u64,
+    /// Maximum transactions per dependencies chain.
     pub max_txs_per_chain: u64,
+    /// Maximum transactions in the pool.
     pub max_txs: u64,
+    /// Maximum transaction time to live.
     pub max_txs_ttl: Duration,
+    /// Blacklist. Transactions with blacklisted inputs will not be accepted.
     pub black_list: BlackList,
 }
 

@@ -18,6 +18,8 @@ use crate::{
 
 pub mod basic;
 
+/// The reason why a transaction collides with another.
+/// It also contains additional information about the collision.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum CollisionReason {
     Coin(UtxoId),
@@ -26,6 +28,7 @@ pub enum CollisionReason {
     ContractCreation(ContractId),
 }
 
+/// Contains all the information about the collisions of a transaction.
 #[derive(Default, Debug)]
 pub struct Collisions<Idx> {
     pub reasons: HashSet<CollisionReason>,
@@ -33,6 +36,7 @@ pub struct Collisions<Idx> {
 }
 
 impl<Idx> Collisions<Idx> {
+    /// Create a new empty collision information.
     pub fn new() -> Self {
         Self {
             reasons: HashSet::default(),
@@ -42,20 +46,24 @@ impl<Idx> Collisions<Idx> {
 }
 
 pub trait CollisionManager<S: Storage> {
-    // Error in case of our transaction is less worthy than the collided one
-    fn collect_tx_collisions(
+    /// Collect all the transactions that collide with the given transaction.
+    /// It returns an error if the transaction is less worthy than the colliding transactions.
+    /// It returns the information about the collisions.
+    fn collect_colliding_transactions(
         &self,
         transaction: &PoolTransaction,
         storage: &S,
         db: &impl TxPoolDb,
     ) -> Result<Collisions<S::StorageIndex>, Error>;
 
+    /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(
         &mut self,
         transaction: &PoolTransaction,
         transaction_id: S::StorageIndex,
     ) -> Result<(), Error>;
 
+    /// Inform the collision manager that a transaction was removed.
     fn on_removed_transaction(
         &mut self,
         transaction: &PoolTransaction,

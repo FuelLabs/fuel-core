@@ -152,7 +152,7 @@ impl<S: Storage> BasicCollisionManager<S> {
 }
 
 impl<S: Storage> CollisionManager<S> for BasicCollisionManager<S> {
-    fn collect_tx_collisions(
+    fn collect_colliding_transactions(
         &self,
         transaction: &PoolTransaction,
         storage: &S,

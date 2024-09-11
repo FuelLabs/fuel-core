@@ -19,17 +19,25 @@ use crate::{
     storage::Storage,
 };
 
+/// The pool is the main component of the txpool service. It is responsible for storing transactions
+/// and allowing the selection of transactions for inclusion in a block.
 pub struct Pool<DB, S: Storage, CM, SA> {
+    /// Configuration of the pool.
     pub config: Config,
+    /// The storage of the pool.
     storage: S,
+    /// The collision manager of the pool.
     collision_manager: CM,
+    /// The selection algorithm of the pool.
     selection_algorithm: SA,
+    /// The database of the pool.
     db: DB,
     #[cfg(test)]
     tx_id_to_storage_id: HashMap<TxId, S::StorageIndex>,
 }
 
 impl<DB, S: Storage, CM, SA> Pool<DB, S, CM, SA> {
+    /// Create a new pool.
     pub fn new(
         database: DB,
         storage: S,
@@ -57,6 +65,10 @@ where
     CM: CollisionManager<S>,
     SA: SelectionAlgorithm<S>,
 {
+    /// Insert transactions into the pool.
+    /// Returns a list of results for each transaction.
+    /// Each result is a list of transactions that were removed from the pool
+    /// because of the insertion of the new transaction.
     #[instrument(skip(self))]
     pub fn insert(
         &mut self,
@@ -75,7 +87,7 @@ where
                     return Err(Error::NotInsertedLimitHit);
                 }
                 self.config.black_list.check_blacklisting(&tx)?;
-                let collisions = self.collision_manager.collect_tx_collisions(
+                let collisions = self.collision_manager.collect_colliding_transactions(
                     &tx,
                     &self.storage,
                     &db_view,
@@ -122,6 +134,9 @@ where
     }
 
     // TODO: Use block space also
+    /// Extract transactions for a block.
+    /// Returns a list of transactions that were selected for the block
+    /// based on the constraints given in the configuration and the selection algorithm used.
     pub fn extract_transactions_for_block(
         &mut self,
     ) -> Result<Vec<PoolTransaction>, Error> {
@@ -149,6 +164,7 @@ where
             .collect()
     }
 
+    /// Prune transactions from the pool.
     pub fn prune(&mut self) -> Result<Vec<PoolTransaction>, Error> {
         Ok(vec![])
     }
