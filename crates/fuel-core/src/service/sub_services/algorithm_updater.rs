@@ -17,9 +17,7 @@ use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
         da_source_adapter::{
             dummy_costs::DummyDaBlockCosts,
-            service::{
-                DaBlockCostsService,
-            },
+            service::DaBlockCostsService,
             DaBlockCostsProvider,
         },
         fuel_core_storage_adapter::{

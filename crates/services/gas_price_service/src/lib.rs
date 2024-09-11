@@ -192,9 +192,7 @@ mod tests {
     use crate::{
         fuel_gas_price_updater::da_source_adapter::{
             dummy_costs::DummyDaBlockCosts,
-            service::{
-                DaBlockCostsService,
-            },
+            service::DaBlockCostsService,
         },
         GasPriceAlgorithm,
         GasPriceService,
@@ -202,10 +200,8 @@ mod tests {
         UpdateAlgorithm,
     };
     use fuel_core_services::{
-        RunnableService,
         Service,
         ServiceRunner,
-        StateWatcher,
     };
     use fuel_core_types::fuel_types::BlockHeight;
     use tokio::sync::mpsc;
@@ -260,11 +256,9 @@ mod tests {
         let service =
             GasPriceService::new(0.into(), updater, shared_algo, da_block_costs_service)
                 .await;
-        let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
-        let task = service.into_task(&watcher, ()).await.unwrap();
-        let service = ServiceRunner::new(task);
-        service.start().unwrap();
+        let service = ServiceRunner::new(service);
+        service.start_and_await().await.unwrap();
 
         // when
         price_sender.send(expected_price).await.unwrap();
@@ -273,5 +267,6 @@ mod tests {
         // then
         let actual_price = read_algo.next_gas_price().await;
         assert_eq!(expected_price, actual_price);
+        service.stop_and_await().await.unwrap();
     }
 }
