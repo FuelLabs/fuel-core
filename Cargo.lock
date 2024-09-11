@@ -3813,6 +3813,7 @@ name = "fuel-gas-price-algorithm"
 version = "0.35.0"
 dependencies = [
  "proptest",
+ "rand",
  "serde",
  "thiserror",
 ]

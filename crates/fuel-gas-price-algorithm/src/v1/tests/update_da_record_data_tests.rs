@@ -4,6 +4,12 @@ use crate::v1::{
     Error,
     RecordedBlock,
 };
+use proptest::{
+    prelude::Rng,
+    prop_compose,
+    proptest,
+};
+use rand::SeedableRng;
 
 #[test]
 fn update_da_record_data__increases_block() {
@@ -27,7 +33,7 @@ fn update_da_record_data__increases_block() {
     ];
 
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     let expected = 2;
@@ -57,7 +63,7 @@ fn update_da_record_data__throws_error_if_out_of_order() {
     ];
 
     // when
-    let actual_error = updater.update_da_record_data(blocks).unwrap_err();
+    let actual_error = updater.update_da_record_data(&blocks).unwrap_err();
 
     // then
     let expected_error = Error::SkippedDABlock {
@@ -84,7 +90,7 @@ fn update_da_record_data__updates_cost_per_byte() {
         block_cost,
     }];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     let expected = new_cost_per_byte as u128;
@@ -128,10 +134,10 @@ fn update_da_record_data__updates_known_total_cost() {
         },
     ];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
-    let actual = updater.latest_known_total_da_cost;
+    let actual = updater.latest_known_total_da_cost_excess;
     let expected = known_total_cost + (3 * block_cost as u128);
     assert_eq!(actual, expected);
 }
@@ -193,18 +199,19 @@ fn update_da_record_data__if_da_height_matches_l2_height_prjected_and_known_matc
         },
     ];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     assert_eq!(updater.l2_block_height, updater.da_recorded_block_height);
     assert_eq!(
         updater.projected_total_da_cost,
-        updater.latest_known_total_da_cost
+        updater.latest_known_total_da_cost_excess
     );
 }
 
 #[test]
-fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top() {
+fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_guesses_on_top(
+) {
     // given
     let da_cost_per_byte = 20;
     let da_recorded_block_height = 10;
@@ -271,7 +278,7 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
         },
     ];
     // when
-    updater.update_da_record_data(blocks).unwrap();
+    updater.update_da_record_data(&blocks).unwrap();
 
     // then
     let actual = updater.projected_total_da_cost;
@@ -282,4 +289,128 @@ fn update__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
         .sum();
     let expected = new_known_total_cost + guessed_part;
     assert_eq!(actual, expected as u128);
+}
+
+prop_compose! {
+    fn arb_vec_of_da_blocks()(last_da_block: u32, count in 1..123usize, rng_seed: u64) -> Vec<RecordedBlock> {
+        let rng = &mut rand::rngs::StdRng::seed_from_u64(rng_seed);
+        let mut blocks = Vec::with_capacity(count);
+        for i in 0..count {
+            let block_bytes = rng.gen_range(100..131_072);
+            let cost_per_byte = rng.gen_range(1..1000000);
+            let block_cost = block_bytes * cost_per_byte;
+            blocks.push(RecordedBlock {
+                height: last_da_block + 1 + i as u32,
+                block_bytes,
+                block_cost,
+            });
+        }
+        blocks
+    }
+}
+
+prop_compose! {
+    fn reward_greater_than_cost_with_da_blocks()(cost: u64, extra: u64, blocks in arb_vec_of_da_blocks()) -> (u128, u128, Vec<RecordedBlock>) {
+        let cost_from_blocks = blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
+        let reward = cost as u128 + cost_from_blocks + extra as u128;
+        (cost as u128, reward, blocks)
+    }
+}
+
+proptest! {
+    #[test]
+    fn update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
+        (cost, reward, blocks) in reward_greater_than_cost_with_da_blocks()
+    ) {
+        _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
+            cost,
+            reward,
+            blocks
+        )
+    }
+}
+
+fn _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
+    known_total_cost: u128,
+    total_rewards: u128,
+    blocks: Vec<RecordedBlock>,
+) {
+    // given
+    let da_cost_per_byte = 20;
+    let da_recorded_block_height = blocks.first().unwrap().height - 1;
+    let l2_block_height = 15;
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte)
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_l2_block_height(l2_block_height)
+        .with_known_total_cost(known_total_cost)
+        .with_total_rewards(total_rewards)
+        .build();
+
+    let new_costs = blocks.iter().map(|block| block.block_cost).sum::<u64>();
+
+    // when
+    updater.update_da_record_data(&blocks).unwrap();
+
+    // then
+    let expected = total_rewards - new_costs as u128 - known_total_cost;
+    let actual = updater.total_da_rewards_excess;
+    assert_eq!(actual, expected);
+
+    let expected = 0;
+    let actual = updater.latest_known_total_da_cost_excess;
+    assert_eq!(actual, expected);
+}
+
+prop_compose! {
+    fn cost_greater_than_reward_with_da_blocks()(reward: u64, extra: u64, blocks in arb_vec_of_da_blocks()) -> (u128, u128, Vec<RecordedBlock>) {
+        let cost_from_blocks = blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
+        let cost = reward as u128 + cost_from_blocks + extra as u128;
+        (cost, reward as u128, blocks)
+    }
+}
+
+proptest! {
+    #[test]
+    fn update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
+        (cost, reward, blocks) in cost_greater_than_reward_with_da_blocks()
+    ) {
+        _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
+            cost,
+            reward,
+            blocks
+        )
+    }
+}
+
+fn _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
+    known_total_cost: u128,
+    total_rewards: u128,
+    blocks: Vec<RecordedBlock>,
+) {
+    // given
+    let da_cost_per_byte = 20;
+    let da_recorded_block_height = blocks.first().unwrap().height - 1;
+    let l2_block_height = 15;
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte)
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_l2_block_height(l2_block_height)
+        .with_known_total_cost(known_total_cost)
+        .with_total_rewards(total_rewards)
+        .build();
+
+    let new_costs = blocks.iter().map(|block| block.block_cost).sum::<u64>();
+
+    // when
+    updater.update_da_record_data(&blocks).unwrap();
+
+    // then
+    let expected = 0;
+    let actual = updater.total_da_rewards_excess;
+    assert_eq!(actual, expected);
+
+    let expected = known_total_cost + new_costs as u128 - total_rewards;
+    let actual = updater.latest_known_total_da_cost_excess;
+    assert_eq!(actual, expected);
 }
