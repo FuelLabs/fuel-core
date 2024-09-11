@@ -2,13 +2,8 @@ use crate::{
     database::OnChainIterableKeyValueView,
     service::{
         adapters::{
-            BlockProducerAdapter,
-            ConsensusParametersProvider,
-            ExecutorAdapter,
-            MaybeRelayerAdapter,
-            StaticGasPrice,
-            TransactionsSource,
-            TxPoolAdapter,
+            BlockProducerAdapter, ConsensusParametersProvider, ExecutorAdapter,
+            MaybeRelayerAdapter, StaticGasPrice, TransactionsSource, TxPoolAdapter,
         },
         sub_services::BlockProducerService,
     },
@@ -16,57 +11,34 @@ use crate::{
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::{
     block_producer::gas_price::{
-        ConsensusParametersProvider as ConsensusParametersProviderTrait,
-        GasPriceProvider,
+        ConsensusParametersProvider as ConsensusParametersProviderTrait, GasPriceProvider,
     },
     ports::TxPool,
 };
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    iter::{IterDirection, IteratorOverTable},
     not_found,
-    tables::{
-        ConsensusParametersVersions,
-        FuelBlocks,
-        StateTransitionBytecodeVersions,
-    },
+    tables::{ConsensusParametersVersions, FuelBlocks, StateTransitionBytecodeVersions},
     transactional::Changes,
-    Result as StorageResult,
-    StorageAsRef,
+    Result as StorageResult, StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        header::{
-            ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
-        },
+        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
         primitives::DaBlockHeight,
     },
     fuel_tx,
-    fuel_tx::{
-        ConsensusParameters,
-        Transaction,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_tx::{ConsensusParameters, Transaction},
+    fuel_types::{BlockHeight, Bytes32},
     services::{
         block_producer::Components,
         executor::{
-            Result as ExecutorResult,
-            TransactionExecutionStatus,
-            UncommittedResult,
+            Result as ExecutorResult, TransactionExecutionStatus, UncommittedResult,
         },
     },
 };
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::{borrow::Cow, sync::Arc};
 
 impl BlockProducerAdapter {
     pub fn new(block_producer: BlockProducerService) -> Self {
@@ -169,6 +141,53 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
             Ok(0)
         }
     }
+
+    async fn get_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<u64> {
+        #[cfg(feature = "relayer")]
+        {
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                get_transactions_number_for_height(**height, sync)
+            } else {
+                Ok(0)
+            }
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            anyhow::ensure!(
+                **height == 0,
+                "Cannot have a da height above zero without a relayer"
+            );
+            // If the relayer is not enabled, then all blocks are zero.
+            Ok(0)
+        }
+    }
+}
+
+#[cfg(feature = "relayer")]
+fn get_transactions_number_for_height(
+    height: u64,
+    sync: &fuel_core_relayer::SharedState<
+        crate::database::Database<
+            crate::database::database_description::relayer::Relayer,
+        >,
+    >,
+) -> anyhow::Result<u64> {
+    let da_height = DaBlockHeight(height);
+    let transactions = sync
+        .database()
+        .storage::<fuel_core_relayer::storage::EventsHistory>()
+        .get(&da_height)?
+        .unwrap_or_default()
+        .iter()
+        .filter(|event| match event {
+            fuel_core_types::services::relayer::Event::Message(_) => false,
+            fuel_core_types::services::relayer::Event::Transaction(_) => true,
+        })
+        .count();
+    Ok(transactions as u64)
 }
 
 #[cfg(feature = "relayer")]

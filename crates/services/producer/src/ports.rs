@@ -1,28 +1,17 @@
 use async_trait::async_trait;
-use fuel_core_storage::{
-    transactional::Changes,
-    Result as StorageResult,
-};
+use fuel_core_storage::{transactional::Changes, Result as StorageResult};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        header::{
-            ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
-        },
+        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
         primitives::DaBlockHeight,
     },
-    fuel_tx::{
-        Bytes32,
-        Transaction,
-    },
+    fuel_tx::{Bytes32, Transaction},
     fuel_types::BlockHeight,
     services::{
         block_producer::Components,
         executor::{
-            Result as ExecutorResult,
-            TransactionExecutionStatus,
-            UncommittedResult,
+            Result as ExecutorResult, TransactionExecutionStatus, UncommittedResult,
         },
     },
 };
@@ -72,6 +61,12 @@ pub trait Relayer: Send + Sync {
 
     /// Get the total Forced Transaction gas cost for the block at the given height.
     async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64>;
+
+    /// Get the total number of Forced Transactions for the block at the given height.
+    async fn get_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<u64>;
 }
 
 pub trait BlockProducer<TxSource>: Send + Sync {
