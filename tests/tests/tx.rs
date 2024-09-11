@@ -146,6 +146,42 @@ async fn dry_run_create() {
 }
 
 #[tokio::test]
+async fn dry_run_above_block_gas_limit() {
+    let config = Config::local_node();
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let gas_limit = client
+        .consensus_parameters(0)
+        .await
+        .unwrap()
+        .unwrap()
+        .block_gas_limit();
+    let maturity = Default::default();
+
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
+    ];
+    let script = script.into_iter().collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(gas_limit)
+        .maturity(maturity)
+        .add_random_fee_input()
+        .finalize_as_transaction();
+
+    // When
+    match client.dry_run(&[tx.clone()]).await {
+        Ok(_) => panic!("Expected error"),
+        Err(e) => assert_eq!(e.to_string(), "Response errors; The sum of the gas usable by the transactions is greater than the block gas limit".to_owned()),
+    }
+}
+
+#[tokio::test]
 async fn submit() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);

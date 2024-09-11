@@ -213,6 +213,14 @@ impl TransactionExecutionResult {
         }
     }
 
+    /// Get the total gas used by the transaction.
+    pub fn total_gas(&self) -> &u64 {
+        match self {
+            TransactionExecutionResult::Success { total_gas, .. }
+            | TransactionExecutionResult::Failed { total_gas, .. } => total_gas,
+        }
+    }
+
     #[cfg(feature = "std")]
     /// Get the reason of the failed transaction execution.
     pub fn reason(receipts: &[Receipt], state: &Option<ProgramState>) -> String {
