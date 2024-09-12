@@ -4,16 +4,24 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use fuel_core_types::fuel_tx::Transaction;
+use fuel_core_types::fuel_tx::{Transaction, TxId};
+
+use crate::{collision_manager::basic::BasicCollisionManager, pool::Pool, selection_algorithms::ratio_tip_gas::RatioTipGasSelection, storage::graph::{GraphStorage, GraphStorageIndex}};
 
 #[derive(Clone)]
-pub struct SharedState;
+pub struct SharedState {
+    pool: Pool<, GraphStorage, BasicCollisionManager<GraphStorageIndex>, RatioTipGasSelection<GraphStorageIndex>>
+}
 
 impl SharedState {
     // TODO: Implement conversion from `Transaction` to `PoolTransaction`. (with all the verifications that it implies): https://github.com/FuelLabs/fuel-core/issues/2186
     fn insert(&mut self, transactions: Vec<Transaction>) -> Vec<()> {
         // Move verif of wasm there
         vec![]
+    }
+
+    pub fn find_one(&self, tx_id: TxId) -> Option<&Transaction> {
+        self
     }
 }
 
