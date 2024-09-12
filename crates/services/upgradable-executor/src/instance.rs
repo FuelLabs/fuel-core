@@ -169,14 +169,15 @@ impl Instance<Created> {
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
-                            gas_limit: u64|
+                            gas_limit: u64,
+                            block_transaction_size_limit: u64|
               -> anyhow::Result<u32> {
             let Some(source) = source.clone() else {
                 return Ok(0);
             };
 
             let txs: Vec<_> = source
-                .next(gas_limit)
+                .next(gas_limit, block_transaction_size_limit)
                 .into_iter()
                 .map(|tx| match tx {
                     MaybeCheckedTransaction::CheckedTransaction(checked, _) => {

@@ -86,7 +86,10 @@ mod host {
 
         /// Returns the size of the next encoded transactions.
         /// If the size is 0, there are no more transactions.
-        pub(crate) fn peek_next_txs_size(gas_limit: u64) -> u32;
+        pub(crate) fn peek_next_txs_size(
+            gas_limit: u64,
+            block_transaction_size_limit: u64,
+        ) -> u32;
 
         /// Consumes the next transactions from the host.
         /// Calling this function before `peek_next_txs_size` do nothing.
@@ -148,8 +151,13 @@ pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
 }
 
 /// Gets the next transactions by using the host function.
-pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
-    let next_size = unsafe { host::peek_next_txs_size(gas_limit) };
+pub fn next_transactions(
+    gas_limit: u64,
+    block_transaction_size_limit: u64,
+) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
+    // TODO[RC]: Peek, check size. If fits, continue. If too large, peek next (?)
+    let next_size =
+        unsafe { host::peek_next_txs_size(gas_limit, block_transaction_size_limit) };
 
     if next_size == 0 {
         return Ok(Vec::new());

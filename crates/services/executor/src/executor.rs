@@ -147,6 +147,7 @@ use tracing::{
     warn,
 };
 
+use core::u64;
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
@@ -186,7 +187,7 @@ impl OnceTransactionsSource {
 }
 
 impl TransactionsSource for OnceTransactionsSource {
-    fn next(&self, _: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(&self, _: u64, _: u64) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         core::mem::take(lock.as_mut())
     }
@@ -556,6 +557,9 @@ where
         T: KeyValueInspect<Column = Column>,
         TxSource: TransactionsSource,
     {
+        // TODO[RC]: Update
+        let remaining_block_transaction_size_limit = u64::MAX;
+
         let Components {
             transactions_source: l2_tx_source,
             coinbase_recipient: coinbase_contract_id,
@@ -567,7 +571,7 @@ where
         let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
         let mut regular_tx_iter = l2_tx_source
-            .next(remaining_gas_limit)
+            .next(remaining_gas_limit, remaining_block_transaction_size_limit)
             .into_iter()
             .peekable();
         while regular_tx_iter.peek().is_some() {
@@ -596,7 +600,7 @@ where
             }
 
             regular_tx_iter = l2_tx_source
-                .next(remaining_gas_limit)
+                .next(remaining_gas_limit, remaining_block_transaction_size_limit)
                 .into_iter()
                 .peekable();
         }

@@ -116,7 +116,11 @@ impl TransactionExt for MaybeCheckedTransaction {
 
 pub trait TransactionsSource {
     /// Returns the next batch of transactions to satisfy the `gas_limit`.
-    fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction>;
+    fn next(
+        &self,
+        gas_limit: u64,
+        block_transaction_size_limit: u64,
+    ) -> Vec<MaybeCheckedTransaction>;
 }
 
 pub trait RelayerPort {

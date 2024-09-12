@@ -13,7 +13,12 @@ impl WasmTxSource {
 }
 
 impl TransactionsSource for WasmTxSource {
-    fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
-        ext::next_transactions(gas_limit).expect("Failed to get next transactions")
+    fn next(
+        &self,
+        gas_limit: u64,
+        block_transaction_size_limit: u64,
+    ) -> Vec<MaybeCheckedTransaction> {
+        ext::next_transactions(gas_limit, block_transaction_size_limit)
+            .expect("Failed to get next transactions")
     }
 }

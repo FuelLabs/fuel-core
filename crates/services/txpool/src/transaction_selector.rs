@@ -10,7 +10,10 @@ use fuel_core_types::{
 pub fn select_transactions(
     includable_txs: impl Iterator<Item = ArcPoolTx>,
     max_gas: u64,
+    _block_transaction_size_limit: u64,
 ) -> Vec<ArcPoolTx> {
+    // TODO[RC]: Here
+
     // Select all txs that fit into the block, preferring ones with higher gas price.
     //
     // Future improvements to this algorithm may take into account the parallel nature of

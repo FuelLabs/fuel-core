@@ -9,9 +9,13 @@ use fuel_core_types::{
 };
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
-    fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(
+        &self,
+        gas_limit: u64,
+        block_transaction_size_limit: u64,
+    ) -> Vec<MaybeCheckedTransaction> {
         self.txpool
-            .select_transactions(gas_limit)
+            .select_transactions(gas_limit, block_transaction_size_limit)
             .into_iter()
             .map(|tx| {
                 MaybeCheckedTransaction::CheckedTransaction(
