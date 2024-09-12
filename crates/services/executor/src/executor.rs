@@ -186,9 +186,12 @@ impl OnceTransactionsSource {
 }
 
 impl TransactionsSource for OnceTransactionsSource {
-    fn next(&self, _: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(&self, _: u64, transactions_limit: u16) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
-        core::mem::take(lock.as_mut())
+        let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
+        // Avoid panicking if we request more transactions than there are in the vector
+        let transactions_limit = (transactions_limit as usize).min(transactions.len());
+        transactions.drain(..transactions_limit as usize).collect()
     }
 }
 
@@ -566,8 +569,15 @@ where
 
         let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
+        // We allow at most u64::MAX transactions in a block, including the mint transaction.
+        // When processing l2 transactions, we must take into account transactions from the l1
+        // that have been included in the block already (stored in `data.tx_count`), as well
+        // as the final mint transaction.
+        let mut remaining_transactions_limit =
+            u16::MAX.saturating_sub(1).saturating_sub(data.tx_count);
+
         let mut regular_tx_iter = l2_tx_source
-            .next(remaining_gas_limit)
+            .next(remaining_gas_limit, remaining_transactions_limit)
             .into_iter()
             .peekable();
         while regular_tx_iter.peek().is_some() {
@@ -593,10 +603,12 @@ where
                     }
                 }
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+                remaining_transactions_limit =
+                    u16::MAX.saturating_sub(1).saturating_sub(data.tx_count);
             }
 
             regular_tx_iter = l2_tx_source
-                .next(remaining_gas_limit)
+                .next(remaining_gas_limit, remaining_transactions_limit)
                 .into_iter()
                 .peekable();
         }

@@ -1,13 +1,8 @@
-use crate::utils::{
-    unpack_exists_size_result,
-    InputDeserializationType,
-};
+use crate::utils::{unpack_exists_size_result, InputDeserializationType};
 use core::marker::PhantomData;
 use fuel_core_executor::ports::MaybeCheckedTransaction;
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_tx::Transaction,
-    services::relayer::Event,
+    blockchain::primitives::DaBlockHeight, fuel_tx::Transaction, services::relayer::Event,
 };
 
 /// A wrapper around a `u32` representing a pointer for WASM.
@@ -156,9 +151,11 @@ pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
 }
 
 /// Gets the next transactions by using the host function.
-pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
-    // TODO - AC: Make this an argument
-    let transactions_limit = u16::MAX as u32;
+pub fn next_transactions(
+    gas_limit: u64,
+    transactions_limit: u16,
+) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
+    let transactions_limit = transactions_limit as u32;
 
     let next_size =
         unsafe { host::peek_next_txs_size_with_limit(gas_limit, transactions_limit) };

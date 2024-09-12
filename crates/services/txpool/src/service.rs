@@ -1,47 +1,24 @@
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use parking_lot::Mutex as ParkingMutex;
-use tokio::{
-    sync::broadcast,
-    time::MissedTickBehavior,
-};
+use tokio::{sync::broadcast, time::MissedTickBehavior};
 use tokio_stream::StreamExt;
 
 use fuel_core_services::{
-    stream::BoxStream,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
+    stream::BoxStream, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        TxId,
-        UniqueIdentifier,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_tx::{Transaction, TxId, UniqueIdentifier},
+    fuel_types::{BlockHeight, Bytes32},
     services::{
         block_importer::SharedImportResult,
         p2p::{
-            GossipData,
-            GossipsubMessageAcceptance,
-            GossipsubMessageInfo,
+            GossipData, GossipsubMessageAcceptance, GossipsubMessageInfo,
             TransactionGossipData,
         },
-        txpool::{
-            ArcPoolTx,
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::{ArcPoolTx, InsertionResult, PoolTransaction, TransactionStatus},
     },
     tai64::Tai64,
 };
@@ -49,29 +26,16 @@ use update_sender::UpdateSender;
 
 use crate::{
     ports::{
-        BlockImporter,
-        ConsensusParametersProvider,
-        GasPriceProvider as GasPriceProviderConstraint,
-        MemoryPool,
-        PeerToPeer,
-        TxPoolDb,
+        BlockImporter, ConsensusParametersProvider,
+        GasPriceProvider as GasPriceProviderConstraint, MemoryPool, PeerToPeer, TxPoolDb,
         WasmChecker as WasmCheckerConstraint,
     },
     transaction_selector::select_transactions,
-    txpool::{
-        check_single_tx,
-        check_transactions,
-    },
-    Config,
-    Error as TxPoolError,
-    TxInfo,
-    TxPool,
+    txpool::{check_single_tx, check_transactions},
+    Config, Error as TxPoolError, TxInfo, TxPool,
 };
 
-use self::update_sender::{
-    MpscChannel,
-    TxStatusStream,
-};
+use self::update_sender::{MpscChannel, TxStatusStream};
 
 mod update_sender;
 
@@ -374,10 +338,17 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
         self.txpool.lock().find_one(&id)
     }
 
-    pub fn select_transactions(&self, max_gas: u64) -> Vec<ArcPoolTx> {
+    pub fn select_transactions(
+        &self,
+        max_gas: u64,
+        transactions_limit: u16,
+    ) -> Vec<ArcPoolTx> {
         let mut guard = self.txpool.lock();
         let txs = guard.includable();
-        let sorted_txs = select_transactions(txs, max_gas);
+        let sorted_txs: Vec<Arc<PoolTransaction>> = select_transactions(txs, max_gas)
+            .into_iter()
+            .take(transactions_limit as usize)
+            .collect();
 
         for tx in sorted_txs.iter() {
             guard.remove_committed_tx(&tx.id());

@@ -1,17 +1,17 @@
 use crate::{
-    database::ReyalerIterableKeyValueView,
-    service::adapters::TransactionsSource,
+    database::ReyalerIterableKeyValueView, service::adapters::TransactionsSource,
 };
 use fuel_core_executor::ports::MaybeCheckedTransaction;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    services::relayer::Event,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, services::relayer::Event};
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
-    fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(
+        &self,
+        gas_limit: u64,
+        transactions_limit: u16,
+    ) -> Vec<MaybeCheckedTransaction> {
         self.txpool
-            .select_transactions(gas_limit)
+            .select_transactions(gas_limit, transactions_limit)
             .into_iter()
             .map(|tx| {
                 MaybeCheckedTransaction::CheckedTransaction(

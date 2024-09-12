@@ -1,8 +1,5 @@
 use crate::ext;
-use fuel_core_executor::ports::{
-    MaybeCheckedTransaction,
-    TransactionsSource,
-};
+use fuel_core_executor::ports::{MaybeCheckedTransaction, TransactionsSource};
 
 pub struct WasmTxSource;
 
@@ -13,7 +10,12 @@ impl WasmTxSource {
 }
 
 impl TransactionsSource for WasmTxSource {
-    fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
-        ext::next_transactions(gas_limit).expect("Failed to get next transactions")
+    fn next(
+        &self,
+        gas_limit: u64,
+        transactions_limit: u16,
+    ) -> Vec<MaybeCheckedTransaction> {
+        ext::next_transactions(gas_limit, transactions_limit)
+            .expect("Failed to get next transactions")
     }
 }
