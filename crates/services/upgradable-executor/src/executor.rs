@@ -3,28 +3,46 @@ use crate::config::Config;
 use crate::error::UpgradableError;
 
 use fuel_core_executor::{
-    executor::{ExecutionInstance, ExecutionOptions, OnceTransactionsSource},
-    ports::{RelayerPort, TransactionsSource},
+    executor::{
+        ExecutionInstance,
+        ExecutionOptions,
+        OnceTransactionsSource,
+    },
+    ports::{
+        RelayerPort,
+        TransactionsSource,
+    },
 };
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
-    transactional::{AtomicView, Changes, HistoricalView, Modifiable},
+    transactional::{
+        AtomicView,
+        Changes,
+        HistoricalView,
+        Modifiable,
+    },
 };
 #[cfg(feature = "wasm-executor")]
 use fuel_core_types::fuel_types::Bytes32;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        header::{StateTransitionBytecodeVersion, LATEST_STATE_TRANSITION_VERSION},
+        header::{
+            StateTransitionBytecodeVersion,
+            LATEST_STATE_TRANSITION_VERSION,
+        },
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::{
         block_producer::Components,
         executor::{
-            Error as ExecutorError, ExecutionResult, Result as ExecutorResult,
-            TransactionExecutionStatus, ValidationResult,
+            Error as ExecutorError,
+            ExecutionResult,
+            Result as ExecutorResult,
+            TransactionExecutionStatus,
+            ValidationResult,
         },
         Uncommitted,
     },
@@ -35,7 +53,10 @@ use std::sync::Arc;
 use fuel_core_storage::{
     not_found,
     structured_storage::StructuredStorage,
-    tables::{StateTransitionBytecodeVersions, UploadedBytecodes},
+    tables::{
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
+    },
     StorageAsRef,
 };
 #[cfg(any(test, feature = "test-helpers"))]
@@ -78,7 +99,10 @@ pub struct Executor<S, R> {
 #[cfg(feature = "wasm-executor")]
 mod private {
     use std::sync::OnceLock;
-    use wasmtime::{Engine, Module};
+    use wasmtime::{
+        Engine,
+        Module,
+    };
 
     /// The default engine for the WASM executor. It is used to compile the WASM bytecode.
     pub(crate) static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -676,24 +700,42 @@ mod test {
 
     use super::*;
     use fuel_core_storage::{
-        kv_store::Value, structured_storage::test::InMemoryStorage,
-        tables::ConsensusParametersVersions, transactional::WriteTransaction,
-        Result as StorageResult, StorageAsMut,
+        kv_store::Value,
+        structured_storage::test::InMemoryStorage,
+        tables::ConsensusParametersVersions,
+        transactional::WriteTransaction,
+        Result as StorageResult,
+        StorageAsMut,
     };
     use fuel_core_types::{
         blockchain::{
-            block::{Block, PartialFuelBlock},
+            block::{
+                Block,
+                PartialFuelBlock,
+            },
             header::{
-                ApplicationHeader, ConsensusHeader, PartialBlockHeader,
+                ApplicationHeader,
+                ConsensusHeader,
+                PartialBlockHeader,
                 StateTransitionBytecodeVersion,
             },
-            primitives::{DaBlockHeight, Empty},
+            primitives::{
+                DaBlockHeight,
+                Empty,
+            },
         },
-        fuel_tx::{AssetId, Bytes32, Transaction},
+        fuel_tx::{
+            AssetId,
+            Bytes32,
+            Transaction,
+        },
         services::relayer::Event,
         tai64::Tai64,
     };
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::{
+        BTreeMap,
+        BTreeSet,
+    };
 
     #[derive(Clone, Debug)]
     struct Storage(InMemoryStorage<Column>);
@@ -898,7 +940,10 @@ mod test {
     #[allow(non_snake_case)]
     mod wasm {
         use super::*;
-        use crate::{executor::Executor, WASM_BYTECODE};
+        use crate::{
+            executor::Executor,
+            WASM_BYTECODE,
+        };
         use fuel_core_storage::tables::UploadedBytecodes;
         use fuel_core_types::fuel_vm::UploadedBytecode;
 

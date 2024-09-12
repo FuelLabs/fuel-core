@@ -1,17 +1,28 @@
 use async_trait::async_trait;
-use fuel_core_storage::{transactional::Changes, Result as StorageResult};
+use fuel_core_storage::{
+    transactional::Changes,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::DaBlockHeight,
     },
-    fuel_tx::{Bytes32, Transaction},
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::{
         block_producer::Components,
         executor::{
-            Result as ExecutorResult, TransactionExecutionStatus, UncommittedResult,
+            Result as ExecutorResult,
+            TransactionExecutionStatus,
+            UncommittedResult,
         },
     },
 };

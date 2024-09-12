@@ -1,79 +1,151 @@
 use crate::{
-    ports::{MaybeCheckedTransaction, RelayerPort, TransactionsSource},
+    ports::{
+        MaybeCheckedTransaction,
+        RelayerPort,
+        TransactionsSource,
+    },
     refs::ContractRef,
 };
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
     tables::{
-        Coins, ConsensusParametersVersions, ContractsLatestUtxo, FuelBlocks, Messages,
+        Coins,
+        ConsensusParametersVersions,
+        ContractsLatestUtxo,
+        FuelBlocks,
+        Messages,
         ProcessedTransactions,
     },
     transactional::{
-        Changes, ConflictPolicy, IntoTransaction, Modifiable, ReadTransaction,
-        StorageTransaction, WriteTransaction,
+        Changes,
+        ConflictPolicy,
+        IntoTransaction,
+        Modifiable,
+        ReadTransaction,
+        StorageTransaction,
+        WriteTransaction,
     },
     vm_storage::VmStorage,
-    StorageAsMut, StorageAsRef,
+    StorageAsMut,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{Block, PartialFuelBlock},
-        header::{ConsensusParametersVersion, PartialBlockHeader},
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
+        header::{
+            ConsensusParametersVersion,
+            PartialBlockHeader,
+        },
         primitives::DaBlockHeight,
     },
     entities::{
-        coins::coin::{CompressedCoin, CompressedCoinV1},
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         contract::ContractUtxoInfo,
         RelayedTransaction,
     },
-    fuel_asm::{RegId, Word},
+    fuel_asm::{
+        RegId,
+        Word,
+    },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         field::{
-            InputContract, MaxFeeLimit, MintAmount, MintAssetId, MintGasPrice,
-            OutputContract, TxPointer as TxPointerField,
+            InputContract,
+            MaxFeeLimit,
+            MintAmount,
+            MintAssetId,
+            MintGasPrice,
+            OutputContract,
+            TxPointer as TxPointerField,
         },
         input::{
             self,
-            coin::{CoinPredicate, CoinSigned},
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
             message::{
-                MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
                 MessageDataSigned,
             },
         },
-        output, Address, AssetId, Bytes32, Cacheable, Chargeable, ConsensusParameters,
-        Input, Mint, Output, Receipt, Transaction, TxId, TxPointer, UniqueIdentifier,
+        output,
+        Address,
+        AssetId,
+        Bytes32,
+        Cacheable,
+        Chargeable,
+        ConsensusParameters,
+        Input,
+        Mint,
+        Output,
+        Receipt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UniqueIdentifier,
         UtxoId,
     },
-    fuel_types::{canonical::Deserialize, BlockHeight, ContractId, MessageId},
+    fuel_types::{
+        canonical::Deserialize,
+        BlockHeight,
+        ContractId,
+        MessageId,
+    },
     fuel_vm::{
         self,
         checked_transaction::{
-            CheckPredicateParams, CheckPredicates, Checked, CheckedTransaction, Checks,
+            CheckPredicateParams,
+            CheckPredicates,
+            Checked,
+            CheckedTransaction,
+            Checks,
             IntoChecked,
         },
         interpreter::{
-            CheckedMetadata as CheckedMetadataTrait, ExecutableTransaction,
-            InterpreterParams, Memory, MemoryInstance,
+            CheckedMetadata as CheckedMetadataTrait,
+            ExecutableTransaction,
+            InterpreterParams,
+            Memory,
+            MemoryInstance,
         },
         state::StateTransition,
-        Backtrace as FuelBacktrace, Interpreter, ProgramState,
+        Backtrace as FuelBacktrace,
+        Interpreter,
+        ProgramState,
     },
     services::{
         block_producer::Components,
         executor::{
-            Error as ExecutorError, Event as ExecutorEvent, ExecutionResult,
-            ForcedTransactionFailure, Result as ExecutorResult,
-            TransactionExecutionResult, TransactionExecutionStatus,
-            TransactionValidityError, UncommittedResult, UncommittedValidationResult,
+            Error as ExecutorError,
+            Event as ExecutorEvent,
+            ExecutionResult,
+            ForcedTransactionFailure,
+            Result as ExecutorResult,
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+            TransactionValidityError,
+            UncommittedResult,
+            UncommittedValidationResult,
             ValidationResult,
         },
         relayer::Event,
     },
 };
 use parking_lot::Mutex as ParkingMutex;
-use tracing::{debug, warn};
+use tracing::{
+    debug,
+    warn,
+};
 
 #[cfg(feature = "std")]
 use std::borrow::Cow;
@@ -83,7 +155,12 @@ use alloc::borrow::Cow;
 
 use crate::ports::TransactionExt;
 #[cfg(feature = "alloc")]
-use alloc::{format, string::ToString, vec, vec::Vec};
+use alloc::{
+    format,
+    string::ToString,
+    vec,
+    vec::Vec,
+};
 
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
@@ -1537,16 +1614,14 @@ where
                         }
 
                         if !message.matches_input(input).unwrap_or_default() {
-                            return Err(TransactionValidityError::MessageMismatch(
-                                *nonce,
-                            )
-                            .into());
+                            return Err(
+                                TransactionValidityError::MessageMismatch(*nonce).into()
+                            );
                         }
                     } else {
-                        return Err(TransactionValidityError::MessageDoesNotExist(
-                            *nonce,
-                        )
-                        .into());
+                        return Err(
+                            TransactionValidityError::MessageDoesNotExist(*nonce).into()
+                        );
                     }
                 }
             }

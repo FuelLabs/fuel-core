@@ -1,21 +1,42 @@
-use crate::ports::{BlockProducer, BlockProducerDatabase, Relayer, TxPool};
+use crate::ports::{
+    BlockProducer,
+    BlockProducerDatabase,
+    Relayer,
+    TxPool,
+};
 use fuel_core_storage::{
     not_found,
-    transactional::{AtomicView, Changes},
+    transactional::{
+        AtomicView,
+        Changes,
+    },
     Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{Block, CompressedBlock},
-        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
+        block::{
+            Block,
+            CompressedBlock,
+        },
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::DaBlockHeight,
     },
     fuel_tx::Transaction,
-    fuel_types::{Address, BlockHeight, Bytes32, ChainId},
+    fuel_types::{
+        Address,
+        BlockHeight,
+        Bytes32,
+        ChainId,
+    },
     services::{
         block_producer::Components,
         executor::{
-            Error as ExecutorError, ExecutionResult, Result as ExecutorResult,
+            Error as ExecutorError,
+            ExecutionResult,
+            Result as ExecutorResult,
             UncommittedResult,
         },
         txpool::ArcPoolTx,
@@ -25,7 +46,10 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     ops::Deref,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 // TODO: Replace mocks with `mockall`.
 

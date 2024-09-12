@@ -2,8 +2,13 @@ use crate::{
     database::OnChainIterableKeyValueView,
     service::{
         adapters::{
-            BlockProducerAdapter, ConsensusParametersProvider, ExecutorAdapter,
-            MaybeRelayerAdapter, StaticGasPrice, TransactionsSource, TxPoolAdapter,
+            BlockProducerAdapter,
+            ConsensusParametersProvider,
+            ExecutorAdapter,
+            MaybeRelayerAdapter,
+            StaticGasPrice,
+            TransactionsSource,
+            TxPoolAdapter,
         },
         sub_services::BlockProducerService,
     },
@@ -11,34 +16,57 @@ use crate::{
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::{
     block_producer::gas_price::{
-        ConsensusParametersProvider as ConsensusParametersProviderTrait, GasPriceProvider,
+        ConsensusParametersProvider as ConsensusParametersProviderTrait,
+        GasPriceProvider,
     },
     ports::TxPool,
 };
 use fuel_core_storage::{
-    iter::{IterDirection, IteratorOverTable},
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
-    tables::{ConsensusParametersVersions, FuelBlocks, StateTransitionBytecodeVersions},
+    tables::{
+        ConsensusParametersVersions,
+        FuelBlocks,
+        StateTransitionBytecodeVersions,
+    },
     transactional::Changes,
-    Result as StorageResult, StorageAsRef,
+    Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::DaBlockHeight,
     },
     fuel_tx,
-    fuel_tx::{ConsensusParameters, Transaction},
-    fuel_types::{BlockHeight, Bytes32},
+    fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
         block_producer::Components,
         executor::{
-            Result as ExecutorResult, TransactionExecutionStatus, UncommittedResult,
+            Result as ExecutorResult,
+            TransactionExecutionStatus,
+            UncommittedResult,
         },
     },
 };
-use std::{borrow::Cow, sync::Arc};
+use std::{
+    borrow::Cow,
+    sync::Arc,
+};
 
 impl BlockProducerAdapter {
     pub fn new(block_producer: BlockProducerService) -> Self {
