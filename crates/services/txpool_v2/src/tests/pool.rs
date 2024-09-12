@@ -56,7 +56,6 @@ use std::vec;
 
 const GAS_LIMIT: Word = 100000;
 
-// TODO: Move out of tests
 fn check_tx_to_pool(checked_tx: Checked<Transaction>) -> PoolTransaction {
     match checked_tx.into() {
         CheckedTransaction::Blob(tx) => {
@@ -487,50 +486,6 @@ async fn underpriced_tx1_not_included_coin_collision() {
 
     assert!(matches!(err, Error::Collided(_)));
 }
-
-// TODO: Why this should error ?
-// #[tokio::test]
-// async fn overpriced_tx_contract_input_not_inserted() {
-//     let mut context = PoolContext::default();
-
-//     let contract_id = Contract::EMPTY_CONTRACT_ID;
-//     let (_, gas_funds) = context.setup_coin();
-//     let tx1 = TransactionBuilder::create(
-//         Default::default(),
-//         Default::default(),
-//         Default::default(),
-//     )
-//     .tip(10)
-//     .max_fee_limit(10)
-//     .add_input(gas_funds)
-//     .add_output(create_contract_output(contract_id))
-//     .finalize_as_transaction();
-
-//     let (_, gas_funds) = context.setup_coin();
-//     let tx2 = TransactionBuilder::script(vec![], vec![])
-//         .tip(11)
-//         .max_fee_limit(11)
-//         .script_gas_limit(GAS_LIMIT)
-//         .add_input(gas_funds)
-//         .add_input(create_contract_input(
-//             Default::default(),
-//             Default::default(),
-//             contract_id,
-//         ))
-//         .add_output(Output::contract(1, Default::default(), Default::default()))
-//         .finalize_as_transaction();
-
-//     let mut txpool = context.build();
-//     let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-//     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-
-//     let results = txpool
-//         .insert(vec![check_tx_to_pool(tx1), check_tx_to_pool(tx2)])
-//         .unwrap();
-//     assert_eq!(results.len(), 2);
-//     assert!(results[0].is_ok());
-//     let err = results[1].as_ref().expect_err("Tx2 should be Err, got Ok");
-// }
 
 #[tokio::test]
 async fn dependent_contract_input_inserted() {
@@ -1513,7 +1468,7 @@ async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
 }
 
 #[tokio::test]
-async fn poc_txpool_dos() {
+async fn remove_dependency_chain_on_insertion() {
     let mut context = PoolContext::default();
 
     // tx1 {inputs: {}, outputs: {coinA}, tip: 1}
@@ -1573,7 +1528,7 @@ async fn poc_txpool_dos() {
     assert!(matches!(err, Error::Storage(_)));
 }
 
-// TODO: Place it elsewhere
+// TODO: Reinstantiatte when https://github.com/FuelLabs/fuel-core/issues/2186 is implemented
 // #[tokio::test]
 // async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
 //     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
