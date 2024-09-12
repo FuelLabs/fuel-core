@@ -1,8 +1,13 @@
-use crate::utils::{unpack_exists_size_result, InputDeserializationType};
+use crate::utils::{
+    unpack_exists_size_result,
+    InputDeserializationType,
+};
 use core::marker::PhantomData;
 use fuel_core_executor::ports::MaybeCheckedTransaction;
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight, fuel_tx::Transaction, services::relayer::Event,
+    blockchain::primitives::DaBlockHeight,
+    fuel_tx::Transaction,
+    services::relayer::Event,
 };
 
 /// A wrapper around a `u32` representing a pointer for WASM.

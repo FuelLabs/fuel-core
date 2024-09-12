@@ -1,8 +1,12 @@
 use crate::{
-    database::ReyalerIterableKeyValueView, service::adapters::TransactionsSource,
+    database::ReyalerIterableKeyValueView,
+    service::adapters::TransactionsSource,
 };
 use fuel_core_executor::ports::MaybeCheckedTransaction;
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, services::relayer::Event};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    services::relayer::Event,
+};
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(

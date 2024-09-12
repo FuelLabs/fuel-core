@@ -1,18 +1,32 @@
 use fuel_core_types::{
-    blockchain::{header::ConsensusParametersVersion, primitives::DaBlockHeight},
+    blockchain::{
+        header::ConsensusParametersVersion,
+        primitives::DaBlockHeight,
+    },
     fuel_tx::{
-        self, Chargeable, ConsensusParameters, Transaction, TxId, UniqueIdentifier,
+        self,
+        Chargeable,
+        ConsensusParameters,
+        Transaction,
+        TxId,
+        UniqueIdentifier,
     },
     fuel_types::ChainId,
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
-        executor::{Error as ExecutorError, Result as ExecutorResult},
+        executor::{
+            Error as ExecutorError,
+            Result as ExecutorResult,
+        },
         relayer::Event,
     },
 };
 
 #[cfg(feature = "alloc")]
-use alloc::{string::ToString, vec::Vec};
+use alloc::{
+    string::ToString,
+    vec::Vec,
+};
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 pub enum MaybeCheckedTransaction {

@@ -1,26 +1,54 @@
 use fuel_core_executor::{
     executor::ExecutionOptions,
-    ports::{MaybeCheckedTransaction, RelayerPort, TransactionsSource},
+    ports::{
+        MaybeCheckedTransaction,
+        RelayerPort,
+        TransactionsSource,
+    },
 };
 use fuel_core_storage::{
     column::Column,
-    kv_store::{KeyValueInspect, Value},
+    kv_store::{
+        KeyValueInspect,
+        Value,
+    },
 };
 use fuel_core_types::{
-    blockchain::{block::Block, primitives::DaBlockHeight},
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_tx::Transaction,
     fuel_vm::checked_transaction::Checked,
     services::{
         block_producer::Components,
-        executor::{Error as ExecutorError, Result as ExecutorResult},
+        executor::{
+            Error as ExecutorError,
+            Result as ExecutorResult,
+        },
     },
 };
 use fuel_core_wasm_executor::utils::{
-    pack_exists_size_result, unpack_ptr_and_len, InputSerializationType, ReturnType,
+    pack_exists_size_result,
+    unpack_ptr_and_len,
+    InputSerializationType,
+    ReturnType,
     WasmSerializationBlockTypes,
 };
-use std::{collections::HashMap, sync::Arc};
-use wasmtime::{AsContextMut, Caller, Engine, Func, Linker, Memory, Module, Store};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
+use wasmtime::{
+    AsContextMut,
+    Caller,
+    Engine,
+    Func,
+    Linker,
+    Memory,
+    Module,
+    Store,
+};
 
 trait CallerHelper {
     /// Writes the encoded data to the memory at the provided pointer.
