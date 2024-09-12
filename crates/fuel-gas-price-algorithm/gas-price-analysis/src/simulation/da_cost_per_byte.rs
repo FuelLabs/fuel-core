@@ -25,6 +25,7 @@ pub fn get_da_cost_per_byte_from_source(
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, serde::Deserialize)]
 struct Record {
     block_number: u64,

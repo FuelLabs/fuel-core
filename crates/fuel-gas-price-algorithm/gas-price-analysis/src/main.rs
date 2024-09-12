@@ -74,7 +74,8 @@ enum Source {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Arg::parse();
 
     const UPDATE_PERIOD: usize = 12;
@@ -103,7 +104,7 @@ fn main() -> anyhow::Result<()> {
             );
             let simulator = Simulator::new(da_cost_per_byte);
             let (results, (p, d)) =
-                naive_optimisation(&simulator, iterations as usize, UPDATE_PERIOD);
+                naive_optimisation(&simulator, iterations as usize, UPDATE_PERIOD).await;
             println!(
                 "Optimization results: P: {}, D: {}",
                 prettify_number(p),
