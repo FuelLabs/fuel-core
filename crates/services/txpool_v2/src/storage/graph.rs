@@ -298,7 +298,8 @@ impl Storage for GraphStorage {
                     node_id
                 )));
             };
-            if dependency_node.number_txs_in_chain >= self.config.max_dependent_txn_count {
+            if dependency_node.number_txs_in_chain >= self.config.max_dependent_txn_count
+            {
                 return Err(Error::NotInsertedChainDependencyTooBig);
             }
             whole_tx_chain.push(node_id);
