@@ -1,3 +1,4 @@
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -157,13 +158,13 @@ impl PoolContext {
     pub(crate) fn build(
         self,
     ) -> Pool<
-        MockDBProvider,
+        MockDb,
         GraphStorage,
         BasicCollisionManager<NodeIndex>,
         RatioTipGasSelection<NodeIndex>,
     > {
         Pool::new(
-            MockDBProvider(self.mock_db),
+            MockDBProvider(self.mock_db).latest_view().unwrap(),
             GraphStorage::new(GraphConfig {
                 max_txs_per_chain: self.config.max_txs_per_chain,
             }),

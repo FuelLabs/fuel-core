@@ -64,10 +64,9 @@ impl<DB, S: Storage, CM, SA> Pool<DB, S, CM, SA> {
     }
 }
 
-impl<DB, View, S, CM, SA> Pool<DB, S, CM, SA>
+impl<DB, S, CM, SA> Pool<DB, S, CM, SA>
 where
-    DB: AtomicView<LatestView = View>,
-    View: TxPoolDb,
+    DB: TxPoolDb,
     S: Storage,
     S: CollisionManagerStorage<StorageIndex = <S as Storage>::StorageIndex>,
     S: SelectionAlgorithmStorage<StorageIndex = <S as Storage>::StorageIndex>,
@@ -83,10 +82,6 @@ where
         &mut self,
         transactions: Vec<PoolTransaction>,
     ) -> Result<Vec<Result<Vec<PoolTransaction>, Error>>, Error> {
-        let db_view = self
-            .db
-            .latest_view()
-            .map_err(|e| Error::Database(e.to_string()))?;
         Ok(transactions
             .into_iter()
             .map(|tx| {
@@ -98,7 +93,8 @@ where
                 self.config.black_list.check_blacklisting(&tx)?;
                 if let PoolTransaction::Blob(checked_tx, _) = &tx {
                     let blob_id = checked_tx.transaction().blob_id();
-                    if db_view
+                    if self
+                        .db
                         .blob_exist(blob_id)
                         .map_err(|e| Error::Database(format!("{:?}", e)))?
                     {
@@ -111,7 +107,7 @@ where
                 let dependencies = self.storage.collect_dependencies_transactions(
                     &tx,
                     collisions.reasons,
-                    &db_view,
+                    &self.db,
                     self.config.utxo_validation,
                 )?;
                 let has_dependencies = !dependencies.is_empty();
