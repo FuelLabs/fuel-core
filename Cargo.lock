@@ -3739,6 +3739,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types",
  "num-rational",
+ "parking_lot",
  "petgraph",
  "tokio",
  "tokio-rayon",

@@ -1,13 +1,13 @@
+use std::collections::HashMap;
+
 use fuel_core_types::{
-    fuel_tx::field::BlobId,
+    fuel_tx::{
+        field::BlobId,
+        TxId,
+    },
     services::txpool::PoolTransaction,
 };
 use tracing::instrument;
-
-#[cfg(test)]
-use fuel_core_types::fuel_tx::TxId;
-#[cfg(test)]
-use std::collections::HashMap;
 
 use crate::{
     collision_manager::{
@@ -41,7 +41,7 @@ pub struct Pool<PSProvider, S: Storage, CM, SA> {
     selection_algorithm: SA,
     /// The persistent storage of the pool.
     persistent_storage_provider: PSProvider,
-    #[cfg(test)]
+    /// Mapping from tx_id to storage_id.
     tx_id_to_storage_id: HashMap<TxId, S::StorageIndex>,
 }
 
@@ -60,7 +60,6 @@ impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
             selection_algorithm,
             persistent_storage_provider,
             config,
-            #[cfg(test)]
             tx_id_to_storage_id: HashMap::new(),
         }
     }
@@ -92,7 +91,6 @@ where
                     .persistent_storage_provider
                     .latest_view()
                     .map_err(|e| Error::Database(format!("{:?}", e)))?;
-                #[cfg(test)]
                 let tx_id = tx.id();
                 if self.storage.count() >= self.config.max_txs {
                     return Err(Error::NotInsertedLimitHit);
@@ -122,10 +120,7 @@ where
                     dependencies,
                     collisions.colliding_txs,
                 )?;
-                #[cfg(test)]
-                {
-                    self.tx_id_to_storage_id.insert(tx_id, storage_id);
-                }
+                self.tx_id_to_storage_id.insert(tx_id, storage_id);
                 // No dependencies directly in the graph and the sorted transactions
                 if !has_dependencies {
                     self.selection_algorithm
@@ -137,10 +132,7 @@ where
                     .map(|tx| {
                         self.collision_manager.on_removed_transaction(&tx)?;
                         self.selection_algorithm.on_removed_transaction(&tx)?;
-                        #[cfg(test)]
-                        {
-                            self.tx_id_to_storage_id.remove(&tx.id());
-                        }
+                        self.tx_id_to_storage_id.remove(&tx.id());
                         Ok(tx)
                     })
                     .collect();
@@ -172,11 +164,8 @@ where
                     .on_removed_transaction(&storage_data.transaction)?;
                 self.selection_algorithm
                     .on_removed_transaction(&storage_data.transaction)?;
-                #[cfg(test)]
-                {
-                    self.tx_id_to_storage_id
-                        .remove(&storage_data.transaction.id());
-                }
+                self.tx_id_to_storage_id
+                    .remove(&storage_data.transaction.id());
                 Ok(storage_data.transaction)
             })
             .collect()
@@ -187,7 +176,6 @@ where
         Ok(vec![])
     }
 
-    #[cfg(test)]
     pub fn find_one(&self, tx_id: &TxId) -> Option<&PoolTransaction> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
             .map(|data| &data.transaction)

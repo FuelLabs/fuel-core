@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
+    blockchain::header::ConsensusParametersVersion,
     entities::{
         coins::coin::CompressedCoin,
         relayer::message::Message,
@@ -7,6 +10,7 @@ use fuel_core_types::{
     fuel_tx::{
         BlobId,
         Bytes32,
+        ConsensusParameters,
         ContractId,
         UtxoId,
     },
@@ -29,6 +33,15 @@ pub trait AtomicView: Send + Sync {
 
     /// Returns current the view of the storage.
     fn latest_view(&self) -> StorageResult<Self::LatestView>;
+}
+
+/// Trait for getting the latest consensus parameters.
+#[cfg_attr(feature = "test-helpers", mockall::automock)]
+pub trait ConsensusParametersProvider {
+    /// Get latest consensus parameters.
+    fn latest_consensus_parameters(
+        &self,
+    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>);
 }
 
 pub trait TxPoolPersistentStorage: Send + Sync {
