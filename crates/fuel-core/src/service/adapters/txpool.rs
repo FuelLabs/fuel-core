@@ -121,17 +121,11 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
-    async fn request_tx_ids(&self, peer_id: PeerId) -> Vec<TxId> {
+    async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
         if let Some(service) = &self.service {
-            match service.get_all_transactions_ids_from_peer(peer_id).await {
-                Ok(txs) => txs,
-                Err(e) => {
-                    tracing::error!("Error getting tx ids from peer: {:?}", e);
-                    vec![]
-                }
-            }
+            service.get_all_transactions_ids_from_peer(peer_id).await
         } else {
-            vec![]
+            Ok(vec![])
         }
     }
 
@@ -139,20 +133,13 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         &self,
         peer_id: PeerId,
         tx_ids: Vec<TxId>,
-    ) -> Vec<Option<Transaction>> {
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
         if let Some(service) = &self.service {
-            match service
+            service
                 .get_full_transactions_from_peer(peer_id, tx_ids)
                 .await
-            {
-                Ok(txs) => txs,
-                Err(e) => {
-                    tracing::error!("Error getting tx ids from peer: {:?}", e);
-                    vec![]
-                }
-            }
         } else {
-            vec![]
+            Ok(vec![])
         }
     }
 }
@@ -185,16 +172,16 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         Box::pin(fuel_core_services::stream::pending())
     }
 
-    async fn request_tx_ids(&self, _peer_id: PeerId) -> Vec<TxId> {
-        vec![]
+    async fn request_tx_ids(&self, _peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
+        Ok(vec![])
     }
 
     async fn request_txs(
         &self,
         _peer_id: PeerId,
         _tx_ids: Vec<TxId>,
-    ) -> Vec<Option<Transaction>> {
-        vec![]
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+        Ok(vec![])
     }
 }
 

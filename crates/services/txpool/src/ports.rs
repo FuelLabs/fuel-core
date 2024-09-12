@@ -60,14 +60,14 @@ pub trait PeerToPeer: Send + Sync {
     ) -> anyhow::Result<()>;
 
     // Asks the network to gather all tx ids of a specific peer
-    async fn request_tx_ids(&self, peer_id: PeerId) -> Vec<TxId>;
+    async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
 
     // Asks the network to gather specific transactions from a specific peer
     async fn request_txs(
         &self,
         peer_id: PeerId,
         tx_ids: Vec<TxId>,
-    ) -> Vec<Option<Transaction>>;
+    ) -> anyhow::Result<Vec<Option<Transaction>>>;
 }
 
 pub trait BlockImporter: Send + Sync {

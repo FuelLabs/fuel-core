@@ -277,7 +277,9 @@ where
             new_peer_subscribed = self.new_tx_gossip_subscription.next() => {
                 if let Some(peer_id) = new_peer_subscribed {
                     // Gathering txs
-                    let peer_tx_ids = self.tx_pool_shared_state.p2p.request_tx_ids(peer_id.clone()).await;
+                    let peer_tx_ids = self.tx_pool_shared_state.p2p.request_tx_ids(peer_id.clone()).await.inspect_err(|e| {
+                        tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
+                    }).unwrap_or_default();
                     if peer_tx_ids.is_empty() {
                         return Ok(true);
                     }
@@ -285,7 +287,9 @@ where
                     if tx_ids_to_ask.is_empty() {
                         return Ok(true);
                     }
-                    let txs: Vec<Arc<Transaction>> = self.tx_pool_shared_state.p2p.request_txs(peer_id, tx_ids_to_ask).await.into_iter().flatten().map(Arc::new).collect();
+                    let txs: Vec<Arc<Transaction>> = self.tx_pool_shared_state.p2p.request_txs(peer_id.clone(), tx_ids_to_ask).await.inspect_err(|e| {
+                        tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
+                    }).unwrap_or_default().into_iter().flatten().map(Arc::new).collect();
                     if txs.is_empty() {
                         return Ok(true);
                     }

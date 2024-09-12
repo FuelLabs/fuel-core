@@ -53,10 +53,10 @@ async fn test_new_subscription_p2p() {
     let tx2_clone = tx2.clone();
     p2p.expect_request_tx_ids().return_once(move |peer_id| {
         assert_eq!(peer_id, PeerId::from(vec![1, 2]));
-        vec![
+        Ok(vec![
             tx1_clone.id(&ChainId::default()),
             tx2_clone.id(&ChainId::default()),
-        ]
+        ])
     });
     let tx1_clone = tx1.clone();
     let tx2_clone = tx2.clone();
@@ -71,7 +71,7 @@ async fn test_new_subscription_p2p() {
                 ]
             );
             notifier.notify_one();
-            vec![Some(tx1_clone), Some(tx2_clone)]
+            Ok(vec![Some(tx1_clone), Some(tx2_clone)])
         });
     ctx_builder.with_p2p(p2p);
     let ctx = ctx_builder.build();
@@ -127,10 +127,10 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     let tx2_clone = tx2.clone();
     p2p.expect_request_tx_ids().returning(move |peer_id| {
         assert_eq!(peer_id, PeerId::from(vec![1, 2]));
-        vec![
+        Ok(vec![
             tx1_clone.id(&ChainId::default()),
             tx2_clone.id(&ChainId::default()),
-        ]
+        ])
     });
     let tx1_clone = tx1.clone();
     let tx2_clone = tx2.clone();
@@ -139,7 +139,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
             assert_eq!(peer_id, PeerId::from(vec![1, 2]));
             assert_eq!(tx_ids, vec![tx2_clone.id(&ChainId::default())]);
             notifier.notify_one();
-            vec![Some(tx1_clone), Some(tx2_clone)]
+            Ok(vec![Some(tx1_clone), Some(tx2_clone)])
         });
     ctx_builder.with_p2p(p2p);
     let ctx = ctx_builder.build();

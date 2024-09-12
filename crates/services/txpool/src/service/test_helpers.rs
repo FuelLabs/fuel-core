@@ -144,13 +144,13 @@ mockall::mock! {
 
         fn new_tx_subscription(&self) -> BoxStream<PeerId>;
 
-        async fn request_tx_ids(&self, peer_id: PeerId) -> Vec<TxId>;
+        async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
 
         async fn request_txs(
             &self,
             peer_id: PeerId,
             tx_ids: Vec<TxId>,
-        ) -> Vec<Option<Transaction>>;
+        ) -> anyhow::Result<Vec<Option<Transaction>>>;
     }
 }
 
