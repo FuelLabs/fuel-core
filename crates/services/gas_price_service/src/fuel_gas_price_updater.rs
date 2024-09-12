@@ -122,7 +122,7 @@ pub struct DaBlockCosts {
 }
 
 pub trait GetDaBlockCosts: Send + Sync {
-    fn get(&mut self) -> Result<Option<DaBlockCosts>>;
+    fn get(&self) -> Result<Option<DaBlockCosts>>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]

@@ -93,7 +93,7 @@ impl FakeDaSource {
 }
 
 impl GetDaBlockCosts for FakeDaSource {
-    fn get(&mut self) -> Result<Option<DaBlockCosts>> {
+    fn get(&self) -> Result<Option<DaBlockCosts>> {
         *self.called.lock().unwrap() = true;
         Ok(Some(DaBlockCosts::default()))
     }

@@ -59,7 +59,7 @@ where
 }
 
 impl GetDaBlockCosts for DaBlockCostsSharedState {
-    fn get(&mut self) -> GasPriceUpdaterResult<Option<DaBlockCosts>> {
+    fn get(&self) -> GasPriceUpdaterResult<Option<DaBlockCosts>> {
         if let Ok(mut guard) = self.inner.try_lock() {
             if let Ok(da_block_costs) = guard.try_recv() {
                 return Ok(Some(da_block_costs));
@@ -91,7 +91,7 @@ mod tests {
             da_block_costs_source,
             Some(Duration::from_millis(1)),
         );
-        let mut shared_state = provider.shared_state.clone();
+        let shared_state = provider.shared_state.clone();
 
         // when
         provider.service.start_and_await().await.unwrap();
@@ -117,7 +117,7 @@ mod tests {
             da_block_costs_source,
             Some(Duration::from_millis(1)),
         );
-        let mut shared_state = provider.shared_state.clone();
+        let shared_state = provider.shared_state.clone();
 
         // when
         provider.service.start_and_await().await.unwrap();
@@ -140,7 +140,7 @@ mod tests {
             da_block_costs_source,
             Some(Duration::from_millis(1)),
         );
-        let mut shared_state = provider.shared_state.clone();
+        let shared_state = provider.shared_state.clone();
 
         // when
         provider.service.start_and_await().await.unwrap();
