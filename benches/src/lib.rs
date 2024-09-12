@@ -454,8 +454,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }
 
         if let Some(BlobCode { code, id }) = blob {
-            db.storage_as_mut::<BlobData>()
-                .insert(&id, &code.0)?;
+            db.storage_as_mut::<BlobData>().insert(&id, &code.0)?;
         }
 
         for contract_id in empty_contracts {
