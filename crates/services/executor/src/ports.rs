@@ -29,6 +29,7 @@ use alloc::{
 };
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
+#[allow(clippy::large_enum_variant)]
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
     Transaction(fuel_tx::Transaction),
