@@ -1,6 +1,10 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+};
 
 use fuel_core_types::{
+    fuel_merkle::storage,
     fuel_tx::{
         BlobId,
         ContractId,
@@ -13,7 +17,7 @@ use fuel_core_types::{
 use crate::{
     error::Error,
     ports::TxPoolDb,
-    storage::Storage,
+    storage::StorageData,
 };
 
 pub mod basic;
@@ -45,7 +49,13 @@ impl<Idx> Collisions<Idx> {
     }
 }
 
-pub trait CollisionManager<S: Storage> {
+pub trait CollisionManagerStorage {
+    type StorageIndex: Copy + Debug;
+
+    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
+}
+
+pub trait CollisionManager<S: CollisionManagerStorage> {
     /// Collect all the transactions that collide with the given transaction.
     /// It returns an error if the transaction is less worthy than the colliding transactions.
     /// It returns the information about the collisions.
@@ -53,7 +63,6 @@ pub trait CollisionManager<S: Storage> {
         &self,
         transaction: &PoolTransaction,
         storage: &S,
-        db: &impl TxPoolDb,
     ) -> Result<Collisions<S::StorageIndex>, Error>;
 
     /// Inform the collision manager that a transaction was stored.

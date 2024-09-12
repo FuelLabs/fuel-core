@@ -48,6 +48,7 @@ use fuel_core_types::{
         interpreter::MemoryInstance,
     },
 };
+use petgraph::graph::NodeIndex;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -158,8 +159,8 @@ impl PoolContext {
     ) -> Pool<
         MockDBProvider,
         GraphStorage,
-        BasicCollisionManager<GraphStorage>,
-        RatioTipGasSelection<GraphStorage>,
+        BasicCollisionManager<NodeIndex>,
+        RatioTipGasSelection<NodeIndex>,
     > {
         Pool::new(
             MockDBProvider(self.mock_db),

@@ -33,9 +33,13 @@ use petgraph::{
 };
 
 use crate::{
-    collision_manager::CollisionReason,
+    collision_manager::{
+        CollisionManagerStorage,
+        CollisionReason,
+    },
     error::Error,
     ports::TxPoolDb,
+    selection_algorithms::SelectionAlgorithmStorage,
 };
 
 use super::{
@@ -233,6 +237,22 @@ impl GraphStorage {
         }
         Ok(())
     }
+
+    fn get_inner(&self, index: &NodeIndex) -> Result<&StorageData, Error> {
+        self.graph
+            .node_weight(*index)
+            .ok_or(Error::TransactionNotFound(format!(
+                "Transaction with index {:?} not found",
+                index
+            )))
+    }
+
+    fn get_dependents_inner(&self, index: &NodeIndex) -> Result<Vec<NodeIndex>, Error> {
+        Ok(self
+            .graph
+            .neighbors_directed(*index, petgraph::Direction::Outgoing)
+            .collect())
+    }
 }
 
 impl Storage for GraphStorage {
@@ -310,12 +330,7 @@ impl Storage for GraphStorage {
     }
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error> {
-        self.graph
-            .node_weight(*index)
-            .ok_or(Error::TransactionNotFound(format!(
-                "Transaction with index {:?} not found",
-                index
-            )))
+        self.get_inner(index)
     }
 
     fn get_dependencies(
@@ -332,10 +347,7 @@ impl Storage for GraphStorage {
         &self,
         index: Self::StorageIndex,
     ) -> Result<Vec<Self::StorageIndex>, Error> {
-        Ok(self
-            .graph
-            .neighbors_directed(index, petgraph::Direction::Outgoing)
-            .collect())
+        self.get_dependents_inner(&index)
     }
 
     fn collect_dependencies_transactions(
@@ -436,5 +448,28 @@ impl Storage for GraphStorage {
 
     fn count(&self) -> u64 {
         self.graph.node_count() as u64
+    }
+}
+
+impl CollisionManagerStorage for GraphStorage {
+    type StorageIndex = NodeIndex;
+
+    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error> {
+        self.get_inner(index)
+    }
+}
+
+impl SelectionAlgorithmStorage for GraphStorage {
+    type StorageIndex = NodeIndex;
+
+    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error> {
+        self.get_inner(index)
+    }
+
+    fn get_dependents(
+        &self,
+        index: &Self::StorageIndex,
+    ) -> Result<Vec<Self::StorageIndex>, Error> {
+        self.get_dependents_inner(index)
     }
 }

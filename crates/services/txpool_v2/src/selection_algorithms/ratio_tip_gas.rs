@@ -4,6 +4,7 @@ use std::{
         Reverse,
     },
     collections::BTreeMap,
+    fmt::Debug,
     time::Instant,
 };
 
@@ -13,14 +14,12 @@ use fuel_core_types::{
 };
 use num_rational::Ratio;
 
-use crate::{
-    error::Error,
-    storage::Storage,
-};
+use crate::error::Error;
 
 use super::{
     Constraints,
     SelectionAlgorithm,
+    SelectionAlgorithmStorage,
 };
 
 pub type RatioTipGas = Ratio<u64>;
@@ -57,11 +56,11 @@ impl PartialOrd for Key {
 }
 
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
-pub struct RatioTipGasSelection<S: Storage> {
-    transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
+pub struct RatioTipGasSelection<StorageIndex> {
+    transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, StorageIndex>,
 }
 
-impl<S: Storage> RatioTipGasSelection<S> {
+impl<StorageIndex> RatioTipGasSelection<StorageIndex> {
     pub fn new() -> Self {
         Self {
             transactions_sorted_tip_gas_ratio: BTreeMap::new(),
@@ -69,13 +68,17 @@ impl<S: Storage> RatioTipGasSelection<S> {
     }
 }
 
-impl<S: Storage> Default for RatioTipGasSelection<S> {
+impl<StorageIndex> Default for RatioTipGasSelection<StorageIndex> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: Storage> SelectionAlgorithm<S> for RatioTipGasSelection<S> {
+impl<StorageIndex, S> SelectionAlgorithm<S> for RatioTipGasSelection<StorageIndex>
+where
+    StorageIndex: Copy + Debug,
+    S: SelectionAlgorithmStorage<StorageIndex = StorageIndex>,
+{
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,
@@ -98,7 +101,7 @@ impl<S: Storage> SelectionAlgorithm<S> for RatioTipGasSelection<S> {
                     stored_transaction.transaction.max_gas() <= gas_left
                 };
                 if enough_gas {
-                    new_executables.extend(storage.get_dependents(*storage_id)?);
+                    new_executables.extend(storage.get_dependents(storage_id)?);
                     let stored_tx = storage.get(storage_id)?;
                     gas_left -= stored_tx.transaction.max_gas();
                     best_transaction = Some((*key, *storage_id));

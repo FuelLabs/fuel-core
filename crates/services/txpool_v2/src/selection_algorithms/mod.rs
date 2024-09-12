@@ -1,8 +1,10 @@
+use std::fmt::Debug;
+
 use fuel_core_types::services::txpool::PoolTransaction;
 
 use crate::{
     error::Error,
-    storage::Storage,
+    storage::StorageData,
 };
 
 pub mod ratio_tip_gas;
@@ -12,8 +14,18 @@ pub struct Constraints {
     pub max_gas: u64,
 }
 
+pub trait SelectionAlgorithmStorage {
+    type StorageIndex: Copy + Debug;
+
+    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
+    fn get_dependents(
+        &self,
+        index: &Self::StorageIndex,
+    ) -> Result<Vec<Self::StorageIndex>, Error>;
+}
+
 /// The selection algorithm is responsible for selecting the best transactions to include in a block.
-pub trait SelectionAlgorithm<S: Storage> {
+pub trait SelectionAlgorithm<S: SelectionAlgorithmStorage> {
     /// Given the constraints, the selection algorithm has to return the best list of transactions to include in a block.
     fn gather_best_txs(
         &mut self,

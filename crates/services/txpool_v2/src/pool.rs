@@ -1,5 +1,8 @@
 use fuel_core_storage::transactional::AtomicView;
-use fuel_core_types::services::txpool::PoolTransaction;
+use fuel_core_types::{
+    fuel_tx::field::BlobId,
+    services::txpool::PoolTransaction,
+};
 use tracing::instrument;
 
 #[cfg(test)]
@@ -8,13 +11,17 @@ use fuel_core_types::fuel_tx::TxId;
 use std::collections::HashMap;
 
 use crate::{
-    collision_manager::CollisionManager,
+    collision_manager::{
+        CollisionManager,
+        CollisionManagerStorage,
+    },
     config::Config,
     error::Error,
     ports::TxPoolDb,
     selection_algorithms::{
         Constraints,
         SelectionAlgorithm,
+        SelectionAlgorithmStorage,
     },
     storage::Storage,
 };
@@ -62,6 +69,8 @@ where
     DB: AtomicView<LatestView = View>,
     View: TxPoolDb,
     S: Storage,
+    S: CollisionManagerStorage<StorageIndex = <S as Storage>::StorageIndex>,
+    S: SelectionAlgorithmStorage<StorageIndex = <S as Storage>::StorageIndex>,
     CM: CollisionManager<S>,
     SA: SelectionAlgorithm<S>,
 {
@@ -87,11 +96,18 @@ where
                     return Err(Error::NotInsertedLimitHit);
                 }
                 self.config.black_list.check_blacklisting(&tx)?;
-                let collisions = self.collision_manager.collect_colliding_transactions(
-                    &tx,
-                    &self.storage,
-                    &db_view,
-                )?;
+                if let PoolTransaction::Blob(checked_tx, _) = &tx {
+                    let blob_id = checked_tx.transaction().blob_id();
+                    if db_view
+                        .blob_exist(blob_id)
+                        .map_err(|e| Error::Database(format!("{:?}", e)))?
+                    {
+                        return Err(Error::NotInsertedBlobIdAlreadyTaken(*blob_id))
+                    }
+                }
+                let collisions = self
+                    .collision_manager
+                    .collect_colliding_transactions(&tx, &self.storage)?;
                 let dependencies = self.storage.collect_dependencies_transactions(
                     &tx,
                     collisions.reasons,
@@ -113,7 +129,7 @@ where
                     self.selection_algorithm
                         .new_executable_transactions(vec![storage_id], &self.storage)?;
                 }
-                let tx = self.storage.get(&storage_id)?;
+                let tx = Storage::get(&self.storage, &storage_id)?;
                 let result = removed_transactions
                     .into_iter()
                     .map(|tx| {
@@ -171,8 +187,7 @@ where
 
     #[cfg(test)]
     pub fn find_one(&self, tx_id: &TxId) -> Option<&PoolTransaction> {
-        self.storage
-            .get(self.tx_id_to_storage_id.get(tx_id)?)
+        Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
             .map(|data| &data.transaction)
             .ok()
     }
