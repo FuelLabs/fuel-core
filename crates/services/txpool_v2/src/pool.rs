@@ -1,4 +1,3 @@
-use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::field::BlobId,
     services::txpool::PoolTransaction,
@@ -17,7 +16,10 @@ use crate::{
     },
     config::Config,
     error::Error,
-    ports::TxPoolDb,
+    ports::{
+        AtomicView,
+        TxPoolPersistentStorage,
+    },
     selection_algorithms::{
         Constraints,
         SelectionAlgorithm,
@@ -28,7 +30,7 @@ use crate::{
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
-pub struct Pool<DB, S: Storage, CM, SA> {
+pub struct Pool<PSProvider, S: Storage, CM, SA> {
     /// Configuration of the pool.
     pub config: Config,
     /// The storage of the pool.
@@ -37,16 +39,16 @@ pub struct Pool<DB, S: Storage, CM, SA> {
     collision_manager: CM,
     /// The selection algorithm of the pool.
     selection_algorithm: SA,
-    /// The database of the pool.
-    db: DB,
+    /// The persistent storage of the pool.
+    persistent_storage_provider: PSProvider,
     #[cfg(test)]
     tx_id_to_storage_id: HashMap<TxId, S::StorageIndex>,
 }
 
-impl<DB, S: Storage, CM, SA> Pool<DB, S, CM, SA> {
+impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
     /// Create a new pool.
     pub fn new(
-        database: DB,
+        persistent_storage_provider: PSProvider,
         storage: S,
         collision_manager: CM,
         selection_algorithm: SA,
@@ -56,7 +58,7 @@ impl<DB, S: Storage, CM, SA> Pool<DB, S, CM, SA> {
             storage,
             collision_manager,
             selection_algorithm,
-            db: database,
+            persistent_storage_provider,
             config,
             #[cfg(test)]
             tx_id_to_storage_id: HashMap::new(),
@@ -64,9 +66,10 @@ impl<DB, S: Storage, CM, SA> Pool<DB, S, CM, SA> {
     }
 }
 
-impl<DB, S, CM, SA> Pool<DB, S, CM, SA>
+impl<PS, View, S, CM, SA> Pool<PS, S, CM, SA>
 where
-    DB: TxPoolDb,
+    PS: AtomicView<LatestView = View>,
+    View: TxPoolPersistentStorage,
     S: Storage,
     S: CollisionManagerStorage<StorageIndex = <S as Storage>::StorageIndex>,
     S: SelectionAlgorithmStorage<StorageIndex = <S as Storage>::StorageIndex>,
@@ -85,6 +88,10 @@ where
         Ok(transactions
             .into_iter()
             .map(|tx| {
+                let latest_view = self
+                    .persistent_storage_provider
+                    .latest_view()
+                    .map_err(|e| Error::Database(format!("{:?}", e)))?;
                 #[cfg(test)]
                 let tx_id = tx.id();
                 if self.storage.count() >= self.config.max_txs {
@@ -93,8 +100,7 @@ where
                 self.config.black_list.check_blacklisting(&tx)?;
                 if let PoolTransaction::Blob(checked_tx, _) = &tx {
                     let blob_id = checked_tx.transaction().blob_id();
-                    if self
-                        .db
+                    if latest_view
                         .blob_exist(blob_id)
                         .map_err(|e| Error::Database(format!("{:?}", e)))?
                     {
@@ -107,7 +113,7 @@ where
                 let dependencies = self.storage.collect_dependencies_transactions(
                     &tx,
                     collisions.reasons,
-                    &self.db,
+                    &latest_view,
                     self.config.utxo_validation,
                 )?;
                 let has_dependencies = !dependencies.is_empty();
