@@ -196,7 +196,6 @@ impl From<&fuel_tx::Input> for Input {
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
-                // TODO[RC]: Not yet sure why these are needed?
                 predicate: HexString(predicate.to_vec()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
