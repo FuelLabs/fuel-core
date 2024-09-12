@@ -137,8 +137,10 @@ where
                 let dependent_tx = storage
                     .get(node_id)
                     .expect("Transaction always should exist in storage");
-                let total_tip = total_tip.saturating_add(dependent_tx.cumulative_tip);
-                let total_gas = total_gas.saturating_add(dependent_tx.cumulative_gas);
+                let total_tip =
+                    total_tip.saturating_add(dependent_tx.dependents_cumulative_tip);
+                let total_gas =
+                    total_gas.saturating_add(dependent_tx.dependents_cumulative_gas);
                 (total_tip, total_gas)
             },
         );

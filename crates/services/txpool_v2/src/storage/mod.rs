@@ -18,9 +18,9 @@ pub struct StorageData {
     /// The transaction.
     pub transaction: PoolTransaction,
     /// The cumulative tip of a transaction and all of its children.
-    pub cumulative_tip: u64,
+    pub dependents_cumulative_tip: u64,
     /// The cumulative gas of a transaction and all of its children.
-    pub cumulative_gas: u64,
+    pub dependents_cumulative_gas: u64,
     /// Number of dependents
     pub number_txs_in_chain: u64,
     /// Submitted time

@@ -82,54 +82,57 @@ impl GraphStorage {
     /// Returns the removed transactions.
     fn remove_node_and_dependent_sub_graph(
         &mut self,
-        root: NodeIndex,
+        root_id: NodeIndex,
     ) -> Result<Vec<PoolTransaction>, Error> {
-        let mut to_traverse = vec![root];
-        let mut to_remove = vec![];
-        while let Some(node_id) = to_traverse.pop() {
-            to_remove.push(node_id);
-            for edge in self
-                .graph
-                .edges_directed(node_id, petgraph::Direction::Outgoing)
-            {
-                to_traverse.push(edge.target());
-            }
-        }
-
-        let mut dependencies: Vec<NodeIndex> = self
-            .graph
-            .neighbors_directed(root, petgraph::Direction::Incoming)
-            .collect();
-        let nb_removed = to_remove.len() as u64;
-        let (gas_removed, tip_removed, removed_transactions) = to_remove.iter().fold(
-            (0, 0, vec![]),
-            |(gas, tip, mut removed_transactions), node_id| {
-                let Some(node) = self.graph.remove_node(*node_id) else {
-                    return (gas, tip, removed_transactions);
-                };
-                removed_transactions.push(node.transaction);
-                (
-                    gas + node.cumulative_gas,
-                    tip + node.cumulative_tip,
-                    removed_transactions,
-                )
-            },
+        let Some(root) = self.graph.node_weight(root_id) else {
+            return Ok(vec![])
+        };
+        let gas_removed = root.dependents_cumulative_gas;
+        let tip_removed = root.dependents_cumulative_tip;
+        self.reduce_dependencies_cumulative_gas_and_tip(
+            root_id,
+            gas_removed,
+            tip_removed,
         );
-
-        while let Some(node_id) = dependencies.pop() {
-            dependencies.extend(
-                self.graph
-                    .neighbors_directed(node_id, petgraph::Direction::Incoming),
-            );
-            let Some(node) = self.graph.node_weight_mut(node_id) else {
-                return Err(Error::Storage(format!(
-                    "Node with id {:?} not found",
-                    node_id
-                )));
-            };
-            node.cumulative_gas = node.cumulative_gas.saturating_sub(gas_removed);
-            node.cumulative_tip = node.cumulative_tip.saturating_sub(tip_removed);
-            node.number_txs_in_chain -= nb_removed;
+        self.remove_dependent_sub_graph(root_id)
+    }
+    fn reduce_dependencies_cumulative_gas_and_tip(
+        &mut self,
+        root_id: NodeIndex,
+        gas_reduction: u64,
+        tip_reduction: u64,
+    ) -> Result<(), Error> {
+        let Some(root) = self.graph.node_weight_mut(root_id) else {
+            return Err(Error::Storage(format!(
+                "Node with id {:?} not found",
+                root_id
+            )));
+        };
+        root.dependents_cumulative_gas.saturating_sub(gas_reduction);
+        root.dependents_cumulative_tip.saturating_sub(tip_reduction);
+        for dependency in self.get_dependencies(root_id)? {
+            self.reduce_dependencies_cumulative_gas_and_tip(
+                dependency,
+                gas_reduction,
+                tip_reduction,
+            )?;
+        }
+        Ok(())
+    }
+    fn remove_dependent_sub_graph(
+        &mut self,
+        root_id: NodeIndex,
+    ) -> Result<Vec<PoolTransaction>, Error> {
+        let dependents: Vec<_> = self
+            .graph
+            .neighbors_directed(root_id, petgraph::Direction::Outgoing)
+            .collect();
+        let Some(root) = self.graph.remove_node(root_id) else {
+            return Ok(vec![]);
+        };
+        let mut removed_transactions = vec![root.transaction];
+        for dependent in dependents {
+            removed_transactions.extend(self.remove_dependent_sub_graph(dependent)?);
         }
         Ok(removed_transactions)
     }
@@ -277,8 +280,8 @@ impl Storage for GraphStorage {
         let gas = transaction.max_gas();
         let outputs = transaction.outputs().clone();
         let node = StorageData {
-            cumulative_tip: tip,
-            cumulative_gas: gas,
+            dependents_cumulative_tip: tip,
+            dependents_cumulative_gas: gas,
             transaction,
             number_txs_in_chain: 1,
             submitted_time: Instant::now(),
@@ -299,12 +302,7 @@ impl Storage for GraphStorage {
                 return Err(Error::NotInsertedChainDependencyTooBig);
             }
             whole_tx_chain.push(node_id);
-            for edge in self
-                .graph
-                .edges_directed(node_id, petgraph::Direction::Incoming)
-            {
-                to_check.push(edge.source());
-            }
+            to_check.extend(self.get_dependencies(node_id)?);
         }
 
         // Add the transaction to the graph
@@ -323,8 +321,10 @@ impl Storage for GraphStorage {
                 )));
             };
             node.number_txs_in_chain = node.number_txs_in_chain.saturating_add(1);
-            node.cumulative_tip = node.cumulative_tip.saturating_add(tip);
-            node.cumulative_gas = node.cumulative_gas.saturating_add(gas);
+            node.dependents_cumulative_tip =
+                node.dependents_cumulative_tip.saturating_add(tip);
+            node.dependents_cumulative_gas =
+                node.dependents_cumulative_gas.saturating_add(gas);
         }
         Ok((node_id, removed_transactions))
     }
