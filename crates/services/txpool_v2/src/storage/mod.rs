@@ -7,7 +7,7 @@ use std::{
 use crate::{
     collision_manager::CollisionReason,
     error::Error,
-    ports::TxPoolDb,
+    ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::PoolTransaction;
 
@@ -66,7 +66,7 @@ pub trait Storage {
         &self,
         transaction: &PoolTransaction,
         collisions: HashSet<CollisionReason>,
-        db: &impl TxPoolDb,
+        persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<Vec<Self::StorageIndex>, Error>;
 

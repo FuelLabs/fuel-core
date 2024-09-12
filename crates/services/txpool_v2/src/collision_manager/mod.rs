@@ -16,7 +16,7 @@ use fuel_core_types::{
 
 use crate::{
     error::Error,
-    ports::TxPoolDb,
+    ports::TxPoolPersistentStorage,
     storage::StorageData,
 };
 

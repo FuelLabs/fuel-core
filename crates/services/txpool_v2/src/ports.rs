@@ -20,7 +20,18 @@ use crate::{
     GasPrice,
 };
 
-pub trait TxPoolDb: Send + Sync {
+/// Provides an atomic view of the storage at the latest height at
+/// the moment of view instantiation. All modifications to the storage
+/// after this point will not affect the view.
+pub trait AtomicView: Send + Sync {
+    /// The type of the latest storage view.
+    type LatestView;
+
+    /// Returns current the view of the storage.
+    fn latest_view(&self) -> StorageResult<Self::LatestView>;
+}
+
+pub trait TxPoolPersistentStorage: Send + Sync {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;

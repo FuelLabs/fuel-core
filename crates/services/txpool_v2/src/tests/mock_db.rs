@@ -1,8 +1,8 @@
-use crate::ports::TxPoolDb;
-use fuel_core_storage::{
-    transactional::AtomicView,
-    Result as StorageResult,
+use crate::ports::{
+    AtomicView,
+    TxPoolPersistentStorage,
 };
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -75,7 +75,7 @@ impl MockDb {
     }
 }
 
-impl TxPoolDb for MockDb {
+impl TxPoolPersistentStorage for MockDb {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         Ok(self.data.lock().unwrap().coins.get(utxo_id).cloned())
     }

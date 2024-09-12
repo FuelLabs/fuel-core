@@ -38,7 +38,7 @@ use crate::{
         CollisionReason,
     },
     error::Error,
-    ports::TxPoolDb,
+    ports::TxPoolPersistentStorage,
     selection_algorithms::SelectionAlgorithmStorage,
 };
 
@@ -355,7 +355,7 @@ impl Storage for GraphStorage {
         &self,
         transaction: &PoolTransaction,
         collisions: std::collections::HashSet<CollisionReason>,
-        db: &impl TxPoolDb,
+        persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<Vec<Self::StorageIndex>, Error> {
         let mut pool_dependencies = Vec::new();
@@ -380,7 +380,7 @@ impl Storage for GraphStorage {
                         Self::check_if_coin_input_can_spend_output(output, input)?;
                         pool_dependencies.push(*node_id);
                     } else if utxo_validation {
-                        let Some(coin) = db
+                        let Some(coin) = persistent_storage
                             .utxo(utxo_id)
                             .map_err(|e| Error::Database(format!("{:?}", e)))?
                         else {
@@ -398,7 +398,7 @@ impl Storage for GraphStorage {
                     // since message id is derived, we don't need to double check all the fields
                     // Maybe this should be on an other function as it's not a dependency finder but just a test
                     if utxo_validation {
-                        if let Some(db_message) = db
+                        if let Some(db_message) = persistent_storage
                             .message(nonce)
                             .map_err(|e| Error::Database(format!("{:?}", e)))?
                         {
@@ -417,7 +417,7 @@ impl Storage for GraphStorage {
                 Input::Contract(Contract { contract_id, .. }) => {
                     if let Some(node_id) = self.contracts_creators.get(contract_id) {
                         pool_dependencies.push(*node_id);
-                    } else if !db
+                    } else if !persistent_storage
                         .contract_exist(contract_id)
                         .map_err(|e| Error::Database(format!("{:?}", e)))?
                     {

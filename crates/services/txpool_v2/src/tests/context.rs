@@ -158,13 +158,13 @@ impl PoolContext {
     pub(crate) fn build(
         self,
     ) -> Pool<
-        MockDb,
+        MockDBProvider,
         GraphStorage,
         BasicCollisionManager<NodeIndex>,
         RatioTipGasSelection<NodeIndex>,
     > {
         Pool::new(
-            MockDBProvider(self.mock_db).latest_view().unwrap(),
+            MockDBProvider(self.mock_db),
             GraphStorage::new(GraphConfig {
                 max_dependent_txn_count: self.config.max_dependent_txn_count,
             }),
