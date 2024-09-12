@@ -123,7 +123,7 @@ pub struct Config {
     /// Maximum gas per block.
     pub max_block_gas: u64,
     /// Maximum transactions per dependencies chain.
-    pub max_txs_per_chain: u64,
+    pub max_dependent_txn_count: u64,
     /// Maximum transactions in the pool.
     pub max_txs: u64,
     /// Maximum transaction time to live.
@@ -139,7 +139,7 @@ impl Default for Config {
             utxo_validation: true,
             max_block_gas: 100000000,
             max_block_size: 1000000000,
-            max_txs_per_chain: 1000,
+            max_dependent_txn_count: 1000,
             max_txs: 10000,
             max_txs_ttl: Duration::from_secs(60 * 10),
             black_list: BlackList::default(),

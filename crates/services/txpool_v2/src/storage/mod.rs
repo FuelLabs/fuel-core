@@ -60,7 +60,7 @@ pub trait Storage {
     ) -> Result<Vec<Self::StorageIndex>, Error>;
 
     /// Collect the storage indexes of the transactions that are dependent on the given transaction.
-    /// The collisions can be useful as they implies that some verfications had already been done.
+    /// The collisions can be useful as they implies that some verifications had already been done.
     /// Returns the storage indexes of the dependencies transactions.
     fn collect_dependencies_transactions(
         &self,

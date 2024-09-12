@@ -53,7 +53,7 @@ pub struct GraphStorage {
     config: GraphConfig,
     /// The graph of transactions
     graph: StableDiGraph<StorageData, ()>,
-    /// Coins -> Transaction that crurrently create the UTXO
+    /// Coins -> Transaction that currently create the UTXO
     coins_creators: HashMap<UtxoId, NodeIndex>,
     /// Contract -> Transaction that currently create the contract
     contracts_creators: HashMap<ContractId, NodeIndex>,
@@ -61,7 +61,7 @@ pub struct GraphStorage {
 
 pub struct GraphConfig {
     /// The maximum number of transactions per dependency chain
-    pub max_txs_per_chain: u64,
+    pub max_dependent_txn_count: u64,
 }
 
 impl GraphStorage {
@@ -223,7 +223,7 @@ impl GraphStorage {
         for (index, output) in outputs.iter().enumerate() {
             let index = u16::try_from(index).map_err(|_| {
                 Error::WrongOutputNumber(format!(
-                    "The number of outputs in `{}` is more than `u8::max`",
+                    "The number of outputs in `{}` is more than `u16::max`",
                     tx_id
                 ))
             })?;
@@ -298,7 +298,7 @@ impl Storage for GraphStorage {
                     node_id
                 )));
             };
-            if dependency_node.number_txs_in_chain >= self.config.max_txs_per_chain {
+            if dependency_node.number_txs_in_chain >= self.config.max_dependent_txn_count {
                 return Err(Error::NotInsertedChainDependencyTooBig);
             }
             whole_tx_chain.push(node_id);
