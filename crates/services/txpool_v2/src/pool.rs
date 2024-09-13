@@ -26,6 +26,7 @@ use crate::{
         SelectionAlgorithmStorage,
     },
     storage::Storage,
+    verifications::FullyVerifiedTx,
 };
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions

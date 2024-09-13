@@ -56,28 +56,6 @@ use std::vec;
 
 const GAS_LIMIT: Word = 100000;
 
-// TODO: Move out of tests
-fn check_tx_to_pool(checked_tx: Checked<Transaction>) -> PoolTransaction {
-    match checked_tx.into() {
-        CheckedTransaction::Blob(tx) => {
-            PoolTransaction::Blob(tx, ConsensusParametersVersion::MIN)
-        }
-        CheckedTransaction::Create(tx) => {
-            PoolTransaction::Create(tx, ConsensusParametersVersion::MIN)
-        }
-        CheckedTransaction::Script(tx) => {
-            PoolTransaction::Script(tx, ConsensusParametersVersion::MIN)
-        }
-        CheckedTransaction::Upgrade(tx) => {
-            PoolTransaction::Upgrade(tx, ConsensusParametersVersion::MIN)
-        }
-        CheckedTransaction::Upload(tx) => {
-            PoolTransaction::Upload(tx, ConsensusParametersVersion::MIN)
-        }
-        _ => panic!("Unexpected transaction type"),
-    }
-}
-
 #[tokio::test]
 async fn insert_simple_tx_succeeds() {
     let mut context = PoolContext::default();

@@ -10,6 +10,7 @@ mod selection_algorithms;
 mod service;
 mod storage;
 mod transaction_conversion;
+mod verifications;
 
 type GasPrice = Word;
 

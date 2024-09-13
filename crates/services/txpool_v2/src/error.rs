@@ -10,6 +10,8 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckError,
 };
 
+use crate::ports::WasmValidityError;
+
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
     #[display(fmt = "Gas price not found for block height {_0}")]
@@ -83,6 +85,10 @@ pub enum Error {
     NotInsertedLimitHit,
     #[display(fmt = "Storage error: {_0}")]
     Storage(String),
+    #[display(fmt = "Error with Wasm validity: {:?}", _0)]
+    WasmValidity(WasmValidityError),
+    #[display(fmt = "Transaction is not inserted. Mint transaction is not allowed")]
+    MintIsDisallowed,
 }
 
 impl From<CheckError> for Error {

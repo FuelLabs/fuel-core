@@ -8,6 +8,7 @@ use fuel_core_services::{
 };
 use fuel_core_types::{
     blockchain::consensus::Consensus,
+    entities::relayer::transaction,
     fuel_tx::{
         Transaction,
         TxId,
@@ -18,16 +19,35 @@ use fuel_core_types::{
 use parking_lot::RwLock;
 
 use crate::{
-    collision_manager::basic::BasicCollisionManager, config::Config, error::Error, pool::Pool, ports::{
+    collision_manager::basic::BasicCollisionManager,
+    config::Config,
+    error::Error,
+    pool::Pool,
+    ports::{
         AtomicView,
         ConsensusParametersProvider,
+        GasPriceProvider as GasPriceProviderTrait,
+        MemoryPool as MemoryPoolTrait,
         TxPoolPersistentStorage,
-    }, selection_algorithms::ratio_tip_gas::RatioTipGasSelection, storage::graph::{
-        GraphConfig, GraphStorage, GraphStorageIndex
-    }, transaction_conversion::check_transactions
+        WasmChecker as WasmCheckerTrait,
+    },
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
+    storage::graph::{
+        GraphConfig,
+        GraphStorage,
+        GraphStorageIndex,
+    },
+    transaction_conversion::check_transactions,
+    verifications::perform_all_verifications,
 };
 
-pub struct SharedState<PSProvider, ConsensusParamsProvider> {
+pub struct SharedState<
+    PSProvider,
+    ConsensusParamsProvider,
+    GasPriceProvider,
+    WasmChecker,
+    MemoryPool,
+> {
     pool: Arc<
         RwLock<
             Pool<
@@ -40,26 +60,56 @@ pub struct SharedState<PSProvider, ConsensusParamsProvider> {
     >,
     current_height: Arc<RwLock<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusParamsProvider>,
+    gas_price_provider: Arc<GasPriceProvider>,
+    wasm_checker: Arc<WasmChecker>,
+    memory: Arc<MemoryPool>,
+    utxo_validation: bool,
 }
 
-impl<PSProvider, ConsensusParamsProvider> Clone
-    for SharedState<PSProvider, ConsensusParamsProvider>
+impl<PSProvider, ConsensusParamsProvider, GasPriceProvider, WasmChecker, MemoryPool> Clone
+    for SharedState<
+        PSProvider,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >
 {
     fn clone(&self) -> Self {
         SharedState {
             pool: self.pool.clone(),
             current_height: self.current_height.clone(),
             consensus_parameters_provider: self.consensus_parameters_provider.clone(),
+            gas_price_provider: self.gas_price_provider.clone(),
+            wasm_checker: self.wasm_checker.clone(),
+            memory: self.memory.clone(),
+            utxo_validation: self.utxo_validation,
         }
     }
 }
 
-impl<PSProvider, PSView, ConsensusParamsProvider>
-    SharedState<PSProvider, ConsensusParamsProvider>
+impl<
+        PSProvider,
+        PSView,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >
+    SharedState<
+        PSProvider,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >
 where
     PSProvider: AtomicView<LatestView = PSView>,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider,
+    GasPriceProvider: GasPriceProviderTrait,
+    WasmChecker: WasmCheckerTrait,
+    MemoryPool: MemoryPoolTrait + Send + Sync,
 {
     // TODO: Implement conversion from `Transaction` to `PoolTransaction`. (with all the verifications that it implies): https://github.com/FuelLabs/fuel-core/issues/2186
     async fn insert(
@@ -70,59 +120,95 @@ where
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
-
-        let checked_txs = check_transactions(
-            transactions,
-            current_height,
-            self.utxo_validation,
-            params.as_ref(),
-            &self.gas_price_provider,
-            self.memory_pool.clone(),
-        )
-        .await;
-
-        let mut valid_txs = vec![];
-
-        let checked_txs: Vec<_> = checked_txs
-            .into_iter()
-            .map(|tx_check| match tx_check {
-                Ok(tx) => {
-                    valid_txs.push(tx);
-                    None
-                }
-                Err(err) => Some(err),
-            })
-            .collect();
-        // Move verif of wasm there
-
-        self.pool.insert(transactions)
+        let insertable_transactions = vec![];
+        for transaction in transactions {
+            let checked_tx = perform_all_verifications(
+                transaction,
+                current_height,
+                &params,
+                version,
+                &self.gas_price_provider,
+                &self.wasm_checker,
+                self.memory.clone(),
+            )
+            .await?;
+            insertable_transactions.push(checked_tx);
+        }
+        self.pool.write().insert(insertable_transactions)
     }
 
     pub fn find_one(&self, tx_id: &TxId) -> Option<Transaction> {
-        self.pool.find_one(tx_id).map(|tx| tx.into())
+        self.pool.read().find_one(tx_id).map(|tx| tx.into())
     }
 }
 
-pub type Service<PSProvider, ConsensusParamsProvider> =
-    ServiceRunner<Task<PSProvider, ConsensusParamsProvider>>;
+pub type Service<
+    PSProvider,
+    ConsensusParamsProvider,
+    GasPriceProvider,
+    WasmChecker,
+    MemoryPool,
+> = ServiceRunner<
+    Task<PSProvider, ConsensusParamsProvider, GasPriceProvider, WasmChecker, MemoryPool>,
+>;
 
-pub struct Task<PSProvider, ConsensusParamsProvider> {
-    shared_state: SharedState<PSProvider, ConsensusParamsProvider>,
+pub struct Task<
+    PSProvider,
+    ConsensusParamsProvider,
+    GasPriceProvider,
+    WasmChecker,
+    MemoryPool,
+> {
+    shared_state: SharedState<
+        PSProvider,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >,
 }
 
 #[async_trait::async_trait]
-impl<PSProvider, PSView, ConsensusParamsProvider> RunnableService
-    for Task<PSProvider, ConsensusParamsProvider>
+impl<
+        PSProvider,
+        PSView,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    > RunnableService
+    for Task<
+        PSProvider,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >
 where
     PSProvider: AtomicView<LatestView = PSView>,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider + Send + Sync,
+    GasPriceProvider: GasPriceProviderTrait + Send + Sync,
+    WasmChecker: WasmCheckerTrait + Send + Sync,
+    MemoryPool: MemoryPoolTrait + Send + Sync,
 {
     const NAME: &'static str = "TxPoolv2";
 
-    type SharedData = SharedState<PSProvider, ConsensusParamsProvider>;
+    type SharedData = SharedState<
+        PSProvider,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >;
 
-    type Task = Task<PSProvider, ConsensusParamsProvider>;
+    type Task = Task<
+        PSProvider,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >;
 
     type TaskParams = ();
 
@@ -140,12 +226,28 @@ where
 }
 
 #[async_trait::async_trait]
-impl<PSProvider, PSView, ConsensusParamsProvider> RunnableTask
-    for Task<PSProvider, ConsensusParamsProvider>
+impl<
+        PSProvider,
+        PSView,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    > RunnableTask
+    for Task<
+        PSProvider,
+        ConsensusParamsProvider,
+        GasPriceProvider,
+        WasmChecker,
+        MemoryPool,
+    >
 where
     PSProvider: AtomicView<LatestView = PSView>,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider + Send + Sync,
+    GasPriceProvider: GasPriceProviderTrait + Send + Sync,
+    WasmChecker: WasmCheckerTrait + Send + Sync,
+    MemoryPool: MemoryPoolTrait + Send + Sync,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -162,27 +264,44 @@ where
     }
 }
 
-pub fn new_service<PSProvider, PSView, ConsensusParamsProvider>(
+pub fn new_service<
+    PSProvider,
+    PSView,
+    ConsensusParamsProvider,
+    GasPriceProvider,
+    WasmChecker,
+    MemoryPool,
+>(
+    config: Config,
     ps_provider: PSProvider,
     consensus_parameters_provider: ConsensusParamsProvider,
     current_height: BlockHeight,
-    config: Config,
-) -> Service<PSProvider, ConsensusParamsProvider>
+    gas_price_provider: GasPriceProvider,
+    wasm_checker: WasmChecker,
+    memory_pool: MemoryPool,
+) -> Service<PSProvider, ConsensusParamsProvider, GasPriceProvider, WasmChecker, MemoryPool>
 where
     PSProvider: AtomicView<LatestView = PSView>,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider + Send + Sync,
+    GasPriceProvider: GasPriceProviderTrait + Send + Sync,
+    WasmChecker: WasmCheckerTrait + Send + Sync,
+    MemoryPool: MemoryPoolTrait + Send + Sync,
 {
     Service::new(Task {
         shared_state: SharedState {
             // Maybe try to take the arc from the paramater
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
+            gas_price_provider: Arc::new(gas_price_provider),
+            wasm_checker: Arc::new(wasm_checker),
+            memory: Arc::new(memory_pool),
             current_height: Arc::new(RwLock::new(current_height)),
+            utxo_validation: config.utxo_validation,
             pool: Arc::new(RwLock::new(Pool::new(
                 ps_provider,
                 // TODO: Real value
                 GraphStorage::new(GraphConfig {
-                    max_dependent_txn_count: 100
+                    max_dependent_txn_count: 100,
                 }),
                 BasicCollisionManager::new(),
                 RatioTipGasSelection::new(),
