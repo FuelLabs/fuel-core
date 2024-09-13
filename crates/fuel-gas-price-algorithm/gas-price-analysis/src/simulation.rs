@@ -65,7 +65,7 @@ impl Simulator {
     ) -> AlgorithmUpdaterV1 {
         // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
-        let updater = AlgorithmUpdaterV1 {
+        AlgorithmUpdaterV1 {
             min_exec_gas_price: 10,
             min_da_gas_price: 10,
             // Change to adjust where the gas price starts on block 0
@@ -91,8 +91,7 @@ impl Simulator {
             da_d_component,
             last_profit: 0,
             second_to_last_profit: 0,
-        };
-        updater
+        }
     }
 
     fn execute_simulation<'a>(
@@ -138,7 +137,7 @@ impl Simulator {
                     total_cost += block.block_cost as u128;
                     actual_costs.push(total_cost);
                 }
-                updater.update_da_record_data(&da_blocks).unwrap();
+                updater.update_da_record_data(da_blocks).unwrap();
             }
         }
         let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) =
@@ -150,7 +149,7 @@ impl Simulator {
         let bytes_and_costs: Vec<_> = bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
-            .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64))
+            .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte)))
             .collect();
 
         let actual_profit: Vec<i128> = actual_costs
@@ -180,7 +179,7 @@ impl Simulator {
     fn zip_l2_blocks_with_da_blocks(
         &self,
         da_recording_rate: usize,
-        fullness_and_bytes: &Vec<(u64, u64)>,
+        fullness_and_bytes: &[(u64, u64)],
     ) -> Vec<Option<Vec<RecordedBlock>>> {
         let (_, da_blocks) = fullness_and_bytes
             .iter()
@@ -195,7 +194,7 @@ impl Simulator {
                     let converted = RecordedBlock {
                         height,
                         block_bytes: *bytes,
-                        block_cost: total_cost as u64,
+                        block_cost: total_cost,
                     };
                     delayed.push(converted);
                     if delayed.len() == da_recording_rate {

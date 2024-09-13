@@ -137,7 +137,7 @@ pub fn draw_gas_prices(
 
 pub fn draw_fullness(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    fullness: &Vec<(u64, u64)>,
+    fullness: &[(u64, u64)],
     title: &str,
 ) -> anyhow::Result<()> {
     const FULLNESS_COLOR: RGBColor = BLACK;

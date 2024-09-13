@@ -10,6 +10,7 @@ repository = { workspace = true }
 version = { workspace = true }
 description = "Fuel gas price algorithm"
 
+
 [lib]
 name = "fuel_gas_price_algorithm"
 path = "src/lib.rs"

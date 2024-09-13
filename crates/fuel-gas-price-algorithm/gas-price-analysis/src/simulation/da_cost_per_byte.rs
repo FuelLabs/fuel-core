@@ -18,8 +18,7 @@ pub fn get_da_cost_per_byte_from_source(
             let original = get_costs_from_csv_file(&file_path, sample_size);
             original
                 .into_iter()
-                .map(|x| std::iter::repeat(x).take(update_period))
-                .flatten()
+                .flat_map(|x| std::iter::repeat(x).take(update_period))
                 .collect()
         }
     }
@@ -89,8 +88,7 @@ fn arbitrary_cost_per_byte(size: usize, update_period: usize) -> Vec<u64> {
         .map(|x| x * ROUGH_COST_AVG + ROUGH_COST_AVG) // Sine wave is between -1 and 1, scale and shift
         .map(|x| x as u64)
         .map(|x| std::cmp::max(x, 1))
-        .map(|x| iter::repeat(x).take(update_period as usize))
-        .flatten()
-        .take(size as usize)
+        .flat_map(|x| iter::repeat(x).take(update_period))
+        .take(size)
         .collect()
 }
