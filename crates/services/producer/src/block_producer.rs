@@ -409,10 +409,11 @@ where
             total_transactions = total_transactions.saturating_add(transactions_number);
             if total_cost > gas_limit || total_transactions > transactions_limit {
                 break;
-            } else {
-                new_best = DaBlockHeight(height);
             }
+
+            new_best = DaBlockHeight(height);
         }
+
         if new_best == previous_da_height {
             Err(anyhow!(NO_NEW_DA_HEIGHT_FOUND))
         } else {
