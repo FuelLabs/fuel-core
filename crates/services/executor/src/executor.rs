@@ -576,7 +576,7 @@ where
                 if transaction.max_gas(&self.consensus_params)? > remaining_gas_limit {
                     data.skipped_transactions
                         .push((tx_id, ExecutorError::GasOverflow));
-                    continue
+                    continue;
                 }
                 match self.execute_transaction_and_commit(
                     block,
@@ -858,7 +858,7 @@ where
                             .insert(message.nonce(), &message)?;
                         execution_data
                             .events
-                            .push(ExecutorEvent::MessageImported(message))
+                            .push(ExecutorEvent::MessageImported(message));
                     }
                     Event::Transaction(relayed_tx) => {
                         let id = relayed_tx.id();

@@ -150,36 +150,16 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         }
     }
 
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
-        #[cfg(feature = "relayer")]
-        {
-            if let Some(sync) = self.relayer_synced.as_ref() {
-                get_gas_cost_for_height(**height, sync)
-            } else {
-                Ok(0)
-            }
-        }
-        #[cfg(not(feature = "relayer"))]
-        {
-            anyhow::ensure!(
-                **height == 0,
-                "Cannot have a da height above zero without a relayer"
-            );
-            // If the relayer is not enabled, then all blocks are zero.
-            Ok(0)
-        }
-    }
-
-    async fn get_transactions_number_for_block(
+    async fn get_cost_and_transactions_number_for_block(
         &self,
         height: &DaBlockHeight,
-    ) -> anyhow::Result<u64> {
+    ) -> anyhow::Result<(u64, u64)> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
-                get_transactions_number_for_height(**height, sync)
+                get_gas_cost_and_transactions_number_for_height(**height, sync)
             } else {
-                Ok(0)
+                Ok((0, 0))
             }
         }
         #[cfg(not(feature = "relayer"))]
@@ -189,53 +169,38 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
                 "Cannot have a da height above zero without a relayer"
             );
             // If the relayer is not enabled, then all blocks are zero.
-            Ok(0)
+            Ok((0, 0))
         }
     }
 }
 
 #[cfg(feature = "relayer")]
-fn get_transactions_number_for_height(
+fn get_gas_cost_and_transactions_number_for_height(
     height: u64,
     sync: &fuel_core_relayer::SharedState<
         crate::database::Database<
             crate::database::database_description::relayer::Relayer,
         >,
     >,
-) -> anyhow::Result<u64> {
+) -> anyhow::Result<(u64, u64)> {
     let da_height = DaBlockHeight(height);
-    let transactions = sync
+    let cost_with_transactions = sync
         .database()
         .storage::<fuel_core_relayer::storage::EventsHistory>()
         .get(&da_height)?
         .unwrap_or_default()
         .iter()
-        .filter(|event| match event {
-            fuel_core_types::services::relayer::Event::Message(_) => false,
-            fuel_core_types::services::relayer::Event::Transaction(_) => true,
-        })
-        .count();
-    Ok(transactions as u64)
-}
-
-#[cfg(feature = "relayer")]
-fn get_gas_cost_for_height(
-    height: u64,
-    sync: &fuel_core_relayer::SharedState<
-        crate::database::Database<
-            crate::database::database_description::relayer::Relayer,
-        >,
-    >,
-) -> anyhow::Result<u64> {
-    let da_height = DaBlockHeight(height);
-    let cost = sync
-        .database()
-        .storage::<fuel_core_relayer::storage::EventsHistory>()
-        .get(&da_height)?
-        .unwrap_or_default()
-        .iter()
-        .fold(0u64, |acc, event| acc.saturating_add(event.cost()));
-    Ok(cost)
+        .fold((0u64, 0u64), |(cost, transactions), event| {
+            let cost = cost.saturating_add(event.cost());
+            let transactions = match event {
+                fuel_core_types::services::relayer::Event::Message(_) => transactions,
+                fuel_core_types::services::relayer::Event::Transaction(_) => {
+                    transactions.saturating_add(1)
+                }
+            };
+            (cost, transactions)
+        });
+    Ok(cost_with_transactions)
 }
 
 impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValueView {

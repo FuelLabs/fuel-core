@@ -662,7 +662,7 @@ where
     ) -> ExecutorResult<wasmtime::Module> {
         let guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
-            return Ok(module.clone())
+            return Ok(module.clone());
         }
         drop(guard);
 

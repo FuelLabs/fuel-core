@@ -392,34 +392,25 @@ where
                 best: highest,
                 previous_block: previous_da_height,
             }
-            .into())
+            .into());
         }
 
         if highest == previous_da_height {
-            return Ok(highest)
+            return Ok(highest);
         }
 
         let next_da_height = previous_da_height.saturating_add(1);
         for height in next_da_height..=highest.0 {
-            let cost = self
+            let (cost, transactions_number) = self
                 .relayer
-                .get_cost_for_block(&DaBlockHeight(height))
+                .get_cost_and_transactions_number_for_block(&DaBlockHeight(height))
                 .await?;
             total_cost = total_cost.saturating_add(cost);
-            if total_cost > gas_limit {
+            total_transactions = total_transactions.saturating_add(transactions_number);
+            if total_cost > gas_limit || total_transactions > transactions_limit {
                 break;
             } else {
-                let transactions_number = self
-                    .relayer
-                    .get_transactions_number_for_block(&DaBlockHeight(height))
-                    .await?;
-                total_transactions =
-                    total_transactions.saturating_add(transactions_number);
-                if total_transactions > transactions_limit {
-                    break;
-                } else {
-                    new_best = DaBlockHeight(height);
-                }
+                new_best = DaBlockHeight(height);
             }
         }
         if new_best == previous_da_height {

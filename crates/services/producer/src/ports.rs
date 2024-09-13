@@ -71,13 +71,10 @@ pub trait Relayer: Send + Sync {
     ) -> anyhow::Result<DaBlockHeight>;
 
     /// Get the total Forced Transaction gas cost for the block at the given height.
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64>;
-
-    /// Get the total number of Forced Transactions for the block at the given height.
-    async fn get_transactions_number_for_block(
+    async fn get_cost_and_transactions_number_for_block(
         &self,
         height: &DaBlockHeight,
-    ) -> anyhow::Result<u64>;
+    ) -> anyhow::Result<(u64, u64)>;
 }
 
 pub trait BlockProducer<TxSource>: Send + Sync {

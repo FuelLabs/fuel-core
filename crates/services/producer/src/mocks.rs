@@ -57,8 +57,8 @@ use std::{
 pub struct MockRelayer {
     pub block_production_key: Address,
     pub latest_block_height: DaBlockHeight,
-    pub latest_da_blocks_with_costs: HashMap<DaBlockHeight, u64>,
-    pub latest_da_blocks_with_transactions: HashMap<DaBlockHeight, u64>,
+    pub latest_da_blocks_with_costs_and_transactions_number:
+        HashMap<DaBlockHeight, (u64, u64)>,
 }
 
 #[async_trait::async_trait]
@@ -71,25 +71,16 @@ impl Relayer for MockRelayer {
         Ok(highest)
     }
 
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
-        let cost = self
-            .latest_da_blocks_with_costs
-            .get(height)
-            .cloned()
-            .unwrap_or_default();
-        Ok(cost)
-    }
-
-    async fn get_transactions_number_for_block(
+    async fn get_cost_and_transactions_number_for_block(
         &self,
         height: &DaBlockHeight,
-    ) -> anyhow::Result<u64> {
-        let cost = self
-            .latest_da_blocks_with_transactions
+    ) -> anyhow::Result<(u64, u64)> {
+        let cost_with_transactions_number = self
+            .latest_da_blocks_with_costs_and_transactions_number
             .get(height)
             .cloned()
             .unwrap_or_default();
-        Ok(cost)
+        Ok(cost_with_transactions_number)
     }
 }
 

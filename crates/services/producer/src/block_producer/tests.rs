@@ -846,8 +846,7 @@ impl<Executor> TestContext<Executor> {
 
 struct TestContextBuilder {
     latest_block_height: DaBlockHeight,
-    blocks_with_gas_costs: HashMap<DaBlockHeight, u64>,
-    blocks_with_transactions: HashMap<DaBlockHeight, u64>,
+    blocks_with_gas_costs_and_transactions_number: HashMap<DaBlockHeight, (u64, u64)>,
     prev_da_height: DaBlockHeight,
     block_gas_limit: Option<u64>,
     prev_height: BlockHeight,
@@ -857,8 +856,7 @@ impl TestContextBuilder {
     fn new() -> Self {
         Self {
             latest_block_height: 0u64.into(),
-            blocks_with_gas_costs: HashMap::new(),
-            blocks_with_transactions: HashMap::new(),
+            blocks_with_gas_costs_and_transactions_number: HashMap::new(),
             prev_da_height: 1u64.into(),
             block_gas_limit: None,
             prev_height: 0u32.into(),
@@ -870,21 +868,47 @@ impl TestContextBuilder {
         self
     }
 
+    fn with_latest_blocks_with_gas_costs_and_transactions_number(
+        mut self,
+        latest_blocks_with_gas_costs_and_transactions: impl Iterator<
+            Item = (DaBlockHeight, (u64, u64)),
+        >,
+    ) -> Self {
+        self.blocks_with_gas_costs_and_transactions_number
+            .extend(latest_blocks_with_gas_costs_and_transactions);
+        self
+    }
+
+    // Helper function that can be used in tests where transaction numbers in a da block are irrelevant
     fn with_latest_blocks_with_gas_costs(
         mut self,
         latest_blocks_with_gas_costs: impl Iterator<Item = (DaBlockHeight, u64)>,
     ) -> Self {
-        self.blocks_with_gas_costs
-            .extend(latest_blocks_with_gas_costs);
+        let latest_blocks_with_gas_costs_and_transactions_number =
+            latest_blocks_with_gas_costs
+                .into_iter()
+                .map(|(da_block_height, gas_costs)| (da_block_height, (gas_costs, 0)));
+        // Assigning `self` necessary to avoid the compiler complaining about the mutability of `self`
+        self = self.with_latest_blocks_with_gas_costs_and_transactions_number(
+            latest_blocks_with_gas_costs_and_transactions_number,
+        );
         self
     }
 
+    // Helper function that can be used in tests where gas costs in a da block are irrelevant
     fn with_latest_blocks_with_transactions(
         mut self,
         latest_blocks_with_transactions: impl Iterator<Item = (DaBlockHeight, u64)>,
     ) -> Self {
-        self.blocks_with_transactions
-            .extend(latest_blocks_with_transactions);
+        let latest_blocks_with_gas_costs_and_transactions_number =
+            latest_blocks_with_transactions.into_iter().map(
+                |(da_block_height, transactions)| (da_block_height, (0, transactions)),
+            );
+
+        // Assigning `self` necessary to avoid the compiler complaining about the mutability of `self`
+        self = self.with_latest_blocks_with_gas_costs_and_transactions_number(
+            latest_blocks_with_gas_costs_and_transactions_number,
+        );
         self
     }
 
@@ -934,8 +958,9 @@ impl TestContextBuilder {
 
         let mock_relayer = MockRelayer {
             latest_block_height: self.latest_block_height,
-            latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
-            latest_da_blocks_with_transactions: self.blocks_with_transactions.clone(),
+            latest_da_blocks_with_costs_and_transactions_number: self
+                .blocks_with_gas_costs_and_transactions_number
+                .clone(),
             ..Default::default()
         };
 
@@ -977,8 +1002,9 @@ impl TestContextBuilder {
 
         let mock_relayer = MockRelayer {
             latest_block_height: self.latest_block_height,
-            latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
-            latest_da_blocks_with_transactions: self.blocks_with_transactions.clone(),
+            latest_da_blocks_with_costs_and_transactions_number: self
+                .blocks_with_gas_costs_and_transactions_number
+                .clone(),
             ..Default::default()
         };
 
