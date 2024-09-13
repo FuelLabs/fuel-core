@@ -11,7 +11,7 @@ pub fn select_transactions(
     includable_txs: impl Iterator<Item = ArcPoolTx>,
     max_gas: u64,
     block_transaction_size_limit: u64,
-) -> Vec<ArcPoolTx> {
+) -> impl Iterator<Item = ArcPoolTx> {
     // Future improvements to this algorithm may take into account the parallel nature of
     // transactions to maximize throughput.
 
@@ -25,7 +25,7 @@ pub fn select_transactions(
     // Pick as many transactions as we can fit into the block (greedy),
     // respecting both gas and size limit
     includable_txs
-        .filter(|tx| {
+        .filter(move |tx| {
             let tx_block_gas_space = tx.max_gas();
             let tx_block_size_space = tx.metered_bytes_size() as u64;
 
@@ -52,7 +52,6 @@ pub fn select_transactions(
             }
         })
         .take(takes_txs as usize)
-        .collect() // TODO[RC]: Needed?
 }
 
 #[cfg(test)]
@@ -280,10 +279,7 @@ mod tests {
 
         // Unlimited request returns all transactions.
         let selected = select_transactions(txs.clone().into_iter(), UNLIMITED, UNLIMITED);
-        let selected_size: u64 = selected
-            .iter()
-            .map(|tx| tx.metered_bytes_size() as u64)
-            .sum();
+        let selected_size: u64 = selected.map(|tx| tx.metered_bytes_size() as u64).sum();
         assert_eq!(selected_size, total_txn_size);
 
         // Limit passed to selection algorithm is respected.
@@ -295,10 +291,8 @@ mod tests {
                 UNLIMITED,
                 selection_size_limit,
             );
-            let selected_size: u64 = selected
-                .iter()
-                .map(|tx| tx.metered_bytes_size() as u64)
-                .sum();
+            let selected_size: u64 =
+                selected.map(|tx| tx.metered_bytes_size() as u64).sum();
             assert!(selected_size <= selection_size_limit);
         }
 
@@ -310,6 +304,6 @@ mod tests {
             .next()
             .expect("txs should not be empty");
         let selected = select_transactions(txs.into_iter(), UNLIMITED, smallest_txn_size);
-        assert_eq!(selected.len(), 1);
+        assert_eq!(selected.collect::<Vec<_>>().len(), 1);
     }
 }

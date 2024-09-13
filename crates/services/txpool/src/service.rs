@@ -381,7 +381,8 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
     ) -> Vec<ArcPoolTx> {
         let mut guard = self.txpool.lock();
         let txs = guard.includable();
-        let sorted_txs = select_transactions(txs, max_gas, block_transaction_size_limit);
+        let sorted_txs: Vec<_> =
+            select_transactions(txs, max_gas, block_transaction_size_limit).collect();
 
         for tx in sorted_txs.iter() {
             guard.remove_committed_tx(&tx.id());
