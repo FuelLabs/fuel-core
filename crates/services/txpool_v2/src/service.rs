@@ -107,8 +107,8 @@ where
     PSProvider: AtomicView<LatestView = PSView>,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider,
-    GasPriceProvider: GasPriceProviderTrait,
-    WasmChecker: WasmCheckerTrait,
+    GasPriceProvider: GasPriceProviderTrait + Send + Sync,
+    WasmChecker: WasmCheckerTrait + Send + Sync,
     MemoryPool: MemoryPoolTrait + Send + Sync,
 {
     // TODO: Implement conversion from `Transaction` to `PoolTransaction`. (with all the verifications that it implies): https://github.com/FuelLabs/fuel-core/issues/2186
@@ -120,16 +120,16 @@ where
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
-        let insertable_transactions = vec![];
+        let mut insertable_transactions = vec![];
         for transaction in transactions {
             let checked_tx = perform_all_verifications(
                 transaction,
                 current_height,
                 &params,
                 version,
-                &self.gas_price_provider,
-                &self.wasm_checker,
-                self.memory.clone(),
+                self.gas_price_provider.as_ref(),
+                self.wasm_checker.as_ref(),
+                self.memory.get_memory().await,
             )
             .await?;
             insertable_transactions.push(checked_tx);

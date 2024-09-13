@@ -18,9 +18,17 @@ derive_more = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
+mockall = { workspace = true, optional = true }
 num-rational = { workspace = true }
 parking_lot = { workspace = true }
 petgraph = "0.6.5"
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }
+
+[features]
+test-helpers = [
+  "dep:mockall",
+  "fuel-core-types/test-helpers",
+  "fuel-core-storage/test-helpers",
+]

@@ -3738,6 +3738,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
+ "mockall",
  "num-rational",
  "parking_lot",
  "petgraph",
