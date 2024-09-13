@@ -88,19 +88,9 @@ where
                     .map_err(|e| Error::Database(format!("{:?}", e)))?;
                 #[cfg(test)]
                 let tx_id = tx.id();
-                if self.storage.count() >= self.config.max_txs {
-                    return Err(Error::NotInsertedLimitHit);
-                }
+                self.check_pool_is_not_full()?;
                 self.config.black_list.check_blacklisting(&tx)?;
-                if let PoolTransaction::Blob(checked_tx, _) = &tx {
-                    let blob_id = checked_tx.transaction().blob_id();
-                    if latest_view
-                        .blob_exist(blob_id)
-                        .map_err(|e| Error::Database(format!("{:?}", e)))?
-                    {
-                        return Err(Error::NotInsertedBlobIdAlreadyTaken(*blob_id))
-                    }
-                }
+                Self::check_blob_does_not_exist(&tx, &latest_view)?;
                 let collisions = self
                     .collision_manager
                     .collect_colliding_transactions(&tx, &self.storage)?;
@@ -125,22 +115,11 @@ where
                     self.selection_algorithm
                         .new_executable_transactions(vec![storage_id], &self.storage)?;
                 }
+                self.update_components_and_caches_on_removal(&removed_transactions)?;
                 let tx = Storage::get(&self.storage, &storage_id)?;
-                let result = removed_transactions
-                    .into_iter()
-                    .map(|tx| {
-                        self.collision_manager.on_removed_transaction(&tx)?;
-                        self.selection_algorithm.on_removed_transaction(&tx)?;
-                        #[cfg(test)]
-                        {
-                            self.tx_id_to_storage_id.remove(&tx.id());
-                        }
-                        Ok(tx)
-                    })
-                    .collect();
                 self.collision_manager
                     .on_stored_transaction(&tx.transaction, storage_id)?;
-                result
+                Ok(removed_transactions)
             })
             .collect())
     }
@@ -186,5 +165,43 @@ where
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
             .map(|data| &data.transaction)
             .ok()
+    }
+
+    fn check_pool_is_not_full(&self) -> Result<(), Error> {
+        if self.storage.count() >= self.config.max_txs {
+            return Err(Error::NotInsertedLimitHit);
+        }
+        Ok(())
+    }
+
+    fn check_blob_does_not_exist(
+        tx: &PoolTransaction,
+        persistent_storage: &impl TxPoolPersistentStorage,
+    ) -> Result<(), Error> {
+        if let PoolTransaction::Blob(checked_tx, _) = &tx {
+            let blob_id = checked_tx.transaction().blob_id();
+            if persistent_storage
+                .blob_exist(blob_id)
+                .map_err(|e| Error::Database(format!("{:?}", e)))?
+            {
+                return Err(Error::NotInsertedBlobIdAlreadyTaken(*blob_id))
+            }
+        }
+        Ok(())
+    }
+
+    fn update_components_and_caches_on_removal(
+        &mut self,
+        removed_transactions: &Vec<PoolTransaction>,
+    ) -> Result<(), Error> {
+        for tx in removed_transactions {
+            self.collision_manager.on_removed_transaction(tx)?;
+            self.selection_algorithm.on_removed_transaction(tx)?;
+            #[cfg(test)]
+            {
+                self.tx_id_to_storage_id.remove(&tx.id());
+            }
+        }
+        Ok(())
     }
 }

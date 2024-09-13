@@ -258,7 +258,7 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
 }
 
 #[tokio::test]
-async fn faulty_t2_collided_on_contract_id_from_tx1() {
+async fn faulty_tx2_collided_on_contract_id_from_tx1() {
     let mut context = PoolContext::default();
 
     let contract_id = Contract::EMPTY_CONTRACT_ID;
@@ -1468,7 +1468,7 @@ async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
 }
 
 #[tokio::test]
-async fn remove_dependency_chain_on_insertion() {
+async fn tx3_dependent_and_conflicts_with_tx2() {
     let mut context = PoolContext::default();
 
     // tx1 {inputs: {}, outputs: {coinA}, tip: 1}
@@ -1495,6 +1495,7 @@ async fn remove_dependency_chain_on_insertion() {
         .add_output(output_b)
         .finalize_as_transaction();
 
+    // Given
     // tx3 {inputs: {coinA, coinB}, outputs:{}, tip: 20}
     let (_, gas_coin) = context.setup_coin();
     let input_b = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
@@ -1514,6 +1515,7 @@ async fn remove_dependency_chain_on_insertion() {
     let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
     let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
 
+    // When
     let results = txpool
         .insert(vec![
             check_tx_to_pool(tx1.clone()),
@@ -1524,6 +1526,8 @@ async fn remove_dependency_chain_on_insertion() {
     assert_eq!(results.len(), 3);
     assert!(results[0].is_ok());
     assert!(results[1].is_ok());
+
+    // Then
     let err = results[2].as_ref().expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(err, Error::Storage(_)));
 }

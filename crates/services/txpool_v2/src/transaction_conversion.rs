@@ -107,7 +107,7 @@ fn verify_tx_min_gas_price(
     let tx: CheckedTransaction = tx.into();
     let gas_costs = consensus_params.gas_costs();
     let fee_parameters = consensus_params.fee_params();
-    let read = match tx {
+    let ready_tx = match tx {
         CheckedTransaction::Script(script) => {
             let ready = script.into_ready(gas_price, gas_costs, fee_parameters)?;
             let (_, checked) = ready.decompose();
@@ -135,5 +135,5 @@ fn verify_tx_min_gas_price(
         }
         CheckedTransaction::Mint(_) => return Err(Error::NotSupportedTransactionType),
     };
-    Ok(read.into())
+    Ok(ready_tx.into())
 }
