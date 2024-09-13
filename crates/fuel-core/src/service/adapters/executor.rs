@@ -14,6 +14,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         gas_limit: u64,
         block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction> {
+        // TODO[RC]: Here
         self.txpool
             .select_transactions(gas_limit, block_transaction_size_limit)
             .into_iter()
