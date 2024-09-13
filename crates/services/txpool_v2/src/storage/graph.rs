@@ -34,12 +34,12 @@ use petgraph::{
 
 use crate::{
     collision_manager::{
-        CollisionManagerStorage,
+        basic::BasicCollisionManagerStorage,
         CollisionReason,
     },
     error::Error,
     ports::TxPoolPersistentStorage,
-    selection_algorithms::SelectionAlgorithmStorage,
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
 };
 
 use super::{
@@ -452,7 +452,7 @@ impl Storage for GraphStorage {
     }
 }
 
-impl CollisionManagerStorage for GraphStorage {
+impl BasicCollisionManagerStorage for GraphStorage {
     type StorageIndex = NodeIndex;
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error> {
@@ -460,7 +460,7 @@ impl CollisionManagerStorage for GraphStorage {
     }
 }
 
-impl SelectionAlgorithmStorage for GraphStorage {
+impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
     type StorageIndex = NodeIndex;
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error> {

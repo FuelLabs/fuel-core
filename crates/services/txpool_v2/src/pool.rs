@@ -10,10 +10,7 @@ use fuel_core_types::fuel_tx::TxId;
 use std::collections::HashMap;
 
 use crate::{
-    collision_manager::{
-        CollisionManager,
-        CollisionManagerStorage,
-    },
+    collision_manager::CollisionManager,
     config::Config,
     error::Error,
     ports::{
@@ -23,7 +20,6 @@ use crate::{
     selection_algorithms::{
         Constraints,
         SelectionAlgorithm,
-        SelectionAlgorithmStorage,
     },
     storage::Storage,
 };
@@ -71,10 +67,8 @@ where
     PS: AtomicView<LatestView = View>,
     View: TxPoolPersistentStorage,
     S: Storage,
-    S: CollisionManagerStorage<StorageIndex = <S as Storage>::StorageIndex>,
-    S: SelectionAlgorithmStorage<StorageIndex = <S as Storage>::StorageIndex>,
-    CM: CollisionManager<S>,
-    SA: SelectionAlgorithm<S>,
+    CM: CollisionManager<Storage = S, StorageIndex = S::StorageIndex>,
+    SA: SelectionAlgorithm<Storage = S, StorageIndex = S::StorageIndex>,
 {
     /// Insert transactions into the pool.
     /// Returns a list of results for each transaction.
