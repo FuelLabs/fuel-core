@@ -351,7 +351,7 @@ where
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
-            return Err(err);
+            return Err(err)
         }
 
         Ok(tx_status)
@@ -644,7 +644,7 @@ where
         let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
             uploaded_bytecode.as_ref()
         else {
-            return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root));
+            return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root))
         };
 
         wasmtime::Module::new(&self.engine, bytecode)
@@ -662,7 +662,7 @@ where
     ) -> ExecutorResult<wasmtime::Module> {
         let guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
-            return Ok(module.clone());
+            return Ok(module.clone())
         }
         drop(guard);
 

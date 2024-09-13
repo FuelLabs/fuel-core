@@ -392,11 +392,11 @@ where
                 best: highest,
                 previous_block: previous_da_height,
             }
-            .into());
+            .into())
         }
 
         if highest == previous_da_height {
-            return Ok(highest);
+            return Ok(highest)
         }
 
         let next_da_height = previous_da_height.saturating_add(1);
