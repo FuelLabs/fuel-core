@@ -21,8 +21,8 @@ use tokio::{
 pub use anyhow::Result;
 use tokio::sync::broadcast::Receiver;
 
-pub struct DaBlockCostsProvider<DaSource: DaBlockCostsSource + 'static> {
-    handle: ServiceRunner<DaBlockCostsService<DaSource>>,
+pub struct DaBlockCostsProvider<Source: DaBlockCostsSource + 'static> {
+    handle: ServiceRunner<DaBlockCostsService<Source>>,
     subscription: Receiver<DaBlockCosts>,
 }
 
@@ -35,9 +35,9 @@ pub trait DaBlockCostsProviderPort {
 }
 
 #[async_trait::async_trait]
-impl<DaSource> DaBlockCostsProviderPort for DaBlockCostsProvider<DaSource>
+impl<Source> DaBlockCostsProviderPort for DaBlockCostsProvider<Source>
 where
-    DaSource: DaBlockCostsSource,
+    Source: DaBlockCostsSource,
 {
     async fn start_and_await(&self) -> Result<()> {
         self.handle.start_and_await().await?;
@@ -59,7 +59,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct DaBlockCostsServiceSharedState {
+struct DaBlockCostsServiceSharedState {
     sender: Sender<DaBlockCosts>,
 }
 
@@ -78,7 +78,7 @@ const POLLING_INTERVAL_MS: u64 = 10_000;
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
-pub struct DaBlockCostsService<Source>
+struct DaBlockCostsService<Source>
 where
     Source: DaBlockCostsSource,
 {
@@ -92,7 +92,7 @@ impl<Source> DaBlockCostsService<Source>
 where
     Source: DaBlockCostsSource,
 {
-    pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
+    fn new(source: Source, poll_interval: Option<Duration>) -> Self {
         let (sender, _) = tokio::sync::broadcast::channel(10);
         #[allow(clippy::arithmetic_side_effects)]
         Self {
