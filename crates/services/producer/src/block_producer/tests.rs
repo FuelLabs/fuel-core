@@ -396,7 +396,7 @@ mod produce_and_execute_block_txpool {
         let prev_da_height = 100;
         let prev_height = 1u32.into();
         // 0 + 15_000 + 15_000 + 15_000 + 21_000 = 66_000 > 65_535
-        let latest_blocks_with_gas_costs = vec![
+        let latest_blocks_with_transaction_numbers = vec![
             (prev_da_height, 0u64),
             (prev_da_height + 1, 15_000),
             (prev_da_height + 2, 15_000),
@@ -408,7 +408,7 @@ mod produce_and_execute_block_txpool {
 
         let ctx = TestContextBuilder::new()
             .with_latest_block_height((prev_da_height + 4u64).into())
-            .with_latest_blocks_with_transactions(latest_blocks_with_gas_costs)
+            .with_latest_blocks_with_transactions(latest_blocks_with_transaction_numbers)
             .with_prev_da_height(prev_da_height.into())
             .with_prev_height(prev_height)
             .build();
