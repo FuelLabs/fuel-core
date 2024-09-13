@@ -67,7 +67,7 @@ pub struct P2PArgs {
     pub max_headers_per_request: usize,
 
     /// Max number of txs in a single txs request response
-    #[clap(long = "max-txs-per-request", default_value = "10000", env)]
+    #[clap(long = "max-txs-per-request", default_value = "1000000", env)]
     pub max_txs_per_request: usize,
 
     /// Addresses of the bootstrap nodes

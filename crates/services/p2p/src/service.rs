@@ -383,11 +383,8 @@ pub struct Task<P, V, B, T> {
     request_sender: mpsc::Sender<TaskRequest>,
     database_processor: HeavyTaskProcessor,
     broadcast: B,
-    #[allow(dead_code)]
     tx_pool: T,
     max_headers_per_request: usize,
-    #[allow(dead_code)]
-    max_txs_per_request: usize,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
     heartbeat_max_avg_interval: Duration,
@@ -402,7 +399,7 @@ pub struct HeartbeatPeerReputationConfig {
     low_heartbeat_frequency_penalty: AppScore,
 }
 
-impl<V, T: TxPool> UninitializedTask<V, SharedState, T> {
+impl<V, T> UninitializedTask<V, SharedState, T> {
     pub fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
         config: Config<NotInitialized>,
@@ -426,7 +423,7 @@ impl<V, T: TxPool> UninitializedTask<V, SharedState, T> {
     }
 }
 
-impl<P: TaskP2PService, V, B: Broadcast, T: TxPool> Task<P, V, B, T> {
+impl<P: TaskP2PService, V, B: Broadcast, T> Task<P, V, B, T> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_all_peer_info() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
@@ -673,7 +670,6 @@ where
         let Config {
             max_block_size,
             max_headers_per_request,
-            max_txs_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -715,7 +711,6 @@ where
             tx_pool,
             database_processor,
             max_headers_per_request,
-            max_txs_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -896,6 +891,8 @@ pub struct SharedState {
     request_sender: mpsc::Sender<TaskRequest>,
     /// Sender of p2p blopck height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
+    /// Max txs per request
+    max_txs_per_request: usize,
 }
 
 impl SharedState {
@@ -977,13 +974,18 @@ impl SharedState {
 
         let (response_from_peer, response) =
             receiver.await.map_err(|e| anyhow!("{e}"))?;
-        assert_eq!(
+
+        debug_assert_eq!(
             peer_id.as_ref(),
             response_from_peer.to_bytes(),
             "Bug: response from non-requested peer"
         );
 
-        response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))
+        let txs = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        if txs.len() > self.max_txs_per_request {
+            return Err(anyhow!("Too many transactions requested: {}", txs.len()));
+        }
+        Ok(txs)
     }
 
     pub async fn get_full_transactions_from_peer(
@@ -1002,13 +1004,17 @@ impl SharedState {
 
         let (response_from_peer, response) =
             receiver.await.map_err(|e| anyhow!("{e}"))?;
-        assert_eq!(
+        debug_assert_eq!(
             peer_id.as_ref(),
             response_from_peer.to_bytes(),
             "Bug: response from non-requested peer"
         );
 
-        response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))
+        let txs = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        if txs.len() > self.max_txs_per_request {
+            return Err(anyhow!("Too many transactions requested: {}", txs.len()));
+        }
+        Ok(txs)
     }
 
     pub fn broadcast_transaction(
@@ -1098,6 +1104,7 @@ pub fn build_shared_state(
             tx_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
+            max_txs_per_request: config.max_txs_per_request,
         },
         request_receiver,
     )
@@ -1457,7 +1464,6 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
-            max_txs_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1546,7 +1552,6 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
-            max_txs_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1607,7 +1612,6 @@ pub mod tests {
             database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
-            max_txs_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval: Default::default(),
             heartbeat_max_time_since_last: Default::default(),
