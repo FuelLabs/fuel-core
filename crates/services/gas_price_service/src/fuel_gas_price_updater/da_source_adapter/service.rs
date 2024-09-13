@@ -75,6 +75,7 @@ impl DaBlockCostsServiceSharedState {
 }
 
 const POLLING_INTERVAL_MS: u64 = 10_000;
+const DA_BLOCK_COSTS_BUFFER_SIZE: usize = 10;
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
@@ -93,7 +94,7 @@ where
     Source: DaBlockCostsSource,
 {
     fn new(source: Source, poll_interval: Option<Duration>) -> Self {
-        let (sender, _) = tokio::sync::broadcast::channel(10);
+        let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_BUFFER_SIZE);
         #[allow(clippy::arithmetic_side_effects)]
         Self {
             sender: DaBlockCostsServiceSharedState { sender },
