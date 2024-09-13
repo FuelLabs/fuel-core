@@ -257,8 +257,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn selector_does_not_exceed_max_size_per_block() {
+    #[rstest::fixture]
+    pub fn block_transaction_size_limit_fixture() -> (Vec<Arc<PoolTransaction>>, u64) {
         const TOTAL_TXN_COUNT: usize = 1000;
 
         let mut rng = thread_rng();
@@ -274,17 +274,32 @@ mod tests {
             .as_slice(),
             &mut rng,
         );
-        let total_txn_size: u64 =
+        let total_txs_size: u64 =
             txs.iter().map(|tx| tx.metered_bytes_size() as u64).sum();
 
-        // Unlimited request returns all transactions.
-        let selected = select_transactions(txs.clone().into_iter(), UNLIMITED, UNLIMITED);
-        let selected_size: u64 = selected.map(|tx| tx.metered_bytes_size() as u64).sum();
-        assert_eq!(selected_size, total_txn_size);
+        (txs, total_txs_size)
+    }
 
-        // Limit passed to selection algorithm is respected.
+    #[rstest::rstest]
+    fn unlimited_size_request_returns_all_transactions(
+        block_transaction_size_limit_fixture: (Vec<Arc<PoolTransaction>>, u64),
+    ) {
+        let (txs, total_size) = block_transaction_size_limit_fixture;
+
+        let selected = select_transactions(txs.into_iter(), UNLIMITED, UNLIMITED);
+        let selected_size: u64 = selected.map(|tx| tx.metered_bytes_size() as u64).sum();
+        assert_eq!(selected_size, total_size);
+    }
+
+    #[rstest::rstest]
+    fn selection_respects_specified_size(
+        block_transaction_size_limit_fixture: (Vec<Arc<PoolTransaction>>, u64),
+    ) {
+        let (txs, total_size) = block_transaction_size_limit_fixture;
+
+        let mut rng = thread_rng();
         for selection_size_limit in
-            std::iter::repeat_with(|| rng.gen_range(1..=total_txn_size)).take(100)
+            std::iter::repeat_with(|| rng.gen_range(1..=total_size)).take(100)
         {
             let selected = select_transactions(
                 txs.clone().into_iter(),
@@ -295,8 +310,14 @@ mod tests {
                 selected.map(|tx| tx.metered_bytes_size() as u64).sum();
             assert!(selected_size <= selection_size_limit);
         }
+    }
 
-        // Selection should be able to satisfy the exact requested size.
+    #[rstest::rstest]
+    fn selection_can_exactly_fit_the_requested_size(
+        block_transaction_size_limit_fixture: (Vec<Arc<PoolTransaction>>, u64),
+    ) {
+        let (txs, _) = block_transaction_size_limit_fixture;
+
         let smallest_txn_size = txs
             .iter()
             .map(|tx| tx.metered_bytes_size() as u64)
