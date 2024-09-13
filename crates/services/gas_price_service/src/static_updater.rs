@@ -1,4 +1,8 @@
 use crate::{
+    fuel_gas_price_updater::{
+        BlockInfo,
+        DaBlockCosts,
+    },
     GasPriceAlgorithm,
     UpdateAlgorithm,
 };
@@ -47,7 +51,11 @@ impl UpdateAlgorithm for StaticAlgorithmUpdater {
         StaticAlgorithm::new(self.static_price)
     }
 
-    async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
+    async fn next(
+        &mut self,
+        _l2_block: BlockInfo,
+        _da_block_costs: Option<DaBlockCosts>,
+    ) -> anyhow::Result<Self::Algorithm> {
         futures::future::pending().await
     }
 }

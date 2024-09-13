@@ -3,6 +3,17 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+use crate::fuel_gas_price_updater::{
+    da_source_adapter::service::{
+        new_provider,
+        DaBlockCostsProvider,
+        DaBlockCostsProviderPort,
+        DaBlockCostsSource,
+    },
+    BlockInfo,
+    DaBlockCosts,
+    L2BlockSource,
+};
 use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
@@ -12,7 +23,6 @@ use fuel_core_services::{
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::FutureExt;
 use std::sync::Arc;
-
 use tokio::sync::RwLock;
 
 pub mod static_updater;
@@ -20,28 +30,42 @@ pub mod static_updater;
 pub mod fuel_gas_price_updater;
 
 /// The service that updates the gas price algorithm.
-pub struct GasPriceService<A, U> {
+pub struct GasPriceService<A, U, L2, DA: DaBlockCostsSource + 'static> {
     /// The algorithm that can be used in the next block
     next_block_algorithm: SharedGasPriceAlgo<A>,
     /// The code that is run to update your specific algorithm
     update_algorithm: U,
+    /// The L2 block source
+    l2_block_source: L2,
+    /// The DA block costs provider
+    da_block_costs_provider: DaBlockCostsProvider<DA>,
+    /// The cached value of da block costs
+    da_block_costs: Option<DaBlockCosts>,
 }
 
-impl<A, U> GasPriceService<A, U>
+impl<A, U, L2, DA> GasPriceService<A, U, L2, DA>
 where
     U: UpdateAlgorithm<Algorithm = A>,
     A: Send + Sync,
+    DA: DaBlockCostsSource,
 {
     pub async fn new(
         starting_block_height: BlockHeight,
         update_algorithm: U,
         mut shared_algo: SharedGasPriceAlgo<A>,
+        l2_block_source: L2,
+        da_block_costs_source: DA,
     ) -> Self {
         let algorithm = update_algorithm.start(starting_block_height);
         shared_algo.update(algorithm).await;
+
+        let da_block_costs_provider = new_provider(da_block_costs_source, None);
         Self {
             next_block_algorithm: shared_algo,
             update_algorithm,
+            l2_block_source,
+            da_block_costs: None,
+            da_block_costs_provider,
         }
     }
 
@@ -60,7 +84,11 @@ pub trait UpdateAlgorithm {
     fn start(&self, for_block: BlockHeight) -> Self::Algorithm;
 
     /// Wait for the next algorithm to be available
-    async fn next(&mut self) -> anyhow::Result<Self::Algorithm>;
+    async fn next(
+        &mut self,
+        l2_block: BlockInfo,
+        da_block_costs: Option<DaBlockCosts>,
+    ) -> anyhow::Result<Self::Algorithm>;
 }
 
 pub trait GasPriceAlgorithm {
@@ -68,10 +96,11 @@ pub trait GasPriceAlgorithm {
     fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64;
 }
 
-impl<A, U> GasPriceService<A, U>
+impl<A, U, L2, DA> GasPriceService<A, U, L2, DA>
 where
     U: UpdateAlgorithm<Algorithm = A>,
     A: Send + Sync,
+    DA: DaBlockCostsSource,
 {
     async fn update(&mut self, new_algorithm: A) {
         self.next_block_algorithm.update(new_algorithm).await;
@@ -115,10 +144,12 @@ where
 }
 
 #[async_trait]
-impl<A, U> RunnableService for GasPriceService<A, U>
+impl<A, U, L2, DA> RunnableService for GasPriceService<A, U, L2, DA>
 where
     U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
     A: Send + Sync,
+    L2: L2BlockSource,
+    DA: DaBlockCostsSource,
 {
     const NAME: &'static str = "GasPriceUpdater";
     type SharedData = SharedGasPriceAlgo<A>;
@@ -134,15 +165,18 @@ where
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        self.da_block_costs_provider.start_and_await().await?;
         Ok(self)
     }
 }
 
 #[async_trait]
-impl<A, U> RunnableTask for GasPriceService<A, U>
+impl<A, U, L2, DA> RunnableTask for GasPriceService<A, U, L2, DA>
 where
     U: UpdateAlgorithm<Algorithm = A> + Send + Sync,
     A: Send + Sync,
+    L2: L2BlockSource,
+    DA: DaBlockCostsSource,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -152,10 +186,22 @@ where
                 tracing::debug!("Stopping gas price service");
                 should_continue = false;
             }
-            new_algo = self.update_algorithm.next() => {
-                let new_algo = new_algo?;
+            da_block_costs = self.da_block_costs_provider.recv() => {
+                self.da_block_costs = match da_block_costs {
+                    Ok(da_block_costs) => Some(da_block_costs),
+                    Err(err) => {
+                        tracing::error!("Failed to get da block costs: {:?}", err);
+                        None
+                    }
+                };
+                should_continue = true;
+            }
+            l2_block = self.l2_block_source.get_l2_block() => {
+                let l2_block = l2_block?;
+                let da_block_costs = self.da_block_costs.clone();
+                let next_algo = self.update_algorithm.next(l2_block, da_block_costs).await?;
                 tracing::debug!("Updating gas price algorithm");
-                self.update(new_algo).await;
+                self.update(next_algo).await;
                 should_continue = true;
             }
         }
@@ -163,10 +209,20 @@ where
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
-        while let Some(new_algo) = self.update_algorithm.next().now_or_never() {
-            let new_algo = new_algo?;
-            tracing::debug!("Updating gas price algorithm");
-            self.update(new_algo).await;
+        self.da_block_costs_provider.stop_and_await().await?;
+
+        let l2_block = self.l2_block_source.get_l2_block().now_or_never();
+        if let Some(Ok(l2_block)) = l2_block {
+            let da_block_costs = self.da_block_costs.clone();
+            if let Some(new_algo) = self
+                .update_algorithm
+                .next(l2_block, da_block_costs)
+                .now_or_never()
+            {
+                let new_algo = new_algo?;
+                tracing::debug!("Updating gas price algorithm");
+                self.update(new_algo).await;
+            }
         }
         Ok(())
     }
@@ -177,6 +233,13 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
+        fuel_gas_price_updater,
+        fuel_gas_price_updater::{
+            da_source_adapter::dummy_costs::DummyDaBlockCosts,
+            BlockInfo,
+            DaBlockCosts,
+            L2BlockSource,
+        },
         GasPriceAlgorithm,
         GasPriceService,
         SharedGasPriceAlgo,
@@ -187,6 +250,7 @@ mod tests {
         ServiceRunner,
     };
     use fuel_core_types::fuel_types::BlockHeight;
+    use std::time::Duration;
     use tokio::sync::mpsc;
 
     #[derive(Clone, Debug)]
@@ -217,11 +281,31 @@ mod tests {
             self.start.clone()
         }
 
-        async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
+        async fn next(
+            &mut self,
+            _l2_block: BlockInfo,
+            _da_block_costs: Option<DaBlockCosts>,
+        ) -> anyhow::Result<Self::Algorithm> {
             let price = self.price_source.recv().await.unwrap();
             Ok(TestAlgorithm { price })
         }
     }
+
+    struct FakeL2BlockSource;
+
+    #[async_trait::async_trait]
+    impl L2BlockSource for FakeL2BlockSource {
+        async fn get_l2_block(&mut self) -> fuel_gas_price_updater::Result<BlockInfo> {
+            // simulate fetch
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            Ok(BlockInfo::Block {
+                height: 0,
+                gas_used: 0,
+                block_gas_capacity: 0,
+            })
+        }
+    }
+
     #[tokio::test]
     async fn run__updates_gas_price() {
         // given
@@ -235,14 +319,24 @@ mod tests {
             price_source: price_receiver,
         };
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(start_algo);
-        let service = GasPriceService::new(0.into(), updater, shared_algo).await;
+        let l2_block_source = FakeL2BlockSource;
+        let da_block_source =
+            DummyDaBlockCosts::new(Err(anyhow::anyhow!("not implemented")));
+        let service = GasPriceService::new(
+            0.into(),
+            updater,
+            shared_algo,
+            l2_block_source,
+            da_block_source,
+        )
+        .await;
         let read_algo = service.next_block_algorithm();
         let service = ServiceRunner::new(service);
         service.start_and_await().await.unwrap();
 
         // when
         price_sender.send(expected_price).await.unwrap();
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
 
         // then
         let actual_price = read_algo.next_gas_price().await;

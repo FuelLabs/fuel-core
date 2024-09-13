@@ -24,12 +24,9 @@ pub mod fuel_core_storage_adapter;
 
 pub mod da_source_adapter;
 
-pub struct FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
+pub struct FuelGasPriceUpdater<Metadata> {
     inner: AlgorithmUpdater,
-    l2_block_source: L2,
     metadata_storage: Metadata,
-    #[allow(dead_code)]
-    da_block_costs: DaBlockCosts,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,29 +51,23 @@ impl AlgorithmUpdater {
     }
 }
 
-impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
-    pub fn new(
-        inner: AlgorithmUpdater,
-        l2_block_source: L2,
-        metadata_storage: Metadata,
-        da_block_costs: DaBlockCosts,
-    ) -> Self {
+impl<Metadata> FuelGasPriceUpdater<Metadata> {
+    pub fn new(inner: AlgorithmUpdater, metadata_storage: Metadata) -> Self {
         Self {
             inner,
-            l2_block_source,
             metadata_storage,
-            da_block_costs,
         }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Failed to find L2 block at height {block_height:?}: {source_error:?}")]
-    CouldNotFetchL2Block {
-        block_height: BlockHeight,
-        source_error: anyhow::Error,
-    },
+    #[error("Failed to find L2 block: {source_error:?}")]
+    CouldNotFetchL2Block { source_error: anyhow::Error },
+    #[error("Failed to compute: {source_error:?}")]
+    MathError { source_error: anyhow::Error },
+    #[error("No Mint transaction in block")]
+    NoMintTx,
     #[error("Failed to find DA records: {0:?}")]
     CouldNotFetchDARecord(anyhow::Error),
     #[error("Failed to retrieve updater metadata: {source_error:?}")]
@@ -111,7 +102,7 @@ pub enum BlockInfo {
 }
 #[async_trait::async_trait]
 pub trait L2BlockSource: Send + Sync {
-    async fn get_l2_block(&mut self, height: BlockHeight) -> Result<BlockInfo>;
+    async fn get_l2_block(&mut self) -> Result<BlockInfo>;
 }
 
 #[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
@@ -119,10 +110,6 @@ pub struct DaBlockCosts {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
     pub blob_cost_wei: u128,
-}
-
-pub trait GetDaBlockCosts: Send + Sync {
-    fn get(&self) -> Result<Option<DaBlockCosts>>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -206,16 +193,13 @@ pub trait MetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
-impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
+impl<Metadata> FuelGasPriceUpdater<Metadata>
 where
     Metadata: MetadataStorage,
-    DaBlockCosts: GetDaBlockCosts,
 {
     pub fn init(
         target_block_height: BlockHeight,
-        l2_block_source: L2,
         metadata_storage: Metadata,
-        da_block_costs: DaBlockCosts,
         min_exec_gas_price: u64,
         exec_gas_price_change_percent: u64,
         l2_block_fullness_threshold_percent: u64,
@@ -240,9 +224,7 @@ where
         };
         let updater = Self {
             inner,
-            l2_block_source,
             metadata_storage,
-            da_block_costs,
         };
         Ok(updater)
     }
@@ -266,6 +248,7 @@ where
         height: u32,
         gas_used: u64,
         block_gas_capacity: u64,
+        _da_block_costs: Option<DaBlockCosts>,
     ) -> anyhow::Result<()> {
         let capacity = self.validate_block_gas_capacity(block_gas_capacity)?;
 
@@ -287,6 +270,7 @@ where
     async fn apply_block_info_to_gas_algorithm(
         &mut self,
         l2_block: BlockInfo,
+        da_block_costs: Option<DaBlockCosts>,
     ) -> anyhow::Result<()> {
         match l2_block {
             BlockInfo::GenesisBlock => {
@@ -297,8 +281,13 @@ where
                 gas_used,
                 block_gas_capacity,
             } => {
-                self.handle_normal_block(height, gas_used, block_gas_capacity)
-                    .await?;
+                self.handle_normal_block(
+                    height,
+                    gas_used,
+                    block_gas_capacity,
+                    da_block_costs,
+                )
+                .await?;
             }
         }
         Ok(())
@@ -306,12 +295,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L2, Metadata, DaBlockCosts> UpdateAlgorithm
-    for FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
+impl<Metadata> UpdateAlgorithm for FuelGasPriceUpdater<Metadata>
 where
-    L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
-    DaBlockCosts: GetDaBlockCosts,
 {
     type Algorithm = Algorithm;
 
@@ -319,15 +305,13 @@ where
         self.inner.algorithm()
     }
 
-    async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
-        let l2_block_res = self
-            .l2_block_source
-            .get_l2_block(self.inner.l2_block_height())
-            .await;
-        tracing::info!("Received L2 block result: {:?}", l2_block_res);
-        let l2_block = l2_block_res?;
-
-        self.apply_block_info_to_gas_algorithm(l2_block).await?;
+    async fn next(
+        &mut self,
+        l2_block: BlockInfo,
+        da_block_costs: Option<DaBlockCosts>,
+    ) -> anyhow::Result<Self::Algorithm> {
+        self.apply_block_info_to_gas_algorithm(l2_block, da_block_costs)
+            .await?;
 
         Ok(self.inner.algorithm())
     }
