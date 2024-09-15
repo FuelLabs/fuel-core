@@ -140,7 +140,7 @@ pub enum ReturnType {
     Validation(Result<Uncommitted<ValidationResult, Changes>, JSONError>),
 }
 
-/// Converts the latest execution resul to the v1 execution result.
+/// Converts the latest execution result to the v1 execution result.
 pub fn convert_to_v1_execution_result(
     result: Result<UncommittedResult<Changes>, ExecutorError>,
 ) -> Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError> {
