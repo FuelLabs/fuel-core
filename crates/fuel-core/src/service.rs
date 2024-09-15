@@ -382,25 +382,6 @@ impl Task {
     pub fn new(services: Arc<SubServices>, shared: SharedState) -> anyhow::Result<Task> {
         Ok(Task { services, shared })
     }
-
-    /// Compile the latest state transition bytecode.
-    #[cfg(feature = "wasm-executor")]
-    fn compile_latest_state_transition_bytecode_if_any(&self) -> anyhow::Result<()> {
-        use crate::query::UpgradeQueryData;
-        use fuel_core_producer::ports::BlockProducerDatabase;
-        use fuel_core_txpool::ports::WasmChecker;
-
-        let on_chain_view = self.shared.database.on_chain().latest_view()?;
-        let last_state_transition_version =
-            on_chain_view.latest_state_transition_bytecode_version()?;
-        let latest_state_transition_root = on_chain_view
-            .state_transition_bytecode_root(last_state_transition_version)?;
-        let _ = self
-            .shared
-            .executor
-            .validate_uploaded_wasm(&latest_state_transition_root);
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -420,9 +401,6 @@ impl RunnableService for Task {
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let mut watcher = watcher.clone();
-
-        #[cfg(feature = "wasm-executor")]
-        self.compile_latest_state_transition_bytecode_if_any()?;
 
         for service in self.services.iter() {
             tokio::select! {
