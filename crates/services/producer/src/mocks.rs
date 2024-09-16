@@ -1,6 +1,7 @@
 use crate::ports::{
     BlockProducer,
     BlockProducerDatabase,
+    DryRunner,
     Relayer,
     TxPool,
 };
@@ -37,6 +38,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            TransactionExecutionStatus,
             UncommittedResult,
         },
         txpool::ArcPoolTx,
@@ -223,6 +225,20 @@ impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture<Transaction> {
                 events: vec![],
             },
             Default::default(),
+        ))
+    }
+}
+
+impl DryRunner for MockExecutorWithCapture<Transaction> {
+    fn dry_run(
+        &self,
+        block: Components<Vec<Transaction>>,
+        _utxo_validation: Option<bool>,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        *self.captured.lock().unwrap() = Some(block);
+
+        Err(ExecutorError::Other(
+            "transaction execution not mocked".to_string(),
         ))
     }
 }

@@ -299,6 +299,7 @@ impl TxMutation {
         let tx_statuses = block_producer
             .dry_run_txs(
                 transactions,
+                None, // TODO (create issue): Expose in interface
                 None,
                 utxo_validation,
                 gas_price.map(|x| x.into()),
