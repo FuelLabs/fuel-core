@@ -3128,7 +3128,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types",
@@ -3789,7 +3789,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3809,7 +3809,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3830,7 +3830,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3844,12 +3844,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 
 [[package]]
 name = "fuel-tx"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -3871,7 +3871,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3882,7 +3882,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.56.0"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=2133_block_size_consensus_parameter#f92096702c9af710a4b5d8377cfa1c867467ca06"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=master#bd9721845bb1ff7097613d1166bd752fd3087627"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4591,7 +4591,7 @@ dependencies = [
  "iana-time-zone-haiku",
  "js-sys",
  "wasm-bindgen",
- "windows-core 0.52.0",
+ "windows-core",
 ]
 
 [[package]]
@@ -7840,9 +7840,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1-sys"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1433bd67156263443f14d603720b082dd3121779323fce20cba2aa07b874bc1b"
+checksum = "d4387882333d3aa8cb20530a17c69a3752e97837832f34f6dccc760e715001d9"
 dependencies = [
  "cc",
 ]
@@ -9717,7 +9717,7 @@ version = "0.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca229916c5ee38c2f2bc1e9d8f04df975b4bd93f9955dc69fabb5d91270045c9"
 dependencies = [
- "windows-core 0.51.1",
+ "windows-core",
  "windows-targets 0.48.5",
 ]
 
@@ -9728,15 +9728,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1f8cf84f35d2db49a46868f947758c7a1138116f7fac3bc844f43ade1292e64"
 dependencies = [
  "windows-targets 0.48.5",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
-dependencies = [
- "windows-targets 0.52.6",
 ]
 
 [[package]]
