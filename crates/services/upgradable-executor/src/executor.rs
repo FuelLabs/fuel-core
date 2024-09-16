@@ -386,8 +386,8 @@ where
                     self.native_produce_inner(block, options, dry_run)
                 }
                 ExecutionStrategy::Wasm { module } => {
-                    let maybe_blocks_module = self.get_module(block_version);
-                    if let Ok(blocks_module) = maybe_blocks_module {
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
                         self.wasm_produce_inner(&blocks_module, block, options, dry_run)
                     } else {
                         self.wasm_produce_inner(module, block, options, dry_run)
@@ -434,8 +434,8 @@ where
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_validate_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
-                    let maybe_blocks_module = self.get_module(block_version);
-                    if let Ok(blocks_module) = maybe_blocks_module {
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
                         self.wasm_validate_inner(&blocks_module, block, options)
                     } else {
                         self.wasm_validate_inner(module, block, options)
