@@ -783,6 +783,7 @@ mod tests {
         fuel_types::ChainId,
         services::p2p::{
             GossipsubMessageAcceptance,
+            NetworkableTransactionPool,
             Transactions,
         },
     };
@@ -1659,11 +1660,11 @@ mod tests {
                                             let response_message = rx_orchestrator.await;
 
                                             if let Ok((_, Ok(transactions))) = response_message {
-                                                let txs: Vec<Option<Transaction>> = tx_ids.iter().enumerate().map(|(i, _)| {
+                                                let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
                                                     if i == 0 {
                                                         None
                                                     } else {
-                                                        Some(Transaction::default_test_tx())
+                                                        Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
                                                     }
                                                 }).collect();
                                                 let check = transactions.len() == tx_ids.len() && transactions.iter().zip(txs.iter()).all(|(a, b)| a == b);
@@ -1704,7 +1705,7 @@ mod tests {
                                     if i == 0 {
                                         None
                                     } else {
-                                        Some(Transaction::default_test_tx())
+                                        Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
                                     }
                                 }).collect();
                                 let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolFullTransactions(txs));

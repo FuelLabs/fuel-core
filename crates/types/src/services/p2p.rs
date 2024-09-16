@@ -1,5 +1,10 @@
 //! Contains types related to P2P data
 
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -14,6 +19,8 @@ use std::{
     str::FromStr,
     time::SystemTime,
 };
+
+use super::txpool::ArcPoolTx;
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
@@ -189,4 +196,39 @@ pub struct HeartbeatData {
     pub block_height: Option<BlockHeight>,
     /// The instant representing when the latest heartbeat was received.
     pub last_heartbeat: SystemTime,
+}
+
+/// Type that represents the networkable transaction pool
+/// It serializes from an Arc pool transaction and deserializes to a transaction
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetworkableTransactionPool {
+    /// A transaction pool transaction
+    PoolTransaction(ArcPoolTx),
+    /// A transaction
+    Transaction(Transaction),
+}
+
+/// Serialize only the pool transaction variant
+impl Serialize for NetworkableTransactionPool {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            NetworkableTransactionPool::PoolTransaction(tx) => tx.serialize(serializer),
+            NetworkableTransactionPool::Transaction(tx) => tx.serialize(serializer),
+        }
+    }
+}
+
+/// Deserialize to a transaction variant
+impl<'de> Deserialize<'de> for NetworkableTransactionPool {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(NetworkableTransactionPool::Transaction(
+            Transaction::deserialize(deserializer)?,
+        ))
+    }
 }

@@ -5,12 +5,12 @@ use fuel_core_types::{
         consensus::Genesis,
         SealedBlockHeader,
     },
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
-    services::p2p::Transactions,
+    services::p2p::{
+        NetworkableTransactionPool,
+        Transactions,
+    },
 };
 use std::ops::Range;
 
@@ -36,5 +36,5 @@ pub trait BlockHeightImporter: Send + Sync {
 pub trait TxPool: Send + Sync {
     fn get_all_tx_ids(&self) -> Vec<TxId>;
 
-    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<Transaction>>;
+    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<NetworkableTransactionPool>>;
 }

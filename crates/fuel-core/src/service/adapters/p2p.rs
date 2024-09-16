@@ -16,9 +16,11 @@ use fuel_core_types::{
         consensus::Genesis,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::Transactions,
+    services::p2p::{
+        NetworkableTransactionPool,
+        Transactions,
+    },
 };
 use std::ops::Range;
 
@@ -61,11 +63,15 @@ impl TxPool for TxPoolAdapter {
         self.service.get_all_tx_ids()
     }
 
-    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<Transaction>> {
+    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<NetworkableTransactionPool>> {
         self.service
             .find(tx_ids)
             .into_iter()
-            .map(|tx_info| tx_info.map(|tx| tx.tx().as_ref().into()))
+            .map(|tx_info| {
+                tx_info.map(|tx| {
+                    NetworkableTransactionPool::PoolTransaction(tx.tx().clone())
+                })
+            })
             .collect()
     }
 }

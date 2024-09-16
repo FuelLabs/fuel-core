@@ -37,6 +37,7 @@ use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
     fuel_types::BlockHeight,
 };
+use serde::Serialize;
 use std::sync::Arc;
 use tai64::Tai64;
 
@@ -57,6 +58,22 @@ pub enum PoolTransaction {
     Upload(Checked<Upload>, ConsensusParametersVersion),
     /// Blob
     Blob(Checked<Blob>, ConsensusParametersVersion),
+}
+
+// BECAREFUL: Serialize only the inner transaction
+impl Serialize for PoolTransaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            PoolTransaction::Script(tx, _) => tx.transaction().serialize(serializer),
+            PoolTransaction::Create(tx, _) => tx.transaction().serialize(serializer),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().serialize(serializer),
+            PoolTransaction::Upload(tx, _) => tx.transaction().serialize(serializer),
+            PoolTransaction::Blob(tx, _) => tx.transaction().serialize(serializer),
+        }
+    }
 }
 
 impl PoolTransaction {

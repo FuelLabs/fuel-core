@@ -1,10 +1,10 @@
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
-    fuel_tx::{
-        Transaction,
-        TxId,
+    fuel_tx::TxId,
+    services::p2p::{
+        NetworkableTransactionPool,
+        Transactions,
     },
-    services::p2p::Transactions,
 };
 use libp2p::{
     request_response::OutboundFailure,
@@ -37,7 +37,7 @@ pub enum ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
     TxPoolAllTransactionsIds(Vec<TxId>),
-    TxPoolFullTransactions(Vec<Option<Transaction>>),
+    TxPoolFullTransactions(Vec<Option<NetworkableTransactionPool>>),
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
@@ -47,7 +47,7 @@ pub enum ResponseSender {
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Vec<Transactions>>>),
     TxPoolAllTransactionsIds(OnResponse<Vec<TxId>>),
-    TxPoolFullTransactions(OnResponse<Vec<Option<Transaction>>>),
+    TxPoolFullTransactions(OnResponse<Vec<Option<NetworkableTransactionPool>>>),
 }
 
 #[derive(Debug, Error)]

@@ -58,6 +58,7 @@ use fuel_core_types::{
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
+        NetworkableTransactionPool,
         PeerId as FuelPeerId,
         TransactionGossipData,
         Transactions,
@@ -120,7 +121,7 @@ pub enum TaskRequest {
     TxPoolGetFullTransactions {
         tx_ids: Vec<TxId>,
         from_peer: PeerId,
-        channel: OnResponse<Vec<Option<Transaction>>>,
+        channel: OnResponse<Vec<Option<NetworkableTransactionPool>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -142,7 +143,7 @@ pub enum TaskRequest {
         request_id: InboundRequestId,
     },
     TxPoolFullTransactions {
-        response: Vec<Option<Transaction>>,
+        response: Vec<Option<NetworkableTransactionPool>>,
         request_id: InboundRequestId,
     },
 }
@@ -1017,7 +1018,10 @@ impl SharedState {
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
-        Ok(txs)
+        Ok(txs.into_iter().map(|tx| tx.map(|tx_enum| match tx_enum {
+            NetworkableTransactionPool::Transaction(tx) => tx,
+            NetworkableTransactionPool::PoolTransaction(_) => panic!("A transaction that comes from the network must always be deserialized as a Transaction"),
+        })).collect())
     }
 
     pub fn broadcast_transaction(
@@ -1242,7 +1246,10 @@ pub mod tests {
             vec![]
         }
 
-        fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<Transaction>> {
+        fn get_full_txs(
+            &self,
+            tx_ids: Vec<TxId>,
+        ) -> Vec<Option<NetworkableTransactionPool>> {
             tx_ids.iter().map(|_| None).collect()
         }
     }
