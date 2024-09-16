@@ -43,9 +43,6 @@ pub trait TemporalRegistry {
         keyspace: RegistryKeyspace,
         value: Vec<u8>,
     ) -> anyhow::Result<Option<RegistryKey>>;
-
-    /// Get the block height for the next block, i.e. the block currently being processed.
-    fn next_block_height(&self) -> anyhow::Result<BlockHeight>;
 }
 
 pub trait UtxoIdToPointer {

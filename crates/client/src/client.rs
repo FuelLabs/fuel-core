@@ -862,6 +862,24 @@ impl FuelClient {
         Ok(block)
     }
 
+    pub async fn da_compressed_block(
+        &self,
+        height: BlockHeight,
+    ) -> io::Result<Option<Vec<u8>>> {
+        let query = schema::block::BlockByIdQuery::build(BlockByIdArgs {
+            id: Some((*id).into()),
+        });
+
+        let block = self
+            .query(query)
+            .await?
+            .block
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(block)
+    }
+
     /// Retrieve a blob by its ID
     pub async fn blob(&self, id: BlobId) -> io::Result<Option<types::Blob>> {
         let query = schema::blob::BlobByIdQuery::build(BlobByIdArgs { id: id.into() });

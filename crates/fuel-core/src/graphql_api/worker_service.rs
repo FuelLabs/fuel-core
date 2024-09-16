@@ -1,9 +1,21 @@
-use super::storage::old::{
-    OldFuelBlockConsensus,
-    OldFuelBlocks,
-    OldTransactions,
+use super::{
+    ports::worker,
+    storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
+    },
 };
 use crate::{
+    database::{
+        database_description::{
+            off_chain::OffChain,
+            DatabaseDescription,
+            DatabaseHeight,
+        },
+        metadata::MetadataTable,
+        Database,
+    },
     fuel_core_graphql_api::{
         ports::{
             self,
@@ -32,6 +44,7 @@ use crate::{
         relayed_transactions::RelayedTransactionStatuses,
     },
 };
+use async_graphql::Description;
 use fuel_core_compression::{
     ports::{
         TemporalRegistry,
@@ -51,6 +64,7 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     not_found,
+    transactional::StorageTransaction,
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
@@ -107,6 +121,7 @@ use futures::{
 };
 use std::{
     borrow::Cow,
+    fmt::Debug,
     ops::Deref,
 };
 
@@ -134,10 +149,10 @@ pub struct Task<TxPool, D> {
     continue_on_error: bool,
 }
 
-impl<TxPool, D> Task<TxPool, D>
+impl<'a, TxPool, D> Task<TxPool, D>
 where
     TxPool: ports::worker::TxPool,
-    D: ports::worker::OffChainDatabase,
+    D: ports::worker::OffChainDatabase + 'a,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
         let block = &result.sealed_block.entity;
@@ -247,10 +262,6 @@ where
                 .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
                 .get(&(keyspace, value))?
                 .map(|v| v.into_owned()))
-        }
-
-        fn next_block_height(&self) -> anyhow::Result<BlockHeight> {
-            todo!()
         }
     }
 
@@ -541,7 +552,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
+impl<'a, TxPool, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
 where
     TxPool: ports::worker::TxPool,
@@ -689,7 +700,7 @@ where
     }
 }
 
-pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
+pub fn new_service<'a, TxPool, BlockImporter, OnChain, OffChain>(
     tx_pool: TxPool,
     block_importer: BlockImporter,
     on_chain_database: OnChain,

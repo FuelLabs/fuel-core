@@ -34,9 +34,9 @@ pub trait CompressDb: TemporalRegistry + UtxoIdToPointer {}
 impl<T> CompressDb for T where T: TemporalRegistry + UtxoIdToPointer {}
 
 pub async fn compress<D: CompressDb>(db: D, block: &Block) -> Result<Vec<u8>, Error> {
-    if *block.header().height() != db.next_block_height()? {
-        return Err(Error::NotLatest);
-    }
+    // if *block.header().height() != db.next_block_height()? {
+    //     return Err(Error::NotLatest);
+    // }
 
     let target = block.transactions().to_vec();
 
