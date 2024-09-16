@@ -20,7 +20,10 @@ use std::{
     time::SystemTime,
 };
 
-use super::txpool::ArcPoolTx;
+use super::txpool::{
+    ArcPoolTx,
+    PoolTransaction,
+};
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
@@ -215,7 +218,23 @@ impl Serialize for NetworkableTransactionPool {
         S: serde::Serializer,
     {
         match self {
-            NetworkableTransactionPool::PoolTransaction(tx) => tx.serialize(serializer),
+            NetworkableTransactionPool::PoolTransaction(tx) => match (*tx).as_ref() {
+                PoolTransaction::Script(script, _) => {
+                    script.transaction().serialize(serializer)
+                }
+                PoolTransaction::Create(create, _) => {
+                    create.transaction().serialize(serializer)
+                }
+                PoolTransaction::Blob(blob, _) => {
+                    blob.transaction().serialize(serializer)
+                }
+                PoolTransaction::Upgrade(upgrade, _) => {
+                    upgrade.transaction().serialize(serializer)
+                }
+                PoolTransaction::Upload(upload, _) => {
+                    upload.transaction().serialize(serializer)
+                }
+            },
             NetworkableTransactionPool::Transaction(tx) => tx.serialize(serializer),
         }
     }
