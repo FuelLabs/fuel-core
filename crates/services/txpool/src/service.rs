@@ -49,6 +49,7 @@ use fuel_core_types::{
 use update_sender::UpdateSender;
 
 use crate::{
+    heavy_async_processing::HeavyAsyncProcessor,
     ports::{
         BlockImporter,
         ConsensusParametersProvider,
@@ -178,6 +179,7 @@ pub struct Task<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvi
         ConsensusProvider,
         MP,
     >,
+    heavy_async_processor: HeavyAsyncProcessor,
     ttl_timer: tokio::time::Interval,
 }
 
@@ -186,13 +188,13 @@ impl<P2P, ViewProvider, View, WasmChecker, GasPriceProvider, ConsensusProvider, 
     RunnableService
     for Task<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
 where
-    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<LatestView = View>,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
+    ViewProvider: AtomicView<LatestView = View> + 'static,
     View: TxPoolDb,
-    WasmChecker: WasmCheckerConstraint + Send + Sync,
-    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
-    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
-    MP: MemoryPool + Send + Sync,
+    WasmChecker: WasmCheckerConstraint + Send + Sync + 'static,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync + 'static,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync + 'static,
+    MP: MemoryPool + Send + Sync + 'static,
 {
     const NAME: &'static str = "TxPool";
 
@@ -227,13 +229,13 @@ impl<P2P, ViewProvider, View, WasmChecker, GasPriceProvider, ConsensusProvider, 
     RunnableTask
     for Task<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
 where
-    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<LatestView = View>,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
+    ViewProvider: AtomicView<LatestView = View> + 'static,
     View: TxPoolDb,
-    WasmChecker: WasmCheckerConstraint + Send + Sync,
-    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
-    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
-    MP: MemoryPool + Send + Sync,
+    WasmChecker: WasmCheckerConstraint + Send + Sync + 'static,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync + 'static,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync + 'static,
+    MP: MemoryPool + Send + Sync + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -273,51 +275,52 @@ where
                 }
             }
 
-            // TODO: Refactor this to not block on calls to the peer and verification (need to open issue before merging)
             new_peer_subscribed = self.new_tx_gossip_subscription.next() => {
-                if let Some(peer_id) = new_peer_subscribed {
-                    // Gathering txs
-                    let peer_tx_ids = self.tx_pool_shared_state.p2p.request_tx_ids(peer_id.clone()).await.inspect_err(|e| {
-                        tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
-                    }).unwrap_or_default();
-                    if peer_tx_ids.is_empty() {
-                        return Ok(true);
-                    }
-                    let tx_ids_to_ask = self.tx_pool_shared_state.txpool.lock().filter_existing_tx_ids(peer_tx_ids);
-                    if tx_ids_to_ask.is_empty() {
-                        return Ok(true);
-                    }
-                    let txs: Vec<Arc<Transaction>> = self.tx_pool_shared_state.p2p.request_txs(peer_id.clone(), tx_ids_to_ask).await.inspect_err(|e| {
-                        tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
-                    }).unwrap_or_default().into_iter().flatten().map(Arc::new).collect();
-                    if txs.is_empty() {
-                        return Ok(true);
-                    }
-                    // Verifying them
-                    let current_height = *self.tx_pool_shared_state.current_height.lock();
-                    let (version, params) = self
-                        .tx_pool_shared_state
-                        .consensus_parameters_provider
-                        .latest_consensus_parameters();
-                    let checked_transactions = check_transactions(
-                        &txs,
-                        current_height,
-                        self.tx_pool_shared_state.utxo_validation,
-                        params.as_ref(),
-                        &self.tx_pool_shared_state.gas_price_provider,
-                        self.tx_pool_shared_state.memory_pool.clone()
-                    ).await.into_iter().flatten().collect::<Vec<_>>();
+                // If we are out of capacity, we will skip this event.
+                let _ = self.heavy_async_processor.spawn({
+                    let shared_state = self.tx_pool_shared_state.clone();
+                    let tx_status_change = shared_state.tx_status_sender.clone();
+                    async move {
+                    if let Some(peer_id) = new_peer_subscribed {
+                        // Gathering txs
+                        let peer_tx_ids = shared_state.p2p.request_tx_ids(peer_id.clone()).await.inspect_err(|e| {
+                            tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
+                        }).unwrap_or_default();
+                        if peer_tx_ids.is_empty() {
+                            return;
+                        }
+                        let tx_ids_to_ask = shared_state.txpool.lock().filter_existing_tx_ids(peer_tx_ids);
+                        if tx_ids_to_ask.is_empty() {
+                            return;
+                        }
+                        let txs: Vec<Arc<Transaction>> = shared_state.p2p.request_txs(peer_id.clone(), tx_ids_to_ask).await.inspect_err(|e| {
+                            tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
+                        }).unwrap_or_default().into_iter().flatten().map(Arc::new).collect();
+                        if txs.is_empty() {
+                            return;
+                        }
+                        // Verifying them
+                        let current_height = *shared_state.current_height.lock();
+                        let (version, params) = shared_state
+                            .consensus_parameters_provider
+                            .latest_consensus_parameters();
+                        let checked_transactions = check_transactions(
+                            &txs,
+                            current_height,
+                            shared_state.utxo_validation,
+                            params.as_ref(),
+                            &shared_state.gas_price_provider,
+                            shared_state.memory_pool.clone()
+                        ).await.into_iter().flatten().collect::<Vec<_>>();
 
-                    self.tx_pool_shared_state.txpool.lock().insert(
-                        &self.tx_pool_shared_state.tx_status_sender,
-                        version,
-                        checked_transactions
-                    );
-
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
+                        shared_state.txpool.lock().insert(
+                            &tx_status_change,
+                            version,
+                            checked_transactions
+                        );
+                    }
+                }});
+                should_continue = true;
             }
 
             new_transaction = self.gossiped_tx_stream.next() => {
@@ -645,6 +648,7 @@ where
             gas_price_provider: Arc::new(gas_price_provider),
             memory_pool: Arc::new(memory_pool),
         },
+        heavy_async_processor: HeavyAsyncProcessor::new(2, 10).unwrap(),
         ttl_timer,
     };
 

@@ -5,7 +5,9 @@ use crate::{
         NotInitialized,
     },
     gossipsub::messages::{
-        GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage
+        GossipTopicTag,
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
     },
     heavy_task_processor::HeavyTaskProcessor,
     p2p_service::{
