@@ -23,19 +23,14 @@ use fuel_core_storage::{
         KVItem,
         KeyItem,
         KeyValueInspect,
-        KeyValueMutate,
         StorageColumn,
         Value,
         WriteOperation,
     },
-    transactional::{
-        Changes,
-        ReadTransaction,
-    },
+    transactional::Changes,
     Result as StorageResult,
 };
 use itertools::Itertools;
-use rand::RngCore;
 use rocksdb::{
     BlockBasedOptions,
     BoundColumnFamily,
@@ -55,7 +50,6 @@ use rocksdb::{
 use std::{
     cmp,
     collections::BTreeMap,
-    env,
     fmt,
     fmt::Formatter,
     iter,
@@ -68,41 +62,6 @@ use std::{
 use tempfile::TempDir;
 
 type DB = DBWithThreadMode<MultiThreaded>;
-
-/// Reimplementation of `tempdir::TempDir` that allows creating a new
-/// instance without actually creating a new directory on the filesystem.
-/// This is needed since rocksdb requires empty directory for checkpoints.
-pub struct ShallowTempDir {
-    path: PathBuf,
-}
-
-impl Default for ShallowTempDir {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ShallowTempDir {
-    /// Creates a random directory.
-    pub fn new() -> Self {
-        let mut rng = rand::thread_rng();
-        let mut path = env::temp_dir();
-        path.push(format!("fuel-core-shallow-{}", rng.next_u64()));
-        Self { path }
-    }
-
-    /// Returns the path of the directory.
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-}
-
-impl Drop for ShallowTempDir {
-    fn drop(&mut self) {
-        // Ignore errors
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
 
 type DropFn = Box<dyn FnOnce() + Send + Sync>;
 #[derive(Default)]
@@ -867,30 +826,39 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     None
 }
 
-impl<Description> KeyValueMutate for RocksDb<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn write(
-        &mut self,
-        key: &[u8],
-        column: Self::Column,
-        buf: &[u8],
-    ) -> StorageResult<usize> {
-        let mut transaction = self.read_transaction();
-        let len = transaction.write(key, column, buf)?;
-        let changes = transaction.into_changes();
-        self.commit_changes(&changes)?;
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers {
+    use super::*;
+    use fuel_core_storage::{
+        kv_store::KeyValueMutate,
+        transactional::ReadTransaction,
+    };
 
-        Ok(len)
-    }
+    impl<Description> KeyValueMutate for RocksDb<Description>
+    where
+        Description: DatabaseDescription,
+    {
+        fn write(
+            &mut self,
+            key: &[u8],
+            column: Self::Column,
+            buf: &[u8],
+        ) -> StorageResult<usize> {
+            let mut transaction = self.read_transaction();
+            let len = transaction.write(key, column, buf)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(&changes)?;
 
-    fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-        let mut transaction = self.read_transaction();
-        transaction.delete(key, column)?;
-        let changes = transaction.into_changes();
-        self.commit_changes(&changes)?;
-        Ok(())
+            Ok(len)
+        }
+
+        fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+            let mut transaction = self.read_transaction();
+            transaction.delete(key, column)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(&changes)?;
+            Ok(())
+        }
     }
 }
 

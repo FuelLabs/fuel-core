@@ -76,7 +76,7 @@ fn update_l2_block_data__updates_projected_cost() {
         .unwrap();
 
     // then
-    let expected = block_bytes * da_cost_per_byte;
+    let expected = block_bytes as u128 * da_cost_per_byte;
     let actual = updater.projected_total_da_cost;
     assert_eq!(actual, expected);
 }
@@ -105,8 +105,8 @@ fn update_l2_block_data__updates_the_total_reward_value() {
     // then
     let expected_new_da_price = new_gas_price - starting_exec_gas_price;
     let expected = gas_used * expected_new_da_price;
-    let actual = updater.total_da_rewards;
-    assert_eq!(actual, expected);
+    let actual = updater.total_da_rewards_excess;
+    assert_eq!(actual, expected as u128);
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
 
     // then
     let expected = starting_gas_price;
-    let actual = updater.new_exec_price;
+    let actual = updater.new_scaled_exec_price;
     assert_eq!(actual, expected);
 }
 
@@ -161,9 +161,9 @@ fn update_l2_block_data__below_threshold_will_decrease_exec_gas_price() {
 
     // then
     let expected_change_amount =
-        starting_exec_gas_price * exec_gas_price_decrease_percent / 100;
+        starting_exec_gas_price * exec_gas_price_decrease_percent as u64 / 100;
     let expected = starting_exec_gas_price - expected_change_amount;
-    let actual = updater.new_exec_price;
+    let actual = updater.new_scaled_exec_price;
     assert_eq!(expected, actual);
 }
 
@@ -191,9 +191,10 @@ fn update_l2_block_data__above_threshold_will_increase_exec_gas_price() {
         .unwrap();
 
     // then
-    let expected_change = starting_exec_gas_price * exec_gas_price_increase_percent / 100;
+    let expected_change =
+        starting_exec_gas_price * exec_gas_price_increase_percent as u64 / 100;
     let expected = starting_exec_gas_price + expected_change;
-    let actual = updater.new_exec_price;
+    let actual = updater.new_scaled_exec_price;
     assert_eq!(actual, expected);
 }
 #[test]
@@ -223,7 +224,7 @@ fn update_l2_block_data__exec_price_will_not_go_below_min() {
 
     // then
     let expected = min_exec_gas_price;
-    let actual = updater.new_exec_price;
+    let actual = updater.new_scaled_exec_price;
     assert_eq!(actual, expected);
 }
 
@@ -282,7 +283,7 @@ fn update_l2_block_data__updates_last_and_last_last_profit() {
     let actual = updater.second_to_last_profit;
     assert_eq!(actual, expected);
     // and
-    let expected = total_rewards as i64 - total_cost as i64;
+    let expected = total_rewards as i128 - total_cost as i128;
     let actual = updater.last_profit;
     assert_eq!(actual, expected);
 }
