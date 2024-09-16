@@ -53,7 +53,7 @@ pub trait CollisionManager {
     /// Storage type of the collision manager.
     type Storage;
     /// Index that identifies a transaction in the storage.
-    type StorageIndex: Copy + Debug;
+    type StorageIndex;
 
     /// Collect all the transactions that collide with the given transaction.
     /// It returns an error if the transaction is less worthy than the colliding transactions.

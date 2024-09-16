@@ -1468,7 +1468,7 @@ async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
 }
 
 #[tokio::test]
-async fn tx3_dependent_and_conflicts_with_tx2() {
+async fn insert__if_tx3_depends_and_collides_witg_tx2() {
     let mut context = PoolContext::default();
 
     // tx1 {inputs: {}, outputs: {coinA}, tip: 1}

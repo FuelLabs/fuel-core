@@ -19,7 +19,7 @@ pub trait SelectionAlgorithm {
     /// The storage type of the selection algorithm.
     type Storage;
     /// The index that identifies a transaction in the storage.
-    type StorageIndex: Copy + Debug;
+    type StorageIndex;
     /// Given the constraints, the selection algorithm has to return the best list of transactions to include in a block.
     fn gather_best_txs(
         &mut self,
