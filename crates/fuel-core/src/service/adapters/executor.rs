@@ -9,9 +9,11 @@ use fuel_core_types::{
 };
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
+    // TODO: Use `tx_count_limit` https://github.com/FuelLabs/fuel-core/issues/2114
     fn next(
         &self,
         gas_limit: u64,
+        _: u16,
         block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         self.txpool
@@ -26,7 +28,6 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
             .collect()
     }
 }
-
 impl fuel_core_executor::ports::RelayerPort for ReyalerIterableKeyValueView {
     fn enabled(&self) -> bool {
         #[cfg(feature = "relayer")]

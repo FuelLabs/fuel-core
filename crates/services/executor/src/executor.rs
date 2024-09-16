@@ -186,7 +186,7 @@ impl OnceTransactionsSource {
 }
 
 impl TransactionsSource for OnceTransactionsSource {
-    fn next(&self, _: u64, _: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(&self, _: u64, _: u16, _: u64) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         core::mem::take(lock.as_mut())
     }
@@ -574,8 +574,15 @@ where
         let mut remaining_block_transaction_size_limit =
             block_transaction_size_limit.saturating_sub(data.used_size);
 
+        // TODO: Handle `remaining_tx_count` https://github.com/FuelLabs/fuel-core/issues/2114
+        let remaining_tx_count = u16::MAX;
+
         let mut regular_tx_iter = l2_tx_source
-            .next(remaining_gas_limit, remaining_block_transaction_size_limit)
+            .next(
+                remaining_gas_limit,
+                remaining_tx_count,
+                remaining_block_transaction_size_limit,
+            )
             .into_iter()
             .peekable();
         while regular_tx_iter.peek().is_some() {
@@ -606,7 +613,11 @@ where
             }
 
             regular_tx_iter = l2_tx_source
-                .next(remaining_gas_limit, remaining_block_transaction_size_limit)
+                .next(
+                    remaining_gas_limit,
+                    remaining_tx_count,
+                    remaining_block_transaction_size_limit,
+                )
                 .into_iter()
                 .peekable();
         }
@@ -806,6 +817,14 @@ where
                 if new_tx != old_tx {
                     let chain_id = self.consensus_params.chain_id();
                     let transaction_id = old_tx.id(&chain_id);
+
+                    tracing::info!(
+                        "Transaction {:?} does not match: new_tx {:?} and old_tx {:?}",
+                        transaction_id,
+                        new_tx,
+                        old_tx
+                    );
+
                     Err(ExecutorError::InvalidTransactionOutcome { transaction_id })
                 } else {
                     Ok(())
@@ -816,6 +835,12 @@ where
             .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
         if new_block.header() != old_block.header() {
+            tracing::info!(
+                "Headers does not match: new_block {:?} and old_block {:?}",
+                new_block,
+                old_block
+            );
+
             Err(ExecutorError::BlockMismatch)
         } else {
             Ok(())
