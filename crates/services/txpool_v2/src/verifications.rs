@@ -26,10 +26,14 @@ use fuel_core_types::{
 
 use crate::{
     error::Error,
+    pool::Pool,
     ports::{
+        AtomicView,
         GasPriceProvider,
+        TxPoolPersistentStorage,
         WasmChecker,
     },
+    service::TxPool,
     GasPrice,
 };
 
@@ -76,11 +80,21 @@ impl UnverifiedTx {
 }
 
 impl BasicVerifiedTx {
-    pub fn perform_inputs_verifications(
+    pub fn perform_inputs_verifications<PSView, PSProvider>(
         self,
-    ) -> Result<InputDependenciesVerifiedTx, Error> {
-        // TODO: Use the pool
-        Ok(InputDependenciesVerifiedTx(self.0))
+        pool: TxPool<PSProvider>,
+        version: ConsensusParametersVersion,
+    ) -> Result<InputDependenciesVerifiedTx, Error>
+    where
+        PSProvider: AtomicView<LatestView = PSView>,
+        PSView: TxPoolPersistentStorage,
+    {
+        let checked_transaction = self.0.into();
+        let pool_tx = checked_tx_into_pool(checked_transaction, version)?;
+
+        pool.read().can_insert_transaction(&pool_tx)?;
+        let checked_tx: CheckedTransaction = (&pool_tx).into();
+        Ok(InputDependenciesVerifiedTx(checked_tx.into()))
     }
 }
 
@@ -98,7 +112,7 @@ impl InputDependenciesVerifiedTx {
             if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
                 wasm_checker
                     .validate_uploaded_wasm(root)
-                    .map_err(|err| Error::WasmValidity(err))?;
+                    .map_err(Error::WasmValidity)?;
             }
         }
 
@@ -127,21 +141,14 @@ impl FullyVerifiedTx {
         self,
         version: ConsensusParametersVersion,
     ) -> Result<PoolTransaction, Error> {
-        let tx: CheckedTransaction = self.0.into();
-
-        match tx {
-            CheckedTransaction::Script(tx) => Ok(PoolTransaction::Script(tx, version)),
-            CheckedTransaction::Create(tx) => Ok(PoolTransaction::Create(tx, version)),
-            CheckedTransaction::Mint(_) => Err(Error::MintIsDisallowed),
-            CheckedTransaction::Upgrade(tx) => Ok(PoolTransaction::Upgrade(tx, version)),
-            CheckedTransaction::Upload(tx) => Ok(PoolTransaction::Upload(tx, version)),
-            CheckedTransaction::Blob(tx) => Ok(PoolTransaction::Blob(tx, version)),
-        }
+        checked_tx_into_pool(self.0.into(), version)
     }
 }
 
-pub async fn perform_all_verifications<M>(
+#[allow(clippy::too_many_arguments)]
+pub async fn perform_all_verifications<M, PSView, PSProvider>(
     tx: Transaction,
+    pool: TxPool<PSProvider>,
     current_height: BlockHeight,
     consensus_params: &ConsensusParameters,
     consensus_params_version: ConsensusParametersVersion,
@@ -151,12 +158,15 @@ pub async fn perform_all_verifications<M>(
 ) -> Result<PoolTransaction, Error>
 where
     M: Memory + Send + Sync + 'static,
+    PSProvider: AtomicView<LatestView = PSView>,
+    PSView: TxPoolPersistentStorage,
 {
     let unverified = UnverifiedTx(tx);
     let basically_verified_tx = unverified
         .perform_basic_verifications(current_height, consensus_params, gas_price_provider)
         .await?;
-    let inputs_verified_tx = basically_verified_tx.perform_inputs_verifications()?;
+    let inputs_verified_tx = basically_verified_tx
+        .perform_inputs_verifications(pool, consensus_params_version)?;
     let input_computation_verified_tx = inputs_verified_tx
         .perform_input_computation_verifications(consensus_params, wasm_checker, memory)
         .await?;
@@ -202,4 +212,18 @@ fn verify_tx_min_gas_price(
         CheckedTransaction::Mint(_) => return Err(Error::NotSupportedTransactionType),
     };
     Ok(read.into())
+}
+
+pub fn checked_tx_into_pool(
+    tx: CheckedTransaction,
+    version: ConsensusParametersVersion,
+) -> Result<PoolTransaction, Error> {
+    match tx {
+        CheckedTransaction::Script(tx) => Ok(PoolTransaction::Script(tx, version)),
+        CheckedTransaction::Create(tx) => Ok(PoolTransaction::Create(tx, version)),
+        CheckedTransaction::Mint(_) => Err(Error::MintIsDisallowed),
+        CheckedTransaction::Upgrade(tx) => Ok(PoolTransaction::Upgrade(tx, version)),
+        CheckedTransaction::Upload(tx) => Ok(PoolTransaction::Upload(tx, version)),
+        CheckedTransaction::Blob(tx) => Ok(PoolTransaction::Blob(tx, version)),
+    }
 }

@@ -40,9 +40,18 @@ pub trait Storage {
     fn store_transaction(
         &mut self,
         transaction: PoolTransaction,
-        dependencies: Vec<Self::StorageIndex>,
-        collided_transactions: Vec<Self::StorageIndex>,
+        dependencies: &[Self::StorageIndex],
+        collided_transactions: &[Self::StorageIndex],
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
+
+    /// Check if a transaction could be stored in the storage. This shouldn't be expected to be called before store_transaction.
+    /// Its just a way to perform some checks without storing the transaction.
+    fn can_store_transaction(
+        &self,
+        transaction: &PoolTransaction,
+        dependencies: &[Self::StorageIndex],
+        collided_transactions: &[Self::StorageIndex],
+    ) -> Result<(), Error>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
@@ -62,7 +71,7 @@ pub trait Storage {
     /// Collect the storage indexes of the transactions that are dependent on the given transaction.
     /// The collisions can be useful as they implies that some verifications had already been done.
     /// Returns the storage indexes of the dependencies transactions.
-    fn collect_dependencies_transactions(
+    fn validate_inputs_and_collect_dependencies(
         &self,
         transaction: &PoolTransaction,
         collisions: HashSet<CollisionReason>,

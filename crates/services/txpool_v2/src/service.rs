@@ -37,9 +37,22 @@ use crate::{
         GraphStorage,
         GraphStorageIndex,
     },
-    transaction_conversion::check_transactions,
     verifications::perform_all_verifications,
 };
+
+pub type RemovedTransactions = Vec<PoolTransaction>;
+pub type InsertionResult = Result<RemovedTransactions, Error>;
+
+pub type TxPool<PSProvider> = Arc<
+    RwLock<
+        Pool<
+            PSProvider,
+            GraphStorage,
+            BasicCollisionManager<GraphStorage>,
+            RatioTipGasSelection<GraphStorage>,
+        >,
+    >,
+>;
 
 pub struct SharedState<
     PSProvider,
@@ -48,16 +61,7 @@ pub struct SharedState<
     WasmChecker,
     MemoryPool,
 > {
-    pool: Arc<
-        RwLock<
-            Pool<
-                PSProvider,
-                GraphStorage,
-                BasicCollisionManager<GraphStorageIndex>,
-                RatioTipGasSelection<GraphStorageIndex>,
-            >,
-        >,
-    >,
+    pool: TxPool<PSProvider>,
     current_height: Arc<RwLock<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusParamsProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
@@ -111,11 +115,10 @@ where
     WasmChecker: WasmCheckerTrait + Send + Sync,
     MemoryPool: MemoryPoolTrait + Send + Sync,
 {
-    // TODO: Implement conversion from `Transaction` to `PoolTransaction`. (with all the verifications that it implies): https://github.com/FuelLabs/fuel-core/issues/2186
     async fn insert(
         &mut self,
         transactions: Vec<Transaction>,
-    ) -> Result<Vec<Result<Vec<PoolTransaction>, Error>>, Error> {
+    ) -> Result<Vec<InsertionResult>, Error> {
         let current_height = *self.current_height.read();
         let (version, params) = self
             .consensus_parameters_provider
@@ -124,6 +127,7 @@ where
         for transaction in transactions {
             let checked_tx = perform_all_verifications(
                 transaction,
+                self.pool.clone(),
                 current_height,
                 &params,
                 version,
@@ -290,7 +294,6 @@ where
 {
     Service::new(Task {
         shared_state: SharedState {
-            // Maybe try to take the arc from the paramater
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
             gas_price_provider: Arc::new(gas_price_provider),
             wasm_checker: Arc::new(wasm_checker),
@@ -299,9 +302,8 @@ where
             utxo_validation: config.utxo_validation,
             pool: Arc::new(RwLock::new(Pool::new(
                 ps_provider,
-                // TODO: Real value
                 GraphStorage::new(GraphConfig {
-                    max_dependent_txn_count: 100,
+                    max_dependent_txn_count: config.max_dependent_txn_count,
                 }),
                 BasicCollisionManager::new(),
                 RatioTipGasSelection::new(),

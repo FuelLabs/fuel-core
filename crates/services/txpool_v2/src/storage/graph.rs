@@ -266,8 +266,8 @@ impl Storage for GraphStorage {
     fn store_transaction(
         &mut self,
         transaction: PoolTransaction,
-        dependencies: Vec<Self::StorageIndex>,
-        collided_transactions: Vec<Self::StorageIndex>,
+        dependencies: &[Self::StorageIndex],
+        collided_transactions: &[Self::StorageIndex],
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error> {
         let tx_id = transaction.id();
 
@@ -275,7 +275,7 @@ impl Storage for GraphStorage {
         let mut removed_transactions = vec![];
         for collision in collided_transactions {
             removed_transactions
-                .extend(self.remove_node_and_dependent_sub_graph(collision)?);
+                .extend(self.remove_node_and_dependent_sub_graph(*collision)?);
         }
         // Add the new transaction to the graph and update the others in consequence
         let tip = transaction.tip();
@@ -292,7 +292,7 @@ impl Storage for GraphStorage {
         let mut whole_tx_chain = vec![];
 
         // Check if the dependency chain is too big
-        let mut to_check = dependencies.clone();
+        let mut to_check = dependencies.to_vec();
         while let Some(node_id) = to_check.pop() {
             let Some(dependency_node) = self.graph.node_weight(node_id) else {
                 return Err(Error::Storage(format!(
@@ -311,7 +311,7 @@ impl Storage for GraphStorage {
         // Add the transaction to the graph
         let node_id = self.graph.add_node(node);
         for dependency in dependencies {
-            self.graph.add_edge(dependency, node_id, ());
+            self.graph.add_edge(*dependency, node_id, ());
         }
         self.cache_tx_infos(&outputs, &tx_id, node_id)?;
 
@@ -330,6 +330,28 @@ impl Storage for GraphStorage {
                 node.dependents_cumulative_gas.saturating_add(gas);
         }
         Ok((node_id, removed_transactions))
+    }
+
+    fn can_store_transaction(
+        &self,
+        transaction: &PoolTransaction,
+        dependencies: &[Self::StorageIndex],
+        collided_transactions: &[Self::StorageIndex],
+    ) -> Result<(), Error> {
+        let mut to_check = dependencies.to_vec();
+        while let Some(node_id) = to_check.pop() {
+            let Some(dependency_node) = self.graph.node_weight(node_id) else {
+                return Err(Error::Storage(format!(
+                    "Node with id {:?} not found",
+                    node_id
+                )));
+            };
+            if dependency_node.number_txs_in_chain >= self.config.max_dependent_txn_count
+            {
+                return Err(Error::NotInsertedChainDependencyTooBig);
+            }
+        }
+        Ok(())
     }
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error> {
@@ -353,7 +375,7 @@ impl Storage for GraphStorage {
         self.get_dependents_inner(&index)
     }
 
-    fn collect_dependencies_transactions(
+    fn validate_inputs_and_collect_dependencies(
         &self,
         transaction: &PoolTransaction,
         collisions: std::collections::HashSet<CollisionReason>,

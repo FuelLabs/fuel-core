@@ -70,7 +70,6 @@ use crate::{
         MockDBProvider,
         MockDb,
     },
-    transaction_conversion::check_single_tx,
     GasPrice,
 };
 // TDOO: Reorganize this file
@@ -337,52 +336,4 @@ impl GasPriceProvider for MockTxPoolGasPrice {
         self.gas_price
             .ok_or(Error::GasPriceNotFound("Gas price not found".to_string()))
     }
-}
-
-pub async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transaction> {
-    let gas_price = 0;
-    check_unwrap_tx_with_gas_price(tx, config, gas_price).await
-}
-
-pub async fn check_unwrap_tx_with_gas_price(
-    tx: Transaction,
-    config: &Config,
-    gas_price: GasPrice,
-) -> Checked<Transaction> {
-    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-    check_single_tx(
-        tx,
-        Default::default(),
-        config.utxo_validation,
-        &ConsensusParameters::default(),
-        &gas_price_provider,
-        MemoryInstance::new(),
-    )
-    .await
-    .expect("Transaction should be checked")
-}
-
-pub async fn check_tx(
-    tx: Transaction,
-    config: &Config,
-) -> Result<Checked<Transaction>, Error> {
-    let gas_price = 0;
-    check_tx_with_gas_price(tx, config, gas_price).await
-}
-
-pub async fn check_tx_with_gas_price(
-    tx: Transaction,
-    config: &Config,
-    gas_price: GasPrice,
-) -> Result<Checked<Transaction>, Error> {
-    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-    check_single_tx(
-        tx,
-        Default::default(),
-        config.utxo_validation,
-        &ConsensusParameters::default(),
-        &gas_price_provider,
-        MemoryInstance::new(),
-    )
-    .await
 }

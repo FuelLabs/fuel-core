@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId,
+        Transaction,
         TxId,
     },
+    fuel_vm::checked_transaction::Checked,
     services::txpool::PoolTransaction,
 };
 use tracing::instrument;
@@ -93,17 +95,18 @@ where
                 let collisions = self
                     .collision_manager
                     .collect_colliding_transactions(&tx, &self.storage)?;
-                let dependencies = self.storage.collect_dependencies_transactions(
-                    &tx,
-                    collisions.reasons,
-                    &latest_view,
-                    self.config.utxo_validation,
-                )?;
+                let dependencies =
+                    self.storage.validate_inputs_and_collect_dependencies(
+                        &tx,
+                        collisions.reasons,
+                        &latest_view,
+                        self.config.utxo_validation,
+                    )?;
                 let has_dependencies = !dependencies.is_empty();
                 let (storage_id, removed_transactions) = self.storage.store_transaction(
                     tx,
-                    dependencies,
-                    collisions.colliding_txs,
+                    &dependencies,
+                    &collisions.colliding_txs,
                 )?;
                 self.tx_id_to_storage_id.insert(tx_id, storage_id);
                 // No dependencies directly in the graph and the sorted transactions
@@ -118,6 +121,29 @@ where
                 Ok(removed_transactions)
             })
             .collect())
+    }
+
+    /// Check if a transaction can be inserted into the pool.
+    pub fn can_insert_transaction(&self, tx: &PoolTransaction) -> Result<(), Error> {
+        let persistent_storage = self
+            .persistent_storage_provider
+            .latest_view()
+            .map_err(|e| Error::Database(format!("{:?}", e)))?;
+        self.check_pool_is_not_full()?;
+        self.config.black_list.check_blacklisting(tx)?;
+        Self::check_blob_does_not_exist(tx, &persistent_storage)?;
+        let collisions = self
+            .collision_manager
+            .collect_colliding_transactions(tx, &self.storage)?;
+        let dependencies = self.storage.validate_inputs_and_collect_dependencies(
+            tx,
+            collisions.reasons,
+            &persistent_storage,
+            self.config.utxo_validation,
+        )?;
+        self.storage
+            .can_store_transaction(tx, &dependencies, &collisions.colliding_txs);
+        Ok(())
     }
 
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
