@@ -10,6 +10,7 @@ use fuel_core::{
     },
     service::{
         Config,
+        DbType,
         FuelService,
     },
 };
@@ -227,6 +228,7 @@ impl TestSetupBuilder {
             starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
+        assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
