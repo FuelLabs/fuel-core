@@ -2,7 +2,7 @@ use super::Bytes32;
 use crate::client::schema::{
     schema,
     BlockId,
-    ConnectionArgs,
+    ConnectionArgsFields,
     PageInfo,
     Signature,
     Tai64Timestamp,
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn blocks_connection_query_gql_output() {
         use cynic::QueryBuilder;
-        let operation = BlocksQuery::build(ConnectionArgs {
+        let operation = BlocksQuery::build(crate::client::schema::ConnectionArgs {
             after: None,
             before: None,
             first: None,

@@ -3,7 +3,7 @@ use crate::client::{
         schema,
         tx::transparent_receipt::Receipt,
         Address,
-        ConnectionArgs,
+        ConnectionArgsFields,
         ConversionError,
         HexString,
         PageInfo,
