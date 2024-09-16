@@ -355,13 +355,17 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn descaled_exec_price(&self) -> u64 {
+        let factor = self.gas_price_factor.into();
         self.new_scaled_exec_price
-            .saturating_div(self.gas_price_factor.into())
+            .checked_div(factor)
+            .expect("factor is never 0")
     }
 
     fn descaled_da_price(&self) -> u64 {
+        let factor: u64 = self.gas_price_factor.into();
         self.new_scaled_da_gas_price
-            .saturating_div(self.gas_price_factor.into())
+            .checked_div(factor)
+            .expect("factor is never 0")
     }
 
     pub fn algorithm(&self) -> AlgorithmV1 {
