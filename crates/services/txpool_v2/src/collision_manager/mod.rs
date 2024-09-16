@@ -49,27 +49,26 @@ impl<Idx> Collisions<Idx> {
     }
 }
 
-pub trait CollisionManagerStorage {
-    type StorageIndex: Copy + Debug;
+pub trait CollisionManager {
+    /// Storage type of the collision manager.
+    type Storage;
+    /// Index that identifies a transaction in the storage.
+    type StorageIndex;
 
-    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
-}
-
-pub trait CollisionManager<S: CollisionManagerStorage> {
     /// Collect all the transactions that collide with the given transaction.
     /// It returns an error if the transaction is less worthy than the colliding transactions.
     /// It returns the information about the collisions.
     fn collect_colliding_transactions(
         &self,
         transaction: &PoolTransaction,
-        storage: &S,
-    ) -> Result<Collisions<S::StorageIndex>, Error>;
+        storage: &Self::Storage,
+    ) -> Result<Collisions<Self::StorageIndex>, Error>;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(
         &mut self,
         transaction: &PoolTransaction,
-        transaction_id: S::StorageIndex,
+        transaction_id: Self::StorageIndex,
     ) -> Result<(), Error>;
 
     /// Inform the collision manager that a transaction was removed.

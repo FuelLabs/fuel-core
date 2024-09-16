@@ -14,13 +14,25 @@ use fuel_core_types::{
 };
 use num_rational::Ratio;
 
-use crate::error::Error;
+use crate::{
+    error::Error,
+    storage::StorageData,
+};
 
 use super::{
     Constraints,
     SelectionAlgorithm,
-    SelectionAlgorithmStorage,
 };
+
+pub trait RatioTipGasSelectionAlgorithmStorage {
+    type StorageIndex: Copy + Debug;
+
+    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
+    fn get_dependents(
+        &self,
+        index: &Self::StorageIndex,
+    ) -> Result<Vec<Self::StorageIndex>, Error>;
+}
 
 pub type RatioTipGas = Ratio<u64>;
 
@@ -56,11 +68,11 @@ impl PartialOrd for Key {
 }
 
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
-pub struct RatioTipGasSelection<StorageIndex> {
-    transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, StorageIndex>,
+pub struct RatioTipGasSelection<S: RatioTipGasSelectionAlgorithmStorage> {
+    transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
 }
 
-impl<StorageIndex> RatioTipGasSelection<StorageIndex> {
+impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
     pub fn new() -> Self {
         Self {
             transactions_sorted_tip_gas_ratio: BTreeMap::new(),
@@ -68,17 +80,17 @@ impl<StorageIndex> RatioTipGasSelection<StorageIndex> {
     }
 }
 
-impl<StorageIndex> Default for RatioTipGasSelection<StorageIndex> {
+impl<S: RatioTipGasSelectionAlgorithmStorage> Default for RatioTipGasSelection<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<StorageIndex, S> SelectionAlgorithm<S> for RatioTipGasSelection<StorageIndex>
-where
-    StorageIndex: Copy + Debug,
-    S: SelectionAlgorithmStorage<StorageIndex = StorageIndex>,
+impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
+    for RatioTipGasSelection<S>
 {
+    type Storage = S;
+    type StorageIndex = S::StorageIndex;
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,

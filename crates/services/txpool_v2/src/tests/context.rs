@@ -160,8 +160,8 @@ impl PoolContext {
     ) -> Pool<
         MockDBProvider,
         GraphStorage,
-        BasicCollisionManager<NodeIndex>,
-        RatioTipGasSelection<NodeIndex>,
+        BasicCollisionManager<GraphStorage>,
+        RatioTipGasSelection<GraphStorage>,
     > {
         Pool::new(
             MockDBProvider(self.mock_db),

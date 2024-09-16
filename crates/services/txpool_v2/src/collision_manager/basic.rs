@@ -32,27 +32,33 @@ use num_rational::Ratio;
 use crate::{
     error::Error,
     ports::TxPoolPersistentStorage,
+    storage::StorageData,
 };
 
 use super::{
     CollisionManager,
-    CollisionManagerStorage,
     CollisionReason,
     Collisions,
 };
 
-pub struct BasicCollisionManager<StorageIndex> {
-    /// Message -> Transaction that currently use the Message
-    messages_spenders: HashMap<Nonce, StorageIndex>,
-    /// Coins -> Transaction that currently use the UTXO
-    coins_spenders: HashMap<UtxoId, StorageIndex>,
-    /// Contract -> Transaction that currently create the contract
-    contracts_creators: HashMap<ContractId, StorageIndex>,
-    /// Blob -> Transaction that currently create the blob
-    blobs_users: HashMap<BlobId, StorageIndex>,
+pub trait BasicCollisionManagerStorage {
+    type StorageIndex: Copy + Debug;
+
+    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
 }
 
-impl<StorageIndex> BasicCollisionManager<StorageIndex> {
+pub struct BasicCollisionManager<S: BasicCollisionManagerStorage> {
+    /// Message -> Transaction that currently use the Message
+    messages_spenders: HashMap<Nonce, S::StorageIndex>,
+    /// Coins -> Transaction that currently use the UTXO
+    coins_spenders: HashMap<UtxoId, S::StorageIndex>,
+    /// Contract -> Transaction that currently create the contract
+    contracts_creators: HashMap<ContractId, S::StorageIndex>,
+    /// Blob -> Transaction that currently create the blob
+    blobs_users: HashMap<BlobId, S::StorageIndex>,
+}
+
+impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
     pub fn new() -> Self {
         Self {
             messages_spenders: HashMap::new(),
@@ -63,20 +69,17 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
     }
 }
 
-impl<StorageIndex> Default for BasicCollisionManager<StorageIndex> {
+impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<StorageIndex> BasicCollisionManager<StorageIndex>
-where
-    StorageIndex: Copy + Debug,
-{
+impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
     fn gather_colliding_txs(
         &self,
         tx: &PoolTransaction,
-    ) -> Result<Collisions<StorageIndex>, Error> {
+    ) -> Result<Collisions<S::StorageIndex>, Error> {
         let mut collisions = Collisions::new();
         if let PoolTransaction::Blob(checked_tx, _) = tx {
             let blob_id = checked_tx.transaction().blob_id();
@@ -127,8 +130,8 @@ where
     fn is_better_than_collisions(
         &self,
         tx: &PoolTransaction,
-        collisions: &Collisions<StorageIndex>,
-        storage: &impl CollisionManagerStorage<StorageIndex = StorageIndex>,
+        collisions: &Collisions<S::StorageIndex>,
+        storage: &S,
     ) -> bool {
         let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
         let (total_tip, total_gas) = collisions.colliding_txs.iter().fold(
@@ -151,11 +154,10 @@ where
     }
 }
 
-impl<StorageIndex, S> CollisionManager<S> for BasicCollisionManager<StorageIndex>
-where
-    StorageIndex: Copy + Debug,
-    S: CollisionManagerStorage<StorageIndex = StorageIndex>,
-{
+impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager<S> {
+    type Storage = S;
+    type StorageIndex = S::StorageIndex;
+
     fn collect_colliding_transactions(
         &self,
         transaction: &PoolTransaction,
