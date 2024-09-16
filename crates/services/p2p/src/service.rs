@@ -5,8 +5,7 @@ use crate::{
         NotInitialized,
     },
     gossipsub::messages::{
-        GossipsubBroadcastRequest,
-        GossipsubMessage,
+        GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage
     },
     heavy_task_processor::HeavyTaskProcessor,
     p2p_service::{
@@ -844,8 +843,10 @@ where
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         self.process_request(request_message, request_id)?
                     },
-                    Some(FuelP2PEvent::NewSubscription { peer_id, .. }) => {
-                        let _ = self.broadcast.new_tx_subscription_broadcast(FuelPeerId::from(peer_id.to_bytes()));
+                    Some(FuelP2PEvent::NewSubscription { peer_id, tag }) => {
+                        if tag == GossipTopicTag::NewTx {
+                            let _ = self.broadcast.new_tx_subscription_broadcast(FuelPeerId::from(peer_id.to_bytes()));
+                        }
                     },
                     _ => (),
                 }
