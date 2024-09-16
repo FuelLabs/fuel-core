@@ -71,7 +71,7 @@ impl Simulator {
             // Change to adjust where the gas price starts on block 0
             new_scaled_exec_price: 10 * gas_price_factor,
             // Change to adjust where the gas price starts on block 0
-            last_da_gas_price: 100,
+            new_scaled_da_gas_price: 100,
             gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
             l2_block_height: 0,
             // Choose the ideal fullness percentage for the L2 block
@@ -114,7 +114,8 @@ impl Simulator {
         for (index, ((fullness, bytes), da_block)) in blocks {
             let height = index as u32 + 1;
             exec_gas_prices.push(updater.new_scaled_exec_price);
-            let gas_price = updater.algorithm().calculate(max_block_bytes);
+            da_gas_prices.push(updater.new_scaled_da_gas_price);
+            let gas_price = updater.algorithm().calculate();
             gas_prices.push(gas_price);
             updater
                 .update_l2_block_data(
@@ -125,7 +126,6 @@ impl Simulator {
                     gas_price,
                 )
                 .unwrap();
-            da_gas_prices.push(updater.last_da_gas_price);
             pessimistic_costs
                 .push(max_block_bytes as u128 * updater.latest_da_cost_per_byte);
             actual_reward_totals.push(updater.total_da_rewards_excess);
