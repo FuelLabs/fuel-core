@@ -68,9 +68,9 @@ impl Simulator {
         let updater = AlgorithmUpdaterV1 {
             min_exec_gas_price: 10,
             min_da_gas_price: 10,
-            // Change to adjust where the gas price starts on block 0
+            // Change to adjust where the exec gas price starts on block 0
             new_scaled_exec_price: 10 * gas_price_factor,
-            // Change to adjust where the gas price starts on block 0
+            // Change to adjust where the da gas price starts on block 0
             new_scaled_da_gas_price: 100,
             gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
             l2_block_height: 0,

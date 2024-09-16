@@ -372,25 +372,7 @@ impl AlgorithmUpdaterV1 {
         let combined_gas_price = self
             .descaled_exec_price()
             .saturating_add(self.descaled_da_price());
-        AlgorithmV1 {
-            // min_da_gas_price: self.min_da_gas_price,
-            // #[allow(clippy::arithmetic_side_effects)]
-            // // `gas_price_factor` will never be zero
-            // new_exec_price: self
-            //     .new_scaled_exec_price
-            //     .saturating_div(self.gas_price_factor.into()),
-            // last_da_price: self.last_da_gas_price,
-            // max_change_percent: self.max_da_gas_price_change_percent,
-            //
-            // latest_da_cost_per_byte: self.latest_da_cost_per_byte,
-            // total_rewards: self.total_da_rewards_excess,
-            // total_costs: self.projected_total_da_cost,
-            // last_profit: self.last_profit,
-            // second_to_last_profit: self.second_to_last_profit,
-            // da_p_factor: self.da_p_component,
-            // da_d_factor: self.da_d_component,
-            combined_gas_price,
-        }
+        AlgorithmV1 { combined_gas_price }
     }
 
     // We only need to track the difference between the rewards and costs after we have true DA data
