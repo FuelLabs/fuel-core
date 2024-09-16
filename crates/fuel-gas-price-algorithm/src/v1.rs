@@ -18,57 +18,8 @@ pub enum Error {
     FailedTooIncludeL2BlockData(String),
 }
 
-/// An algorithm for calculating the gas price for the next block
-///
-/// The algorithm breaks up the gas price into two components:
-/// - The execution gas price, which is used to cover the cost of executing the next block as well
-///   as moderating the congestion of the network by increasing the price when traffic is high.
-/// - The data availability (DA) gas price, which is used to cover the cost of recording the block on the DA chain
-///
-/// The execution gas price is calculated eagerly based on the fullness of the last received l2 block. Each
-/// block has a capacity threshold, and if the block is above this threshold, the gas price is increased. If
-/// it is below the threshold, the gas price is decreased.
-/// The gas price can only change by a fixed amount each block.
-///
-/// The DA gas price is calculated based on the profit of previous blocks. The profit is the
-/// difference between the rewards from the DA portion of the gas price and the cost of recording the blocks on the DA chain.
-/// The algorithm uses a naive PID controller to calculate the change in the DA gas price. The "P" portion
-/// of the new gas price is "proportional" to the profit, either negative or positive. The "D" portion is derived
-/// from the slope or change in the profits since the last block.
-///
-/// if p > 0 and dp/db > 0, decrease
-/// if p > 0 and dp/db < 0, hold/moderate
-/// if p < 0 and dp/db < 0, increase
-/// if p < 0 and dp/db > 0, hold/moderate
-///
-/// The DA portion also uses a moving average of the profits over the last `avg_window` blocks
-/// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
-/// moving average.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
-    // /// The lowest the algorithm allows the gas price to go
-    // min_da_gas_price: u64,
-    // /// The gas price for to cover the execution of the next block
-    // new_exec_price: u64,
-    // /// The gas price for the DA portion of the last block. This can be used to calculate
-    // last_da_price: u64,
-    // /// The maximum percentage that the DA portion of the gas price can change in a single block.
-    // ///   Using `u16` because it can go above 100% and possibly over 255%
-    // max_change_percent: u16,
-    // /// The latest known cost per byte for recording blocks on the DA chain
-    // latest_da_cost_per_byte: u128,
-    // /// The cumulative reward from the DA portion of the gas price
-    // total_rewards: u128,
-    // /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    // total_costs: u128,
-    // /// The P component of the PID control for the DA gas price
-    // da_p_factor: i64,
-    // /// The D component of the PID control for the DA gas price
-    // da_d_factor: i64,
-    // /// The average profit over the last `avg_window` blocks
-    // last_profit: i128,
-    // /// the previous profit
-    // second_to_last_profit: i128,
     /// the combined Execution and DA gas prices
     combined_gas_price: u64,
 }
@@ -132,6 +83,33 @@ impl AlgorithmV1 {
 ///
 /// This projection will inevitably lead to error in the gas price calculation. Special care should be taken
 /// to account for the worst case scenario when calculating the parameters of the algorithm.
+///
+/// An algorithm for calculating the gas price for the next block
+///
+/// The algorithm breaks up the gas price into two components:
+/// - The execution gas price, which is used to cover the cost of executing the next block as well
+///   as moderating the congestion of the network by increasing the price when traffic is high.
+/// - The data availability (DA) gas price, which is used to cover the cost of recording the block on the DA chain
+///
+/// The execution gas price is calculated based on the fullness of the last received l2 block. Each
+/// block has a capacity threshold, and if the block is above this threshold, the gas price is increased. If
+/// it is below the threshold, the gas price is decreased.
+/// The gas price can only change by a fixed amount each block.
+///
+/// The DA gas price is calculated based on the profit of previous blocks. The profit is the
+/// difference between the rewards from the DA portion of the gas price and the cost of recording the blocks on the DA chain.
+/// The algorithm uses a naive PID controller to calculate the change in the DA gas price. The "P" portion
+/// of the new gas price is "proportional" to the profit, either negative or positive. The "D" portion is derived
+/// from the slope or change in the profits since the last block.
+///
+/// if p > 0 and dp/db > 0, decrease
+/// if p > 0 and dp/db < 0, hold/moderate
+/// if p < 0 and dp/db < 0, increase
+/// if p < 0 and dp/db > 0, hold/moderate
+///
+/// The DA portion also uses a moving average of the profits over the last `avg_window` blocks
+/// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
+/// moving average.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct AlgorithmUpdaterV1 {
     // Execution
