@@ -187,7 +187,7 @@ async fn get_kademlia_kv(
         })
         .collect::<Vec<_>>();
 
-    let dns_resolver = DnsResolver::new().await.unwrap();
+    let dns_resolver = DnsResolver::new().await?;
     let mut dnsaddr_multiaddrs = vec![];
 
     for dnsaddr in dnsaddr_urls {
