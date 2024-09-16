@@ -227,32 +227,6 @@ fn update_l2_block_data__exec_price_will_not_go_below_min() {
     assert_eq!(actual, expected);
 }
 
-// #[test]
-// fn update_l2_block_data__updates_last_da_gas_price() {
-//     // given
-//
-//     let starting_exec_gas_price = 100;
-//     let mut updater = UpdaterBuilder::new()
-//         .with_starting_exec_gas_price(starting_exec_gas_price)
-//         .build();
-//
-//     let height = 1;
-//     let used = 50;
-//     let capacity = 100.try_into().unwrap();
-//     let block_bytes = 1000;
-//     let new_gas_price = 200;
-//
-//     // when
-//     updater
-//         .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
-//         .unwrap();
-//
-//     // then
-//     let expected = new_gas_price - starting_exec_gas_price;
-//     let actual = updater.new_scaled_da_price;
-//     assert_eq!(actual, expected);
-// }
-
 #[test]
 fn update_l2_block_data__updates_last_and_last_last_profit() {
     // given

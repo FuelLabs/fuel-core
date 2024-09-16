@@ -26,51 +26,8 @@ pub struct AlgorithmV1 {
 
 impl AlgorithmV1 {
     pub fn calculate(&self) -> u64 {
-        // let p = self.p();
-        // let d = self.d();
-        // let da_change = self.change(p, d);
-        //
-        // self.assemble_price(da_change)
         self.combined_gas_price
     }
-    // fn p(&self) -> i128 {
-    //     let upcast_p: i128 = self.da_p_factor.into();
-    //     let checked_p = self.last_profit.checked_div(upcast_p);
-    //     // If the profit is positive, we want to decrease the gas price
-    //     checked_p.unwrap_or(0).saturating_mul(-1)
-    // }
-    //
-    // fn d(&self) -> i128 {
-    //     let upcast_d: i128 = self.da_d_factor.into();
-    //     let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
-    //     let checked_d = slope.checked_div(upcast_d);
-    //     // if the slope is positive, we want to decrease the gas price
-    //     checked_d.unwrap_or(0).saturating_mul(-1)
-    // }
-    //
-    // fn change(&self, p: i128, d: i128) -> i128 {
-    //     let pd_change = p.saturating_add(d);
-    //     let upcast_percent = self.max_change_percent.into();
-    //     let max_change = self
-    //         .last_da_price
-    //         .saturating_mul(upcast_percent)
-    //         .saturating_div(100)
-    //         .into();
-    //     let clamped_change = pd_change.abs().min(max_change);
-    //     pd_change.signum().saturating_mul(clamped_change)
-    // }
-    //
-    // fn assemble_price(&self, change: i128) -> u64 {
-    //     let upcast_last_da_price: i128 = self.last_da_price.into();
-    //     let new_price_oversized = upcast_last_da_price.saturating_add(change);
-    //
-    //     let maybe_new_da_gas_price: u64 = new_price_oversized
-    //         .try_into()
-    //         .unwrap_or(if change.is_positive() { u64::MAX } else { 0 });
-    //
-    //     let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
-    //     self.new_exec_price.saturating_add(new_da_gas_price)
-    // }
 }
 
 /// The state of the algorithm used to update the gas price algorithm for each block
@@ -248,14 +205,12 @@ impl AlgorithmUpdaterV1 {
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(block_projected_da_cost);
-            // TODO: fix this nonsense when we fix the types https://github.com/FuelLabs/fuel-core/issues/2147
             let projected_total_da_cost =
                 i128::try_from(self.projected_total_da_cost).unwrap_or(i128::MAX);
             let last_profit = rewards.saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
-            // implicitly deduce what our da gas price was for the l2 block
-            // self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
 
+            // gas prices
             self.update_exec_gas_price(used, capacity);
             self.update_da_gas_price();
             Ok(())
