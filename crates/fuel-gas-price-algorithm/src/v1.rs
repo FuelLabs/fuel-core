@@ -46,78 +46,80 @@ pub enum Error {
 /// moving average.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
-    /// The lowest the algorithm allows the gas price to go
-    min_da_gas_price: u64,
-    /// The gas price for to cover the execution of the next block
-    new_exec_price: u64,
-    /// The gas price for the DA portion of the last block. This can be used to calculate
-    last_da_price: u64,
-    /// The maximum percentage that the DA portion of the gas price can change in a single block.
-    ///   Using `u16` because it can go above 100% and possibly over 255%
-    max_change_percent: u16,
-    /// The latest known cost per byte for recording blocks on the DA chain
-    latest_da_cost_per_byte: u128,
-    /// The cumulative reward from the DA portion of the gas price
-    total_rewards: u128,
-    /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    total_costs: u128,
-    /// The P component of the PID control for the DA gas price
-    da_p_factor: i64,
-    /// The D component of the PID control for the DA gas price
-    da_d_factor: i64,
-    /// The average profit over the last `avg_window` blocks
-    last_profit: i128,
-    /// the previous profit
-    second_to_last_profit: i128,
+    // /// The lowest the algorithm allows the gas price to go
+    // min_da_gas_price: u64,
+    // /// The gas price for to cover the execution of the next block
+    // new_exec_price: u64,
+    // /// The gas price for the DA portion of the last block. This can be used to calculate
+    // last_da_price: u64,
+    // /// The maximum percentage that the DA portion of the gas price can change in a single block.
+    // ///   Using `u16` because it can go above 100% and possibly over 255%
+    // max_change_percent: u16,
+    // /// The latest known cost per byte for recording blocks on the DA chain
+    // latest_da_cost_per_byte: u128,
+    // /// The cumulative reward from the DA portion of the gas price
+    // total_rewards: u128,
+    // /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
+    // total_costs: u128,
+    // /// The P component of the PID control for the DA gas price
+    // da_p_factor: i64,
+    // /// The D component of the PID control for the DA gas price
+    // da_d_factor: i64,
+    // /// The average profit over the last `avg_window` blocks
+    // last_profit: i128,
+    // /// the previous profit
+    // second_to_last_profit: i128,
+    /// the combined Execution and DA gas prices
+    combined_gas_price: u64,
 }
 
 impl AlgorithmV1 {
-    pub fn calculate(&self, _block_bytes: u64) -> u64 {
-        let p = self.p();
-        let d = self.d();
-        let da_change = self.change(p, d);
-
-        self.assemble_price(da_change)
+    pub fn calculate(&self) -> u64 {
+        // let p = self.p();
+        // let d = self.d();
+        // let da_change = self.change(p, d);
+        //
+        // self.assemble_price(da_change)
+        self.combined_gas_price
     }
-
-    fn p(&self) -> i128 {
-        let upcast_p: i128 = self.da_p_factor.into();
-        let checked_p = self.last_profit.checked_div(upcast_p);
-        // If the profit is positive, we want to decrease the gas price
-        checked_p.unwrap_or(0).saturating_mul(-1)
-    }
-
-    fn d(&self) -> i128 {
-        let upcast_d: i128 = self.da_d_factor.into();
-        let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
-        let checked_d = slope.checked_div(upcast_d);
-        // if the slope is positive, we want to decrease the gas price
-        checked_d.unwrap_or(0).saturating_mul(-1)
-    }
-
-    fn change(&self, p: i128, d: i128) -> i128 {
-        let pd_change = p.saturating_add(d);
-        let upcast_percent = self.max_change_percent.into();
-        let max_change = self
-            .last_da_price
-            .saturating_mul(upcast_percent)
-            .saturating_div(100)
-            .into();
-        let clamped_change = pd_change.abs().min(max_change);
-        pd_change.signum().saturating_mul(clamped_change)
-    }
-
-    fn assemble_price(&self, change: i128) -> u64 {
-        let upcast_last_da_price: i128 = self.last_da_price.into();
-        let new_price_oversized = upcast_last_da_price.saturating_add(change);
-
-        let maybe_new_da_gas_price: u64 = new_price_oversized
-            .try_into()
-            .unwrap_or(if change.is_positive() { u64::MAX } else { 0 });
-
-        let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
-        self.new_exec_price.saturating_add(new_da_gas_price)
-    }
+    // fn p(&self) -> i128 {
+    //     let upcast_p: i128 = self.da_p_factor.into();
+    //     let checked_p = self.last_profit.checked_div(upcast_p);
+    //     // If the profit is positive, we want to decrease the gas price
+    //     checked_p.unwrap_or(0).saturating_mul(-1)
+    // }
+    //
+    // fn d(&self) -> i128 {
+    //     let upcast_d: i128 = self.da_d_factor.into();
+    //     let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
+    //     let checked_d = slope.checked_div(upcast_d);
+    //     // if the slope is positive, we want to decrease the gas price
+    //     checked_d.unwrap_or(0).saturating_mul(-1)
+    // }
+    //
+    // fn change(&self, p: i128, d: i128) -> i128 {
+    //     let pd_change = p.saturating_add(d);
+    //     let upcast_percent = self.max_change_percent.into();
+    //     let max_change = self
+    //         .last_da_price
+    //         .saturating_mul(upcast_percent)
+    //         .saturating_div(100)
+    //         .into();
+    //     let clamped_change = pd_change.abs().min(max_change);
+    //     pd_change.signum().saturating_mul(clamped_change)
+    // }
+    //
+    // fn assemble_price(&self, change: i128) -> u64 {
+    //     let upcast_last_da_price: i128 = self.last_da_price.into();
+    //     let new_price_oversized = upcast_last_da_price.saturating_add(change);
+    //
+    //     let maybe_new_da_gas_price: u64 = new_price_oversized
+    //         .try_into()
+    //         .unwrap_or(if change.is_positive() { u64::MAX } else { 0 });
+    //
+    //     let new_da_gas_price = max(self.min_da_gas_price, maybe_new_da_gas_price);
+    //     self.new_exec_price.saturating_add(new_da_gas_price)
+    // }
 }
 
 /// The state of the algorithm used to update the gas price algorithm for each block
@@ -133,7 +135,7 @@ impl AlgorithmV1 {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct AlgorithmUpdaterV1 {
     // Execution
-    /// The gas price to cover the execution of the next block
+    /// The gas price (scaled by the `gas_price_factor`) to cover the execution of the next block
     pub new_scaled_exec_price: u64,
     /// The lowest the algorithm allows the exec gas price to go
     pub min_exec_gas_price: u64,
@@ -149,7 +151,11 @@ pub struct AlgorithmUpdaterV1 {
     // DA
     /// The gas price for the DA portion of the last block. This can be used to calculate
     /// the DA portion of the next block
-    pub last_da_gas_price: u64,
+    // pub last_da_gas_price: u64,
+
+    /// The gas price (scaled by the `gas_price_factor`) to cover the DA commitment of the next block
+    pub new_scaled_da_gas_price: u64,
+
     /// Scale factor for the gas price.
     pub gas_price_factor: NonZeroU64,
     /// The lowest the algorithm allows the da gas price to go
@@ -240,7 +246,7 @@ impl AlgorithmUpdaterV1 {
         used: u64,
         capacity: NonZeroU64,
         block_bytes: u64,
-        gas_price: u64,
+        _gas_price: u64,
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
@@ -250,34 +256,30 @@ impl AlgorithmUpdaterV1 {
             })
         } else {
             self.l2_block_height = height;
-            // `gas_price_factor` will never be zero
-            #[allow(clippy::arithmetic_side_effects)]
-            let last_exec_price = self
-                .new_scaled_exec_price
-                .saturating_div(self.gas_price_factor.into());
-            // TODO: fix this nonsense when we fix the types https://github.com/FuelLabs/fuel-core/issues/2147
-            let projected_total_da_cost = i128::try_from(self.projected_total_da_cost)
-                .map_err(|_| {
-                    Error::FailedTooIncludeL2BlockData(format!(
-                        "Converting {:?} to an i64 from u256",
-                        self.projected_total_da_cost
-                    ))
-                })?;
+
+            // rewards
+            let block_da_reward = used.saturating_mul(self.descaled_da_price());
+            self.total_da_rewards_excess = self
+                .total_da_rewards_excess
+                .saturating_add(block_da_reward.into());
             let rewards = self.total_da_rewards_excess.try_into().unwrap_or(i128::MAX);
-            let last_profit = rewards.saturating_sub(projected_total_da_cost);
-            self.update_last_profit(last_profit);
+
+            // costs
             let block_projected_da_cost =
                 (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(block_projected_da_cost);
+            // TODO: fix this nonsense when we fix the types https://github.com/FuelLabs/fuel-core/issues/2147
+            let projected_total_da_cost =
+                i128::try_from(self.projected_total_da_cost).unwrap_or(i128::MAX);
+            let last_profit = rewards.saturating_sub(projected_total_da_cost);
+            self.update_last_profit(last_profit);
             // implicitly deduce what our da gas price was for the l2 block
-            self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
+            // self.last_da_gas_price = gas_price.saturating_sub(last_exec_price);
+
             self.update_exec_gas_price(used, capacity);
-            let block_da_reward = used.saturating_mul(self.last_da_gas_price);
-            self.total_da_rewards_excess = self
-                .total_da_rewards_excess
-                .saturating_add(block_da_reward.into());
+            self.update_da_gas_price();
             Ok(())
         }
     }
@@ -289,7 +291,7 @@ impl AlgorithmUpdaterV1 {
 
     fn update_exec_gas_price(&mut self, used: u64, capacity: NonZeroU64) {
         let threshold = *self.l2_block_fullness_threshold_percent as u64;
-        let mut exec_gas_price = self.new_scaled_exec_price;
+        let mut scaled_exec_gas_price = self.new_scaled_exec_price;
         let fullness_percent = used
             .saturating_mul(100)
             .checked_div(capacity.into())
@@ -297,19 +299,77 @@ impl AlgorithmUpdaterV1 {
 
         match fullness_percent.cmp(&threshold) {
             std::cmp::Ordering::Greater => {
-                let change_amount = self.change_amount(exec_gas_price);
-                exec_gas_price = exec_gas_price.saturating_add(change_amount);
+                let change_amount = self.exec_change(scaled_exec_gas_price);
+                scaled_exec_gas_price =
+                    scaled_exec_gas_price.saturating_add(change_amount);
             }
             std::cmp::Ordering::Less => {
-                let change_amount = self.change_amount(exec_gas_price);
-                exec_gas_price = exec_gas_price.saturating_sub(change_amount);
+                let change_amount = self.exec_change(scaled_exec_gas_price);
+                scaled_exec_gas_price =
+                    scaled_exec_gas_price.saturating_sub(change_amount);
             }
             std::cmp::Ordering::Equal => {}
         }
-        self.new_scaled_exec_price = max(self.min_exec_gas_price, exec_gas_price);
+        self.new_scaled_exec_price =
+            max(self.min_scaled_exec_gas_price(), scaled_exec_gas_price);
     }
 
-    fn change_amount(&self, principle: u64) -> u64 {
+    fn min_scaled_exec_gas_price(&self) -> u64 {
+        self.min_exec_gas_price
+            .saturating_mul(self.gas_price_factor.into())
+    }
+
+    fn update_da_gas_price(&mut self) {
+        let p = self.p();
+        let d = self.d();
+        let da_change = self.da_change(p, d);
+        let maybe_new_scaled_da_gas_price = (self.new_scaled_da_gas_price as i128)
+            .checked_add(da_change)
+            .and_then(|x| u64::try_from(x).ok())
+            .unwrap_or(if da_change.is_positive() {
+                u64::MAX
+            } else {
+                0u64
+            });
+        self.new_scaled_da_gas_price = max(
+            self.min_scaled_da_gas_price(),
+            maybe_new_scaled_da_gas_price,
+        );
+    }
+
+    fn min_scaled_da_gas_price(&self) -> u64 {
+        self.min_da_gas_price
+            .saturating_mul(self.gas_price_factor.into())
+    }
+
+    fn p(&self) -> i128 {
+        let upcast_p: i128 = self.da_p_component.into();
+        let checked_p = self.last_profit.checked_div(upcast_p);
+        // If the profit is positive, we want to decrease the gas price
+        checked_p.unwrap_or(0).saturating_mul(-1)
+    }
+
+    fn d(&self) -> i128 {
+        let upcast_d: i128 = self.da_d_component.into();
+        let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
+        let checked_d = slope.checked_div(upcast_d);
+        // if the slope is positive, we want to decrease the gas price
+        checked_d.unwrap_or(0).saturating_mul(-1)
+    }
+
+    fn da_change(&self, p: i128, d: i128) -> i128 {
+        let pd_change = p.saturating_add(d);
+        let upcast_percent = self.max_da_gas_price_change_percent.into();
+        let max_change = self
+            .new_scaled_da_gas_price
+            .saturating_mul(upcast_percent)
+            .saturating_div(100)
+            .into();
+        let clamped_change = pd_change.abs().min(max_change);
+        pd_change.signum().saturating_mul(clamped_change)
+    }
+
+    fn exec_change(&self, principle: u64) -> u64 {
         principle
             .saturating_mul(self.exec_gas_price_change_percent as u64)
             .saturating_div(100)
@@ -361,24 +421,38 @@ impl AlgorithmUpdaterV1 {
             .saturating_add(projection_portion);
     }
 
-    pub fn algorithm(&self) -> AlgorithmV1 {
-        AlgorithmV1 {
-            min_da_gas_price: self.min_da_gas_price,
-            #[allow(clippy::arithmetic_side_effects)]
-            // `gas_price_factor` will never be zero
-            new_exec_price: self
-                .new_scaled_exec_price
-                .saturating_div(self.gas_price_factor.into()),
-            last_da_price: self.last_da_gas_price,
-            max_change_percent: self.max_da_gas_price_change_percent,
+    fn descaled_exec_price(&self) -> u64 {
+        self.new_scaled_exec_price
+            .saturating_div(self.gas_price_factor.into())
+    }
 
-            latest_da_cost_per_byte: self.latest_da_cost_per_byte,
-            total_rewards: self.total_da_rewards_excess,
-            total_costs: self.projected_total_da_cost,
-            last_profit: self.last_profit,
-            second_to_last_profit: self.second_to_last_profit,
-            da_p_factor: self.da_p_component,
-            da_d_factor: self.da_d_component,
+    fn descaled_da_price(&self) -> u64 {
+        self.new_scaled_da_gas_price
+            .saturating_div(self.gas_price_factor.into())
+    }
+
+    pub fn algorithm(&self) -> AlgorithmV1 {
+        let combined_gas_price = self
+            .descaled_exec_price()
+            .saturating_add(self.descaled_da_price());
+        AlgorithmV1 {
+            // min_da_gas_price: self.min_da_gas_price,
+            // #[allow(clippy::arithmetic_side_effects)]
+            // // `gas_price_factor` will never be zero
+            // new_exec_price: self
+            //     .new_scaled_exec_price
+            //     .saturating_div(self.gas_price_factor.into()),
+            // last_da_price: self.last_da_gas_price,
+            // max_change_percent: self.max_da_gas_price_change_percent,
+            //
+            // latest_da_cost_per_byte: self.latest_da_cost_per_byte,
+            // total_rewards: self.total_da_rewards_excess,
+            // total_costs: self.projected_total_da_cost,
+            // last_profit: self.last_profit,
+            // second_to_last_profit: self.second_to_last_profit,
+            // da_p_factor: self.da_p_component,
+            // da_d_factor: self.da_d_component,
+            combined_gas_price,
         }
     }
 
