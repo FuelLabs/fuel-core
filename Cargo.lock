@@ -3363,7 +3363,6 @@ dependencies = [
  "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-client",
- "fuel-core-e2e-client",
  "fuel-core-trace",
  "fuel-core-types 0.35.0",
  "futures",
