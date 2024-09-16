@@ -39,7 +39,7 @@ async fn test_new_subscription_p2p() {
     let mut p2p = MockP2P::new();
     p2p.expect_gossiped_transaction_events()
         .returning(|| Box::pin(fuel_core_services::stream::pending()));
-    p2p.expect_new_tx_subscription().returning(|| {
+    p2p.expect_subscribe_new_peers().returning(|| {
         // Return a boxstream that yield one element
         Box::pin(fuel_core_services::stream::unfold(0, |state| async move {
             if state == 0 {
@@ -112,7 +112,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     let mut p2p = MockP2P::new();
     p2p.expect_gossiped_transaction_events()
         .returning(|| Box::pin(fuel_core_services::stream::pending()));
-    p2p.expect_new_tx_subscription().returning(|| {
+    p2p.expect_subscribe_new_peers().returning(|| {
         // Return a boxstream that yield one element
         Box::pin(fuel_core_services::stream::unfold(0, |state| async move {
             tokio::time::sleep(Duration::from_millis(1000)).await;

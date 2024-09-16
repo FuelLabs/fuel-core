@@ -974,7 +974,7 @@ impl SharedState {
             from_peer,
             channel: sender,
         };
-        self.request_sender.send(request).await?;
+        self.request_sender.try_send(request)?;
 
         let (response_from_peer, response) =
             receiver.await.map_err(|e| anyhow!("{e}"))?;
@@ -1004,7 +1004,7 @@ impl SharedState {
             from_peer,
             channel: sender,
         };
-        self.request_sender.send(request).await?;
+        self.request_sender.try_send(request)?;
 
         let (response_from_peer, response) =
             receiver.await.map_err(|e| anyhow!("{e}"))?;
@@ -1018,10 +1018,13 @@ impl SharedState {
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
-        Ok(txs.into_iter().map(|tx| tx.map(|tx_enum| match tx_enum {
-            NetworkableTransactionPool::Transaction(tx) => tx,
-            NetworkableTransactionPool::PoolTransaction(_) => panic!("A transaction that comes from the network must always be deserialized as a Transaction"),
-        })).collect())
+        txs.into_iter()
+            .map(|tx| {
+                tx.map(Transaction::try_from)
+                    .transpose()
+                    .map_err(|err| anyhow::anyhow!(err))
+            })
+            .collect()
     }
 
     pub fn broadcast_transaction(
@@ -1043,7 +1046,7 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
-    pub fn subscribe_new_tx_subscription(&self) -> broadcast::Receiver<FuelPeerId> {
+    pub fn subscribe_new_peers(&self) -> broadcast::Receiver<FuelPeerId> {
         self.new_tx_subscription_broadcast.subscribe()
     }
 

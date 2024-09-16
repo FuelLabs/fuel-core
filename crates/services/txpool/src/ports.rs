@@ -47,7 +47,7 @@ pub trait PeerToPeer: Send + Sync {
 
     /// Creates a stream that is filled with the peer_id when they subscribe to
     /// our transactions gossip.
-    fn new_tx_subscription(&self) -> BoxStream<PeerId>;
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
 
     /// Creates a stream of next transactions gossiped from the network.
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;

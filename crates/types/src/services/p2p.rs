@@ -251,3 +251,14 @@ impl<'de> Deserialize<'de> for NetworkableTransactionPool {
         ))
     }
 }
+
+impl TryFrom<NetworkableTransactionPool> for Transaction {
+    type Error = &'static str;
+
+    fn try_from(value: NetworkableTransactionPool) -> Result<Self, Self::Error> {
+        match value {
+            NetworkableTransactionPool::Transaction(tx) => Ok(tx),
+            _ => Err("Cannot convert to transaction"),
+        }
+    }
+}

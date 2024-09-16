@@ -142,7 +142,7 @@ mockall::mock! {
             validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()>;
 
-        fn new_tx_subscription(&self) -> BoxStream<PeerId>;
+        fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
 
         async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
 
@@ -270,7 +270,7 @@ impl TestContextBuilder {
             .returning(move |_, _| Ok(()));
         p2p.expect_broadcast_transaction()
             .returning(move |_| Ok(()));
-        p2p.expect_new_tx_subscription()
+        p2p.expect_subscribe_new_peers()
             .returning(|| Box::pin(fuel_core_services::stream::pending()));
 
         let importer = self

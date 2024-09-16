@@ -277,49 +277,13 @@ where
 
             new_peer_subscribed = self.new_tx_gossip_subscription.next() => {
                 // If we are out of capacity, we will skip this event.
-                let _ = self.heavy_async_processor.spawn({
-                    let shared_state = self.tx_pool_shared_state.clone();
-                    let tx_status_change = shared_state.tx_status_sender.clone();
-                    async move {
-                    if let Some(peer_id) = new_peer_subscribed {
-                        // Gathering txs
-                        let peer_tx_ids = shared_state.p2p.request_tx_ids(peer_id.clone()).await.inspect_err(|e| {
-                            tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
-                        }).unwrap_or_default();
-                        if peer_tx_ids.is_empty() {
-                            return;
-                        }
-                        let tx_ids_to_ask = shared_state.txpool.lock().filter_existing_tx_ids(peer_tx_ids);
-                        if tx_ids_to_ask.is_empty() {
-                            return;
-                        }
-                        let txs: Vec<Arc<Transaction>> = shared_state.p2p.request_txs(peer_id.clone(), tx_ids_to_ask).await.inspect_err(|e| {
-                            tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
-                        }).unwrap_or_default().into_iter().flatten().map(Arc::new).collect();
-                        if txs.is_empty() {
-                            return;
-                        }
-                        // Verifying them
-                        let current_height = *shared_state.current_height.lock();
-                        let (version, params) = shared_state
-                            .consensus_parameters_provider
-                            .latest_consensus_parameters();
-                        let checked_transactions = check_transactions(
-                            &txs,
-                            current_height,
-                            shared_state.utxo_validation,
-                            params.as_ref(),
-                            &shared_state.gas_price_provider,
-                            shared_state.memory_pool.clone()
-                        ).await.into_iter().flatten().collect::<Vec<_>>();
-
-                        shared_state.txpool.lock().insert(
-                            &tx_status_change,
-                            version,
-                            checked_transactions
-                        );
-                    }
-                }});
+                if let Some(peer_id) = new_peer_subscribed {
+                    let _ = self.heavy_async_processor.spawn({
+                        let shared_state = self.tx_pool_shared_state.clone();
+                        async move {
+                            shared_state.new_peer_subscribed(peer_id).await;
+                    }});
+                }
                 should_continue = true;
             }
 
@@ -486,6 +450,42 @@ where
     ConsensusProvider: ConsensusParametersProvider,
     MP: MemoryPool + Send + Sync,
 {
+    async fn new_peer_subscribed(&self, peer_id: PeerId) {
+        // Gathering txs
+        let peer_tx_ids = self
+            .p2p
+            .request_tx_ids(peer_id.clone())
+            .await
+            .inspect_err(|e| {
+                tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
+            })
+            .unwrap_or_default();
+        if peer_tx_ids.is_empty() {
+            return;
+        }
+        let tx_ids_to_ask = self.txpool.lock().filter_existing_tx_ids(peer_tx_ids);
+        if tx_ids_to_ask.is_empty() {
+            return;
+        }
+        let txs: Vec<Arc<Transaction>> = self
+            .p2p
+            .request_txs(peer_id.clone(), tx_ids_to_ask)
+            .await
+            .inspect_err(|e| {
+                tracing::error!("Failed to gather tx ids from peer {}: {}", &peer_id, e);
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+            .map(Arc::new)
+            .collect();
+        if txs.is_empty() {
+            return;
+        }
+        // Verifying them
+        self.insert(txs).await;
+    }
+
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub async fn insert(
         &self,
@@ -617,7 +617,7 @@ where
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
-    let new_tx_gossip_subscription = p2p.new_tx_subscription();
+    let new_tx_gossip_subscription = p2p.subscribe_new_peers();
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);

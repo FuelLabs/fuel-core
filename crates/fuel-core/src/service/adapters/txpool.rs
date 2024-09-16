@@ -94,14 +94,14 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
-    fn new_tx_subscription(&self) -> BoxStream<PeerId> {
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
         use tokio_stream::{
             wrappers::BroadcastStream,
             StreamExt,
         };
         if let Some(service) = &self.service {
             Box::pin(
-                BroadcastStream::new(service.subscribe_new_tx_subscription())
+                BroadcastStream::new(service.subscribe_new_peers())
                     .filter_map(|result| result.ok()),
             )
         } else {
@@ -168,7 +168,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         Ok(())
     }
 
-    fn new_tx_subscription(&self) -> BoxStream<PeerId> {
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
         Box::pin(fuel_core_services::stream::pending())
     }
 

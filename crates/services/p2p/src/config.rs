@@ -50,7 +50,7 @@ pub const MAX_RESPONSE_SIZE: usize = 18 * 1024 * 1024;
 pub const MAX_HEADERS_PER_REQUEST: usize = 100;
 
 /// Maximum number of transactions ids asked per request.
-pub const MAX_TXS_PER_REQUEST: usize = 1000000;
+pub const MAX_TXS_PER_REQUEST: usize = 10000;
 
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
