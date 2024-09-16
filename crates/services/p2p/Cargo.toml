@@ -50,6 +50,7 @@ thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 void = "1"
+hickory-resolver = "0.25.0-alpha.2"
 
 [dev-dependencies]
 ctor = "0.1"

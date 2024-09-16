@@ -134,13 +134,13 @@ pub struct NamedNodes(pub HashMap<String, Node>);
 
 impl Bootstrap {
     /// Spawn a bootstrap node.
-    pub async fn new(node_config: &Config) -> Self {
+    pub async fn new(node_config: &Config) -> anyhow::Result<Self> {
         let bootstrap_config = extract_p2p_config(node_config).await;
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
         let (sender, _) =
             broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));
-        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec);
-        bootstrap.start().await.unwrap();
+        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec).await?;
+        bootstrap.start().await?;
 
         let listeners = bootstrap.multiaddrs();
         let (kill, mut shutdown) = broadcast::channel(1);
@@ -169,7 +169,7 @@ impl Bootstrap {
             }
         });
 
-        Bootstrap { listeners, kill }
+        Ok(Bootstrap { listeners, kill })
     }
 
     pub fn listeners(&self) -> Vec<Multiaddr> {
