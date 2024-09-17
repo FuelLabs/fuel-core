@@ -85,7 +85,7 @@ mod tests {
     async fn dns_resolver__parses_all_multiaddresses_from_mainnet_dnsaddr_entry() {
         // given
         let resolver = DnsResolver::new().await.unwrap();
-        let expected_multiaddrs: HashSet<Multiaddr> = vec![
+        let expected_multiaddrs: HashSet<Multiaddr> = [
             "/dns/p2p-mainnet.fuel.network/tcp/30336/p2p/16Uiu2HAkxjhwNYtwawWUexYn84MsrA9ivFWkNHmiF4hSieoNP7Jd",
             "/dns/p2p-mainnet.fuel.network/tcp/30337/p2p/16Uiu2HAmQunK6Dd81BXh3rW2ZsszgviPgGMuHw39vv2XxbkuCfaw",
             "/dns/p2p-mainnet.fuel.network/tcp/30333/p2p/16Uiu2HAkuiLZNrfecgDYHJZV5LoEtCXqqRCqHY3yLBqs4LQk8jJg",
