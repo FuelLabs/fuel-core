@@ -1,21 +1,9 @@
-use super::{
-    ports::worker,
-    storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
-    },
+use super::storage::old::{
+    OldFuelBlockConsensus,
+    OldFuelBlocks,
+    OldTransactions,
 };
 use crate::{
-    database::{
-        database_description::{
-            off_chain::OffChain,
-            DatabaseDescription,
-            DatabaseHeight,
-        },
-        metadata::MetadataTable,
-        Database,
-    },
     fuel_core_graphql_api::{
         ports::{
             self,
@@ -44,7 +32,6 @@ use crate::{
         relayed_transactions::RelayedTransactionStatuses,
     },
 };
-use async_graphql::Description;
 use fuel_core_compression::{
     ports::{
         TemporalRegistry,
@@ -64,7 +51,6 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     not_found,
-    transactional::StorageTransaction,
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
@@ -121,7 +107,6 @@ use futures::{
 };
 use std::{
     borrow::Cow,
-    fmt::Debug,
     ops::Deref,
 };
 

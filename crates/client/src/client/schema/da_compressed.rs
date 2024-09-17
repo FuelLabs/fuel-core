@@ -28,47 +28,17 @@ pub struct DaCompressedBlock {
     pub bytes: HexString,
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[test]
-//     fn block_by_id_query_gql_output() {
-//         use cynic::QueryBuilder;
-//         let operation = BlockByIdQuery::build(BlockByIdArgs {
-//             id: Some(BlockId::default()),
-//         });
-//         insta::assert_snapshot!(operation.query)
-//     }
-
-//     #[test]
-//     fn block_by_height_query_gql_output() {
-//         use cynic::QueryBuilder;
-//         let operation = BlockByHeightQuery::build(BlockByHeightArgs {
-//             height: Some(U32(0)),
-//         });
-//         insta::assert_snapshot!(operation.query)
-//     }
-
-//     #[test]
-//     fn block_mutation_query_gql_output() {
-//         use cynic::MutationBuilder;
-//         let operation = BlockMutation::build(ProduceBlockArgs {
-//             blocks_to_produce: U32(0),
-//             start_timestamp: None,
-//         });
-//         insta::assert_snapshot!(operation.query)
-//     }
-
-//     #[test]
-//     fn blocks_connection_query_gql_output() {
-//         use cynic::QueryBuilder;
-//         let operation = BlocksQuery::build(ConnectionArgs {
-//             after: None,
-//             before: None,
-//             first: None,
-//             last: None,
-//         });
-//         insta::assert_snapshot!(operation.query)
-//     }
-// }
+    #[test]
+    fn block_by_height_query_gql_output() {
+        use cynic::QueryBuilder;
+        let operation =
+            DaCompressedBlockByHeightQuery::build(DaCompressedBlockByHeightArgs {
+                height: U32(0),
+            });
+        insta::assert_snapshot!(operation.query)
+    }
+}

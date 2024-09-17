@@ -9,10 +9,7 @@ use fuel_core_types::{
         UtxoId,
         Word,
     },
-    fuel_types::{
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::Nonce,
 };
 
 use crate::tables::RegistryKeyspace;
