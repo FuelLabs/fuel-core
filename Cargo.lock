@@ -3498,6 +3498,7 @@ dependencies = [
  "fuel-core-types 0.35.0",
  "futures",
  "hex",
+ "hickory-resolver",
  "ip_network",
  "libp2p",
  "libp2p-mplex",
