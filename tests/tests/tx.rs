@@ -235,7 +235,8 @@ fn config_with_size_limit(size_limit: u64) -> Config {
 }
 
 #[tokio::test]
-async fn block_transaction_size_limit_is_respected() {
+async fn transaction_selector_can_saturate_block_according_to_block_transaction_size_limit(
+) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // Create 5 transactions of increasing sizes.
@@ -285,6 +286,54 @@ async fn block_transaction_size_limit_is_respected() {
         assert_eq!(expected_ids, actual_ids);
     }
 }
+
+#[tokio::test]
+async fn transaction_selector_can_select_a_transaction_that_fits() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    // Create 5 transactions of decreasing sizes.
+    let arb_tx_count = 5;
+    let transactions: Vec<(_, _)> = (0..arb_tx_count)
+        .into_iter()
+        .map(|i| {
+            let script_bytes_count = 10_000 + (i * 100);
+            let tx =
+                arb_large_script_tx(189028 + i as Word, script_bytes_count, &mut rng);
+            let size = tx
+                .as_script()
+                .expect("script tx expected")
+                .metered_bytes_size() as u64;
+            (tx, size)
+        })
+        .rev()
+        .collect();
+
+    let (smallest_tx, smallest_size) = transactions.last().unwrap();
+
+    // Allow only the smallest transaction to fit.
+    let config = config_with_size_limit(*smallest_size);
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Submit all transactions
+    for (tx, _) in &transactions {
+        let status = client.submit(tx).await;
+        assert!(status.is_ok())
+    }
+
+    let _ = tokio::time::sleep(Duration::from_millis(10)).await;
+
+    // Produce a block.
+    let block_height = client.produce_blocks(1, None).await.unwrap();
+
+    // Assert that only the smallest transaction (+ mint) was included.
+    let block = client.block_by_height(block_height).await.unwrap().unwrap();
+    assert_eq!(block.transactions.len(), 2);
+    let expected_id = smallest_tx.id(&ChainId::default());
+    let actual_id = block.transactions.first().unwrap();
+    assert_eq!(&expected_id, actual_id);
+}
+
 
 #[tokio::test]
 async fn submit() {
