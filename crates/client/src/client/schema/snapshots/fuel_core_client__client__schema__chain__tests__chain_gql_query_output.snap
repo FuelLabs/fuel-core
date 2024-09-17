@@ -75,6 +75,7 @@ query ChainQuery {
       }
       baseAssetId
       blockGasLimit
+      blockTransactionSizeLimit
       chainId
       gasCosts {
         version

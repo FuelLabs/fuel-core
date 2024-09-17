@@ -5,7 +5,7 @@ expression: json
 {
   "chain_name": "local_testnet",
   "consensus_parameters": {
-    "V1": {
+    "V2": {
       "tx_params": {
         "V1": {
           "max_inputs": 255,
@@ -297,6 +297,7 @@ expression: json
       },
       "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000",
       "block_gas_limit": 100000000,
+      "block_transaction_size_limit": 129024,
       "privileged_address": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
