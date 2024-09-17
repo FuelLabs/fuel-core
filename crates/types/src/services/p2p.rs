@@ -21,10 +21,10 @@ use std::{
     time::SystemTime,
 };
 
-use super::txpool::{
-    ArcPoolTx,
-    PoolTransaction,
-};
+use super::txpool::ArcPoolTx;
+
+#[cfg(feature = "serde")]
+use super::txpool::PoolTransaction;
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
@@ -242,6 +242,7 @@ impl Serialize for NetworkableTransactionPool {
     }
 }
 
+#[cfg(feature = "serde")]
 /// Deserialize to a transaction variant
 impl<'de> Deserialize<'de> for NetworkableTransactionPool {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
