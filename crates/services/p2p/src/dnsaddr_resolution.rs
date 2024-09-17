@@ -79,17 +79,29 @@ impl DnsResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[tokio::test]
     async fn dns_resolver__parses_all_multiaddresses_from_ipfs_bootstrap_nodes() {
         // given
         let resolver = DnsResolver::new().await.unwrap();
+        let expected_multiaddrs: HashSet<Multiaddr> = vec![
+            "/dns4/sjc-1.bootstrap.libp2p.io/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        ].iter().map(|s| s.parse().unwrap()).collect();
+
         // when
-        let multiaddrs = resolver
-            .lookup_dnsaddr("bootstrap.libp2p.io")
-            .await
-            .unwrap();
+        // run a `dig +short txt rymnc.com` to get the TXT records
+        // notice that it contains -
+        // `dnsaddr=/dnsaddr/zone-1.rymnc.com/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN`
+        // which is a recursive call
+        let multiaddrs = resolver.lookup_dnsaddr("rymnc.com").await.unwrap();
         // then
-        assert!(!multiaddrs.is_empty());
+        for multiaddr in multiaddrs.iter() {
+            assert!(
+                expected_multiaddrs.contains(multiaddr),
+                "Unexpected multiaddr: {:?}",
+                multiaddr
+            );
+        }
     }
 }
