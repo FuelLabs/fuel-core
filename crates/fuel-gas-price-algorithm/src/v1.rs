@@ -1,6 +1,7 @@
 use std::{
     cmp::max,
     num::NonZeroU64,
+    ops::Div,
 };
 
 #[cfg(test)]
@@ -205,8 +206,7 @@ impl AlgorithmUpdaterV1 {
             self.projected_total_da_cost = self
                 .projected_total_da_cost
                 .saturating_add(block_projected_da_cost);
-            let projected_total_da_cost =
-                i128::try_from(self.projected_total_da_cost).unwrap_or(i128::MAX);
+            let projected_total_da_cost = self.projected_cost_as_i128();
             let last_profit = rewards.saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
 
@@ -215,6 +215,11 @@ impl AlgorithmUpdaterV1 {
             self.update_da_gas_price();
             Ok(())
         }
+    }
+
+    // We are assuming that the difference between u128::MAX and i128::MAX is negligible
+    fn projected_cost_as_i128(&self) -> i128 {
+        i128::try_from(self.projected_total_da_cost).unwrap_or(i128::MAX)
     }
 
     fn update_last_profit(&mut self, new_profit: i128) {
@@ -256,13 +261,15 @@ impl AlgorithmUpdaterV1 {
         let p = self.p();
         let d = self.d();
         let da_change = self.da_change(p, d);
-        let maybe_new_scaled_da_gas_price = (self.new_scaled_da_gas_price as i128)
+        let maybe_new_scaled_da_gas_price = i128::from(self.new_scaled_da_gas_price)
             .checked_add(da_change)
             .and_then(|x| u64::try_from(x).ok())
-            .unwrap_or(if da_change.is_positive() {
-                u64::MAX
-            } else {
-                0u64
+            .unwrap_or_else(|| {
+                if da_change.is_positive() {
+                    u64::MAX
+                } else {
+                    0u64
+                }
             });
         self.new_scaled_da_gas_price = max(
             self.min_scaled_da_gas_price(),
@@ -276,14 +283,14 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn p(&self) -> i128 {
-        let upcast_p: i128 = self.da_p_component.into();
+        let upcast_p = i128::from(self.da_p_component);
         let checked_p = self.last_profit.checked_div(upcast_p);
         // If the profit is positive, we want to decrease the gas price
         checked_p.unwrap_or(0).saturating_mul(-1)
     }
 
     fn d(&self) -> i128 {
-        let upcast_d: i128 = self.da_d_component.into();
+        let upcast_d = i128::from(self.da_d_component);
         let slope = self.last_profit.saturating_sub(self.second_to_last_profit);
         let checked_d = slope.checked_div(upcast_d);
         // if the slope is positive, we want to decrease the gas price
@@ -355,17 +362,11 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn descaled_exec_price(&self) -> u64 {
-        let factor = self.gas_price_factor.into();
-        self.new_scaled_exec_price
-            .checked_div(factor)
-            .expect("factor is never 0")
+        self.new_scaled_exec_price.div(self.gas_price_factor)
     }
 
     fn descaled_da_price(&self) -> u64 {
-        let factor: u64 = self.gas_price_factor.into();
-        self.new_scaled_da_gas_price
-            .checked_div(factor)
-            .expect("factor is never 0")
+        self.new_scaled_da_gas_price.div(self.gas_price_factor)
     }
 
     pub fn algorithm(&self) -> AlgorithmV1 {
