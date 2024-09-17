@@ -3231,6 +3231,7 @@ dependencies = [
  "criterion",
  "ctrlc",
  "ed25519-dalek",
+ "enum-iterator",
  "ethnum",
  "fuel-core",
  "fuel-core-chain-config",
@@ -3240,6 +3241,8 @@ dependencies = [
  "fuel-core-sync",
  "fuel-core-types",
  "futures",
+ "itertools 0.12.1",
+ "num_enum",
  "p256",
  "postcard",
  "primitive-types",
@@ -3248,6 +3251,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "test-helpers",
  "tikv-jemallocator",
  "tokio",
@@ -3445,6 +3450,7 @@ dependencies = [
  "fuel-gas-price-algorithm",
  "futures",
  "num_enum",
+ "reqwest",
  "serde",
  "strum 0.25.0",
  "strum_macros 0.25.3",
@@ -3842,6 +3848,7 @@ name = "fuel-gas-price-algorithm"
 version = "0.35.0"
 dependencies = [
  "proptest",
+ "rand",
  "serde",
  "thiserror",
 ]

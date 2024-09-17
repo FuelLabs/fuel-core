@@ -1,3 +1,7 @@
+use crate::{
+    charts::draw_chart,
+    simulation::da_cost_per_byte::get_da_cost_per_byte_from_source,
+};
 use plotters::prelude::*;
 use rand::{
     rngs::StdRng,
@@ -8,16 +12,10 @@ use rand::{
 use plotters::coord::Shift;
 
 use crate::{
-    charts::{
-        draw_bytes_and_cost_per_block,
-        draw_fullness,
-        draw_gas_prices,
-        draw_profit,
-    },
     optimisation::naive_optimisation,
     simulation::{
-        run_simulation,
         SimulationResults,
+        Simulator,
     },
 };
 
@@ -26,20 +24,10 @@ mod simulation;
 
 mod charts;
 
-pub fn pretty<T: ToString>(input: T) -> String {
-    input
-        .to_string()
-        .as_bytes()
-        .rchunks(3)
-        .rev()
-        .map(std::str::from_utf8)
-        .collect::<Result<Vec<&str>, _>>()
-        .unwrap()
-        .join(",") // separator
-}
-
-
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser,
+    Subcommand,
+};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -70,83 +58,148 @@ enum Mode {
         source: Source,
         /// Number of iterations to run the optimization for
         iterations: u64,
-    }
+    },
 }
 
 #[derive(Subcommand)]
 enum Source {
-    Generated { size: usize }
+    Generated {
+        size: usize,
+    },
+    Predefined {
+        file_path: String,
+        /// The number of L2 blocks to include from source
+        #[arg(short, long)]
+        sample_size: Option<usize>,
+    },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Arg::parse();
+
+    const UPDATE_PERIOD: usize = 12;
 
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
-            let Source::Generated { size } = source;
-            println!("Running simulation with P: {}, D: {}, and {} blocks", pretty(p), pretty(d), pretty(size));
-            let result = run_simulation(p, d, size);
+            let da_cost_per_byte =
+                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
+            let size = da_cost_per_byte.len();
+            println!(
+                "Running simulation with P: {}, D: {}, and {} blocks",
+                prettify_number(p),
+                prettify_number(d),
+                prettify_number(size)
+            );
+            let simulator = Simulator::new(da_cost_per_byte);
+            let result = simulator.run_simulation(p, d, UPDATE_PERIOD);
             (result, (p, d))
-        },
-        Mode::Optimization { iterations, source} => {
-            let Source::Generated { size } = source;
-            println!("Running optimization with {iterations} iterations and {size} blocks");
-            let (results, (p, d)) = naive_optimisation(iterations as usize, size);
-            println!("Optimization results: P: {}, D: {}", pretty(p), pretty(d));
+        }
+        Mode::Optimization { iterations, source } => {
+            let da_cost_per_byte =
+                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
+            let size = da_cost_per_byte.len();
+            println!(
+                "Running optimization with {iterations} iterations and {size} blocks"
+            );
+            let simulator = Simulator::new(da_cost_per_byte);
+            let (results, (p, d)) =
+                naive_optimisation(&simulator, iterations as usize, UPDATE_PERIOD).await;
+            println!(
+                "Optimization results: P: {}, D: {}",
+                prettify_number(p),
+                prettify_number(d)
+            );
             (results, (p, d))
         }
     };
 
-    if let Some(file_path) = &args.file_path {
-        draw_chart(results, p_comp, d_comp, file_path);
+    print_info(&results);
 
+    if let Some(file_path) = &args.file_path {
+        draw_chart(results, p_comp, d_comp, file_path)?;
     }
+
+    Ok(())
 }
 
-fn draw_chart(results: SimulationResults, p_comp: i64, d_comp: i64, file_path: &str) {
+fn print_info(results: &SimulationResults) {
     let SimulationResults {
-        gas_prices,
-        exec_gas_prices,
         da_gas_prices,
-        fullness,
-        bytes_and_costs,
         actual_profit,
         projected_profit,
-        pessimistic_costs,
+        ..
     } = results;
 
-    let max_actual_profit = pretty(*actual_profit.iter().max().unwrap() as u64);
-    println!("max_actual: {max_actual_profit}");
+    // Max actual profit
+    let (index, max_actual_profit) = actual_profit
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *max_actual_profit as f64 / (10_f64).powf(18.);
+    println!("max actual profit: {} ETH at {}", eth, index);
 
-    let plot_width = 640 * 2 * 2;
-    let plot_height = 480 * 3;
+    // Max projected profit
+    let (index, max_projected_profit) = projected_profit
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *max_projected_profit as f64 / (10_f64).powf(18.);
+    println!("max projected profit: {} ETH at {}", eth, index);
 
-    let root =
-        BitMapBackend::new(file_path, (plot_width, plot_height)).into_drawing_area();
-    root.fill(&WHITE).unwrap();
-    let (window_one, lower) = root.split_vertically(plot_height / 4);
-    let (window_two, new_lower) = lower.split_vertically(plot_height / 4);
-    let (window_three, window_four) = new_lower.split_vertically(plot_height / 4);
+    // Min actual profit
+    let (index, min_actual_profit) = actual_profit
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *min_actual_profit as f64 / (10_f64).powf(18.);
+    println!("min actual profit: {} ETH at {}", eth, index);
 
-    draw_fullness(&window_one, &fullness, "Fullness");
+    // Min projected profit
+    let (index, min_projected_profit) = projected_profit
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *min_projected_profit as f64 / (10_f64).powf(18.);
+    println!("min projected profit: {} ETH at {}", eth, index);
 
-    draw_bytes_and_cost_per_block(&window_two, &bytes_and_costs, "Bytes Per Block");
-
-    draw_profit(
-        &window_three,
-        &actual_profit,
-        &projected_profit,
-        &pessimistic_costs,
-        &format!("Profit p_comp: {p_comp:?}, d_comp: {d_comp:?}"),
+    // Max DA Gas Price
+    let (index, max_da_gas_price) = da_gas_prices
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *max_da_gas_price as f64 / (10_f64).powf(18.);
+    println!(
+        "max DA gas price: {} Wei ({} ETH) at {}",
+        max_da_gas_price, eth, index
     );
-    draw_gas_prices(
-        &window_four,
-        &gas_prices,
-        &exec_gas_prices,
-        &da_gas_prices,
-        "Gas Prices",
-    );
 
-    root.present().unwrap();
+    // Min Da Gas Price
+    let (index, min_da_gas_price) = da_gas_prices
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.cmp(b))
+        .unwrap();
+    let eth = *min_da_gas_price as f64 / (10_f64).powf(18.);
+    println!(
+        "min DA gas price: {} Wei ({} ETH) at {}",
+        min_da_gas_price, eth, index
+    );
 }
 
+pub fn prettify_number<T: std::fmt::Display>(input: T) -> String {
+    input
+        .to_string()
+        .as_bytes()
+        .rchunks(3)
+        .rev()
+        .map(std::str::from_utf8)
+        .collect::<Result<Vec<&str>, _>>()
+        .unwrap()
+        .join(",") // separator
+}

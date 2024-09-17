@@ -92,10 +92,10 @@ impl FakeDaSource {
     }
 }
 
-impl DaCommitSource for FakeDaSource {
-    fn get_da_commit_details(&mut self) -> Result<Option<DaCommitDetails>> {
+impl GetDaBlockCosts for FakeDaSource {
+    fn get(&self) -> Result<Option<DaBlockCosts>> {
         *self.called.lock().unwrap() = true;
-        Ok(Some(DaCommitDetails::default()))
+        Ok(Some(DaBlockCosts::default()))
     }
 }
 

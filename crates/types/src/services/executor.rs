@@ -51,6 +51,7 @@ pub type UncommittedValidationResult<DatabaseTransaction> =
     Uncommitted<ValidationResult, DatabaseTransaction>;
 
 /// The result of transactions execution for block production.
+#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
 pub struct ExecutionResult {
@@ -209,6 +210,14 @@ impl TransactionExecutionResult {
         match self {
             TransactionExecutionResult::Success { receipts, .. }
             | TransactionExecutionResult::Failed { receipts, .. } => receipts,
+        }
+    }
+
+    /// Get the total gas used by the transaction.
+    pub fn total_gas(&self) -> &u64 {
+        match self {
+            TransactionExecutionResult::Success { total_gas, .. }
+            | TransactionExecutionResult::Failed { total_gas, .. } => total_gas,
         }
     }
 

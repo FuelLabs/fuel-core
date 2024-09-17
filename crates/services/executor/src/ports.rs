@@ -3,18 +3,30 @@ use fuel_core_types::{
         header::ConsensusParametersVersion,
         primitives::DaBlockHeight,
     },
-    fuel_tx,
     fuel_tx::{
+        self,
+        Chargeable,
+        ConsensusParameters,
+        Transaction,
         TxId,
         UniqueIdentifier,
     },
     fuel_types::ChainId,
     fuel_vm::checked_transaction::CheckedTransaction,
-    services::relayer::Event,
+    services::{
+        executor::{
+            Error as ExecutorError,
+            Result as ExecutorResult,
+        },
+        relayer::Event,
+    },
 };
 
 #[cfg(feature = "alloc")]
-use alloc::vec::Vec;
+use alloc::{
+    string::ToString,
+    vec::Vec,
+};
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -51,6 +63,53 @@ impl MaybeCheckedTransaction {
                 _,
             ) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
+        }
+    }
+}
+
+pub trait TransactionExt {
+    fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64>;
+}
+
+impl TransactionExt for Transaction {
+    fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64> {
+        let fee_params = consensus_params.fee_params();
+        let gas_costs = consensus_params.gas_costs();
+        match self {
+            Transaction::Script(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+            Transaction::Create(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have max_gas".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+            Transaction::Upload(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+            Transaction::Blob(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+        }
+    }
+}
+
+impl TransactionExt for CheckedTransaction {
+    fn max_gas(&self, _: &ConsensusParameters) -> ExecutorResult<u64> {
+        match self {
+            CheckedTransaction::Script(tx) => Ok(tx.metadata().max_gas),
+            CheckedTransaction::Create(tx) => Ok(tx.metadata().max_gas),
+            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have max_gas".to_string(),
+            )),
+            CheckedTransaction::Upgrade(tx) => Ok(tx.metadata().max_gas),
+            CheckedTransaction::Upload(tx) => Ok(tx.metadata().max_gas),
+            CheckedTransaction::Blob(tx) => Ok(tx.metadata().max_gas),
+        }
+    }
+}
+
+impl TransactionExt for MaybeCheckedTransaction {
+    fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64> {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => {
+                tx.max_gas(consensus_params)
+            }
+            MaybeCheckedTransaction::Transaction(tx) => tx.max_gas(consensus_params),
         }
     }
 }
