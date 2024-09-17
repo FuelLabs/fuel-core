@@ -1,5 +1,9 @@
 use crate::helpers::TestContext;
 use fuel_core::{
+    chain_config::{
+        ChainConfig,
+        StateConfig,
+    },
     schema::tx::receipt::all_receipts,
     service::{
         Config,
@@ -14,12 +18,19 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::service::Mode;
+use fuel_core_poa::{
+    service::Mode,
+    Trigger,
+};
 use fuel_core_types::{
-    fuel_asm::*,
+    fuel_asm::{
+        op,
+        RegId,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::{
         field::ReceiptsRoot,
+        Chargeable,
         *,
     },
     fuel_types::ChainId,
@@ -31,7 +42,12 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::io::ErrorKind::NotFound;
+use std::{
+    io::ErrorKind::NotFound,
+    iter::repeat,
+    time::Duration,
+    u64,
+};
 
 mod predicates;
 mod tx_pointer;
@@ -178,6 +194,95 @@ async fn dry_run_above_block_gas_limit() {
     match client.dry_run(&[tx.clone()]).await {
         Ok(_) => panic!("Expected error"),
         Err(e) => assert_eq!(e.to_string(), "Response errors; The sum of the gas usable by the transactions is greater than the block gas limit".to_owned()),
+    }
+}
+
+fn arb_large_script_tx<R: Rng + rand::CryptoRng>(
+    max_fee_limit: Word,
+    size: usize,
+    rng: &mut R,
+) -> Transaction {
+    let mut script: Vec<_> = repeat(op::noop()).take(size).collect();
+    script.push(op::ret(RegId::ONE));
+    let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
+    let asset_id = *builder.get_params().base_asset_id();
+    builder
+        .max_fee_limit(max_fee_limit)
+        .script_gas_limit(22430)
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            rng.gen(),
+            u32::MAX as u64,
+            asset_id,
+            Default::default(),
+        )
+        .finalize()
+        .into()
+}
+
+fn config_with_size_limit(size_limit: u64) -> Config {
+    let mut chain_config = ChainConfig::default();
+    chain_config
+        .consensus_parameters
+        .set_block_transaction_size_limit(size_limit)
+        .expect("should be able to set the limit");
+    let state_config = StateConfig::default();
+
+    let mut config = Config::local_node_with_configs(chain_config, state_config);
+    config.block_production = Trigger::Never;
+    config
+}
+
+#[tokio::test]
+async fn block_transaction_size_limit_is_respected() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    // Create 5 transactions of increasing sizes.
+    let arb_tx_count = 5;
+    let transactions: Vec<(_, _)> = (0..arb_tx_count)
+        .into_iter()
+        .map(|i| {
+            let script_bytes_count = 10_000 + (i * 100);
+            let tx =
+                arb_large_script_tx(189028 + i as Word, script_bytes_count, &mut rng);
+            let size = tx
+                .as_script()
+                .expect("script tx expected")
+                .metered_bytes_size() as u64;
+            (tx, size)
+        })
+        .collect();
+
+    // Run 5 cases. Each one will allow one more transaction to be included due to size.
+    for n in 1..=arb_tx_count {
+        // Calculate proper size limit for 'n' transactions
+        let size_limit: u64 = transactions.iter().take(n).map(|(_, size)| size).sum();
+        let config = config_with_size_limit(size_limit);
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // Submit all transactions
+        for (tx, _) in &transactions {
+            let status = client.submit(tx).await;
+            assert!(status.is_ok())
+        }
+
+        let _ = tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Produce a block.
+        let block_height = client.produce_blocks(1, None).await.unwrap();
+
+        // Assert that only 'n' first transactions (+1 for mint) were included.
+        let block = client.block_by_height(block_height).await.unwrap().unwrap();
+        assert_eq!(block.transactions.len(), n + 1);
+        let expected_ids: Vec<_> = transactions
+            .iter()
+            .take(n)
+            .map(|(tx, _)| tx.id(&ChainId::default()))
+            .collect();
+        let actual_ids: Vec<_> = block.transactions.into_iter().take(n).collect();
+        assert_eq!(expected_ids, actual_ids);
     }
 }
 
