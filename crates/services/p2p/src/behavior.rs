@@ -96,7 +96,7 @@ impl FuelBehaviour {
 
         let gossipsub = build_gossipsub_behaviour(p2p_config);
 
-        let peer_report = peer_report::Behaviour::new(p2p_config);
+        let peer_report = peer_report::Behaviour::new(&p2p_config.reserved_nodes);
 
         let identify = {
             let identify_config = identify::Config::new(

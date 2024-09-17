@@ -5,6 +5,7 @@ pub mod behavior;
 pub mod codecs;
 pub mod config;
 pub mod discovery;
+mod dnsaddr_resolution;
 pub mod gossipsub;
 pub mod heartbeat;
 pub mod heavy_task_processor;

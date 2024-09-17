@@ -1,9 +1,5 @@
 use crate::{
     discovery::{
-        dnsaddr_resolution::{
-            DnsLookup,
-            DnsResolver,
-        },
         mdns_wrapper::MdnsWrapper,
         Behaviour,
     },
@@ -15,7 +11,6 @@ use libp2p::{
         store::MemoryStore,
         Mode,
     },
-    multiaddr::Protocol,
     swarm::StreamProtocol,
     Multiaddr,
     PeerId,
@@ -124,8 +119,17 @@ impl Config {
             kad::Behaviour::with_config(local_peer_id, memory_store, kademlia_config);
         kademlia.set_mode(Some(Mode::Server));
 
-        let bootstrap_nodes = get_kademlia_kv(bootstrap_nodes).await?;
-        let reserved_nodes = get_kademlia_kv(reserved_nodes).await?;
+        // bootstrap nodes need to have their peer_id defined in the Multiaddr
+        let bootstrap_nodes = bootstrap_nodes
+            .into_iter()
+            .filter_map(|node| node.try_to_peer_id().map(|peer_id| (peer_id, node)))
+            .collect::<Vec<_>>();
+
+        // reserved nodes need to have their peer_id defined in the Multiaddr
+        let reserved_nodes = reserved_nodes
+            .into_iter()
+            .filter_map(|node| node.try_to_peer_id().map(|peer_id| (peer_id, node)))
+            .collect::<Vec<_>>();
 
         // add bootstrap nodes only if `reserved_nodes_only_mode` is disabled
         if !reserved_nodes_only_mode {
@@ -171,33 +175,4 @@ impl Config {
             mdns,
         })
     }
-}
-
-async fn get_kademlia_kv(
-    multiaddrs: Vec<Multiaddr>,
-) -> anyhow::Result<Vec<(PeerId, Multiaddr)>> {
-    let dnsaddr_urls = multiaddrs
-        .iter()
-        .filter_map(|node| {
-            if let Protocol::Dnsaddr(multiaddr) = node.iter().next()? {
-                Some(multiaddr.clone())
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let dns_resolver = DnsResolver::new().await?;
-    let mut dnsaddr_multiaddrs = vec![];
-
-    for dnsaddr in dnsaddr_urls {
-        let multiaddrs = dns_resolver.lookup_dnsaddr(dnsaddr.as_ref()).await?;
-        dnsaddr_multiaddrs.extend(multiaddrs);
-    }
-
-    Ok(multiaddrs
-        .into_iter()
-        .chain(dnsaddr_multiaddrs.into_iter())
-        .filter_map(|node| node.try_to_peer_id().map(|peer_id| (peer_id, node)))
-        .collect::<Vec<_>>())
 }

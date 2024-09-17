@@ -11,6 +11,8 @@ use crate::{
         build_transport_function,
         Config,
     },
+    discovery,
+    dnsaddr_resolution::DnsResolver,
     gossipsub::{
         messages::{
             GossipTopicTag,
@@ -168,6 +170,33 @@ pub enum FuelP2PEvent {
     },
 }
 
+async fn parse_multiaddrs(multiaddrs: Vec<Multiaddr>) -> anyhow::Result<Vec<Multiaddr>> {
+    let dnsaddr_urls = multiaddrs
+        .iter()
+        .filter_map(|node| {
+            if let Protocol::Dnsaddr(multiaddr) = node.iter().next()? {
+                Some(multiaddr.clone())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let dns_resolver = DnsResolver::new().await?;
+    let mut dnsaddr_multiaddrs = vec![];
+
+    for dnsaddr in dnsaddr_urls {
+        let multiaddrs = dns_resolver.lookup_dnsaddr(dnsaddr.as_ref()).await?;
+        dnsaddr_multiaddrs.extend(multiaddrs);
+    }
+
+    Ok(multiaddrs
+        .into_iter()
+        .filter(|multiaddr| !multiaddr.iter().any(|p| matches!(p, Protocol::Dnsaddr(_))))
+        .chain(dnsaddr_multiaddrs.into_iter())
+        .collect::<Vec<_>>())
+}
+
 impl FuelP2PService {
     pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
@@ -177,6 +206,11 @@ impl FuelP2PService {
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
+
+        let mut config = config;
+        // override the configuration with the parsed multiaddrs from dnsaddr resolution
+        config.bootstrap_nodes = parse_multiaddrs(config.bootstrap_nodes).await?;
+        config.reserved_nodes = parse_multiaddrs(config.reserved_nodes).await?;
 
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);

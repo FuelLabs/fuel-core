@@ -9,29 +9,23 @@ const DNSADDR_PREFIX: &str = "_dnsaddr.";
 /// This limit is for preventing malicious or misconfigured DNS records from causing infinite recursion.
 const MAX_DNS_LOOKUPS: usize = 10;
 
-#[async_trait::async_trait]
-pub trait DnsLookup {
-    async fn lookup_dnsaddr(&self, addr: &str) -> anyhow::Result<Vec<Multiaddr>>;
-    async fn new() -> anyhow::Result<Box<Self>>;
-}
-
-pub struct DnsResolver {
+pub(crate) struct DnsResolver {
     resolver: TokioAsyncResolver,
 }
 
-#[async_trait::async_trait]
-impl DnsLookup for DnsResolver {
-    async fn lookup_dnsaddr(&self, addr: &str) -> anyhow::Result<Vec<Multiaddr>> {
+impl DnsResolver {
+    pub(crate) async fn lookup_dnsaddr(
+        &self,
+        addr: &str,
+    ) -> anyhow::Result<Vec<Multiaddr>> {
         self.resolve_recursive(addr, 0).await
     }
 
-    async fn new() -> anyhow::Result<Box<Self>> {
+    pub(crate) async fn new() -> anyhow::Result<Box<Self>> {
         let resolver = TokioAsyncResolver::tokio_from_system_conf()?;
         Ok(Box::new(Self { resolver }))
     }
-}
 
-impl DnsResolver {
     /// Internal method to handle recursive DNS lookups.
     fn resolve_recursive<'a>(
         &'a self,

@@ -38,7 +38,6 @@ use std::{
 };
 use tracing::trace;
 mod discovery_config;
-mod dnsaddr_resolution;
 mod mdns_wrapper;
 
 pub use discovery_config::Config;
