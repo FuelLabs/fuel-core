@@ -120,6 +120,8 @@ fn dev_config() -> Config {
         .consensus_parameters
         .set_tx_params(tx_parameters);
     chain_config.consensus_parameters.set_fee_params(fee_params);
+    chain_config.state_transition_bytecode =
+        fuel_core::upgradable_executor::WASM_BYTECODE.to_vec();
     let reader = reader.with_chain_config(chain_config);
 
     let mut config = Config::local_node_with_reader(reader);

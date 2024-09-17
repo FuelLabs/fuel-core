@@ -135,12 +135,13 @@ pub enum ReturnType {
 #[cfg(not(feature = "std"))]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ReturnType {
+    /// WASM executor doesn't use this variant, so from its perspective it is empty.
     ExecutionV0,
     ExecutionV1(Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>),
     Validation(Result<Uncommitted<ValidationResult, Changes>, JSONError>),
 }
 
-/// Converts the latest execution result to the v1 execution result.
+/// Converts the latest execution result to the `ExecutionV1`.
 pub fn convert_to_v1_execution_result(
     result: Result<UncommittedResult<Changes>, ExecutorError>,
 ) -> Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError> {
@@ -171,7 +172,7 @@ pub fn convert_to_v1_execution_result(
         .map_err(JSONError::from)
 }
 
-/// Converts the v1 execution result to latest execution result.
+/// Converts the `ExecutionV1` to latest execution result.
 pub fn convert_from_v1_execution_result(
     result: Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>,
 ) -> Result<UncommittedResult<Changes>, ExecutorError> {
@@ -202,7 +203,7 @@ pub fn convert_from_v1_execution_result(
         .map_err(ExecutorError::from)
 }
 
-/// Converts the v0 execution result to latest execution result.
+/// Converts the `ExecutionV0` to latest execution result.
 #[cfg(feature = "std")]
 pub fn convert_from_v0_execution_result(
     result: Result<
