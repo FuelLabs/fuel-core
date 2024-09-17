@@ -360,6 +360,7 @@ mod full_block {
         },
         FuelClient,
     };
+    use fuel_core_types::fuel_types::BlockHeight;
 
     #[derive(cynic::QueryFragment, Debug)]
     #[cynic(
@@ -422,5 +423,96 @@ mod full_block {
         let block = client.full_block_by_height(1).await.unwrap().unwrap();
         assert_eq!(block.header.height.0, 1);
         assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
+    }
+
+    use fuel_core_types::{
+        fuel_asm::{
+            op,
+            RegId,
+        },
+        fuel_vm::SecretKey,
+    };
+
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        SeedableRng,
+    };
+
+    #[tokio::test]
+    async fn too_many_transactions_are_split_in_blocks() {
+        let max_gas_limit = 50_000_000;
+        let mut rng = StdRng::seed_from_u64(2322);
+
+        let local_node_config = Config::local_node();
+        let txpool = fuel_core_txpool::Config {
+            max_tx: usize::MAX,
+            ..local_node_config.txpool
+        };
+        let chain_config = local_node_config.snapshot_reader.chain_config().clone();
+        let mut consensus_parameters = chain_config.consensus_parameters;
+        consensus_parameters.set_block_gas_limit(u64::MAX);
+        let snapshot_reader = local_node_config.snapshot_reader.with_chain_config(
+            fuel_core::chain_config::ChainConfig {
+                consensus_parameters,
+                ..chain_config
+            },
+        );
+
+        let patched_node_config = Config {
+            block_production: Trigger::Never,
+            txpool,
+            snapshot_reader,
+            ..local_node_config
+        };
+
+        let srv = FuelService::new_node(patched_node_config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        let tx_count = 66_000;
+        let txs = (1..=tx_count)
+            .map(|i| {
+                TransactionBuilder::script(
+                    op::ret(RegId::ONE).to_bytes().into_iter().collect(),
+                    vec![],
+                )
+                .script_gas_limit(max_gas_limit / 2)
+                .add_unsigned_coin_input(
+                    SecretKey::random(&mut rng),
+                    rng.gen(),
+                    1000 + i,
+                    Default::default(),
+                    Default::default(),
+                )
+                .add_output(Output::Change {
+                    amount: 0,
+                    asset_id: Default::default(),
+                    to: rng.gen(),
+                })
+                .finalize_as_transaction()
+            })
+            .collect_vec();
+
+        for tx in txs.iter() {
+            let _tx_id = client.submit(tx).await.unwrap();
+        }
+
+        let last_block_height: u32 = client.produce_blocks(2, None).await.unwrap().into();
+        assert_eq!(last_block_height, 2u32);
+        let second_last_block = client
+            .block_by_height(BlockHeight::from(1))
+            .await
+            .unwrap()
+            .expect("Second last block should be defined");
+        let last_block = client
+            .block_by_height(BlockHeight::from(2))
+            .await
+            .unwrap()
+            .expect("Last Block should be defined");
+        assert_eq!(second_last_block.transactions.len(), 65_535);
+        assert_eq!(
+            last_block.transactions.len(),
+            (tx_count as usize - 65_534) + 1
+        );
     }
 }
