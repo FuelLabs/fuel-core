@@ -3151,7 +3151,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3178,7 +3178,7 @@ dependencies = [
  "fuel-core-sync",
  "fuel-core-trace",
  "fuel-core-txpool",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "fuel-core-upgradable-executor",
  "futures",
  "hex",
@@ -3226,7 +3226,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "futures",
  "itertools 0.12.1",
  "num_enum",
@@ -3247,11 +3247,11 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.35.0"
+version = "0.36.0"
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3264,7 +3264,7 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-poa",
  "fuel-core-storage",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "hex",
  "humantime",
  "itertools 0.12.1",
@@ -3285,7 +3285,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "bech32",
@@ -3293,7 +3293,7 @@ dependencies = [
  "derivative",
  "fuel-core-chain-config",
  "fuel-core-storage",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "insta",
  "itertools 0.12.1",
  "parquet",
@@ -3311,13 +3311,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "cynic",
  "derive_more",
  "eventsource-client",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "futures",
  "hex",
  "hyper-rustls",
@@ -3334,41 +3334,41 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "clap 4.5.17",
  "fuel-core-client",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
  "fuel-core-poa",
  "fuel-core-storage",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "test-case",
 ]
 
 [[package]]
 name = "fuel-core-database"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "derive_more",
  "fuel-core-storage",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
 ]
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3376,7 +3376,7 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-client",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "futures",
  "hex",
  "humantime-serde",
@@ -3393,12 +3393,12 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "hex",
  "parking_lot",
  "serde",
@@ -3407,14 +3407,14 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-gas-price-service"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "enum-iterator",
  "fuel-core-services",
  "fuel-core-storage",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "fuel-gas-price-algorithm",
  "futures",
  "num_enum",
@@ -3430,14 +3430,14 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "derive_more",
  "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "mockall",
  "parking_lot",
  "rayon",
@@ -3448,18 +3448,18 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "clap 4.5.17",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "libp2p-identity",
  "serde",
 ]
 
 [[package]]
 name = "fuel-core-keygen-bin"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "atty",
@@ -3472,7 +3472,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "parking_lot",
  "pin-project-lite",
@@ -3484,7 +3484,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3495,7 +3495,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "futures",
  "hex",
  "hickory-resolver",
@@ -3522,7 +3522,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3532,7 +3532,7 @@ dependencies = [
  "fuel-core-poa",
  "fuel-core-services",
  "fuel-core-storage",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "k256",
  "mockall",
  "rand",
@@ -3546,7 +3546,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3554,7 +3554,7 @@ dependencies = [
  "fuel-core-producer",
  "fuel-core-storage",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "mockall",
  "proptest",
  "rand",
@@ -3565,7 +3565,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3579,7 +3579,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "futures",
  "mockall",
  "once_cell",
@@ -3598,7 +3598,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3612,13 +3612,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "derive_more",
  "enum-iterator",
  "fuel-core-storage",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "fuel-vm 0.57.0",
  "impl-tools",
  "itertools 0.12.1",
@@ -3636,13 +3636,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-services",
  "fuel-core-trace",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "futures",
  "mockall",
  "rand",
@@ -3676,7 +3676,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-txpool",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "fuel-core-upgradable-executor",
  "futures",
  "hex",
@@ -3701,7 +3701,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "ctor",
  "tracing",
@@ -3711,7 +3711,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3721,7 +3721,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-txpool",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "itertools 0.12.1",
  "mockall",
  "num-rational",
@@ -3733,22 +3733,6 @@ dependencies = [
  "tokio-rayon",
  "tokio-stream",
  "tracing",
-]
-
-[[package]]
-name = "fuel-core-types"
-version = "0.35.0"
-dependencies = [
- "anyhow",
- "bs58",
- "derivative",
- "derive_more",
- "fuel-vm 0.57.0",
- "rand",
- "secrecy",
- "serde",
- "tai64",
- "zeroize",
 ]
 
 [[package]]
@@ -3768,14 +3752,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-types"
+version = "0.36.0"
+dependencies = [
+ "anyhow",
+ "bs58",
+ "derivative",
+ "derive_more",
+ "fuel-vm 0.57.0",
+ "rand",
+ "secrecy",
+ "serde",
+ "tai64",
+ "zeroize",
+]
+
+[[package]]
 name = "fuel-core-upgradable-executor"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "derive_more",
  "fuel-core-executor",
  "fuel-core-storage",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "fuel-core-wasm-executor",
  "ntest",
  "parking_lot",
@@ -3786,13 +3786,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-wasm-executor"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-types 0.35.0",
- "fuel-core-types 0.35.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fuel-core-types 0.36.0",
  "postcard",
  "proptest",
  "serde",
@@ -3862,7 +3862,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gas-price-algorithm"
-version = "0.35.0"
+version = "0.36.0"
 dependencies = [
  "proptest",
  "rand",
@@ -5731,7 +5731,8 @@ dependencies = [
 [[package]]
 name = "librocksdb-sys"
 version = "0.11.0+8.1.1"
-source = "git+https://github.com/FuelLabs/rust-rocksdb/?branch=release/v0.21.0#c41859ecfdd85692b10aab500a773b7f589b2589"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3386f101bcb4bd252d8e9d2fb41ec3b0862a15a62b478c355b2982efa469e3e"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -8757,7 +8758,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-txpool",
- "fuel-core-types 0.35.0",
+ "fuel-core-types 0.36.0",
  "futures",
  "itertools 0.12.1",
  "rand",
