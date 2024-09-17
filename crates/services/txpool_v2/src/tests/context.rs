@@ -142,7 +142,7 @@ pub fn create_contract_output(contract_id: ContractId) -> Output {
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
 // the byte and gas price fees.
 pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
-const GAS_LIMIT: Word = 100000;
+pub const GAS_LIMIT: Word = 100000;
 
 pub struct TestPoolUniverse {
     mock_db: MockDb,
@@ -207,7 +207,7 @@ impl TestPoolUniverse {
             tx_builder.add_output(output);
         }
         tx_builder.tip(tip);
-        tx_builder.max_fee_limit(tip);
+        tx_builder.max_fee_limit(10000);
         tx_builder.finalize().into()
     }
 
@@ -231,6 +231,57 @@ impl TestPoolUniverse {
         } else {
             panic!("Pool needs to be built first");
         }
+    }
+
+    pub async fn verify_and_insert_with_gas_price(
+        &mut self,
+        tx: Transaction,
+        gas_price: GasPrice,
+    ) -> Result<RemovedTransactions, Error> {
+        if let Some(pool) = &self.pool {
+            let tx = perform_all_verifications(
+                tx,
+                pool.clone(),
+                Default::default(),
+                &ConsensusParameters::default(),
+                0,
+                &MockTxPoolGasPrice::new(gas_price),
+                &MockWasmChecker::new(Ok(())),
+                MemoryInstance::new(),
+            )
+            .await?;
+            pool.write().insert(tx)
+        } else {
+            panic!("Pool needs to be built first");
+        }
+    }
+
+    pub async fn verify_and_insert_with_consensus_params_wasm_checker(
+        &mut self,
+        tx: Transaction,
+        consensus_params: ConsensusParameters,
+        wasm_checker: MockWasmChecker,
+    ) -> Result<RemovedTransactions, Error> {
+        if let Some(pool) = &self.pool {
+            let tx = perform_all_verifications(
+                tx,
+                pool.clone(),
+                Default::default(),
+                &consensus_params,
+                0,
+                &MockTxPoolGasPrice::new(0),
+                &wasm_checker,
+                MemoryInstance::new(),
+            )
+            .await?;
+            pool.write().insert(tx)
+        } else {
+            panic!("Pool needs to be built first");
+        }
+    }
+
+    pub fn get_pool(&self) -> TxPool<MockDBProvider> {
+        self.pool.clone().unwrap()
     }
 
     pub fn setup_coin(&mut self) -> (Coin, Input) {
