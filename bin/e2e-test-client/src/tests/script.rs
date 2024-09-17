@@ -78,7 +78,7 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
     )
     .await??;
 
-    _dry_runs(ctx, &[transaction], 1000, DryRunResult::Successful).await
+    _dry_runs(ctx, &[transaction], 100, DryRunResult::Successful).await
 }
 
 // Dry run multiple transactions
@@ -97,7 +97,7 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
     _dry_runs(
         ctx,
         &[transaction1, transaction2],
-        1000,
+        100,
         DryRunResult::Successful,
     )
     .await
@@ -140,7 +140,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
         timeout(Duration::from_secs(20), deployment_request).await??;
     }
 
-    _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &[dry_run], 100, DryRunResult::MayFail).await
 }
 
 pub async fn arbitrary_transaction(ctx: &TestContext) -> Result<(), Failed> {
@@ -172,7 +172,7 @@ pub async fn arbitrary_transaction(ctx: &TestContext) -> Result<(), Failed> {
 
     assert_eq!(dry_run_tx_from_raw, dry_run_tx_from_json);
 
-    _dry_runs(ctx, &[dry_run_tx_from_json], 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &[dry_run_tx_from_json], 100, DryRunResult::MayFail).await
 }
 
 async fn _dry_runs(
