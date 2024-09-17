@@ -237,13 +237,13 @@ where
             .ok_or_else(|| anyhow!("Block gas capacity must be non-zero"))
     }
 
-    async fn set_metadata(&mut self) -> anyhow::Result<()> {
+    fn set_metadata(&mut self) -> anyhow::Result<()> {
         self.metadata_storage
             .set_metadata(self.inner.clone().into())
             .map_err(|err| anyhow!(err))
     }
 
-    async fn handle_normal_block(
+    fn handle_normal_block(
         &mut self,
         height: u32,
         gas_used: u64,
@@ -263,18 +263,18 @@ where
             }
         }
 
-        self.set_metadata().await?;
+        self.set_metadata()?;
         Ok(())
     }
 
-    async fn apply_block_info_to_gas_algorithm(
+    fn apply_block_info_to_gas_algorithm(
         &mut self,
         l2_block: BlockInfo,
         da_block_costs: Option<DaBlockCosts>,
     ) -> anyhow::Result<()> {
         match l2_block {
             BlockInfo::GenesisBlock => {
-                self.set_metadata().await?;
+                self.set_metadata()?;
             }
             BlockInfo::Block {
                 height,
@@ -286,8 +286,7 @@ where
                     gas_used,
                     block_gas_capacity,
                     da_block_costs,
-                )
-                .await?;
+                )?;
             }
         }
         Ok(())
@@ -305,13 +304,12 @@ where
         self.inner.algorithm()
     }
 
-    async fn next(
+    fn next(
         &mut self,
         l2_block: BlockInfo,
         da_block_costs: Option<DaBlockCosts>,
     ) -> anyhow::Result<Self::Algorithm> {
-        self.apply_block_info_to_gas_algorithm(l2_block, da_block_costs)
-            .await?;
+        self.apply_block_info_to_gas_algorithm(l2_block, da_block_costs)?;
 
         Ok(self.inner.algorithm())
     }

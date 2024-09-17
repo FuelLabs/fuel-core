@@ -84,7 +84,7 @@ pub trait UpdateAlgorithm {
     fn start(&self, for_block: BlockHeight) -> Self::Algorithm;
 
     /// Wait for the next algorithm to be available
-    async fn next(
+    fn next(
         &mut self,
         l2_block: BlockInfo,
         da_block_costs: Option<DaBlockCosts>,
@@ -197,7 +197,7 @@ where
             l2_block = self.l2_block_source.get_l2_block() => {
                 let l2_block = l2_block?;
                 let da_block_costs = self.da_block_costs.take();
-                let next_algo = self.update_algorithm.next(l2_block, da_block_costs).await?;
+                let next_algo = self.update_algorithm.next(l2_block, da_block_costs)?;
                 tracing::debug!("Updating gas price algorithm");
                 self.update(next_algo).await;
                 should_continue = true;
@@ -212,12 +212,7 @@ where
         let l2_block = self.l2_block_source.get_l2_block().now_or_never();
         if let Some(Ok(l2_block)) = l2_block {
             let da_block_costs = self.da_block_costs.clone();
-            if let Some(new_algo) = self
-                .update_algorithm
-                .next(l2_block, da_block_costs)
-                .now_or_never()
-            {
-                let new_algo = new_algo?;
+            if let Ok(new_algo) = self.update_algorithm.next(l2_block, da_block_costs) {
                 tracing::debug!("Updating gas price algorithm");
                 self.update(new_algo).await;
             }
@@ -279,12 +274,12 @@ mod tests {
             self.start.clone()
         }
 
-        async fn next(
+        fn next(
             &mut self,
             _l2_block: BlockInfo,
             _da_block_costs: Option<DaBlockCosts>,
         ) -> anyhow::Result<Self::Algorithm> {
-            let price = self.price_source.recv().await.unwrap();
+            let price = self.price_source.try_recv()?;
             Ok(TestAlgorithm { price })
         }
     }

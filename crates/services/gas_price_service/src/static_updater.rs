@@ -51,11 +51,11 @@ impl UpdateAlgorithm for StaticAlgorithmUpdater {
         StaticAlgorithm::new(self.static_price)
     }
 
-    async fn next(
+    fn next(
         &mut self,
         _l2_block: BlockInfo,
         _da_block_costs: Option<DaBlockCosts>,
     ) -> anyhow::Result<Self::Algorithm> {
-        futures::future::pending().await
+        Ok(StaticAlgorithm::new(self.static_price))
     }
 }

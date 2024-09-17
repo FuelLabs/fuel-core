@@ -69,10 +69,7 @@ async fn next__fetches_l2_block() {
 
     let start = updater.start(0.into());
     // when
-    let next = tokio::spawn(async move { updater.next(l2_block, None).await });
-
-    let new = next.await.unwrap().unwrap();
-
+    let new = updater.next(l2_block, None).unwrap();
     // then
     assert_ne!(start, new);
 }
@@ -96,9 +93,7 @@ async fn next__new_l2_block_saves_old_metadata() {
 
     let start = updater.start(0.into());
     // when
-    let next = tokio::spawn(async move { updater.next(l2_block, None).await });
-
-    let new = next.await.unwrap().unwrap();
+    let new = updater.next(l2_block, None).unwrap();
 
     // then
     assert_ne!(start, new);
