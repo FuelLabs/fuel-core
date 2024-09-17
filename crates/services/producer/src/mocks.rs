@@ -237,9 +237,7 @@ impl DryRunner for MockExecutorWithCapture<Transaction> {
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         *self.captured.lock().unwrap() = Some(block);
 
-        Err(ExecutorError::Other(
-            "transaction execution not mocked".to_string(),
-        ))
+        Ok(Vec::new())
     }
 }
 

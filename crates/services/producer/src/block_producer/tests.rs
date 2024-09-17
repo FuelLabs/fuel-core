@@ -559,7 +559,7 @@ mod dry_run {
             .producer()
             .dry_run(vec![], None, Some(simulated_block_time), None, None)
             .await
-            .expect_err("expected failure");
+            .expect("dry run failed");
 
         // Then
         assert_eq!(executor.captured_block_timestamp(), simulated_block_time);
@@ -581,7 +581,7 @@ mod dry_run {
             .producer()
             .dry_run(vec![], None, Some(simulated_block_time), None, None)
             .await
-            .expect_err("expected failure");
+            .expect("dry run failed");
 
         // Then
         assert_eq!(executor.captured_block_timestamp(), simulated_block_time);
@@ -602,7 +602,7 @@ mod dry_run {
             .producer()
             .dry_run(vec![], None, None, None, None)
             .await
-            .expect_err("expected failure");
+            .expect("dry run failed");
 
         // Then
         assert_eq!(executor.captured_block_timestamp(), last_block_time);
