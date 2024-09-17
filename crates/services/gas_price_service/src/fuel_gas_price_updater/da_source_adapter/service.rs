@@ -54,17 +54,6 @@ struct DaBlockCostsServiceSharedState {
     sender: Sender<DaBlockCosts>,
 }
 
-impl DaBlockCostsServiceSharedState {
-    pub fn subscribe(&self) -> Receiver<DaBlockCosts> {
-        self.sender.subscribe()
-    }
-
-    fn send(&self, da_block_costs: DaBlockCosts) -> Result<()> {
-        self.sender.send(da_block_costs)?;
-        Ok(())
-    }
-}
-
 const POLLING_INTERVAL_MS: u64 = 10_000;
 const DA_BLOCK_COSTS_BUFFER_SIZE: usize = 10;
 
@@ -75,7 +64,7 @@ where
     Source: DaBlockCostsSource,
 {
     poll_interval: Interval,
-    sender: DaBlockCostsServiceSharedState,
+    shared: DaBlockCostsServiceSharedState,
     source: Source,
     cache: HashSet<DaBlockCosts>,
 }
@@ -88,7 +77,7 @@ where
         let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_BUFFER_SIZE);
         #[allow(clippy::arithmetic_side_effects)]
         Self {
-            sender: DaBlockCostsServiceSharedState { sender },
+            shared: DaBlockCostsServiceSharedState { sender },
             poll_interval: interval(
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
@@ -119,7 +108,7 @@ where
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.sender.clone()
+        self.shared.clone()
     }
 
     async fn into_task(
@@ -151,7 +140,7 @@ where
                 let da_block_costs = self.source.request_da_block_cost().await?;
                 if !self.cache.contains(&da_block_costs) {
                     self.cache.insert(da_block_costs.clone());
-                    self.sender.send(da_block_costs)?;
+                    self.shared.sender.send(da_block_costs)?;
                 }
                 continue_running = true;
             }
@@ -171,7 +160,7 @@ pub fn new_provider<S: DaBlockCostsSource>(
     poll_interval: Option<Duration>,
 ) -> DaBlockCostsProvider<S> {
     let handle = ServiceRunner::new(DaBlockCostsService::new(da_source, poll_interval));
-    let subscription = handle.shared.subscribe();
+    let subscription = handle.shared.sender.subscribe();
     DaBlockCostsProvider {
         handle,
         subscription,
