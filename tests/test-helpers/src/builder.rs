@@ -206,6 +206,8 @@ impl TestSetupBuilder {
         chain_conf
             .consensus_parameters
             .set_base_asset_id(self.base_asset_id);
+        chain_conf.state_transition_bytecode =
+            fuel_core::upgradable_executor::WASM_BYTECODE.to_vec();
 
         let latest_block = self.starting_block.map(|starting_block| LastBlockConfig {
             block_height: starting_block,

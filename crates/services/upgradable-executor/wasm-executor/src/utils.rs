@@ -5,12 +5,16 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            Error as ExecutorError,
             ExecutionResult,
-            Result as ExecutorResult,
+            UncommittedResult,
+            ValidationResult,
         },
         Uncommitted,
     },
 };
+#[cfg(feature = "std")]
+use fuel_core_types_v0::services::executor::Error as ExecutorErrorV0;
 
 /// Pack a pointer and length into an `u64`.
 pub fn pack_ptr_and_len(ptr: u32, len: u32) -> u64 {
@@ -80,16 +84,167 @@ pub enum WasmDeserializationBlockTypes<TxSource> {
     Validation(Block),
 }
 
+/// The JSON version of the executor error. The serialization and deserialization
+/// of the JSON error are less sensitive to the order of the variants in the enum.
+/// It simplifies the error conversion between different versions of the execution.
+///
+/// If deserialization fails, it returns a string representation of the error that
+/// still has useful information, even if the error is not supported by the native executor.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct JSONError(String);
+
+#[cfg(feature = "std")]
+impl From<ExecutorErrorV0> for JSONError {
+    fn from(value: ExecutorErrorV0) -> Self {
+        let json = serde_json::to_string(&value).unwrap_or_else(|e| {
+            anyhow::anyhow!("Failed to serialize the V0 error: {:?}", e).to_string()
+        });
+        JSONError(json)
+    }
+}
+
+impl From<ExecutorError> for JSONError {
+    fn from(value: ExecutorError) -> Self {
+        let json = serde_json::to_string(&value).unwrap_or_else(|e| {
+            anyhow::anyhow!("Failed to serialize the error: {:?}", e).to_string()
+        });
+        JSONError(json)
+    }
+}
+
+impl From<JSONError> for ExecutorError {
+    fn from(value: JSONError) -> Self {
+        serde_json::from_str(&value.0).unwrap_or(ExecutorError::Other(value.0))
+    }
+}
+
 /// The return type for the WASM executor. Enum allows handling different
 /// versions of the return without introducing new host functions.
+#[cfg(feature = "std")]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ReturnType {
-    V1(ExecutorResult<Uncommitted<ExecutionResult, Changes>>),
+    ExecutionV0(
+        Result<Uncommitted<ExecutionResult<ExecutorErrorV0>, Changes>, ExecutorErrorV0>,
+    ),
+    ExecutionV1(Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>),
+    Validation(Result<Uncommitted<ValidationResult, Changes>, JSONError>),
+}
+
+/// The return type for the WASM executor. Enum allows handling different
+/// versions of the return without introducing new host functions.
+#[cfg(not(feature = "std"))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum ReturnType {
+    /// WASM executor doesn't use this variant, so from its perspective it is empty.
+    ExecutionV0,
+    ExecutionV1(Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>),
+    Validation(Result<Uncommitted<ValidationResult, Changes>, JSONError>),
+}
+
+/// Converts the latest execution result to the `ExecutionV1`.
+pub fn convert_to_v1_execution_result(
+    result: Result<UncommittedResult<Changes>, ExecutorError>,
+) -> Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError> {
+    result
+        .map(|result| {
+            let (result, changes) = result.into();
+            let ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            } = result;
+
+            let skipped_transactions: Vec<_> = skipped_transactions
+                .into_iter()
+                .map(|(id, error)| (id, JSONError::from(error)))
+                .collect();
+
+            let result = ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            };
+
+            Uncommitted::new(result, changes)
+        })
+        .map_err(JSONError::from)
+}
+
+/// Converts the `ExecutionV1` to latest execution result.
+pub fn convert_from_v1_execution_result(
+    result: Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>,
+) -> Result<UncommittedResult<Changes>, ExecutorError> {
+    result
+        .map(|result| {
+            let (result, changes) = result.into();
+            let ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            } = result;
+
+            let skipped_transactions: Vec<_> = skipped_transactions
+                .into_iter()
+                .map(|(id, error)| (id, ExecutorError::from(error)))
+                .collect();
+
+            let result = ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            };
+
+            Uncommitted::new(result, changes)
+        })
+        .map_err(ExecutorError::from)
+}
+
+/// Converts the `ExecutionV0` to latest execution result.
+#[cfg(feature = "std")]
+pub fn convert_from_v0_execution_result(
+    result: Result<
+        Uncommitted<ExecutionResult<ExecutorErrorV0>, Changes>,
+        ExecutorErrorV0,
+    >,
+) -> Result<UncommittedResult<Changes>, ExecutorError> {
+    result
+        .map(|result| {
+            let (result, changes) = result.into();
+            let ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            } = result;
+
+            let skipped_transactions: Vec<_> = skipped_transactions
+                .into_iter()
+                .map(|(id, error)| (id, ExecutorError::from(JSONError::from(error))))
+                .collect();
+
+            let result = ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                events,
+            };
+
+            Uncommitted::new(result, changes)
+        })
+        .map_err(JSONError::from)
+        .map_err(ExecutorError::from)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_types::services::executor::TransactionValidityError;
+    #[cfg(feature = "std")]
+    use fuel_core_types_v0::services::executor::TransactionValidityError as TransactionValidityErrorV0;
     use proptest::prelude::prop::*;
 
     proptest::proptest! {
@@ -114,5 +269,26 @@ mod tests {
             proptest::prop_assert_eq!(size, unpacked_size);
             proptest::prop_assert_eq!(result, unpacked_result);
         }
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn can_convert_v0_error_to_v1() {
+        // Given
+        let v0 = ExecutorErrorV0::TransactionValidity(
+            TransactionValidityErrorV0::CoinDoesNotExist(Default::default()),
+        );
+
+        // When
+        let json: JSONError = v0.into();
+        let v1: ExecutorError = json.into();
+
+        // Then
+        assert_eq!(
+            v1,
+            ExecutorError::TransactionValidity(
+                TransactionValidityError::CoinDoesNotExist(Default::default())
+            )
+        );
     }
 }
