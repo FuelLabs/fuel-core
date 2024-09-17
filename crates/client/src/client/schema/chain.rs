@@ -30,7 +30,6 @@ pub struct ConsensusParameters {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum ConsensusParametersVersion {
     V1,
-    V2,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -481,21 +480,6 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
     fn try_from(params: ConsensusParameters) -> Result<Self, Self::Error> {
         match params.version {
             ConsensusParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV1 {
-                    tx_params: params.tx_params.try_into()?,
-                    predicate_params: params.predicate_params.try_into()?,
-                    script_params: params.script_params.try_into()?,
-                    contract_params: params.contract_params.try_into()?,
-                    fee_params: params.fee_params.try_into()?,
-                    base_asset_id: params.base_asset_id.into(),
-                    block_gas_limit: params.block_gas_limit.into(),
-                    chain_id: params.chain_id.0.into(),
-                    gas_costs: params.gas_costs.try_into()?,
-                    privileged_address: params.privileged_address.into(),
-                }
-                .into(),
-            ),
-            ConsensusParametersVersion::V2 => Ok(
                 fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
                     tx_params: params.tx_params.try_into()?,
                     predicate_params: params.predicate_params.try_into()?,

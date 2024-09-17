@@ -85,7 +85,7 @@ fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.35.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.56.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.57.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
@@ -140,6 +140,3 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
-
-[patch.crates-io]
-fuel-vm-private = { git = 'https://github.com/FuelLabs/fuel-vm.git', package = "fuel-vm", branch = "master" }
