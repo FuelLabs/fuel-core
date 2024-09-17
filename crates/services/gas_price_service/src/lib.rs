@@ -187,13 +187,11 @@ where
                 should_continue = false;
             }
             da_block_costs = self.da_block_costs_provider.recv() => {
-                self.da_block_costs = match da_block_costs {
-                    Ok(da_block_costs) => Some(da_block_costs),
-                    Err(err) => {
-                        tracing::error!("Failed to get da block costs: {:?}", err);
-                        None
-                    }
-                };
+                if da_block_costs.is_err() {
+                    tracing::error!("Failed to get da block costs: {:?}", da_block_costs.err());
+                } else {
+                    self.da_block_costs = Some(da_block_costs?);
+                }
                 should_continue = true;
             }
             l2_block = self.l2_block_source.get_l2_block() => {
