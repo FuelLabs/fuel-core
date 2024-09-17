@@ -1,5 +1,6 @@
 //! Contains types related to P2P data
 
+#[cfg(feature = "serde")]
 use serde::{
     Deserialize,
     Serialize,
@@ -211,6 +212,7 @@ pub enum NetworkableTransactionPool {
     Transaction(Transaction),
 }
 
+#[cfg(feature = "serde")]
 /// Serialize only the pool transaction variant
 impl Serialize for NetworkableTransactionPool {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
