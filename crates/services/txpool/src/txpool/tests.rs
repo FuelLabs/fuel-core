@@ -1,7 +1,11 @@
+#![allow(non_snake_case)]
+
 use crate::{
+    ports::WasmValidityError,
     service::test_helpers::MockTxPoolGasPrice,
     test_helpers::{
         IntoEstimated,
+        MockWasmChecker,
         TextContext,
         TEST_COIN_AMOUNT,
     },
@@ -25,6 +29,10 @@ use fuel_core_types::{
         input::coin::CoinPredicate,
         Address,
         AssetId,
+        BlobBody,
+        BlobId,
+        BlobIdExt,
+        Bytes32,
         ConsensusParameters,
         Contract,
         Finalizable,
@@ -35,6 +43,7 @@ use fuel_core_types::{
         TransactionBuilder,
         TxParameters,
         UniqueIdentifier,
+        UpgradePurpose,
         UtxoId,
     },
     fuel_types::ChainId,
@@ -46,11 +55,7 @@ use fuel_core_types::{
         interpreter::MemoryInstance,
     },
 };
-use std::{
-    cmp::Reverse,
-    collections::HashMap,
-    vec,
-};
+use std::vec;
 
 use super::check_single_tx;
 
@@ -1028,71 +1033,6 @@ async fn sorted_out_tx_by_creation_instant() {
 }
 
 #[tokio::test]
-async fn find_dependent_tx1_tx2() {
-    let mut context = TextContext::default();
-
-    let (_, gas_coin) = context.setup_coin();
-    let (output, unset_input) = context.create_output_and_input(10_000);
-    let tx1 = TransactionBuilder::script(vec![], vec![])
-        .tip(11)
-        .max_fee_limit(11)
-        .script_gas_limit(GAS_LIMIT)
-        .add_input(gas_coin)
-        .add_output(output)
-        .finalize_as_transaction();
-
-    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-    let (output, unset_input) = context.create_output_and_input(7_500);
-    let tx2 = TransactionBuilder::script(vec![], vec![])
-        .tip(10)
-        .max_fee_limit(10)
-        .script_gas_limit(GAS_LIMIT)
-        .add_input(input)
-        .add_output(output)
-        .finalize_as_transaction();
-
-    let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
-    let tx3 = TransactionBuilder::script(vec![], vec![])
-        .tip(9)
-        .max_fee_limit(9)
-        .script_gas_limit(GAS_LIMIT)
-        .add_input(input)
-        .finalize_as_transaction();
-
-    let tx1_id = tx1.id(&ChainId::default());
-    let tx2_id = tx2.id(&ChainId::default());
-    let tx3_id = tx3.id(&ChainId::default());
-
-    let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
-
-    txpool
-        .insert_single(tx1)
-        .expect("Tx0 should be Ok, got Err");
-    txpool
-        .insert_single(tx2)
-        .expect("Tx1 should be Ok, got Err");
-    let tx3_result = txpool
-        .insert_single(tx3)
-        .expect("Tx2 should be Ok, got Err");
-
-    let mut seen = HashMap::new();
-    txpool
-        .dependency()
-        .find_dependent(tx3_result.inserted, &mut seen, txpool.txs());
-
-    let mut list: Vec<_> = seen.into_values().collect();
-    // sort from high to low price
-    list.sort_by_key(|tx| Reverse(tx.tip()));
-    assert_eq!(list.len(), 3, "We should have three items");
-    assert_eq!(list[0].id(), tx1_id, "Tx1 should be first.");
-    assert_eq!(list[1].id(), tx2_id, "Tx2 should be second.");
-    assert_eq!(list[2].id(), tx3_id, "Tx3 should be third.");
-}
-
-#[tokio::test]
 async fn tx_at_least_min_gas_price_is_insertable() {
     let gas_price = 10;
     let mut context = TextContext::default().config(Config {
@@ -1420,4 +1360,194 @@ async fn predicate_that_returns_false_is_invalid() {
         err.to_string().contains("PredicateVerificationFailed"),
         "unexpected error: {err}",
     )
+}
+
+#[tokio::test]
+async fn insert_single__blob_tx_works() {
+    let program = vec![123; 123];
+    let tx = TransactionBuilder::blob(BlobBody {
+        id: BlobId::compute(program.as_slice()),
+        witness_index: 0,
+    })
+    .add_witness(program.into())
+    .add_random_fee_input()
+    .finalize_as_transaction();
+
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let context = TextContext::default().config(config);
+    let mut txpool = context.build();
+
+    // Given
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let id = tx.id();
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    let _ = result.expect("Should insert blob");
+    assert!(txpool.by_hash.contains_key(&id));
+}
+
+#[tokio::test]
+async fn insert_single__blob_tx_fails_if_blob_already_inserted_and_lower_tip() {
+    let program = vec![123; 123];
+    let blob_id = BlobId::compute(program.as_slice());
+    let tx = TransactionBuilder::blob(BlobBody {
+        id: blob_id,
+        witness_index: 0,
+    })
+    .add_witness(program.clone().into())
+    .add_random_fee_input()
+    .finalize_as_transaction();
+
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let context = TextContext::default().config(config);
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    // Given
+    txpool.insert_single(tx).unwrap();
+    let same_blob_tx = TransactionBuilder::blob(BlobBody {
+        id: blob_id,
+        witness_index: 1,
+    })
+    .add_random_fee_input()
+    .add_witness(program.into())
+    .finalize_as_transaction();
+    let same_blob_tx = check_unwrap_tx(same_blob_tx, &txpool.config).await;
+
+    // When
+    let result = txpool.insert_single(same_blob_tx);
+
+    // Then
+    assert_eq!(result, Err(Error::NotInsertedCollisionBlobId(blob_id)));
+}
+
+#[tokio::test]
+async fn insert_single__blob_tx_succeeds_if_blob_already_inserted_but_higher_tip() {
+    let program = vec![123; 123];
+    let blob_id = BlobId::compute(program.as_slice());
+    let tx = TransactionBuilder::blob(BlobBody {
+        id: blob_id,
+        witness_index: 0,
+    })
+    .add_witness(program.clone().into())
+    .add_random_fee_input()
+    .finalize_as_transaction();
+
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let context = TextContext::default().config(config);
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    // Given
+    txpool.insert_single(tx).unwrap();
+    let same_blob_tx = TransactionBuilder::blob(BlobBody {
+        id: blob_id,
+        witness_index: 1,
+    })
+    .add_random_fee_input()
+    .add_witness(program.into())
+    .tip(100)
+    .max_fee_limit(100)
+    .finalize_as_transaction();
+    let same_blob_tx = check_unwrap_tx(same_blob_tx, &txpool.config).await;
+
+    // When
+    let result = txpool.insert_single(same_blob_tx);
+
+    // Then
+    let _ = result.expect("Should insert transaction with the same blob but higher tip");
+}
+
+#[tokio::test]
+async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
+    let program = vec![123; 123];
+    let blob_id = BlobId::compute(program.as_slice());
+    let tx = TransactionBuilder::blob(BlobBody {
+        id: blob_id,
+        witness_index: 0,
+    })
+    .add_witness(program.clone().into())
+    .add_random_fee_input()
+    .finalize_as_transaction();
+
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let context = TextContext::default().config(config);
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    // Given
+    txpool.database.0.insert_dummy_blob(blob_id);
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    assert_eq!(result, Err(Error::NotInsertedBlobIdAlreadyTaken(blob_id)));
+}
+
+#[tokio::test]
+async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
+    let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
+    let privileged_address = Input::predicate_owner(predicate.clone());
+
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let context = TextContext::default()
+        .config(config)
+        .wasm_checker(MockWasmChecker {
+            result: Err(WasmValidityError::NotValid),
+        });
+    let mut txpool = context.build();
+    let gas_price_provider = MockTxPoolGasPrice::new(0);
+
+    // Given
+    let tx = TransactionBuilder::upgrade(UpgradePurpose::StateTransition {
+        root: Bytes32::new([1; 32]),
+    })
+    .add_input(Input::coin_predicate(
+        UtxoId::new(Bytes32::new([1; 32]), 0),
+        privileged_address,
+        1_000_000_000,
+        AssetId::BASE,
+        Default::default(),
+        Default::default(),
+        predicate,
+        vec![],
+    ))
+    .finalize_as_transaction();
+    let mut params = ConsensusParameters::default();
+    params.set_privileged_address(privileged_address);
+    let tx = check_single_tx(
+        tx,
+        Default::default(),
+        false,
+        &params,
+        &gas_price_provider,
+        MemoryInstance::new(),
+    )
+    .await
+    .expect("Transaction should be checked");
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    assert_eq!(result, Err(Error::NotInsertedInvalidWasm));
 }

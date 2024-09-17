@@ -27,6 +27,7 @@ use fuel_core_types::{
     fuel_types::canonical::Serialize,
     fuel_vm::checked_transaction::IntoChecked,
 };
+use tokio::io;
 
 struct TestContext {
     _node: FuelService,
@@ -40,15 +41,21 @@ impl TestContext {
             ..Config::local_node()
         };
 
-        let _node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
+        let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
             .await
             .unwrap();
-        let client = FuelClient::from(_node.bound_address);
+        let client = FuelClient::from(node.bound_address);
 
-        Self { _node, client }
+        Self {
+            _node: node,
+            client,
+        }
     }
 
-    async fn new_blob(&mut self, blob_data: Vec<u8>) -> (TransactionStatus, BlobId) {
+    async fn new_blob(
+        &mut self,
+        blob_data: Vec<u8>,
+    ) -> io::Result<(TransactionStatus, BlobId)> {
         let blob_id = BlobId::compute(&blob_data);
         let tx = TransactionBuilder::blob(BlobBody {
             id: blob_id,
@@ -63,9 +70,8 @@ impl TestContext {
         let status = self
             .client
             .submit_and_await_commit(tx.transaction())
-            .await
-            .expect("Cannot submit blob");
-        (status, blob_id)
+            .await?;
+        Ok((status, blob_id))
     }
 }
 
@@ -77,7 +83,8 @@ async fn blob__upload_works() {
     // When
     let (status, blob_id) = ctx
         .new_blob([op::ret(RegId::ONE)].into_iter().collect())
-        .await;
+        .await
+        .unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // Then
@@ -107,14 +114,15 @@ async fn blob__cannot_post_already_existing_blob() {
     // Given
     let mut ctx = TestContext::new().await;
     let payload: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
-    let (status, _blob_id) = ctx.new_blob(payload.clone()).await;
+    let (status, _blob_id) = ctx.new_blob(payload.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // When
-    let (status, _blob_id) = ctx.new_blob(payload).await;
+    let result = ctx.new_blob(payload).await;
 
     // Then
-    assert!(matches!(status, TransactionStatus::SqueezedOut { .. }));
+    let err = result.expect_err("Should fail because of the same blob id");
+    assert!(err.to_string().contains("BlobId is already taken"));
 }
 
 #[tokio::test]
@@ -145,4 +153,25 @@ async fn blob__accessing_nonexitent_blob_panics_vm() {
 
     // Then
     assert!(matches!(tx_status, TransactionStatus::Failure { .. }));
+}
+
+#[tokio::test]
+async fn blob__can_be_queried_if_uploaded() {
+    // Given
+    let mut ctx = TestContext::new().await;
+    let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
+    let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
+    assert!(matches!(status, TransactionStatus::Success { .. }));
+
+    // When
+    let queried_blob = ctx
+        .client
+        .blob(blob_id)
+        .await
+        .expect("blob query failed")
+        .expect("no block returned");
+
+    // Then
+    assert_eq!(queried_blob.id, blob_id);
+    assert_eq!(queried_blob.bytecode, bytecode);
 }

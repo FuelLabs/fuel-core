@@ -58,7 +58,18 @@ use fuel_vm_private::{
 };
 use itertools::Itertools;
 use primitive_types::U256;
+
+#[cfg(feature = "std")]
 use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    borrow::ToOwned,
+    vec::Vec,
+};
 
 /// Used to store metadata relevant during the execution of a transaction.
 #[derive(Clone, Debug)]

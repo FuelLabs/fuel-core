@@ -17,22 +17,25 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
+aws-config = { version = "1.1.7", features = [
+  "behavior-version-latest",
+], optional = true }
+aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true, features = ["derive", "env", "string"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
-fuel-core-types = { workspace = true }
-hex = "0.4"
+fuel-core-poa = { workspace = true }
+fuel-core-types = { workspace = true, features = ["std"] }
+hex = { workspace = true }
 humantime = "2.1"
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
   "ansi",
@@ -54,6 +57,7 @@ test-case = { workspace = true }
 
 [features]
 default = ["env", "relayer", "rocksdb"]
+aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-poa/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]
@@ -61,4 +65,11 @@ parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]
 # features to enable in production, but increase build times
-production = ["env", "relayer", "rocksdb-production", "p2p", "parquet"]
+production = [
+  "env",
+  "relayer",
+  "rocksdb-production",
+  "p2p",
+  "parquet",
+  "aws-kms",
+]

@@ -4,7 +4,10 @@ use crate::{
         time_sort::TimeSort,
         tip_per_gas_sort::RatioGasTipSort,
     },
-    ports::TxPoolDb,
+    ports::{
+        TxPoolDb,
+        WasmChecker as WasmCheckerConstraint,
+    },
     service::TxStatusChange,
     types::*,
     Config,
@@ -12,7 +15,11 @@ use crate::{
     TxInfo,
 };
 use fuel_core_types::{
-    fuel_tx::Transaction,
+    fuel_tx::{
+        field::UpgradePurpose as _,
+        Transaction,
+        UpgradePurpose,
+    },
     fuel_types::BlockHeight,
     fuel_vm::checked_transaction::{
         CheckPredicates,
@@ -60,7 +67,6 @@ use fuel_core_types::{
     services::executor::TransactionExecutionStatus,
 };
 use std::{
-    cmp::Reverse,
     collections::HashMap,
     ops::Deref,
     sync::Arc,
@@ -72,17 +78,22 @@ mod test_helpers;
 mod tests;
 
 #[derive(Debug, Clone)]
-pub struct TxPool<ViewProvider> {
+pub struct TxPool<ViewProvider, WasmChecker> {
     by_hash: HashMap<TxId, TxInfo>,
     by_ratio_gas_tip: RatioGasTipSort,
     by_time: TimeSort,
     by_dependency: Dependency,
     config: Config,
     database: ViewProvider,
+    wasm_checker: WasmChecker,
 }
 
-impl<ViewProvider> TxPool<ViewProvider> {
-    pub fn new(config: Config, database: ViewProvider) -> Self {
+impl<ViewProvider, WasmChecker> TxPool<ViewProvider, WasmChecker> {
+    pub fn new(
+        config: Config,
+        database: ViewProvider,
+        wasm_checker: WasmChecker,
+    ) -> Self {
         let max_depth = config.max_depth;
 
         Self {
@@ -92,6 +103,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
             by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
             database,
+            wasm_checker,
         }
     }
 
@@ -171,27 +183,6 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
     pub fn find_one(&self, hash: &TxId) -> Option<TxInfo> {
         self.txs().get(hash).cloned()
-    }
-
-    /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
-    pub fn find_dependent(&self, hashes: &[TxId]) -> Vec<ArcPoolTx> {
-        let mut seen = HashMap::new();
-        {
-            for hash in hashes {
-                if let Some(tx) = self.txs().get(hash) {
-                    self.dependency().find_dependent(
-                        tx.tx().clone(),
-                        &mut seen,
-                        self.txs(),
-                    );
-                }
-            }
-        }
-        let mut list: Vec<_> = seen.into_values().collect();
-        // sort from high to low price
-        list.sort_by_key(|tx| Reverse(tx.tip()));
-
-        list
     }
 
     /// The number of pending transaction in the pool.
@@ -333,10 +324,11 @@ impl<ViewProvider> TxPool<ViewProvider> {
     }
 }
 
-impl<ViewProvider, View> TxPool<ViewProvider>
+impl<ViewProvider, View, WasmChecker> TxPool<ViewProvider, WasmChecker>
 where
     ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
+    WasmChecker: WasmCheckerConstraint + Send + Sync,
 {
     #[cfg(test)]
     fn insert_single(
@@ -374,6 +366,15 @@ where
 
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown)
+        }
+
+        // If upgrading transition function, at least check that it is valid wasm
+        if let PoolTransaction::Upgrade(upgrade, _) = tx.as_ref() {
+            if let UpgradePurpose::StateTransition { root } =
+                upgrade.transaction().upgrade_purpose()
+            {
+                self.wasm_checker.validate_uploaded_wasm(root)?;
+            }
         }
 
         let mut max_limit_hit = false;

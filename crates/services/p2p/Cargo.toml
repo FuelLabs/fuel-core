@@ -16,10 +16,10 @@ async-trait = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true } # TODO make this a feature
 fuel-core-services = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true, features = ["serde"] }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
-hex = "0.4"
+hex = { workspace = true }
 ip_network = "0.4"
 libp2p = { version = "0.53.2", default-features = false, features = [
   "dns",

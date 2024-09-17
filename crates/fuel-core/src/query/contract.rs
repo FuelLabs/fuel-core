@@ -25,7 +25,7 @@ use fuel_core_types::{
 };
 
 pub trait ContractQueryData: Send + Sync {
-    fn contract_id(&self, id: ContractId) -> StorageResult<ContractId>;
+    fn contract_exists(&self, id: ContractId) -> StorageResult<bool>;
 
     fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>>;
 
@@ -46,13 +46,8 @@ pub trait ContractQueryData: Send + Sync {
 }
 
 impl<D: OnChainDatabase + OffChainDatabase + ?Sized> ContractQueryData for D {
-    fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
-        let contract_exists = self.storage::<ContractsRawCode>().contains_key(&id)?;
-        if contract_exists {
-            Ok(id)
-        } else {
-            Err(not_found!(ContractsRawCode))
-        }
+    fn contract_exists(&self, id: ContractId) -> StorageResult<bool> {
+        self.storage::<ContractsRawCode>().contains_key(&id)
     }
 
     fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>> {

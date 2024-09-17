@@ -50,7 +50,9 @@ fn message(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> 
         ..Default::default()
     };
     let mut log = message.into_log();
-    log.address = u32_to_contract(contract_address);
+    log.address = crate::test_helpers::convert_to_address(
+        u32_to_contract(contract_address).as_slice(),
+    );
     log.block_number = Some(block_number.into());
     log.log_index = Some(index.into());
     log
@@ -76,17 +78,19 @@ fn transaction(nonce: u64, block_number: u64, contract_address: u32, index: u64)
         ..Default::default()
     };
     let mut log = transaction.into_log();
-    log.address = u32_to_contract(contract_address);
+    log.address = crate::test_helpers::convert_to_address(
+        u32_to_contract(contract_address).as_slice(),
+    );
     log.block_number = Some(block_number.into());
     log.log_index = Some(index.into());
     log
 }
 
-fn contracts(c: &[u32]) -> Vec<H160> {
+fn contracts(c: &[u32]) -> Vec<Bytes20> {
     c.iter().copied().map(u32_to_contract).collect()
 }
 
-fn u32_to_contract(n: u32) -> H160 {
+fn u32_to_contract(n: u32) -> Bytes20 {
     let address: [u8; 20] = n
         .to_ne_bytes()
         .into_iter()
@@ -101,7 +105,7 @@ fn u32_to_contract(n: u32) -> H160 {
 #[derive(Clone, Debug)]
 struct Input {
     eth_gap: RangeInclusive<u64>,
-    c: Vec<H160>,
+    c: Vec<Bytes20>,
     m: Vec<Log>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

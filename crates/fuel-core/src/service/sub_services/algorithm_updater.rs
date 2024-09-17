@@ -16,6 +16,7 @@ use crate::{
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
         fuel_core_storage_adapter::{
+            storage::GasPriceMetadata,
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
@@ -41,7 +42,10 @@ use fuel_core_storage::{
         FuelBlocks,
         Transactions,
     },
-    transactional::AtomicView,
+    transactional::{
+        AtomicView,
+        HistoricalView,
+    },
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -85,7 +89,13 @@ impl InitializeTask {
         gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
         on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     ) -> anyhow::Result<Self> {
-        let shared_algo = SharedGasPriceAlgo::new();
+        let latest_block_height = on_chain_db
+            .latest_height()
+            .unwrap_or(genesis_block_height)
+            .into();
+        let default_metadata = get_default_metadata(&config, latest_block_height);
+        let algo = get_best_algo(&gas_price_db, default_metadata)?;
+        let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
         let task = Self {
             config,
             genesis_block_height,
@@ -99,6 +109,34 @@ impl InitializeTask {
     }
 }
 
+fn get_default_metadata(config: &Config, latest_block_height: u32) -> UpdaterMetadata {
+    UpdaterMetadata::V0(V0Metadata {
+        new_exec_price: config.starting_gas_price.max(config.min_gas_price),
+        min_exec_gas_price: config.min_gas_price,
+        exec_gas_price_change_percent: config.gas_price_change_percent,
+        l2_block_height: latest_block_height,
+        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
+    })
+}
+
+fn get_best_algo(
+    gas_price_db: &Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
+    default_metadata: UpdaterMetadata,
+) -> anyhow::Result<Algorithm> {
+    let best_metadata: UpdaterMetadata =
+        if let Some(height) = gas_price_db.latest_height() {
+            gas_price_db
+                .storage::<GasPriceMetadata>()
+                .get(&height)?
+                .map(|m| m.into_owned())
+                .unwrap_or(default_metadata)
+        } else {
+            default_metadata
+        };
+    let updater: AlgorithmUpdater = best_metadata.into();
+    let algo = updater.algorithm();
+    Ok(algo)
+}
 #[async_trait::async_trait]
 impl RunnableService for InitializeTask {
     const NAME: &'static str = "GasPriceUpdater";
@@ -117,11 +155,11 @@ impl RunnableService for InitializeTask {
     ) -> anyhow::Result<Self::Task> {
         let starting_height = self
             .on_chain_db
-            .latest_height()?
+            .latest_height()
             .unwrap_or(self.genesis_block_height);
 
         let updater = get_synced_gas_price_updater(
-            &self.config,
+            self.config,
             self.genesis_block_height,
             self.settings,
             self.gas_price_db,
@@ -135,7 +173,7 @@ impl RunnableService for InitializeTask {
 }
 
 pub fn get_synced_gas_price_updater(
-    config: &Config,
+    config: Config,
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
@@ -144,30 +182,23 @@ pub fn get_synced_gas_price_updater(
 ) -> anyhow::Result<Updater> {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
-        .latest_height()?
+        .latest_height()
         .unwrap_or(genesis_block_height)
         .into();
 
-    let maybe_metadata_height = gas_price_db.latest_height()?;
+    let maybe_metadata_height = gas_price_db.latest_height();
     let mut metadata_height = if let Some(metadata_height) = maybe_metadata_height {
         metadata_height.into()
     } else {
         first_run = true;
         latest_block_height
     };
-
-    let first_metadata = UpdaterMetadata::V0(V0Metadata {
-        new_exec_price: config.starting_gas_price,
-        min_exec_gas_price: config.min_gas_price,
-        exec_gas_price_change_percent: config.gas_price_change_percent,
-        l2_block_height: latest_block_height,
-        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
-    });
+    let default_metadata = get_default_metadata(&config, latest_block_height);
 
     if metadata_height > latest_block_height {
         revert_gas_price_db_to_height(&mut gas_price_db, latest_block_height.into())?;
         metadata_height = gas_price_db
-            .latest_height()?
+            .latest_height()
             .ok_or(anyhow::anyhow!(
                 "Metadata DB height should match the latest block height"
             ))?
@@ -180,7 +211,7 @@ pub fn get_synced_gas_price_updater(
 
     if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
         let updater = FuelGasPriceUpdater::new(
-            first_metadata.into(),
+            default_metadata.into(),
             l2_block_source,
             metadata_storage,
         );
@@ -280,7 +311,7 @@ fn revert_gas_price_db_to_height(
     gas_price_db: &mut Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
-    if let Some(gas_price_db_height) = gas_price_db.latest_height()? {
+    if let Some(gas_price_db_height) = gas_price_db.latest_height() {
         let gas_price_db_height: u32 = gas_price_db_height.into();
         let height: u32 = height.into();
         let diff = gas_price_db_height.saturating_sub(height);

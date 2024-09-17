@@ -144,6 +144,6 @@ impl OnChainDatabase for OnChainIterableKeyValueView {}
 
 impl worker::OnChainDatabase for Database<OnChain> {
     fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
-        self.latest_height()
+        Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
     }
 }

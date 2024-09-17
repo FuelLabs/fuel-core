@@ -6,6 +6,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -84,5 +85,15 @@ where
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
         self.0.iter_store(column, prefix, start, direction)
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        self.0.iter_store_keys(column, prefix, start, direction)
     }
 }

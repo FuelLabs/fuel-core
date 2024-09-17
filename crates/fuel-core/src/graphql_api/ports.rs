@@ -6,10 +6,13 @@ use fuel_core_storage::{
         IterDirection,
     },
     tables::{
+        BlobData,
         Coins,
         ContractsAssets,
         ContractsRawCode,
         Messages,
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
     },
     Error as StorageError,
     Result as StorageResult,
@@ -20,6 +23,7 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
+        header::ConsensusParametersVersion,
         primitives::{
             BlockHeightQuery,
             BlockId,
@@ -118,6 +122,9 @@ pub trait OnChainDatabase:
     + DatabaseBlocks
     + DatabaseMessages
     + StorageInspect<Coins, Error = StorageError>
+    + StorageInspect<BlobData, Error = StorageError>
+    + StorageInspect<StateTransitionBytecodeVersions, Error = StorageError>
+    + StorageInspect<UploadedBytecodes, Error = StorageError>
     + DatabaseContracts
     + DatabaseChain
     + DatabaseMessageProof
@@ -366,4 +373,9 @@ pub mod worker {
 pub trait ConsensusProvider: Send + Sync {
     /// Returns latest consensus parameters.
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
+
+    fn consensus_params_at_version(
+        &self,
+        version: &ConsensusParametersVersion,
+    ) -> anyhow::Result<Arc<ConsensusParameters>>;
 }

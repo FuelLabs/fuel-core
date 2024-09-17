@@ -13,8 +13,8 @@ version = { workspace = true }
 anyhow = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-poa = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
 
 [dev-dependencies]
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }

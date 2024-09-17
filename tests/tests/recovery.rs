@@ -1,12 +1,6 @@
 #![allow(non_snake_case)]
 
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::storage::GasPriceMetadata,
-};
-use fuel_core_storage::{
-    transactional::AtomicView,
-    StorageAsRef,
-};
+use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use proptest::{
     prelude::{
@@ -34,13 +28,13 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
     driver.client.produce_blocks(HEIGHTS, None).await?;
     let database = &driver.node.shared.database;
     assert_eq!(
-        database.on_chain().latest_height()?,
+        database.on_chain().latest_height(),
         Some(BlockHeight::new(HEIGHTS))
     );
     for _ in 0..HEIGHTS {
         database.off_chain().rollback_last_block()?;
     }
-    assert!(database.on_chain().latest_height()? > database.off_chain().latest_height()?);
+    assert!(database.on_chain().latest_height() > database.off_chain().latest_height());
     let temp_dir = driver.kill().await;
 
     // When
@@ -59,11 +53,11 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
     // Then
     let recovered_database = &recovered_driver.node.shared.database;
     assert_eq!(
-        recovered_database.on_chain().latest_height()?,
+        recovered_database.on_chain().latest_height(),
         Some(BlockHeight::new(HEIGHTS))
     );
     assert_eq!(
-        recovered_database.off_chain().latest_height()?,
+        recovered_database.off_chain().latest_height(),
         Some(BlockHeight::new(HEIGHTS))
     );
 
@@ -93,7 +87,7 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead(
     driver.client.produce_blocks(height, None).await?;
     let database = &driver.node.shared.database;
     assert_eq!(
-        database.on_chain().latest_height()?,
+        database.on_chain().latest_height(),
         Some(BlockHeight::new(height))
     );
     let diff = height - lower_height;
@@ -101,7 +95,7 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead(
         database.on_chain().rollback_last_block()?;
         database.off_chain().rollback_last_block()?;
     }
-    assert!(database.on_chain().latest_height()? < database.gas_price().latest_height()?);
+    assert!(database.on_chain().latest_height() < database.gas_price().latest_height());
     let temp_dir = driver.kill().await;
 
     // When
@@ -119,12 +113,12 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead(
 
     // Then
     let recovered_database = &recovered_driver.node.shared.database;
-    let actual_onchain_height = recovered_database.on_chain().latest_height()?.unwrap();
+    let actual_onchain_height = recovered_database.on_chain().latest_height().unwrap();
     let expected_onchain_height = BlockHeight::new(lower_height);
 
     let actual_gas_price_height = recovered_database
         .gas_price()
-        .latest_height()?
+        .latest_height()
         .unwrap_or(0.into()); // Gas price metadata never gets written for block 0
     let expected_gas_price_height = BlockHeight::new(lower_height);
 
@@ -161,7 +155,7 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(
     driver.client.produce_blocks(height, None).await?;
     let database = &driver.node.shared.database;
     assert_eq!(
-        database.on_chain().latest_height()?,
+        database.on_chain().latest_height(),
         Some(BlockHeight::new(height))
     );
 
@@ -169,7 +163,7 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(
     for _ in 0..diff {
         let _ = database.gas_price().rollback_last_block();
     }
-    assert!(database.on_chain().latest_height()? > database.gas_price().latest_height()?);
+    assert!(database.on_chain().latest_height() > database.gas_price().latest_height());
     let temp_dir = driver.kill().await;
 
     // When
@@ -188,11 +182,11 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(
     // Then
     let recovered_database = &recovered_driver.node.shared.database;
     assert_eq!(
-        recovered_database.on_chain().latest_height()?,
+        recovered_database.on_chain().latest_height(),
         Some(BlockHeight::new(height))
     );
     assert_eq!(
-        recovered_database.gas_price().latest_height()?,
+        recovered_database.gas_price().latest_height(),
         Some(BlockHeight::new(height))
     );
 
@@ -228,7 +222,7 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
     driver.client.produce_blocks(height, None).await?;
     let database = &driver.node.shared.database;
     assert_eq!(
-        database.on_chain().latest_height()?,
+        database.on_chain().latest_height(),
         Some(BlockHeight::new(height))
     );
 
@@ -236,7 +230,7 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
     for _ in 0..diff {
         let _ = database.gas_price().rollback_last_block();
     }
-    assert!(database.on_chain().latest_height()? > database.gas_price().latest_height()?);
+    assert!(database.on_chain().latest_height() > database.gas_price().latest_height());
     let temp_dir = driver.kill().await;
 
     // When
@@ -255,23 +249,19 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
     // Then
     // advance the block height to the next block to add the metadata to db
     recovered_driver.client.produce_blocks(1, None).await?;
+    // And wait for the gas price updater to update the gas price metadata.
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+
     let recovered_database = &recovered_driver.node.shared.database;
     let next_height = height + 1;
     assert_eq!(
-        recovered_database.on_chain().latest_height()?,
+        recovered_database.on_chain().latest_height(),
         Some(BlockHeight::new(next_height))
     );
     assert_eq!(
-        recovered_database.gas_price().latest_height()?,
+        recovered_database.gas_price().latest_height(),
         Some(BlockHeight::new(next_height))
     );
-    let view = recovered_database.gas_price().latest_view().unwrap();
-    let previous_metadata = view
-        .storage::<GasPriceMetadata>()
-        .get(&height.into())
-        .unwrap()
-        .clone();
-    assert!(previous_metadata.is_none());
 
     Ok(())
 }

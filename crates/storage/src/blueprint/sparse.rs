@@ -41,7 +41,12 @@ use fuel_core_types::fuel_merkle::{
     },
 };
 use itertools::Itertools;
+
+#[cfg(feature = "std")]
 use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
 
 /// The trait that allows to convert the key of the table into the key of the metadata table.
 /// If the key comprises several entities, it is possible to build a Merkle tree over different primary keys.

@@ -29,6 +29,7 @@ use fuel_core_storage::tables::{
     Messages,
 };
 use fuel_core_storage::Result as StorageResult;
+use fuel_core_types::fuel_types::BlockHeight;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -229,6 +230,93 @@ impl CombinedDatabase {
             relayer: self.relayer.into_genesis(),
         }
     }
+
+    /// Rollbacks the state of the blockchain to a specific block height.
+    pub fn rollback_to<S>(
+        &self,
+        target_block_height: BlockHeight,
+        shutdown_listener: &mut S,
+    ) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        while !shutdown_listener.is_cancelled() {
+            let on_chain_height = self
+                .on_chain()
+                .latest_height_from_metadata()?
+                .ok_or(anyhow::anyhow!("on-chain database doesn't have height"))?;
+
+            let off_chain_height = self
+                .off_chain()
+                .latest_height_from_metadata()?
+                .ok_or(anyhow::anyhow!("off-chain database doesn't have height"))?;
+
+            let gas_price_chain_height =
+                self.gas_price().latest_height_from_metadata()?;
+
+            let gas_price_rolled_back = gas_price_chain_height.is_none()
+                || gas_price_chain_height.expect("We checked height before")
+                    == target_block_height;
+
+            if on_chain_height == target_block_height
+                && off_chain_height == target_block_height
+                && gas_price_rolled_back
+            {
+                break;
+            }
+
+            if on_chain_height < target_block_height {
+                return Err(anyhow::anyhow!(
+                    "on-chain database height({on_chain_height}) \
+                    is less than target height({target_block_height})"
+                ));
+            }
+
+            if off_chain_height < target_block_height {
+                return Err(anyhow::anyhow!(
+                    "off-chain database height({off_chain_height}) \
+                    is less than target height({target_block_height})"
+                ));
+            }
+
+            if let Some(gas_price_chain_height) = gas_price_chain_height {
+                if gas_price_chain_height < target_block_height {
+                    return Err(anyhow::anyhow!(
+                        "gas-price-chain database height({gas_price_chain_height}) \
+                        is less than target height({target_block_height})"
+                    ));
+                }
+            }
+
+            if on_chain_height > target_block_height {
+                self.on_chain().rollback_last_block()?;
+            }
+
+            if off_chain_height > target_block_height {
+                self.off_chain().rollback_last_block()?;
+            }
+
+            if let Some(gas_price_chain_height) = gas_price_chain_height {
+                if gas_price_chain_height > target_block_height {
+                    self.gas_price().rollback_last_block()?;
+                }
+            }
+        }
+
+        if shutdown_listener.is_cancelled() {
+            return Err(anyhow::anyhow!(
+                "Stop the rollback due to shutdown signal received"
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// A trait for listening to shutdown signals.
+pub trait ShutdownListener {
+    /// Returns true if the shutdown signal has been received.
+    fn is_cancelled(&self) -> bool;
 }
 
 /// A genesis database that combines the on-chain, off-chain and relayer

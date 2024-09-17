@@ -27,6 +27,7 @@ use itertools::Itertools;
 use std::borrow::Cow;
 
 pub mod balance;
+pub mod blob;
 pub mod block;
 pub mod chain;
 pub mod coins;
@@ -35,6 +36,7 @@ pub mod dap;
 pub mod health;
 pub mod message;
 pub mod node_info;
+pub mod upgrades;
 
 pub mod gas_price;
 pub mod scalars;
@@ -46,6 +48,7 @@ pub mod relayed_tx;
 pub struct Query(
     dap::DapQuery,
     balance::BalanceQuery,
+    blob::BlobQuery,
     block::BlockQuery,
     chain::ChainQuery,
     tx::TxQuery,
@@ -58,6 +61,7 @@ pub struct Query(
     gas_price::EstimateGasPriceQuery,
     message::MessageQuery,
     relayed_tx::RelayedTransactionQuery,
+    upgrades::UpgradeQuery,
 );
 
 #[derive(MergedObject, Default)]

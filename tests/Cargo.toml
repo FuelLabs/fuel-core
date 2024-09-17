@@ -19,6 +19,10 @@ path = "tests/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+aws-config = { version = "1.1.7", features = [
+  "behavior-version-latest",
+], optional = true }
+aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
@@ -46,15 +50,18 @@ fuel-core-txpool = { path = "../crates/services/txpool", features = [
 ] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor" }
-futures = "0.3"
+futures = { workspace = true }
+hex = { workspace = true }
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
+k256 = { version = "0.13.3", features = ["ecdsa-core"] }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rstest = "0.15"
 serde_json = { workspace = true }
+spki = "0.7.3"
 tempfile = { workspace = true }
 test-case = { workspace = true }
 test-helpers = { path = "./test-helpers" }
@@ -74,3 +81,4 @@ default = ["fuel-core/default", "relayer"]
 p2p = ["fuel-core/p2p", "fuel-core-p2p"]
 relayer = ["fuel-core/relayer", "fuel-core-relayer"]
 wasm-executor = ["fuel-core/wasm-executor"]
+aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
