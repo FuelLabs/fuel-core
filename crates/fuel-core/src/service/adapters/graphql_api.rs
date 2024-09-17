@@ -29,7 +29,10 @@ use fuel_core_txpool::{
     types::TxId,
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusParametersVersion,
+    blockchain::{
+        header::ConsensusParametersVersion,
+        primitives::BlockHeightQuery,
+    },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
@@ -209,7 +212,7 @@ impl worker::BlockImporter for GraphQLBlockImporter {
 
     fn block_event_at_height(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockHeightQuery,
     ) -> anyhow::Result<SharedImportResult> {
         self.import_result_provider_adapter.result_at_height(height)
     }

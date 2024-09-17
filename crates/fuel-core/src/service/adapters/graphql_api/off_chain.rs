@@ -45,7 +45,10 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::BlockId,
+        primitives::{
+            BlockHeightQuery,
+            BlockId,
+        },
     },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
@@ -134,9 +137,10 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
     fn old_blocks(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockHeightQuery,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        let height: Option<BlockHeight> = height.into();
         self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
             .map(|r| r.map(|(_, block)| block))
             .into_boxed()
