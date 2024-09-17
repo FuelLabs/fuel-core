@@ -87,5 +87,5 @@ pub trait Storage {
     ) -> Result<StorageData, Error>;
 
     /// Count the number of transactions in the storage.
-    fn count(&self) -> u64;
+    fn count(&self) -> usize;
 }

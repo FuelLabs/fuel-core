@@ -338,9 +338,8 @@ impl Storage for GraphStorage {
         dependencies: &[Self::StorageIndex],
         collided_transactions: &[Self::StorageIndex],
     ) -> Result<(), Error> {
-        let mut to_check = dependencies.to_vec();
-        while let Some(node_id) = to_check.pop() {
-            let Some(dependency_node) = self.graph.node_weight(node_id) else {
+        for node_id in dependencies.iter() {
+            let Some(dependency_node) = self.graph.node_weight(*node_id) else {
                 return Err(Error::Storage(format!(
                     "Node with id {:?} not found",
                     node_id
@@ -471,8 +470,8 @@ impl Storage for GraphStorage {
             })
     }
 
-    fn count(&self) -> u64 {
-        self.graph.node_count() as u64
+    fn count(&self) -> usize {
+        self.graph.node_count()
     }
 }
 

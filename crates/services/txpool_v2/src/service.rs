@@ -124,7 +124,7 @@ where
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
-        let mut insertable_transactions = vec![];
+        let mut results = vec![];
         for transaction in transactions {
             let checked_tx = perform_all_verifications(
                 transaction,
@@ -137,9 +137,12 @@ where
                 self.memory.get_memory().await,
             )
             .await?;
-            insertable_transactions.push(checked_tx);
+            let result = {
+                let mut pool = self.pool.write();
+                pool.insert(checked_tx)
+            };
         }
-        self.pool.write().insert(insertable_transactions)
+        Ok(results)
     }
 }
 

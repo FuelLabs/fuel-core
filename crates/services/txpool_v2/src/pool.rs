@@ -77,50 +77,41 @@ where
     /// Each result is a list of transactions that were removed from the pool
     /// because of the insertion of the new transaction.
     #[instrument(skip(self))]
-    pub fn insert(
-        &mut self,
-        transactions: Vec<PoolTransaction>,
-    ) -> Result<Vec<Result<Vec<PoolTransaction>, Error>>, Error> {
-        Ok(transactions
-            .into_iter()
-            .map(|tx| {
-                let latest_view = self
-                    .persistent_storage_provider
-                    .latest_view()
-                    .map_err(|e| Error::Database(format!("{:?}", e)))?;
-                let tx_id = tx.id();
-                self.check_pool_is_not_full()?;
-                self.config.black_list.check_blacklisting(&tx)?;
-                Self::check_blob_does_not_exist(&tx, &latest_view)?;
-                let collisions = self
-                    .collision_manager
-                    .collect_colliding_transactions(&tx, &self.storage)?;
-                let dependencies =
-                    self.storage.validate_inputs_and_collect_dependencies(
-                        &tx,
-                        collisions.reasons,
-                        &latest_view,
-                        self.config.utxo_validation,
-                    )?;
-                let has_dependencies = !dependencies.is_empty();
-                let (storage_id, removed_transactions) = self.storage.store_transaction(
-                    tx,
-                    &dependencies,
-                    &collisions.colliding_txs,
-                )?;
-                self.tx_id_to_storage_id.insert(tx_id, storage_id);
-                // No dependencies directly in the graph and the sorted transactions
-                if !has_dependencies {
-                    self.selection_algorithm
-                        .new_executable_transactions(vec![storage_id], &self.storage)?;
-                }
-                self.update_components_and_caches_on_removal(&removed_transactions)?;
-                let tx = Storage::get(&self.storage, &storage_id)?;
-                self.collision_manager
-                    .on_stored_transaction(&tx.transaction, storage_id)?;
-                Ok(removed_transactions)
-            })
-            .collect())
+    pub fn insert(&mut self, tx: PoolTransaction) -> Result<Vec<PoolTransaction>, Error> {
+        let latest_view = self
+            .persistent_storage_provider
+            .latest_view()
+            .map_err(|e| Error::Database(format!("{:?}", e)))?;
+        let tx_id = tx.id();
+        self.check_pool_is_not_full()?;
+        self.config.black_list.check_blacklisting(&tx)?;
+        Self::check_blob_does_not_exist(&tx, &latest_view)?;
+        let collisions = self
+            .collision_manager
+            .collect_colliding_transactions(&tx, &self.storage)?;
+        let dependencies = self.storage.validate_inputs_and_collect_dependencies(
+            &tx,
+            collisions.reasons,
+            &latest_view,
+            self.config.utxo_validation,
+        )?;
+        let has_dependencies = !dependencies.is_empty();
+        let (storage_id, removed_transactions) = self.storage.store_transaction(
+            tx,
+            &dependencies,
+            &collisions.colliding_txs,
+        )?;
+        self.tx_id_to_storage_id.insert(tx_id, storage_id);
+        // No dependencies directly in the graph and the sorted transactions
+        if !has_dependencies {
+            self.selection_algorithm
+                .new_executable_transactions(vec![storage_id], &self.storage)?;
+        }
+        self.update_components_and_caches_on_removal(&removed_transactions)?;
+        let tx = Storage::get(&self.storage, &storage_id)?;
+        self.collision_manager
+            .on_stored_transaction(&tx.transaction, storage_id)?;
+        Ok(removed_transactions)
     }
 
     /// Check if a transaction can be inserted into the pool.
@@ -186,7 +177,7 @@ where
     }
 
     fn check_pool_is_not_full(&self) -> Result<(), Error> {
-        if self.storage.count() >= self.config.max_txs {
+        if self.storage.count() >= self.config.max_txs as usize {
             return Err(Error::NotInsertedLimitHit);
         }
         Ok(())

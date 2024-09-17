@@ -1,6 +1,13 @@
-use crate::ports::{
-    AtomicView,
-    TxPoolPersistentStorage,
+use crate::{
+    error::Error,
+    ports::{
+        AtomicView,
+        GasPriceProvider,
+        TxPoolPersistentStorage,
+        WasmChecker,
+        WasmValidityError,
+    },
+    GasPrice,
 };
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -13,6 +20,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         BlobId,
+        Bytes32,
         Contract,
         ContractId,
         UtxoId,
@@ -105,5 +113,49 @@ impl AtomicView for MockDBProvider {
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         Ok(self.0.clone())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MockTxPoolGasPrice {
+    pub gas_price: Option<GasPrice>,
+}
+
+impl MockTxPoolGasPrice {
+    pub fn new(gas_price: GasPrice) -> Self {
+        Self {
+            gas_price: Some(gas_price),
+        }
+    }
+
+    pub fn new_none() -> Self {
+        Self { gas_price: None }
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceProvider for MockTxPoolGasPrice {
+    async fn next_gas_price(&self) -> Result<GasPrice, Error> {
+        self.gas_price
+            .ok_or(Error::GasPriceNotFound("Gas price not found".to_string()))
+    }
+}
+
+pub struct MockWasmChecker {
+    pub result: Result<(), WasmValidityError>,
+}
+
+impl MockWasmChecker {
+    pub fn new(result: Result<(), WasmValidityError>) -> Self {
+        Self { result }
+    }
+}
+
+impl WasmChecker for MockWasmChecker {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        self.result
     }
 }

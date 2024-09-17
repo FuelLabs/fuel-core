@@ -115,6 +115,7 @@ impl BlackList {
     }
 }
 
+#[derive(Clone)]
 pub struct Config {
     /// Enable UTXO validation (will check if UTXO exists in the database and has correct data).
     pub utxo_validation: bool,
