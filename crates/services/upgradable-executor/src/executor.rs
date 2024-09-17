@@ -699,11 +699,10 @@ where
         &self,
         version: StateTransitionBytecodeVersion,
     ) -> ExecutorResult<wasmtime::Module> {
-        let guard = self.cached_modules.lock();
+        let mut guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
             return Ok(module.clone());
         }
-        drop(guard);
 
         let view = StructuredStorage::new(
             self.storage_view_provider
@@ -725,7 +724,7 @@ where
                 UpgradableError::ExecutorError(err) => err
             })?;
 
-        self.cached_modules.lock().insert(version, module.clone());
+        guard.insert(version, module.clone());
         Ok(module)
     }
 }
