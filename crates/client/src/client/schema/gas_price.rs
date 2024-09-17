@@ -62,7 +62,9 @@ mod tests {
     fn estimate_gas_price_query_gql_output() {
         use cynic::QueryBuilder;
         let arbitrary_horizon = 10;
-        let operation = QueryEstimateGasPrice::build(arbitrary_horizon.into());
+        let operation = QueryEstimateGasPrice::build(BlockHorizonArgs {
+            block_horizon: Some(arbitrary_horizon.into()),
+        });
         insta::assert_snapshot!(operation.query)
     }
 }

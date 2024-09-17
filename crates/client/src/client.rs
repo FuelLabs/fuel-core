@@ -1,18 +1,28 @@
 use crate::client::{
     schema::{
         block::BlockByHeightArgs,
-        coins::{ExcludeInput, SpendQueryElementInput},
+        coins::{
+            ExcludeInput,
+            SpendQueryElementInput,
+        },
         contract::ContractBalanceQueryArgs,
         gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
         relayed_tx::RelayedTransactionStatusArgs,
         tx::DryRunArg,
-        Tai64Timestamp, TransactionId,
+        Tai64Timestamp,
+        TransactionId,
     },
     types::{
         gas_price::LatestGasPrice,
         message::MessageStatus,
-        primitives::{Address, AssetId, BlockId, ContractId, UtxoId},
+        primitives::{
+            Address,
+            AssetId,
+            BlockId,
+            ContractId,
+            UtxoId,
+        },
         upgrades::StateTransitionBytecode,
         RelayedTransactionStatus,
     },
@@ -21,44 +31,108 @@ use anyhow::Context;
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
-    http::ReqwestExt, GraphQlResponse, Id, MutationBuilder, Operation, QueryBuilder,
+    http::ReqwestExt,
+    GraphQlResponse,
+    Id,
+    MutationBuilder,
+    Operation,
+    QueryBuilder,
 };
 use fuel_core_types::{
-    fuel_asm::{Instruction, Word},
-    fuel_tx::{BlobId, Bytes32, ConsensusParameters, Receipt, Transaction, TxId},
-    fuel_types::{self, canonical::Serialize, BlockHeight, Nonce},
+    fuel_asm::{
+        Instruction,
+        Word,
+    },
+    fuel_tx::{
+        BlobId,
+        Bytes32,
+        ConsensusParameters,
+        Receipt,
+        Transaction,
+        TxId,
+    },
+    fuel_types::{
+        self,
+        canonical::Serialize,
+        BlockHeight,
+        Nonce,
+    },
     services::executor::TransactionExecutionStatus,
 };
 #[cfg(feature = "subscriptions")]
-use futures::{Stream, StreamExt};
+use futures::{
+    Stream,
+    StreamExt,
+};
 use itertools::Itertools;
-use pagination::{PageDirection, PaginatedResult, PaginationRequest};
+use pagination::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 use schema::{
     balance::BalanceArgs,
     blob::BlobByIdArgs,
     block::BlockByIdArgs,
-    coins::CoinByIdArgs,
-    contract::ContractByIdArgs,
-    tx::{TxArg, TxIdArgs},
-    Bytes, ContinueTx, ContinueTxArgs, ConversionError, HexString, IdArg, MemoryArgs,
-    RegisterArgs, RunResult, SetBreakpoint, SetBreakpointArgs, SetSingleStepping,
-    SetSingleSteppingArgs, StartTx, StartTxArgs, U32, U64,
+    coins::{
+        CoinByIdArgs,
+        CoinsConnectionArgs,
+    },
+    contract::{
+        ContractBalancesConnectionArgs,
+        ContractByIdArgs,
+    },
+    gas_price::BlockHorizonArgs,
+    tx::{
+        TransactionsByOwnerConnectionArgs,
+        TxArg,
+        TxIdArgs,
+    },
+    Bytes,
+    ContinueTx,
+    ContinueTxArgs,
+    ConversionError,
+    HexString,
+    IdArg,
+    MemoryArgs,
+    RegisterArgs,
+    RunResult,
+    SetBreakpoint,
+    SetBreakpointArgs,
+    SetSingleStepping,
+    SetSingleSteppingArgs,
+    StartTx,
+    StartTxArgs,
+    U32,
+    U64,
 };
 #[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
     convert::TryInto,
-    io::{self, ErrorKind},
+    io::{
+        self,
+        ErrorKind,
+    },
     net,
-    str::{self, FromStr},
+    str::{
+        self,
+        FromStr,
+    },
 };
 use tai64::Tai64;
 use tracing as _;
-use types::{TransactionResponse, TransactionStatus};
+use types::{
+    TransactionResponse,
+    TransactionStatus,
+};
 
 use self::schema::{
     block::ProduceBlockArgs,
-    message::{MessageProofArgs, NonceArgs},
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
 };
 
 pub mod pagination;
@@ -300,7 +374,9 @@ impl FuelClient {
         &self,
         block_horizon: u32,
     ) -> io::Result<EstimateGasPrice> {
-        let query = schema::gas_price::QueryEstimateGasPrice::build(block_horizon.into());
+        let query = schema::gas_price::QueryEstimateGasPrice::build(BlockHorizonArgs {
+            block_horizon: Some(block_horizon.into()),
+        });
         self.query(query).await.map(|r| r.estimate_gas_price)
     }
 
@@ -684,7 +760,8 @@ impl FuelClient {
         &self,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
-        let query = schema::tx::TransactionsQuery::build(request.into());
+        let query =
+            schema::tx::TransactionsQuery::build(schema::ConnectionArgs::from(request));
         let transactions = self.query(query).await?.transactions.try_into()?;
         Ok(transactions)
     }
@@ -696,7 +773,9 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
         let owner: schema::Address = (*owner).into();
-        let query = schema::tx::TransactionsByOwnerQuery::build((owner, request).into());
+        let query = schema::tx::TransactionsByOwnerQuery::build(
+            TransactionsByOwnerConnectionArgs::from((owner, request)),
+        );
 
         let transactions = self.query(query).await?.transactions_by_owner.try_into()?;
         Ok(transactions)
@@ -808,7 +887,8 @@ impl FuelClient {
         &self,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Block, String>> {
-        let query = schema::block::BlocksQuery::build(request.into());
+        let query =
+            schema::block::BlocksQuery::build(schema::ConnectionArgs::from(request));
 
         let blocks = self.query(query).await?.blocks.try_into()?;
 
@@ -835,7 +915,9 @@ impl FuelClient {
             Some(asset_id) => (*asset_id).into(),
             None => schema::AssetId::default(),
         };
-        let query = schema::coins::CoinsQuery::build((owner, asset_id, request).into());
+        let query = schema::coins::CoinsQuery::build(CoinsConnectionArgs::from((
+            owner, asset_id, request,
+        )));
 
         let coins = self.query(query).await?.coins.into();
         Ok(coins)
@@ -871,7 +953,7 @@ impl FuelClient {
             )
             .map(Into::into);
         let query = schema::coins::CoinsToSpendQuery::build(
-            (owner, spend_query, excluded_ids).into(),
+            schema::coins::CoinsToSpendArgs::from((owner, spend_query, excluded_ids)),
         );
 
         let coins_per_asset = self
@@ -935,7 +1017,9 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Balance, String>> {
         let owner: schema::Address = (*owner).into();
-        let query = schema::balance::BalancesQuery::build((owner, request).into());
+        let query = schema::balance::BalancesQuery::build(
+            schema::balance::BalancesConnectionArgs::from((owner, request)),
+        );
 
         let balances = self.query(query).await?.balances.into();
         Ok(balances)
@@ -947,8 +1031,9 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::ContractBalance, String>> {
         let contract_id: schema::ContractId = (*contract).into();
-        let query =
-            schema::contract::ContractBalancesQuery::build((contract_id, request).into());
+        let query = schema::contract::ContractBalancesQuery::build(
+            ContractBalancesConnectionArgs::from((contract_id, request)),
+        );
 
         let balances = self.query(query).await?.contract_balances.into();
 
@@ -970,7 +1055,9 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Message, String>> {
         let owner: Option<schema::Address> = owner.map(|owner| (*owner).into());
-        let query = schema::message::OwnedMessageQuery::build((owner, request).into());
+        let query = schema::message::OwnedMessageQuery::build(
+            schema::message::OwnedMessagesConnectionArgs::from((owner, request)),
+        );
 
         let messages = self.query(query).await?.messages.into();
 
