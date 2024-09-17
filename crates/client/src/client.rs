@@ -76,6 +76,7 @@ use schema::{
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
+    da_compressed::DaCompressedBlockByHeightArgs,
     tx::{
         TxArg,
         TxIdArgs,
@@ -866,18 +867,17 @@ impl FuelClient {
         &self,
         height: BlockHeight,
     ) -> io::Result<Option<Vec<u8>>> {
-        let query = schema::block::BlockByIdQuery::build(BlockByIdArgs {
-            id: Some((*id).into()),
-        });
+        let query = schema::da_compressed::DaCompressedBlockByHeightQuery::build(
+            DaCompressedBlockByHeightArgs {
+                height: U32(height.into()),
+            },
+        );
 
-        let block = self
+        Ok(self
             .query(query)
             .await?
-            .block
-            .map(TryInto::try_into)
-            .transpose()?;
-
-        Ok(block)
+            .da_compressed_block
+            .map(|b| b.bytes.into()))
     }
 
     /// Retrieve a blob by its ID

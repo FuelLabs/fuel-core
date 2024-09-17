@@ -1,7 +1,6 @@
 use fuel_core::{
     combined_database::CombinedDatabase,
     service::{
-        adapters::consensus_module::poa::block_path,
         Config,
         FuelService,
     },
@@ -11,9 +10,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_poa::signer::SignMode;
-use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    blockchain::consensus::Consensus,
     fuel_crypto::SecretKey,
     fuel_tx::Transaction,
     secrecy::Secret,
@@ -22,17 +19,11 @@ use rand::{
     rngs::StdRng,
     SeedableRng,
 };
-use tempfile::tempdir;
-use test_helpers::{
-    fuel_core_driver::FuelCoreDriver,
-    produce_block_with_tx,
-};
 
 #[tokio::test]
 async fn can_get_da_compressed_blocks() {
     let mut rng = StdRng::seed_from_u64(10);
     let poa_secret = SecretKey::random(&mut rng);
-    let poa_public = poa_secret.public_key();
 
     let db = CombinedDatabase::default();
     let mut config = Config::local_node();
@@ -54,5 +45,6 @@ async fn can_get_da_compressed_blocks() {
         }
     };
 
-    let block = client.get_da_compressed_block(block_height).await.unwrap();
+    let block = client.da_compressed_block(block_height).await.unwrap();
+    assert!(block.is_some());
 }

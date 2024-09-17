@@ -284,7 +284,7 @@ enum ContractParametersVersion {
 }
 
 type DaCompressedBlock {
-	bytes: [Int!]!
+	bytes: HexString!
 }
 
 union DependentCost = LightOperation | HeavyOperation

@@ -271,9 +271,23 @@ where
     {
         fn lookup(
             &self,
-            _utxo_id: fuel_core_types::fuel_tx::UtxoId,
+            utxo_id: fuel_core_types::fuel_tx::UtxoId,
         ) -> anyhow::Result<fuel_core_types::fuel_tx::CompressedUtxoId> {
-            todo!();
+            for event in self.1 {
+                match event {
+                    Event::CoinCreated(coin) | Event::CoinConsumed(coin)
+                        if coin.utxo_id == utxo_id =>
+                    {
+                        let output_index = coin.utxo_id.output_index();
+                        return Ok(fuel_core_types::fuel_tx::CompressedUtxoId {
+                            tx_pointer: coin.tx_pointer,
+                            output_index,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            panic!("UtxoId not found in the block events");
         }
     }
 

@@ -1,4 +1,7 @@
-use super::ReadViewProvider;
+use super::{
+    scalars::HexString,
+    ReadViewProvider,
+};
 use crate::{
     fuel_core_graphql_api::{
         IntoApiResult,
@@ -24,8 +27,8 @@ impl From<Vec<u8>> for DaCompressedBlock {
 
 #[Object]
 impl DaCompressedBlock {
-    async fn bytes(&self) -> Vec<u8> {
-        self.bytes.clone()
+    async fn bytes(&self) -> HexString {
+        HexString(self.bytes.clone())
     }
 }
 
