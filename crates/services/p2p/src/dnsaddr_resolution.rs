@@ -82,19 +82,23 @@ mod tests {
     use std::collections::HashSet;
 
     #[tokio::test]
-    async fn dns_resolver__parses_all_multiaddresses_from_ipfs_bootstrap_nodes() {
+    async fn dns_resolver__parses_all_multiaddresses_from_mainnet_dnsaddr_entry() {
         // given
         let resolver = DnsResolver::new().await.unwrap();
         let expected_multiaddrs: HashSet<Multiaddr> = vec![
-            "/dns4/sjc-1.bootstrap.libp2p.io/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+            "/dns/p2p-mainnet.fuel.network/tcp/30336/p2p/16Uiu2HAkxjhwNYtwawWUexYn84MsrA9ivFWkNHmiF4hSieoNP7Jd",
+            "/dns/p2p-mainnet.fuel.network/tcp/30337/p2p/16Uiu2HAmQunK6Dd81BXh3rW2ZsszgviPgGMuHw39vv2XxbkuCfaw",
+            "/dns/p2p-mainnet.fuel.network/tcp/30333/p2p/16Uiu2HAkuiLZNrfecgDYHJZV5LoEtCXqqRCqHY3yLBqs4LQk8jJg",
+            "/dns/p2p-mainnet.fuel.network/tcp/30334/p2p/16Uiu2HAkzYNa6yMykppS1ij69mKoKjrZEr11oHGiM5Mpc8nKjVDM",
+            "/dns/p2p-mainnet.fuel.network/tcp/30335/p2p/16Uiu2HAm5yqpTv1QVk3SepUYzeKXTWMuE2VqMWHq5qQLPR2Udg6s"
         ].iter().map(|s| s.parse().unwrap()).collect();
 
         // when
-        // run a `dig +short txt _dnsaddr.rymnc.com` to get the TXT records
-        // notice that it contains -
-        // `dnsaddr=/dnsaddr/zone-1.rymnc.com/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN`
-        // which is a recursive call
-        let multiaddrs = resolver.lookup_dnsaddr("rymnc.com").await.unwrap();
+        // run a `dig +short txt _dnsaddr.mainnet.fuel.network` to get the TXT records
+        let multiaddrs = resolver
+            .lookup_dnsaddr("mainnet.fuel.network")
+            .await
+            .unwrap();
         // then
         for multiaddr in multiaddrs.iter() {
             assert!(
