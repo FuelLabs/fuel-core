@@ -11,7 +11,6 @@ use crate::{
         build_transport_function,
         Config,
     },
-    discovery,
     dnsaddr_resolution::DnsResolver,
     gossipsub::{
         messages::{
@@ -215,7 +214,7 @@ impl FuelP2PService {
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);
         let tcp_config = tcp::Config::new().port_reuse(true);
-        let behaviour = FuelBehaviour::new(&config, codec.clone()).await?;
+        let behaviour = FuelBehaviour::new(&config, codec.clone())?;
 
         let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()

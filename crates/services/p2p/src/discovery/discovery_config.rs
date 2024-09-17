@@ -97,7 +97,7 @@ impl Config {
         self
     }
 
-    pub async fn finish(self) -> anyhow::Result<Behaviour> {
+    pub fn finish(self) -> anyhow::Result<Behaviour> {
         let Config {
             local_peer_id,
             bootstrap_nodes,

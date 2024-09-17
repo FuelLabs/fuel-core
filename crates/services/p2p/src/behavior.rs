@@ -65,10 +65,7 @@ pub struct FuelBehaviour {
 }
 
 impl FuelBehaviour {
-    pub(crate) async fn new(
-        p2p_config: &Config,
-        codec: PostcardCodec,
-    ) -> anyhow::Result<Self> {
+    pub(crate) fn new(p2p_config: &Config, codec: PostcardCodec) -> anyhow::Result<Self> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -128,7 +125,7 @@ impl FuelBehaviour {
             req_res_config,
         );
 
-        let discovery = discovery_config.finish().await?;
+        let discovery = discovery_config.finish()?;
         Ok(Self {
             discovery,
             gossipsub,

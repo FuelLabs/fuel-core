@@ -235,7 +235,6 @@ mod tests {
     };
     use futures::{
         future::poll_fn,
-        FutureExt,
         StreamExt,
     };
     use libp2p::{
@@ -267,10 +266,7 @@ mod tests {
                 .with_bootstrap_nodes(bootstrap_nodes)
                 .with_random_walk(Duration::from_millis(500));
 
-            async move { config.finish().await }
-                .now_or_never()
-                .unwrap()
-                .unwrap()
+            config.finish().expect("Config should be valid")
         }
     }
 
