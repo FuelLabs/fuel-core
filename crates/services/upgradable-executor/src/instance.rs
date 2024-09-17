@@ -57,8 +57,9 @@ trait CallerHelper {
     /// Writes the encoded data to the memory at the provided pointer.
     fn write(&mut self, ptr: u32, encoded: &[u8]) -> anyhow::Result<()>;
 
-    /// Peeks the next transactions from the source and returns the size of the encoded transactions.
-    fn peek_next_txs_size<Source>(
+    /// Peeks the next transactions from the source and returns the size of
+    /// the encoded transactions in bytes.
+    fn peek_next_txs_bytes<Source>(
         &mut self,
         source: Arc<Source>,
         gas_limit: u64,
@@ -78,7 +79,7 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
             .map_err(|e| anyhow::anyhow!("Failed to write to the memory: {}", e))
     }
 
-    fn peek_next_txs_size<Source>(
+    fn peek_next_txs_bytes<Source>(
         &mut self,
         source: Arc<Source>,
         gas_limit: u64,
@@ -240,7 +241,7 @@ impl Instance<Created> {
                 return Ok(0);
             };
 
-            caller.peek_next_txs_size(source, gas_limit, u16::MAX, u32::MAX)
+            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -263,7 +264,7 @@ impl Instance<Created> {
                 anyhow::anyhow!("The number of transactions is more than `u16::MAX`: {e}")
             })?;
 
-            caller.peek_next_txs_size(source, gas_limit, tx_number_limit, size_limit)
+            caller.peek_next_txs_bytes(source, gas_limit, tx_number_limit, size_limit)
         };
 
         Func::wrap(&mut self.store, closure)
