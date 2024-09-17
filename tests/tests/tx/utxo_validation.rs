@@ -110,7 +110,7 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .add_random_fee_input()
+    .add_fee_input()
     .script_gas_limit(100)
     .finalize_as_transaction();
 

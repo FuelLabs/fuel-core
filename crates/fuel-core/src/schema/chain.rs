@@ -118,6 +118,7 @@ impl ConsensusParameters {
     async fn version(&self) -> ConsensusParametersVersion {
         match self.0.as_ref() {
             fuel_tx::ConsensusParameters::V1(_) => ConsensusParametersVersion::V1,
+            fuel_tx::ConsensusParameters::V2(_) => todo!(), /* TODO: This will get fixed with https://github.com/FuelLabs/fuel-core/pull/2199 which contains changes from https://github.com/FuelLabs/fuel-core/pull/2188 */
         }
     }
 

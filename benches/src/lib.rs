@@ -455,7 +455,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         });
 
         // add at least one coin input
-        tx.add_random_fee_input();
+        tx.add_fee_input();
 
         let mut tx = tx
             .script_gas_limit(gas_limit)

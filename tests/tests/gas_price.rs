@@ -55,7 +55,7 @@ use test_helpers::fuel_core_driver::FuelCoreDriver;
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
         .max_fee_limit(max_fee_limit)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize()
         .into()
 }
@@ -307,7 +307,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .add_random_fee_input()
+    .add_fee_input()
     .script_gas_limit(1000)
     .max_fee_limit(600000)
     .finalize_as_transaction();
