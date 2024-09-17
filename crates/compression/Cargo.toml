@@ -15,9 +15,9 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde", "da-compression"] }
 postcard = { version = "1.0", features = ["use-std"] }
+rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = { workspace = true }
-rand = { workspace = true, optional = true}
 
 [dev-dependencies]
 bimap = { version = "0.6" }
