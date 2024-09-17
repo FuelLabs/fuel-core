@@ -31,7 +31,6 @@ async fn works_in_local_env() {
 }
 
 // Spins up a node for each wallet and verifies that the suite works across multiple nodes
-#[cfg(feature = "p2p")]
 #[tokio::test(flavor = "multi_thread")]
 async fn works_in_multinode_local_env() {
     use fuel_core::p2p_test_helpers::*;
@@ -120,6 +119,8 @@ fn dev_config() -> Config {
         .consensus_parameters
         .set_tx_params(tx_parameters);
     chain_config.consensus_parameters.set_fee_params(fee_params);
+    chain_config.state_transition_bytecode =
+        fuel_core::upgradable_executor::WASM_BYTECODE.to_vec();
     let reader = reader.with_chain_config(chain_config);
 
     let mut config = Config::local_node_with_reader(reader);

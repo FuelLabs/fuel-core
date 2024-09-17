@@ -23,6 +23,7 @@ use crate::{
         BlockImporter,
         BlockProducer,
         BlockSigner,
+        GetTime,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
@@ -71,7 +72,7 @@ use fuel_core_types::{
 };
 use serde::Serialize;
 
-pub type Service<T, B, I, S, PB> = ServiceRunner<MainTask<T, B, I, S, PB>>;
+pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -126,7 +127,7 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<T, B, I, S, PB> {
+pub struct MainTask<T, B, I, S, PB, C> {
     signer: S,
     block_producer: B,
     block_importer: I,
@@ -139,15 +140,17 @@ pub struct MainTask<T, B, I, S, PB> {
     last_block_created: Instant,
     predefined_blocks: PB,
     trigger: Trigger,
+    clock: C,
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I, S, PB> MainTask<T, B, I, S, PB>
+impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
+    C: GetTime,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort>(
@@ -159,11 +162,12 @@ where
         p2p_port: P,
         signer: S,
         predefined_blocks: PB,
+        clock: C,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(1024);
         let (last_height, last_timestamp, last_block_created) =
-            Self::extract_block_info(last_block);
+            Self::extract_block_info(clock.now(), last_block);
 
         let block_stream = block_importer.block_stream();
         let peer_connections_stream = p2p_port.reserved_peers_count();
@@ -199,13 +203,17 @@ where
             predefined_blocks,
             trigger,
             sync_task_handle,
+            clock,
         }
     }
 
-    fn extract_block_info(last_block: &BlockHeader) -> (BlockHeight, Tai64, Instant) {
+    fn extract_block_info(
+        now: Tai64,
+        last_block: &BlockHeader,
+    ) -> (BlockHeight, Tai64, Instant) {
         let last_timestamp = last_block.time();
         let duration_since_last_block =
-            Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
+            Duration::from_secs(now.0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now()
             .checked_sub(duration_since_last_block)
             .unwrap_or(Instant::now());
@@ -231,7 +239,7 @@ where
                 }
             },
             RequestType::Trigger => {
-                let now = Tai64::now();
+                let now = self.clock.now();
                 if now > self.last_timestamp {
                     Ok(now)
                 } else {
@@ -242,13 +250,14 @@ where
     }
 }
 
-impl<T, B, I, S, PB> MainTask<T, B, I, S, PB>
+impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
     S: BlockSigner,
     PB: PredefinedBlocks,
+    C: GetTime,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -351,6 +360,9 @@ where
             entity: block,
             consensus: seal,
         };
+
+        block.entity.header().time();
+
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
@@ -454,7 +466,7 @@ where
     }
     fn update_last_block_values(&mut self, block_header: &Arc<BlockHeader>) {
         let (last_height, last_timestamp, last_block_created) =
-            Self::extract_block_info(block_header);
+            Self::extract_block_info(self.clock.now(), block_header);
         if last_height > self.last_height {
             self.last_height = last_height;
             self.last_timestamp = last_timestamp;
@@ -470,14 +482,14 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB> RunnableService for MainTask<T, B, I, S, PB>
+impl<T, B, I, S, PB, C> RunnableService for MainTask<T, B, I, S, PB, C>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I, S, PB>;
+    type Task = MainTask<T, B, I, S, PB, C>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -506,13 +518,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB> RunnableTask for MainTask<T, B, I, S, PB>
+impl<T, B, I, S, PB, C> RunnableTask for MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
     S: BlockSigner,
     PB: PredefinedBlocks,
+    C: GetTime,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -611,7 +624,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB>(
+pub fn new_service<T, B, I, P, S, PB, C>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
@@ -620,7 +633,8 @@ pub fn new_service<T, B, I, P, S, PB>(
     p2p_port: P,
     block_signer: S,
     predefined_blocks: PB,
-) -> Service<T, B, I, S, PB>
+    clock: C,
+) -> Service<T, B, I, S, PB, C>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
@@ -628,6 +642,7 @@ where
     S: BlockSigner + 'static,
     PB: PredefinedBlocks + 'static,
     P: P2pPort,
+    C: GetTime,
 {
     Service::new(MainTask::new(
         last_block,
@@ -638,6 +653,7 @@ where
         p2p_port,
         block_signer,
         predefined_blocks,
+        clock,
     ))
 }
 

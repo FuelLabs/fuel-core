@@ -11,6 +11,7 @@ use crate::{
         build_transport_function,
         Config,
     },
+    dnsaddr_resolution::DnsResolver,
     gossipsub::{
         messages::{
             GossipTopicTag,
@@ -35,7 +36,7 @@ use crate::{
     },
     TryPeerId,
 };
-use fuel_core_metrics::p2p_metrics::p2p_metrics;
+use fuel_core_metrics::p2p_metrics::increment_unique_peers;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::AppScore,
@@ -168,20 +169,53 @@ pub enum FuelP2PEvent {
     },
 }
 
+async fn parse_multiaddrs(multiaddrs: Vec<Multiaddr>) -> anyhow::Result<Vec<Multiaddr>> {
+    let dnsaddr_urls = multiaddrs
+        .iter()
+        .filter_map(|multiaddr| {
+            if let Protocol::Dnsaddr(dnsaddr_url) = multiaddr.iter().next()? {
+                Some(dnsaddr_url.clone())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let dns_resolver = DnsResolver::new().await?;
+    let mut dnsaddr_multiaddrs = vec![];
+
+    for dnsaddr in dnsaddr_urls {
+        let multiaddrs = dns_resolver.lookup_dnsaddr(dnsaddr.as_ref()).await?;
+        dnsaddr_multiaddrs.extend(multiaddrs);
+    }
+
+    let resolved_multiaddrs = multiaddrs
+        .into_iter()
+        .filter(|multiaddr| !multiaddr.iter().any(|p| matches!(p, Protocol::Dnsaddr(_))))
+        .chain(dnsaddr_multiaddrs.into_iter())
+        .collect();
+    Ok(resolved_multiaddrs)
+}
+
 impl FuelP2PService {
-    pub fn new(
+    pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
         codec: PostcardCodec,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
 
+        let mut config = config;
+        // override the configuration with the parsed multiaddrs from dnsaddr resolution
+        config.bootstrap_nodes = parse_multiaddrs(config.bootstrap_nodes).await?;
+        config.reserved_nodes = parse_multiaddrs(config.reserved_nodes).await?;
+
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);
         let tcp_config = tcp::Config::new().port_reuse(true);
-        let behaviour = FuelBehaviour::new(&config, codec.clone());
+        let behaviour = FuelBehaviour::new(&config, codec.clone())?;
 
         let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
@@ -190,11 +224,9 @@ impl FuelP2PService {
                 transport_function,
                 libp2p::yamux::Config::default,
             )
-            .unwrap()
-            .with_dns()
-            .unwrap()
-            .with_behaviour(|_| behaviour)
-            .unwrap()
+            .map_err(|_| anyhow::anyhow!("Failed to build Swarm"))?
+            .with_dns()?
+            .with_behaviour(|_| behaviour)?
             .with_swarm_config(|cfg| {
                 if let Some(timeout) = config.connection_idle_timeout {
                     cfg.with_idle_connection_timeout(timeout)
@@ -218,7 +250,7 @@ impl FuelP2PService {
             .filter_map(|m| m.try_to_peer_id())
             .collect();
 
-        Self {
+        Ok(Self {
             local_peer_id,
             local_address: config.address,
             tcp_port: config.tcp_port,
@@ -234,7 +266,7 @@ impl FuelP2PService {
                 connection_state,
                 config.max_peers_connected as usize,
             ),
-        }
+        })
     }
 
     pub async fn start(&mut self) -> anyhow::Result<()> {
@@ -268,6 +300,15 @@ impl FuelP2PService {
             {
                 break;
             }
+        }
+    }
+
+    pub fn update_metrics<T>(&self, update_fn: T)
+    where
+        T: FnOnce(),
+    {
+        if self.metrics {
+            update_fn();
         }
     }
 
@@ -644,9 +685,7 @@ impl FuelP2PService {
     fn handle_identify_event(&mut self, event: identify::Event) -> Option<FuelP2PEvent> {
         match event {
             identify::Event::Received { peer_id, info } => {
-                if self.metrics {
-                    p2p_metrics().unique_peers.inc();
-                }
+                self.update_metrics(increment_unique_peers);
 
                 let mut addresses = info.listen_addrs;
                 let agent_version = info.agent_version;
@@ -785,7 +824,9 @@ mod tests {
             broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
         let mut service =
-            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size));
+            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size))
+                .await
+                .unwrap();
         service.start().await.unwrap();
         service
     }

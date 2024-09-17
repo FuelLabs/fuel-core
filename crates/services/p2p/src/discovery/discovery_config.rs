@@ -97,7 +97,7 @@ impl Config {
         self
     }
 
-    pub fn finish(self) -> Behaviour {
+    pub fn finish(self) -> anyhow::Result<Behaviour> {
         let Config {
             local_peer_id,
             bootstrap_nodes,
@@ -112,9 +112,8 @@ impl Config {
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
         let mut kademlia_config = kad::Config::default();
         let network = format!("/fuel/kad/{network_name}/kad/1.0.0");
-        kademlia_config.set_protocol_names(vec![
-            StreamProtocol::try_from_owned(network).expect("Invalid kad protocol")
-        ]);
+        kademlia_config
+            .set_protocol_names(vec![StreamProtocol::try_from_owned(network)?]);
 
         let mut kademlia =
             kad::Behaviour::with_config(local_peer_id, memory_store, kademlia_config);
@@ -167,13 +166,13 @@ impl Config {
             MdnsWrapper::disabled()
         };
 
-        Behaviour {
+        Ok(Behaviour {
             connected_peers: HashSet::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
             max_peers_connected,
             mdns,
-        }
+        })
     }
 }

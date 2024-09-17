@@ -10,6 +10,7 @@ use crate::{
 
 /// The components required to produce a block.
 #[derive(Debug)]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Components<Source> {
     /// The partial block header of the future block without transactions related information.

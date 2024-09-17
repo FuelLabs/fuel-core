@@ -1,5 +1,8 @@
 use fuel_core_executor::{
-    executor::ExecutionOptions,
+    executor::{
+        ExecutionOptions,
+        OnceTransactionsSource,
+    },
     ports::{
         MaybeCheckedTransaction,
         RelayerPort,
@@ -53,6 +56,18 @@ use wasmtime::{
 trait CallerHelper {
     /// Writes the encoded data to the memory at the provided pointer.
     fn write(&mut self, ptr: u32, encoded: &[u8]) -> anyhow::Result<()>;
+
+    /// Peeks the next transactions from the source and returns the size of
+    /// the encoded transactions in bytes.
+    fn peek_next_txs_bytes<Source>(
+        &mut self,
+        source: Arc<Source>,
+        gas_limit: u64,
+        tx_number_limit: u16,
+        size_limit: u32,
+    ) -> anyhow::Result<u32>
+    where
+        Source: TransactionsSource;
 }
 
 impl<'a> CallerHelper for Caller<'a, ExecutionState> {
@@ -62,6 +77,51 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
         memory
             .write(&mut store, ptr as usize, encoded)
             .map_err(|e| anyhow::anyhow!("Failed to write to the memory: {}", e))
+    }
+
+    fn peek_next_txs_bytes<Source>(
+        &mut self,
+        source: Arc<Source>,
+        gas_limit: u64,
+        tx_number_limit: u16,
+        size_limit: u32,
+    ) -> anyhow::Result<u32>
+    where
+        Source: TransactionsSource,
+    {
+        let txs: Vec<_> = source
+            .next(gas_limit, tx_number_limit, size_limit)
+            .into_iter()
+            .map(|tx| match tx {
+                MaybeCheckedTransaction::CheckedTransaction(checked, _) => {
+                    let checked: Checked<Transaction> = checked.into();
+                    let (tx, _) = checked.into();
+                    tx
+                }
+                MaybeCheckedTransaction::Transaction(tx) => tx,
+            })
+            .collect();
+
+        let encoded_txs = postcard::to_allocvec(&txs).map_err(|e| {
+            ExecutorError::Other(format!(
+                "Failed encoding of the transactions for `peek_next_txs_size` function: {}",
+                e
+            ))
+        })?;
+        let encoded_size = u32::try_from(encoded_txs.len()).map_err(|e| {
+            ExecutorError::Other(format!(
+                "The encoded transactions are more \
+                than `u32::MAX`. We support only wasm32: {}",
+                e
+            ))
+        })?;
+
+        self.data_mut()
+            .next_transactions
+            .entry(encoded_size)
+            .or_default()
+            .push(encoded_txs);
+        Ok(encoded_size)
     }
 }
 
@@ -108,12 +168,26 @@ impl Instance {
 }
 
 impl<Stage> Instance<Stage> {
-    const LATEST_HOST_MODULE: &'static str = "host_v0";
+    const V0_HOST_MODULE: &'static str = "host_v0";
+    const V1_HOST_MODULE: &'static str = "host_v1";
 
-    /// Adds a new host function to the instance.
-    pub fn add_method(&mut self, method: &str, func: Func) -> ExecutorResult<()> {
+    /// Adds a new host function to the `host_v0` module of the instance.
+    pub fn add_v0_method(&mut self, method: &str, func: Func) -> ExecutorResult<()> {
         self.linker
-            .define(&self.store, Self::LATEST_HOST_MODULE, method, func)
+            .define(&self.store, Self::V0_HOST_MODULE, method, func)
+            .map_err(|e| {
+                ExecutorError::Other(format!(
+                    "Failed definition of the `{}` function: {}",
+                    method, e
+                ))
+            })?;
+        Ok(())
+    }
+
+    /// Adds a new host function to the `host_v1` module of the instance.
+    pub fn add_v1_method(&mut self, method: &str, func: Func) -> ExecutorResult<()> {
+        self.linker
+            .define(&self.store, Self::V1_HOST_MODULE, method, func)
             .map_err(|e| {
                 ExecutorError::Other(format!(
                     "Failed definition of the `{}` function: {}",
@@ -137,11 +211,13 @@ impl Instance<Created> {
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let source = source.map(|source| Arc::new(source));
+        let peek_next_txs_size_v0 = self.peek_next_txs_size_v0(source.clone());
+        self.add_v0_method("peek_next_txs_size", peek_next_txs_size_v0)?;
         let peek_next_txs_size = self.peek_next_txs_size(source.clone());
-        self.add_method("peek_next_txs_size", peek_next_txs_size)?;
+        self.add_v1_method("peek_next_txs_size", peek_next_txs_size)?;
 
         let consume_next_txs = self.consume_next_txs();
-        self.add_method("consume_next_txs", consume_next_txs)?;
+        self.add_v0_method("consume_next_txs", consume_next_txs)?;
 
         Ok(Instance {
             store: self.store,
@@ -150,21 +226,11 @@ impl Instance<Created> {
         })
     }
 
-    pub fn no_source(mut self) -> ExecutorResult<Instance<Source>> {
-        let peek_next_txs_size = self.no_source_peek_next_txs_size();
-        self.add_method("peek_next_txs_size", peek_next_txs_size)?;
-
-        let consume_next_txs = self.consume_next_txs();
-        self.add_method("consume_next_txs", consume_next_txs)?;
-
-        Ok(Instance {
-            store: self.store,
-            linker: self.linker,
-            stage: Source {},
-        })
+    pub fn no_source(self) -> ExecutorResult<Instance<Source>> {
+        self.add_source::<OnceTransactionsSource>(None)
     }
 
-    fn peek_next_txs_size<TxSource>(&mut self, source: Option<Arc<TxSource>>) -> Func
+    fn peek_next_txs_size_v0<TxSource>(&mut self, source: Option<Arc<TxSource>>) -> Func
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -175,47 +241,31 @@ impl Instance<Created> {
                 return Ok(0);
             };
 
-            let txs: Vec<_> = source
-                .next(gas_limit)
-                .into_iter()
-                .map(|tx| match tx {
-                    MaybeCheckedTransaction::CheckedTransaction(checked, _) => {
-                        let checked: Checked<Transaction> = checked.into();
-                        let (tx, _) = checked.into();
-                        tx
-                    }
-                    MaybeCheckedTransaction::Transaction(tx) => tx,
-                })
-                .collect();
-
-            let encoded_txs = postcard::to_allocvec(&txs).map_err(|e| {
-                ExecutorError::Other(format!(
-                    "Failed encoding of the transactions for `peek_next_txs_size` function: {}",
-                    e
-                ))
-            })?;
-            let encoded_size = u32::try_from(encoded_txs.len()).map_err(|e| {
-                ExecutorError::Other(format!(
-                    "The encoded transactions are more than `u32::MAX`. We support only wasm32: {}",
-                    e
-                ))
-            })?;
-
-            caller
-                .data_mut()
-                .next_transactions
-                .entry(encoded_size)
-                .or_default()
-                .push(encoded_txs);
-            Ok(encoded_size)
+            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
         };
 
         Func::wrap(&mut self.store, closure)
     }
 
-    fn no_source_peek_next_txs_size(&mut self) -> Func {
-        let closure =
-            move |_: Caller<'_, ExecutionState>, _: u64| -> anyhow::Result<u32> { Ok(0) };
+    fn peek_next_txs_size<TxSource>(&mut self, source: Option<Arc<TxSource>>) -> Func
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let closure = move |mut caller: Caller<'_, ExecutionState>,
+                            gas_limit: u64,
+                            tx_number_limit: u32,
+                            size_limit: u32|
+              -> anyhow::Result<u32> {
+            let Some(source) = source.clone() else {
+                return Ok(0);
+            };
+
+            let tx_number_limit = u16::try_from(tx_number_limit).map_err(|e| {
+                anyhow::anyhow!("The number of transactions is more than `u16::MAX`: {e}")
+            })?;
+
+            caller.peek_next_txs_bytes(source, gas_limit, tx_number_limit, size_limit)
+        };
 
         Func::wrap(&mut self.store, closure)
     }
@@ -251,10 +301,10 @@ impl Instance<Source> {
         let storage = Arc::new(storage);
 
         let storage_size_of_value = self.storage_size_of_value(storage.clone());
-        self.add_method("storage_size_of_value", storage_size_of_value)?;
+        self.add_v0_method("storage_size_of_value", storage_size_of_value)?;
 
         let storage_get = self.storage_get(storage);
-        self.add_method("storage_get", storage_get)?;
+        self.add_v0_method("storage_get", storage_get)?;
 
         Ok(Instance {
             store: self.store,
@@ -352,13 +402,13 @@ impl Instance<Storage> {
         let relayer = Arc::new(relayer);
 
         let relayer_enabled = self.relayer_enabled(relayer.clone());
-        self.add_method("relayer_enabled", relayer_enabled)?;
+        self.add_v0_method("relayer_enabled", relayer_enabled)?;
 
         let relayer_size_of_events = self.relayer_size_of_events(relayer);
-        self.add_method("relayer_size_of_events", relayer_size_of_events)?;
+        self.add_v0_method("relayer_size_of_events", relayer_size_of_events)?;
 
         let relayer_get_events = self.relayer_get_events();
-        self.add_method("relayer_get_events", relayer_get_events)?;
+        self.add_v0_method("relayer_get_events", relayer_get_events)?;
 
         Ok(Instance {
             store: self.store,
@@ -478,7 +528,6 @@ impl Instance<Relayer> {
         self.add_input_data(input)
     }
 
-    //
     pub fn add_validation_input_data(
         self,
         block: &Block,
@@ -509,7 +558,7 @@ impl Instance<Relayer> {
         })?;
 
         let input = self.input(encoded_input, encoded_input_size);
-        self.add_method("input", input)?;
+        self.add_v0_method("input", input)?;
 
         Ok(Instance {
             store: self.store,

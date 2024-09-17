@@ -16,13 +16,14 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY --from=planner /build/recipe.json recipe.json
+
 # Build our project dependencies, not our application!
 RUN \
   --mount=type=cache,target=/usr/local/cargo/registry/index \
   --mount=type=cache,target=/usr/local/cargo/registry/cache \
   --mount=type=cache,target=/usr/local/cargo/git/db \
   --mount=type=cache,target=/build/target \
-    cargo chef cook --release -p fuel-core-e2e-client --features p2p --recipe-path recipe.json
+    cargo chef cook --release -p fuel-core-e2e-client --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
@@ -31,7 +32,7 @@ RUN \
   --mount=type=cache,target=/usr/local/cargo/registry/cache \
   --mount=type=cache,target=/usr/local/cargo/git/db \
   --mount=type=cache,target=/build/target \
-    cargo build --release -p fuel-core-e2e-client --features p2p \
+    cargo build --release -p fuel-core-e2e-client \
     && cp ./target/release/fuel-core-e2e-client /root/fuel-core-e2e-client \
     && cp ./target/release/fuel-core-e2e-client.d /root/fuel-core-e2e-client.d
 

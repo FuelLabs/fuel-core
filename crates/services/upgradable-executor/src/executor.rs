@@ -63,6 +63,12 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
+#[cfg(feature = "wasm-executor")]
+use fuel_core_wasm_executor::utils::{
+    convert_from_v0_execution_result,
+    convert_from_v1_execution_result,
+    ReturnType,
+};
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -89,10 +95,7 @@ pub struct Executor<S, R> {
     execution_strategy: ExecutionStrategy,
     #[cfg(feature = "wasm-executor")]
     cached_modules: parking_lot::Mutex<
-        std::collections::HashMap<
-            fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
-            wasmtime::Module,
-        >,
+        std::collections::HashMap<StateTransitionBytecodeVersion, wasmtime::Module>,
     >,
 }
 
@@ -383,7 +386,12 @@ where
                     self.native_produce_inner(block, options, dry_run)
                 }
                 ExecutionStrategy::Wasm { module } => {
-                    self.wasm_produce_inner(module, block, options, dry_run)
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
+                        self.wasm_produce_inner(&blocks_module, block, options, dry_run)
+                    } else {
+                        self.wasm_produce_inner(module, block, options, dry_run)
+                    }
                 }
             }
         } else {
@@ -426,7 +434,12 @@ where
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_validate_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
-                    self.wasm_validate_inner(module, block, options)
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
+                        self.wasm_validate_inner(&blocks_module, block, options)
+                    } else {
+                        self.wasm_validate_inner(module, block, options)
+                    }
                 }
             }
         } else {
@@ -525,7 +538,18 @@ where
         let output = instance.run(module)?;
 
         match output {
-            fuel_core_wasm_executor::utils::ReturnType::V1(result) => result,
+            ReturnType::ExecutionV0(result) => {
+                convert_from_v0_execution_result(result)
+            },
+            ReturnType::ExecutionV1(result) => {
+                convert_from_v1_execution_result(result)
+            }
+            ReturnType::Validation(_) => {
+                Err(ExecutorError::Other(
+                    "The WASM executor returned a validation result instead of an execution result"
+                        .to_string(),
+                ))
+            }
         }
     }
 
@@ -559,9 +583,14 @@ where
         let output = instance.run(module)?;
 
         match output {
-            fuel_core_wasm_executor::utils::ReturnType::V1(result) => {
-                Ok(result?.into_validation_result())
+            ReturnType::ExecutionV0(result) => {
+                Ok(convert_from_v0_execution_result(result)?.into_validation_result())
             }
+            ReturnType::ExecutionV1(result) => {
+                let result = convert_from_v1_execution_result(result)?;
+                Ok(result.into_validation_result())
+            }
+            ReturnType::Validation(result) => Ok(result?),
         }
     }
 
@@ -647,6 +676,16 @@ where
             return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root))
         };
 
+        // If the bytecode is the same as the native executor, we don't need to compile it.
+        if bytecode == crate::WASM_BYTECODE {
+            let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
+            let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
+                wasmtime::Module::new(engine, crate::WASM_BYTECODE)
+                    .expect("Failed to validate the WASM bytecode")
+            });
+            return Ok(module.clone());
+        }
+
         wasmtime::Module::new(&self.engine, bytecode)
             .map_err(|e| UpgradableError::InvalidWasm(e.to_string()))
     }
@@ -658,13 +697,12 @@ where
     #[cfg(feature = "wasm-executor")]
     fn get_module(
         &self,
-        version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
+        version: StateTransitionBytecodeVersion,
     ) -> ExecutorResult<wasmtime::Module> {
-        let guard = self.cached_modules.lock();
+        let mut guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
             return Ok(module.clone());
         }
-        drop(guard);
 
         let view = StructuredStorage::new(
             self.storage_view_provider
@@ -686,7 +724,7 @@ where
                 UpgradableError::ExecutorError(err) => err
             })?;
 
-        self.cached_modules.lock().insert(version, module.clone());
+        guard.insert(version, module.clone());
         Ok(module)
     }
 }
