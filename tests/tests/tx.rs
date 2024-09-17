@@ -311,12 +311,11 @@ async fn dry_run_transaction_should_use_latest_block_time() {
     };
 
     // Then
-    assert_eq!(
-        start_time.0
-            + block_production_interval_seconds
-                * number_of_blocks_to_produce_manually.saturating_sub(1) as u64,
-        returned_timestamp
-    );
+    let expected_returned_timestamp = start_time.0
+        + block_production_interval_seconds
+            * number_of_blocks_to_produce_manually.saturating_sub(1) as u64;
+
+    assert_eq!(expected_returned_timestamp, returned_timestamp);
 }
 
 #[ignore]

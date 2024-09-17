@@ -566,10 +566,33 @@ mod dry_run {
     }
 
     #[tokio::test]
+    async fn dry_run__executes_with_past_timestamp() {
+        // Given
+        let simulated_block_time = Tai64::UNIX_EPOCH;
+        let last_block_time = Tai64::from_unix(1337);
+
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContextBuilder::new()
+            .with_prev_time(last_block_time)
+            .build_with_executor(executor.clone());
+
+        // When
+        let _err = ctx
+            .producer()
+            .dry_run(vec![], None, Some(simulated_block_time), None, None)
+            .await
+            .expect_err("expected failure");
+
+        // Then
+        assert_eq!(executor.captured_block_timestamp(), simulated_block_time);
+    }
+
+    #[tokio::test]
     async fn dry_run__uses_last_block_timestamp_when_no_time_provided() {
         // Given
-        let executor = MockExecutorWithCapture::default();
         let last_block_time = Tai64::from_unix(1337);
+
+        let executor = MockExecutorWithCapture::default();
         let ctx = TestContextBuilder::new()
             .with_prev_time(last_block_time)
             .build_with_executor(executor.clone());
@@ -588,8 +611,9 @@ mod dry_run {
     #[tokio::test]
     async fn dry_run__errors_early_if_height_is_lower_than_chain_tip() {
         // Given
-        let executor = MockExecutorWithCapture::default();
         let last_block_height = BlockHeight::new(42);
+
+        let executor = MockExecutorWithCapture::default();
         let ctx = TestContextBuilder::new()
             .with_prev_height(last_block_height)
             .build_with_executor(executor.clone());
@@ -933,7 +957,7 @@ impl TestContextBuilder {
         self
     }
 
-    fn pre_existing_blockss(&self) -> Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>> {
+    fn pre_existing_blocks(&self) -> Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>> {
         let da_height = self.prev_da_height;
         let height = self.prev_height;
         let time = self.prev_time;
@@ -969,7 +993,7 @@ impl TestContextBuilder {
         };
 
         let db = MockDb {
-            blocks: self.pre_existing_blockss(),
+            blocks: self.pre_existing_blocks(),
             consensus_parameters_version: 0,
             state_transition_bytecode_version: 0,
         };
@@ -991,7 +1015,7 @@ impl TestContextBuilder {
         };
 
         let db = MockDb {
-            blocks: self.pre_existing_blockss(),
+            blocks: self.pre_existing_blocks(),
             consensus_parameters_version: 0,
             state_transition_bytecode_version: 0,
         };
