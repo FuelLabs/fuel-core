@@ -269,7 +269,9 @@ pub async fn make_nodes(
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         update_signing_key(&mut node_config, pub_key);
                     }
-                    Bootstrap::new(&node_config).await
+                    Bootstrap::new(&node_config)
+                        .await
+                        .expect("Failed to create bootstrap node")
                 }
             })
             .collect()
