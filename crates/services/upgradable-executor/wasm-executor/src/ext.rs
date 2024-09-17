@@ -75,6 +75,19 @@ impl<'a, T> Ptr32Mut<'a, [T]> {
 mod host {
     use super::*;
 
+    #[link(wasm_import_module = "host_v1")]
+    extern "C" {
+        // TxSource API
+
+        /// Returns the size of the next encoded transactions.
+        /// If the size is 0, there are no more transactions.
+        pub(crate) fn peek_next_txs_size(
+            gas_limit: u64,
+            tx_count_limit: u32,
+            size_limit: u32,
+        ) -> u32;
+    }
+
     #[link(wasm_import_module = "host_v0")]
     extern "C" {
         // Initialization API
@@ -83,10 +96,6 @@ mod host {
         pub(crate) fn input(output_ptr: Ptr32Mut<[u8]>, output_size: u32);
 
         // TxSource API
-
-        /// Returns the size of the next encoded transactions.
-        /// If the size is 0, there are no more transactions.
-        pub(crate) fn peek_next_txs_size(gas_limit: u64) -> u32;
 
         /// Consumes the next transactions from the host.
         /// Calling this function before `peek_next_txs_size` do nothing.
@@ -148,8 +157,13 @@ pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
 }
 
 /// Gets the next transactions by using the host function.
-pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
-    let next_size = unsafe { host::peek_next_txs_size(gas_limit) };
+pub fn next_transactions(
+    gas_limit: u64,
+    tx_count_limit: u16,
+    size_limit: u32,
+) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
+    let next_size =
+        unsafe { host::peek_next_txs_size(gas_limit, tx_count_limit as u32, size_limit) };
 
     if next_size == 0 {
         return Ok(Vec::new());

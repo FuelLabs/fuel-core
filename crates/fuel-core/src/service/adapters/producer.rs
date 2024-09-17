@@ -13,7 +13,6 @@ use crate::{
         sub_services::BlockProducerService,
     },
 };
-use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::{
     block_producer::gas_price::{
         ConsensusParametersProvider as ConsensusParametersProviderTrait,
@@ -99,17 +98,7 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
         &self,
         component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let new_components = Components {
-            header_to_produce: component.header_to_produce,
-            transactions_source: OnceTransactionsSource::new(
-                component.transactions_source,
-            ),
-            gas_price: component.gas_price,
-            coinbase_recipient: component.coinbase_recipient,
-        };
-
-        self.executor
-            .produce_without_commit_with_source(new_components)
+        self.produce_without_commit_from_vector(component)
     }
 }
 

@@ -1,7 +1,7 @@
 {
   "chain_name": "Local testnet",
   "consensus_parameters": {
-    "V1": {
+    "V2": {
       "tx_params": {
         "V1": {
           "max_inputs": 255,
@@ -293,6 +293,7 @@
       },
       "base_asset_id": "f8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07",
       "block_gas_limit": 30000000,
+      "block_transaction_size_limit": 129024,
       "privileged_address": "9f0e19d6c2a6283a3222426ab2630d35516b1799b503f37b02105bebe1b8a3e9"
     }
   },
