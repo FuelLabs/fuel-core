@@ -20,6 +20,7 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
 hex = { workspace = true }
+hickory-resolver = "0.24.1"
 ip_network = "0.4"
 libp2p = { version = "0.53.2", default-features = false, features = [
   "dns",
@@ -50,7 +51,6 @@ thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 void = "1"
-hickory-resolver = "0.25.0-alpha.2"
 
 [dev-dependencies]
 ctor = "0.1"
