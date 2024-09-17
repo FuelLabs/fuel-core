@@ -104,6 +104,13 @@ where
     async fn update(&mut self, new_algorithm: A) {
         self.next_block_algorithm.update(new_algorithm).await;
     }
+
+    async fn update_algorithm(&mut self, l2_block: BlockInfo) -> anyhow::Result<()> {
+        let da_block_costs = self.da_block_costs.take();
+        let new_algo = self.update_algorithm.next(l2_block, da_block_costs)?;
+        self.update(new_algo).await;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default)]
@@ -195,10 +202,8 @@ where
             }
             l2_block = self.l2_block_source.get_l2_block() => {
                 let l2_block = l2_block?;
-                let da_block_costs = self.da_block_costs.take();
-                let next_algo = self.update_algorithm.next(l2_block, da_block_costs)?;
                 tracing::debug!("Updating gas price algorithm");
-                self.update(next_algo).await;
+                self.update_algorithm(l2_block).await?;
                 should_continue = true;
             }
         }
@@ -210,11 +215,7 @@ where
 
         let l2_block = self.l2_block_source.get_l2_block().now_or_never();
         if let Some(Ok(l2_block)) = l2_block {
-            let da_block_costs = self.da_block_costs.clone();
-            if let Ok(new_algo) = self.update_algorithm.next(l2_block, da_block_costs) {
-                tracing::debug!("Updating gas price algorithm");
-                self.update(new_algo).await;
-            }
+            self.update_algorithm(l2_block).await?;
         }
         Ok(())
     }
