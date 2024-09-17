@@ -479,7 +479,8 @@ pub mod tests {
     #[test]
     fn transactions_connection_query_gql_output() {
         use cynic::QueryBuilder;
-        let operation = TransactionsQuery::build(ConnectionArgs {
+
+        let operation = TransactionsQuery::build(crate::client::schema::ConnectionArgs {
             after: None,
             before: None,
             first: None,
