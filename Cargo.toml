@@ -112,7 +112,7 @@ postcard = "1.0"
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
 serde = "1.0"
-serde_json = "1.0"
+serde_json = { version = "1.0", default-features = false }
 serde_with = { version = "3.4", default-features = false }
 strum = { version = "0.25" }
 strum_macros = "0.25"

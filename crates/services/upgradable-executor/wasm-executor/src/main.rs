@@ -15,21 +15,16 @@
 
 use crate as fuel_core_wasm_executor;
 use crate::utils::{
+    convert_to_v1_execution_result,
     InputDeserializationType,
     WasmDeserializationBlockTypes,
 };
 use fuel_core_executor::executor::ExecutionInstance;
-use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
     services::{
         block_producer::Components,
-        executor::{
-            Error as ExecutorError,
-            ExecutionResult,
-            Result as ExecutorResult,
-        },
-        Uncommitted,
+        executor::Error as ExecutorError,
     },
 };
 use fuel_core_wasm_executor::{
@@ -50,8 +45,7 @@ pub mod utils;
 
 #[no_mangle]
 pub extern "C" fn execute(input_len: u32) -> u64 {
-    let result = execute_without_commit(input_len);
-    let output = ReturnType::V1(result);
+    let output: ReturnType = execute_without_commit(input_len);
     let encoded = postcard::to_allocvec(&output).expect("Failed to encode the output");
     let static_slice = encoded.leak();
     pack_ptr_and_len(
@@ -60,11 +54,16 @@ pub extern "C" fn execute(input_len: u32) -> u64 {
     )
 }
 
-pub fn execute_without_commit(
-    input_len: u32,
-) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    let input = ext::input(input_len as usize)
-        .map_err(|e| ExecutorError::Other(e.to_string()))?;
+pub fn execute_without_commit(input_len: u32) -> ReturnType {
+    let input =
+        ext::input(input_len as usize).map_err(|e| ExecutorError::Other(e.to_string()));
+
+    let input = match input {
+        Ok(input) => input,
+        Err(err) => {
+            return ReturnType::ExecutionV1(Err(err.into()));
+        }
+    };
 
     let (block, options) = match input {
         InputDeserializationType::V1 { block, options } => {
@@ -100,28 +99,24 @@ pub fn execute_without_commit(
 fn execute_dry_run(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
-) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    instance.produce_without_commit(block, true)
+) -> ReturnType {
+    let result = instance.produce_without_commit(block, true);
+    ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
 }
 
 fn execute_production(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
-) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    instance.produce_without_commit(block, false)
+) -> ReturnType {
+    let result = instance.produce_without_commit(block, false);
+    ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
 }
 
 fn execute_validation(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Block,
-) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-    let result = instance
-        .validate_without_commit(&block)?
-        .into_execution_result(block, vec![]);
-
-    // TODO: Modify return type to differentiate between validation and production results
-    // https://github.com/FuelLabs/fuel-core/issues/1887
-    Ok(result)
+) -> ReturnType {
+    ReturnType::Validation(instance.validate_without_commit(&block).map_err(Into::into))
 }
 
 fn use_wasm_tx_source(component: Components<()>) -> Components<WasmTxSource> {
