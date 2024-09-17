@@ -343,14 +343,15 @@ impl GasPriceAlgorithm for Algorithm {
     fn next_gas_price(&self) -> u64 {
         match self {
             Algorithm::V0(v0) => v0.calculate(),
-            Algorithm::V1(v1) => v1.calculate(0),
+            Algorithm::V1(v1) => v1.calculate(),
         }
     }
 
     fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
         match self {
             Algorithm::V0(v0) => v0.worst_case(height.into()),
-            Algorithm::V1(v1) => v1.calculate(0),
+            // TODO: Add worst_case calculation https://github.com/FuelLabs/fuel-core/issues/2203
+            Algorithm::V1(v1) => v1.calculate(),
         }
     }
 }
