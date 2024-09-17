@@ -196,7 +196,7 @@ where
             }
             l2_block = self.l2_block_source.get_l2_block() => {
                 let l2_block = l2_block?;
-                let da_block_costs = self.da_block_costs.clone();
+                let da_block_costs = self.da_block_costs.take();
                 let next_algo = self.update_algorithm.next(l2_block, da_block_costs).await?;
                 tracing::debug!("Updating gas price algorithm");
                 self.update(next_algo).await;
