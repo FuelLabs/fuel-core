@@ -172,9 +172,9 @@ pub enum FuelP2PEvent {
 async fn parse_multiaddrs(multiaddrs: Vec<Multiaddr>) -> anyhow::Result<Vec<Multiaddr>> {
     let dnsaddr_urls = multiaddrs
         .iter()
-        .filter_map(|node| {
-            if let Protocol::Dnsaddr(multiaddr) = node.iter().next()? {
-                Some(multiaddr.clone())
+        .filter_map(|multiaddr| {
+            if let Protocol::Dnsaddr(dnsaddr_url) = multiaddr.iter().next()? {
+                Some(dnsaddr_url.clone())
             } else {
                 None
             }
