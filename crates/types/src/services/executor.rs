@@ -53,16 +53,28 @@ pub type UncommittedValidationResult<DatabaseTransaction> =
 /// The result of transactions execution for block production.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct ExecutionResult {
+pub struct ExecutionResult<E = Error> {
     /// Created block during the execution of transactions. It contains only valid transactions.
     pub block: Block,
     /// The list of skipped transactions with corresponding errors. Those transactions were
     /// not included in the block and didn't affect the state of the blockchain.
-    pub skipped_transactions: Vec<(TxId, Error)>,
+    pub skipped_transactions: Vec<(TxId, E)>,
     /// The status of the transactions execution included into the block.
     pub tx_status: Vec<TransactionExecutionStatus>,
     /// The list of all events generated during the execution of the block.
     pub events: Vec<Event>,
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<E> Default for ExecutionResult<E> {
+    fn default() -> Self {
+        Self {
+            block: Block::default(),
+            skipped_transactions: Default::default(),
+            tx_status: Default::default(),
+            events: Default::default(),
+        }
+    }
 }
 
 /// The result of the validation of the block.
@@ -212,6 +224,14 @@ impl TransactionExecutionResult {
         }
     }
 
+    /// Get the total gas used by the transaction.
+    pub fn total_gas(&self) -> &u64 {
+        match self {
+            TransactionExecutionResult::Success { total_gas, .. }
+            | TransactionExecutionResult::Failed { total_gas, .. } => total_gas,
+        }
+    }
+
     #[cfg(feature = "std")]
     /// Get the reason of the failed transaction execution.
     pub fn reason(receipts: &[Receipt], state: &Option<ProgramState>) -> String {
@@ -237,6 +257,9 @@ pub enum Error {
     TransactionIdCollision(Bytes32),
     #[display(fmt = "Too many transactions in the block")]
     TooManyTransactions,
+    /// Number of outputs is more than `u16::MAX`.
+    #[display(fmt = "Number of outputs is more than `u16::MAX`")]
+    TooManyOutputs,
     #[display(fmt = "output already exists")]
     OutputAlreadyExists,
     #[display(fmt = "The computed fee caused an integer overflow")]
@@ -304,9 +327,6 @@ pub enum Error {
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),
-    /// Number of outputs is more than `u16::MAX`.
-    #[display(fmt = "Number of outputs is more than `u16::MAX`")]
-    TooManyOutputs,
 }
 
 impl From<Error> for anyhow::Error {

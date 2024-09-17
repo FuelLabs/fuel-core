@@ -153,6 +153,7 @@ use std::borrow::Cow;
 #[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
 
+use crate::ports::TransactionExt;
 #[cfg(feature = "alloc")]
 use alloc::{
     format,
@@ -185,7 +186,7 @@ impl OnceTransactionsSource {
 }
 
 impl TransactionsSource for OnceTransactionsSource {
-    fn next(&self, _: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         core::mem::take(lock.as_mut())
     }
@@ -563,15 +564,24 @@ where
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
 
-        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+        let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+        // TODO: Handle `remaining_tx_count` https://github.com/FuelLabs/fuel-core/issues/2114
+        let remaining_tx_count = u16::MAX;
+        // TODO: Handle `remaining_size` https://github.com/FuelLabs/fuel-core/issues/2133
+        let remaining_size = u32::MAX;
 
         let mut regular_tx_iter = l2_tx_source
-            .next(remaining_gas_limit)
+            .next(remaining_gas_limit, remaining_tx_count, remaining_size)
             .into_iter()
             .peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
+                if transaction.max_gas(&self.consensus_params)? > remaining_gas_limit {
+                    data.skipped_transactions
+                        .push((tx_id, ExecutorError::GasOverflow));
+                    continue;
+                }
                 match self.execute_transaction_and_commit(
                     block,
                     storage_tx,
@@ -586,12 +596,11 @@ where
                         data.skipped_transactions.push((tx_id, err));
                     }
                 }
+                remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
             }
 
-            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
             regular_tx_iter = l2_tx_source
-                .next(new_remaining_gas_limit)
+                .next(remaining_gas_limit, remaining_tx_count, remaining_size)
                 .into_iter()
                 .peekable();
         }
@@ -791,6 +800,14 @@ where
                 if new_tx != old_tx {
                     let chain_id = self.consensus_params.chain_id();
                     let transaction_id = old_tx.id(&chain_id);
+
+                    tracing::info!(
+                        "Transaction {:?} does not match: new_tx {:?} and old_tx {:?}",
+                        transaction_id,
+                        new_tx,
+                        old_tx
+                    );
+
                     Err(ExecutorError::InvalidTransactionOutcome { transaction_id })
                 } else {
                     Ok(())
@@ -801,6 +818,12 @@ where
             .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
         if new_block.header() != old_block.header() {
+            tracing::info!(
+                "Headers does not match: new_block {:?} and old_block {:?}",
+                new_block,
+                old_block
+            );
+
             Err(ExecutorError::BlockMismatch)
         } else {
             Ok(())
@@ -944,18 +967,9 @@ where
         consensus_params: &ConsensusParameters,
     ) -> Result<(), ForcedTransactionFailure> {
         let claimed_max_gas = relayed_tx.max_gas();
-        let gas_costs = consensus_params.gas_costs();
-        let fee_params = consensus_params.fee_params();
-        let actual_max_gas = match tx {
-            Transaction::Script(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Create(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Mint(_) => {
-                return Err(ForcedTransactionFailure::InvalidTransactionType)
-            }
-            Transaction::Upgrade(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Upload(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Blob(tx) => tx.max_gas(gas_costs, fee_params),
-        };
+        let actual_max_gas = tx
+            .max_gas(consensus_params)
+            .map_err(|_| ForcedTransactionFailure::InvalidTransactionType)?;
         if actual_max_gas > claimed_max_gas {
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
                 claimed_max_gas,
