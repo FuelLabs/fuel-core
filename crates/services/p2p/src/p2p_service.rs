@@ -189,11 +189,12 @@ async fn parse_multiaddrs(multiaddrs: Vec<Multiaddr>) -> anyhow::Result<Vec<Mult
         dnsaddr_multiaddrs.extend(multiaddrs);
     }
 
-    Ok(multiaddrs
+    let resolved_multiaddrs = multiaddrs
         .into_iter()
         .filter(|multiaddr| !multiaddr.iter().any(|p| matches!(p, Protocol::Dnsaddr(_))))
         .chain(dnsaddr_multiaddrs.into_iter())
-        .collect::<Vec<_>>())
+        .collect();
+    Ok(resolved_multiaddrs)
 }
 
 impl FuelP2PService {
