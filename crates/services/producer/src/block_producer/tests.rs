@@ -607,14 +607,14 @@ mod dry_run {
 
     impl MockExecutorWithCapture<Transaction> {
         fn captured_block_timestamp(&self) -> Tai64 {
-            self.captured
+            *self
+                .captured
                 .lock()
                 .unwrap()
                 .as_ref()
                 .expect("should have captured a block")
                 .header_to_produce
                 .time()
-                .clone()
         }
 
         fn has_no_captured_block_timestamp(&self) -> bool {
@@ -963,7 +963,7 @@ impl TestContextBuilder {
         let block_gas_limit = self.block_gas_limit.unwrap_or_default();
 
         let mock_relayer = MockRelayer {
-            latest_block_height: self.latest_block_height.clone(),
+            latest_block_height: self.latest_block_height,
             latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
             ..Default::default()
         };
@@ -985,7 +985,7 @@ impl TestContextBuilder {
         let block_gas_limit = self.block_gas_limit.unwrap_or_default();
 
         let mock_relayer = MockRelayer {
-            latest_block_height: self.latest_block_height.clone(),
+            latest_block_height: self.latest_block_height,
             latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
             ..Default::default()
         };
