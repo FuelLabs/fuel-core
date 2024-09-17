@@ -41,7 +41,7 @@ use crate::{
 pub struct UnverifiedTx(Transaction);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct BasicVerifiedTx(Checked<Transaction>);
+pub struct BasicVerifiedTx(CheckedTransaction);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct InputDependenciesVerifiedTx(Checked<Transaction>);
@@ -89,12 +89,11 @@ impl BasicVerifiedTx {
         PSProvider: AtomicView<LatestView = PSView>,
         PSView: TxPoolPersistentStorage,
     {
-        let checked_transaction = self.0.into();
-        let pool_tx = checked_tx_into_pool(checked_transaction, version)?;
+        let pool_tx = checked_tx_into_pool(self.0, version)?;
 
         pool.read().can_insert_transaction(&pool_tx)?;
-        let checked_tx: CheckedTransaction = (&pool_tx).into();
-        Ok(InputDependenciesVerifiedTx(checked_tx.into()))
+        let checked_transaction: CheckedTransaction = pool_tx.into();
+        Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
     }
 }
 
@@ -179,7 +178,7 @@ fn verify_tx_min_gas_price(
     tx: Checked<Transaction>,
     consensus_params: &ConsensusParameters,
     gas_price: GasPrice,
-) -> Result<Checked<Transaction>, Error> {
+) -> Result<CheckedTransaction, Error> {
     let tx: CheckedTransaction = tx.into();
     let gas_costs = consensus_params.gas_costs();
     let fee_parameters = consensus_params.fee_params();
@@ -211,7 +210,7 @@ fn verify_tx_min_gas_price(
         }
         CheckedTransaction::Mint(_) => return Err(Error::NotSupportedTransactionType),
     };
-    Ok(read.into())
+    Ok(read)
 }
 
 pub fn checked_tx_into_pool(

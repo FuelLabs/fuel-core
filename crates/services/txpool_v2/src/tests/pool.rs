@@ -4,10 +4,6 @@ use crate::{
     config::Config,
     error::Error,
     tests::context::{
-        check_tx,
-        check_tx_with_gas_price,
-        check_unwrap_tx,
-        check_unwrap_tx_with_gas_price,
         create_coin_output,
         create_contract_input,
         create_contract_output,

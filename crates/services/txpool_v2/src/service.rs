@@ -14,6 +14,7 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
+    fuel_vm::checked_transaction::CheckedTransaction,
     services::txpool::PoolTransaction,
 };
 use parking_lot::RwLock;
@@ -139,10 +140,6 @@ where
             insertable_transactions.push(checked_tx);
         }
         self.pool.write().insert(insertable_transactions)
-    }
-
-    pub fn find_one(&self, tx_id: &TxId) -> Option<Transaction> {
-        self.pool.read().find_one(tx_id).map(|tx| tx.into())
     }
 }
 
