@@ -78,6 +78,7 @@ pub enum TxParametersVersion {
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum ConsensusParametersVersion {
     V1,
+    V2,
 }
 
 #[derive(Union)]
@@ -118,6 +119,7 @@ impl ConsensusParameters {
     async fn version(&self) -> ConsensusParametersVersion {
         match self.0.as_ref() {
             fuel_tx::ConsensusParameters::V1(_) => ConsensusParametersVersion::V1,
+            fuel_tx::ConsensusParameters::V2(_) => ConsensusParametersVersion::V2,
         }
     }
 

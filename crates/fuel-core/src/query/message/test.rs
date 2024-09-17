@@ -18,7 +18,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-use super::*;
+use super::{TxId, *};
 
 const fn txn_id(i: u8) -> Bytes32 {
     Bytes32::new([i; 32])
