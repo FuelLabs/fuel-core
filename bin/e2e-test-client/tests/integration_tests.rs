@@ -31,7 +31,6 @@ async fn works_in_local_env() {
 }
 
 // Spins up a node for each wallet and verifies that the suite works across multiple nodes
-#[cfg(feature = "p2p")]
 #[tokio::test(flavor = "multi_thread")]
 async fn works_in_multinode_local_env() {
     use fuel_core::p2p_test_helpers::*;
