@@ -90,7 +90,7 @@ mod tests {
         ].iter().map(|s| s.parse().unwrap()).collect();
 
         // when
-        // run a `dig +short txt rymnc.com` to get the TXT records
+        // run a `dig +short txt _dnsaddr.rymnc.com` to get the TXT records
         // notice that it contains -
         // `dnsaddr=/dnsaddr/zone-1.rymnc.com/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN`
         // which is a recursive call
