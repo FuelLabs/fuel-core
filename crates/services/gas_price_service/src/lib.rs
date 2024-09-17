@@ -7,7 +7,6 @@ use crate::fuel_gas_price_updater::{
     da_source_adapter::service::{
         new_provider,
         DaBlockCostsProvider,
-        DaBlockCostsProviderPort,
         DaBlockCostsSource,
     },
     BlockInfo,

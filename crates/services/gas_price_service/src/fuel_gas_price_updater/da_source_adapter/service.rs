@@ -26,34 +26,25 @@ pub struct DaBlockCostsProvider<Source: DaBlockCostsSource + 'static> {
     subscription: Receiver<DaBlockCosts>,
 }
 
-#[async_trait::async_trait]
-pub trait DaBlockCostsProviderPort {
-    async fn start_and_await(&self) -> Result<()>;
-    async fn stop_and_await(&self) -> Result<()>;
-    async fn recv(&mut self) -> Result<DaBlockCosts>;
-    fn try_recv(&mut self) -> Result<DaBlockCosts>;
-}
-
-#[async_trait::async_trait]
-impl<Source> DaBlockCostsProviderPort for DaBlockCostsProvider<Source>
+impl<Source> DaBlockCostsProvider<Source>
 where
     Source: DaBlockCostsSource,
 {
-    async fn start_and_await(&self) -> Result<()> {
+    pub async fn start_and_await(&self) -> Result<()> {
         self.handle.start_and_await().await?;
         Ok(())
     }
 
-    async fn stop_and_await(&self) -> Result<()> {
+    pub async fn stop_and_await(&self) -> Result<()> {
         self.handle.stop_and_await().await?;
         Ok(())
     }
 
-    async fn recv(&mut self) -> Result<DaBlockCosts> {
+    pub async fn recv(&mut self) -> Result<DaBlockCosts> {
         self.subscription.recv().await.map_err(Into::into)
     }
 
-    fn try_recv(&mut self) -> Result<DaBlockCosts> {
+    pub fn try_recv(&mut self) -> Result<DaBlockCosts> {
         self.subscription.try_recv().map_err(Into::into)
     }
 }

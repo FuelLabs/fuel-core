@@ -8,10 +8,7 @@ mod tests {
     use crate::fuel_gas_price_updater::{
         da_source_adapter::{
             dummy_costs::DummyDaBlockCosts,
-            service::{
-                new_provider,
-                DaBlockCostsProviderPort,
-            },
+            service::new_provider,
         },
         DaBlockCosts,
     };
