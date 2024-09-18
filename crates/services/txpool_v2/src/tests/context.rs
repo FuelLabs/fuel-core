@@ -132,7 +132,7 @@ impl TestPoolUniverse {
     ) -> Transaction {
         let mut inputs = inputs.unwrap_or_default();
         let (_, gas_coin) = self.setup_coin();
-        inputs.push(gas_coin.into());
+        inputs.push(gas_coin);
         let outputs = outputs.unwrap_or_default();
         let mut tx_builder = TransactionBuilder::script(vec![], vec![]);
         tx_builder.script_gas_limit(GAS_LIMIT);
