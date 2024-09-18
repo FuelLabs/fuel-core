@@ -29,6 +29,7 @@ use alloc::{
 };
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
+#[allow(clippy::large_enum_variant)]
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
     Transaction(fuel_tx::Transaction),
@@ -115,7 +116,12 @@ impl TransactionExt for MaybeCheckedTransaction {
 
 pub trait TransactionsSource {
     /// Returns the next batch of transactions to satisfy the `gas_limit`.
-    fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction>;
+    fn next(
+        &self,
+        gas_limit: u64,
+        tx_count_limit: u16,
+        size_limit: u32,
+    ) -> Vec<MaybeCheckedTransaction>;
 }
 
 pub trait RelayerPort {

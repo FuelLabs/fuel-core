@@ -274,7 +274,7 @@ mod p2p {
         update_signing_key(&mut config, pub_key);
 
         let bootstrap_config = make_config("Bootstrap".to_string(), config.clone());
-        let bootstrap = Bootstrap::new(&bootstrap_config).await;
+        let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
 
         let make_node_config = |name: &str| {
             let mut config = make_config(name.to_string(), config.clone());

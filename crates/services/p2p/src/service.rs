@@ -690,7 +690,8 @@ where
             broadcast.reserved_peers_broadcast.clone(),
             config,
             PostcardCodec::new(max_block_size),
-        );
+        )
+        .await?;
         p2p_service.start().await?;
 
         let next_check_time =
