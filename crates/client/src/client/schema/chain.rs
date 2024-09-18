@@ -20,6 +20,7 @@ pub struct ConsensusParameters {
     pub fee_params: FeeParameters,
     pub base_asset_id: AssetId,
     pub block_gas_limit: U64,
+    pub block_transaction_size_limit: U64,
     pub chain_id: U64,
     pub gas_costs: GasCosts,
     pub privileged_address: Address,
@@ -479,7 +480,7 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
     fn try_from(params: ConsensusParameters) -> Result<Self, Self::Error> {
         match params.version {
             ConsensusParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV1 {
+                fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
                     tx_params: params.tx_params.try_into()?,
                     predicate_params: params.predicate_params.try_into()?,
                     script_params: params.script_params.try_into()?,
@@ -487,6 +488,9 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
                     fee_params: params.fee_params.try_into()?,
                     base_asset_id: params.base_asset_id.into(),
                     block_gas_limit: params.block_gas_limit.into(),
+                    block_transaction_size_limit: params
+                        .block_transaction_size_limit
+                        .into(),
                     chain_id: params.chain_id.0.into(),
                     gas_costs: params.gas_costs.try_into()?,
                     privileged_address: params.privileged_address.into(),
