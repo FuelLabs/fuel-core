@@ -374,9 +374,10 @@ impl FuelClient {
         &self,
         block_horizon: u32,
     ) -> io::Result<EstimateGasPrice> {
-        let query = schema::gas_price::QueryEstimateGasPrice::build(BlockHorizonArgs {
+        let args = BlockHorizonArgs {
             block_horizon: Some(block_horizon.into()),
-        });
+        };
+        let query = schema::gas_price::QueryEstimateGasPrice::build(args);
         self.query(query).await.map(|r| r.estimate_gas_price)
     }
 
@@ -760,8 +761,8 @@ impl FuelClient {
         &self,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
-        let query =
-            schema::tx::TransactionsQuery::build(schema::ConnectionArgs::from(request));
+        let args = schema::ConnectionArgs::from(request);
+        let query = schema::tx::TransactionsQuery::build(args);
         let transactions = self.query(query).await?.transactions.try_into()?;
         Ok(transactions)
     }
@@ -773,9 +774,8 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
         let owner: schema::Address = (*owner).into();
-        let query = schema::tx::TransactionsByOwnerQuery::build(
-            TransactionsByOwnerConnectionArgs::from((owner, request)),
-        );
+        let args = TransactionsByOwnerConnectionArgs::from((owner, request));
+        let query = schema::tx::TransactionsByOwnerQuery::build(args);
 
         let transactions = self.query(query).await?.transactions_by_owner.try_into()?;
         Ok(transactions)
@@ -887,8 +887,8 @@ impl FuelClient {
         &self,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Block, String>> {
-        let query =
-            schema::block::BlocksQuery::build(schema::ConnectionArgs::from(request));
+        let args = schema::ConnectionArgs::from(request);
+        let query = schema::block::BlocksQuery::build(args);
 
         let blocks = self.query(query).await?.blocks.try_into()?;
 
@@ -915,9 +915,8 @@ impl FuelClient {
             Some(asset_id) => (*asset_id).into(),
             None => schema::AssetId::default(),
         };
-        let query = schema::coins::CoinsQuery::build(CoinsConnectionArgs::from((
-            owner, asset_id, request,
-        )));
+        let args = CoinsConnectionArgs::from((owner, asset_id, request));
+        let query = schema::coins::CoinsQuery::build(args);
 
         let coins = self.query(query).await?.coins.into();
         Ok(coins)
@@ -952,9 +951,9 @@ impl FuelClient {
                 },
             )
             .map(Into::into);
-        let query = schema::coins::CoinsToSpendQuery::build(
-            schema::coins::CoinsToSpendArgs::from((owner, spend_query, excluded_ids)),
-        );
+        let args =
+            schema::coins::CoinsToSpendArgs::from((owner, spend_query, excluded_ids));
+        let query = schema::coins::CoinsToSpendQuery::build(args);
 
         let coins_per_asset = self
             .query(query)
@@ -1017,9 +1016,8 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Balance, String>> {
         let owner: schema::Address = (*owner).into();
-        let query = schema::balance::BalancesQuery::build(
-            schema::balance::BalancesConnectionArgs::from((owner, request)),
-        );
+        let args = schema::balance::BalancesConnectionArgs::from((owner, request));
+        let query = schema::balance::BalancesQuery::build(args);
 
         let balances = self.query(query).await?.balances.into();
         Ok(balances)
@@ -1031,9 +1029,8 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::ContractBalance, String>> {
         let contract_id: schema::ContractId = (*contract).into();
-        let query = schema::contract::ContractBalancesQuery::build(
-            ContractBalancesConnectionArgs::from((contract_id, request)),
-        );
+        let args = ContractBalancesConnectionArgs::from((contract_id, request));
+        let query = schema::contract::ContractBalancesQuery::build(args);
 
         let balances = self.query(query).await?.contract_balances.into();
 
@@ -1055,9 +1052,8 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Message, String>> {
         let owner: Option<schema::Address> = owner.map(|owner| (*owner).into());
-        let query = schema::message::OwnedMessageQuery::build(
-            schema::message::OwnedMessagesConnectionArgs::from((owner, request)),
-        );
+        let args = schema::message::OwnedMessagesConnectionArgs::from((owner, request));
+        let query = schema::message::OwnedMessageQuery::build(args);
 
         let messages = self.query(query).await?.messages.into();
 

@@ -480,12 +480,13 @@ pub mod tests {
     fn transactions_connection_query_gql_output() {
         use cynic::QueryBuilder;
 
-        let operation = TransactionsQuery::build(crate::client::schema::ConnectionArgs {
+        let args = crate::client::schema::ConnectionArgs {
             after: None,
             before: None,
             first: None,
             last: None,
-        });
+        };
+        let operation = TransactionsQuery::build(args);
         insta::assert_snapshot!(operation.query)
     }
 

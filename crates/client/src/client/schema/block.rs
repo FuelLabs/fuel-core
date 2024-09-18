@@ -226,12 +226,13 @@ mod tests {
     #[test]
     fn blocks_connection_query_gql_output() {
         use cynic::QueryBuilder;
-        let operation = BlocksQuery::build(crate::client::schema::ConnectionArgs {
+        let args = crate::client::schema::ConnectionArgs {
             after: None,
             before: None,
             first: None,
             last: None,
-        });
+        };
+        let operation = BlocksQuery::build(args);
         insta::assert_snapshot!(operation.query)
     }
 }
