@@ -3,7 +3,7 @@ use std::{
     num::NonZeroU64,
 };
 
-use crate::cumulative_percentage;
+use crate::cumulative_percentage_change;
 
 #[cfg(test)]
 mod tests;
@@ -30,7 +30,7 @@ impl AlgorithmV0 {
     }
 
     pub fn worst_case(&self, height: u32) -> u64 {
-        cumulative_percentage(
+        cumulative_percentage_change(
             self.new_exec_price,
             self.for_height,
             self.percentage,

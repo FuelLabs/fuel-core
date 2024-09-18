@@ -4,7 +4,7 @@ use std::{
     ops::Div,
 };
 
-use crate::cumulative_percentage;
+use crate::cumulative_percentage_change;
 
 #[cfg(test)]
 mod tests;
@@ -41,13 +41,13 @@ impl AlgorithmV1 {
     }
 
     pub fn worst_case(&self, height: u32) -> u64 {
-        let exec = cumulative_percentage(
+        let exec = cumulative_percentage_change(
             self.new_exec_price,
             self.for_height,
             self.exec_price_percentage,
             height,
         );
-        let da = cumulative_percentage(
+        let da = cumulative_percentage_change(
             self.new_da_gas_price,
             self.for_height,
             self.da_gas_price_percentage,
