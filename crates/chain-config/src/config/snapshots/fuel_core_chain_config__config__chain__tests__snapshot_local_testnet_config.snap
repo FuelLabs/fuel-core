@@ -5,7 +5,7 @@ expression: json
 {
   "chain_name": "local_testnet",
   "consensus_parameters": {
-    "V1": {
+    "V2": {
       "tx_params": {
         "V1": {
           "max_inputs": 255,
@@ -297,10 +297,11 @@ expression: json
       },
       "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000",
       "block_gas_limit": 100000000,
+      "block_transaction_size_limit": 129024,
       "privileged_address": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
-  "genesis_state_transition_version": 10,
+  "genesis_state_transition_version": 11,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb",
