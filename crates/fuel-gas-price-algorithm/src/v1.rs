@@ -4,6 +4,8 @@ use std::{
     ops::Div,
 };
 
+use crate::cumulative_percentage;
+
 #[cfg(test)]
 mod tests;
 
@@ -21,25 +23,37 @@ pub enum Error {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
-    /// the combined Execution and DA gas prices
-    combined_gas_price: u64, // TODO: This needs to be split into DA price and exec price
-
-    //exec gas price
-    //exec gas price percentage
-
-    //da gas price
-    //da gas price percentage
-
-    //for_height
+    /// The gas price for to cover the execution of the next block
+    new_exec_price: u64,
+    /// The change percentage per block
+    exec_price_percentage: u64,
+    /// The gas price for to cover DA commitment
+    new_da_gas_price: u64,
+    /// The change percentage per block
+    da_gas_price_percentage: u64,
+    /// The block height of the next L2 block
+    for_height: u32,
 }
 
 impl AlgorithmV1 {
     pub fn calculate(&self) -> u64 {
-        self.combined_gas_price // TODO: exec + da
+        self.new_exec_price.saturating_add(self.new_da_gas_price)
     }
 
-    pub fn worst_case(&self, _height: u32) -> u64 {
-        todo!()
+    pub fn worst_case(&self, height: u32) -> u64 {
+        let exec = cumulative_percentage(
+            self.new_exec_price,
+            self.for_height,
+            self.exec_price_percentage,
+            height,
+        );
+        let da = cumulative_percentage(
+            self.new_da_gas_price,
+            self.for_height,
+            self.da_gas_price_percentage,
+            height,
+        );
+        exec.saturating_add(da)
     }
 }
 
@@ -382,10 +396,13 @@ impl AlgorithmUpdaterV1 {
     }
 
     pub fn algorithm(&self) -> AlgorithmV1 {
-        let combined_gas_price = self
-            .descaled_exec_price()
-            .saturating_add(self.descaled_da_price());
-        AlgorithmV1 { combined_gas_price }
+        AlgorithmV1 {
+            new_exec_price: self.descaled_exec_price(),
+            exec_price_percentage: self.exec_gas_price_change_percent as u64,
+            new_da_gas_price: self.descaled_da_price(),
+            da_gas_price_percentage: self.max_da_gas_price_change_percent as u64,
+            for_height: self.l2_block_height,
+        }
     }
 
     // We only need to track the difference between the rewards and costs after we have true DA data

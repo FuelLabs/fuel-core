@@ -1,4 +1,8 @@
-use crate::v1::tests::UpdaterBuilder;
+use crate::v1::{
+    tests::UpdaterBuilder,
+    AlgorithmV1,
+};
+use proptest::prelude::*;
 
 #[test]
 fn calculate__returns_sum_of_da_and_exec_gas_prices() {
@@ -27,4 +31,61 @@ fn calculate__returns_sum_of_da_and_exec_gas_prices() {
     // then
     let expected = starting_exec_gas_price + starting_da_gas_price;
     assert_eq!(expected, actual);
+}
+
+fn _worst_case__correctly_calculates_value(
+    new_exec_price: u64,
+    new_da_gas_price: u64,
+    for_height: u32,
+    block_horizon: u32,
+    exec_price_percentage: u64,
+    da_gas_price_percentage: u64,
+) {
+    // given
+    let algorithm = AlgorithmV1 {
+        new_exec_price,
+        exec_price_percentage,
+        new_da_gas_price,
+        da_gas_price_percentage,
+        for_height,
+    };
+
+    // when
+    let target_height = for_height.saturating_add(block_horizon);
+    let actual = algorithm.worst_case(target_height);
+
+    // then
+    let mut expected_exec_price = new_exec_price;
+    let mut expected_da_gas_price = new_da_gas_price;
+
+    for _ in 0..block_horizon {
+        let change_amount = expected_exec_price
+            .saturating_mul(exec_price_percentage)
+            .saturating_div(100);
+        expected_exec_price = expected_exec_price.saturating_add(change_amount);
+
+        let change_amount = expected_da_gas_price
+            .saturating_mul(da_gas_price_percentage)
+            .saturating_div(100);
+        expected_da_gas_price = expected_da_gas_price.saturating_add(change_amount);
+    }
+
+    let expected = expected_exec_price.saturating_add(expected_da_gas_price);
+
+    dbg!(actual, expected);
+    assert!(actual >= expected);
+}
+
+proptest! {
+    #[test]
+    fn worst_case__correctly_calculates_value(
+        exec_price: u64,
+        da_price: u64,
+        starting_height: u32,
+        block_horizon in 0..10_000u32,
+        exec_percentage: u64,
+        da_percentage: u64,
+    ) {
+        _worst_case__correctly_calculates_value(exec_price, da_price, starting_height, block_horizon, exec_percentage, da_percentage);
+    }
 }
