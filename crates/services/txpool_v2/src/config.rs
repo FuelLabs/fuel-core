@@ -129,8 +129,18 @@ pub struct Config {
     pub max_txs: u64,
     /// Maximum transaction time to live.
     pub max_txs_ttl: Duration,
+    /// Heavy async processing configuration.
+    pub heavy_work: HeavyWorkConfig,
     /// Blacklist. Transactions with blacklisted inputs will not be accepted.
     pub black_list: BlackList,
+}
+
+#[derive(Clone)]
+pub struct HeavyWorkConfig {
+    /// Maximum of threads for managing verifications/insertions.
+    pub number_threads_verif_insert_transactions: usize,
+    /// Maximum of tasks in the heavy async processing queue.
+    pub number_pending_tasks_threads_verif_insert_transactions: usize,
 }
 
 #[cfg(test)]
@@ -144,6 +154,10 @@ impl Default for Config {
             max_txs: 10000,
             max_txs_ttl: Duration::from_secs(60 * 10),
             black_list: BlackList::default(),
+            heavy_work: HeavyWorkConfig {
+                number_threads_verif_insert_transactions: 4,
+                number_pending_tasks_threads_verif_insert_transactions: 100,
+            },
         }
     }
 }

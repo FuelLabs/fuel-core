@@ -23,6 +23,7 @@ use crate::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
     error::Error,
+    heavy_async_processing::HeavyAsyncProcessor,
     pool::Pool,
     ports::{
         AtomicView,
@@ -68,6 +69,7 @@ pub struct SharedState<
     gas_price_provider: Arc<GasPriceProvider>,
     wasm_checker: Arc<WasmChecker>,
     memory: Arc<MemoryPool>,
+    heavy_async_processor: Arc<HeavyAsyncProcessor>,
     utxo_validation: bool,
 }
 
@@ -88,6 +90,7 @@ impl<PSProvider, ConsensusParamsProvider, GasPriceProvider, WasmChecker, MemoryP
             gas_price_provider: self.gas_price_provider.clone(),
             wasm_checker: self.wasm_checker.clone(),
             memory: self.memory.clone(),
+            heavy_async_processor: self.heavy_async_processor.clone(),
             utxo_validation: self.utxo_validation,
         }
     }
@@ -109,15 +112,15 @@ impl<
         MemoryPool,
     >
 where
-    PSProvider: AtomicView<LatestView = PSView>,
+    PSProvider: AtomicView<LatestView = PSView> + 'static,
     PSView: TxPoolPersistentStorage,
-    ConsensusParamsProvider: ConsensusParametersProvider,
-    GasPriceProvider: GasPriceProviderTrait + Send + Sync,
-    WasmChecker: WasmCheckerTrait + Send + Sync,
-    MemoryPool: MemoryPoolTrait + Send + Sync,
+    ConsensusParamsProvider: ConsensusParametersProvider + 'static,
+    GasPriceProvider: GasPriceProviderTrait + Send + Sync + 'static,
+    WasmChecker: WasmCheckerTrait + Send + Sync + 'static,
+    MemoryPool: MemoryPoolTrait + Send + Sync + 'static,
 {
     async fn insert(
-        &mut self,
+        &self,
         transactions: Vec<Transaction>,
     ) -> Result<Vec<InsertionResult>, Error> {
         let current_height = *self.current_height.read();
@@ -126,21 +129,30 @@ where
             .latest_consensus_parameters();
         let mut results = vec![];
         for transaction in transactions {
-            let checked_tx = perform_all_verifications(
-                transaction,
-                self.pool.clone(),
-                current_height,
-                &params,
-                version,
-                self.gas_price_provider.as_ref(),
-                self.wasm_checker.as_ref(),
-                self.memory.get_memory().await,
-            )
-            .await?;
-            let result = {
-                let mut pool = self.pool.write();
-                pool.insert(checked_tx)
-            };
+            self.heavy_async_processor.spawn({
+                let shared_state = self.clone();
+                let params = params.clone();
+                async move {
+                    // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
+                    let checked_tx = perform_all_verifications(
+                        transaction,
+                        shared_state.pool.clone(),
+                        current_height,
+                        &params,
+                        version,
+                        shared_state.gas_price_provider.as_ref(),
+                        shared_state.wasm_checker.as_ref(),
+                        shared_state.memory.get_memory().await,
+                    )
+                    .await
+                    .unwrap();
+                    let result = {
+                        let mut pool = shared_state.pool.write();
+                        // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)
+                        pool.insert(checked_tx)
+                    };
+                }
+            });
         }
         Ok(results)
     }
@@ -300,6 +312,15 @@ where
             memory: Arc::new(memory_pool),
             current_height: Arc::new(RwLock::new(current_height)),
             utxo_validation: config.utxo_validation,
+            heavy_async_processor: Arc::new(
+                HeavyAsyncProcessor::new(
+                    config
+                        .heavy_work
+                        .number_pending_tasks_threads_verif_insert_transactions,
+                    config.heavy_work.number_threads_verif_insert_transactions,
+                )
+                .unwrap(),
+            ),
             pool: Arc::new(RwLock::new(Pool::new(
                 ps_provider,
                 GraphStorage::new(GraphConfig {
