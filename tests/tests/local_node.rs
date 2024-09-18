@@ -11,7 +11,6 @@ use fuel_core_types::{
     blockchain::header::LATEST_STATE_TRANSITION_VERSION,
     fuel_tx::GasCosts,
 };
-use fuel_core_upgradable_executor::WASM_BYTECODE;
 use test_helpers::fuel_core_driver::FuelCoreDriver;
 
 #[test]
@@ -29,7 +28,6 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
         .set_gas_costs(benchmark_gas_costs);
 
     if env::var_os("OVERRIDE_CHAIN_CONFIGS").is_some() {
-        chain_config.state_transition_bytecode = WASM_BYTECODE.to_vec();
         chain_config.genesis_state_transition_version =
             Some(LATEST_STATE_TRANSITION_VERSION);
         std::fs::remove_file(&stored_snapshot.chain_config)?;
