@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- [#1609](https://github.com/FuelLabs/fuel-core/pull/1609): Add DA compression support. Compressed blocks are stored in the offchain database when blocks are produced, and can be fetched using the GraphQL API.
+
 ## [Version 0.36.0]
 
 ### Added
@@ -238,10 +242,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [#1895](https://github.com/FuelLabs/fuel-core/pull/1895): Added backward and forward compatibility integration tests for forkless upgrades.
 - [#1898](https://github.com/FuelLabs/fuel-core/pull/1898): Enforce increasing of the `Executor::VERSION` on each release.
-
-### Added
-
-- [#1609](https://github.com/FuelLabs/fuel-core/pull/1609): Add a DA compression crate `fuel-core-compression`.
 
 ### Changed
 
