@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -16,6 +17,7 @@ use fuel_core_types::{
     },
     fuel_types::Nonce,
     fuel_vm::interpreter::Memory,
+    services::block_importer::SharedImportResult,
     tai64::Tai64,
 };
 
@@ -25,6 +27,11 @@ use crate::{
 };
 
 pub use fuel_core_storage::transactional::AtomicView;
+
+pub trait BlockImporter: Send + Sync {
+    /// Wait until the next block is available
+    fn block_events(&self) -> BoxStream<SharedImportResult>;
+}
 
 /// Trait for getting the latest consensus parameters.
 #[cfg_attr(feature = "test-helpers", mockall::automock)]

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use fuel_core_services::{
+    stream::BoxStream,
     RunnableService,
     RunnableTask,
     ServiceRunner,
@@ -15,8 +16,12 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     fuel_vm::checked_transaction::CheckedTransaction,
-    services::txpool::PoolTransaction,
+    services::{
+        block_importer::SharedImportResult,
+        txpool::PoolTransaction,
+    },
 };
+use futures::StreamExt;
 use parking_lot::RwLock;
 use tokio::sync::Notify;
 
@@ -28,6 +33,7 @@ use crate::{
     pool::Pool,
     ports::{
         AtomicView,
+        BlockImporter as BlockImporterTrait,
         ConsensusParametersProvider,
         GasPriceProvider as GasPriceProviderTrait,
         MemoryPool as MemoryPoolTrait,
@@ -191,6 +197,7 @@ pub struct Task<
     WasmChecker,
     MemoryPool,
 > {
+    import_block_results_stream: BoxStream<SharedImportResult>,
     shared_state: SharedState<
         PSProvider,
         ConsensusParamsProvider,
@@ -287,6 +294,27 @@ where
             _ = watcher.while_started() => {
                 should_continue = false;
             }
+
+            //TODO: move in function
+            block_result = self.import_block_results_stream.next() => {
+                if let Some(result) = block_result {
+                    {
+                        let mut tx_pool = self.shared_state.pool.write();
+                        tx_pool.remove_committed_txs(result.tx_status.iter().map(|s| s.id).collect()).map_err(|e| anyhow::anyhow!(e))?;
+                    }
+
+                    let new_height = *result
+                    .sealed_block
+                    .entity.header().height();
+                    {
+                        let mut block_height = self.shared_state.current_height.write();
+                        *block_height = new_height;
+                    }
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            }
         }
         Ok(should_continue)
     }
@@ -297,6 +325,7 @@ where
 }
 
 pub fn new_service<
+    BlockImporter,
     PSProvider,
     PSView,
     ConsensusParamsProvider,
@@ -305,6 +334,7 @@ pub fn new_service<
     MemoryPool,
 >(
     config: Config,
+    block_importer: BlockImporter,
     ps_provider: PSProvider,
     consensus_parameters_provider: ConsensusParamsProvider,
     current_height: BlockHeight,
@@ -319,8 +349,10 @@ where
     GasPriceProvider: GasPriceProviderTrait + Send + Sync,
     WasmChecker: WasmCheckerTrait + Send + Sync,
     MemoryPool: MemoryPoolTrait + Send + Sync,
+    BlockImporter: BlockImporterTrait + Send + Sync,
 {
     Service::new(Task {
+        import_block_results_stream: block_importer.block_events(),
         shared_state: SharedState {
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
             gas_price_provider: Arc::new(gas_price_provider),

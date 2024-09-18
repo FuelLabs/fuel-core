@@ -162,15 +162,27 @@ where
             .collect()
     }
 
-    /// Prune transactions from the pool.
-    pub fn prune(&mut self) -> Result<Vec<PoolTransaction>, Error> {
-        Ok(vec![])
-    }
-
     pub fn find_one(&self, tx_id: &TxId) -> Option<&PoolTransaction> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
             .map(|data| &data.transaction)
             .ok()
+    }
+
+    /// Remove transaction but keep its dependents.
+    /// The dependents become exeuctables.
+    pub fn remove_committed_txs(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {
+        for tx_id in tx_ids {
+            if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
+                let dependents = self.storage.get_dependents(storage_id)?;
+                let storage_data = self.storage.remove_transaction(storage_id)?;
+                self.selection_algorithm
+                    .new_executable_transactions(dependents, &self.storage)?;
+                self.update_components_and_caches_on_removal(
+                    &[storage_data.transaction],
+                )?;
+            }
+        }
+        Ok(())
     }
 
     fn check_pool_is_not_full(&self) -> Result<(), Error> {
@@ -198,7 +210,7 @@ where
 
     fn update_components_and_caches_on_removal(
         &mut self,
-        removed_transactions: &Vec<PoolTransaction>,
+        removed_transactions: &[PoolTransaction],
     ) -> Result<(), Error> {
         for tx in removed_transactions {
             self.collision_manager.on_removed_transaction(tx)?;
