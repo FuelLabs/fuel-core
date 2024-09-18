@@ -29,23 +29,6 @@ macro_rules! tables {
                 $name,
             )*
         }
-        impl RegistryKeyspace {
-            pub fn name(&self) -> &'static str {
-                match self {
-                    $(
-                        Self::$name => stringify!($name),
-                    )*
-                }
-            }
-            pub fn from_str(name: &str) -> Option<Self> {
-                match name {
-                    $(
-                        stringify!($name) => Some(Self::$name),
-                    )*
-                    _ => None,
-                }
-            }
-        }
 
         #[derive(Debug, Clone, Default)]
         pub struct PerRegistryKeyspace<T> {
