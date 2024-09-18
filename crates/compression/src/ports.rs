@@ -47,9 +47,9 @@ pub trait UtxoIdToPointer {
 }
 
 pub trait HistoryLookup {
-    fn utxo_id(&self, c: &CompressedUtxoId) -> anyhow::Result<UtxoId>;
-    fn coin(&self, utxo_id: &UtxoId) -> anyhow::Result<CoinInfo>;
-    fn message(&self, nonce: &Nonce) -> anyhow::Result<MessageInfo>;
+    fn utxo_id(&self, c: CompressedUtxoId) -> anyhow::Result<UtxoId>;
+    fn coin(&self, utxo_id: UtxoId) -> anyhow::Result<CoinInfo>;
+    fn message(&self, nonce: Nonce) -> anyhow::Result<MessageInfo>;
 }
 
 #[derive(Debug, Clone)]

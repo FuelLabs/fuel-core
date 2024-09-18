@@ -57,7 +57,7 @@ pub async fn decompress<D: DecompressDb + TemporalRegistry>(
     let ctx = DecompressCtx { db };
 
     let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress_with(
-        &compressed.transactions,
+        compressed.transactions,
         &ctx,
     )
     .await?;

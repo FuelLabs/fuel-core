@@ -21,7 +21,7 @@ use rand::{
 };
 
 #[tokio::test]
-async fn can_get_da_compressed_blocks() {
+async fn can_fetch_da_compressed_block_from_graphql() {
     let mut rng = StdRng::seed_from_u64(10);
     let poa_secret = SecretKey::random(&mut rng);
 
