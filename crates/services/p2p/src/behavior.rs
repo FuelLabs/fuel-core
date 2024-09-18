@@ -65,7 +65,7 @@ pub struct FuelBehaviour {
 }
 
 impl FuelBehaviour {
-    pub(crate) fn new(p2p_config: &Config, codec: PostcardCodec) -> Self {
+    pub(crate) fn new(p2p_config: &Config, codec: PostcardCodec) -> anyhow::Result<Self> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -93,7 +93,7 @@ impl FuelBehaviour {
 
         let gossipsub = build_gossipsub_behaviour(p2p_config);
 
-        let peer_report = peer_report::Behaviour::new(p2p_config);
+        let peer_report = peer_report::Behaviour::new(&p2p_config.reserved_nodes);
 
         let identify = {
             let identify_config = identify::Config::new(
@@ -125,15 +125,16 @@ impl FuelBehaviour {
             req_res_config,
         );
 
-        Self {
-            discovery: discovery_config.finish(),
+        let discovery = discovery_config.finish()?;
+        Ok(Self {
+            discovery,
             gossipsub,
             peer_report,
             request_response,
             blocked_peer: Default::default(),
             identify,
             heartbeat,
-        }
+        })
     }
 
     pub fn add_addresses_to_discovery(
