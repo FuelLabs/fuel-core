@@ -149,7 +149,8 @@ impl<S, R> Executor<S, R> {
         ("0-32-1", 7),
         ("0-33-0", 8),
         ("0-34-0", 9),
-        ("0-35-0", LATEST_STATE_TRANSITION_VERSION),
+        ("0-35-0", 10),
+        ("0-36-0", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
@@ -386,9 +387,9 @@ where
                     self.native_produce_inner(block, options, dry_run)
                 }
                 ExecutionStrategy::Wasm { module } => {
-                    let blocks_module = self.get_module(block_version);
-                    if let Ok(module) = blocks_module {
-                        self.wasm_produce_inner(&module, block, options, dry_run)
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
+                        self.wasm_produce_inner(&blocks_module, block, options, dry_run)
                     } else {
                         self.wasm_produce_inner(module, block, options, dry_run)
                     }
@@ -434,9 +435,9 @@ where
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_validate_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
-                    let blocks_module = self.get_module(block_version);
-                    if let Ok(module) = blocks_module {
-                        self.wasm_validate_inner(&module, block, options)
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
+                        self.wasm_validate_inner(&blocks_module, block, options)
                     } else {
                         self.wasm_validate_inner(module, block, options)
                     }
@@ -699,11 +700,10 @@ where
         &self,
         version: StateTransitionBytecodeVersion,
     ) -> ExecutorResult<wasmtime::Module> {
-        let guard = self.cached_modules.lock();
+        let mut guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
             return Ok(module.clone());
         }
-        drop(guard);
 
         let view = StructuredStorage::new(
             self.storage_view_provider
@@ -725,7 +725,7 @@ where
                 UpgradableError::ExecutorError(err) => err
             })?;
 
-        self.cached_modules.lock().insert(version, module.clone());
+        guard.insert(version, module.clone());
         Ok(module)
     }
 }

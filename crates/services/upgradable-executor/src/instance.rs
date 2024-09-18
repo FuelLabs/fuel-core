@@ -57,8 +57,9 @@ trait CallerHelper {
     /// Writes the encoded data to the memory at the provided pointer.
     fn write(&mut self, ptr: u32, encoded: &[u8]) -> anyhow::Result<()>;
 
-    /// Peeks the next transactions from the source and returns the size of the encoded transactions.
-    fn peek_next_txs_size<Source>(
+    /// Peeks the next transactions from the source and returns the size of
+    /// the encoded transactions in bytes.
+    fn peek_next_txs_bytes<Source>(
         &mut self,
         source: Arc<Source>,
         gas_limit: u64,
@@ -78,7 +79,7 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
             .map_err(|e| anyhow::anyhow!("Failed to write to the memory: {}", e))
     }
 
-    fn peek_next_txs_size<Source>(
+    fn peek_next_txs_bytes<Source>(
         &mut self,
         source: Arc<Source>,
         gas_limit: u64,
@@ -168,7 +169,7 @@ impl Instance {
 
 impl<Stage> Instance<Stage> {
     const V0_HOST_MODULE: &'static str = "host_v0";
-    const LATEST_HOST_MODULE: &'static str = "host_v1";
+    const V1_HOST_MODULE: &'static str = "host_v1";
 
     /// Adds a new host function to the `host_v0` module of the instance.
     pub fn add_v0_method(&mut self, method: &str, func: Func) -> ExecutorResult<()> {
@@ -183,10 +184,10 @@ impl<Stage> Instance<Stage> {
         Ok(())
     }
 
-    /// Adds a new host function to the latest module of the instance.
-    pub fn add_method(&mut self, method: &str, func: Func) -> ExecutorResult<()> {
+    /// Adds a new host function to the `host_v1` module of the instance.
+    pub fn add_v1_method(&mut self, method: &str, func: Func) -> ExecutorResult<()> {
         self.linker
-            .define(&self.store, Self::LATEST_HOST_MODULE, method, func)
+            .define(&self.store, Self::V1_HOST_MODULE, method, func)
             .map_err(|e| {
                 ExecutorError::Other(format!(
                     "Failed definition of the `{}` function: {}",
@@ -213,7 +214,7 @@ impl Instance<Created> {
         let peek_next_txs_size_v0 = self.peek_next_txs_size_v0(source.clone());
         self.add_v0_method("peek_next_txs_size", peek_next_txs_size_v0)?;
         let peek_next_txs_size = self.peek_next_txs_size(source.clone());
-        self.add_method("peek_next_txs_size", peek_next_txs_size)?;
+        self.add_v1_method("peek_next_txs_size", peek_next_txs_size)?;
 
         let consume_next_txs = self.consume_next_txs();
         self.add_v0_method("consume_next_txs", consume_next_txs)?;
@@ -240,7 +241,7 @@ impl Instance<Created> {
                 return Ok(0);
             };
 
-            caller.peek_next_txs_size(source, gas_limit, u16::MAX, u64::MAX)
+            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -263,7 +264,7 @@ impl Instance<Created> {
                 anyhow::anyhow!("The number of transactions is more than `u16::MAX`: {e}")
             })?;
 
-            caller.peek_next_txs_size(
+            caller.peek_next_txs_bytes(
                 source,
                 gas_limit,
                 tx_number_limit,
