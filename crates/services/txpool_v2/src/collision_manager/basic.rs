@@ -31,7 +31,6 @@ use num_rational::Ratio;
 
 use crate::{
     error::Error,
-    ports::TxPoolPersistentStorage,
     storage::StorageData,
 };
 

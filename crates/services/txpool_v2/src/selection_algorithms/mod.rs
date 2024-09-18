@@ -1,11 +1,6 @@
-use std::fmt::Debug;
-
 use fuel_core_types::services::txpool::PoolTransaction;
 
-use crate::{
-    error::Error,
-    storage::StorageData,
-};
+use crate::error::Error;
 
 pub mod ratio_tip_gas;
 

@@ -3,7 +3,6 @@ use fuel_core_types::{
         Address,
         BlobId,
         ContractId,
-        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
