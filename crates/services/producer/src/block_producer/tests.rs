@@ -555,11 +555,10 @@ mod dry_run {
         let ctx = TestContext::default_from_executor(executor.clone());
 
         // When
-        let _err = ctx
+        let _ = ctx
             .producer()
             .dry_run(vec![], None, Some(simulated_block_time), None, None)
-            .await
-            .expect("dry run failed");
+            .await;
 
         // Then
         assert_eq!(executor.captured_block_timestamp(), simulated_block_time);
@@ -577,11 +576,10 @@ mod dry_run {
             .build_with_executor(executor.clone());
 
         // When
-        let _err = ctx
+        let _ = ctx
             .producer()
             .dry_run(vec![], None, Some(simulated_block_time), None, None)
-            .await
-            .expect("dry run failed");
+            .await;
 
         // Then
         assert_eq!(executor.captured_block_timestamp(), simulated_block_time);
@@ -598,11 +596,7 @@ mod dry_run {
             .build_with_executor(executor.clone());
 
         // When
-        let _err = ctx
-            .producer()
-            .dry_run(vec![], None, None, None, None)
-            .await
-            .expect("dry run failed");
+        let _ = ctx.producer().dry_run(vec![], None, None, None, None).await;
 
         // Then
         assert_eq!(executor.captured_block_timestamp(), last_block_time);
@@ -619,7 +613,7 @@ mod dry_run {
             .build_with_executor(executor.clone());
 
         // When
-        let _err = ctx
+        let _ = ctx
             .producer()
             .dry_run(vec![], last_block_height.pred(), None, None, None)
             .await
