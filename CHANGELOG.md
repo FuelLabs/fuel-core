@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2163](https://github.com/FuelLabs/fuel-core/pull/2163): Added runnable task for fetching block committer data.
 - [2204](https://github.com/FuelLabs/fuel-core/pull/2204): Added `dnsaddr` resolution for TLD without suffixes.
 - [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module.
+- [2193](https://github.com/FuelLabs/fuel-core/pull/2193): Insertion in PoolV2 and tests refactoring
 
 ### Changed
 
