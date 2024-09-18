@@ -430,11 +430,12 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
         )
     }
 
-    pub fn get_all_tx_ids(&self) -> Vec<TxId> {
+    pub fn get_tx_ids(&self, max_txs: usize) -> Vec<TxId> {
         self.txpool
             .lock()
             .txs()
             .iter()
+            .take(max_txs)
             .map(|tx| TxId::new(**tx.0))
             .collect()
     }

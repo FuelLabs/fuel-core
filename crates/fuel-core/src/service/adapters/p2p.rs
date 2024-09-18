@@ -59,8 +59,8 @@ impl BlockHeightImporter for BlockImporterAdapter {
 }
 
 impl TxPool for TxPoolAdapter {
-    fn get_all_tx_ids(&self) -> Vec<TxId> {
-        self.service.get_all_tx_ids()
+    fn get_tx_ids(&self, max_txs: usize) -> Vec<TxId> {
+        self.service.get_tx_ids(max_txs)
     }
 
     fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<NetworkableTransactionPool>> {

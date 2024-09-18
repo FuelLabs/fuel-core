@@ -647,7 +647,7 @@ where
         let max_txs = self.max_txs_per_request;
         self.handle_txpool_request(
             request_id,
-            move || tx_pool.get_all_tx_ids().into_iter().take(max_txs).collect(),
+            move || tx_pool.get_tx_ids(max_txs),
             ResponseMessage::TxPoolAllTransactionsIds,
             |response, request_id| TaskRequest::TxPoolAllTransactionsIds {
                 response,
@@ -661,17 +661,18 @@ where
         tx_ids: Vec<TxId>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
+        // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+        if tx_ids.len() > self.max_txs_per_request {
+            self.p2p_service.send_response_msg(
+                request_id,
+                ResponseMessage::TxPoolFullTransactions(None),
+            )?;
+            return Ok(());
+        }
         let tx_pool = self.tx_pool.clone();
-        let max_txs = self.max_txs_per_request;
         self.handle_txpool_request(
             request_id,
-            move || {
-                tx_pool
-                    .get_full_txs(tx_ids)
-                    .into_iter()
-                    .take(max_txs)
-                    .collect()
-            },
+            move || tx_pool.get_full_txs(tx_ids),
             ResponseMessage::TxPoolFullTransactions,
             |response, request_id| TaskRequest::TxPoolFullTransactions {
                 response,
@@ -1308,7 +1309,7 @@ pub mod tests {
     struct FakeTxPool;
 
     impl TxPool for FakeTxPool {
-        fn get_all_tx_ids(&self) -> Vec<fuel_core_types::fuel_tx::TxId> {
+        fn get_tx_ids(&self, _max_txs: usize) -> Vec<fuel_core_types::fuel_tx::TxId> {
             vec![]
         }
 
