@@ -48,7 +48,6 @@ use fuel_core_types::{
         PredicateVerificationFailed,
     },
 };
-use std::vec;
 
 #[tokio::test]
 async fn insert_one_tx_succeeds() {
@@ -528,7 +527,7 @@ async fn get_sorted_out_tx1_2_3() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block()
+        .extract_transactions_for_block(u64::MAX)
         .unwrap();
 
     // Then
@@ -580,7 +579,7 @@ async fn get_sorted_out_tx_same_tips() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block()
+        .extract_transactions_for_block(u64::MAX)
         .unwrap();
 
     // Then
@@ -632,7 +631,7 @@ async fn get_sorted_out_tx_profitable_ratios() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block()
+        .extract_transactions_for_block(u64::MAX)
         .unwrap();
 
     // Then
@@ -666,7 +665,7 @@ async fn get_sorted_out_tx_by_creation_instant() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block()
+        .extract_transactions_for_block(u64::MAX)
         .unwrap();
 
     // Then

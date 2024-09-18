@@ -118,7 +118,7 @@ where
     WasmChecker: WasmCheckerTrait + Send + Sync + 'static,
     MemoryPool: MemoryPoolTrait + Send + Sync + 'static,
 {
-    async fn insert(
+    pub async fn insert(
         &self,
         transactions: Vec<Transaction>,
     ) -> Result<Vec<InsertionResult>, Error> {
@@ -154,6 +154,13 @@ where
             });
         }
         Ok(results)
+    }
+
+    pub fn select_transactions(
+        &self,
+        max_gas: u64,
+    ) -> Result<Vec<PoolTransaction>, Error> {
+        self.pool.write().extract_transactions_for_block(max_gas)
     }
 }
 

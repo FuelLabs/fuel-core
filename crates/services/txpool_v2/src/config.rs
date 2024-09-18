@@ -121,8 +121,6 @@ pub struct Config {
     pub utxo_validation: bool,
     /// Maximum block size in bytes.
     pub max_block_size: u64,
-    /// Maximum gas per block.
-    pub max_block_gas: u64,
     /// Maximum transactions per dependencies chain.
     pub max_dependent_txn_count: u64,
     /// Maximum transactions in the pool.
@@ -148,7 +146,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             utxo_validation: true,
-            max_block_gas: 100000000,
             max_block_size: 1000000000,
             max_dependent_txn_count: 1000,
             max_txs: 10000,
