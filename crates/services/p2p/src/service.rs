@@ -646,7 +646,7 @@ where
         self.handle_txpool_request(
             request_id,
             move || tx_pool.get_all_tx_ids(),
-            |response| ResponseMessage::TxPoolAllTransactionsIds(response),
+            ResponseMessage::TxPoolAllTransactionsIds,
             |response, request_id| TaskRequest::TxPoolAllTransactionsIds {
                 response,
                 request_id,
@@ -663,7 +663,7 @@ where
         self.handle_txpool_request(
             request_id,
             move || tx_pool.get_full_txs(tx_ids),
-            |response| ResponseMessage::TxPoolFullTransactions(response),
+            ResponseMessage::TxPoolFullTransactions,
             |response, request_id| TaskRequest::TxPoolFullTransactions {
                 response,
                 request_id,
