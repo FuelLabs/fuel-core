@@ -3378,7 +3378,6 @@ dependencies = [
  "async-trait",
  "bimap",
  "bincode",
- "fuel-core-compression",
  "fuel-core-types 0.36.0",
  "postcard",
  "rand",
