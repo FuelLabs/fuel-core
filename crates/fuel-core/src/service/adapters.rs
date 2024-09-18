@@ -2,12 +2,14 @@ use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
+use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_importer::ImporterResult;
 use fuel_core_poa::{
     ports::BlockSigner,
     signer::SignMode,
 };
 use fuel_core_services::stream::BoxStream;
+use fuel_core_storage::transactional::Changes;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -15,8 +17,16 @@ use fuel_core_types::{
         block::Block,
         consensus::Consensus,
     },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::block_importer::SharedImportResult,
+    services::{
+        block_importer::SharedImportResult,
+        block_producer::Components,
+        executor::{
+            Result as ExecutorResult,
+            UncommittedResult,
+        },
+    },
     tai64::Tai64,
 };
 use fuel_core_upgradable_executor::executor::Executor;
@@ -109,7 +119,7 @@ impl TransactionsSource {
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
-    pub executor: Arc<Executor<Database, Database<Relayer>>>,
+    pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
 }
 
 impl ExecutorAdapter {
@@ -122,6 +132,23 @@ impl ExecutorAdapter {
         Self {
             executor: Arc::new(executor),
         }
+    }
+
+    pub fn produce_without_commit_from_vector(
+        &self,
+        component: Components<Vec<Transaction>>,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        let new_components = Components {
+            header_to_produce: component.header_to_produce,
+            transactions_source: OnceTransactionsSource::new(
+                component.transactions_source,
+            ),
+            gas_price: component.gas_price,
+            coinbase_recipient: component.coinbase_recipient,
+        };
+
+        self.executor
+            .produce_without_commit_with_source(new_components)
     }
 }
 
