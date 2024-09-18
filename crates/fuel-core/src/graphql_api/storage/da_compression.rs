@@ -75,6 +75,7 @@ impl TableWithBlueprint for DaCompressionTemporalRegistryIndex {
 mod tests {
     use super::*;
 
+    #[allow(clippy::arithmetic_side_effects)] // Test code, also safe
     fn generate_registry_key(
         rng: &mut impl rand::Rng,
     ) -> (RegistryKeyspace, RegistryKey) {
