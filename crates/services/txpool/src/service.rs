@@ -282,7 +282,8 @@ where
                         let shared_state = self.tx_pool_shared_state.clone();
                         async move {
                             shared_state.new_peer_subscribed(peer_id).await;
-                    }});
+                        }
+                    });
                 }
                 should_continue = true;
             }
