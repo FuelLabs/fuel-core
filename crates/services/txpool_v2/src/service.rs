@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::VecDeque,
+    sync::Arc,
+};
 
 use fuel_core_services::{
     RunnableService,
@@ -18,7 +21,13 @@ use fuel_core_types::{
     services::txpool::PoolTransaction,
 };
 use parking_lot::RwLock;
-use tokio::time::{Instant, MissedTickBehavior};
+use tokio::{
+    sync::Notify,
+    time::{
+        Instant,
+        MissedTickBehavior,
+    },
+};
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -70,6 +79,7 @@ pub struct SharedState<
     wasm_checker: Arc<WasmChecker>,
     memory: Arc<MemoryPool>,
     heavy_async_processor: Arc<HeavyAsyncProcessor>,
+    new_txs_notifier: Arc<Notify>,
     utxo_validation: bool,
 }
 
@@ -91,6 +101,7 @@ impl<PSProvider, ConsensusParamsProvider, GasPriceProvider, WasmChecker, MemoryP
             wasm_checker: self.wasm_checker.clone(),
             memory: self.memory.clone(),
             heavy_async_processor: self.heavy_async_processor.clone(),
+            new_txs_notifier: self.new_txs_notifier.clone(),
             utxo_validation: self.utxo_validation,
         }
     }
@@ -119,7 +130,7 @@ where
     WasmChecker: WasmCheckerTrait + Send + Sync + 'static,
     MemoryPool: MemoryPoolTrait + Send + Sync + 'static,
 {
-    async fn insert(
+    pub async fn insert(
         &self,
         transactions: Vec<Transaction>,
     ) -> Result<Vec<InsertionResult>, Error> {
@@ -149,12 +160,26 @@ where
                     let result = {
                         let mut pool = shared_state.pool.write();
                         // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)
-                        pool.insert(checked_tx)
+                        let result = pool.insert(checked_tx);
+                        if result.is_ok() {
+                            shared_state.new_txs_notifier.notify_waiters();
+                        }
                     };
                 }
             });
         }
         Ok(results)
+    }
+
+    pub fn select_transactions(
+        &self,
+        max_gas: u64,
+    ) -> Result<Vec<PoolTransaction>, Error> {
+        self.pool.write().extract_transactions_for_block(max_gas)
+    }
+
+    pub fn get_new_txs_notifier(&self) -> Arc<Notify> {
+        self.new_txs_notifier.clone()
     }
 }
 
@@ -337,6 +362,7 @@ where
                 RatioTipGasSelection::new(),
                 config,
             ))),
+            new_txs_notifier: Arc::new(Notify::new()),
         },
         ttl_timer,
     })

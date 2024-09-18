@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use fuel_core_types::{
     fuel_tx::{
+        consensus_parameters::gas,
         field::BlobId,
         Transaction,
         TxId,
@@ -143,14 +144,10 @@ where
     /// based on the constraints given in the configuration and the selection algorithm used.
     pub fn extract_transactions_for_block(
         &mut self,
+        max_gas: u64,
     ) -> Result<Vec<PoolTransaction>, Error> {
         self.selection_algorithm
-            .gather_best_txs(
-                Constraints {
-                    max_gas: self.config.max_block_gas,
-                },
-                &self.storage,
-            )?
+            .gather_best_txs(Constraints { max_gas }, &self.storage)?
             .into_iter()
             .map(|storage_id| {
                 let storage_data = self.storage.remove_transaction(storage_id)?;
