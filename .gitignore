@@ -16,4 +16,5 @@ benches/benches-outputs/src/test_gas_costs_output.rs
 node_modules/
 package-lock.json
 package.json
+bin/fuel-core/chainspec/local-testnet/state_transition_bytecode.wasm
 
