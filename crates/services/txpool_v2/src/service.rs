@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use fuel_core_services::{
     RunnableService,
@@ -18,6 +18,7 @@ use fuel_core_types::{
     services::txpool::PoolTransaction,
 };
 use parking_lot::RwLock;
+use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -181,6 +182,7 @@ pub struct Task<
         WasmChecker,
         MemoryPool,
     >,
+    ttl_timer: tokio::time::Interval,
 }
 
 #[async_trait::async_trait]
@@ -270,6 +272,10 @@ where
             _ = watcher.while_started() => {
                 should_continue = false;
             }
+
+            _ = self.ttl_timer.tick() => {
+                should_continue = true;
+            }
         }
         Ok(should_continue)
     }
@@ -303,6 +309,8 @@ where
     WasmChecker: WasmCheckerTrait + Send + Sync,
     MemoryPool: MemoryPoolTrait + Send + Sync,
 {
+    let mut ttl_timer = tokio::time::interval(config.max_txs_ttl);
+    ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     Service::new(Task {
         shared_state: SharedState {
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
@@ -330,5 +338,6 @@ where
                 config,
             ))),
         },
+        ttl_timer,
     })
 }
