@@ -387,6 +387,7 @@ pub struct Task<P, V, B, T> {
     broadcast: B,
     tx_pool: T,
     max_headers_per_request: usize,
+    max_txs_per_request: usize,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
     heartbeat_max_avg_interval: Duration,
@@ -643,9 +644,10 @@ where
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
         let tx_pool = self.tx_pool.clone();
+        let max_txs = self.max_txs_per_request;
         self.handle_txpool_request(
             request_id,
-            move || tx_pool.get_all_tx_ids(),
+            move || tx_pool.get_all_tx_ids().into_iter().take(max_txs).collect(),
             ResponseMessage::TxPoolAllTransactionsIds,
             |response, request_id| TaskRequest::TxPoolAllTransactionsIds {
                 response,
@@ -660,9 +662,16 @@ where
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
         let tx_pool = self.tx_pool.clone();
+        let max_txs = self.max_txs_per_request;
         self.handle_txpool_request(
             request_id,
-            move || tx_pool.get_full_txs(tx_ids),
+            move || {
+                tx_pool
+                    .get_full_txs(tx_ids)
+                    .into_iter()
+                    .take(max_txs)
+                    .collect()
+            },
             ResponseMessage::TxPoolFullTransactions,
             |response, request_id| TaskRequest::TxPoolFullTransactions {
                 response,
@@ -715,6 +724,7 @@ where
         let Config {
             max_block_size,
             max_headers_per_request,
+            max_txs_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -757,6 +767,7 @@ where
             tx_pool,
             heavy_task_processor,
             max_headers_per_request,
+            max_txs_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1529,6 +1540,7 @@ pub mod tests {
             heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_txs_per_request: 100,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1617,6 +1629,7 @@ pub mod tests {
             heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_txs_per_request: 100,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
@@ -1677,6 +1690,7 @@ pub mod tests {
             heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
+            max_txs_per_request: 100,
             heartbeat_check_interval: Duration::from_secs(0),
             heartbeat_max_avg_interval: Default::default(),
             heartbeat_max_time_since_last: Default::default(),
