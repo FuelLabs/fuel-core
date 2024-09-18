@@ -1,8 +1,5 @@
 use fuel_core_types::{
-    blockchain::{
-        consensus,
-        header::ConsensusParametersVersion,
-    },
+    blockchain::header::ConsensusParametersVersion,
     fuel_tx::{
         field::UpgradePurpose as _,
         ConsensusParameters,
@@ -26,7 +23,6 @@ use fuel_core_types::{
 
 use crate::{
     error::Error,
-    pool::Pool,
     ports::{
         AtomicView,
         GasPriceProvider,

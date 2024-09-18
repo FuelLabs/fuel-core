@@ -37,7 +37,6 @@ use crate::{
     storage::graph::{
         GraphConfig,
         GraphStorage,
-        GraphStorageIndex,
     },
     verifications::perform_all_verifications,
 };

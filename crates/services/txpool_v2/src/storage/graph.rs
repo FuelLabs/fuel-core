@@ -47,8 +47,6 @@ use super::{
     StorageData,
 };
 
-pub type GraphStorageIndex = NodeIndex;
-
 pub struct GraphStorage {
     /// The configuration of the graph
     config: GraphConfig,

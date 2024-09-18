@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -28,7 +27,6 @@ use fuel_core_types::{
             contract::Contract as ContractInput,
             Input,
         },
-        Bytes32,
         ConsensusParameters,
         Contract,
         ContractId,
@@ -44,27 +42,17 @@ use fuel_core_types::{
         Word,
     },
     fuel_vm::{
-        checked_transaction::{
-            Checked,
-            EstimatePredicates,
-        },
+        checked_transaction::EstimatePredicates,
         interpreter::MemoryInstance,
     },
-    services::txpool::PoolTransaction,
 };
 use parking_lot::RwLock;
-use petgraph::graph::NodeIndex;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
     error::Error,
     pool::Pool,
-    ports::{
-        GasPriceProvider,
-        WasmChecker,
-        WasmValidityError,
-    },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
         RemovedTransactions,
@@ -86,58 +74,6 @@ use super::mocks::{
     MockTxPoolGasPrice,
     MockWasmChecker,
 };
-// TDOO: Reorganize this file
-
-pub fn create_message_predicate_from_message(
-    amount: Word,
-    nonce: u64,
-) -> (Message, Input) {
-    let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
-    let message = MessageV1 {
-        sender: Default::default(),
-        recipient: Input::predicate_owner(&predicate),
-        nonce: nonce.into(),
-        amount,
-        data: vec![],
-        da_height: Default::default(),
-    };
-
-    (
-        message.clone().into(),
-        Input::message_coin_predicate(
-            message.sender,
-            Input::predicate_owner(&predicate),
-            message.amount,
-            message.nonce,
-            Default::default(),
-            predicate,
-            Default::default(),
-        )
-        .into_default_estimated(),
-    )
-}
-
-pub fn create_coin_output() -> Output {
-    Output::coin(Default::default(), Default::default(), Default::default())
-}
-
-pub fn create_contract_input(
-    tx_id: TxId,
-    output_index: u16,
-    contract_id: ContractId,
-) -> Input {
-    Input::contract(
-        UtxoId::new(tx_id, output_index),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        contract_id,
-    )
-}
-
-pub fn create_contract_output(contract_id: ContractId) -> Output {
-    Output::contract_created(contract_id, Contract::default_state_root())
-}
 
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
 // the byte and gas price fees.
@@ -302,10 +238,9 @@ impl TestPoolUniverse {
         (coin.uncompress(utxo_id), input)
     }
 
-    // TODO: Change this
-    pub fn create_output_and_input(&mut self, amount: Word) -> (Output, UnsetInput) {
-        let input = self.random_predicate(AssetId::BASE, amount, None);
-        let output = Output::coin(*input.input_owner().unwrap(), amount, AssetId::BASE);
+    pub fn create_output_and_input(&mut self) -> (Output, UnsetInput) {
+        let input = self.random_predicate(AssetId::BASE, 1, None);
+        let output = Output::coin(*input.input_owner().unwrap(), 1, AssetId::BASE);
         (output, UnsetInput(input))
     }
 
@@ -352,6 +287,53 @@ impl TestPoolUniverse {
             vec![],
         )
     }
+}
+
+pub fn create_message_predicate_from_message(
+    amount: Word,
+    nonce: u64,
+) -> (Message, Input) {
+    let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
+    let message = MessageV1 {
+        sender: Default::default(),
+        recipient: Input::predicate_owner(&predicate),
+        nonce: nonce.into(),
+        amount,
+        data: vec![],
+        da_height: Default::default(),
+    };
+
+    (
+        message.clone().into(),
+        Input::message_coin_predicate(
+            message.sender,
+            Input::predicate_owner(&predicate),
+            message.amount,
+            message.nonce,
+            Default::default(),
+            predicate,
+            Default::default(),
+        )
+        .into_default_estimated(),
+    )
+}
+
+pub fn create_contract_input(
+    tx_id: TxId,
+    output_index: u16,
+    contract_id: ContractId,
+) -> Input {
+    Input::contract(
+        UtxoId::new(tx_id, output_index),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        contract_id,
+    )
+}
+
+pub fn create_contract_output(contract_id: ContractId) -> Output {
+    Output::contract_created(contract_id, Contract::default_state_root())
 }
 
 pub struct UnsetInput(Input);

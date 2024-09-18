@@ -3744,7 +3744,7 @@ dependencies = [
  "derive_more",
  "fuel-core-services",
  "fuel-core-storage",
- "fuel-core-types",
+ "fuel-core-types 0.36.0",
  "futures",
  "mockall",
  "num-rational",

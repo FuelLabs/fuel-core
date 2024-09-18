@@ -6,7 +6,6 @@ use crate::{
     ports::WasmValidityError,
     tests::{
         context::{
-            create_coin_output,
             create_contract_input,
             create_contract_output,
             create_message_predicate_from_message,
@@ -19,15 +18,11 @@ use crate::{
     },
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusParametersVersion,
     fuel_asm::{
         op,
         RegId,
-        Word,
     },
-    fuel_merkle::common,
     fuel_tx::{
-        consensus_parameters::gas,
         input::coin::CoinPredicate,
         Address,
         AssetId,
@@ -37,12 +32,10 @@ use fuel_core_types::{
         Bytes32,
         ConsensusParameters,
         Contract,
-        Finalizable,
         Input,
         Output,
         PanicReason,
         PredicateParameters,
-        Transaction,
         TransactionBuilder,
         TxParameters,
         UniqueIdentifier,
@@ -51,17 +44,8 @@ use fuel_core_types::{
     },
     fuel_types::ChainId,
     fuel_vm::{
-        checked_transaction::{
-            CheckError,
-            Checked,
-            CheckedTransaction,
-            IntoChecked,
-        },
+        checked_transaction::CheckError,
         PredicateVerificationFailed,
-    },
-    services::txpool::{
-        self,
-        PoolTransaction,
     },
 };
 use std::vec;
@@ -167,10 +151,10 @@ async fn insert__tx_with_blacklisted_message() {
 #[tokio::test]
 async fn insert_tx2_dependent_tx1() {
     let mut universe = TestPoolUniverse::default();
-    let mut txpool = universe.build_pool();
+    universe.build_pool();
 
     // Given
-    let (output, unset_input) = universe.create_output_and_input(1);
+    let (output, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output]), 0);
 
     let input = unset_input.into_input(UtxoId::new(tx1.id(&ChainId::default()), 0));
@@ -194,7 +178,7 @@ async fn insert__tx2_collided_on_contract_id() {
 
     // contract creation tx
     let (_, gas_coin) = universe.setup_coin();
-    let (output, unset_input) = universe.create_output_and_input(10);
+    let (output, unset_input) = universe.create_output_and_input();
     let tx = TransactionBuilder::create(
         Default::default(),
         Default::default(),
@@ -241,7 +225,7 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
     universe.build_pool();
     let contract_id = Contract::EMPTY_CONTRACT_ID;
 
-    let (_, gas_coin) = universe.setup_coin();
+    let gas_coin = universe.setup_coin().1;
     let tx = TransactionBuilder::create(
         Default::default(),
         Default::default(),
@@ -323,11 +307,11 @@ async fn insert_higher_priced_tx_removes_lower_priced_tx() {
     let tx2 = universe.build_script_transaction(Some(vec![common_coin]), None, 20);
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await.unwrap();
-    let result2 = universe.verify_and_insert(tx2).await.unwrap();
+    universe.verify_and_insert(tx1).await.unwrap();
+    let result = universe.verify_and_insert(tx2).await.unwrap();
 
     // Then
-    assert_eq!(result2[0].id(), tx_id);
+    assert_eq!(result[0].id(), tx_id);
 }
 
 #[tokio::test]
@@ -335,7 +319,7 @@ async fn insert__colliding_dependent_underpriced() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
-    let (output, unset_input) = universe.create_output_and_input(20);
+    let (output, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output]), 20);
     let input = unset_input.into_input(UtxoId::new(tx1.id(&ChainId::default()), 0));
 
@@ -404,7 +388,7 @@ async fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
 
     // Given
     let common_coin = universe.setup_coin().1;
-    let (output, unset_input) = universe.create_output_and_input(10);
+    let (output, unset_input) = universe.create_output_and_input();
 
     let tx1 = universe.build_script_transaction(
         Some(vec![common_coin.clone()]),
@@ -500,11 +484,11 @@ async fn insert__dependency_chain_length_hit() {
     universe.build_pool();
 
     // Given
-    let (output, unset_input) = universe.create_output_and_input(10_000);
+    let (output, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output]), 0);
     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
 
-    let (output, unset_input) = universe.create_output_and_input(5_000);
+    let (output, unset_input) = universe.create_output_and_input();
     let tx2 = universe.build_script_transaction(Some(vec![input]), Some(vec![output]), 0);
     let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
 
@@ -1114,11 +1098,11 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     universe.build_pool();
 
     // tx1 {inputs: {}, outputs: {coinA}, tip: 1}
-    let (output_a, unset_input) = universe.create_output_and_input(1);
+    let (output_a, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output_a]), 1);
     // tx2 {inputs: {coinA}, outputs: {coinB}, tip: 1}
     let input_a = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-    let (output_b, unset_input) = universe.create_output_and_input(1);
+    let (output_b, unset_input) = universe.create_output_and_input();
     let tx2 = universe.build_script_transaction(
         Some(vec![input_a.clone()]),
         Some(vec![output_b]),
