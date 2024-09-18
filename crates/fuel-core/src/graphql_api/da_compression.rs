@@ -95,8 +95,7 @@ where
         &self,
         keyspace: RegistryKeyspace,
         value: Vec<u8>,
-    ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
-    {
+    ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
         Ok(self
             .0
             .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
