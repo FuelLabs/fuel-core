@@ -241,7 +241,7 @@ impl Instance<Created> {
                 return Ok(0);
             };
 
-            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
+            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u64::MAX)
         };
 
         Func::wrap(&mut self.store, closure)

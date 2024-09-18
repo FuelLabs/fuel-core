@@ -62,7 +62,7 @@ impl TestContext {
             witness_index: 0,
         })
         .add_witness(blob_data.into())
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction()
         .into_checked(Default::default(), &Default::default())
         .expect("Cannot check transaction");
@@ -99,7 +99,7 @@ async fn blob__upload_works() {
         blob_id.to_bytes(),
     )
     .script_gas_limit(1000000)
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
     let tx_status = ctx
         .client
@@ -143,7 +143,7 @@ async fn blob__accessing_nonexitent_blob_panics_vm() {
         blob_id.to_bytes(),
     )
     .script_gas_limit(1000000)
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
     let tx_status = ctx
         .client

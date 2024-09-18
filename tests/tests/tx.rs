@@ -46,7 +46,6 @@ use std::{
     io::ErrorKind::NotFound,
     iter::repeat,
     time::Duration,
-    u64,
 };
 
 mod predicates;
@@ -95,7 +94,7 @@ async fn dry_run_script() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
@@ -138,7 +137,7 @@ async fn dry_run_create() {
     let contract_id = contract.id(&salt, &root, &state_root);
 
     let tx = TransactionBuilder::create(contract_code.into(), salt, vec![])
-        .add_random_fee_input()
+        .add_fee_input()
         .add_output(Output::contract_created(contract_id, state_root))
         .finalize_as_transaction();
 
@@ -187,7 +186,7 @@ async fn dry_run_above_block_gas_limit() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     // When
@@ -221,11 +220,11 @@ fn arb_large_script_tx<R: Rng + rand::CryptoRng>(
         .into()
 }
 
-fn config_with_size_limit(size_limit: u64) -> Config {
+fn config_with_size_limit(block_transaction_size_limit: u64) -> Config {
     let mut chain_config = ChainConfig::default();
     chain_config
         .consensus_parameters
-        .set_block_transaction_size_limit(size_limit)
+        .set_block_transaction_size_limit(block_transaction_size_limit)
         .expect("should be able to set the limit");
     let state_config = StateConfig::default();
 
@@ -242,7 +241,6 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
     // Create 5 transactions of increasing sizes.
     let arb_tx_count = 5;
     let transactions: Vec<(_, _)> = (0..arb_tx_count)
-        .into_iter()
         .map(|i| {
             let script_bytes_count = 10_000 + (i * 100);
             let tx =
@@ -258,8 +256,9 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
     // Run 5 cases. Each one will allow one more transaction to be included due to size.
     for n in 1..=arb_tx_count {
         // Calculate proper size limit for 'n' transactions
-        let size_limit: u64 = transactions.iter().take(n).map(|(_, size)| size).sum();
-        let config = config_with_size_limit(size_limit);
+        let block_transaction_size_limit: u64 =
+            transactions.iter().take(n).map(|(_, size)| size).sum();
+        let config = config_with_size_limit(block_transaction_size_limit);
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
@@ -288,13 +287,12 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
 }
 
 #[tokio::test]
-async fn transaction_selector_can_select_a_transaction_that_fits() {
+async fn transaction_selector_can_select_a_transaction_that_fits_the_block_size_limit() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // Create 5 transactions of decreasing sizes.
     let arb_tx_count = 5;
     let transactions: Vec<(_, _)> = (0..arb_tx_count)
-        .into_iter()
         .map(|i| {
             let script_bytes_count = 10_000 + (i * 100);
             let tx =
@@ -334,7 +332,6 @@ async fn transaction_selector_can_select_a_transaction_that_fits() {
     assert_eq!(&expected_id, actual_id);
 }
 
-
 #[tokio::test]
 async fn submit() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -357,7 +354,7 @@ async fn submit() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     client.submit_and_await_commit(&tx).await.unwrap();
@@ -393,7 +390,7 @@ async fn submit_and_await_status() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     let mut status_stream = client.submit_and_await_status(&tx).await.unwrap();

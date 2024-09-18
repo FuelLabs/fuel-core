@@ -108,7 +108,6 @@ mod tests {
             block_gas_limit,
             block_transaction_size_limit,
         )
-        .into_iter()
         .map(|tx| TxGas {
             limit: tx.script_gas_limit().unwrap_or_default(),
             tip: tx.tip(),
