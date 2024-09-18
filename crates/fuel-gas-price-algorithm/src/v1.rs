@@ -22,12 +22,24 @@ pub enum Error {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
     /// the combined Execution and DA gas prices
-    combined_gas_price: u64,
+    combined_gas_price: u64, // TODO: This needs to be split into DA price and exec price
+
+    //exec gas price
+    //exec gas price percentage
+
+    //da gas price
+    //da gas price percentage
+
+    //for_height
 }
 
 impl AlgorithmV1 {
     pub fn calculate(&self) -> u64 {
-        self.combined_gas_price
+        self.combined_gas_price // TODO: exec + da
+    }
+
+    pub fn worst_case(&self, _height: u32) -> u64 {
+        todo!()
     }
 }
 
