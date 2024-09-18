@@ -5,6 +5,7 @@
 pub mod v0;
 pub mod v1;
 
+#[allow(clippy::cast_possible_truncation)]
 pub(crate) fn cumulative_percentage(
     new_exec_price: u64,
     for_height: u32,

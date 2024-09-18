@@ -29,7 +29,6 @@ impl AlgorithmV0 {
         self.new_exec_price
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     pub fn worst_case(&self, height: u32) -> u64 {
         cumulative_percentage(
             self.new_exec_price,
