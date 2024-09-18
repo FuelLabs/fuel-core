@@ -44,7 +44,6 @@ use rand::{
 };
 use std::{
     io::ErrorKind::NotFound,
-    iter::repeat,
     time::Duration,
 };
 
@@ -196,30 +195,6 @@ async fn dry_run_above_block_gas_limit() {
     }
 }
 
-fn arb_large_script_tx<R: Rng + rand::CryptoRng>(
-    max_fee_limit: Word,
-    size: usize,
-    rng: &mut R,
-) -> Transaction {
-    let mut script: Vec<_> = repeat(op::noop()).take(size).collect();
-    script.push(op::ret(RegId::ONE));
-    let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
-    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
-    let asset_id = *builder.get_params().base_asset_id();
-    builder
-        .max_fee_limit(max_fee_limit)
-        .script_gas_limit(22430)
-        .add_unsigned_coin_input(
-            SecretKey::random(rng),
-            rng.gen(),
-            u32::MAX as u64,
-            asset_id,
-            Default::default(),
-        )
-        .finalize()
-        .into()
-}
-
 fn config_with_size_limit(block_transaction_size_limit: u64) -> Config {
     let mut chain_config = ChainConfig::default();
     chain_config
@@ -238,23 +213,34 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
 ) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
+    ];
+    let script: Vec<_> = script.into_iter().collect();
+
     // Create 5 transactions of increasing sizes.
-    let arb_tx_count = 5;
-    let transactions: Vec<(_, _)> = (0..arb_tx_count)
+    let tx_count = 5;
+    let transactions: Vec<(_, _)> = (0..tx_count)
         .map(|i| {
-            let script_bytes_count = 10_000 + (i * 100);
-            let tx =
-                arb_large_script_tx(189028 + i as Word, script_bytes_count, &mut rng);
+            let tx = TransactionBuilder::script(script.clone(), vec![])
+                .add_random_fee_input(&mut rng)
+                .add_witness(Witness::from(vec![0; i * 100]))
+                .finalize_as_transaction();
+
             let size = tx
                 .as_script()
                 .expect("script tx expected")
                 .metered_bytes_size() as u64;
+
             (tx, size)
         })
         .collect();
 
     // Run 5 cases. Each one will allow one more transaction to be included due to size.
-    for n in 1..=arb_tx_count {
+    for n in 1..=tx_count {
         // Calculate proper size limit for 'n' transactions
         let block_transaction_size_limit: u64 =
             transactions.iter().take(n).map(|(_, size)| size).sum();
@@ -290,13 +276,22 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
 async fn transaction_selector_can_select_a_transaction_that_fits_the_block_size_limit() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
+    ];
+    let script: Vec<_> = script.into_iter().collect();
+
     // Create 5 transactions of decreasing sizes.
-    let arb_tx_count = 5;
-    let transactions: Vec<(_, _)> = (0..arb_tx_count)
+    let tx_count = 5;
+    let transactions: Vec<(_, _)> = (0..tx_count)
         .map(|i| {
-            let script_bytes_count = 10_000 + (i * 100);
-            let tx =
-                arb_large_script_tx(189028 + i as Word, script_bytes_count, &mut rng);
+            let tx = TransactionBuilder::script(script.clone(), vec![])
+                .add_random_fee_input(&mut rng)
+                .add_witness(Witness::from(vec![0; i * 100]))
+                .finalize_as_transaction();
             let size = tx
                 .as_script()
                 .expect("script tx expected")
