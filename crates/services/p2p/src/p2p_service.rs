@@ -1676,7 +1676,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(transaction_ids))) = response_message {
+                                            if let Ok((_, Ok(Some(transaction_ids)))) = response_message {
                                                 let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
                                                 let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
                                                 let _ = tx_test_end.send(check).await;
@@ -1693,7 +1693,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(transactions))) = response_message {
+                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
                                                 let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
                                                     if i == 0 {
                                                         None
@@ -1732,7 +1732,7 @@ mod tests {
                             }
                             RequestMessage::TxPoolAllTransactionsIds => {
                                 let tx_ids = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolAllTransactionsIds(tx_ids));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolAllTransactionsIds(Some(tx_ids)));
                             }
                             RequestMessage::TxPoolFullTransactions(tx_ids) => {
                                 let txs = tx_ids.iter().enumerate().map(|(i, _)| {
@@ -1742,7 +1742,7 @@ mod tests {
                                         Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
                                     }
                                 }).collect();
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolFullTransactions(txs));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolFullTransactions(Some(txs)));
                             }
                         }
                     }

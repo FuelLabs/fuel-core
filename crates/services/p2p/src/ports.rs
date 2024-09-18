@@ -33,7 +33,7 @@ pub trait BlockHeightImporter: Send + Sync {
     fn next_block_height(&self) -> BoxStream<BlockHeight>;
 }
 
-pub trait TxPool: Send + Sync {
+pub trait TxPool: Send + Sync + Clone {
     fn get_all_tx_ids(&self) -> Vec<TxId>;
 
     fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<NetworkableTransactionPool>>;

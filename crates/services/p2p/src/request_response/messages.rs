@@ -36,8 +36,8 @@ pub enum RequestMessage {
 pub enum ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
-    TxPoolAllTransactionsIds(Vec<TxId>),
-    TxPoolFullTransactions(Vec<Option<NetworkableTransactionPool>>),
+    TxPoolAllTransactionsIds(Option<Vec<TxId>>),
+    TxPoolFullTransactions(Option<Vec<Option<NetworkableTransactionPool>>>),
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
@@ -46,8 +46,8 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 pub enum ResponseSender {
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Vec<Transactions>>>),
-    TxPoolAllTransactionsIds(OnResponse<Vec<TxId>>),
-    TxPoolFullTransactions(OnResponse<Vec<Option<NetworkableTransactionPool>>>),
+    TxPoolAllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
+    TxPoolFullTransactions(OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>),
 }
 
 #[derive(Debug, Error)]

@@ -116,12 +116,12 @@ pub enum TaskRequest {
     },
     TxPoolGetAllTxIds {
         from_peer: PeerId,
-        channel: OnResponse<Vec<TxId>>,
+        channel: OnResponse<Option<Vec<TxId>>>,
     },
     TxPoolGetFullTransactions {
         tx_ids: Vec<TxId>,
         from_peer: PeerId,
-        channel: OnResponse<Vec<Option<NetworkableTransactionPool>>>,
+        channel: OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -139,11 +139,11 @@ pub enum TaskRequest {
         request_id: InboundRequestId,
     },
     TxPoolAllTransactionsIds {
-        response: Vec<TxId>,
+        response: Option<Vec<TxId>>,
         request_id: InboundRequestId,
     },
     TxPoolFullTransactions {
-        response: Vec<Option<NetworkableTransactionPool>>,
+        response: Option<Vec<Option<NetworkableTransactionPool>>>,
         request_id: InboundRequestId,
     },
 }
@@ -383,7 +383,7 @@ pub struct Task<P, V, B, T> {
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     request_sender: mpsc::Sender<TaskRequest>,
-    database_processor: HeavyTaskProcessor,
+    heavy_task_processor: HeavyTaskProcessor,
     broadcast: B,
     tx_pool: T,
     max_headers_per_request: usize,
@@ -503,7 +503,7 @@ where
         }
     }
 
-    fn handle_request<DbLookUpFn, ResponseSenderFn, TaskRequestFn, R>(
+    fn handle_db_request<DbLookUpFn, ResponseSenderFn, TaskRequestFn, R>(
         &mut self,
         range: Range<u32>,
         request_id: InboundRequestId,
@@ -541,7 +541,7 @@ where
         }
 
         let view = self.view_provider.latest_view()?;
-        let result = self.database_processor.spawn(move || {
+        let result = self.heavy_task_processor.spawn(move || {
             if instant.elapsed() > timeout {
                 tracing::warn!("Request timed out");
                 return;
@@ -568,7 +568,7 @@ where
         range: Range<u32>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        self.handle_request(
+        self.handle_db_request(
             range,
             request_id,
             ResponseMessage::Transactions,
@@ -586,7 +586,7 @@ where
         range: Range<u32>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        self.handle_request(
+        self.handle_db_request(
             range,
             request_id,
             ResponseMessage::SealedHeaders,
@@ -599,18 +599,59 @@ where
         )
     }
 
+    fn handle_txpool_request<TxPoolFn, ResponseSenderFn, TaskRequestFn, R>(
+        &mut self,
+        request_id: InboundRequestId,
+        txpool_function: TxPoolFn,
+        response_sender: ResponseSenderFn,
+        task_request: TaskRequestFn,
+    ) -> anyhow::Result<()>
+    where
+        ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
+        TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
+        TxPoolFn: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let instant = Instant::now();
+        let timeout = self.response_timeout;
+        let response_channel = self.request_sender.clone();
+        let result = self.heavy_task_processor.spawn(move || {
+            if instant.elapsed() > timeout {
+                tracing::warn!("Request timed out");
+                return;
+            }
+
+            let response = txpool_function();
+
+            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+            let _ = response_channel
+                .try_send(task_request(Some(response), request_id))
+                .trace_err("Failed to send response to the request channel");
+        });
+
+        if result.is_err() {
+            let _ = self
+                .p2p_service
+                .send_response_msg(request_id, response_sender(None));
+        }
+
+        Ok(())
+    }
+
     fn handle_all_transactions_ids_request(
         &mut self,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        let response_channel = self.request_sender.clone();
-
-        let tx_ids = self.tx_pool.get_all_tx_ids();
-        response_channel.try_send(TaskRequest::TxPoolAllTransactionsIds {
-            response: tx_ids,
+        let tx_pool = self.tx_pool.clone();
+        self.handle_txpool_request(
             request_id,
-        })?;
-        Ok(())
+            move || tx_pool.get_all_tx_ids(),
+            |response| ResponseMessage::TxPoolAllTransactionsIds(response),
+            |response, request_id| TaskRequest::TxPoolAllTransactionsIds {
+                response,
+                request_id,
+            },
+        )
     }
 
     fn handle_full_transactions_request(
@@ -618,14 +659,16 @@ where
         tx_ids: Vec<TxId>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        let response_channel = self.request_sender.clone();
-
-        let txs = self.tx_pool.get_full_txs(tx_ids);
-        response_channel.try_send(TaskRequest::TxPoolFullTransactions {
-            response: txs,
+        let tx_pool = self.tx_pool.clone();
+        self.handle_txpool_request(
             request_id,
-        })?;
-        Ok(())
+            move || tx_pool.get_full_txs(tx_ids),
+            |response| ResponseMessage::TxPoolFullTransactions(response),
+            |response, request_id| TaskRequest::TxPoolFullTransactions {
+                response,
+                request_id,
+            },
+        )
     }
 }
 
@@ -699,7 +742,7 @@ where
                 "The heartbeat check interval should be small enough to do frequently",
             );
         let number_of_threads = 2;
-        let database_processor = HeavyTaskProcessor::new(number_of_threads, 1024 * 10)?;
+        let heavy_task_processor = HeavyTaskProcessor::new(number_of_threads, 1024 * 10)?;
         let request_sender = broadcast.request_sender.clone();
 
         let task = Task {
@@ -712,7 +755,7 @@ where
             next_block_height,
             broadcast,
             tx_pool,
-            database_processor,
+            heavy_task_processor,
             max_headers_per_request,
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
@@ -986,7 +1029,11 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let txs = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        let Some(txs) =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
+        else {
+            return Ok(vec![]);
+        };
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
@@ -1015,7 +1062,11 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let txs = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        let Some(txs) =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
+        else {
+            return Ok(vec![]);
+        };
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
@@ -1475,7 +1526,7 @@ pub mod tests {
             tx_pool: FakeTxPool,
             request_receiver,
             request_sender,
-            database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
+            heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
@@ -1563,7 +1614,7 @@ pub mod tests {
             next_block_height: FakeBlockImporter.next_block_height(),
             request_receiver,
             request_sender,
-            database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
+            heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),
@@ -1623,7 +1674,7 @@ pub mod tests {
             next_block_height,
             request_receiver,
             request_sender,
-            database_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
+            heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             heartbeat_check_interval: Duration::from_secs(0),

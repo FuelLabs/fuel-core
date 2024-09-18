@@ -176,7 +176,7 @@ impl Bootstrap {
                                 if request_message == RequestMessage::TxPoolAllTransactionsIds {
                                     let _ = bootstrap.send_response_msg(
                                         request_id,
-                                        ResponseMessage::TxPoolAllTransactionsIds(vec![]),
+                                        ResponseMessage::TxPoolAllTransactionsIds(Some(vec![])),
                                     );
                                 }
                             }
