@@ -20,31 +20,26 @@ use crate::{
     GasPrice,
 };
 
-/// Provides an atomic view of the storage at the latest height at
-/// the moment of view instantiation. All modifications to the storage
-/// after this point will not affect the view.
-pub trait AtomicView: Send + Sync {
-    /// The type of the latest storage view.
-    type LatestView;
-
-    /// Returns current the view of the storage.
-    fn latest_view(&self) -> StorageResult<Self::LatestView>;
-}
+pub use fuel_core_storage::transactional::AtomicView;
 
 pub trait TxPoolPersistentStorage: Send + Sync {
+    /// Get the UTXO by its ID.
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
+    /// Check if the contract with the given ID exists.
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
 
+    /// Check if the blob with the given ID exists.
     fn blob_exist(&self, blob_id: &BlobId) -> StorageResult<bool>;
 
+    /// Get the message by its ID.
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 }
 
 #[async_trait::async_trait]
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider {
-    /// Calculate gas price for the next block with a given size `block_bytes`.
+    /// Calculate gas price for the next block.
     async fn next_gas_price(&self) -> Result<GasPrice, Error>;
 }
 

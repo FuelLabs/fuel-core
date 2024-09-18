@@ -4,7 +4,6 @@ use std::{
 };
 
 use fuel_core_types::{
-    fuel_merkle::storage,
     fuel_tx::{
         BlobId,
         ContractId,
@@ -14,11 +13,7 @@ use fuel_core_types::{
     services::txpool::PoolTransaction,
 };
 
-use crate::{
-    error::Error,
-    ports::TxPoolPersistentStorage,
-    storage::StorageData,
-};
+use crate::error::Error;
 
 pub mod basic;
 

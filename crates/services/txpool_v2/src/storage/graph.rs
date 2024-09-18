@@ -29,7 +29,6 @@ use fuel_core_types::{
 use petgraph::{
     graph::NodeIndex,
     prelude::StableDiGraph,
-    visit::EdgeRef,
 };
 
 use crate::{
@@ -93,7 +92,7 @@ impl GraphStorage {
             root_id,
             gas_removed,
             tip_removed,
-        );
+        )?;
         self.remove_dependent_sub_graph(root_id)
     }
     fn reduce_dependencies_cumulative_gas_and_tip(
@@ -108,8 +107,10 @@ impl GraphStorage {
                 root_id
             )));
         };
-        root.dependents_cumulative_gas.saturating_sub(gas_reduction);
-        root.dependents_cumulative_tip.saturating_sub(tip_reduction);
+        root.dependents_cumulative_gas =
+            root.dependents_cumulative_gas.saturating_sub(gas_reduction);
+        root.dependents_cumulative_tip =
+            root.dependents_cumulative_tip.saturating_sub(tip_reduction);
         for dependency in self.get_dependencies(root_id)? {
             self.reduce_dependencies_cumulative_gas_and_tip(
                 dependency,

@@ -1,4 +1,3 @@
-use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -49,7 +48,6 @@ use fuel_core_types::{
         interpreter::MemoryInstance,
     },
 };
-use petgraph::graph::NodeIndex;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -324,10 +322,6 @@ impl MockTxPoolGasPrice {
         Self {
             gas_price: Some(gas_price),
         }
-    }
-
-    pub fn new_none() -> Self {
-        Self { gas_price: None }
     }
 }
 
