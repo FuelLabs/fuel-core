@@ -183,7 +183,9 @@ where
 
         let source = tx_source(height);
 
-        let header = self.new_header_with_new_da_height(height, block_time).await?;
+        let header = self
+            .new_header_with_new_da_height(height, block_time)
+            .await?;
 
         let gas_price = self.calculate_gas_price().await?;
 
