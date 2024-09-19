@@ -1,9 +1,6 @@
 use crate::{
     database::{
-        database_description::{
-            gas_price::GasPriceDatabase,
-            on_chain::OnChain,
-        },
+        database_description::gas_price::GasPriceDatabase,
         Database,
         RegularStage,
     },
@@ -33,6 +30,7 @@ use fuel_core_gas_price_service::{
         UpdaterMetadata,
         V0Metadata,
     },
+    ports::L2Data,
     GasPriceService,
     SharedGasPriceAlgo,
 };
@@ -44,10 +42,6 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
-    tables::{
-        FuelBlocks,
-        Transactions,
-    },
     transactional::{
         AtomicView,
         HistoricalView,
@@ -66,12 +60,12 @@ type Updater = FuelGasPriceUpdater<
     DaBlockCostsSharedState,
 >;
 
-pub struct InitializeTask {
+pub struct InitializeTask<L2DataStoreView> {
     pub config: Config,
     pub genesis_block_height: BlockHeight,
     pub settings: ConsensusParametersProvider,
     pub gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
-    pub on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
     pub shared_algo: SharedGasPriceAlgo<Algorithm>,
     pub da_block_costs_provider: DaBlockCostsProvider<DummyDaBlockCosts>,
@@ -82,19 +76,22 @@ type MetadataStorageAdapter =
 
 type Task = GasPriceService<Algorithm, Updater>;
 
-impl InitializeTask {
+impl<L2DataStore, L2DataStoreView> InitializeTask<L2DataStoreView>
+where
+    L2DataStore: L2Data,
+    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
+{
     pub fn new(
         config: Config,
         genesis_block_height: BlockHeight,
         settings: ConsensusParametersProvider,
         block_stream: BoxStream<SharedImportResult>,
         gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
-        on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+        on_chain_db: L2DataStoreView,
     ) -> anyhow::Result<Self> {
-        let latest_block_height = on_chain_db
-            .latest_height()
-            .unwrap_or(genesis_block_height)
-            .into();
+        let view = on_chain_db.latest_view()?;
+        let latest_block_height =
+            view.latest_height().unwrap_or(genesis_block_height).into();
         let default_metadata = get_default_metadata(&config, latest_block_height);
         let algo = get_best_algo(&gas_price_db, default_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
@@ -147,7 +144,11 @@ fn get_best_algo(
     Ok(algo)
 }
 #[async_trait::async_trait]
-impl RunnableService for InitializeTask {
+impl<L2DataStore, L2DataStoreView> RunnableService for InitializeTask<L2DataStoreView>
+where
+    L2DataStore: L2Data,
+    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
+{
     const NAME: &'static str = "GasPriceUpdater";
     type SharedData = SharedGasPriceAlgo<Algorithm>;
     type Task = Task;
@@ -162,17 +163,15 @@ impl RunnableService for InitializeTask {
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let starting_height = self
-            .on_chain_db
-            .latest_height()
-            .unwrap_or(self.genesis_block_height);
+        let view = self.on_chain_db.latest_view()?;
+        let starting_height = view.latest_height().unwrap_or(self.genesis_block_height);
 
         let updater = get_synced_gas_price_updater(
             self.config,
             self.genesis_block_height,
             self.settings,
             self.gas_price_db,
-            self.on_chain_db,
+            &self.on_chain_db,
             self.block_stream,
             self.da_block_costs_provider.shared_state,
         )?;
@@ -187,17 +186,22 @@ impl RunnableService for InitializeTask {
     }
 }
 
-pub fn get_synced_gas_price_updater(
+pub fn get_synced_gas_price_updater<L2DataStore, L2DataStoreView>(
     config: Config,
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
-    on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    on_chain_db: &L2DataStoreView,
     block_stream: BoxStream<SharedImportResult>,
     da_block_costs: DaBlockCostsSharedState,
-) -> anyhow::Result<Updater> {
+) -> anyhow::Result<Updater>
+where
+    L2DataStore: L2Data,
+    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
+{
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
+        .latest_view()?
         .latest_height()
         .unwrap_or(genesis_block_height)
         .into();
@@ -257,15 +261,19 @@ pub fn get_synced_gas_price_updater(
     }
 }
 
-fn sync_metadata_storage_with_on_chain_storage(
+fn sync_metadata_storage_with_on_chain_storage<L2DataStore, L2DataStoreView>(
     settings: &ConsensusParametersProvider,
     metadata_storage: &mut StructuredStorage<
         Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     >,
-    on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    L2DataStore: L2Data,
+    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
+{
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
         .ok_or(anyhow::anyhow!(
@@ -290,22 +298,25 @@ fn sync_metadata_storage_with_on_chain_storage(
     Ok(())
 }
 
-fn sync_v0_metadata(
+fn sync_v0_metadata<L2DataStore, L2DataStoreView>(
     settings: &ConsensusParametersProvider,
-    on_chain_db: Database<OnChain, RegularStage<OnChain>>,
+    on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
     updater: &mut AlgorithmUpdaterV0,
     metadata_storage: &mut StructuredStorage<
         Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     >,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    L2DataStore: L2Data,
+    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
+{
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
     for height in first..=latest_block_height {
         let block = view
-            .storage::<FuelBlocks>()
-            .get(&height.into())?
+            .get_block(&height.into())?
             .ok_or(anyhow::anyhow!("Expected block to exist"))?;
         let last_tx_id = block.transactions().last().ok_or(anyhow::anyhow!(
             "Expected block to have at least one transaction"
@@ -313,8 +324,7 @@ fn sync_v0_metadata(
         let param_version = block.header().consensus_parameters_version;
         let params = settings.settings(&param_version)?;
         let mint = view
-            .storage::<Transactions>()
-            .get(last_tx_id)?
+            .get_transaction(last_tx_id)?
             .ok_or(anyhow::anyhow!("Expected tx to exist for id: {last_tx_id}"))?
             .as_mint()
             .ok_or(anyhow::anyhow!("Expected tx to be a mint"))?
