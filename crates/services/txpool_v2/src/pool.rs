@@ -159,14 +159,13 @@ where
             .gather_best_txs(Constraints { max_gas }, &self.storage)?
             .into_iter()
             .map(|storage_id| {
-                let storage_data = self.storage.remove_transaction(storage_id)?;
+                let transaction = self.storage.remove_transaction(storage_id)?;
                 self.collision_manager
-                    .on_removed_transaction(&storage_data.transaction)?;
+                    .on_removed_transaction(&transaction)?;
                 self.selection_algorithm
-                    .on_removed_transaction(&storage_data.transaction)?;
-                self.tx_id_to_storage_id
-                    .remove(&storage_data.transaction.id());
-                Ok(storage_data.transaction)
+                    .on_removed_transaction(&transaction)?;
+                self.tx_id_to_storage_id.remove(&transaction.id());
+                Ok(transaction)
             })
             .collect()
     }
@@ -187,17 +186,26 @@ where
 
     /// Remove transaction but keep its dependents.
     /// The dependents become exeuctables.
-    pub fn remove_committed_txs(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {
+    pub fn remove_transaction(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents = self.storage.get_dependents(storage_id)?;
-                let storage_data = self.storage.remove_transaction(storage_id)?;
+                let transaction = self.storage.remove_transaction(storage_id)?;
                 self.selection_algorithm
                     .new_executable_transactions(dependents, &self.storage)?;
-                self.update_components_and_caches_on_removal(
-                    &[storage_data.transaction],
-                )?;
+                self.update_components_and_caches_on_removal(&[transaction])?;
             }
+        }
+        Ok(())
+    }
+
+    /// Remove transaction and its dependents.
+    pub fn remove_transaction_and_dependents(
+        &mut self,
+        tx_ids: Vec<TxId>,
+    ) -> Result<(), Error> {
+        for tx_id in tx_ids {
+            if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {}
         }
         Ok(())
     }

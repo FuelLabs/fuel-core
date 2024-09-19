@@ -125,6 +125,8 @@ pub struct Config {
     pub max_dependent_txn_count: u64,
     /// Maximum transactions in the pool.
     pub max_txs: u64,
+    /// Interval for checking the time to live of transactions.
+    pub ttl_check_interval: Duration,
     /// Maximum transaction time to live.
     pub max_txs_ttl: Duration,
     /// Heavy async processing configuration.
@@ -149,6 +151,7 @@ impl Default for Config {
             max_block_size: 1000000000,
             max_dependent_txn_count: 1000,
             max_txs: 10000,
+            ttl_check_interval: Duration::from_secs(60),
             max_txs_ttl: Duration::from_secs(60 * 10),
             black_list: BlackList::default(),
             heavy_work: HeavyWorkConfig {

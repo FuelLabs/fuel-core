@@ -88,7 +88,13 @@ pub trait Storage {
     fn remove_transaction(
         &mut self,
         index: Self::StorageIndex,
-    ) -> Result<StorageData, Error>;
+    ) -> Result<ArcPoolTx, Error>;
+
+    /// Remove a transaction from the storage by its index and all of its dependents.
+    fn remove_transaction_and_dependents(
+        &mut self,
+        index: Self::StorageIndex,
+    ) -> Result<RemovedTransactions, Error>;
 
     /// Count the number of transactions in the storage.
     fn count(&self) -> usize;

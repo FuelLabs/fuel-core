@@ -103,6 +103,7 @@ pub struct Task<
         MemoryPool,
     >,
     ttl_timer: tokio::time::Interval,
+    txs_ttl: tokio::time::Duration,
 }
 
 #[async_trait::async_trait]
@@ -202,6 +203,7 @@ where
             }
 
             _ = self.ttl_timer.tick() => {
+                self.manage_prune_old_transactions();
                 should_continue = true;
             }
 
@@ -275,7 +277,7 @@ where
         {
             let mut tx_pool = self.shared_state.pool.write();
             tx_pool
-                .remove_committed_txs(result.tx_status.iter().map(|s| s.id).collect())
+                .remove_transaction(result.tx_status.iter().map(|s| s.id).collect())
                 .map_err(|e| anyhow::anyhow!(e))?;
         }
 
@@ -307,6 +309,10 @@ where
 
     fn manage_new_peer_subscribed(&mut self, peer_id: PeerId) {
         self.shared_state.new_peer_subscribed(peer_id);
+    }
+
+    fn manage_prune_old_transactions(&mut self) {
+        self.shared_state.prune_old_transactions(self.txs_ttl);
     }
 }
 
@@ -348,7 +354,7 @@ where
     BlockImporter: BlockImporterTrait + Send + Sync,
     P2P: P2PTrait + Send + Sync,
 {
-    let mut ttl_timer = tokio::time::interval(config.max_txs_ttl);
+    let mut ttl_timer = tokio::time::interval(config.ttl_check_interval);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let tx_from_p2p_stream = p2p.gossiped_transaction_events();
     let new_peers_subscribed_stream = p2p.subscribe_new_peers();
@@ -356,6 +362,7 @@ where
         new_peers_subscribed_stream,
         tx_from_p2p_stream,
         imported_block_results_stream: block_importer.block_events(),
+        txs_ttl: config.max_txs_ttl,
         shared_state: SharedState {
             p2p: Arc::new(p2p),
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
@@ -383,6 +390,7 @@ where
                 config,
             ))),
             new_txs_notifier: Arc::new(Notify::new()),
+            time_txs_submitted: Arc::new(RwLock::new(VecDeque::new())),
         },
         ttl_timer,
     })

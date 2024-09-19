@@ -459,7 +459,7 @@ impl Storage for GraphStorage {
     fn remove_transaction(
         &mut self,
         index: Self::StorageIndex,
-    ) -> Result<StorageData, Error> {
+    ) -> Result<ArcPoolTx, Error> {
         self.graph
             .remove_node(index)
             .ok_or(Error::TransactionNotFound(format!(
@@ -468,8 +468,15 @@ impl Storage for GraphStorage {
             )))
             .and_then(|node| {
                 self.clear_cache(node.transaction.outputs(), &node.transaction.id())?;
-                Ok(node)
+                Ok(node.transaction)
             })
+    }
+
+    fn remove_transaction_and_dependents(
+        &mut self,
+        index: Self::StorageIndex,
+    ) -> Result<RemovedTransactions, Error> {
+        self.remove_node_and_dependent_sub_graph(index)
     }
 
     fn count(&self) -> usize {
