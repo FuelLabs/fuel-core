@@ -15,12 +15,16 @@ use crate::{
 
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
+        da_source_adapter::{
+            dummy_costs::DummyDaBlockCosts,
+            DaBlockCostsProvider,
+            DaBlockCostsSharedState,
+        },
         fuel_core_storage_adapter::{
             storage::GasPriceMetadata,
             FuelL2BlockSource,
             GasPriceSettingsProvider,
         },
-        fuel_da_source_adapter::FuelDaSource,
         Algorithm,
         AlgorithmUpdater,
         AlgorithmUpdaterV0,
@@ -35,6 +39,7 @@ use fuel_core_gas_price_service::{
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
+    Service,
     StateWatcher,
 };
 use fuel_core_storage::{
@@ -58,7 +63,7 @@ use fuel_core_types::{
 type Updater = FuelGasPriceUpdater<
     FuelL2BlockSource<ConsensusParametersProvider>,
     MetadataStorageAdapter,
-    FuelDaSource,
+    DaBlockCostsSharedState,
 >;
 
 pub struct InitializeTask {
@@ -69,19 +74,13 @@ pub struct InitializeTask {
     pub on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     pub block_stream: BoxStream<SharedImportResult>,
     pub shared_algo: SharedGasPriceAlgo<Algorithm>,
+    pub da_block_costs_provider: DaBlockCostsProvider<DummyDaBlockCosts>,
 }
 
 type MetadataStorageAdapter =
     StructuredStorage<Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>>;
 
-type Task = GasPriceService<
-    Algorithm,
-    FuelGasPriceUpdater<
-        FuelL2BlockSource<ConsensusParametersProvider>,
-        MetadataStorageAdapter,
-        FuelDaSource,
-    >,
->;
+type Task = GasPriceService<Algorithm, Updater>;
 
 impl InitializeTask {
     pub fn new(
@@ -99,6 +98,12 @@ impl InitializeTask {
         let default_metadata = get_default_metadata(&config, latest_block_height);
         let algo = get_best_algo(&gas_price_db, default_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
+        // there's no use of this source yet, so we can safely return an error
+        let da_block_costs_source =
+            DummyDaBlockCosts::new(Err(anyhow::anyhow!("Not used")));
+        let da_block_costs_provider =
+            DaBlockCostsProvider::new(da_block_costs_source, None);
+
         let task = Self {
             config,
             genesis_block_height,
@@ -107,6 +112,7 @@ impl InitializeTask {
             on_chain_db,
             block_stream,
             shared_algo,
+            da_block_costs_provider,
         };
         Ok(task)
     }
@@ -168,7 +174,13 @@ impl RunnableService for InitializeTask {
             self.gas_price_db,
             self.on_chain_db,
             self.block_stream,
+            self.da_block_costs_provider.shared_state,
         )?;
+
+        self.da_block_costs_provider
+            .service
+            .start_and_await()
+            .await?;
         let inner_service =
             GasPriceService::new(starting_height, updater, self.shared_algo).await;
         Ok(inner_service)
@@ -182,6 +194,7 @@ pub fn get_synced_gas_price_updater(
     mut gas_price_db: Database<GasPriceDatabase, RegularStage<GasPriceDatabase>>,
     on_chain_db: Database<OnChain, RegularStage<OnChain>>,
     block_stream: BoxStream<SharedImportResult>,
+    da_block_costs: DaBlockCostsSharedState,
 ) -> anyhow::Result<Updater> {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
@@ -217,7 +230,7 @@ pub fn get_synced_gas_price_updater(
             default_metadata.into(),
             l2_block_source,
             metadata_storage,
-            FuelDaSource,
+            da_block_costs,
         );
         Ok(updater)
     } else {
@@ -235,7 +248,7 @@ pub fn get_synced_gas_price_updater(
             latest_block_height.into(),
             l2_block_source,
             metadata_storage,
-            FuelDaSource,
+            da_block_costs,
             config.min_gas_price,
             config.gas_price_change_percent,
             config.gas_price_threshold_percent,

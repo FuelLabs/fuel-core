@@ -15,7 +15,6 @@ use crate::{
             FuelBlockMerkleMetadata,
         },
         FuelBlocks,
-        FullFuelBlocks,
     },
 };
 use fuel_core_types::blockchain::block::{
@@ -57,21 +56,6 @@ impl TableWithBlueprint for FuelBlocks {
 
     fn column() -> Column {
         Column::FuelBlocks
-    }
-}
-
-impl TableWithBlueprint for FullFuelBlocks {
-    type Blueprint = Merklized<
-        Primitive<4>,
-        Postcard,
-        FuelBlockMerkleMetadata,
-        FuelBlockMerkleData,
-        BlockEncoder,
-    >;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::FullFuelBlocks
     }
 }
 

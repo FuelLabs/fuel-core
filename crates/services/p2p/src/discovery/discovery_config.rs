@@ -97,7 +97,7 @@ impl Config {
         self
     }
 
-    pub fn finish(self) -> Behaviour {
+    pub fn finish(self) -> anyhow::Result<Behaviour> {
         let Config {
             local_peer_id,
             bootstrap_nodes,
@@ -166,13 +166,13 @@ impl Config {
             MdnsWrapper::disabled()
         };
 
-        Behaviour {
+        Ok(Behaviour {
             connected_peers: HashSet::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
             max_peers_connected,
             mdns,
-        }
+        })
     }
 }

@@ -42,6 +42,7 @@ use std::{
 use tracing::trace;
 mod discovery_config;
 mod mdns_wrapper;
+
 pub use discovery_config::Config;
 
 const SIXTY_SECONDS: Duration = Duration::from_secs(60);
@@ -270,7 +271,7 @@ mod tests {
                 .with_bootstrap_nodes(bootstrap_nodes)
                 .with_random_walk(Duration::from_millis(500));
 
-            config.finish()
+            config.finish().expect("Config should be valid")
         }
     }
 

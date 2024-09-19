@@ -401,6 +401,7 @@ impl RunnableService for Task {
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let mut watcher = watcher.clone();
+
         for service in self.services.iter() {
             tokio::select! {
                 _ = watcher.wait_stopping_or_stopped() => {

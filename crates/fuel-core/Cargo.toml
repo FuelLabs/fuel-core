@@ -44,7 +44,7 @@ hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
-postcard = { workspace = true }
+postcard = { workspace = true, optional = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
   "lz4",
@@ -89,7 +89,7 @@ smt = [
 ]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
-rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
+rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus", "dep:postcard"]
 test-helpers = [
   "fuel-core-database/test-helpers",
   "fuel-core-p2p?/test-helpers",

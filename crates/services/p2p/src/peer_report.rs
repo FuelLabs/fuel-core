@@ -1,7 +1,4 @@
-use crate::{
-    config::Config,
-    TryPeerId,
-};
+use crate::TryPeerId;
 use libp2p::{
     self,
     core::{
@@ -78,14 +75,16 @@ pub struct Behaviour {
 }
 
 impl Behaviour {
-    pub(crate) fn new(_config: &Config) -> Self {
+    pub(crate) fn new(reserved_nodes_multiaddrs: &[Multiaddr]) -> Self {
         let mut reserved_nodes_to_connect = VecDeque::new();
-        let mut reserved_nodes_multiaddr = BTreeMap::<PeerId, Vec<Multiaddr>>::new();
+        let mut reserved_nodes_multiaddr_map = BTreeMap::<PeerId, Vec<Multiaddr>>::new();
 
-        for multiaddr in &_config.reserved_nodes {
-            let peer_id = multiaddr.try_to_peer_id().unwrap();
+        for multiaddr in reserved_nodes_multiaddrs {
+            let peer_id = multiaddr
+                .try_to_peer_id()
+                .expect("Multiaddr MUST have a PeerId");
             reserved_nodes_to_connect.push_back((Instant::now(), peer_id));
-            reserved_nodes_multiaddr
+            reserved_nodes_multiaddr_map
                 .entry(peer_id)
                 .or_default()
                 .push(multiaddr.clone());
@@ -93,7 +92,7 @@ impl Behaviour {
 
         Self {
             reserved_nodes_to_connect,
-            reserved_nodes_multiaddr,
+            reserved_nodes_multiaddr: reserved_nodes_multiaddr_map,
             connected_reserved_nodes: Default::default(),
             pending_connections: Default::default(),
             pending_events: VecDeque::default(),
