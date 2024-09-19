@@ -1,25 +1,29 @@
 #![allow(non_snake_case)]
 
-use crate::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::storage::GasPriceColumn,
-    AlgorithmUpdater,
+use super::*;
+use crate::{
+    fuel_gas_price_updater::{
+        fuel_core_storage_adapter::storage::{
+            GasPriceColumn,
+            GasPriceMetadata,
+        },
+        AlgorithmUpdater,
+        UpdaterMetadata,
+    },
+    ports::GasPriceData,
 };
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
     transactional::{
         IntoTransaction,
+        Modifiable,
         StorageTransaction,
     },
+    Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
 };
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
-
-use super::*;
-
-fn arb_metadata() -> UpdaterMetadata {
-    let height = 111231u32.into();
-    arb_metadata_with_l2_height(height)
-}
 
 fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
     let inner = AlgorithmUpdaterV0 {
@@ -36,23 +40,30 @@ fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     InMemoryStorage::default().into_transaction()
 }
 
-#[tokio::test]
-async fn get_metadata__can_get_most_recent_version() {
-    // given
-    let mut database = database();
-    let block_height: BlockHeight = 1u32.into();
-    let metadata = arb_metadata();
-    database
-        .storage_as_mut::<GasPriceMetadata>()
-        .insert(&block_height, &metadata)
-        .unwrap();
+impl GasPriceData for StorageTransaction<InMemoryStorage<GasPriceColumn>> {
+    fn get_metadata(
+        &self,
+        block_height: &BlockHeight,
+    ) -> StorageResult<Option<UpdaterMetadata>> {
+        self.storage_as_ref::<GasPriceMetadata>()
+            .get(block_height)
+            .map(|v| v.map(|v| v.as_ref().clone()))
+    }
 
-    // when
-    let actual = database.get_metadata(&block_height).unwrap();
+    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> StorageResult<()> {
+        self.storage::<GasPriceMetadata>()
+            .insert(&metadata.l2_block_height(), &metadata)?;
+        self.commit_changes(self.changes().clone())?;
+        Ok(())
+    }
 
-    // then
-    let expected = Some(metadata);
-    assert_eq!(expected, actual);
+    fn latest_height(&self) -> Option<BlockHeight> {
+        todo!()
+    }
+
+    fn rollback_last_block(&self) -> StorageResult<()> {
+        todo!()
+    }
 }
 
 #[tokio::test]
