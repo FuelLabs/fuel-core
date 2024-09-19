@@ -89,3 +89,57 @@ proptest! {
         _worst_case__correctly_calculates_value(exec_price, da_price, starting_height, block_horizon, exec_percentage, da_percentage);
     }
 }
+
+proptest! {
+    #[test]
+    fn worst_case__never_overflows(
+        exec_price: u64,
+        da_price: u64,
+        starting_height: u32,
+        block_horizon in 0..10_000u32,
+        exec_percentage: u64,
+        da_percentage: u64,
+    ) {
+        // given
+        let algorithm = AlgorithmV1 {
+            new_exec_price: exec_price,
+            exec_price_percentage: exec_percentage,
+            new_da_gas_price: da_price,
+            da_gas_price_percentage: da_percentage,
+            for_height: starting_height,
+        };
+
+        // when
+        let target_height = starting_height.saturating_add(block_horizon);
+        let _ = algorithm.worst_case(target_height);
+
+        // then
+        // doesn't panic with an overflow
+    }
+}
+
+#[test]
+fn worst_case__same_block_gives_new_exec_price() {
+    // given
+    let new_exec_price = 1000;
+    let exec_price_percentage = 10;
+    let new_da_gas_price = 1000;
+    let da_gas_price_percentage = 10;
+    let for_height = 10;
+    let algorithm = AlgorithmV1 {
+        new_exec_price,
+        exec_price_percentage,
+        new_da_gas_price,
+        da_gas_price_percentage,
+        for_height,
+    };
+
+    // when
+    let delta = 0;
+    let target_height = for_height + delta;
+    let actual = algorithm.worst_case(target_height);
+
+    // then
+    let expected = new_exec_price + new_da_gas_price;
+    assert_eq!(expected, actual);
+}
