@@ -28,6 +28,7 @@ use fuel_core_txpool::{
         GasPriceProvider,
         MemoryPool,
     },
+    types::TxId,
     Result as TxPoolResult,
 };
 use fuel_core_types::{
@@ -52,6 +53,7 @@ use fuel_core_types::{
         p2p::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
+            PeerId,
             TransactionGossipData,
         },
     },
@@ -65,6 +67,7 @@ impl BlockImporter for BlockImporterAdapter {
 }
 
 #[cfg(feature = "p2p")]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -91,6 +94,21 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_new_peers())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            Box::pin(fuel_core_services::stream::pending())
+        }
+    }
+
     fn notify_gossip_transaction_validity(
         &self,
         message_info: GossipsubMessageInfo,
@@ -102,9 +120,32 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
             Ok(())
         }
     }
+
+    async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
+        if let Some(service) = &self.service {
+            service.get_all_transactions_ids_from_peer(peer_id).await
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    async fn request_txs(
+        &self,
+        peer_id: PeerId,
+        tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+        if let Some(service) = &self.service {
+            service
+                .get_full_transactions_from_peer(peer_id, tx_ids)
+                .await
+        } else {
+            Ok(vec![])
+        }
+    }
 }
 
 #[cfg(not(feature = "p2p"))]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -125,6 +166,22 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         _validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
+        Box::pin(fuel_core_services::stream::pending())
+    }
+
+    async fn request_tx_ids(&self, _peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
+        Ok(vec![])
+    }
+
+    async fn request_txs(
+        &self,
+        _peer_id: PeerId,
+        _tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+        Ok(vec![])
     }
 }
 

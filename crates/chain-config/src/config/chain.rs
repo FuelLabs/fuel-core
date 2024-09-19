@@ -54,7 +54,7 @@ impl Default for ChainConfig {
                 fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION,
             ),
             // Note: It is invalid bytecode.
-            state_transition_bytecode: vec![123; 1024],
+            state_transition_bytecode: vec![],
             consensus: ConsensusConfig::default_poa(),
         }
     }
@@ -78,13 +78,17 @@ impl ChainConfig {
             })?;
 
         let bytecode_path = path.with_file_name(BYTECODE_NAME);
-        let bytecode = std::fs::read(bytecode_path).map_err(|e| {
-            anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the state transition bytecode: {:?}",
-                path.to_str()
-            ))
-        })?;
 
+        let bytecode = if bytecode_path.exists() {
+            std::fs::read(bytecode_path).map_err(|e| {
+                anyhow::Error::new(e).context(format!(
+                    "an error occurred while loading the state transition bytecode: {:?}",
+                    path.to_str()
+                ))
+            })?
+        } else {
+            Vec::new()
+        };
         chain_config.state_transition_bytecode = bytecode;
 
         Ok(chain_config)
