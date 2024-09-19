@@ -642,6 +642,30 @@ impl FuelP2PService {
                                 c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
                             }
                         },
+                        ResponseSender::TxPoolAllTransactionsIds(c) => match response {
+                            ResponseMessage::TxPoolAllTransactionsIds(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                        ResponseSender::TxPoolFullTransactions(c) => match response {
+                            ResponseMessage::TxPoolFullTransactions(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
                     };
 
                     if !send_ok {
@@ -672,6 +696,12 @@ impl FuelP2PService {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
                         ResponseSender::Transactions(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                        ResponseSender::TxPoolAllTransactionsIds(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                        ResponseSender::TxPoolFullTransactions(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
                     };
@@ -779,9 +809,13 @@ mod tests {
         fuel_tx::{
             Transaction,
             TransactionBuilder,
+            TxId,
+            UniqueIdentifier,
         },
+        fuel_types::ChainId,
         services::p2p::{
             GossipsubMessageAcceptance,
+            NetworkableTransactionPool,
             Transactions,
         },
     };
@@ -1635,6 +1669,46 @@ mod tests {
                                             }
                                         });
                                     }
+                                    RequestMessage::TxPoolAllTransactionsIds => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolAllTransactionsIds(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok((_, Ok(Some(transaction_ids)))) = response_message {
+                                                let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
+                                                let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
+                                                let _ = tx_test_end.send(check).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                    RequestMessage::TxPoolFullTransactions(tx_ids) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolFullTransactions(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
+                                                let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
+                                                    if i == 0 {
+                                                        None
+                                                    } else {
+                                                        Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
+                                                    }
+                                                }).collect();
+                                                let check = transactions.len() == tx_ids.len() && transactions.iter().zip(txs.iter()).all(|(a, b)| a == b);
+                                                let _ = tx_test_end.send(check).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -1655,6 +1729,20 @@ mod tests {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
+                            }
+                            RequestMessage::TxPoolAllTransactionsIds => {
+                                let tx_ids = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolAllTransactionsIds(Some(tx_ids)));
+                            }
+                            RequestMessage::TxPoolFullTransactions(tx_ids) => {
+                                let txs = tx_ids.iter().enumerate().map(|(i, _)| {
+                                    if i == 0 {
+                                        None
+                                    } else {
+                                        Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
+                                    }
+                                }).collect();
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolFullTransactions(Some(txs)));
                             }
                         }
                     }
@@ -1677,6 +1765,21 @@ mod tests {
     async fn request_response_works_with_sealed_headers_range_inclusive() {
         let arbitrary_range = 2..6;
         request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_transactions_ids() {
+        request_response_works_with(RequestMessage::TxPoolAllTransactionsIds).await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_full_transactions() {
+        let tx_ids = (0..10)
+            .map(|_| Transaction::default_test_tx().id(&ChainId::new(1)))
+            .collect();
+        request_response_works_with(RequestMessage::TxPoolFullTransactions(tx_ids)).await
     }
 
     /// We send a request for transactions, but it's responded by only headers

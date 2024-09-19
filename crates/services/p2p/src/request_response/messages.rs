@@ -1,6 +1,10 @@
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
-    services::p2p::Transactions,
+    fuel_tx::TxId,
+    services::p2p::{
+        NetworkableTransactionPool,
+        Transactions,
+    },
 };
 use libp2p::{
     request_response::OutboundFailure,
@@ -24,12 +28,16 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 pub enum RequestMessage {
     SealedHeaders(Range<u32>),
     Transactions(Range<u32>),
+    TxPoolAllTransactionsIds,
+    TxPoolFullTransactions(Vec<TxId>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
+    TxPoolAllTransactionsIds(Option<Vec<TxId>>),
+    TxPoolFullTransactions(Option<Vec<Option<NetworkableTransactionPool>>>),
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
@@ -38,6 +46,8 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 pub enum ResponseSender {
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Vec<Transactions>>>),
+    TxPoolAllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
+    TxPoolFullTransactions(OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>),
 }
 
 #[derive(Debug, Error)]

@@ -18,6 +18,7 @@ use std::{
 pub mod config;
 mod containers;
 pub mod error;
+pub mod heavy_async_processing;
 pub mod ports;
 pub mod service;
 mod transaction_selector;
