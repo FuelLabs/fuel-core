@@ -589,6 +589,7 @@ where
         let mut regular_tx_iter = l2_tx_source
             .next(remaining_gas_limit, remaining_tx_count, remaining_size)
             .into_iter()
+            .take(remaining_tx_count as usize)
             .peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
@@ -619,6 +620,7 @@ where
             regular_tx_iter = l2_tx_source
                 .next(remaining_gas_limit, remaining_tx_count, remaining_size)
                 .into_iter()
+                .take(remaining_tx_count as usize)
                 .peekable();
         }
 
