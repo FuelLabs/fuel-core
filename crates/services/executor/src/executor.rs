@@ -162,6 +162,8 @@ use alloc::{
     vec::Vec,
 };
 
+pub const MAX_TX_COUNT: u16 = u16::MAX.saturating_sub(1);
+
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
 }
@@ -580,8 +582,7 @@ where
         // When processing l2 transactions, we must take into account transactions from the l1
         // that have been included in the block already (stored in `data.tx_count`), as well
         // as the final mint transaction.
-        let max_tx_count = u16::MAX.saturating_sub(1);
-        let mut remaining_tx_count = max_tx_count.saturating_sub(data.tx_count);
+        let mut remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
 
         let mut regular_tx_iter = l2_tx_source
             .next(remaining_gas_limit, remaining_tx_count, remaining_size)
@@ -610,7 +611,7 @@ where
                     }
                 }
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-                remaining_tx_count = max_tx_count.saturating_sub(data.tx_count);
+                remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
             }
 
             regular_tx_iter = l2_tx_source

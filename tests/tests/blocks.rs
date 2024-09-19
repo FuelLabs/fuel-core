@@ -50,6 +50,11 @@ use std::{
 };
 use test_helpers::send_graph_ql_query;
 
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
+
 #[tokio::test]
 async fn block() {
     // setup test data in the node
@@ -360,6 +365,7 @@ mod full_block {
         },
         FuelClient,
     };
+    use fuel_core_executor::executor;
     use fuel_core_types::fuel_types::BlockHeight;
 
     #[derive(cynic::QueryFragment, Debug)]
@@ -425,22 +431,9 @@ mod full_block {
         assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
     }
 
-    use fuel_core_types::{
-        fuel_asm::{
-            op,
-            RegId,
-        },
-        fuel_vm::SecretKey,
-    };
-
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        SeedableRng,
-    };
-
     #[tokio::test]
     async fn too_many_transactions_are_split_in_blocks() {
+        // Given
         let max_gas_limit = 50_000_000;
         let mut rng = StdRng::seed_from_u64(2322);
 
@@ -469,36 +462,18 @@ mod full_block {
         let srv = FuelService::new_node(patched_node_config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
-        let tx_count = 66_000;
+        let tx_count: u64 = 66_000;
         let txs = (1..=tx_count)
-            .map(|i| {
-                TransactionBuilder::script(
-                    op::ret(RegId::ONE).to_bytes().into_iter().collect(),
-                    vec![],
-                )
-                .script_gas_limit(max_gas_limit / 2)
-                .add_unsigned_coin_input(
-                    SecretKey::random(&mut rng),
-                    rng.gen(),
-                    1000 + i,
-                    Default::default(),
-                    Default::default(),
-                )
-                .add_output(Output::Change {
-                    amount: 0,
-                    asset_id: Default::default(),
-                    to: rng.gen(),
-                })
-                .finalize_as_transaction()
-            })
+            .map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit))
             .collect_vec();
 
+        // When
         for tx in txs.iter() {
             let _tx_id = client.submit(tx).await.unwrap();
         }
 
+        // Then
         let last_block_height: u32 = client.produce_blocks(2, None).await.unwrap().into();
-        assert_eq!(last_block_height, 2u32);
         let second_last_block = client
             .block_by_height(BlockHeight::from(1))
             .await
@@ -509,10 +484,14 @@ mod full_block {
             .await
             .unwrap()
             .expect("Last Block should be defined");
-        assert_eq!(second_last_block.transactions.len(), 65_535);
+
+        assert_eq!(
+            second_last_block.transactions.len(),
+            executor::MAX_TX_COUNT as usize + 1 // Mint transaction for one block
+        );
         assert_eq!(
             last_block.transactions.len(),
-            (tx_count as usize - 65_534) + 1
+            (tx_count as usize - (executor::MAX_TX_COUNT as usize)) + 1 /* Mint transaction for second block */
         );
     }
 }

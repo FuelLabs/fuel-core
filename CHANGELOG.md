@@ -39,7 +39,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2158](https://github.com/FuelLabs/fuel-core/pull/2158): Log the public address of the signing key, if it is specified
 - [2188](https://github.com/FuelLabs/fuel-core/pull/2188): Upgraded the `fuel-vm` to `0.57.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.57.0).
 
-
 ## [Version 0.35.0]
 
 ### Added
