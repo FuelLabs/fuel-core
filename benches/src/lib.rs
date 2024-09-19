@@ -1,7 +1,10 @@
 use fuel_core::database::GenesisDatabase;
-use fuel_core_storage::transactional::{
-    IntoTransaction,
-    StorageTransaction,
+use fuel_core_storage::{
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
+    StorageAsMut,
 };
 use fuel_core_types::{
     fuel_asm::{
@@ -81,6 +84,22 @@ impl From<Vec<u8>> for ContractCode {
     }
 }
 
+pub struct BlobCode {
+    pub code: BlobBytes,
+    pub id: BlobId,
+}
+
+impl From<Vec<u8>> for BlobCode {
+    fn from(bytes: Vec<u8>) -> Self {
+        let id = BlobId::compute(&bytes);
+
+        Self {
+            code: BlobBytes::from(bytes),
+            id,
+        }
+    }
+}
+
 pub struct PrepareCall {
     pub ra: RegId,
     pub rb: RegId,
@@ -94,6 +113,7 @@ pub struct VmBench {
     pub gas_limit: Word,
     pub maturity: BlockHeight,
     pub height: BlockHeight,
+    pub memory: Option<MemoryInstance>,
     pub prepare_script: Vec<Instruction>,
     pub post_call: Vec<Instruction>,
     pub data: Vec<u8>,
@@ -105,6 +125,7 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
+    pub blob: Option<BlobCode>,
     pub empty_contracts: Vec<ContractId>,
     pub receipts_ctx: Option<ReceiptsCtx>,
 }
@@ -138,6 +159,7 @@ impl VmBench {
             gas_limit: LARGE_GAS_LIMIT,
             maturity: Default::default(),
             height: Default::default(),
+            memory: Some(MemoryInstance::from(vec![123; MEM_SIZE])),
             prepare_script: vec![],
             post_call: vec![],
             data: vec![],
@@ -149,6 +171,7 @@ impl VmBench {
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
+            blob: None,
             empty_contracts: vec![],
             receipts_ctx: None,
         }
@@ -251,6 +274,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_memory(mut self, memory: MemoryInstance) -> Self {
+        self.memory = Some(memory);
+        self
+    }
+
     /// Replaces the current prepare script with the given one.
     /// Not that if you've constructed this instance with `contract` or `using_contract_db`,
     /// then this will remove the script added by it. Use `extend_prepare_script` instead.
@@ -310,6 +338,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_blob(mut self, blob: BlobCode) -> Self {
+        self.blob.replace(blob);
+        self
+    }
+
     pub fn with_empty_contracts_count(mut self, count: usize) -> Self {
         let mut contract_ids = Vec::with_capacity(count);
         for n in 0..count {
@@ -334,6 +367,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             gas_limit,
             maturity,
             height,
+            memory,
             prepare_script,
             post_call,
             data,
@@ -345,6 +379,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             prepare_call,
             dummy_contract,
             contract_code,
+            blob,
             empty_contracts,
             receipts_ctx,
         } = case;
@@ -418,6 +453,10 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             db.deploy_contract_with_id(&slots, &contract, &id)?;
         }
 
+        if let Some(BlobCode { code, id }) = blob {
+            db.storage_as_mut::<BlobData>().insert(&id, &code.0)?;
+        }
+
         for contract_id in empty_contracts {
             let input_count = tx.inputs().len();
             let output = Output::contract(
@@ -469,8 +508,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         .unwrap();
         let tx = tx.into_checked(height, &params).unwrap();
         let interpreter_params = InterpreterParams::new(gas_price, &params);
+        let memory = memory.unwrap_or_else(MemoryInstance::new);
 
-        let mut txtor = Transactor::new(MemoryInstance::new(), db, interpreter_params);
+        let mut txtor = Transactor::new(memory, db, interpreter_params);
 
         txtor.transact(tx);
 
@@ -492,6 +532,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let start_vm = vm.clone();
         let original_db = vm.as_mut().database_mut().clone();
+        let original_memory = vm.memory().clone();
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {
@@ -509,6 +550,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
         vm.reset_vm_state(&diff);
         *vm.as_mut().database_mut() = original_db;
+        *vm.memory_mut() = original_memory;
 
         Ok(Self {
             vm,
