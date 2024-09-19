@@ -647,7 +647,7 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> DependentCost {
     #[derive(PartialEq, Eq)]
     enum Type {
         /// The points have a linear property. The first point
-        /// and the last points are almost the same(The difference is < 0.1).
+        /// and the last points are almost the same(The difference is < `NEAR_LINEAR`).
         Linear,
         /// When the delta of the last point is much lower than
         /// the first point, it is a logarithmic chart.
