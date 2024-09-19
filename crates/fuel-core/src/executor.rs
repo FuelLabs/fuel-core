@@ -6,7 +6,10 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource,
+        executor::{
+            OnceTransactionsSource,
+            MAX_TX_COUNT,
+        },
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
@@ -2984,14 +2987,14 @@ mod tests {
     }
 
     #[test]
-    fn block_producer_never_includes_more_than_u16_max_transactions() {
+    fn block_producer_never_includes_more_than_max_tx_count_transactions() {
         let block_height = 1u32;
         let block_da_height = 2u64;
 
         let mut consensus_parameters = ConsensusParameters::default();
 
         // Given
-        let transactions_in_tx_source = u16::MAX as usize + 10;
+        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
         consensus_parameters.set_block_gas_limit(u64::MAX);
         let config = Config {
             consensus_parameters,
@@ -3013,9 +3016,10 @@ mod tests {
             .into();
 
         // Then
-        // u16::MAX -1 transactions have been included from the transaction source, plus the mint transaction
-        // In total we expect to see u16::MAX transactions in the block
-        assert_eq!(result.block.transactions().len(), (u16::MAX) as usize);
+        assert_eq!(
+            result.block.transactions().len(),
+            (MAX_TX_COUNT as usize + 1)
+        );
     }
 
     #[cfg(feature = "relayer")]

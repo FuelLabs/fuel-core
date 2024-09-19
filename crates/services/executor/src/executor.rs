@@ -162,6 +162,8 @@ use alloc::{
     vec::Vec,
 };
 
+/// The maximum amount of transactions that can be included in a block,
+/// excluding the mint transaction.
 pub const MAX_TX_COUNT: u16 = u16::MAX.saturating_sub(1);
 
 pub struct OnceTransactionsSource {
@@ -578,7 +580,7 @@ where
         // TODO: Handle `remaining_size` https://github.com/FuelLabs/fuel-core/issues/2133
         let remaining_size = u32::MAX;
 
-        // We allow at most u64::MAX transactions in a block, including the mint transaction.
+        // We allow at most u16::MAX transactions in a block, including the mint transaction.
         // When processing l2 transactions, we must take into account transactions from the l1
         // that have been included in the block already (stored in `data.tx_count`), as well
         // as the final mint transaction.

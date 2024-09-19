@@ -473,7 +473,8 @@ mod full_block {
         }
 
         // Then
-        let last_block_height: u32 = client.produce_blocks(2, None).await.unwrap().into();
+        let _last_block_height: u32 =
+            client.produce_blocks(2, None).await.unwrap().into();
         let second_last_block = client
             .block_by_height(BlockHeight::from(1))
             .await
