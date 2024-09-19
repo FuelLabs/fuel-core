@@ -28,7 +28,6 @@ env:
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
-  FUEL_ALWAYS_USE_WASM: true
 
 jobs:
   check-changelog:
@@ -126,6 +125,10 @@ jobs:
           - command: test
             args: -p fuel-core --no-default-features
           - command: test
+            args: -p fuel-core --lib executor --features wasm-executor
+            env:
+              FUEL_ALWAYS_USE_WASM=true
+          - command: test
             args: -p fuel-core-client --no-default-features
           - command: test
             args: -p fuel-core-chain-config --no-default-features
@@ -175,7 +178,7 @@ jobs:
             target/
           key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: ${{ matrix.command }} ${{ matrix.args }}
-        run: cargo ${{ matrix.command }} ${{ matrix.args }}
+        run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && github.ref == 'refs/heads/master'
         with:
