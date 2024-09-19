@@ -183,7 +183,7 @@ where
 
         let source = tx_source(height);
 
-        let header = self.new_header(height, block_time).await?;
+        let header = self.new_header_with_new_da_height(height, block_time).await?;
 
         let gas_price = self.calculate_gas_price().await?;
 
@@ -294,7 +294,7 @@ where
                 .unwrap_or(Tai64::UNIX_EPOCH)
         });
 
-        let header = self._new_header(simulated_height, simulated_time)?;
+        let header = self.new_header(simulated_height, simulated_time)?;
 
         let gas_price = if let Some(inner) = gas_price {
             inner
@@ -348,12 +348,12 @@ where
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Create the header for a new block at the provided height
-    async fn new_header(
+    async fn new_header_with_new_da_height(
         &self,
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self._new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time)?;
         let previous_da_height = block_header.da_height;
         let gas_limit = self
             .consensus_parameters_provider
@@ -374,7 +374,7 @@ where
         block_time: Tai64,
         da_height: DaBlockHeight,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self._new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time)?;
         block_header.application.da_height = da_height;
         Ok(block_header)
     }
@@ -421,7 +421,7 @@ where
         }
     }
 
-    fn _new_header(
+    fn new_header(
         &self,
         height: BlockHeight,
         block_time: Tai64,
