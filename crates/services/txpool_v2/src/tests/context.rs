@@ -54,7 +54,7 @@ use crate::{
     error::Error,
     pool::Pool,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    service::{
+    shared_state::{
         RemovedTransactions,
         TxPool,
     },

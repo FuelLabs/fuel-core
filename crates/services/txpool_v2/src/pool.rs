@@ -168,6 +168,10 @@ where
             .ok()
     }
 
+    pub fn contains(&self, tx_id: &TxId) -> bool {
+        self.tx_id_to_storage_id.contains_key(tx_id)
+    }
+
     /// Remove transaction but keep its dependents.
     /// The dependents become exeuctables.
     pub fn remove_committed_txs(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {

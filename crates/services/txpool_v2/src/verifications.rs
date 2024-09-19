@@ -29,7 +29,7 @@ use crate::{
         TxPoolPersistentStorage,
         WasmChecker,
     },
-    service::TxPool,
+    shared_state::TxPool,
     GasPrice,
 };
 
