@@ -74,9 +74,7 @@ impl PeerToPeerPort for P2PAdapter {
             data: range,
         } = range;
         if let Some(service) = &self.service {
-            service
-                .get_transactions_from_peer(peer_id.into(), range)
-                .await
+            service.get_transactions_from_peer(peer_id, range).await
         } else {
             Err(anyhow::anyhow!("No P2P service available"))
         }
