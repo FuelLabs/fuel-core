@@ -296,6 +296,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn new_service<
     P2P,
     BlockImporter,
