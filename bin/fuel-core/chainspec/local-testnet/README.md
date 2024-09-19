@@ -14,7 +14,7 @@
 
 ### Gas costs
 
-The gas costs was created from the [benchmarks_fuel_core_0_30_0.json](benchmarks_fuel_core_0_30_0.json) benchmark results.
+The gas costs was created from the [benchmarks_fuel_core_0_35_0.json](benchmarks_fuel_core_0_35_0.json) benchmark results.
 The `new_storage_per_byte` is manually set to be `63`.
 The `gtf` is manually set to be `13`.
 The "jmpb", "jmpf", "jneb", "jnef", "jnzb", "jnzf" is manually set to be the same price as "jnei".
