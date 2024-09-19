@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -12,10 +13,21 @@ use fuel_core_types::{
         Bytes32,
         ConsensusParameters,
         ContractId,
+        Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
     fuel_vm::interpreter::Memory,
+    services::{
+        block_importer::SharedImportResult,
+        p2p::{
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            NetworkData,
+            PeerId,
+        },
+    },
     tai64::Tai64,
 };
 
@@ -25,6 +37,11 @@ use crate::{
 };
 
 pub use fuel_core_storage::transactional::AtomicView;
+
+pub trait BlockImporter: Send + Sync {
+    /// Wait until the next block is available
+    fn block_events(&self) -> BoxStream<SharedImportResult>;
+}
 
 /// Trait for getting the latest consensus parameters.
 #[cfg_attr(feature = "test-helpers", mockall::automock)]
@@ -84,4 +101,36 @@ pub trait WasmChecker {
         &self,
         wasm_root: &Bytes32,
     ) -> Result<(), WasmValidityError>;
+}
+
+#[async_trait::async_trait]
+pub trait P2P: Send + Sync {
+    type GossipedTransaction: NetworkData<Transaction>;
+
+    // Gossip broadcast a transaction inserted via API.
+    fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
+
+    /// Creates a stream that is filled with the peer_id when they subscribe to
+    /// our transactions gossip.
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
+
+    /// Creates a stream of next transactions gossiped from the network.
+    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
+
+    // Report the validity of a transaction received from the network.
+    fn notify_gossip_transaction_validity(
+        &self,
+        message_info: GossipsubMessageInfo,
+        validity: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()>;
+
+    // Asks the network to gather all tx ids of a specific peer
+    async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
+
+    // Asks the network to gather specific transactions from a specific peer
+    async fn request_txs(
+        &self,
+        peer_id: PeerId,
+        tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>>;
 }

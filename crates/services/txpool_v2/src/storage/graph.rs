@@ -24,7 +24,10 @@ use fuel_core_types::{
         TxId,
         UtxoId,
     },
-    services::txpool::PoolTransaction,
+    services::txpool::{
+        ArcPoolTx,
+        PoolTransaction,
+    },
 };
 use petgraph::{
     graph::NodeIndex,
@@ -82,7 +85,7 @@ impl GraphStorage {
     fn remove_node_and_dependent_sub_graph(
         &mut self,
         root_id: NodeIndex,
-    ) -> Result<Vec<PoolTransaction>, Error> {
+    ) -> Result<RemovedTransactions, Error> {
         let Some(root) = self.graph.node_weight(root_id) else {
             return Ok(vec![])
         };
@@ -123,7 +126,7 @@ impl GraphStorage {
     fn remove_dependent_sub_graph(
         &mut self,
         root_id: NodeIndex,
-    ) -> Result<Vec<PoolTransaction>, Error> {
+    ) -> Result<RemovedTransactions, Error> {
         let dependents: Vec<_> = self
             .graph
             .neighbors_directed(root_id, petgraph::Direction::Outgoing)
@@ -264,7 +267,7 @@ impl Storage for GraphStorage {
 
     fn store_transaction(
         &mut self,
-        transaction: PoolTransaction,
+        transaction: ArcPoolTx,
         dependencies: &[Self::StorageIndex],
         collided_transactions: &[Self::StorageIndex],
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error> {

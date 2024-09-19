@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 
 use fuel_core_types::{
     fuel_tx::{
@@ -8,7 +11,10 @@ use fuel_core_types::{
         TxId,
     },
     fuel_vm::checked_transaction::Checked,
-    services::txpool::PoolTransaction,
+    services::txpool::{
+        ArcPoolTx,
+        PoolTransaction,
+    },
 };
 use tracing::instrument;
 
@@ -24,7 +30,10 @@ use crate::{
         Constraints,
         SelectionAlgorithm,
     },
-    storage::Storage,
+    storage::{
+        RemovedTransactions,
+        Storage,
+    },
     verifications::FullyVerifiedTx,
 };
 
@@ -78,7 +87,7 @@ where
     /// Each result is a list of transactions that were removed from the pool
     /// because of the insertion of the new transaction.
     #[instrument(skip(self))]
-    pub fn insert(&mut self, tx: PoolTransaction) -> Result<Vec<PoolTransaction>, Error> {
+    pub fn insert(&mut self, tx: ArcPoolTx) -> Result<RemovedTransactions, Error> {
         let latest_view = self
             .persistent_storage_provider
             .latest_view()
@@ -145,7 +154,7 @@ where
     pub fn extract_transactions_for_block(
         &mut self,
         max_gas: u64,
-    ) -> Result<Vec<PoolTransaction>, Error> {
+    ) -> Result<Vec<ArcPoolTx>, Error> {
         self.selection_algorithm
             .gather_best_txs(Constraints { max_gas }, &self.storage)?
             .into_iter()
@@ -162,15 +171,35 @@ where
             .collect()
     }
 
-    /// Prune transactions from the pool.
-    pub fn prune(&mut self) -> Result<Vec<PoolTransaction>, Error> {
-        Ok(vec![])
+    pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
+        Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
+            .map(|data| data.transaction.clone())
+            .ok()
     }
 
-    pub fn find_one(&self, tx_id: &TxId) -> Option<&PoolTransaction> {
-        Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
-            .map(|data| &data.transaction)
-            .ok()
+    pub fn contains(&self, tx_id: &TxId) -> bool {
+        self.tx_id_to_storage_id.contains_key(tx_id)
+    }
+
+    pub fn iter_tx_ids(&self) -> impl Iterator<Item = &TxId> {
+        self.tx_id_to_storage_id.keys()
+    }
+
+    /// Remove transaction but keep its dependents.
+    /// The dependents become exeuctables.
+    pub fn remove_committed_txs(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {
+        for tx_id in tx_ids {
+            if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
+                let dependents = self.storage.get_dependents(storage_id)?;
+                let storage_data = self.storage.remove_transaction(storage_id)?;
+                self.selection_algorithm
+                    .new_executable_transactions(dependents, &self.storage)?;
+                self.update_components_and_caches_on_removal(
+                    &[storage_data.transaction],
+                )?;
+            }
+        }
+        Ok(())
     }
 
     fn check_pool_is_not_full(&self) -> Result<(), Error> {
@@ -198,7 +227,7 @@ where
 
     fn update_components_and_caches_on_removal(
         &mut self,
-        removed_transactions: &Vec<PoolTransaction>,
+        removed_transactions: &[ArcPoolTx],
     ) -> Result<(), Error> {
         for tx in removed_transactions {
             self.collision_manager.on_removed_transaction(tx)?;

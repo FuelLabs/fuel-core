@@ -9,6 +9,7 @@ mod pool;
 mod ports;
 mod selection_algorithms;
 mod service;
+mod shared_state;
 mod storage;
 mod verifications;
 
@@ -21,5 +22,5 @@ use fuel_core_types::fuel_asm::Word;
 pub use service::{
     new_service,
     Service,
-    SharedState,
 };
+pub use shared_state::SharedState;

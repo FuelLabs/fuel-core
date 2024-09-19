@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2131](https://github.com/FuelLabs/fuel-core/pull/2131): Add flow in TxPool in order to ask to newly connected peers to share their transaction pool
+- [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module.
+- [2193](https://github.com/FuelLabs/fuel-core/pull/2193): Insertion in PoolV2 and tests refactoring
+- [2216](https://github.com/FuelLabs/fuel-core/pull/2216): Add more function to the state and task of TxPoolV2 to handle the future interactions with others modules (PoA, BlockProducer, BlockImporter and P2P)
+
+
+### Changed
+
+#### Breaking
+- [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
+- [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
+
 ## [Version 0.36.0]
 
 ### Added
@@ -14,8 +27,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2188](https://github.com/FuelLabs/fuel-core/pull/2188): Added the new variant `V2` for the `ConsensusParameters` which contains the new `block_transaction_size_limit` parameter.
 - [2163](https://github.com/FuelLabs/fuel-core/pull/2163): Added runnable task for fetching block committer data.
 - [2204](https://github.com/FuelLabs/fuel-core/pull/2204): Added `dnsaddr` resolution for TLD without suffixes.
-- [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module.
-- [2193](https://github.com/FuelLabs/fuel-core/pull/2193): Insertion in PoolV2 and tests refactoring
 
 ### Changed
 
