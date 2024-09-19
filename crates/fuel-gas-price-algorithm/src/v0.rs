@@ -3,7 +3,7 @@ use std::{
     num::NonZeroU64,
 };
 
-use crate::cumulative_percentage_change;
+use crate::utils::cumulative_percentage_change;
 
 #[cfg(test)]
 mod tests;
