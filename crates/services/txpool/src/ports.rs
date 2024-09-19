@@ -14,6 +14,7 @@ use fuel_core_types::{
         Bytes32,
         ConsensusParameters,
         Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::{
@@ -28,6 +29,7 @@ use fuel_core_types::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             NetworkData,
+            PeerId,
         },
     },
 };
@@ -36,11 +38,16 @@ use std::{
     sync::Arc,
 };
 
+#[async_trait::async_trait]
 pub trait PeerToPeer: Send + Sync {
     type GossipedTransaction: NetworkData<Transaction>;
 
     // Gossip broadcast a transaction inserted via API.
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
+
+    /// Creates a stream that is filled with the peer_id when they subscribe to
+    /// our transactions gossip.
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
 
     /// Creates a stream of next transactions gossiped from the network.
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
@@ -51,6 +58,16 @@ pub trait PeerToPeer: Send + Sync {
         message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()>;
+
+    // Asks the network to gather all tx ids of a specific peer
+    async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
+
+    // Asks the network to gather specific transactions from a specific peer
+    async fn request_txs(
+        &self,
+        peer_id: PeerId,
+        tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>>;
 }
 
 pub trait BlockImporter: Send + Sync {

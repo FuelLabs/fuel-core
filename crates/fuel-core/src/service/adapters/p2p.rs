@@ -1,18 +1,26 @@
-use super::BlockImporterAdapter;
+use super::{
+    BlockImporterAdapter,
+    TxPoolAdapter,
+};
 use crate::database::OnChainIterableKeyValueView;
 use fuel_core_p2p::ports::{
     BlockHeightImporter,
     P2pDb,
+    TxPool,
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
+use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     blockchain::{
         consensus::Genesis,
         SealedBlockHeader,
     },
     fuel_types::BlockHeight,
-    services::p2p::Transactions,
+    services::p2p::{
+        NetworkableTransactionPool,
+        Transactions,
+    },
 };
 use std::ops::Range;
 
@@ -47,5 +55,23 @@ impl BlockHeightImporter for BlockImporterAdapter {
                 .filter_map(|result| result.ok())
                 .map(|result| *result.sealed_block.entity.header().height()),
         )
+    }
+}
+
+impl TxPool for TxPoolAdapter {
+    fn get_tx_ids(&self, max_txs: usize) -> Vec<TxId> {
+        self.service.get_tx_ids(max_txs)
+    }
+
+    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<NetworkableTransactionPool>> {
+        self.service
+            .find(tx_ids)
+            .into_iter()
+            .map(|tx_info| {
+                tx_info.map(|tx| {
+                    NetworkableTransactionPool::PoolTransaction(tx.tx().clone())
+                })
+            })
+            .collect()
     }
 }
