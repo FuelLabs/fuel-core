@@ -11,17 +11,158 @@ use fuel_core_storage::rand::{
     prelude::StdRng,
     SeedableRng,
 };
-use fuel_core_types::fuel_tx::{
-    field::Inputs,
-    AssetId,
-    Transaction,
-    TransactionBuilder,
-    UniqueIdentifier,
+use fuel_core_types::{
+    fuel_tx::{
+        field::Inputs,
+        AssetId,
+        Transaction,
+        TransactionBuilder,
+        UniqueIdentifier,
+    },
+    fuel_types::ChainId,
 };
 use std::{
     ops::Deref,
     time::Duration,
 };
+use tokio::sync::Notify;
+
+#[tokio::test]
+async fn test_new_subscription_p2p() {
+    let mut ctx_builder = TestContextBuilder::new();
+    let tx1 = ctx_builder.setup_script_tx(10);
+    let tx2 = ctx_builder.setup_script_tx(100);
+
+    // Given
+    let wait_notification = Arc::new(Notify::new());
+    let notifier = wait_notification.clone();
+    let mut p2p = MockP2P::new();
+    p2p.expect_gossiped_transaction_events()
+        .returning(|| Box::pin(fuel_core_services::stream::pending()));
+    p2p.expect_subscribe_new_peers().returning(|| {
+        // Return a boxstream that yield one element
+        Box::pin(fuel_core_services::stream::unfold(0, |state| async move {
+            if state == 0 {
+                Some((PeerId::from(vec![1, 2]), state + 1))
+            } else {
+                None
+            }
+        }))
+    });
+    let tx1_clone = tx1.clone();
+    let tx2_clone = tx2.clone();
+    p2p.expect_request_tx_ids().return_once(move |peer_id| {
+        assert_eq!(peer_id, PeerId::from(vec![1, 2]));
+        Ok(vec![
+            tx1_clone.id(&ChainId::default()),
+            tx2_clone.id(&ChainId::default()),
+        ])
+    });
+    let tx1_clone = tx1.clone();
+    let tx2_clone = tx2.clone();
+    p2p.expect_request_txs()
+        .return_once(move |peer_id, tx_ids| {
+            assert_eq!(peer_id, PeerId::from(vec![1, 2]));
+            assert_eq!(
+                tx_ids,
+                vec![
+                    tx1_clone.id(&ChainId::default()),
+                    tx2_clone.id(&ChainId::default())
+                ]
+            );
+            notifier.notify_one();
+            Ok(vec![Some(tx1_clone), Some(tx2_clone)])
+        });
+    ctx_builder.with_p2p(p2p);
+    let ctx = ctx_builder.build();
+    let service = ctx.service();
+
+    service.start_and_await().await.unwrap();
+
+    wait_notification.notified().await;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    // When
+    let out = service.shared.find(vec![
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
+    ]);
+
+    // Then
+    assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
+    for (tx_pool, tx_expected) in out.into_iter().zip(&[tx1, tx2]) {
+        assert!(tx_pool.is_some(), "Tx should be some:{tx_pool:?}");
+        assert_eq!(
+            tx_pool.unwrap().id(),
+            tx_expected.id(&Default::default()),
+            "Found tx id didn't match"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_new_subscription_p2p_ask_subset_of_transactions() {
+    let mut ctx_builder = TestContextBuilder::new();
+    let tx1 = ctx_builder.setup_script_tx(10);
+    let tx2 = ctx_builder.setup_script_tx(100);
+
+    // Given
+    let wait_notification = Arc::new(Notify::new());
+    let notifier = wait_notification.clone();
+    let mut p2p = MockP2P::new();
+    p2p.expect_gossiped_transaction_events()
+        .returning(|| Box::pin(fuel_core_services::stream::pending()));
+    p2p.expect_subscribe_new_peers().returning(|| {
+        // Return a boxstream that yield one element
+        Box::pin(fuel_core_services::stream::unfold(0, |state| async move {
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+            if state == 0 {
+                Some((PeerId::from(vec![1, 2]), state + 1))
+            } else {
+                None
+            }
+        }))
+    });
+    let tx1_clone = tx1.clone();
+    let tx2_clone = tx2.clone();
+    p2p.expect_request_tx_ids().returning(move |peer_id| {
+        assert_eq!(peer_id, PeerId::from(vec![1, 2]));
+        Ok(vec![
+            tx1_clone.id(&ChainId::default()),
+            tx2_clone.id(&ChainId::default()),
+        ])
+    });
+    let tx2_clone = tx2.clone();
+    p2p.expect_request_txs()
+        .return_once(move |peer_id, tx_ids| {
+            assert_eq!(peer_id, PeerId::from(vec![1, 2]));
+            assert_eq!(tx_ids, vec![tx2_clone.id(&ChainId::default())]);
+            notifier.notify_one();
+            Ok(vec![Some(tx2_clone)])
+        });
+    ctx_builder.with_p2p(p2p);
+    let ctx = ctx_builder.build();
+    let service = ctx.service();
+
+    service.start_and_await().await.unwrap();
+    service.shared.insert(vec![Arc::new(tx1.clone())]).await;
+
+    wait_notification.notified().await;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+    let out = service.shared.find(vec![
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
+    ]);
+    assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
+    for (tx_pool, tx_expected) in out.into_iter().zip(&[tx1, tx2]) {
+        assert!(tx_pool.is_some(), "Tx should be some:{tx_pool:?}");
+        assert_eq!(
+            tx_pool.unwrap().id(),
+            tx_expected.id(&Default::default()),
+            "Found tx id didn't match"
+        );
+    }
+}
 
 #[tokio::test]
 async fn can_insert_from_p2p() {
