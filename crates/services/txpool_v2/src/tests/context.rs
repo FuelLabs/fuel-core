@@ -54,13 +54,13 @@ use crate::{
     error::Error,
     pool::Pool,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    shared_state::{
+    shared_state::TxPool,
+    storage::{
+        graph::{
+            GraphConfig,
+            GraphStorage,
+        },
         RemovedTransactions,
-        TxPool,
-    },
-    storage::graph::{
-        GraphConfig,
-        GraphStorage,
     },
     tests::mocks::{
         MockDBProvider,
@@ -163,7 +163,7 @@ impl TestPoolUniverse {
                 MemoryInstance::new(),
             )
             .await?;
-            pool.write().insert(tx)
+            pool.write().insert(Arc::new(tx))
         } else {
             panic!("Pool needs to be built first");
         }
@@ -186,7 +186,7 @@ impl TestPoolUniverse {
                 MemoryInstance::new(),
             )
             .await?;
-            pool.write().insert(tx)
+            pool.write().insert(Arc::new(tx))
         } else {
             panic!("Pool needs to be built first");
         }
@@ -210,7 +210,7 @@ impl TestPoolUniverse {
                 MemoryInstance::new(),
             )
             .await?;
-            pool.write().insert(tx)
+            pool.write().insert(Arc::new(tx))
         } else {
             panic!("Pool needs to be built first");
         }

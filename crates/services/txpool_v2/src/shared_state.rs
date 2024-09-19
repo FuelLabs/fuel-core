@@ -12,7 +12,10 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             PeerId,
         },
-        txpool::PoolTransaction,
+        txpool::{
+            ArcPoolTx,
+            PoolTransaction,
+        },
     },
 };
 use parking_lot::RwLock;
@@ -34,11 +37,13 @@ use crate::{
         P2P as P2PTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    storage::graph::GraphStorage,
+    storage::{
+        graph::GraphStorage,
+        RemovedTransactions,
+    },
     verifications::perform_all_verifications,
 };
 
-pub type RemovedTransactions = Vec<PoolTransaction>;
 pub type InsertionResult = Result<RemovedTransactions, Error>;
 
 pub type TxPool<PSProvider> = Arc<
@@ -133,7 +138,7 @@ where
 {
     pub fn insert(
         &self,
-        transactions: Vec<Transaction>,
+        transactions: Vec<Arc<Transaction>>,
         from_peer_info: Option<GossipsubMessageInfo>,
     ) -> Result<Vec<InsertionResult>, Error> {
         let current_height = *self.current_height.read();
@@ -147,9 +152,11 @@ where
                 let params = params.clone();
                 let from_peer_info = from_peer_info.clone();
                 async move {
+                    let tx_clone = Arc::clone(&transaction);
                     // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
                     let Ok(checked_tx) = perform_all_verifications(
-                        transaction,
+                        // TODO: This should be removed if the checked transactions can work with Arc in it (see https://github.com/FuelLabs/fuel-vm/issues/831)
+                        Arc::unwrap_or_clone(transaction),
                         shared_state.pool.clone(),
                         current_height,
                         &params,
@@ -168,14 +175,18 @@ where
                         }
                         return;
                     };
+                    let tx = Arc::new(checked_tx);
 
                     let result = {
                         let mut pool = shared_state.pool.write();
                         // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)
-                        pool.insert(checked_tx)
+                        pool.insert(tx)
                     };
                     if result.is_ok() {
                         shared_state.new_txs_notifier.notify_waiters();
+                        if let Err(e) = shared_state.p2p.broadcast_transaction(tx_clone) {
+                            tracing::error!("Failed to broadcast transaction: {}", e);
+                        }
                     }
                     match (from_peer_info, result) {
                         (Some(from_peer_info), Ok(_)) => {
@@ -221,7 +232,7 @@ where
                 if tx_ids_to_ask.is_empty() {
                     return;
                 }
-                let txs: Vec<Transaction> = shared_state
+                let txs: Vec<Arc<Transaction>> = shared_state
                     .p2p
                     .request_txs(peer_id.clone(), tx_ids_to_ask)
                     .await
@@ -235,6 +246,7 @@ where
                     .unwrap_or_default()
                     .into_iter()
                     .flatten()
+                    .map(Arc::new)
                     .collect();
                 if txs.is_empty() {
                     return;
@@ -245,10 +257,7 @@ where
         });
     }
 
-    pub fn select_transactions(
-        &self,
-        max_gas: u64,
-    ) -> Result<Vec<PoolTransaction>, Error> {
+    pub fn select_transactions(&self, max_gas: u64) -> Result<Vec<ArcPoolTx>, Error> {
         self.pool.write().extract_transactions_for_block(max_gas)
     }
 
@@ -261,6 +270,23 @@ where
         tx_ids
             .into_iter()
             .filter(|tx_id| !pool.contains(tx_id))
+            .collect()
+    }
+
+    pub fn get_tx_ids(&self, max_txs: usize) -> Vec<TxId> {
+        self.pool
+            .read()
+            .iter_tx_ids()
+            .take(max_txs)
+            .copied()
+            .collect()
+    }
+
+    pub fn get_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<ArcPoolTx>> {
+        let pool = self.pool.read();
+        tx_ids
+            .into_iter()
+            .map(|tx_id| pool.find_one(&tx_id))
             .collect()
     }
 }

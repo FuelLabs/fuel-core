@@ -281,7 +281,7 @@ where
     ) -> anyhow::Result<()> {
         self.shared_state
             .insert(
-                vec![tx],
+                vec![Arc::new(tx)],
                 Some(GossipsubMessageInfo {
                     message_id,
                     peer_id,

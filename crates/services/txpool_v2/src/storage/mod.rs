@@ -9,14 +9,18 @@ use crate::{
     error::Error,
     ports::TxPoolPersistentStorage,
 };
-use fuel_core_types::services::txpool::PoolTransaction;
+use fuel_core_types::services::txpool::{
+    ArcPoolTx,
+    PoolTransaction,
+};
 
 pub mod graph;
 
 #[derive(Debug)]
 pub struct StorageData {
     /// The transaction.
-    pub transaction: PoolTransaction,
+    /// We are forced to take an arc here as we need to be able to send a transaction that still exists here to p2p and API.
+    pub transaction: ArcPoolTx,
     /// The cumulative tip of a transaction and all of its children.
     pub dependents_cumulative_tip: u64,
     /// The cumulative gas of a transaction and all of its children.
@@ -27,7 +31,7 @@ pub struct StorageData {
     pub submitted_time: Instant,
 }
 
-pub type RemovedTransactions = Vec<PoolTransaction>;
+pub type RemovedTransactions = Vec<ArcPoolTx>;
 
 /// The storage trait is responsible for storing transactions.
 /// It has to manage somehow the dependencies between transactions.
@@ -39,7 +43,7 @@ pub trait Storage {
     /// Returns the index of the stored transaction and the transactions that were removed from the storage in favor of the new transaction.
     fn store_transaction(
         &mut self,
-        transaction: PoolTransaction,
+        transaction: ArcPoolTx,
         dependencies: &[Self::StorageIndex],
         collided_transactions: &[Self::StorageIndex],
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
