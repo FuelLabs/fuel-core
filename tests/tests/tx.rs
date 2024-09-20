@@ -291,6 +291,8 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
 #[tokio::test]
 async fn transaction_selector_can_select_a_transaction_that_fits_the_block_size_limit() {
     let mut rng = rand::rngs::StdRng::from_entropy();
+
+    // Create 5 transactions of decreasing sizes.
     let arb_tx_count = 5;
     let transactions: Vec<(_, _)> = (0..arb_tx_count)
         .map(|i| {
