@@ -79,13 +79,13 @@ where
         &mut self,
         transactions: Vec<PoolTransaction>,
     ) -> Result<Vec<Result<Vec<PoolTransaction>, Error>>, Error> {
+        let latest_view = self
+            .persistent_storage_provider
+            .latest_view()
+            .map_err(|e| Error::Database(format!("{:?}", e)))?;
         Ok(transactions
             .into_iter()
             .map(|tx| {
-                let latest_view = self
-                    .persistent_storage_provider
-                    .latest_view()
-                    .map_err(|e| Error::Database(format!("{:?}", e)))?;
                 #[cfg(test)]
                 let tx_id = tx.id();
                 self.check_pool_is_not_full()?;
@@ -96,7 +96,6 @@ where
                     .collect_colliding_transactions(&tx, &self.storage)?;
                 let dependencies = self.storage.collect_dependencies_transactions(
                     &tx,
-                    collisions.reasons,
                     &latest_view,
                     self.config.utxo_validation,
                 )?;
@@ -104,7 +103,7 @@ where
                 let (storage_id, removed_transactions) = self.storage.store_transaction(
                     tx,
                     dependencies,
-                    collisions.colliding_txs,
+                    collisions.colliding_txs(),
                 )?;
                 #[cfg(test)]
                 {

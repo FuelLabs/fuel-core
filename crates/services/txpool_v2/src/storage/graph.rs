@@ -1,5 +1,8 @@
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     time::Instant,
 };
 
@@ -266,7 +269,7 @@ impl Storage for GraphStorage {
         &mut self,
         transaction: PoolTransaction,
         dependencies: Vec<Self::StorageIndex>,
-        collided_transactions: Vec<Self::StorageIndex>,
+        collided_transactions: &[Self::StorageIndex],
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error> {
         let tx_id = transaction.id();
 
@@ -274,7 +277,7 @@ impl Storage for GraphStorage {
         let mut removed_transactions = vec![];
         for collision in collided_transactions {
             removed_transactions
-                .extend(self.remove_node_and_dependent_sub_graph(collision)?);
+                .extend(self.remove_node_and_dependent_sub_graph(*collision)?);
         }
         // Add the new transaction to the graph and update the others in consequence
         let tip = transaction.tip();
@@ -355,7 +358,6 @@ impl Storage for GraphStorage {
     fn collect_dependencies_transactions(
         &self,
         transaction: &PoolTransaction,
-        collisions: std::collections::HashSet<CollisionReason>,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<Vec<Self::StorageIndex>, Error> {
@@ -364,12 +366,9 @@ impl Storage for GraphStorage {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // If the utxo collides it means we already made the verifications
                     // If the utxo is created in the pool, need to check if we don't spend too much (utxo can still be unresolved)
                     // If the utxo_validation is active, we need to check if the utxo exists in the database and is valid
-                    if collisions.contains(&CollisionReason::Coin(*utxo_id)) {
-                        continue;
-                    } else if let Some(node_id) = self.coins_creators.get(utxo_id) {
+                    if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         let Some(node) = self.graph.node_weight(*node_id) else {
                             return Err(Error::Storage(format!(
                                 "Node with id {:?} not found",

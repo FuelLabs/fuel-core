@@ -41,7 +41,7 @@ pub trait Storage {
         &mut self,
         transaction: PoolTransaction,
         dependencies: Vec<Self::StorageIndex>,
-        collided_transactions: Vec<Self::StorageIndex>,
+        collided_transactions: &[Self::StorageIndex],
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
 
     /// Get the storage data by its index.
@@ -65,7 +65,6 @@ pub trait Storage {
     fn collect_dependencies_transactions(
         &self,
         transaction: &PoolTransaction,
-        collisions: HashSet<CollisionReason>,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<Vec<Self::StorageIndex>, Error>;
