@@ -6,7 +6,10 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource,
+        executor::{
+            OnceTransactionsSource,
+            MAX_TX_COUNT,
+        },
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
@@ -2981,6 +2984,42 @@ mod tests {
             skipped_transactions[0].1,
             ExecutorError::InvalidTransaction(_)
         ));
+    }
+
+    #[test]
+    fn block_producer_never_includes_more_than_max_tx_count_transactions() {
+        let block_height = 1u32;
+        let block_da_height = 2u64;
+
+        let mut consensus_parameters = ConsensusParameters::default();
+
+        // Given
+        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        consensus_parameters.set_block_gas_limit(u64::MAX);
+        let config = Config {
+            consensus_parameters,
+            ..Default::default()
+        };
+
+        // When
+        let block = test_block(
+            block_height.into(),
+            block_da_height.into(),
+            transactions_in_tx_source,
+        );
+        let partial_fuel_block: PartialFuelBlock = block.into();
+
+        let producer = create_executor(Database::default(), config);
+        let (result, _) = producer
+            .produce_without_commit(partial_fuel_block)
+            .unwrap()
+            .into();
+
+        // Then
+        assert_eq!(
+            result.block.transactions().len(),
+            (MAX_TX_COUNT as usize + 1)
+        );
     }
 
     #[cfg(feature = "relayer")]
