@@ -70,11 +70,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
         )],
         [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
-        Some(Config {
-            debug: true,
-            utxo_validation: false,
-            ..Config::local_node()
-        }),
+        None,
     )
     .await;
 
