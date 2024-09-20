@@ -183,7 +183,9 @@ where
 
         let source = tx_source(height);
 
-        let header = self.new_header(height, block_time).await?;
+        let header = self
+            .new_header_with_new_da_height(height, block_time)
+            .await?;
 
         let gas_price = self.calculate_gas_price().await?;
 
@@ -268,7 +270,6 @@ where
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
 {
-    // TODO: Support custom `block_time` for `dry_run`.
     /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
@@ -276,18 +277,26 @@ where
         &self,
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
+        time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let view = self.view_provider.latest_view()?;
-        let height = height.unwrap_or_else(|| {
-            view.latest_height()
-                .unwrap_or_default()
+        let latest_height = view.latest_height().unwrap_or_default();
+
+        let simulated_height = height.unwrap_or_else(|| {
+            latest_height
                 .succ()
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let header = self._new_header(height, Tai64::now())?;
+        let simulated_time = time.unwrap_or_else(|| {
+            view.get_block(&latest_height)
+                .map(|block| block.header().time())
+                .unwrap_or(Tai64::UNIX_EPOCH)
+        });
+
+        let header = self.new_header(simulated_height, simulated_time)?;
 
         let gas_price = if let Some(inner) = gas_price {
             inner
@@ -341,12 +350,12 @@ where
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Create the header for a new block at the provided height
-    async fn new_header(
+    async fn new_header_with_new_da_height(
         &self,
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self._new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time)?;
         let previous_da_height = block_header.da_height;
         let gas_limit = self
             .consensus_parameters_provider
@@ -369,7 +378,7 @@ where
         block_time: Tai64,
         da_height: DaBlockHeight,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self._new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time)?;
         block_header.application.da_height = da_height;
         Ok(block_header)
     }
@@ -421,7 +430,7 @@ where
         }
     }
 
-    fn _new_header(
+    fn new_header(
         &self,
         height: BlockHeight,
         block_time: Tai64,
