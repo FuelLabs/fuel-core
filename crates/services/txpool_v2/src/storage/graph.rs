@@ -120,13 +120,14 @@ impl GraphStorage {
             root.dependents_cumulative_gas.saturating_sub(gas_reduction);
         root.dependents_cumulative_tip =
             root.dependents_cumulative_tip.saturating_sub(tip_reduction);
-        root.number_txs_in_chain = root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
+        root.number_txs_in_chain =
+            root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
         for dependency in self.get_dependencies(root_id)? {
             self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
                 dependency,
                 gas_reduction,
                 tip_reduction,
-                number_txs_in_chain
+                number_txs_in_chain,
             )?;
         }
         Ok(())
@@ -142,7 +143,8 @@ impl GraphStorage {
                 root_id
             )));
         };
-        root.number_txs_in_chain = root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
+        root.number_txs_in_chain =
+            root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
         for dependency in self.get_dependents_inner(&root_id)? {
             self.reduce_dependents_chain_count(dependency, number_txs_in_chain)?;
         }
@@ -339,7 +341,7 @@ impl Storage for GraphStorage {
             dependents_cumulative_tip: tip,
             dependents_cumulative_gas: gas,
             transaction,
-            number_txs_in_chain: whole_tx_chain.len().saturating_add(1)
+            number_txs_in_chain: whole_tx_chain.len().saturating_add(1),
         };
 
         // Add the transaction to the graph
