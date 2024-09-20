@@ -2,6 +2,9 @@ use crate::database::database_description::DatabaseDescription;
 use fuel_core_storage::kv_store::StorageColumn;
 
 pub const HISTORY_COLUMN_ID: u32 = u32::MAX / 2;
+// Avoid conflicts with HistoricalDuplicateColumn indexes, which are
+// in decreasing order starting from HISTORY_COLUMN_ID - 1.
+pub const MIGRATED_HISTORY_KEYS_COLUMN_ID: u32 = HISTORY_COLUMN_ID + 1;
 
 #[derive(Debug, Copy, Clone, enum_iterator::Sequence)]
 pub enum Column<Description>
@@ -11,6 +14,7 @@ where
     OriginalColumn(Description::Column),
     HistoricalDuplicateColumn(Description::Column),
     HistoryColumn,
+    MigratedHistoryKeysColumn,
 }
 
 impl<Description> strum::EnumCount for Column<Description>
@@ -33,6 +37,9 @@ where
                 format!("history_{}", c.name())
             }
             Column::HistoryColumn => "modifications_history".to_string(),
+            Column::MigratedHistoryKeysColumn => {
+                "migrated_history_keys_column".to_string()
+            }
         }
     }
 
@@ -43,6 +50,7 @@ where
                 historical_duplicate_column_id(c.id())
             }
             Column::HistoryColumn => HISTORY_COLUMN_ID,
+            Column::MigratedHistoryKeysColumn => MIGRATED_HISTORY_KEYS_COLUMN_ID,
         }
     }
 }
@@ -82,6 +90,7 @@ where
                 Some(Description::prefix(c).unwrap_or(0).saturating_add(8)) // `u64::to_be_bytes`
             }
             Column::HistoryColumn => Some(8),
+            Column::MigratedHistoryKeysColumn => Some(8),
         }
     }
 }
