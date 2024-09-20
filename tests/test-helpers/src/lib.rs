@@ -3,15 +3,22 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
+    fuel_asm::{
+        op,
+        RegId,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::{
         Output,
+        Transaction,
         TransactionBuilder,
     },
 };
 use rand::{
-    prelude::StdRng,
+    rngs::StdRng,
+    CryptoRng,
     Rng,
+    RngCore,
 };
 
 pub mod builder;
@@ -24,6 +31,31 @@ pub async fn send_graph_ql_query(url: &str, query: &str) -> String {
     let response = client.post(url).json(&map).send().await.unwrap();
 
     response.text().await.unwrap()
+}
+
+pub fn make_tx(
+    rng: &mut (impl CryptoRng + RngCore),
+    i: u64,
+    max_gas_limit: u64,
+) -> Transaction {
+    TransactionBuilder::script(
+        op::ret(RegId::ONE).to_bytes().into_iter().collect(),
+        vec![],
+    )
+    .script_gas_limit(max_gas_limit / 2)
+    .add_unsigned_coin_input(
+        SecretKey::random(rng),
+        rng.gen(),
+        1000 + i,
+        Default::default(),
+        Default::default(),
+    )
+    .add_output(Output::Change {
+        amount: 0,
+        asset_id: Default::default(),
+        to: rng.gen(),
+    })
+    .finalize_as_transaction()
 }
 
 pub async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
