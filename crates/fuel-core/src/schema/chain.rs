@@ -78,7 +78,6 @@ pub enum TxParametersVersion {
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum ConsensusParametersVersion {
     V1,
-    V2,
 }
 
 #[derive(Union)]

@@ -211,7 +211,6 @@ type ConsensusParametersPurpose {
 
 enum ConsensusParametersVersion {
 	V1
-	V2
 }
 
 type Contract {
