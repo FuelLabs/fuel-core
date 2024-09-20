@@ -139,7 +139,9 @@ where
             )?
             .into_iter()
             .map(|storage_id| {
-                let storage_data = self.storage.remove_transaction_without_dependencies(storage_id)?;
+                let storage_data = self
+                    .storage
+                    .remove_transaction_without_dependencies(storage_id)?;
                 self.collision_manager
                     .on_removed_transaction(&storage_data.transaction)?;
                 self.selection_algorithm
