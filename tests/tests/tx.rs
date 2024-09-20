@@ -34,6 +34,9 @@ use fuel_core_types::{
         *,
     },
     fuel_types::ChainId,
+    fuel_vm::ProgramState,
+    services::executor::TransactionExecutionResult,
+    tai64::Tai64,
 };
 use futures::StreamExt;
 use itertools::Itertools;
@@ -396,6 +399,63 @@ async fn submit_and_await_status() {
     ));
     let final_status = status_stream.next().await.unwrap().unwrap();
     assert!(matches!(final_status, TransactionStatus::Success { .. }));
+}
+
+#[tokio::test]
+async fn dry_run_transaction_should_use_latest_block_time() {
+    // Given
+    let start_time = Tai64::from_unix(1337);
+    let block_production_interval_seconds = 10;
+    let number_of_blocks_to_produce_manually = 5;
+
+    let mut config = Config::local_node();
+    config.block_production = Trigger::Interval {
+        block_time: Duration::from_secs(block_production_interval_seconds),
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let gas_limit = 1_000_000;
+    let maturity = Default::default();
+
+    let get_block_timestamp_script =
+        [op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
+
+    let script: Vec<u8> = get_block_timestamp_script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(gas_limit)
+        .maturity(maturity)
+        .add_random_fee_input()
+        .finalize_as_transaction();
+
+    // When
+    client
+        .produce_blocks(number_of_blocks_to_produce_manually, Some(start_time.0))
+        .await
+        .expect("failed to produce blocks");
+
+    let TransactionExecutionResult::Success {
+        result: Some(ProgramState::Return(returned_timestamp)),
+        ..
+    } = client
+        .dry_run(&[tx.clone()])
+        .await
+        .expect("failed to dry run")[0]
+        .result
+    else {
+        panic!("unexpected execution result from dry run")
+    };
+
+    // Then
+    let expected_returned_timestamp = start_time.0
+        + block_production_interval_seconds
+            * number_of_blocks_to_produce_manually.saturating_sub(1) as u64;
+
+    assert_eq!(expected_returned_timestamp, returned_timestamp);
 }
 
 #[ignore]

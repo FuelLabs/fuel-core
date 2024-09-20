@@ -162,6 +162,10 @@ use alloc::{
     vec::Vec,
 };
 
+/// The maximum amount of transactions that can be included in a block,
+/// excluding the mint transaction.
+pub const MAX_TX_COUNT: u16 = u16::MAX.saturating_sub(1);
+
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
 }
@@ -186,9 +190,17 @@ impl OnceTransactionsSource {
 }
 
 impl TransactionsSource for OnceTransactionsSource {
-    fn next(&self, _: u64, _: u16, _: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(
+        &self,
+        _: u64,
+        transactions_limit: u16,
+        _: u64,
+    ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
-        core::mem::take(lock.as_mut())
+        let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
+        // Avoid panicking if we request more transactions than there are in the vector
+        let transactions_limit = (transactions_limit as usize).min(transactions.len());
+        transactions.drain(..transactions_limit).collect()
     }
 }
 
@@ -574,8 +586,11 @@ where
         let mut remaining_block_transaction_size_limit =
             block_transaction_size_limit.saturating_sub(data.used_size);
 
-        // TODO: Handle `remaining_tx_count` https://github.com/FuelLabs/fuel-core/issues/2114
-        let remaining_tx_count = u16::MAX;
+        // We allow at most u16::MAX transactions in a block, including the mint transaction.
+        // When processing l2 transactions, we must take into account transactions from the l1
+        // that have been included in the block already (stored in `data.tx_count`), as well
+        // as the final mint transaction.
+        let mut remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
 
         let mut regular_tx_iter = l2_tx_source
             .next(
@@ -584,6 +599,7 @@ where
                 remaining_block_transaction_size_limit,
             )
             .into_iter()
+            .take(remaining_tx_count as usize)
             .peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
@@ -609,7 +625,8 @@ where
                 }
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
-                    block_transaction_size_limit.saturating_sub(data.used_size)
+                    block_transaction_size_limit.saturating_sub(data.used_size);
+                remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
             }
 
             regular_tx_iter = l2_tx_source
@@ -619,6 +636,7 @@ where
                     remaining_block_transaction_size_limit,
                 )
                 .into_iter()
+                .take(remaining_tx_count as usize)
                 .peekable();
         }
 
