@@ -26,3 +26,26 @@ pub trait MetadataStorage: Send + Sync {
 pub trait GasPriceData: Send + Sync {
     fn latest_height(&self) -> Option<BlockHeight>;
 }
+
+pub struct GasPriceServiceConfig {
+    pub min_gas_price: u64,
+    pub starting_gas_price: u64,
+    pub gas_price_change_percent: u64,
+    pub gas_price_threshold_percent: u64,
+}
+
+impl GasPriceServiceConfig {
+    pub fn new(
+        min_gas_price: u64,
+        starting_gas_price: u64,
+        gas_price_change_percent: u64,
+        gas_price_threshold_percent: u64,
+    ) -> Self {
+        Self {
+            min_gas_price,
+            starting_gas_price,
+            gas_price_change_percent,
+            gas_price_threshold_percent,
+        }
+    }
+}

@@ -15,6 +15,7 @@ use fuel_core_gas_price_service::{
     },
     ports::{
         GasPriceData,
+        GasPriceServiceConfig,
         L2Data,
         MetadataStorage,
     },
@@ -37,9 +38,12 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-use crate::database::{
-    database_description::gas_price::GasPriceDatabase,
-    Database,
+use crate::{
+    database::{
+        database_description::gas_price::GasPriceDatabase,
+        Database,
+    },
+    service::Config,
 };
 
 #[cfg(test)]
@@ -93,6 +97,17 @@ impl MetadataStorage for Database<GasPriceDatabase> {
                 source_error: err.into(),
             })?;
         Ok(())
+    }
+}
+
+impl From<Config> for GasPriceServiceConfig {
+    fn from(value: Config) -> Self {
+        GasPriceServiceConfig::new(
+            value.min_gas_price,
+            value.starting_gas_price,
+            value.gas_price_change_percent,
+            value.gas_price_threshold_percent,
+        )
     }
 }
 

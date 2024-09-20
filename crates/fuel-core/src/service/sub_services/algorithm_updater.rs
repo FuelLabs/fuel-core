@@ -1,7 +1,4 @@
-use crate::service::{
-    adapters::ConsensusParametersProvider,
-    Config,
-};
+use crate::service::adapters::ConsensusParametersProvider;
 
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
@@ -27,6 +24,7 @@ use fuel_core_gas_price_service::{
     },
     ports::{
         GasPriceData,
+        GasPriceServiceConfig,
         L2Data,
         MetadataStorage,
     },
@@ -60,7 +58,7 @@ type Updater<GasPriceStore> = FuelGasPriceUpdater<
 >;
 
 pub struct InitializeTask<L2DataStoreView, GasPriceStore> {
-    pub config: Config,
+    pub config: GasPriceServiceConfig,
     pub genesis_block_height: BlockHeight,
     pub settings: ConsensusParametersProvider,
     pub gas_price_db: GasPriceStore,
@@ -80,7 +78,7 @@ where
     GasPriceStore: GasPriceData + MetadataStorage,
 {
     pub fn new(
-        config: Config,
+        config: GasPriceServiceConfig,
         genesis_block_height: BlockHeight,
         settings: ConsensusParametersProvider,
         block_stream: BoxStream<SharedImportResult>,
@@ -113,7 +111,10 @@ where
     }
 }
 
-fn get_default_metadata(config: &Config, latest_block_height: u32) -> UpdaterMetadata {
+fn get_default_metadata(
+    config: &GasPriceServiceConfig,
+    latest_block_height: u32,
+) -> UpdaterMetadata {
     UpdaterMetadata::V0(V0Metadata {
         new_exec_price: config.starting_gas_price.max(config.min_gas_price),
         min_exec_gas_price: config.min_gas_price,
@@ -191,7 +192,7 @@ where
 }
 
 pub fn get_synced_gas_price_updater<L2DataStore, L2DataStoreView, GasPriceStore>(
-    config: Config,
+    config: GasPriceServiceConfig,
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
     mut gas_price_db: GasPriceStore,
