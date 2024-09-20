@@ -14,7 +14,7 @@ exists on only a single uncompressed block.
 
 ### Fraud proofs
 
-Compressed block will start with 32 bytes of merkle root over all compression smts, followed by newly registered values along with their keys. Using an SMT provides flexibility around the algorithm we use to define keys without knowing how exactly values were chosen to be registered.
+Compressed block will contain a merkle root over all compression smts, followed by newly registered values along with their keys. Using an SMT provides flexibility around the algorithm we use to define keys without knowing how exactly values were chosen to be registered.
 
 Each registry also uses an SMT. Since the keys are three bytes long, the depth of the SMT is capped at 24 levels. 
 

@@ -36,14 +36,15 @@ use tables::RegistrationsPerTable;
 /// Compressed block, without the preceding version byte.
 #[derive(Clone, Serialize, Deserialize)]
 struct CompressedBlockPayload {
-    /// Registration section of the compressed block
+    /// Temporal registry insertions
     registrations: RegistrationsPerTable,
+    /// Merkle root of the temporal registry state
+    registrations_root: Bytes32,
     /// Compressed block header
     header: Header,
     /// Compressed transactions
     transactions: Vec<CompressedTransaction>,
 }
-
 
 /// Fuel block header with only the fields required to reconstruct it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -55,7 +56,6 @@ struct Header {
     pub consensus_parameters_version: ConsensusParametersVersion,
     pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -131,6 +131,7 @@ mod tests {
             height in 0..u32::MAX,
             consensus_parameters_version in 0..u32::MAX,
             state_transition_bytecode_version in 0..u32::MAX,
+            registrations_root in prop::array::uniform32(0..u8::MAX),
             registration_inputs in prop::collection::vec(
                 (keyspace_and_value(), prop::num::u16::ANY).prop_map(|((ks, v), rk)| {
                     let k = RegistryKey::try_from(rk as u32).unwrap();
@@ -147,6 +148,7 @@ mod tests {
 
             let original = CompressedBlockPayload {
                 registrations: RegistrationsPerTable::try_from(registrations).unwrap(),
+                registrations_root: registrations_root.into(),
                 header: Header {
                     da_height: da_height.into(),
                     prev_root: prev_root.into(),
@@ -164,11 +166,13 @@ mod tests {
 
             let CompressedBlockPayload {
                 registrations,
+                registrations_root,
                 header,
                 transactions,
             } = decompressed;
 
             assert_eq!(registrations, original.registrations);
+            assert_eq!(registrations_root, original.registrations_root);
 
             assert_eq!(header.da_height, da_height.into());
             assert_eq!(header.prev_root, prev_root.into());

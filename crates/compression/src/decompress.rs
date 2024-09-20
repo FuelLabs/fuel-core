@@ -52,6 +52,8 @@ pub async fn decompress<D: DecompressDb + TemporalRegistry>(
     //     return Err(DecompressError::NotLatest);
     // }
 
+    // TODO: merkle root verification: https://github.com/FuelLabs/fuel-core/issues/2232
+
     compressed.registrations.write_to_registry(&mut db)?;
 
     let ctx = DecompressCtx { db };
