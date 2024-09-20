@@ -18,6 +18,7 @@ use tokio::sync::RwLock;
 pub mod static_updater;
 
 pub mod fuel_gas_price_updater;
+pub mod ports;
 
 /// The service that updates the gas price algorithm.
 pub struct GasPriceService<A, U> {
