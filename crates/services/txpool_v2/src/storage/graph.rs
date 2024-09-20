@@ -63,7 +63,7 @@ pub struct GraphStorage {
 
 pub struct GraphConfig {
     /// The maximum number of transactions per dependency chain
-    pub max_dependent_txn_count: u64,
+    pub max_txs_chain_count: usize,
 }
 
 impl GraphStorage {
@@ -91,18 +91,24 @@ impl GraphStorage {
         };
         let gas_removed = root.dependents_cumulative_gas;
         let tip_removed = root.dependents_cumulative_tip;
-        self.reduce_dependencies_cumulative_gas_and_tip(
-            root_id,
-            gas_removed,
-            tip_removed,
-        )?;
-        self.remove_dependent_sub_graph(root_id)
+        let dependencies = self.get_dependencies(root_id)?;
+        let removed = self.remove_dependent_sub_graph(root_id)?;
+        for dependency in dependencies {
+            self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
+                dependency,
+                gas_removed,
+                tip_removed,
+                removed.len(),
+            )?;
+        }
+        Ok(removed)
     }
-    fn reduce_dependencies_cumulative_gas_and_tip(
+    fn reduce_dependencies_cumulative_gas_tip_and_chain_count(
         &mut self,
         root_id: NodeIndex,
         gas_reduction: u64,
         tip_reduction: u64,
+        number_txs_in_chain: usize,
     ) -> Result<(), Error> {
         let Some(root) = self.graph.node_weight_mut(root_id) else {
             return Err(Error::Storage(format!(
@@ -114,12 +120,31 @@ impl GraphStorage {
             root.dependents_cumulative_gas.saturating_sub(gas_reduction);
         root.dependents_cumulative_tip =
             root.dependents_cumulative_tip.saturating_sub(tip_reduction);
+        root.number_txs_in_chain = root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
         for dependency in self.get_dependencies(root_id)? {
-            self.reduce_dependencies_cumulative_gas_and_tip(
+            self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
                 dependency,
                 gas_reduction,
                 tip_reduction,
+                number_txs_in_chain
             )?;
+        }
+        Ok(())
+    }
+    fn reduce_dependents_chain_count(
+        &mut self,
+        root_id: NodeIndex,
+        number_txs_in_chain: usize,
+    ) -> Result<(), Error> {
+        let Some(root) = self.graph.node_weight_mut(root_id) else {
+            return Err(Error::Storage(format!(
+                "Node with id {:?} not found",
+                root_id
+            )));
+        };
+        root.number_txs_in_chain = root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
+        for dependency in self.get_dependents_inner(&root_id)? {
+            self.reduce_dependents_chain_count(dependency, number_txs_in_chain)?;
         }
         Ok(())
     }
@@ -284,32 +309,38 @@ impl Storage for GraphStorage {
         let tip = transaction.tip();
         let gas = transaction.max_gas();
         let outputs = transaction.outputs().clone();
-        let node = StorageData {
-            dependents_cumulative_tip: tip,
-            dependents_cumulative_gas: gas,
-            transaction,
-            number_txs_in_chain: 1,
-            submitted_time: Instant::now(),
-        };
-
-        let mut whole_tx_chain = vec![];
 
         // Check if the dependency chain is too big
+        let mut whole_tx_chain = HashSet::new();
         let mut to_check = dependencies.clone();
         while let Some(node_id) = to_check.pop() {
+            // Already checked node
+            if whole_tx_chain.contains(&node_id) {
+                continue;
+            }
             let Some(dependency_node) = self.graph.node_weight(node_id) else {
                 return Err(Error::Storage(format!(
                     "Node with id {:?} not found",
                     node_id
                 )));
             };
-            if dependency_node.number_txs_in_chain >= self.config.max_dependent_txn_count
-            {
+            if dependency_node.number_txs_in_chain >= self.config.max_txs_chain_count {
                 return Err(Error::NotInsertedChainDependencyTooBig);
             }
-            whole_tx_chain.push(node_id);
+            whole_tx_chain.insert(node_id);
             to_check.extend(self.get_dependencies(node_id)?);
         }
+
+        if whole_tx_chain.len() >= self.config.max_txs_chain_count {
+            return Err(Error::NotInsertedChainDependencyTooBig);
+        }
+
+        let node = StorageData {
+            dependents_cumulative_tip: tip,
+            dependents_cumulative_gas: gas,
+            transaction,
+            number_txs_in_chain: whole_tx_chain.len().saturating_add(1)
+        };
 
         // Add the transaction to the graph
         let node_id = self.graph.add_node(node);
@@ -439,6 +470,7 @@ impl Storage for GraphStorage {
         if !self.get_dependencies(index)?.is_empty() {
             return Err(Error::Storage("Tried to remove a transaction without dependencies but it has dependencies".to_string()));
         }
+        self.reduce_dependents_chain_count(index, 1);
         self.graph
             .remove_node(index)
             .ok_or(Error::TransactionNotFound(format!(

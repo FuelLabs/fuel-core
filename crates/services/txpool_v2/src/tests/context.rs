@@ -164,7 +164,7 @@ impl PoolContext {
         Pool::new(
             MockDBProvider(self.mock_db),
             GraphStorage::new(GraphConfig {
-                max_dependent_txn_count: self.config.max_dependent_txn_count,
+                max_txs_chain_count: self.config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
             RatioTipGasSelection::new(),

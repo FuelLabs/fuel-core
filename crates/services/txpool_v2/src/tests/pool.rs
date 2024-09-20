@@ -674,7 +674,7 @@ async fn tx_limit_hit() {
 #[tokio::test]
 async fn tx_chain_length_hit() {
     let mut context = PoolContext::default().config(Config {
-        max_dependent_txn_count: 2,
+        max_txs_chain_count: 2,
         ..Default::default()
     });
 
