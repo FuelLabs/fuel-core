@@ -16,7 +16,11 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         self.txpool
-            .select_transactions(gas_limit, transactions_limit, block_transaction_size_limit)
+            .select_transactions(
+                gas_limit,
+                transactions_limit,
+                block_transaction_size_limit,
+            )
             .into_iter()
             .map(|tx| {
                 MaybeCheckedTransaction::CheckedTransaction(
