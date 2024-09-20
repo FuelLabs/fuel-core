@@ -325,7 +325,7 @@ mod tests {
 
         let tx =
             TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_fee_input()
+                .add_random_fee_input()
                 .add_output(Output::contract_created(contract_id, state_root))
                 .finalize();
         (tx, contract_id)
@@ -1448,7 +1448,7 @@ mod tests {
             header: Default::default(),
             transactions: vec![TransactionBuilder::script(vec![], vec![])
                 .max_fee_limit(100_000_000)
-                .add_fee_input()
+                .add_random_fee_input()
                 .script_gas_limit(0)
                 .tip(123)
                 .finalize_as_transaction()],
@@ -1464,7 +1464,7 @@ mod tests {
         for i in 0..10 {
             let tx = TransactionBuilder::script(vec![], vec![])
                 .max_fee_limit(100_000_000)
-                .add_fee_input()
+                .add_random_fee_input()
                 .script_gas_limit(0)
                 .tip(i * 100)
                 .finalize_as_transaction();
@@ -1503,7 +1503,7 @@ mod tests {
         // The test checks that execution for the block with transactions [tx1, tx2, tx3] skips
         // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
         let tx1 = TransactionBuilder::script(vec![], vec![])
-            .add_fee_input()
+            .add_random_fee_input()
             .script_gas_limit(1000000)
             .tip(1000000)
             .finalize_as_transaction();
@@ -2603,7 +2603,7 @@ mod tests {
             .collect(),
             vec![],
         )
-        .add_fee_input()
+        .add_random_fee_input()
         .script_gas_limit(1000000)
         .finalize_as_transaction();
 
@@ -2667,7 +2667,7 @@ mod tests {
             .collect(),
             vec![],
         )
-        .add_fee_input()
+        .add_random_fee_input()
         .script_gas_limit(1000000)
         .finalize_as_transaction();
 

@@ -63,7 +63,7 @@ async fn setup(rng: &mut StdRng) -> TestContext {
     let state_root = Contract::default_state_root();
     let contract_id = contract.id(&salt, &root, &state_root);
     let mut create_tx = TransactionBuilder::create(witness.clone(), salt, vec![])
-        .add_fee_input()
+        .add_random_fee_input()
         .add_output(Output::contract_created(contract_id, state_root))
         .finalize();
     create_tx
@@ -166,7 +166,7 @@ async fn collect_fees(ctx: &TestContext) {
                 .chain(0u64.to_bytes().into_iter())
                 .collect(),
         )
-            .add_fee_input() // No coinbase fee for this block
+            .add_random_fee_input() // No coinbase fee for this block
             .script_gas_limit(1_000_000)
             .add_input(Input::contract(
                 Default::default(),
@@ -298,7 +298,7 @@ async fn missing_variable_output() {
                 .chain(0u64.to_bytes().into_iter())
                 .collect(),
         )
-            .add_fee_input() // No coinbase fee for this block
+            .add_random_fee_input() // No coinbase fee for this block
             .script_gas_limit(1_000_000)
             .add_input(Input::contract(
                 Default::default(),

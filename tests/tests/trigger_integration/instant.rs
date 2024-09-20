@@ -50,7 +50,7 @@ async fn poa_instant_trigger_is_produces_instantly() {
                 .collect(),
             vec![],
         )
-        .add_fee_input()
+        .add_random_fee_input()
         .finalize_as_transaction();
         let _tx_id = client.submit(&tx).await.unwrap();
         let count = client
