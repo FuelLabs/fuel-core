@@ -77,6 +77,8 @@ pub struct BlockEdge {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum BlockVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 /// Block with transaction ids
@@ -123,6 +125,8 @@ pub struct BlockMutation {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum HeaderVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
