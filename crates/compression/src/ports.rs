@@ -42,16 +42,19 @@ pub trait TemporalRegistry {
     ) -> anyhow::Result<Option<RegistryKey>>;
 }
 
+/// Lookup for UTXO pointers used for compression.
 pub trait UtxoIdToPointer {
     fn lookup(&self, utxo_id: UtxoId) -> anyhow::Result<CompressedUtxoId>;
 }
 
+/// Lookup for history of UTXOs and messages, used for decompression.
 pub trait HistoryLookup {
     fn utxo_id(&self, c: CompressedUtxoId) -> anyhow::Result<UtxoId>;
     fn coin(&self, utxo_id: UtxoId) -> anyhow::Result<CoinInfo>;
     fn message(&self, nonce: Nonce) -> anyhow::Result<MessageInfo>;
 }
 
+/// Information about a coin.
 #[derive(Debug, Clone)]
 pub struct CoinInfo {
     pub owner: Address,
@@ -59,6 +62,7 @@ pub struct CoinInfo {
     pub asset_id: AssetId,
 }
 
+/// Information about a message.
 #[derive(Debug, Clone)]
 pub struct MessageInfo {
     pub sender: Address,

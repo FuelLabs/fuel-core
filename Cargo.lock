@@ -1109,21 +1109,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
 
 [[package]]
-name = "bimap"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
-
-[[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3375,17 +3360,12 @@ name = "fuel-core-compression"
 version = "0.36.0"
 dependencies = [
  "anyhow",
- "async-trait",
- "bimap",
- "bincode",
  "fuel-core-types 0.36.0",
  "postcard",
  "proptest",
  "rand",
  "serde",
- "tempfile",
  "thiserror",
- "tokio",
 ]
 
 [[package]]

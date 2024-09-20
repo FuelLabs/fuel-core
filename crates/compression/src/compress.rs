@@ -68,7 +68,7 @@ pub async fn compress<D: CompressDb>(db: D, block: &Block) -> Result<Vec<u8>, Er
     // Construct the actual compacted block
     let compact = CompressedBlockPayload {
         registrations,
-        registrations_root: Bytes32::default(), // TODO: https://github.com/FuelLabs/fuel-core/issues/2232
+        registrations_root: Bytes32::default(), /* TODO: https://github.com/FuelLabs/fuel-core/issues/2232 */
         header: Header {
             da_height: block.header().da_height,
             prev_root: *block.header().prev_root(),

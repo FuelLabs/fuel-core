@@ -30,6 +30,7 @@ macro_rules! tables {
             )*
         }
 
+        #[doc = "A value for each keyspace"]
         #[derive(Debug, Clone, Default)]
         pub struct PerRegistryKeyspace<T> {
             $(pub $name: T,)*
@@ -55,6 +56,7 @@ macro_rules! tables {
             }
         }
 
+        #[doc = "The set of registrations for each table, as used in the compressed block header"]
         #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
         pub struct RegistrationsPerTable {
             $(pub $name: Vec<(RegistryKey, $type)>,)*

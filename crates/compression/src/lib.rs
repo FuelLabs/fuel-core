@@ -1,3 +1,8 @@
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(unused_crate_dependencies)]
+#![deny(warnings)]
+
 pub mod compress;
 pub mod decompress;
 mod eviction_policy;
@@ -49,12 +54,12 @@ struct CompressedBlockPayload {
 /// Fuel block header with only the fields required to reconstruct it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Header {
-    pub da_height: DaBlockHeight,
-    pub prev_root: Bytes32,
-    pub height: BlockHeight,
-    pub time: Tai64,
-    pub consensus_parameters_version: ConsensusParametersVersion,
-    pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
+    da_height: DaBlockHeight,
+    prev_root: Bytes32,
+    height: BlockHeight,
+    time: Tai64,
+    consensus_parameters_version: ConsensusParametersVersion,
+    state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
 #[cfg(test)]
