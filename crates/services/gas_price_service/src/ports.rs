@@ -7,5 +7,8 @@ use fuel_core_types::{
 
 pub trait L2Data: Send + Sync {
     fn latest_height(&self) -> StorageResult<BlockHeight>;
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Block<Transaction>>;
+    fn get_block(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Option<Block<Transaction>>>;
 }

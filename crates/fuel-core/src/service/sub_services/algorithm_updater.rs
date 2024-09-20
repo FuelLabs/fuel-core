@@ -44,6 +44,7 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    not_found,
     structured_storage::StructuredStorage,
     transactional::{
         AtomicView,
@@ -317,7 +318,9 @@ where
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
     for height in first..=latest_block_height {
-        let block = view.get_block(&height.into())?;
+        let block = view
+            .get_block(&height.into())?
+            .ok_or(not_found!("FullBlock"))?;
         let param_version = block.header().consensus_parameters_version;
 
         let GasPriceSettings {

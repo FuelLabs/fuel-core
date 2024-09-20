@@ -13,15 +13,7 @@ use fuel_core_gas_price_service::{
     },
     ports::L2Data,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::{
-        FuelBlocks,
-        Transactions,
-    },
-    Result as StorageResult,
-    StorageAsRef,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -39,23 +31,11 @@ impl L2Data for OnChainIterableKeyValueView {
         self.latest_height()
     }
 
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Block<Transaction>> {
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(height)
-            .map(|block| block.map(|block| block.as_ref().clone()))?
-            .ok_or(not_found!("FuelBlock"))?;
-
-        let mut transactions = vec![];
-        for tx_id in block.transactions() {
-            let tx = self
-                .storage::<Transactions>()
-                .get(tx_id)
-                .map(|tx| tx.map(|tx| tx.as_ref().clone()))?
-                .ok_or(not_found!("Transaction"))?;
-            transactions.push(tx);
-        }
-        Ok(block.uncompress(transactions))
+    fn get_block(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Option<Block<Transaction>>> {
+        self.get_full_block(height)
     }
 }
 
