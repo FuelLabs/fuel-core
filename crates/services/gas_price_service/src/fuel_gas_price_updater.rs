@@ -350,8 +350,7 @@ impl GasPriceAlgorithm for Algorithm {
     fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
         match self {
             Algorithm::V0(v0) => v0.worst_case(height.into()),
-            // TODO: Add worst_case calculation https://github.com/FuelLabs/fuel-core/issues/2203
-            Algorithm::V1(v1) => v1.calculate(),
+            Algorithm::V1(v1) => v1.worst_case(height.into()),
         }
     }
 }
