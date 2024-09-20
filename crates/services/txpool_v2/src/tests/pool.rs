@@ -1529,7 +1529,7 @@ async fn insert__if_tx3_depends_and_collides_witg_tx2() {
 
     // Then
     let err = results[2].as_ref().expect_err("Tx3 should be Err, got Ok");
-    assert!(matches!(err, Error::Storage(_)));
+    assert!(matches!(err, Error::Collided(_)));
 }
 
 // TODO: Reinstantiatte when https://github.com/FuelLabs/fuel-core/issues/2186 is implemented
