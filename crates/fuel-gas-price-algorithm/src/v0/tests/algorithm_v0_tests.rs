@@ -83,7 +83,7 @@ proptest! {
 }
 
 #[test]
-fn worst_case__same_block_gives_new_exec_price() {
+fn worst_case__same_block_gives_the_same_value_as_calculate() {
     // given
     let new_exec_price = 1000;
     let for_height = 10;
