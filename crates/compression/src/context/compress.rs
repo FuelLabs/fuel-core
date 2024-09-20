@@ -18,8 +18,8 @@ use fuel_core_types::{
 };
 
 use crate::{
+    compress::CompressDb,
     eviction_policy::CacheEvictor,
-    services::compress::CompressDb,
     tables::{
         PerRegistryKeyspace,
         PostcardSerialized,

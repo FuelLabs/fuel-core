@@ -7,11 +7,11 @@ use crate::{
     },
 };
 use fuel_core_compression::{
+    compress::compress,
     ports::{
         TemporalRegistry,
         UtxoIdToPointer,
     },
-    services::compress::compress,
     RegistryKeyspace,
 };
 use fuel_core_storage::{

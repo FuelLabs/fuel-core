@@ -1,10 +1,8 @@
+pub mod compress;
+pub mod decompress;
 mod eviction_policy;
 pub mod ports;
 mod tables;
-pub mod services {
-    pub mod compress;
-    pub mod decompress;
-}
 mod context {
     pub mod compress;
     pub mod decompress;
@@ -35,16 +33,6 @@ use fuel_core_types::{
 };
 use tables::RegistrationsPerTable;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct Header {
-    pub da_height: DaBlockHeight,
-    pub prev_root: Bytes32,
-    pub height: BlockHeight,
-    pub time: Tai64,
-    pub consensus_parameters_version: ConsensusParametersVersion,
-    pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
-}
-
 /// Compressed block, without the preceding version byte.
 #[derive(Clone, Serialize, Deserialize)]
 struct CompressedBlockPayload {
@@ -55,6 +43,19 @@ struct CompressedBlockPayload {
     /// Compressed transactions
     transactions: Vec<CompressedTransaction>,
 }
+
+
+/// Fuel block header with only the fields required to reconstruct it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct Header {
+    pub da_height: DaBlockHeight,
+    pub prev_root: Bytes32,
+    pub height: BlockHeight,
+    pub time: Tai64,
+    pub consensus_parameters_version: ConsensusParametersVersion,
+    pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
+}
+
 
 #[cfg(test)]
 mod tests {

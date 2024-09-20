@@ -11,7 +11,7 @@ use fuel_core_types::{
 use input::PredicateCode;
 
 use crate::{
-    services::compress::CompressDb,
+    compress::CompressDb,
     tables::{
         PerRegistryKeyspace,
         RegistryKeyspace,

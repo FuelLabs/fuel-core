@@ -31,7 +31,7 @@ use fuel_core_types::{
 };
 
 use crate::{
-    services::decompress::{
+    decompress::{
         DecompressDb,
         DecompressError,
     },
