@@ -1,4 +1,7 @@
-use crate::service::adapters::ConsensusParametersProvider;
+use crate::{
+    database::OnChainIterableKeyValueView,
+    service::adapters::ConsensusParametersProvider,
+};
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
         fuel_core_storage_adapter::{
@@ -11,6 +14,7 @@ use fuel_core_gas_price_service::{
     ports::L2Data,
 };
 use fuel_core_storage::{
+    not_found,
     tables::{
         FuelBlocks,
         Transactions,
@@ -20,17 +24,16 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+        },
         header::ConsensusParametersVersion,
     },
     fuel_tx::{
         Transaction,
-        TxId,
     },
     fuel_types::BlockHeight,
 };
-
-use crate::database::OnChainIterableKeyValueView;
 
 #[cfg(test)]
 mod tests;
@@ -40,16 +43,23 @@ impl L2Data for OnChainIterableKeyValueView {
         self.latest_height()
     }
 
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Option<CompressedBlock>> {
-        self.storage::<FuelBlocks>()
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Block<Transaction>> {
+        let block = self
+            .storage::<FuelBlocks>()
             .get(height)
-            .map(|block| block.map(|block| block.as_ref().clone()))
-    }
+            .map(|block| block.map(|block| block.as_ref().clone()))?
+            .ok_or(not_found!("FuelBlock"))?;
 
-    fn get_transaction(&self, tx_id: &TxId) -> StorageResult<Option<Transaction>> {
-        self.storage::<Transactions>()
-            .get(tx_id)
-            .map(|tx| tx.map(|tx| tx.as_ref().clone()))
+        let mut transactions = vec![];
+        for tx_id in block.transactions() {
+            let tx = self
+                .storage::<Transactions>()
+                .get(tx_id)
+                .map(|tx| tx.map(|tx| tx.as_ref().clone()))?
+                .ok_or(not_found!("Transaction"))?;
+            transactions.push(tx);
+        }
+        Ok(block.uncompress(transactions))
     }
 }
 

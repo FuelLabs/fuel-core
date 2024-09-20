@@ -18,13 +18,16 @@ use fuel_core_gas_price_service::{
             DaBlockCostsSharedState,
         },
         fuel_core_storage_adapter::{
+            get_block_info,
             storage::GasPriceMetadata,
             FuelL2BlockSource,
+            GasPriceSettings,
             GasPriceSettingsProvider,
         },
         Algorithm,
         AlgorithmUpdater,
         AlgorithmUpdaterV0,
+        BlockInfo,
         FuelGasPriceUpdater,
         MetadataStorage,
         UpdaterMetadata,
@@ -49,7 +52,6 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    fuel_tx::field::MintAmount,
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
@@ -315,26 +317,28 @@ where
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
     for height in first..=latest_block_height {
-        let block = view
-            .get_block(&height.into())?
-            .ok_or(anyhow::anyhow!("Expected block to exist"))?;
-        let last_tx_id = block.transactions().last().ok_or(anyhow::anyhow!(
-            "Expected block to have at least one transaction"
-        ))?;
+        let block = view.get_block(&height.into())?;
         let param_version = block.header().consensus_parameters_version;
-        let params = settings.settings(&param_version)?;
-        let mint = view
-            .get_transaction(last_tx_id)?
-            .ok_or(anyhow::anyhow!("Expected tx to exist for id: {last_tx_id}"))?
-            .as_mint()
-            .ok_or(anyhow::anyhow!("Expected tx to be a mint"))?
-            .to_owned();
-        let block_gas_used = mint.mint_amount();
-        let block_gas_capacity = params.block_gas_limit.try_into()?;
-        updater.update_l2_block_data(height, *block_gas_used, block_gas_capacity)?;
+
+        let GasPriceSettings {
+            gas_price_factor,
+            block_gas_limit,
+        } = settings.settings(&param_version)?;
+        let block_gas_capacity = block_gas_limit.try_into()?;
+
+        let block_gas_used =
+            match get_block_info(&block, gas_price_factor, block_gas_limit)? {
+                BlockInfo::GenesisBlock => {
+                    Err(anyhow::anyhow!("should not be genesis block"))?
+                }
+                BlockInfo::Block { gas_used, .. } => gas_used,
+            };
+
+        updater.update_l2_block_data(height, block_gas_used, block_gas_capacity)?;
         let metadata = AlgorithmUpdater::V0(updater.clone()).into();
         metadata_storage.set_metadata(metadata)?;
     }
+
     Ok(())
 }
 
