@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    config::Config,
+    config::{
+        Config,
+        PoolLimits,
+    },
     error::Error,
     ports::WasmValidityError,
     tests::{
@@ -30,6 +33,7 @@ use fuel_core_types::{
         BlobId,
         BlobIdExt,
         Bytes32,
+        Chargeable,
         ConsensusParameters,
         Contract,
         Input,
@@ -44,7 +48,11 @@ use fuel_core_types::{
     },
     fuel_types::ChainId,
     fuel_vm::{
-        checked_transaction::CheckError,
+        checked_transaction::{
+            CheckError,
+            CheckedTransaction,
+            IntoChecked,
+        },
         PredicateVerificationFailed,
     },
 };
@@ -455,7 +463,11 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
 #[tokio::test]
 async fn insert__tx_limit_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
-        max_txs: 1,
+        pool_limits: PoolLimits {
+            max_txs: 1,
+            max_bytes: 1000000000,
+            max_gas: 100_000_000_000,
+        },
         ..Default::default()
     });
     universe.build_pool();
@@ -463,6 +475,76 @@ async fn insert__tx_limit_hit() {
     // Given
     let tx1 = universe.build_script_transaction(None, None, 0);
     let tx2 = universe.build_script_transaction(None, None, 0);
+
+    // When
+    let result1 = universe.verify_and_insert(tx1).await;
+    let result2 = universe.verify_and_insert(tx2).await;
+
+    // Then
+    assert!(result1.is_ok());
+    let err = result2.unwrap_err();
+    assert!(matches!(err, Error::NotInsertedLimitHit));
+}
+
+#[tokio::test]
+async fn insert__tx_gas_limit() {
+    // Given
+    let mut universe = TestPoolUniverse::default();
+    let tx1 = universe.build_script_transaction(None, None, 0);
+    let checked_tx: CheckedTransaction = tx1
+        .clone()
+        .into_checked_basic(Default::default(), &ConsensusParameters::default())
+        .unwrap()
+        .into();
+    let max_gas = match checked_tx {
+        CheckedTransaction::Script(tx) => tx.metadata().max_gas,
+        _ => panic!("Expected script transaction"),
+    };
+    let tx2 = universe.build_script_transaction(None, None, 0);
+    universe = universe.config(Config {
+        pool_limits: PoolLimits {
+            max_txs: 10000,
+            max_bytes: 1000000000,
+            max_gas: max_gas + 10,
+        },
+        ..Default::default()
+    });
+    universe.build_pool();
+
+    // When
+    let result1 = universe.verify_and_insert(tx1).await;
+    let result2 = universe.verify_and_insert(tx2).await;
+
+    // Then
+    assert!(result1.is_ok());
+    let err = result2.unwrap_err();
+    assert!(matches!(err, Error::NotInsertedLimitHit));
+}
+
+#[tokio::test]
+async fn insert__tx_bytes_limit() {
+    // Given
+    let mut universe = TestPoolUniverse::default();
+    let tx1 = universe.build_script_transaction(None, None, 0);
+    let checked_tx: CheckedTransaction = tx1
+        .clone()
+        .into_checked_basic(Default::default(), &ConsensusParameters::default())
+        .unwrap()
+        .into();
+    let max_bytes = match checked_tx {
+        CheckedTransaction::Script(tx) => tx.transaction().metered_bytes_size() as u64,
+        _ => panic!("Expected script transaction"),
+    };
+    let tx2 = universe.build_script_transaction(None, None, 0);
+    universe = universe.config(Config {
+        pool_limits: PoolLimits {
+            max_txs: 10000,
+            max_bytes: max_bytes + 10,
+            max_gas: 100_000_000_000,
+        },
+        ..Default::default()
+    });
+    universe.build_pool();
 
     // When
     let result1 = universe.verify_and_insert(tx1).await;

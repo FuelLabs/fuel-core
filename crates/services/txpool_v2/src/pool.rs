@@ -52,6 +52,10 @@ pub struct Pool<PSProvider, S: Storage, CM, SA> {
     persistent_storage_provider: PSProvider,
     /// Mapping from tx_id to storage_id.
     tx_id_to_storage_id: HashMap<TxId, S::StorageIndex>,
+    /// Current number of gas in the pool.
+    current_gas_stored: u64,
+    /// Current number of bytes in the pool.
+    current_bytes_stored: u64,
 }
 
 impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
@@ -70,6 +74,8 @@ impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
             persistent_storage_provider,
             config,
             tx_id_to_storage_id: HashMap::new(),
+            current_gas_stored: 0,
+            current_bytes_stored: 0,
         }
     }
 }
@@ -93,7 +99,9 @@ where
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
         let tx_id = tx.id();
-        self.check_pool_is_not_full()?;
+        let tx_bytes = tx.metered_bytes_size() as u64;
+        let tx_max_gas = tx.max_gas();
+        self.check_pool_is_not_full(tx_max_gas, tx_bytes)?;
         self.config.black_list.check_blacklisting(&tx)?;
         Self::check_blob_does_not_exist(&tx, &latest_view)?;
         let collisions = self
@@ -107,11 +115,15 @@ where
         )?;
         let has_dependencies = !dependencies.is_empty();
         let (storage_id, removed_transactions) = self.storage.store_transaction(
-            tx,
+            tx.clone(),
             &dependencies,
             &collisions.colliding_txs,
         )?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
+        self.current_gas_stored = self.current_gas_stored.saturating_add(tx.max_gas());
+        self.current_bytes_stored = self
+            .current_bytes_stored
+            .saturating_add(tx.metered_bytes_size() as u64);
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
             self.selection_algorithm
@@ -130,7 +142,7 @@ where
             .persistent_storage_provider
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
-        self.check_pool_is_not_full()?;
+        self.check_pool_is_not_full(tx.max_gas(), tx.metered_bytes_size() as u64)?;
         self.config.black_list.check_blacklisting(tx)?;
         Self::check_blob_does_not_exist(tx, &persistent_storage)?;
         let collisions = self
@@ -210,8 +222,21 @@ where
         Ok(())
     }
 
-    fn check_pool_is_not_full(&self) -> Result<(), Error> {
-        if self.storage.count() >= self.config.max_txs as usize {
+    fn check_pool_is_not_full(
+        &self,
+        newly_added_gas: u64,
+        newly_added_bytes: u64,
+    ) -> Result<(), Error> {
+        if self.storage.count() >= self.config.pool_limits.max_txs as usize {
+            return Err(Error::NotInsertedLimitHit);
+        }
+        let new_gas_stored = self.current_gas_stored.saturating_add(newly_added_gas);
+        if new_gas_stored > self.config.pool_limits.max_gas {
+            return Err(Error::NotInsertedLimitHit);
+        }
+        let new_bytes_stored =
+            self.current_bytes_stored.saturating_add(newly_added_bytes);
+        if new_bytes_stored > self.config.pool_limits.max_bytes {
             return Err(Error::NotInsertedLimitHit);
         }
         Ok(())
@@ -241,6 +266,11 @@ where
             self.collision_manager.on_removed_transaction(tx)?;
             self.selection_algorithm.on_removed_transaction(tx)?;
             self.tx_id_to_storage_id.remove(&tx.id());
+            self.current_gas_stored =
+                self.current_gas_stored.saturating_sub(tx.max_gas());
+            self.current_bytes_stored = self
+                .current_bytes_stored
+                .saturating_sub(tx.metered_bytes_size() as u64);
         }
         Ok(())
     }

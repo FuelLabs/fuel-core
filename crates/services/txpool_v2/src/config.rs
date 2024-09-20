@@ -123,16 +123,26 @@ pub struct Config {
     pub max_block_size: u64,
     /// Maximum transactions per dependencies chain.
     pub max_dependent_txn_count: u64,
-    /// Maximum transactions in the pool.
-    pub max_txs: u64,
     /// Interval for checking the time to live of transactions.
     pub ttl_check_interval: Duration,
     /// Maximum transaction time to live.
     pub max_txs_ttl: Duration,
+    /// Pool limits
+    pub pool_limits: PoolLimits,
     /// Heavy async processing configuration.
     pub heavy_work: HeavyWorkConfig,
     /// Blacklist. Transactions with blacklisted inputs will not be accepted.
     pub black_list: BlackList,
+}
+
+#[derive(Clone)]
+pub struct PoolLimits {
+    /// Maximum number of transactions in the pool.
+    pub max_txs: u64,
+    /// Maximum number of gas in the pool.
+    pub max_gas: u64,
+    /// Maximum number of bytes in the pool.
+    pub max_bytes: u64,
 }
 
 #[derive(Clone)]
@@ -150,10 +160,14 @@ impl Default for Config {
             utxo_validation: true,
             max_block_size: 1000000000,
             max_dependent_txn_count: 1000,
-            max_txs: 10000,
             ttl_check_interval: Duration::from_secs(60),
             max_txs_ttl: Duration::from_secs(60 * 10),
             black_list: BlackList::default(),
+            pool_limits: PoolLimits {
+                max_txs: 10000,
+                max_gas: 100_000_000_000,
+                max_bytes: 10_000_000_000,
+            },
             heavy_work: HeavyWorkConfig {
                 number_threads_verif_insert_transactions: 4,
                 number_pending_tasks_threads_verif_insert_transactions: 100,
