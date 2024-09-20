@@ -3,6 +3,7 @@ use crate::ports::{
     BlockProducerDatabase,
     DryRunner,
     Relayer,
+    RelayerBlockInfo,
     TxPool,
 };
 use fuel_core_storage::{
@@ -76,13 +77,13 @@ impl Relayer for MockRelayer {
     async fn get_cost_and_transactions_number_for_block(
         &self,
         height: &DaBlockHeight,
-    ) -> anyhow::Result<(u64, u64)> {
-        let cost_with_transactions_number = self
+    ) -> anyhow::Result<RelayerBlockInfo> {
+        let (gas_cost, tx_count) = self
             .latest_da_blocks_with_costs_and_transactions_number
             .get(height)
             .cloned()
             .unwrap_or_default();
-        Ok(cost_with_transactions_number)
+        Ok(RelayerBlockInfo { gas_cost, tx_count })
     }
 }
 

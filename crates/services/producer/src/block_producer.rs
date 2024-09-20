@@ -3,8 +3,11 @@ use crate::{
         ConsensusParametersProvider,
         GasPriceProvider as GasPriceProviderConstraint,
     },
-    ports,
-    ports::BlockProducerDatabase,
+    ports::{
+        self,
+        BlockProducerDatabase,
+        RelayerBlockInfo,
+    },
     Config,
 };
 use anyhow::{
@@ -410,12 +413,12 @@ where
 
         let next_da_height = previous_da_height.saturating_add(1);
         for height in next_da_height..=highest.0 {
-            let (cost, transactions_number) = self
+            let RelayerBlockInfo { gas_cost, tx_count } = self
                 .relayer
                 .get_cost_and_transactions_number_for_block(&DaBlockHeight(height))
                 .await?;
-            total_cost = total_cost.saturating_add(cost);
-            total_transactions = total_transactions.saturating_add(transactions_number);
+            total_cost = total_cost.saturating_add(gas_cost);
+            total_transactions = total_transactions.saturating_add(tx_count);
             if total_cost > gas_limit || total_transactions > transactions_limit {
                 break;
             }
