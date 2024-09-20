@@ -322,6 +322,13 @@ impl<ViewProvider, WasmChecker> TxPool<ViewProvider, WasmChecker> {
 
         Ok(())
     }
+
+    pub fn filter_existing_tx_ids(&self, tx_ids: Vec<TxId>) -> Vec<TxId> {
+        tx_ids
+            .into_iter()
+            .filter(|tx_id| !self.by_hash.contains_key(tx_id))
+            .collect()
+    }
 }
 
 impl<ViewProvider, View, WasmChecker> TxPool<ViewProvider, WasmChecker>
