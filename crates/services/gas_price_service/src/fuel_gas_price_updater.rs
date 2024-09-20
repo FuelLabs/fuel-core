@@ -252,8 +252,9 @@ where
     }
 
     async fn set_metadata(&mut self) -> anyhow::Result<()> {
+        let metadata = self.inner.clone().into();
         self.metadata_storage
-            .set_metadata(self.inner.clone().into())
+            .set_metadata(&metadata)
             .map_err(|err| anyhow!(err))
     }
 

@@ -46,8 +46,8 @@ impl GasPriceData for FakeMetadata {
         Ok(self.inner.lock().unwrap().clone())
     }
 
-    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> StorageResult<()> {
-        *self.inner.lock().unwrap() = Some(metadata);
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()> {
+        *self.inner.lock().unwrap() = Some(metadata.clone());
         Ok(())
     }
 

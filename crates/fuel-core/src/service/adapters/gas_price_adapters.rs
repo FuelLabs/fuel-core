@@ -67,11 +67,11 @@ impl GasPriceData for Database<GasPriceDatabase> {
             .map(|metadata| metadata.map(|metadata| metadata.as_ref().clone()))
     }
 
-    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> StorageResult<()> {
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()> {
         let height = metadata.l2_block_height();
         let mut tx = self.write_transaction();
         tx.storage_as_mut::<GasPriceMetadata>()
-            .insert(&height, &metadata)?;
+            .insert(&height, metadata)?;
         tx.commit()?;
         Ok(())
     }

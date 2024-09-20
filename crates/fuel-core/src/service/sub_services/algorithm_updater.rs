@@ -329,7 +329,7 @@ where
 
         updater.update_l2_block_data(height, block_gas_used, block_gas_capacity)?;
         let metadata = AlgorithmUpdater::V0(updater.clone()).into();
-        gas_price_db.set_metadata(metadata)?;
+        gas_price_db.set_metadata(&metadata)?;
     }
 
     Ok(())

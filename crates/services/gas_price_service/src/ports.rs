@@ -19,7 +19,7 @@ pub trait GasPriceData: Send + Sync {
         &self,
         block_height: &BlockHeight,
     ) -> StorageResult<Option<UpdaterMetadata>>;
-    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> StorageResult<()>;
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()>;
 
     fn latest_height(&self) -> Option<BlockHeight>;
 

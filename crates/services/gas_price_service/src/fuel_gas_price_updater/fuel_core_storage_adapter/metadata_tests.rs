@@ -50,9 +50,9 @@ impl GasPriceData for StorageTransaction<InMemoryStorage<GasPriceColumn>> {
             .map(|v| v.map(|v| v.as_ref().clone()))
     }
 
-    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> StorageResult<()> {
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()> {
         self.storage::<GasPriceMetadata>()
-            .insert(&metadata.l2_block_height(), &metadata)?;
+            .insert(&metadata.l2_block_height(), metadata)?;
         self.commit_changes(self.changes().clone())?;
         Ok(())
     }
@@ -90,7 +90,7 @@ async fn set_metadata__can_set_metadata() {
     // when
     let actual = database.get_metadata(&block_height).unwrap();
     assert_eq!(None, actual);
-    database.set_metadata(metadata.clone()).unwrap();
+    database.set_metadata(&metadata).unwrap();
     let actual = database.get_metadata(&block_height).unwrap();
 
     // then
