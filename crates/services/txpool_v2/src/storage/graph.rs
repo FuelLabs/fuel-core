@@ -301,12 +301,6 @@ impl Storage for GraphStorage {
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error> {
         let tx_id = transaction.id();
 
-        // Remove collisions and their dependencies from the graph
-        let mut removed_transactions = vec![];
-        for collision in collided_transactions {
-            removed_transactions
-                .extend(self.remove_node_and_dependent_sub_graph(*collision)?);
-        }
         // Add the new transaction to the graph and update the others in consequence
         let tip = transaction.tip();
         let gas = transaction.max_gas();
@@ -335,6 +329,13 @@ impl Storage for GraphStorage {
 
         if whole_tx_chain.len() >= self.config.max_txs_chain_count {
             return Err(Error::NotInsertedChainDependencyTooBig);
+        }
+
+        // Remove collisions and their dependencies from the graph
+        let mut removed_transactions = vec![];
+        for collision in collided_transactions {
+            removed_transactions
+                .extend(self.remove_node_and_dependent_sub_graph(*collision)?);
         }
 
         let node = StorageData {
