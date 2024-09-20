@@ -140,6 +140,6 @@ fn worst_case__same_block_gives_the_same_value_as_calculate() {
     let actual = algorithm.worst_case(target_height);
 
     // then
-    let expected = new_exec_price + new_da_gas_price;
+    let expected = algorithm.calculate();
     assert_eq!(expected, actual);
 }
