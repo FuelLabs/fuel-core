@@ -55,7 +55,7 @@ macro_rules! tables {
             }
         }
 
-        #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
         pub struct RegistrationsPerTable {
             $(pub $name: Vec<(RegistryKey, $type)>,)*
         }
@@ -75,16 +75,6 @@ macro_rules! tables {
         }
 
         impl RegistrationsPerTable {
-            #[cfg(test)]
-            pub(crate) fn is_empty(&self) -> bool {
-                $(
-                    if !self.$name.is_empty() {
-                        return false;
-                    }
-                )*
-                true
-            }
-
             pub(crate) fn write_to_registry<R: TemporalRegistry>(&self, registry: &mut R) -> anyhow::Result<()> {
                 $(
                     for (key, value) in self.$name.iter() {

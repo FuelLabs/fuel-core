@@ -3380,6 +3380,7 @@ dependencies = [
  "bincode",
  "fuel-core-types 0.36.0",
  "postcard",
+ "proptest",
  "rand",
  "serde",
  "tempfile",
