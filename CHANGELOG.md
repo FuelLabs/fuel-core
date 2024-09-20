@@ -7,20 +7,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `ConsensusParameters` graphql queries
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `Block` graphql queries
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `TransactionType` type in `fuel-client`
 - [2131](https://github.com/FuelLabs/fuel-core/pull/2131): Add flow in TxPool in order to ask to newly connected peers to share their transaction pool
 - [2182](https://github.com/FuelLabs/fuel-core/pull/2151): Limit number of transactions that can be fetched via TxSource::next
 
 ### Changed
 
 #### Breaking
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`
 - [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
 - [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
 
 ## [Version 0.36.0]
 
 ### Added
-- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `ConsensusParameters` graphql queries
-- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `TransactionType` type in `fuel-client`
 - [2135](https://github.com/FuelLabs/fuel-core/pull/2135): Added metrics logging for number of blocks served over the p2p req/res protocol.
 - [2151](https://github.com/FuelLabs/fuel-core/pull/2151): Added limitations on gas used during dry_run in API.
 - [2188](https://github.com/FuelLabs/fuel-core/pull/2188): Added the new variant `V2` for the `ConsensusParameters` which contains the new `block_transaction_size_limit` parameter.
@@ -30,7 +32,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 #### Breaking
-- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`
 - [2199](https://github.com/FuelLabs/fuel-core/pull/2199): Applying several breaking changes to the WASM interface from backlog:
   - Get the module to execute WASM byte code from the storage first, an fallback to the built-in version in the case of the `FUEL_ALWAYS_USE_WASM`.
   - Added `host_v1` with a new `peek_next_txs_size` method, that accepts `tx_number_limit` and `size_limit`.
