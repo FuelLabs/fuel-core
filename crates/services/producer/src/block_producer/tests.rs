@@ -285,7 +285,7 @@ mod produce_and_execute_block_txpool {
         let da_height = DaBlockHeight(100u64);
         let prev_height = 1u32.into();
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height(da_height)
+            .with_latest_da_block_height_from_relayer(da_height)
             .with_prev_da_height(da_height)
             .with_prev_height(prev_height)
             .build();
@@ -311,7 +311,7 @@ mod produce_and_execute_block_txpool {
         let prev_da_height = DaBlockHeight(100u64);
         let prev_height = 1u32.into();
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height(prev_da_height - 1u64.into())
+            .with_latest_da_block_height_from_relayer(prev_da_height - 1u64.into())
             .with_prev_da_height(prev_da_height)
             .with_prev_height(prev_height)
             .build();
@@ -360,7 +360,7 @@ mod produce_and_execute_block_txpool {
         .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height((prev_da_height + 4u64).into())
+            .with_latest_da_block_height_from_relayer((prev_da_height + 4u64).into())
             .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
             .with_prev_da_height(prev_da_height.into())
             .with_block_gas_limit(block_gas_limit)
@@ -407,7 +407,7 @@ mod produce_and_execute_block_txpool {
         .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height((prev_da_height + 4u64).into())
+            .with_latest_da_block_height_from_relayer((prev_da_height + 4u64).into())
             .with_latest_blocks_with_transactions(latest_blocks_with_transaction_numbers)
             .with_prev_da_height(prev_da_height.into())
             .with_prev_height(prev_height)
@@ -453,7 +453,7 @@ mod produce_and_execute_block_txpool {
         .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height((prev_da_height + 4u64).into())
+            .with_latest_da_block_height_from_relayer((prev_da_height + 4u64).into())
             .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
             .with_prev_da_height(prev_da_height.into())
             .with_block_gas_limit(block_gas_limit)
@@ -501,7 +501,7 @@ mod produce_and_execute_block_txpool {
                 .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height((prev_da_height + 1u64).into())
+            .with_latest_da_block_height_from_relayer((prev_da_height + 1u64).into())
             .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
             .with_prev_da_height(prev_da_height.into())
             .with_block_gas_limit(block_gas_limit)
@@ -963,7 +963,10 @@ impl TestContextBuilder {
         }
     }
 
-    fn with_latest_block_height(mut self, latest_block_height: DaBlockHeight) -> Self {
+    fn with_latest_da_block_height_from_relayer(
+        mut self,
+        latest_block_height: DaBlockHeight,
+    ) -> Self {
         self.latest_block_height = latest_block_height;
         self
     }
