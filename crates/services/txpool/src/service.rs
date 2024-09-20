@@ -41,6 +41,7 @@ use fuel_core_types::{
         txpool::{
             ArcPoolTx,
             InsertionResult,
+            PoolTransaction,
             TransactionStatus,
         },
     },
@@ -391,10 +392,17 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
         self.txpool.lock().find_one(&id)
     }
 
-    pub fn select_transactions(&self, max_gas: u64) -> Vec<ArcPoolTx> {
+    pub fn select_transactions(
+        &self,
+        max_gas: u64,
+        transactions_limit: u16,
+    ) -> Vec<ArcPoolTx> {
         let mut guard = self.txpool.lock();
         let txs = guard.includable();
-        let sorted_txs = select_transactions(txs, max_gas);
+        let sorted_txs: Vec<Arc<PoolTransaction>> = select_transactions(txs, max_gas)
+            .into_iter()
+            .take(transactions_limit as usize)
+            .collect();
 
         for tx in sorted_txs.iter() {
             guard.remove_committed_tx(&tx.id());
