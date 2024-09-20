@@ -993,7 +993,7 @@ where
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
                 claimed_max_gas,
                 actual_max_gas,
-            })
+            });
         }
         Ok(())
     }
