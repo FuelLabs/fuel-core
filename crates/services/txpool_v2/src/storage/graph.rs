@@ -134,6 +134,7 @@ impl GraphStorage {
         let Some(root) = self.graph.remove_node(root_id) else {
             return Ok(vec![]);
         };
+        self.clear_cache(root.transaction.outputs(), &root.transaction.id())?;
         let mut removed_transactions = vec![root.transaction];
         for dependent in dependents {
             removed_transactions.extend(self.remove_dependent_sub_graph(dependent)?);
@@ -210,7 +211,7 @@ impl GraphStorage {
             })?;
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
-                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                Output::Coin { .. } => {
                     self.coins_creators.insert(utxo_id, node_id);
                 }
                 Output::ContractCreated { contract_id, .. } => {
@@ -431,10 +432,13 @@ impl Storage for GraphStorage {
         Ok(pool_dependencies)
     }
 
-    fn remove_transaction(
+    fn remove_transaction_without_dependencies(
         &mut self,
         index: Self::StorageIndex,
     ) -> Result<StorageData, Error> {
+        if !self.get_dependencies(index)?.is_empty() {
+            return Err(Error::Storage("Tried to remove a transaction without dependencies but it has dependencies".to_string()));
+        }
         self.graph
             .remove_node(index)
             .ok_or(Error::TransactionNotFound(format!(

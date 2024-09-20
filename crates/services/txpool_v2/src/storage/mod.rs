@@ -70,8 +70,9 @@ pub trait Storage {
     ) -> Result<Vec<Self::StorageIndex>, Error>;
 
     /// Remove a transaction from the storage by its index.
+    /// The transaction is removed only if it has no dependencies.
     /// Doesn't remove the dependents.
-    fn remove_transaction(
+    fn remove_transaction_without_dependencies(
         &mut self,
         index: Self::StorageIndex,
     ) -> Result<StorageData, Error>;
