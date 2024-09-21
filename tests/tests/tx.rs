@@ -270,8 +270,6 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
             assert!(status.is_ok())
         }
 
-        let _ = tokio::time::sleep(Duration::from_millis(10)).await;
-
         // Produce a block.
         let block_height = client.produce_blocks(1, None).await.unwrap();
 
@@ -320,8 +318,6 @@ async fn transaction_selector_can_select_a_transaction_that_fits_the_block_size_
         let status = client.submit(tx).await;
         assert!(status.is_ok())
     }
-
-    let _ = tokio::time::sleep(Duration::from_millis(10)).await;
 
     // Produce a block.
     let block_height = client.produce_blocks(1, None).await.unwrap();
