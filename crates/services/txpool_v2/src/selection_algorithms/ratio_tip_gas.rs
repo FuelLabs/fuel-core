@@ -31,7 +31,7 @@ pub trait RatioTipGasSelectionAlgorithmStorage {
     fn get_dependents(
         &self,
         index: &Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
 }
 
 pub type RatioTipGas = Ratio<u64>;

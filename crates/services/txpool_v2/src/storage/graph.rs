@@ -91,7 +91,7 @@ impl GraphStorage {
         };
         let gas_removed = root.dependents_cumulative_gas;
         let tip_removed = root.dependents_cumulative_tip;
-        let dependencies = self.get_dependencies(root_id)?;
+        let dependencies: Vec<NodeIndex> = self.get_dependencies(root_id)?.collect();
         let removed = self.remove_dependent_sub_graph(root_id)?;
         let mut already_visited = HashSet::new();
         for dependency in dependencies {
@@ -132,7 +132,8 @@ impl GraphStorage {
             root.dependents_cumulative_tip.saturating_sub(tip_reduction);
         root.number_txs_in_chain =
             root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
-        for dependency in self.get_dependencies(root_id)? {
+        let dependencies: Vec<_> = self.get_dependencies(root_id)?.collect();
+        for dependency in dependencies {
             self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
                 dependency,
                 gas_reduction,
@@ -161,9 +162,10 @@ impl GraphStorage {
         };
         root.number_txs_in_chain =
             root.number_txs_in_chain.saturating_sub(number_txs_in_chain);
-        for dependency in self.get_dependents_inner(&root_id)? {
+        let dependents: Vec<_> = self.get_dependents_inner(root_id)?.collect();
+        for dependent in dependents {
             self.reduce_dependents_chain_count(
-                dependency,
+                dependent,
                 number_txs_in_chain,
                 already_visited,
             )?;
@@ -302,11 +304,13 @@ impl GraphStorage {
             )))
     }
 
-    fn get_dependents_inner(&self, index: &NodeIndex) -> Result<Vec<NodeIndex>, Error> {
+    fn get_dependents_inner<'a>(
+        &'a self,
+        index: NodeIndex,
+    ) -> Result<impl Iterator<Item = NodeIndex> + 'a, Error> {
         Ok(self
             .graph
-            .neighbors_directed(*index, petgraph::Direction::Outgoing)
-            .collect())
+            .neighbors_directed(index, petgraph::Direction::Outgoing))
     }
 }
 
@@ -401,33 +405,31 @@ impl Storage for GraphStorage {
     fn get_dependencies(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error> {
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error> {
         Ok(self
             .graph
-            .neighbors_directed(index, petgraph::Direction::Incoming)
-            .collect())
+            .neighbors_directed(index, petgraph::Direction::Incoming))
     }
 
     fn get_dependents(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error> {
-        self.get_dependents_inner(&index)
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error> {
+        self.get_dependents_inner(index)
     }
 
-    fn collect_dependencies_transactions(
+    fn validate_inputs(
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
-    ) -> Result<Vec<Self::StorageIndex>, Error> {
-        let mut pool_dependencies = Vec::new();
+    ) -> Result<(), Error> {
         for input in transaction.inputs() {
             match input {
+                // If the utxo is created in the pool, need to check if we don't spend too much (utxo can still be unresolved)
+                // If the utxo_validation is active, we need to check if the utxo exists in the database and is valid
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // If the utxo is created in the pool, need to check if we don't spend too much (utxo can still be unresolved)
-                    // If the utxo_validation is active, we need to check if the utxo exists in the database and is valid
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         let Some(node) = self.graph.node_weight(*node_id) else {
                             return Err(Error::Storage(format!(
@@ -438,7 +440,6 @@ impl Storage for GraphStorage {
                         let output =
                             &node.transaction.outputs()[utxo_id.output_index() as usize];
                         Self::check_if_coin_input_can_spend_output(output, input)?;
-                        pool_dependencies.push(*node_id);
                     } else if utxo_validation {
                         let Some(coin) = persistent_storage
                             .utxo(utxo_id)
@@ -475,15 +476,41 @@ impl Storage for GraphStorage {
                     }
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
-                    if let Some(node_id) = self.contracts_creators.get(contract_id) {
-                        pool_dependencies.push(*node_id);
-                    } else if !persistent_storage
-                        .contract_exist(contract_id)
-                        .map_err(|e| Error::Database(format!("{:?}", e)))?
+                    if !self.contracts_creators.contains_key(contract_id)
+                        && !persistent_storage
+                            .contract_exist(contract_id)
+                            .map_err(|e| Error::Database(format!("{:?}", e)))?
                     {
                         return Err(Error::NotInsertedInputContractDoesNotExist(
                             *contract_id,
                         ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn collect_transaction_dependencies(
+        &self,
+        transaction: &PoolTransaction,
+    ) -> Result<Vec<Self::StorageIndex>, Error> {
+        let mut pool_dependencies = Vec::new();
+        for input in transaction.inputs() {
+            match input {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                    if let Some(node_id) = self.coins_creators.get(utxo_id) {
+                        pool_dependencies.push(*node_id);
+                    }
+                }
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {}
+                Input::Contract(Contract { contract_id, .. }) => {
+                    if let Some(node_id) = self.contracts_creators.get(contract_id) {
+                        pool_dependencies.push(*node_id);
                     }
                 }
             }
@@ -495,7 +522,7 @@ impl Storage for GraphStorage {
         &mut self,
         index: Self::StorageIndex,
     ) -> Result<StorageData, Error> {
-        if !self.get_dependencies(index)?.is_empty() {
+        if self.get_dependencies(index)?.next().is_some() {
             return Err(Error::Storage("Tried to remove a transaction without dependencies but it has dependencies".to_string()));
         }
         let mut already_visited = HashSet::new();
@@ -535,7 +562,7 @@ impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
     fn get_dependents(
         &self,
         index: &Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error> {
-        self.get_dependents_inner(index)
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error> {
+        self.get_dependents_inner(*index)
     }
 }

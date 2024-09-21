@@ -91,14 +91,15 @@ where
                 self.check_pool_is_not_full()?;
                 self.config.black_list.check_blacklisting(&tx)?;
                 Self::check_blob_does_not_exist(&tx, &latest_view)?;
-                let collisions = self
-                    .collision_manager
-                    .collect_colliding_transactions(&tx, &self.storage)?;
-                let dependencies = self.storage.collect_dependencies_transactions(
+                self.storage.validate_inputs(
                     &tx,
                     &latest_view,
                     self.config.utxo_validation,
                 )?;
+                let collisions = self
+                    .collision_manager
+                    .collect_colliding_transactions(&tx, &self.storage)?;
+                let dependencies = self.storage.collect_transaction_dependencies(&tx)?;
                 let has_dependencies = !dependencies.is_empty();
                 let (storage_id, removed_transactions) = self.storage.store_transaction(
                     tx,

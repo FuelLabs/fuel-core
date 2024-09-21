@@ -49,22 +49,26 @@ pub trait Storage {
     fn get_dependencies(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
 
     /// Get the storage indexes of the dependents of a transaction.
     fn get_dependents(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
 
-    /// Collect the storage indexes of the transactions that are dependent on the given transaction.
-    /// The collisions can be useful as they implies that some verifications had already been done.
-    /// Returns the storage indexes of the dependencies transactions.
-    fn collect_dependencies_transactions(
+    /// Validate inputs of a transaction.
+    fn validate_inputs(
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
+    ) -> Result<(), Error>;
+
+    /// Collect the storage indexes of the transactions that are dependent on the given transaction.
+    fn collect_transaction_dependencies(
+        &self,
+        transaction: &PoolTransaction,
     ) -> Result<Vec<Self::StorageIndex>, Error>;
 
     /// Remove a transaction from the storage by its index.
