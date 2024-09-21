@@ -29,24 +29,17 @@ pub fn select_transactions(
             let tx_block_gas_space = tx.max_gas();
             let tx_block_size_space = tx.metered_bytes_size() as u64;
 
-            let maybe_new_used_block_gas_space =
-                used_block_gas_space.checked_add(tx_block_gas_space);
-            let maybe_new_used_block_size_space =
-                used_block_size_space.checked_add(tx_block_size_space);
+            let new_used_block_gas_space =
+                used_block_gas_space.saturating_add(tx_block_gas_space);
+            let new_used_block_size_space =
+                used_block_size_space.saturating_add(tx_block_size_space);
 
-            if let (Some(new_used_block_gas_space), Some(new_used_block_size_space)) = (
-                maybe_new_used_block_gas_space,
-                maybe_new_used_block_size_space,
-            ) {
-                if new_used_block_gas_space <= max_gas
-                    && new_used_block_size_space <= block_transaction_size_limit
-                {
-                    used_block_gas_space = new_used_block_gas_space;
-                    used_block_size_space = new_used_block_size_space;
-                    true
-                } else {
-                    false
-                }
+            if new_used_block_gas_space <= max_gas
+                && new_used_block_size_space <= block_transaction_size_limit
+            {
+                used_block_gas_space = new_used_block_gas_space;
+                used_block_size_space = new_used_block_size_space;
+                true
             } else {
                 false
             }
