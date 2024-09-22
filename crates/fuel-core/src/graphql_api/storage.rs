@@ -95,7 +95,7 @@ pub enum Column {
     /// See [`SpentMessages`](messages::SpentMessages)
     SpentMessages = 13,
     /// DA compression and postcard serialized blocks.
-    /// See [`DaCompressedBlocks`](da_compressed::DaCompressedBlocks)
+    /// See [`DaCompressedBlocks`](da_compression::DaCompressedBlocks)
     DaCompressedBlocks = 14,
     /// DA compression metadata.
     DaCompressionMetadata = 15,
