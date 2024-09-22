@@ -3,8 +3,11 @@ use crate::{
         ConsensusParametersProvider,
         GasPriceProvider as GasPriceProviderConstraint,
     },
-    ports,
-    ports::BlockProducerDatabase,
+    ports::{
+        self,
+        BlockProducerDatabase,
+        RelayerBlockInfo,
+    },
     Config,
 };
 use anyhow::{
@@ -361,8 +364,10 @@ where
             .consensus_parameters_provider
             .consensus_params_at_version(&block_header.consensus_parameters_version)?
             .block_gas_limit();
+        // We have a hard limit of u16::MAX transactions per block, including the final mint transactions.
+        // Therefore we choose the `new_da_height` to never include more than u16::MAX - 1 transactions in a block.
         let new_da_height = self
-            .select_new_da_height(gas_limit, previous_da_height)
+            .select_new_da_height(gas_limit, previous_da_height, u16::MAX - 1)
             .await?;
 
         block_header.application.da_height = new_da_height;
@@ -384,9 +389,12 @@ where
         &self,
         gas_limit: u64,
         previous_da_height: DaBlockHeight,
+        transactions_limit: u16,
     ) -> anyhow::Result<DaBlockHeight> {
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;
+        let transactions_limit: u64 = transactions_limit as u64;
+        let mut total_transactions: u64 = 0;
         let highest = self
             .relayer
             .wait_for_at_least_height(&previous_da_height)
@@ -405,17 +413,19 @@ where
 
         let next_da_height = previous_da_height.saturating_add(1);
         for height in next_da_height..=highest.0 {
-            let cost = self
+            let RelayerBlockInfo { gas_cost, tx_count } = self
                 .relayer
-                .get_cost_for_block(&DaBlockHeight(height))
+                .get_cost_and_transactions_number_for_block(&DaBlockHeight(height))
                 .await?;
-            total_cost = total_cost.saturating_add(cost);
-            if total_cost > gas_limit {
+            total_cost = total_cost.saturating_add(gas_cost);
+            total_transactions = total_transactions.saturating_add(tx_count);
+            if total_cost > gas_limit || total_transactions > transactions_limit {
                 break;
-            } else {
-                new_best = DaBlockHeight(height);
             }
+
+            new_best = DaBlockHeight(height);
         }
+
         if new_best == previous_da_height {
             Err(anyhow!(NO_NEW_DA_HEIGHT_FOUND))
         } else {
