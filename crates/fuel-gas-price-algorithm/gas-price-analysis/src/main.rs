@@ -37,6 +37,8 @@ struct Arg {
     /// File path to save the chart to. Will not generate chart if left blank
     #[arg(short, long)]
     file_path: Option<String>,
+    #[arg(short, long)]
+    update_period: usize,
 }
 
 #[derive(Subcommand)]
@@ -78,37 +80,39 @@ enum Source {
 async fn main() -> anyhow::Result<()> {
     let args = Arg::parse();
 
-    const UPDATE_PERIOD: usize = 12;
+    let update_period = args.update_period;
 
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
             let da_cost_per_byte =
-                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
+                get_da_cost_per_byte_from_source(source, update_period);
             let size = da_cost_per_byte.len();
             println!(
-                "Running simulation with P: {}, D: {}, and {} blocks",
+                "Running simulation with P: {}, D: {}, {} blocks and {} update period",
                 prettify_number(p),
                 prettify_number(d),
-                prettify_number(size)
+                prettify_number(size),
+                prettify_number(update_period)
             );
             let simulator = Simulator::new(da_cost_per_byte);
-            let result = simulator.run_simulation(p, d, UPDATE_PERIOD);
+            let result = simulator.run_simulation(p, d, update_period);
             (result, (p, d))
         }
         Mode::Optimization { iterations, source } => {
             let da_cost_per_byte =
-                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
+                get_da_cost_per_byte_from_source(source, update_period);
             let size = da_cost_per_byte.len();
             println!(
                 "Running optimization with {iterations} iterations and {size} blocks"
             );
             let simulator = Simulator::new(da_cost_per_byte);
             let (results, (p, d)) =
-                naive_optimisation(&simulator, iterations as usize, UPDATE_PERIOD).await;
+                naive_optimisation(&simulator, iterations as usize, update_period).await;
             println!(
-                "Optimization results: P: {}, D: {}",
+                "Optimization results: P: {}, D: {}, update_period: {}",
                 prettify_number(p),
-                prettify_number(d)
+                prettify_number(d),
+                prettify_number(update_period)
             );
             (results, (p, d))
         }
@@ -117,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
     print_info(&results);
 
     if let Some(file_path) = &args.file_path {
-        draw_chart(results, p_comp, d_comp, file_path)?;
+        draw_chart(results, p_comp, d_comp, update_period, file_path)?;
     }
 
     Ok(())
