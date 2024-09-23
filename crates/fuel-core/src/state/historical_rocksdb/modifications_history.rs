@@ -29,9 +29,16 @@ use fuel_core_storage::{
 /// This allows to define different layout implementations for different
 /// versions of the storage history (e.g. by defining different TableWithBlueprint
 /// implementations for V1 and V2 of the modification history.
-pub struct ModificationsHistoryVersion<Description, const N: usize>(
+/// The [`ModificationHistoryVersion`]` struct is private. This forces reads and writes
+/// to the modification history to go through the [`ModificationHistory`] struct,
+/// for which storage inspection and mutation primitives are defined via the [`VersionedStorage`].
+struct ModificationsHistoryVersion<Description, const N: usize>(
     core::marker::PhantomData<Description>,
 )
+where
+    Description: DatabaseDescription;
+
+pub struct ModificationsHistory<Description>(core::marker::PhantomData<Description>)
 where
     Description: DatabaseDescription;
 
@@ -48,7 +55,20 @@ where
     type OwnedValue = Self::Value;
 }
 
-/// Blueprint for Modificaations History V1. Keys are stored in little endian
+/// ModificationsHistory Key-value pairs.
+impl<Description> Mappable for ModificationsHistory<Description>
+where
+    Description: DatabaseDescription,
+{
+    /// The height of the modifications.
+    type Key = u64;
+    type OwnedKey = Self::Key;
+    /// Reverse modification at the corresponding height.
+    type Value = Changes;
+    type OwnedValue = Self::Value;
+}
+
+/// Blueprint for Modifications History V1. Keys are stored in little endian
 /// using the `Column::HistoryColumn` column family.
 impl<Description> TableWithBlueprint for ModificationsHistoryVersion<Description, 0>
 where
@@ -78,15 +98,25 @@ where
     }
 }
 
-// Default to V1 until we implement the versioned Storage.
-// Switch to V2 once the implementation is done.
-// Would be nice to have feature flags here.
+// TODO: Remove this data structure! It is currently needed to allow reading
+// and writing to the modifications history using the V1 of the key encoding.
+impl<Description> TableWithBlueprint for ModificationsHistory<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = Column<Description>;
+
+    // We store key-value pairs using the same column family as for V1
+    fn column() -> Self::Column {
+        Column::HistoryV2Column
+    }
+}
+
 type ModificationsHistoryV1<Description> = ModificationsHistoryVersion<Description, 0>;
 type ModificationsHistoryV2<Description> = ModificationsHistoryVersion<Description, 1>;
-/// The ModificationHistory type exposed to other modules.
-pub type ModificationsHistory<Description> = ModificationsHistoryV2<Description>;
 
-/// VersionedStorage<S> wraps a StructuredStorage and adds versioning capabilities for the
+/// [`VersionedStorage<S>`] wraps a StructuredStorage and adds versioning capabilities for the
 /// ModificationsHistory.
 /// - Reading a value for the `ModificationsHistory` corresponds to reading first from V2,
 ///   then falling back to V1 if an entry is not found
@@ -139,6 +169,42 @@ where
     }
 }
 
+impl<S> VersionedStorage<S> {
+    /// Creates a new instance of the structured storage.
+    pub fn new(storage: S) -> Self {
+        Self { inner: storage }
+    }
+
+    /// Returns the inner storage.
+    pub fn into_inner(self) -> S {
+        self.inner.into_inner()
+    }
+}
+
+impl<S> AsRef<S> for VersionedStorage<S> {
+    fn as_ref(&self) -> &S {
+        self.inner.as_ref()
+    }
+}
+
+impl<S> AsMut<S> for VersionedStorage<S> {
+    fn as_mut(&mut self) -> &mut S {
+        self.inner.as_mut()
+    }
+}
+
+impl<S> AsRef<StructuredStorage<S>> for VersionedStorage<S> {
+    fn as_ref(&self) -> &StructuredStorage<S> {
+        &self.inner
+    }
+}
+
+impl<S> AsMut<StructuredStorage<S>> for VersionedStorage<S> {
+    fn as_mut(&mut self) -> &mut StructuredStorage<S> {
+        &mut self.inner
+    }
+}
+
 impl<Description, S> StorageMutate<ModificationsHistory<Description>>
     for VersionedStorage<S>
 where
@@ -176,4 +242,10 @@ where
         >>::take(&mut self.inner, key)?;
         Ok(v2_value_opt.or(v1_value_opt))
     }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn storage_read() {}
 }
