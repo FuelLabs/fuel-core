@@ -317,7 +317,7 @@ impl CombinedDatabase {
         S: ShutdownListener,
     {
         if let Some(on_chain_height) = self.on_chain().latest_height_from_metadata()? {
-            self.rollback_to(on_chain_height, shutdown_listener)?;
+            let _ = self.rollback_to(on_chain_height, shutdown_listener);
         };
 
         Ok(())
