@@ -38,6 +38,7 @@ struct Arg {
     #[arg(short, long)]
     file_path: Option<String>,
     #[arg(short, long)]
+    /// DA update period in blocks
     update_period: usize,
 }
 
