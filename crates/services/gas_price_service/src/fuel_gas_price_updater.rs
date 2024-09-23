@@ -1,5 +1,5 @@
 use crate::{
-    ports::GasPriceData,
+    ports::MetadataStorage,
     GasPriceAlgorithm,
     UpdateAlgorithm,
 };
@@ -203,7 +203,7 @@ impl From<AlgorithmUpdater> for UpdaterMetadata {
 
 impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
-    Metadata: GasPriceData,
+    Metadata: MetadataStorage,
     DaBlockCosts: GetDaBlockCosts,
 {
     pub fn init(
@@ -307,7 +307,7 @@ impl<L2, Metadata, DaBlockCosts> UpdateAlgorithm
     for FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
     L2: L2BlockSource,
-    Metadata: GasPriceData,
+    Metadata: MetadataStorage,
     DaBlockCosts: GetDaBlockCosts,
 {
     type Algorithm = Algorithm;

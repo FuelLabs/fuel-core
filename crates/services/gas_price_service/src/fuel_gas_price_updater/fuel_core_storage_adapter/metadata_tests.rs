@@ -1,27 +1,17 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::{
-    fuel_gas_price_updater::{
-        fuel_core_storage_adapter::storage::{
-            GasPriceColumn,
-            GasPriceMetadata,
-        },
-        AlgorithmUpdater,
-        UpdaterMetadata,
-    },
-    ports::GasPriceData,
+use crate::fuel_gas_price_updater::{
+    fuel_core_storage_adapter::storage::GasPriceColumn,
+    AlgorithmUpdater,
+    UpdaterMetadata,
 };
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
     transactional::{
         IntoTransaction,
-        Modifiable,
         StorageTransaction,
     },
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
 };
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 
@@ -38,32 +28,6 @@ fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
 
 fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     InMemoryStorage::default().into_transaction()
-}
-
-impl GasPriceData for StorageTransaction<InMemoryStorage<GasPriceColumn>> {
-    fn get_metadata(
-        &self,
-        block_height: &BlockHeight,
-    ) -> StorageResult<Option<UpdaterMetadata>> {
-        self.storage_as_ref::<GasPriceMetadata>()
-            .get(block_height)
-            .map(|v| v.map(|v| v.as_ref().clone()))
-    }
-
-    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()> {
-        self.storage::<GasPriceMetadata>()
-            .insert(&metadata.l2_block_height(), metadata)?;
-        self.commit_changes(self.changes().clone())?;
-        Ok(())
-    }
-
-    fn latest_height(&self) -> Option<BlockHeight> {
-        todo!()
-    }
-
-    fn rollback_last_block(&self) -> StorageResult<()> {
-        todo!()
-    }
 }
 
 #[tokio::test]

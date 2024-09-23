@@ -16,6 +16,7 @@ use fuel_core_gas_price_service::{
     ports::{
         GasPriceData,
         L2Data,
+        MetadataStorage,
     },
 };
 use fuel_core_storage::{
@@ -58,30 +59,39 @@ impl L2Data for OnChainIterableKeyValueView {
 }
 
 impl GasPriceData for Database<GasPriceDatabase> {
-    fn get_metadata(
-        &self,
-        block_height: &BlockHeight,
-    ) -> StorageResult<Option<UpdaterMetadata>> {
-        self.storage::<GasPriceMetadata>()
-            .get(block_height)
-            .map(|metadata| metadata.map(|metadata| metadata.as_ref().clone()))
-    }
-
-    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()> {
-        let height = metadata.l2_block_height();
-        let mut tx = self.write_transaction();
-        tx.storage_as_mut::<GasPriceMetadata>()
-            .insert(&height, metadata)?;
-        tx.commit()?;
-        Ok(())
-    }
-
     fn latest_height(&self) -> Option<BlockHeight> {
         HistoricalView::latest_height(self)
     }
+}
 
-    fn rollback_last_block(&self) -> StorageResult<()> {
-        self.rollback_last_block()
+impl MetadataStorage for Database<GasPriceDatabase> {
+    fn get_metadata(
+        &self,
+        block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<UpdaterMetadata>> {
+        let metadata = self
+            .storage::<GasPriceMetadata>()
+            .get(block_height)
+            .map_err(|err| GasPriceError::CouldNotFetchMetadata {
+                source_error: err.into(),
+            })?;
+        Ok(metadata.map(|inner| inner.into_owned()))
+    }
+
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+        let block_height = metadata.l2_block_height();
+        let mut tx = self.write_transaction();
+        tx.storage_as_mut::<GasPriceMetadata>()
+            .insert(&block_height, metadata)
+            .map_err(|err| GasPriceError::CouldNotSetMetadata {
+                block_height,
+                source_error: err.into(),
+            })?;
+        tx.commit().map_err(|err| GasPriceError::CouldNotSetMetadata {
+            block_height,
+            source_error: err.into(),
+        })?;
+        Ok(())
     }
 }
 

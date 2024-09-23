@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use fuel_core_storage::Result as StorageResult;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 
@@ -38,24 +37,14 @@ impl FakeMetadata {
     }
 }
 
-impl GasPriceData for FakeMetadata {
-    fn get_metadata(
-        &self,
-        _block_height: &BlockHeight,
-    ) -> StorageResult<Option<UpdaterMetadata>> {
-        Ok(self.inner.lock().unwrap().clone())
+impl MetadataStorage for FakeMetadata {
+    fn get_metadata(&self, _: &BlockHeight) -> Result<Option<UpdaterMetadata>> {
+        let metadata = self.inner.lock().unwrap().clone();
+        Ok(metadata)
     }
 
-    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()> {
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()> {
         *self.inner.lock().unwrap() = Some(metadata.clone());
-        Ok(())
-    }
-
-    fn latest_height(&self) -> Option<BlockHeight> {
-        None
-    }
-
-    fn rollback_last_block(&self) -> StorageResult<()> {
         Ok(())
     }
 }

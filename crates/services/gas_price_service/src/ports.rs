@@ -1,4 +1,7 @@
-use crate::fuel_gas_price_updater::UpdaterMetadata;
+use crate::fuel_gas_price_updater::{
+    Result,
+    UpdaterMetadata,
+};
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -14,14 +17,12 @@ pub trait L2Data: Send + Sync {
     ) -> StorageResult<Option<Block<Transaction>>>;
 }
 
+pub trait MetadataStorage: Send + Sync {
+    fn get_metadata(&self, block_height: &BlockHeight)
+        -> Result<Option<UpdaterMetadata>>;
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
+}
+
 pub trait GasPriceData: Send + Sync {
-    fn get_metadata(
-        &self,
-        block_height: &BlockHeight,
-    ) -> StorageResult<Option<UpdaterMetadata>>;
-    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> StorageResult<()>;
-
     fn latest_height(&self) -> Option<BlockHeight>;
-
-    fn rollback_last_block(&self) -> StorageResult<()>;
 }
