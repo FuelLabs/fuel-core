@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    config::Config,
+    config::{
+        Config,
+        PoolLimits,
+    },
     error::Error,
     ports::WasmValidityError,
     tests::{
@@ -456,7 +459,11 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
 #[tokio::test]
 async fn insert__tx_limit_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
-        max_txs: 1,
+        pool_limits: PoolLimits {
+            max_txs: 1,
+            max_bytes_size: 1000000000,
+            max_gas: 100_000_000_000,
+        },
         ..Default::default()
     });
     universe.build_pool();

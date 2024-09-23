@@ -23,7 +23,10 @@ use crate::{
         Constraints,
         SelectionAlgorithm,
     },
-    storage::Storage,
+    storage::{
+        RemovedTransactions,
+        Storage,
+    },
     verifications::FullyVerifiedTx,
 };
 
@@ -42,6 +45,10 @@ pub struct Pool<PSProvider, S: Storage, CM, SA> {
     persistent_storage_provider: PSProvider,
     /// Mapping from tx_id to storage_id.
     tx_id_to_storage_id: HashMap<TxId, S::StorageIndex>,
+    /// Current pool gas stored.
+    current_gas: u64,
+    /// Current pool size in bytes.
+    current_bytes_size: usize,
 }
 
 impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
@@ -60,6 +67,8 @@ impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
             persistent_storage_provider,
             config,
             tx_id_to_storage_id: HashMap::new(),
+            current_gas: 0,
+            current_bytes_size: 0,
         }
     }
 }
@@ -83,21 +92,31 @@ where
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
         let tx_id = tx.id();
-        self.check_pool_is_not_full()?;
         self.config.black_list.check_blacklisting(&tx)?;
         Self::check_blob_does_not_exist(&tx, &latest_view)?;
-        let collisions = self
-            .collision_manager
-            .collect_colliding_transactions(&tx, &self.storage)?;
         self.storage
             .validate_inputs(&tx, &latest_view, self.config.utxo_validation)?;
+        let collision = self
+            .collision_manager
+            .collect_colliding_transaction(&tx, &self.storage)?;
         let dependencies = self.storage.collect_transaction_dependencies(&tx)?;
+        if let Some(collision) = collision {
+            if self
+                .storage
+                .is_in_dependencies_subtrees(collision, &dependencies)?
+            {
+                return Err(Error::NotInsertedCollisionIsDependency);
+            }
+        }
+        let transactions_to_remove =
+            self.check_pool_size_available(&tx, &collision, &dependencies)?;
+        let mut removed_transactions = vec![];
+        for tx in transactions_to_remove {
+            let removed = self.storage.remove_transaction_and_dependents_subtree(tx)?;
+            removed_transactions.extend(removed);
+        }
         let has_dependencies = !dependencies.is_empty();
-        let (storage_id, removed_transactions) = self.storage.store_transaction(
-            tx,
-            dependencies,
-            collisions.colliding_txs(),
-        )?;
+        let storage_id = self.storage.store_transaction(tx, dependencies)?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
@@ -117,20 +136,19 @@ where
             .persistent_storage_provider
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
-        self.check_pool_is_not_full()?;
         self.config.black_list.check_blacklisting(tx)?;
         Self::check_blob_does_not_exist(tx, &persistent_storage)?;
-        let collisions = self
+        let collision = self
             .collision_manager
-            .collect_colliding_transactions(tx, &self.storage)?;
+            .collect_colliding_transaction(tx, &self.storage)?;
         self.storage.validate_inputs(
             tx,
             &persistent_storage,
             self.config.utxo_validation,
         )?;
         let dependencies = self.storage.collect_transaction_dependencies(tx)?;
-        self.storage
-            .can_store_transaction(tx, &dependencies, collisions.colliding_txs());
+        self.check_pool_size_available(&tx, &collision, &dependencies)?;
+        self.storage.can_store_transaction(tx, &dependencies);
         Ok(())
     }
 
@@ -175,11 +193,68 @@ where
             .ok()
     }
 
-    fn check_pool_is_not_full(&self) -> Result<(), Error> {
-        if self.storage.count() >= self.config.max_txs {
+    /// Check if the pool has enough space to store a transaction.
+    /// It will try to see if we can free some space dependending on defined rules
+    /// Returns an error if the pool is full.
+    /// If the pool is not full, it will return the list of transactions that must be removed from the pool along all of their dependent subtree
+    fn check_pool_size_available(
+        &self,
+        tx: &PoolTransaction,
+        collision: &Option<S::StorageIndex>,
+        dependencies: &Vec<S::StorageIndex>,
+    ) -> Result<Vec<S::StorageIndex>, Error> {
+        if self.current_gas < self.config.pool_limits.max_gas
+            && self.current_bytes_size < self.config.pool_limits.max_bytes_size
+            && self.storage.count() < self.config.pool_limits.max_txs
+        {
+            return Ok(vec![]);
+        }
+        // If the transaction has a collision verify that by removing the transaction we can free enough space
+        // otherwise return an error
+        if let Some(collision) = collision {
+            let collision_data = self.storage.get(collision)?;
+            let new_current_gas = self
+                .current_gas
+                .saturating_sub(collision_data.dependents_cumulative_gas);
+            let new_current_bytes_size = self
+                .current_bytes_size
+                .saturating_sub(collision_data.dependents_cumulative_bytes_size);
+            if new_current_gas < self.config.pool_limits.max_gas
+                && new_current_bytes_size < self.config.pool_limits.max_bytes_size
+                && self.storage.count().saturating_sub(1)
+                    < self.config.pool_limits.max_txs
+            {
+                return Ok(vec![*collision]);
+            } else {
+                return Err(Error::NotInsertedLimitHit);
+            }
+        }
+
+        // If the transaction has a dependency and the pool is full, we refuse it
+        if !dependencies.is_empty() {
             return Err(Error::NotInsertedLimitHit);
         }
-        Ok(())
+
+        // Here the transaction has no dependencies and no collision which means that it's an executable transaction
+        // and we want to make space for it
+        let mut removed_transactions = vec![];
+        let mut gas_left = self.current_gas;
+        let mut bytes_left = self.current_bytes_size;
+        let mut txs_left = self.storage.count();
+        let mut sorted_txs = self.storage.get_worst_ratio_tip_gas_subtree_roots()?;
+        while gas_left > self.config.pool_limits.max_gas
+            || bytes_left > self.config.pool_limits.max_bytes_size
+            || txs_left > self.config.pool_limits.max_txs
+        {
+            let storage_id = sorted_txs.next().ok_or(Error::NotInsertedLimitHit)?;
+            let storage_data = self.storage.get(&storage_id)?;
+            gas_left = gas_left.saturating_sub(storage_data.dependents_cumulative_gas);
+            bytes_left =
+                bytes_left.saturating_sub(storage_data.dependents_cumulative_bytes_size);
+            txs_left = txs_left.saturating_sub(1);
+            removed_transactions.push(storage_id);
+        }
+        Ok(removed_transactions)
     }
 
     fn check_blob_does_not_exist(

@@ -32,6 +32,8 @@ pub enum Error {
     // TODO: Make more specific errors: https://github.com/FuelLabs/fuel-core/issues/2185
     #[display(fmt = "Transaction collided: {_0}")]
     Collided(String),
+    #[display(fmt = "Transaction is not inserted. Collision is also a dependency")]
+    NotInsertedCollisionIsDependency,
     #[display(fmt = "Utxo not found: {_0}")]
     UtxoNotFound(UtxoId),
     #[display(fmt = "The UTXO `{_0}` is blacklisted")]
