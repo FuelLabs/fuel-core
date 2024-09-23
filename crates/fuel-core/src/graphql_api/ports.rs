@@ -281,6 +281,7 @@ pub mod worker {
             da_compression::{
                 DaCompressedBlocks,
                 DaCompressionTemporalRegistry,
+                DaCompressionTemporalRegistryEvictor,
                 DaCompressionTemporalRegistryIndex,
             },
             old::{
@@ -339,6 +340,7 @@ pub mod worker {
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistry, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryEvictor, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,

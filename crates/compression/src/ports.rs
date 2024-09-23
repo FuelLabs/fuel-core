@@ -70,3 +70,16 @@ pub struct MessageInfo {
     pub amount: Word,
     pub data: Vec<u8>,
 }
+
+/// Temporal registry evictor state storage,
+/// currently backed by a `DaCompressionTemporalRegistryEvictor`
+/// column in the offchain database.
+pub trait EvictorDb {
+    fn read_latest(&mut self, keyspace: RegistryKeyspace) -> anyhow::Result<RegistryKey>;
+
+    fn write_latest(
+        &mut self,
+        keyspace: RegistryKeyspace,
+        key: RegistryKey,
+    ) -> anyhow::Result<()>;
+}

@@ -105,6 +105,9 @@ pub enum Column {
     /// Temporal registry lookup index for DA compression.
     /// See [`DaCompressionTemporalRegistryIndex`](da_compression::DaCompressionTemporalRegistryIndex)
     DaCompressionTemporalRegistryIndex = 17,
+    /// Temporal registry evictor state.
+    /// See [`DaCompressionTemporalRegistryEvictor`](da_compression::DaCompressionTemporalRegistryEvictor)
+    DaCompressionTemporalRegistryEvictor = 18,
 }
 
 impl Column {

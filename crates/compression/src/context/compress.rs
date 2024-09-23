@@ -20,6 +20,7 @@ use fuel_core_types::{
 use crate::{
     compress::CompressDb,
     eviction_policy::CacheEvictor,
+    ports::EvictorDb,
     tables::{
         PerRegistryKeyspace,
         PostcardSerialized,
@@ -38,7 +39,10 @@ impl<D> ContextError for CompressCtx<D> {
     type Error = anyhow::Error;
 }
 
-fn registry_substitute<D: CompressDb, T: serde::Serialize + Default + PartialEq>(
+fn registry_substitute<
+    D: CompressDb + EvictorDb,
+    T: serde::Serialize + Default + PartialEq,
+>(
     keyspace: RegistryKeyspace,
     value: &T,
     ctx: &mut CompressCtx<D>,
@@ -52,13 +56,13 @@ fn registry_substitute<D: CompressDb, T: serde::Serialize + Default + PartialEq>
         return Ok(found);
     }
 
-    let key = ctx.cache_evictor.next_key(keyspace)?;
+    let key = ctx.cache_evictor.next_key(&mut ctx.db, keyspace)?;
     let old = ctx.changes[keyspace].insert(key, PostcardSerialized::new(value)?);
     assert!(old.is_none(), "Key collision in registry substitution");
     Ok(key)
 }
 
-impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for Address {
+impl<D: CompressDb + EvictorDb> CompressibleBy<CompressCtx<D>> for Address {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<D>,
@@ -67,7 +71,7 @@ impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for Address {
     }
 }
 
-impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for AssetId {
+impl<D: CompressDb + EvictorDb> CompressibleBy<CompressCtx<D>> for AssetId {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<D>,
@@ -76,7 +80,7 @@ impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for AssetId {
     }
 }
 
-impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for ContractId {
+impl<D: CompressDb + EvictorDb> CompressibleBy<CompressCtx<D>> for ContractId {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<D>,
@@ -85,7 +89,7 @@ impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for ContractId {
     }
 }
 
-impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for ScriptCode {
+impl<D: CompressDb + EvictorDb> CompressibleBy<CompressCtx<D>> for ScriptCode {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<D>,
@@ -94,7 +98,7 @@ impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for ScriptCode {
     }
 }
 
-impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for PredicateCode {
+impl<D: CompressDb + EvictorDb> CompressibleBy<CompressCtx<D>> for PredicateCode {
     async fn compress_with(
         &self,
         ctx: &mut CompressCtx<D>,

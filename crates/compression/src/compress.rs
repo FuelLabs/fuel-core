@@ -14,6 +14,7 @@ use crate::{
     },
     eviction_policy::CacheEvictor,
     ports::{
+        EvictorDb,
         TemporalRegistry,
         UtxoIdToPointer,
     },
@@ -36,7 +37,10 @@ pub enum Error {
 pub trait CompressDb: TemporalRegistry + UtxoIdToPointer {}
 impl<T> CompressDb for T where T: TemporalRegistry + UtxoIdToPointer {}
 
-pub async fn compress<D: CompressDb>(db: D, block: &Block) -> Result<Vec<u8>, Error> {
+pub async fn compress<D: CompressDb + EvictorDb>(
+    db: D,
+    block: &Block,
+) -> Result<Vec<u8>, Error> {
     // if *block.header().height() != db.next_block_height()? {
     //     return Err(Error::NotLatest);
     // }

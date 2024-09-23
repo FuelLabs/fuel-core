@@ -2,9 +2,12 @@ use std::collections::HashSet;
 
 use fuel_core_types::fuel_compression::RegistryKey;
 
-use crate::tables::{
-    PerRegistryKeyspace,
-    RegistryKeyspace,
+use crate::{
+    ports::EvictorDb,
+    tables::{
+        PerRegistryKeyspace,
+        RegistryKeyspace,
+    },
 };
 
 pub struct CacheEvictor {
@@ -14,18 +17,23 @@ pub struct CacheEvictor {
 
 impl CacheEvictor {
     /// Get a key, evicting an old value if necessary
-    pub fn next_key(
+    pub fn next_key<D>(
         &mut self,
+        db: &mut D,
         keyspace: RegistryKeyspace,
-    ) -> anyhow::Result<RegistryKey> {
+    ) -> anyhow::Result<RegistryKey>
+    where
+        D: EvictorDb,
+    {
         // Pick first key not in the set
-        // TODO: this can be optimized by keeping a counter of the last key used
         // TODO: use a proper algo, maybe LRU?
-        let mut key = RegistryKey::ZERO;
+        let mut key = db.read_latest(keyspace)?;
         while self.keep_keys[keyspace].contains(&key) {
             key = key.next();
             assert_ne!(key, RegistryKey::ZERO, "Ran out of keys");
         }
+
+        db.write_latest(keyspace, key)?;
 
         self.keep_keys[keyspace].insert(key);
         Ok(key)

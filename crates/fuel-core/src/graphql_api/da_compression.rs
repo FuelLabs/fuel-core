@@ -3,12 +3,14 @@ use crate::{
     graphql_api::storage::da_compression::{
         DaCompressedBlocks,
         DaCompressionTemporalRegistry,
+        DaCompressionTemporalRegistryEvictor,
         DaCompressionTemporalRegistryIndex,
     },
 };
 use fuel_core_compression::{
     compress::compress,
     ports::{
+        EvictorDb,
         TemporalRegistry,
         UtxoIdToPointer,
     },
@@ -19,6 +21,7 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageAsRef,
     StorageInspect,
+    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::block::Block,
@@ -35,6 +38,7 @@ pub fn da_compress_block<T>(
 where
     T: OffChainDatabaseTransaction,
     T: StorageInspect<DaCompressionTemporalRegistry>,
+    T: StorageMutate<DaCompressionTemporalRegistryEvictor>,
 {
     let compressed = compress(CompressTx(transaction, events), block)
         .now_or_never()
@@ -127,5 +131,33 @@ where
             }
         }
         panic!("UtxoId not found in the block events");
+    }
+}
+
+impl<'a, Tx> EvictorDb for CompressTx<'a, Tx>
+where
+    Tx: OffChainDatabaseTransaction,
+{
+    fn write_latest(
+        &mut self,
+        keyspace: RegistryKeyspace,
+        key: fuel_core_types::fuel_compression::RegistryKey,
+    ) -> anyhow::Result<()> {
+        self.0
+            .storage_as_mut::<DaCompressionTemporalRegistryEvictor>()
+            .insert(&keyspace, &key)?;
+        Ok(())
+    }
+
+    fn read_latest(
+        &mut self,
+        keyspace: RegistryKeyspace,
+    ) -> anyhow::Result<fuel_core_types::fuel_compression::RegistryKey> {
+        Ok(self
+            .0
+            .storage_as_ref::<DaCompressionTemporalRegistryEvictor>()
+            .get(&keyspace)?
+            .ok_or(not_found!(DaCompressionTemporalRegistryEvictor))?
+            .into_owned())
     }
 }

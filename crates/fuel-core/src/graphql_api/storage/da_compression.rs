@@ -56,7 +56,7 @@ pub struct DaCompressionTemporalRegistryIndex;
 impl Mappable for DaCompressionTemporalRegistryIndex {
     type Key = Self::OwnedKey;
     // The second value is a postcard-encoded value, where the original type depends on the keyspace.
-    // TODO: should we hash the secodn part of this key?
+    // TODO: should we hash the second part of this key?
     type OwnedKey = (RegistryKeyspace, Vec<u8>);
     type Value = Self::OwnedValue;
     type OwnedValue = RegistryKey;
@@ -71,20 +71,47 @@ impl TableWithBlueprint for DaCompressionTemporalRegistryIndex {
     }
 }
 
+/// This table is used to hold "next key to evict" for each keyspace.
+/// In the future we'll likely switch to use LRU or something, in which
+/// case this table can be repurposed, iff migrations have been figured out.
+pub struct DaCompressionTemporalRegistryEvictor;
+
+impl Mappable for DaCompressionTemporalRegistryEvictor {
+    type Key = Self::OwnedKey;
+    type OwnedKey = RegistryKeyspace;
+    type Value = Self::OwnedValue;
+    type OwnedValue = RegistryKey;
+}
+
+impl TableWithBlueprint for DaCompressionTemporalRegistryEvictor {
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::DaCompressionTemporalRegistryEvictor
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[allow(clippy::arithmetic_side_effects)] // Test code, also safe
+    fn generate_keyspace(rng: &mut impl rand::Rng) -> RegistryKeyspace {
+        rng.gen()
+    }
+
+    #[allow(clippy::arithmetic_side_effects)] // Test code, also safe
+    fn generate_raw_key(rng: &mut impl rand::Rng) -> RegistryKey {
+        let raw_key: u32 = rng.gen_range(0..2u32.pow(24) - 2);
+        RegistryKey::try_from(raw_key).unwrap()
+    }
+
+    #[allow(clippy::arithmetic_side_effects)] // Test code, also safe
     fn generate_registry_key(
         rng: &mut impl rand::Rng,
     ) -> (RegistryKeyspace, RegistryKey) {
-        let keyspace: RegistryKeyspace = rng.gen();
-
-        let raw_key: u32 = rng.gen_range(0..2u32.pow(24) - 2);
-        let key = RegistryKey::try_from(raw_key).unwrap();
-
-        (keyspace, key)
+        (generate_keyspace(rng), generate_raw_key(rng))
     }
 
     fn generate_registry_index_key(
@@ -118,5 +145,13 @@ mod tests {
         RegistryKey::ZERO,
         RegistryKey::ZERO,
         generate_registry_index_key
+    );
+
+    fuel_core_storage::basic_storage_tests!(
+        DaCompressionTemporalRegistryEvictor,
+        RegistryKeyspace::address,
+        RegistryKey::ZERO,
+        RegistryKey::ZERO,
+        generate_keyspace
     );
 }
