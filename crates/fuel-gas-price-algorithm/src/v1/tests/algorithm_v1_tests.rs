@@ -1,6 +1,10 @@
+use std::num::NonZeroU64;
+
 use crate::v1::{
     tests::UpdaterBuilder,
+    AlgorithmUpdaterV1,
     AlgorithmV1,
+    ClampedPercentage,
 };
 use proptest::prelude::*;
 
@@ -142,4 +146,31 @@ fn worst_case__same_block_gives_the_same_value_as_calculate() {
     // then
     let expected = algorithm.calculate();
     assert_eq!(expected, actual);
+}
+
+#[test]
+fn da_change_should_not_panic() {
+    let updater = AlgorithmUpdaterV1 {
+        new_scaled_exec_price: 0,
+        min_exec_gas_price: 0,
+        exec_gas_price_change_percent: 0,
+        l2_block_height: 0,
+        l2_block_fullness_threshold_percent: ClampedPercentage::new(0),
+        new_scaled_da_gas_price: 0,
+        gas_price_factor: NonZeroU64::new(1).unwrap(),
+        min_da_gas_price: 0,
+        max_da_gas_price_change_percent: 0,
+        total_da_rewards_excess: 0,
+        da_recorded_block_height: 0,
+        latest_known_total_da_cost_excess: 0,
+        projected_total_da_cost: 0,
+        da_p_component: 0,
+        da_d_component: 0,
+        last_profit: 0,
+        second_to_last_profit: 0,
+        latest_da_cost_per_byte: 0,
+        unrecorded_blocks: vec![],
+    };
+
+    updater.da_change(i128::MIN / 2, i128::MIN / 2);
 }
