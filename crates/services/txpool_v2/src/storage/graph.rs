@@ -304,10 +304,10 @@ impl GraphStorage {
             )))
     }
 
-    fn get_dependents_inner<'a>(
-        &'a self,
+    fn get_dependents_inner(
+        &self,
         index: NodeIndex,
-    ) -> Result<impl Iterator<Item = NodeIndex> + 'a, Error> {
+    ) -> Result<impl Iterator<Item = NodeIndex> + '_, Error> {
         Ok(self
             .graph
             .neighbors_directed(index, petgraph::Direction::Outgoing))
