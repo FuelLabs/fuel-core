@@ -406,13 +406,17 @@ pub mod test {
     use crate as fuel_core_storage;
     use crate::kv_store::{
         KeyValueInspect,
+        KeyValueMutate,
         StorageColumn,
     };
     use fuel_core_storage::{
         kv_store::Value,
         Result as StorageResult,
     };
-    use std::collections::HashMap;
+    use std::{
+        collections::HashMap,
+        sync::Arc,
+    };
 
     type Storage = HashMap<(u32, Vec<u8>), Value>;
 
@@ -448,6 +452,29 @@ pub mod test {
         fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
             let value = self.storage.get(&(column.id(), key.to_vec())).cloned();
             Ok(value)
+        }
+    }
+
+    impl<Column> KeyValueMutate for InMemoryStorage<Column>
+    where
+        InMemoryStorage<Column>: KeyValueInspect,
+    {
+        #[doc = " Writes the `buf` into the storage and returns the number of written bytes."]
+        fn write(
+            &mut self,
+            key: &[u8],
+            column: Self::Column,
+            buf: &[u8],
+        ) -> StorageResult<usize> {
+            self.storage
+                .insert((column.id(), key.to_vec()), Arc::new(buf.to_vec()));
+            Ok(buf.len())
+        }
+
+        #[doc = " Removes the value from the storage."]
+        fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+            self.storage.remove(&(column.id(), key.to_vec()));
+            Ok(())
         }
     }
 }

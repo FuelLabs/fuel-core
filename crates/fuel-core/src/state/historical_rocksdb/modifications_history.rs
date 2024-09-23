@@ -144,7 +144,7 @@ where
         // Give priority to keys stored using the V2 format
 
         let v2 = <StructuredStorage<S> as StorageInspect<
-            ModificationsHistoryV1<Description>,
+            ModificationsHistoryV2<Description>,
         >>::get(&self.inner, key)?;
 
         match v2 {
@@ -172,7 +172,9 @@ where
 impl<S> VersionedStorage<S> {
     /// Creates a new instance of the structured storage.
     pub fn new(storage: S) -> Self {
-        Self { inner: storage }
+        Self {
+            inner: StructuredStorage::new(storage),
+        }
     }
 
     /// Returns the inner storage.
@@ -244,8 +246,74 @@ where
     }
 }
 
+#[cfg(feature = "test-helpers")]
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use fuel_core_storage::{
+        structured_storage::{
+            test::InMemoryStorage,
+            StructuredStorage,
+        },
+        transactional::Changes,
+        StorageInspect,
+        StorageMutate,
+    };
+
+    use crate::{
+        database::database_description::on_chain::OnChain,
+        state::historical_rocksdb::{
+            description::Column,
+            modifications_history::{
+                ModificationsHistory,
+                ModificationsHistoryV2,
+            },
+        },
+    };
+
+    fn with_empty_level(changes: &mut Changes, height: u32) {
+        changes.insert(height, BTreeMap::default());
+    }
+
+    use super::{
+        ModificationsHistoryV1,
+        VersionedStorage,
+    };
+
     #[test]
-    fn storage_read() {}
+    fn get_prefers_v2() {
+        // Given
+        let storage: InMemoryStorage<Column<OnChain>> = InMemoryStorage::default();
+        let mut versioned_storage = VersionedStorage::new(storage);
+        let as_structured_storage: &mut StructuredStorage<
+            InMemoryStorage<Column<OnChain>>,
+        > = versioned_storage.as_mut();
+
+        // When
+        let mut v1_value = Changes::default();
+        with_empty_level(&mut v1_value, 42);
+        let v2_value = Changes::default();
+
+        <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+            ModificationsHistoryV1<OnChain>,
+        >>::insert(as_structured_storage, &1, &v1_value)
+        .unwrap();
+
+        <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+            ModificationsHistoryV2<OnChain>,
+        >>::insert(as_structured_storage, &1, &v2_value)
+        .unwrap();
+
+        // Then
+        let fetched =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistory<OnChain>,
+            >>::get(&versioned_storage, &1)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        assert!(fetched.is_empty());
+    }
 }
