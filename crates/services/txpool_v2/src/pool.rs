@@ -118,7 +118,7 @@ where
         if let Some(collision) = collision {
             removed_transactions.extend(
                 self.storage
-                    .remove_transaction_and_dependents_subtree(collision)?
+                    .remove_transaction_and_dependents_subtree(collision)?,
             );
         }
         let has_dependencies = !dependencies.is_empty();

@@ -106,7 +106,10 @@ impl GraphStorage {
             )?;
         }
         if let Some(removed_tx) = self.graph.remove_node(root_id) {
-            self.clear_cache(&removed_tx.transaction.outputs(), &removed_tx.transaction.id())?;
+            self.clear_cache(
+                &removed_tx.transaction.outputs(),
+                &removed_tx.transaction.id(),
+            )?;
             removed.push(removed_tx.transaction);
         }
         Ok(removed)
