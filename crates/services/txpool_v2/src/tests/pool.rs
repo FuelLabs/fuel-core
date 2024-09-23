@@ -465,7 +465,7 @@ async fn insert__tx_limit_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
         pool_limits: PoolLimits {
             max_txs: 1,
-            max_bytes: 1000000000,
+            max_bytes_size: 1000000000,
             max_gas: 100_000_000_000,
         },
         ..Default::default()
@@ -473,7 +473,7 @@ async fn insert__tx_limit_hit() {
     universe.build_pool();
 
     // Given
-    let tx1 = universe.build_script_transaction(None, None, 0);
+    let tx1 = universe.build_script_transaction(None, None, 10);
     let tx2 = universe.build_script_transaction(None, None, 0);
 
     // When
@@ -490,7 +490,7 @@ async fn insert__tx_limit_hit() {
 async fn insert__tx_gas_limit() {
     // Given
     let mut universe = TestPoolUniverse::default();
-    let tx1 = universe.build_script_transaction(None, None, 0);
+    let tx1 = universe.build_script_transaction(None, None, 10);
     let checked_tx: CheckedTransaction = tx1
         .clone()
         .into_checked_basic(Default::default(), &ConsensusParameters::default())
@@ -504,7 +504,7 @@ async fn insert__tx_gas_limit() {
     universe = universe.config(Config {
         pool_limits: PoolLimits {
             max_txs: 10000,
-            max_bytes: 1000000000,
+            max_bytes_size: 1000000000,
             max_gas: max_gas + 10,
         },
         ..Default::default()
@@ -532,14 +532,14 @@ async fn insert__tx_bytes_limit() {
         .unwrap()
         .into();
     let max_bytes = match checked_tx {
-        CheckedTransaction::Script(tx) => tx.transaction().metered_bytes_size() as u64,
+        CheckedTransaction::Script(tx) => tx.transaction().metered_bytes_size(),
         _ => panic!("Expected script transaction"),
     };
     let tx2 = universe.build_script_transaction(None, None, 0);
     universe = universe.config(Config {
         pool_limits: PoolLimits {
             max_txs: 10000,
-            max_bytes: max_bytes + 10,
+            max_bytes_size: max_bytes + 10,
             max_gas: 100_000_000_000,
         },
         ..Default::default()
@@ -559,7 +559,7 @@ async fn insert__tx_bytes_limit() {
 #[tokio::test]
 async fn insert__dependency_chain_length_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
-        max_dependent_txn_count: 2,
+        max_txs_chain_count: 2,
         ..Default::default()
     });
     universe.build_pool();
@@ -876,8 +876,8 @@ async fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
-    let tip_high = 2u64;
     let tip_low = 1u64;
+    let tip_high = 2u64;
     let (message, conflicting_message_input) =
         create_message_predicate_from_message(10_000, 0);
     universe.database_mut().insert_message(message.clone());
@@ -1200,7 +1200,7 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     let err = universe.verify_and_insert(tx3).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::Storage(_)));
+    assert!(matches!(err, Error::NotInsertedCollisionIsDependency));
 }
 
 #[tokio::test]

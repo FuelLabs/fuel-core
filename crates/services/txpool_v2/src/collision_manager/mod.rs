@@ -17,47 +17,21 @@ use crate::error::Error;
 
 pub mod basic;
 
-/// The reason why a transaction collides with another.
-/// It also contains additional information about the collision.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum CollisionReason {
-    Coin(UtxoId),
-    Blob(BlobId),
-    Message(Nonce),
-    ContractCreation(ContractId),
-}
-
-/// Contains all the information about the collisions of a transaction.
-#[derive(Default, Debug)]
-pub struct Collisions<Idx> {
-    pub reasons: HashSet<CollisionReason>,
-    pub colliding_txs: Vec<Idx>,
-}
-
-impl<Idx> Collisions<Idx> {
-    /// Create a new empty collision information.
-    pub fn new() -> Self {
-        Self {
-            reasons: HashSet::default(),
-            colliding_txs: vec![],
-        }
-    }
-}
-
 pub trait CollisionManager {
     /// Storage type of the collision manager.
     type Storage;
     /// Index that identifies a transaction in the storage.
     type StorageIndex;
 
-    /// Collect all the transactions that collide with the given transaction.
+    /// Collect the transaction that collide with the given transaction.
     /// It returns an error if the transaction is less worthy than the colliding transactions.
-    /// It returns the information about the collisions.
-    fn collect_colliding_transactions(
+    /// It returns an error if the transaction collide with two transactions.
+    /// It returns the information about the collision if exists, none otherwise.
+    fn collect_colliding_transaction(
         &self,
         transaction: &PoolTransaction,
         storage: &Self::Storage,
-    ) -> Result<Collisions<Self::StorageIndex>, Error>;
+    ) -> Result<Option<Self::StorageIndex>, Error>;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(

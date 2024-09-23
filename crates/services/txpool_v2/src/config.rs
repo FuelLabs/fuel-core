@@ -119,16 +119,14 @@ impl BlackList {
 pub struct Config {
     /// Enable UTXO validation (will check if UTXO exists in the database and has correct data).
     pub utxo_validation: bool,
-    /// Maximum block size in bytes.
-    pub max_block_size: u64,
     /// Maximum transactions per dependencies chain.
-    pub max_dependent_txn_count: u64,
+    pub max_txs_chain_count: usize,
+    /// Pool limits
+    pub pool_limits: PoolLimits,
     /// Interval for checking the time to live of transactions.
     pub ttl_check_interval: Duration,
     /// Maximum transaction time to live.
     pub max_txs_ttl: Duration,
-    /// Pool limits
-    pub pool_limits: PoolLimits,
     /// Heavy async processing configuration.
     pub heavy_work: HeavyWorkConfig,
     /// Blacklist. Transactions with blacklisted inputs will not be accepted.
@@ -138,11 +136,11 @@ pub struct Config {
 #[derive(Clone)]
 pub struct PoolLimits {
     /// Maximum number of transactions in the pool.
-    pub max_txs: u64,
+    pub max_txs: usize,
     /// Maximum number of gas in the pool.
     pub max_gas: u64,
     /// Maximum number of bytes in the pool.
-    pub max_bytes: u64,
+    pub max_bytes_size: usize,
 }
 
 #[derive(Clone)]
@@ -158,15 +156,14 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             utxo_validation: true,
-            max_block_size: 1000000000,
-            max_dependent_txn_count: 1000,
+            max_txs_chain_count: 1000,
             ttl_check_interval: Duration::from_secs(60),
             max_txs_ttl: Duration::from_secs(60 * 10),
             black_list: BlackList::default(),
             pool_limits: PoolLimits {
                 max_txs: 10000,
                 max_gas: 100_000_000_000,
-                max_bytes: 10_000_000_000,
+                max_bytes_size: 10_000_000_000,
             },
             heavy_work: HeavyWorkConfig {
                 number_threads_verif_insert_transactions: 4,

@@ -118,7 +118,7 @@ pub trait GasPriceSettingsProvider {
     ) -> Result<GasPriceSettings>;
 }
 
-fn get_block_info(
+pub fn get_block_info(
     block: &Block<Transaction>,
     gas_price_factor: u64,
     block_gas_limit: u64,
