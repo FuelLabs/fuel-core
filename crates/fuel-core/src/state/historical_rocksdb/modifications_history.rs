@@ -498,7 +498,7 @@ mod tests {
 
         let v2_fetched_after_replaced =
             <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
-                ModificationsHistoryV1<OnChain>,
+                ModificationsHistoryV2<OnChain>,
             >>::get(as_structured_storage, &1)
             .unwrap()
             .unwrap()
