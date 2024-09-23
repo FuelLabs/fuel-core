@@ -4,10 +4,7 @@ use std::{
     ops::Div,
 };
 
-use crate::utils::{
-    cumulative_percentage_change,
-    safe_signed_abs,
-};
+use crate::utils::cumulative_percentage_change;
 
 #[cfg(test)]
 mod tests;
@@ -334,7 +331,7 @@ impl AlgorithmUpdaterV1 {
             .saturating_mul(upcast_percent)
             .saturating_div(100)
             .into();
-        let clamped_change = safe_signed_abs(pd_change).min(max_change);
+        let clamped_change = pd_change.saturating_abs().min(max_change);
         pd_change.signum().saturating_mul(clamped_change)
     }
 
