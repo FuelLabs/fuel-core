@@ -18,7 +18,7 @@ description = "Compression and decompression of Fuel blocks for DA storage."
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-types = { workspace = true, features = ["serde", "da-compression"] }
+fuel-core-types = { workspace = true, features = ["alloc", "serde", "da-compression"] }
 postcard = { version = "1.0", features = ["use-std"] }
 rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
