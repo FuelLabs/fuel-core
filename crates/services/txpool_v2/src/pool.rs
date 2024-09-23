@@ -89,17 +89,14 @@ where
         let collisions = self
             .collision_manager
             .collect_colliding_transactions(&tx, &self.storage)?;
-        let dependencies = self.storage.validate_inputs_and_collect_dependencies(
-            &tx,
-            collisions.reasons,
-            &latest_view,
-            self.config.utxo_validation,
-        )?;
+        self.storage
+            .validate_inputs(&tx, &latest_view, self.config.utxo_validation)?;
+        let dependencies = self.storage.collect_transaction_dependencies(&tx)?;
         let has_dependencies = !dependencies.is_empty();
         let (storage_id, removed_transactions) = self.storage.store_transaction(
             tx,
-            &dependencies,
-            &collisions.colliding_txs,
+            dependencies,
+            collisions.colliding_txs(),
         )?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
         // No dependencies directly in the graph and the sorted transactions
@@ -126,14 +123,14 @@ where
         let collisions = self
             .collision_manager
             .collect_colliding_transactions(tx, &self.storage)?;
-        let dependencies = self.storage.validate_inputs_and_collect_dependencies(
+        self.storage.validate_inputs(
             tx,
-            collisions.reasons,
             &persistent_storage,
             self.config.utxo_validation,
         )?;
+        let dependencies = self.storage.collect_transaction_dependencies(tx)?;
         self.storage
-            .can_store_transaction(tx, &dependencies, &collisions.colliding_txs);
+            .can_store_transaction(tx, &dependencies, collisions.colliding_txs());
         Ok(())
     }
 
@@ -153,7 +150,9 @@ where
             )?
             .into_iter()
             .map(|storage_id| {
-                let storage_data = self.storage.remove_transaction(storage_id)?;
+                let storage_data = self
+                    .storage
+                    .remove_transaction_without_dependencies(storage_id)?;
                 self.collision_manager
                     .on_removed_transaction(&storage_data.transaction)?;
                 self.selection_algorithm
@@ -177,7 +176,7 @@ where
     }
 
     fn check_pool_is_not_full(&self) -> Result<(), Error> {
-        if self.storage.count() >= self.config.max_txs as usize {
+        if self.storage.count() >= self.config.max_txs {
             return Err(Error::NotInsertedLimitHit);
         }
         Ok(())

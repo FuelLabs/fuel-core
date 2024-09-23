@@ -323,7 +323,7 @@ where
             pool: Arc::new(RwLock::new(Pool::new(
                 ps_provider,
                 GraphStorage::new(GraphConfig {
-                    max_dependent_txn_count: config.max_dependent_txn_count,
+                    max_txs_chain_count: config.max_txs_chain_count,
                 }),
                 BasicCollisionManager::new(),
                 RatioTipGasSelection::new(),
