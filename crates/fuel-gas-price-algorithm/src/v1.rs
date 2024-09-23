@@ -4,7 +4,10 @@ use std::{
     ops::Div,
 };
 
-use crate::utils::cumulative_percentage_change;
+use crate::utils::{
+    cumulative_percentage_change,
+    safe_signed_abs,
+};
 
 #[cfg(test)]
 mod tests;
@@ -325,19 +328,13 @@ impl AlgorithmUpdaterV1 {
 
     fn da_change(&self, p: i128, d: i128) -> i128 {
         let pd_change = p.saturating_add(d);
-        let pd_change = if pd_change == i128::MIN {
-            pd_change + 1
-        } else {
-            pd_change
-        };
         let upcast_percent = self.max_da_gas_price_change_percent.into();
         let max_change = self
             .new_scaled_da_gas_price
             .saturating_mul(upcast_percent)
             .saturating_div(100)
             .into();
-        debug_assert!(pd_change != i128::MIN);
-        let clamped_change = pd_change.abs().min(max_change);
+        let clamped_change = safe_signed_abs(pd_change).min(max_change);
         pd_change.signum().saturating_mul(clamped_change)
     }
 

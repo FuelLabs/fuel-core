@@ -18,3 +18,24 @@ pub(crate) fn cumulative_percentage_change(
     // `f64` over `u64::MAX` are cast to `u64::MAX`
     approx.ceil() as u64
 }
+
+pub(crate) fn safe_signed_abs(n: i128) -> i128 {
+    let n = if n == i128::MIN {
+        n.saturating_add(1)
+    } else {
+        n
+    };
+    debug_assert!(n != i128::MIN);
+    n.abs()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::safe_signed_abs;
+
+    #[test]
+    fn safe_signed_abs_does_not_overflow_on_min_value() {
+        let abs = safe_signed_abs(i128::MIN);
+        assert_eq!(abs, i128::MAX);
+    }
+}
