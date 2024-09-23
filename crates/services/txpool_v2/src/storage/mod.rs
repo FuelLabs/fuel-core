@@ -5,7 +5,6 @@ use std::{
 };
 
 use crate::{
-    collision_manager::CollisionReason,
     error::Error,
     ports::TxPoolPersistentStorage,
 };
@@ -25,6 +24,8 @@ pub struct StorageData {
     pub dependents_cumulative_tip: u64,
     /// The cumulative gas of a transaction and all of its children.
     pub dependents_cumulative_gas: u64,
+    /// The cumulative of space used by a transaction and all of its children.
+    pub dependents_cumulative_bytes_size: usize,
     /// Number of dependents
     pub number_txs_in_chain: usize,
 }
@@ -37,14 +38,13 @@ pub trait Storage {
     /// The index type used in the storage and allow other components to reference transactions.
     type StorageIndex: Copy + Debug;
 
-    /// Store a transaction in the storage according to the dependencies and collisions.
-    /// Returns the index of the stored transaction and the transactions that were removed from the storage in favor of the new transaction.
+    /// Store a transaction in the storage according to the dependencies.
+    /// Returns the index of the stored transaction.
     fn store_transaction(
         &mut self,
         transaction: ArcPoolTx,
         dependencies: Vec<Self::StorageIndex>,
-        collided_transactions: &[Self::StorageIndex],
-    ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
+    ) -> Result<Self::StorageIndex, Error>;
 
     /// Check if a transaction could be stored in the storage. This shouldn't be expected to be called before store_transaction.
     /// Its just a way to perform some checks without storing the transaction.
@@ -52,7 +52,6 @@ pub trait Storage {
         &self,
         transaction: &PoolTransaction,
         dependencies: &[Self::StorageIndex],
-        collided_transactions: &[Self::StorageIndex],
     ) -> Result<(), Error>;
 
     /// Get the storage data by its index.
@@ -69,6 +68,18 @@ pub trait Storage {
         &self,
         index: Self::StorageIndex,
     ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
+
+    /// Get less worth subtree roots.
+    fn get_worst_ratio_tip_gas_subtree_roots(
+        &self,
+    ) -> Result<Vec<Self::StorageIndex>, Error>;
+
+    /// Verify if an id is in the dependencies subtree of another ids
+    fn is_in_dependencies_subtrees(
+        &self,
+        index: Self::StorageIndex,
+        transactions: &[Self::StorageIndex],
+    ) -> Result<bool, Error>;
 
     /// Validate inputs of a transaction.
     fn validate_inputs(
@@ -91,6 +102,12 @@ pub trait Storage {
         &mut self,
         index: Self::StorageIndex,
     ) -> Result<StorageData, Error>;
+
+    /// Remove a transaction along with its dependents subtree.
+    fn remove_transaction_and_dependents_subtree(
+        &mut self,
+        index: Self::StorageIndex,
+    ) -> Result<RemovedTransactions, Error>;
 
     /// Count the number of transactions in the storage.
     fn count(&self) -> usize;
