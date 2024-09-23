@@ -87,10 +87,11 @@ impl MetadataStorage for Database<GasPriceDatabase> {
                 block_height,
                 source_error: err.into(),
             })?;
-        tx.commit().map_err(|err| GasPriceError::CouldNotSetMetadata {
-            block_height,
-            source_error: err.into(),
-        })?;
+        tx.commit()
+            .map_err(|err| GasPriceError::CouldNotSetMetadata {
+                block_height,
+                source_error: err.into(),
+            })?;
         Ok(())
     }
 }

@@ -311,6 +311,18 @@ impl CombinedDatabase {
 
         Ok(())
     }
+
+    pub fn sync_aux_db_heights<S>(&self, shutdown_listener: &mut S) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        let on_chain_height = self
+            .on_chain()
+            .latest_height_from_metadata()?
+            .ok_or(anyhow::anyhow!("on-chain database doesn't have height"))?;
+
+        self.rollback_to(on_chain_height, shutdown_listener)
+    }
 }
 
 /// A trait for listening to shutdown signals.
