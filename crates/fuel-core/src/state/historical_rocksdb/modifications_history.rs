@@ -289,12 +289,11 @@ mod tests {
         let as_structured_storage: &mut StructuredStorage<
             InMemoryStorage<Column<OnChain>>,
         > = versioned_storage.as_mut();
-
-        // When
         let mut v1_value = Changes::default();
         with_empty_level(&mut v1_value, 42);
         let v2_value = Changes::default();
 
+        // When
         <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
             ModificationsHistoryV1<OnChain>,
         >>::insert(as_structured_storage, &1, &v1_value)
@@ -319,19 +318,48 @@ mod tests {
     }
 
     #[test]
-    fn remove_removes_all_versions() {
+    fn get_returns_v1_on_old_values() {
         // Given
         let storage: InMemoryStorage<Column<OnChain>> = InMemoryStorage::default();
         let mut versioned_storage = VersionedStorage::new(storage);
         let as_structured_storage: &mut StructuredStorage<
             InMemoryStorage<Column<OnChain>>,
         > = versioned_storage.as_mut();
+        let mut v1_value = Changes::default();
+        with_empty_level(&mut v1_value, 42);
 
         // When
+
+        <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+            ModificationsHistoryV1<OnChain>,
+        >>::insert(as_structured_storage, &1, &v1_value)
+        .unwrap();
+
+        // Then
+        let fetched =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistory<OnChain>,
+            >>::get(&versioned_storage, &1)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        assert_eq!(fetched, v1_value);
+    }
+
+    #[test]
+    fn take_removes_all_versions() {
+        // Given
+        let storage: InMemoryStorage<Column<OnChain>> = InMemoryStorage::default();
+        let mut versioned_storage = VersionedStorage::new(storage);
+        let as_structured_storage: &mut StructuredStorage<
+            InMemoryStorage<Column<OnChain>>,
+        > = versioned_storage.as_mut();
         let mut v1_value = Changes::default();
         with_empty_level(&mut v1_value, 42);
         let v2_value = Changes::default();
 
+        // When
         <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
             ModificationsHistoryV1<OnChain>,
         >>::insert(as_structured_storage, &1, &v1_value)
@@ -362,20 +390,173 @@ mod tests {
             <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
                 ModificationsHistoryV1<OnChain>,
             >>::get(as_structured_storage, &1)
-            .unwrap()
-            .map(|borrowed| borrowed.into_owned());
+            .unwrap();
 
         let v2_fetched_after_taken =
             <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
                 ModificationsHistoryV2<OnChain>,
             >>::get(as_structured_storage, &1)
-            .unwrap()
-            .map(|borrowed| borrowed.into_owned());
+            .unwrap();
 
         // Then
         assert_eq!(taken, v2_value);
         assert!(v1_fetched_after_taken.is_none());
         assert!(v2_fetched_after_taken.is_none());
         assert!(fetched_after_taken.is_none());
+    }
+
+    #[test]
+    fn take_returns_v1_on_old_values() {
+        // Given
+        let storage: InMemoryStorage<Column<OnChain>> = InMemoryStorage::default();
+        let mut versioned_storage = VersionedStorage::new(storage);
+        let as_structured_storage: &mut StructuredStorage<
+            InMemoryStorage<Column<OnChain>>,
+        > = versioned_storage.as_mut();
+
+        let mut v1_value = Changes::default();
+        with_empty_level(&mut v1_value, 42);
+
+        // When
+
+        <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+            ModificationsHistoryV1<OnChain>,
+        >>::insert(as_structured_storage, &1, &v1_value)
+        .unwrap();
+
+        let taken =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+                ModificationsHistory<OnChain>,
+            >>::take(&mut versioned_storage, &1)
+            .unwrap()
+            .unwrap();
+
+        let fetched_after_taken =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistory<OnChain>,
+            >>::get(&versioned_storage, &1)
+            .unwrap();
+
+        let as_structured_storage: &StructuredStorage<InMemoryStorage<Column<OnChain>>> =
+            versioned_storage.as_ref();
+
+        let v1_fetched_after_taken =
+            <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistoryV1<OnChain>,
+            >>::get(as_structured_storage, &1)
+            .unwrap();
+
+        // Then
+        assert_eq!(taken, v1_value);
+        assert!(v1_fetched_after_taken.is_none());
+        assert!(fetched_after_taken.is_none());
+    }
+
+    #[test]
+    fn replace_v1_with_v2() {
+        // Given
+        let storage: InMemoryStorage<Column<OnChain>> = InMemoryStorage::default();
+        let mut versioned_storage = VersionedStorage::new(storage);
+        let as_structured_storage: &mut StructuredStorage<
+            InMemoryStorage<Column<OnChain>>,
+        > = versioned_storage.as_mut();
+
+        let v1_value = Changes::default();
+        let mut v2_value = Changes::default();
+        with_empty_level(&mut v2_value, 42);
+
+        // When
+        <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+            ModificationsHistoryV1<OnChain>,
+        >>::insert(as_structured_storage, &1, &v1_value)
+        .unwrap();
+
+        let replaced =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+                ModificationsHistory<OnChain>,
+            >>::replace(&mut versioned_storage, &1, &v2_value)
+            .unwrap()
+            .unwrap();
+
+        let fetched_after_replaced =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistory<OnChain>,
+            >>::get(&versioned_storage, &1)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        let as_structured_storage: &StructuredStorage<InMemoryStorage<Column<OnChain>>> =
+            versioned_storage.as_ref();
+
+        let v1_fetched_after_replaced =
+            <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistoryV1<OnChain>,
+            >>::get(as_structured_storage, &1)
+            .unwrap()
+            .map(|borrowed| borrowed.into_owned());
+
+        let v2_fetched_after_replaced =
+            <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistoryV1<OnChain>,
+            >>::get(as_structured_storage, &1)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        // Then
+        assert_eq!(replaced, v1_value);
+        assert!(v1_fetched_after_replaced.is_none());
+        assert_eq!(v2_fetched_after_replaced, v2_value);
+        assert_eq!(fetched_after_replaced, v2_value);
+    }
+
+    #[test]
+    fn replace_v2() {
+        // Given
+        let storage: InMemoryStorage<Column<OnChain>> = InMemoryStorage::default();
+        let mut versioned_storage = VersionedStorage::new(storage);
+        let as_structured_storage: &mut StructuredStorage<
+            InMemoryStorage<Column<OnChain>>,
+        > = versioned_storage.as_mut();
+
+        let v2_old_value = Changes::default();
+        let mut v2_new_value = Changes::default();
+        with_empty_level(&mut v2_new_value, 42);
+
+        // When
+        <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+            ModificationsHistoryV2<OnChain>,
+        >>::insert(as_structured_storage, &1, &v2_old_value)
+        .unwrap();
+
+        let replaced =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageMutate<
+                ModificationsHistory<OnChain>,
+            >>::replace(&mut versioned_storage, &1, &v2_new_value)
+            .unwrap()
+            .unwrap();
+
+        let fetched_after_replaced =
+            <VersionedStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistory<OnChain>,
+            >>::get(&versioned_storage, &1)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        let as_structured_storage: &StructuredStorage<InMemoryStorage<Column<OnChain>>> =
+            versioned_storage.as_ref();
+
+        let v2_fetched_after_replaced =
+            <StructuredStorage<InMemoryStorage<Column<OnChain>>> as StorageInspect<
+                ModificationsHistoryV2<OnChain>,
+            >>::get(as_structured_storage, &1)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        // Then
+        assert_eq!(replaced, v2_old_value);
+        assert_eq!(v2_fetched_after_replaced, v2_new_value);
+        assert_eq!(fetched_after_replaced, v2_new_value);
     }
 }
