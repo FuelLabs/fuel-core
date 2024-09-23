@@ -123,6 +123,8 @@ pub struct Config {
     pub max_txs_chain_count: usize,
     /// Pool limits
     pub pool_limits: PoolLimits,
+    /// Interval for checking the time to live of transactions.
+    pub ttl_check_interval: Duration,
     /// Maximum transaction time to live.
     pub max_txs_ttl: Duration,
     /// Heavy async processing configuration.
@@ -155,13 +157,14 @@ impl Default for Config {
         Self {
             utxo_validation: true,
             max_txs_chain_count: 1000,
+            ttl_check_interval: Duration::from_secs(60),
+            max_txs_ttl: Duration::from_secs(60 * 10),
+            black_list: BlackList::default(),
             pool_limits: PoolLimits {
                 max_txs: 10000,
                 max_gas: 100_000_000_000,
                 max_bytes_size: 10_000_000_000,
             },
-            max_txs_ttl: Duration::from_secs(60 * 10),
-            black_list: BlackList::default(),
             heavy_work: HeavyWorkConfig {
                 number_threads_verif_insert_transactions: 4,
                 number_pending_tasks_threads_verif_insert_transactions: 100,

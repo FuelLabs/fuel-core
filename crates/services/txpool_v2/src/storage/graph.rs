@@ -110,7 +110,7 @@ impl GraphStorage {
         }
         if let Some(removed_tx) = self.graph.remove_node(root_id) {
             self.clear_cache(
-                &removed_tx.transaction.outputs(),
+                removed_tx.transaction.outputs(),
                 &removed_tx.transaction.id(),
             )?;
             removed.push(removed_tx.transaction);
@@ -583,7 +583,7 @@ impl Storage for GraphStorage {
     fn remove_transaction_without_dependencies(
         &mut self,
         index: Self::StorageIndex,
-    ) -> Result<StorageData, Error> {
+    ) -> Result<ArcPoolTx, Error> {
         if self.get_dependencies(index)?.next().is_some() {
             return Err(Error::Storage("Tried to remove a transaction without dependencies but it has dependencies".to_string()));
         }
@@ -597,7 +597,7 @@ impl Storage for GraphStorage {
             )))
             .and_then(|node| {
                 self.clear_cache(node.transaction.outputs(), &node.transaction.id())?;
-                Ok(node)
+                Ok(node.transaction)
             })
     }
 

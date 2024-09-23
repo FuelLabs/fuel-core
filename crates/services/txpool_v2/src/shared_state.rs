@@ -1,4 +1,8 @@
-use std::sync::Arc;
+use std::{
+    collections::VecDeque,
+    sync::Arc,
+    time::Duration,
+};
 
 use fuel_core_types::{
     fuel_tx::{
@@ -19,7 +23,10 @@ use fuel_core_types::{
     },
 };
 use parking_lot::RwLock;
-use tokio::sync::Notify;
+use tokio::{
+    sync::Notify,
+    time::Instant,
+};
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -75,6 +82,7 @@ pub struct SharedState<
     pub(crate) p2p: Arc<P2P>,
     pub(crate) new_txs_notifier: Arc<Notify>,
     pub(crate) utxo_validation: bool,
+    pub(crate) time_txs_submitted: Arc<RwLock<VecDeque<(Instant, TxId)>>>,
 }
 
 impl<
@@ -105,6 +113,7 @@ impl<
             memory: self.memory.clone(),
             heavy_async_processor: self.heavy_async_processor.clone(),
             new_txs_notifier: self.new_txs_notifier.clone(),
+            time_txs_submitted: self.time_txs_submitted.clone(),
             utxo_validation: self.utxo_validation,
         }
     }
@@ -180,10 +189,15 @@ where
                     let result = {
                         let mut pool = shared_state.pool.write();
                         // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)
-                        pool.insert(tx)
+                        pool.insert(tx.clone())
                     };
                     if result.is_ok() {
                         shared_state.new_txs_notifier.notify_waiters();
+                        let submitted_time = Instant::now();
+                        shared_state
+                            .time_txs_submitted
+                            .write()
+                            .push_front((submitted_time, tx.id()));
                         if let Err(e) = shared_state.p2p.broadcast_transaction(tx_clone) {
                             tracing::error!("Failed to broadcast transaction: {}", e);
                         }
@@ -259,6 +273,26 @@ where
 
     pub fn select_transactions(&self, max_gas: u64) -> Result<Vec<ArcPoolTx>, Error> {
         self.pool.write().extract_transactions_for_block(max_gas)
+    }
+
+    pub fn prune_old_transactions(&mut self, ttl: Duration) {
+        let txs_to_remove = {
+            let mut time_txs_submitted = self.time_txs_submitted.write();
+            let now = Instant::now();
+            let mut txs_to_remove = vec![];
+            while let Some((time, _)) = time_txs_submitted.back() {
+                if now.duration_since(*time) < ttl {
+                    break;
+                }
+                // SAFETY: We are removing the last element that we just checked
+                txs_to_remove.push(time_txs_submitted.pop_back().unwrap().1);
+            }
+            txs_to_remove
+        };
+        {
+            let mut pool = self.pool.write();
+            pool.remove_transaction_and_dependents(txs_to_remove);
+        }
     }
 
     pub fn get_new_txs_notifier(&self) -> Arc<Notify> {

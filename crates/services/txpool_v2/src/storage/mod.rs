@@ -101,7 +101,7 @@ pub trait Storage {
     fn remove_transaction_without_dependencies(
         &mut self,
         index: Self::StorageIndex,
-    ) -> Result<StorageData, Error>;
+    ) -> Result<ArcPoolTx, Error>;
 
     /// Remove a transaction along with its dependents subtree.
     fn remove_transaction_and_dependents_subtree(

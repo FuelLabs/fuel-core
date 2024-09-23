@@ -16,6 +16,7 @@ use fuel_core_types::{
         PoolTransaction,
     },
 };
+use num_rational::Ratio;
 use tracing::instrument;
 
 use crate::{
@@ -99,6 +100,8 @@ where
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
         let tx_id = tx.id();
+        let gas = tx.max_gas();
+        let bytes_size = tx.metered_bytes_size();
         self.config.black_list.check_blacklisting(&tx)?;
         Self::check_blob_does_not_exist(&tx, &latest_view)?;
         self.storage
@@ -131,6 +134,8 @@ where
         let has_dependencies = !dependencies.is_empty();
         let storage_id = self.storage.store_transaction(tx, dependencies)?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
+        self.current_gas = self.current_gas.saturating_add(gas);
+        self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
             self.selection_algorithm
@@ -177,16 +182,15 @@ where
             .gather_best_txs(Constraints { max_gas }, &self.storage)?
             .into_iter()
             .map(|storage_id| {
-                let storage_data = self
+                let transaction = self
                     .storage
                     .remove_transaction_without_dependencies(storage_id)?;
                 self.collision_manager
-                    .on_removed_transaction(&storage_data.transaction)?;
+                    .on_removed_transaction(&transaction)?;
                 self.selection_algorithm
-                    .on_removed_transaction(&storage_data.transaction)?;
-                self.tx_id_to_storage_id
-                    .remove(&storage_data.transaction.id());
-                Ok(storage_data.transaction)
+                    .on_removed_transaction(&transaction)?;
+                self.tx_id_to_storage_id.remove(&transaction.id());
+                Ok(transaction)
             })
             .collect()
     }
@@ -206,26 +210,40 @@ where
     }
 
     /// Remove transaction but keep its dependents.
-    /// The dependents become exeuctables.
-    pub fn remove_committed_txs(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {
+    /// The dependents become executables.
+    pub fn remove_transaction(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents = self.storage.get_dependents(storage_id)?.collect();
-                let storage_data = self
+                let transaction = self
                     .storage
                     .remove_transaction_without_dependencies(storage_id)?;
                 self.selection_algorithm
                     .new_executable_transactions(dependents, &self.storage)?;
-                self.update_components_and_caches_on_removal(
-                    &[storage_data.transaction],
-                )?;
+                self.update_components_and_caches_on_removal(&[transaction])?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove transaction and its dependents.
+    pub fn remove_transaction_and_dependents(
+        &mut self,
+        tx_ids: Vec<TxId>,
+    ) -> Result<(), Error> {
+        for tx_id in tx_ids {
+            if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
+                let removed = self
+                    .storage
+                    .remove_transaction_and_dependents_subtree(storage_id)?;
+                self.update_components_and_caches_on_removal(&removed)?;
             }
         }
         Ok(())
     }
 
     /// Check if the pool has enough space to store a transaction.
-    /// It will try to see if we can free some space dependending on defined rules
+    /// It will try to see if we can free some space depending on defined rules
     /// If the pool is not full, it will return an empty list
     /// If the pool is full, it will return the list of transactions that must be removed from the pool along all of their dependent subtree
     /// If the pool is full and we can't make enough space by removing transactions, it will return an error
@@ -235,9 +253,12 @@ where
         collision: &Option<S::StorageIndex>,
         dependencies: &[S::StorageIndex],
     ) -> Result<Vec<S::StorageIndex>, Error> {
-        if self.current_gas < self.config.pool_limits.max_gas
-            && self.current_bytes_size < self.config.pool_limits.max_bytes_size
-            && self.storage.count() < self.config.pool_limits.max_txs
+        let tx_gas = tx.max_gas();
+        let bytes_size = tx.metered_bytes_size();
+        if self.current_gas.saturating_add(tx_gas) <= self.config.pool_limits.max_gas
+            && self.current_bytes_size.saturating_add(bytes_size)
+                <= self.config.pool_limits.max_bytes_size
+            && self.storage.count().saturating_add(1) <= self.config.pool_limits.max_txs
         {
             return Ok(vec![]);
         }
@@ -270,9 +291,10 @@ where
         // Here the transaction has no dependencies and no collision which means that it's an executable transaction
         // and we want to make space for it
         let mut removed_transactions = vec![];
-        let mut gas_left = self.current_gas;
-        let mut bytes_left = self.current_bytes_size;
-        let mut txs_left = self.storage.count();
+        let mut gas_left = self.current_gas.saturating_add(tx_gas);
+        let mut bytes_left = self.current_bytes_size.saturating_add(bytes_size);
+        let mut txs_left = self.storage.count().saturating_add(1);
+        let current_ratio = Ratio::new(tx.tip(), tx_gas);
         let mut sorted_txs = self
             .storage
             .get_worst_ratio_tip_gas_subtree_roots()?
@@ -283,6 +305,19 @@ where
         {
             let storage_id = sorted_txs.next().ok_or(Error::NotInsertedLimitHit)?;
             let storage_data = self.storage.get(&storage_id)?;
+            let mut dependencies = self.storage.get_dependencies(storage_id)?;
+            match dependencies.next() {
+                Some(_) => {}
+                None => {
+                    let stored_ratio = Ratio::new(
+                        storage_data.transaction.tip(),
+                        storage_data.transaction.max_gas(),
+                    );
+                    if stored_ratio >= current_ratio {
+                        return Err(Error::NotInsertedLimitHit);
+                    }
+                }
+            }
             gas_left = gas_left.saturating_sub(storage_data.dependents_cumulative_gas);
             bytes_left =
                 bytes_left.saturating_sub(storage_data.dependents_cumulative_bytes_size);
@@ -316,6 +351,10 @@ where
             self.collision_manager.on_removed_transaction(tx)?;
             self.selection_algorithm.on_removed_transaction(tx)?;
             self.tx_id_to_storage_id.remove(&tx.id());
+            self.current_gas = self.current_gas.saturating_sub(tx.max_gas());
+            self.current_bytes_size = self
+                .current_bytes_size
+                .saturating_sub(tx.metered_bytes_size());
         }
         Ok(())
     }
