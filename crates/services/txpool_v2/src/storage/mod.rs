@@ -68,7 +68,7 @@ pub trait Storage {
     /// Get less worth subtree roots.
     fn get_worst_ratio_tip_gas_subtree_roots(
         &self,
-    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
+    ) -> Result<Vec<Self::StorageIndex>, Error>;
 
     /// Verify if an id is in the dependencies subtree of another ids
     fn is_in_dependencies_subtrees(

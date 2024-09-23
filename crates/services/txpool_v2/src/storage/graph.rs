@@ -1,6 +1,6 @@
 use std::{
     collections::{
-        BTreeMap,
+        BTreeSet,
         HashMap,
         HashSet,
     },
@@ -425,6 +425,29 @@ impl Storage for GraphStorage {
         index: Self::StorageIndex,
     ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error> {
         self.get_dependents_inner(index)
+    }
+
+    // Maybe change in the future as it can be very costly.
+    fn get_worst_ratio_tip_gas_subtree_roots(
+        &self,
+    ) -> Result<Vec<Self::StorageIndex>, Error> {
+        let mut sorted_nodes: BTreeSet<(Ratio<u64>, NodeIndex)> = BTreeSet::new();
+        for node_id in self.graph.node_indices() {
+            let Some(node) = self.graph.node_weight(node_id) else {
+                return Err(Error::Storage(format!(
+                    "Node with id {:?} not found",
+                    node_id
+                )));
+            };
+            sorted_nodes.insert((
+                Ratio::new(
+                    node.dependents_cumulative_tip,
+                    node.dependents_cumulative_gas,
+                ),
+                node_id,
+            ));
+        }
+        Ok(sorted_nodes.iter().map(|(_, node_id)| *node_id).collect())
     }
 
     fn is_in_dependencies_subtrees(

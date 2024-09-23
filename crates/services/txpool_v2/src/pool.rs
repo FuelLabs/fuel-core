@@ -241,7 +241,10 @@ where
         let mut gas_left = self.current_gas;
         let mut bytes_left = self.current_bytes_size;
         let mut txs_left = self.storage.count();
-        let mut sorted_txs = self.storage.get_worst_ratio_tip_gas_subtree_roots()?;
+        let mut sorted_txs = self
+            .storage
+            .get_worst_ratio_tip_gas_subtree_roots()?
+            .into_iter();
         while gas_left > self.config.pool_limits.max_gas
             || bytes_left > self.config.pool_limits.max_bytes_size
             || txs_left > self.config.pool_limits.max_txs
