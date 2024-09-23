@@ -317,7 +317,11 @@ impl CombinedDatabase {
         S: ShutdownListener,
     {
         if let Some(on_chain_height) = self.on_chain().latest_height_from_metadata()? {
-            let _ = self.rollback_to(on_chain_height, shutdown_listener);
+            // todo(https://github.com/FuelLabs/fuel-core/issues/2239): This is a temporary fix
+            let res = self.rollback_to(on_chain_height, shutdown_listener);
+            if res.is_err() {
+                tracing::warn!("Failed to rollback auxiliary databases to on-chain database height: {:?}", res);
+            }
         };
 
         Ok(())
