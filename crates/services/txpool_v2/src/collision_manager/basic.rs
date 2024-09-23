@@ -159,8 +159,8 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
             .get(&collision)
             .expect("Transaction always should exist in storage");
         let colliding_tx_ratio = Ratio::new(
-            colliding_tx.dependents_cumulative_gas,
             colliding_tx.dependents_cumulative_tip,
+            colliding_tx.dependents_cumulative_gas,
         );
         new_tx_ratio > colliding_tx_ratio
     }

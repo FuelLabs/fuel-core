@@ -115,6 +115,12 @@ where
             let removed = self.storage.remove_transaction_and_dependents_subtree(tx)?;
             removed_transactions.extend(removed);
         }
+        if let Some(collision) = collision {
+            removed_transactions.extend(
+                self.storage
+                    .remove_transaction_and_dependents_subtree(collision)?
+            );
+        }
         let has_dependencies = !dependencies.is_empty();
         let storage_id = self.storage.store_transaction(tx, dependencies)?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
@@ -147,7 +153,7 @@ where
             self.config.utxo_validation,
         )?;
         let dependencies = self.storage.collect_transaction_dependencies(tx)?;
-        self.check_pool_size_available(&tx, &collision, &dependencies)?;
+        self.check_pool_size_available(tx, &collision, &dependencies)?;
         self.storage.can_store_transaction(tx, &dependencies);
         Ok(())
     }
@@ -195,13 +201,14 @@ where
 
     /// Check if the pool has enough space to store a transaction.
     /// It will try to see if we can free some space dependending on defined rules
-    /// Returns an error if the pool is full.
-    /// If the pool is not full, it will return the list of transactions that must be removed from the pool along all of their dependent subtree
+    /// If the pool is not full, it will return an empty list
+    /// If the pool is full, it will return the list of transactions that must be removed from the pool along all of their dependent subtree
+    /// If the pool is full and we can't make enough space by removing transactions, it will return an error
     fn check_pool_size_available(
         &self,
         tx: &PoolTransaction,
         collision: &Option<S::StorageIndex>,
-        dependencies: &Vec<S::StorageIndex>,
+        dependencies: &[S::StorageIndex],
     ) -> Result<Vec<S::StorageIndex>, Error> {
         if self.current_gas < self.config.pool_limits.max_gas
             && self.current_bytes_size < self.config.pool_limits.max_bytes_size

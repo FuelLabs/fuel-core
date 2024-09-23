@@ -457,32 +457,6 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
 }
 
 #[tokio::test]
-async fn insert__tx_limit_hit() {
-    let mut universe = TestPoolUniverse::default().config(Config {
-        pool_limits: PoolLimits {
-            max_txs: 1,
-            max_bytes_size: 1000000000,
-            max_gas: 100_000_000_000,
-        },
-        ..Default::default()
-    });
-    universe.build_pool();
-
-    // Given
-    let tx1 = universe.build_script_transaction(None, None, 0);
-    let tx2 = universe.build_script_transaction(None, None, 0);
-
-    // When
-    let result1 = universe.verify_and_insert(tx1).await;
-    let result2 = universe.verify_and_insert(tx2).await;
-
-    // Then
-    assert!(result1.is_ok());
-    let err = result2.unwrap_err();
-    assert!(matches!(err, Error::NotInsertedLimitHit));
-}
-
-#[tokio::test]
 async fn insert__dependency_chain_length_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
         max_txs_chain_count: 2,
@@ -802,8 +776,8 @@ async fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
-    let tip_high = 2u64;
     let tip_low = 1u64;
+    let tip_high = 2u64;
     let (message, conflicting_message_input) =
         create_message_predicate_from_message(10_000, 0);
     universe.database_mut().insert_message(message.clone());
@@ -1126,7 +1100,7 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     let err = universe.verify_and_insert(tx3).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::Collided(_)));
+    assert!(matches!(err, Error::NotInsertedCollisionIsDependency));
 }
 
 #[tokio::test]

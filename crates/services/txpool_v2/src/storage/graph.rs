@@ -91,7 +91,7 @@ impl GraphStorage {
         let gas_removed = root.dependents_cumulative_gas;
         let tip_removed = root.dependents_cumulative_tip;
         let dependencies: Vec<NodeIndex> = self.get_dependencies(root_id)?.collect();
-        let removed = self.remove_dependent_sub_graph(root_id)?;
+        let mut removed = self.remove_dependent_sub_graph(root_id)?;
         let mut already_visited = HashSet::new();
         for dependency in dependencies {
             if already_visited.contains(&dependency) {
@@ -104,6 +104,10 @@ impl GraphStorage {
                 removed.len(),
                 &mut already_visited,
             )?;
+        }
+        if let Some(removed_tx) = self.graph.remove_node(root_id) {
+            self.clear_cache(&removed_tx.transaction.outputs(), &removed_tx.transaction.id())?;
+            removed.push(removed_tx.transaction);
         }
         Ok(removed)
     }
