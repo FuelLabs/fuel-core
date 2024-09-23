@@ -37,7 +37,7 @@ use crate::{
 use super::CollisionManager;
 
 pub trait BasicCollisionManagerStorage {
-    type StorageIndex: Copy + Debug;
+    type StorageIndex: Copy + Debug + PartialEq + Eq;
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
 }
@@ -79,11 +79,13 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
         if let PoolTransaction::Blob(checked_tx, _) = tx {
             let blob_id = checked_tx.transaction().blob_id();
             if let Some(state) = self.blobs_users.get(blob_id) {
-                if collision.is_some() {
-                    return Err(Error::Collided(format!(
-                        "Transaction collides with other transactions: {:?}",
-                        collision
-                    )));
+                if let Some(collision) = collision {
+                    if state != &collision {
+                        return Err(Error::Collided(format!(
+                            "Transaction collides with other transactions: {:?}",
+                            collision
+                        )));
+                    }
                 }
                 collision = Some(*state);
             }
@@ -94,11 +96,13 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // Check if the utxo is already spent by another transaction in the pool
                     if let Some(tx_id) = self.coins_spenders.get(utxo_id) {
-                        if collision.is_some() {
-                            return Err(Error::Collided(format!(
-                                "Transaction collides with other transactions: {:?}",
-                                collision
-                            )));
+                        if let Some(collision) = collision {
+                            if tx_id != &collision {
+                                return Err(Error::Collided(format!(
+                                    "Transaction collides with other transactions: {:?}",
+                                    collision
+                                )));
+                            }
                         }
                         collision = Some(*tx_id);
                     }
@@ -109,11 +113,13 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // Check if the message is already spent by another transaction in the pool
                     if let Some(tx_id) = self.messages_spenders.get(nonce) {
-                        if collision.is_some() {
-                            return Err(Error::Collided(format!(
-                                "Transaction collides with other transactions: {:?}",
-                                collision
-                            )));
+                        if let Some(collision) = collision {
+                            if tx_id != &collision {
+                                return Err(Error::Collided(format!(
+                                    "Transaction collides with other transactions: {:?}",
+                                    collision
+                                )));
+                            }
                         }
                         collision = Some(*tx_id);
                     }
@@ -127,11 +133,13 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
             if let Output::ContractCreated { contract_id, .. } = output {
                 // Check if the contract is already created by another transaction in the pool
                 if let Some(tx_id) = self.contracts_creators.get(contract_id) {
-                    if collision.is_some() {
-                        return Err(Error::Collided(format!(
-                            "Transaction collides with other transactions: {:?}",
-                            collision
-                        )));
+                    if let Some(collision) = collision {
+                        if tx_id != &collision {
+                            return Err(Error::Collided(format!(
+                                "Transaction collides with other transactions: {:?}",
+                                collision
+                            )));
+                        }
                     }
                     collision = Some(*tx_id);
                 }
