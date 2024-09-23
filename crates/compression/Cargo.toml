@@ -21,7 +21,7 @@ anyhow = { workspace = true }
 fuel-core-types = { workspace = true, features = [
   "alloc",
   "serde",
-  "da-compression"
+  "da-compression",
 ] }
 postcard = { version = "1.0", features = ["use-std"] }
 rand = { workspace = true, optional = true }
