@@ -62,6 +62,11 @@ pub trait TxPool: Send + Sync {
     ) -> Self::TxSource;
 }
 
+pub struct RelayerBlockInfo {
+    pub gas_cost: u64,
+    pub tx_count: u64,
+}
+
 #[async_trait::async_trait]
 pub trait Relayer: Send + Sync {
     /// Wait for the relayer to reach at least this height and return the latest height.
@@ -71,7 +76,10 @@ pub trait Relayer: Send + Sync {
     ) -> anyhow::Result<DaBlockHeight>;
 
     /// Get the total Forced Transaction gas cost for the block at the given height.
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64>;
+    async fn get_cost_and_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<RelayerBlockInfo>;
 }
 
 pub trait BlockProducer<TxSource>: Send + Sync {

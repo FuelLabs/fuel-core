@@ -26,9 +26,7 @@ pub struct StorageData {
     /// The cumulative gas of a transaction and all of its children.
     pub dependents_cumulative_gas: u64,
     /// Number of dependents
-    pub number_txs_in_chain: u64,
-    /// Submitted time
-    pub submitted_time: Instant,
+    pub number_txs_in_chain: usize,
 }
 
 pub type RemovedTransactions = Vec<ArcPoolTx>;
@@ -44,7 +42,7 @@ pub trait Storage {
     fn store_transaction(
         &mut self,
         transaction: ArcPoolTx,
-        dependencies: &[Self::StorageIndex],
+        dependencies: Vec<Self::StorageIndex>,
         collided_transactions: &[Self::StorageIndex],
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
 
@@ -64,28 +62,32 @@ pub trait Storage {
     fn get_dependencies(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
 
     /// Get the storage indexes of the dependents of a transaction.
     fn get_dependents(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
+    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
 
-    /// Collect the storage indexes of the transactions that are dependent on the given transaction.
-    /// The collisions can be useful as they implies that some verifications had already been done.
-    /// Returns the storage indexes of the dependencies transactions.
-    fn validate_inputs_and_collect_dependencies(
+    /// Validate inputs of a transaction.
+    fn validate_inputs(
         &self,
         transaction: &PoolTransaction,
-        collisions: HashSet<CollisionReason>,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
+    ) -> Result<(), Error>;
+
+    /// Collect the storage indexes of the transactions that are dependent on the given transaction.
+    fn collect_transaction_dependencies(
+        &self,
+        transaction: &PoolTransaction,
     ) -> Result<Vec<Self::StorageIndex>, Error>;
 
     /// Remove a transaction from the storage by its index.
+    /// The transaction is removed only if it has no dependencies.
     /// Doesn't remove the dependents.
-    fn remove_transaction(
+    fn remove_transaction_without_dependencies(
         &mut self,
         index: Self::StorageIndex,
     ) -> Result<StorageData, Error>;

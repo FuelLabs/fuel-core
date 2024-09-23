@@ -222,6 +222,10 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
         &mut self,
         transaction: &PoolTransaction,
     ) -> Result<(), Error> {
+        if let PoolTransaction::Blob(checked_tx, _) = transaction {
+            let blob_id = checked_tx.transaction().blob_id();
+            self.blobs_users.remove(blob_id);
+        }
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })

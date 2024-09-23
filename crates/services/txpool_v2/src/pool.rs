@@ -99,17 +99,14 @@ where
         let collisions = self
             .collision_manager
             .collect_colliding_transactions(&tx, &self.storage)?;
-        let dependencies = self.storage.validate_inputs_and_collect_dependencies(
-            &tx,
-            collisions.reasons,
-            &latest_view,
-            self.config.utxo_validation,
-        )?;
+        self.storage
+            .validate_inputs(&tx, &latest_view, self.config.utxo_validation)?;
+        let dependencies = self.storage.collect_transaction_dependencies(&tx)?;
         let has_dependencies = !dependencies.is_empty();
         let (storage_id, removed_transactions) = self.storage.store_transaction(
             tx,
-            &dependencies,
-            &collisions.colliding_txs,
+            dependencies,
+            collisions.colliding_txs(),
         )?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
         // No dependencies directly in the graph and the sorted transactions
@@ -136,14 +133,14 @@ where
         let collisions = self
             .collision_manager
             .collect_colliding_transactions(tx, &self.storage)?;
-        let dependencies = self.storage.validate_inputs_and_collect_dependencies(
+        self.storage.validate_inputs(
             tx,
-            collisions.reasons,
             &persistent_storage,
             self.config.utxo_validation,
         )?;
+        let dependencies = self.storage.collect_transaction_dependencies(tx)?;
         self.storage
-            .can_store_transaction(tx, &dependencies, &collisions.colliding_txs);
+            .can_store_transaction(tx, &dependencies, collisions.colliding_txs());
         Ok(())
     }
 
@@ -159,7 +156,9 @@ where
             .gather_best_txs(Constraints { max_gas }, &self.storage)?
             .into_iter()
             .map(|storage_id| {
-                let storage_data = self.storage.remove_transaction(storage_id)?;
+                let storage_data = self
+                    .storage
+                    .remove_transaction_without_dependencies(storage_id)?;
                 self.collision_manager
                     .on_removed_transaction(&storage_data.transaction)?;
                 self.selection_algorithm
@@ -190,8 +189,10 @@ where
     pub fn remove_committed_txs(&mut self, tx_ids: Vec<TxId>) -> Result<(), Error> {
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
-                let dependents = self.storage.get_dependents(storage_id)?;
-                let storage_data = self.storage.remove_transaction(storage_id)?;
+                let dependents = self.storage.get_dependents(storage_id)?.collect();
+                let storage_data = self
+                    .storage
+                    .remove_transaction_without_dependencies(storage_id)?;
                 self.selection_algorithm
                     .new_executable_transactions(dependents, &self.storage)?;
                 self.update_components_and_caches_on_removal(
@@ -203,7 +204,7 @@ where
     }
 
     fn check_pool_is_not_full(&self) -> Result<(), Error> {
-        if self.storage.count() >= self.config.max_txs as usize {
+        if self.storage.count() >= self.config.max_txs {
             return Err(Error::NotInsertedLimitHit);
         }
         Ok(())

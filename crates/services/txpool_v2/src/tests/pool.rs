@@ -477,7 +477,7 @@ async fn insert__tx_limit_hit() {
 #[tokio::test]
 async fn insert__dependency_chain_length_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
-        max_dependent_txn_count: 2,
+        max_txs_chain_count: 2,
         ..Default::default()
     });
     universe.build_pool();
@@ -1118,7 +1118,7 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     let err = universe.verify_and_insert(tx3).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::Storage(_)));
+    assert!(matches!(err, Error::Collided(_)));
 }
 
 #[tokio::test]

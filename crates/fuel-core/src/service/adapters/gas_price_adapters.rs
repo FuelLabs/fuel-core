@@ -1,16 +1,43 @@
-use crate::service::adapters::ConsensusParametersProvider;
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::{
-        GasPriceSettings,
-        GasPriceSettingsProvider,
-    },
-    Error as GasPriceError,
-    Result as GasPriceResult,
+use crate::{
+    database::OnChainIterableKeyValueView,
+    service::adapters::ConsensusParametersProvider,
 };
-use fuel_core_types::blockchain::header::ConsensusParametersVersion;
+use fuel_core_gas_price_service::{
+    fuel_gas_price_updater::{
+        fuel_core_storage_adapter::{
+            GasPriceSettings,
+            GasPriceSettingsProvider,
+        },
+        Error as GasPriceError,
+        Result as GasPriceResult,
+    },
+    ports::L2Data,
+};
+use fuel_core_storage::Result as StorageResult;
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
+};
 
 #[cfg(test)]
 mod tests;
+
+impl L2Data for OnChainIterableKeyValueView {
+    fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.latest_height()
+    }
+
+    fn get_block(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Option<Block<Transaction>>> {
+        self.get_full_block(height)
+    }
+}
 
 impl GasPriceSettingsProvider for ConsensusParametersProvider {
     fn settings(
