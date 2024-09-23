@@ -316,12 +316,11 @@ impl CombinedDatabase {
     where
         S: ShutdownListener,
     {
-        let on_chain_height = self
-            .on_chain()
-            .latest_height_from_metadata()?
-            .ok_or(anyhow::anyhow!("on-chain database doesn't have height"))?;
+        if let Some(on_chain_height) = self.on_chain().latest_height_from_metadata()? {
+            self.rollback_to(on_chain_height, shutdown_listener)?;
+        };
 
-        self.rollback_to(on_chain_height, shutdown_listener)
+        Ok(())
     }
 }
 
