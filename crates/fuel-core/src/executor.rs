@@ -4,10 +4,7 @@
 #[cfg(test)]
 mod tests {
 
-    use std::{
-        cell::RefCell,
-        sync::Mutex,
-    };
+    use std::sync::Mutex;
 
     use crate as fuel_core;
     use fuel_core::database::Database;
@@ -194,25 +191,25 @@ mod tests {
     /// that should be returned by [`TransactionsSource::next()`].
     /// It is used only for testing purposes
     pub struct BadTransactionsSource {
-        transactions: Mutex<RefCell<Vec<MaybeCheckedTransaction>>>,
+        transactions: Mutex<Vec<MaybeCheckedTransaction>>,
     }
 
     impl BadTransactionsSource {
         pub fn new(transactions: Vec<Transaction>) -> Self {
             Self {
-                transactions: Mutex::new(RefCell::new(
+                transactions: Mutex::new(
                     transactions
                         .into_iter()
                         .map(MaybeCheckedTransaction::Transaction)
                         .collect(),
-                )),
+                ),
             }
         }
     }
 
     impl TransactionsSource for BadTransactionsSource {
         fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
-            std::mem::take(&mut *self.transactions.lock().unwrap().borrow_mut())
+            std::mem::take(&mut *self.transactions.lock().unwrap())
         }
     }
 
