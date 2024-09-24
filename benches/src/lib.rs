@@ -398,7 +398,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         let prepare_script = prepare_script
             .into_iter()
             .chain(iter::once(op::ret(RegId::ONE)))
-            .chain(iter::once(instruction))
             .collect();
 
         let mut tx = TransactionBuilder::script(prepare_script, data);
@@ -531,8 +530,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }
 
         let start_vm = vm.clone();
-        let original_db = vm.as_mut().database_mut().clone();
-        let original_memory = vm.memory().clone();
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {
@@ -544,16 +541,13 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             }
         }
         let storage_diff = vm.storage_diff();
-        let mut vm = vm.remove_recording();
+        let vm = vm.remove_recording();
         let mut diff = start_vm.diff(&vm);
         diff += storage_diff;
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
-        vm.reset_vm_state(&diff);
-        *vm.as_mut().database_mut() = original_db;
-        *vm.memory_mut() = original_memory;
 
         Ok(Self {
-            vm,
+            vm: start_vm,
             instruction,
             diff,
         })
