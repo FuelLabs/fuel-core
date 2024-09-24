@@ -33,7 +33,8 @@ impl Simulator {
         &self,
         da_p_component: i64,
         da_d_component: i64,
-        da_recording_rate: usize,
+        update_period: usize,
+        da_finalization_rate: usize,
     ) -> SimulationResults {
         let capacity = 30_000_000;
         let gas_per_byte = 63;
@@ -42,8 +43,11 @@ impl Simulator {
         let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
 
         let l2_blocks = fullness_and_bytes.clone().into_iter();
-        let da_blocks =
-            self.zip_l2_blocks_with_da_blocks(da_recording_rate, &fullness_and_bytes);
+        let da_blocks = self.calculate_da_blocks(
+            update_period,
+            da_finalization_rate,
+            &fullness_and_bytes,
+        );
 
         let blocks = l2_blocks.zip(da_blocks.iter()).enumerate();
 
@@ -177,11 +181,13 @@ impl Simulator {
         }
     }
 
-    fn zip_l2_blocks_with_da_blocks(
+    fn calculate_da_blocks(
         &self,
         da_recording_rate: usize,
+        da_finalization_rate: usize,
         fullness_and_bytes: &Vec<(u64, u64)>,
     ) -> Vec<Option<Vec<RecordedBlock>>> {
+        let nones = std::iter::repeat(None).take(da_finalization_rate);
         let (_, da_blocks) = fullness_and_bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
@@ -207,7 +213,7 @@ impl Simulator {
                     }
                 },
             );
-        da_blocks
+        nones.chain(da_blocks).collect()
     }
 }
 

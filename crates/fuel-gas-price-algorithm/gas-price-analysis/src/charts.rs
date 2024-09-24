@@ -8,7 +8,7 @@ pub fn draw_chart(
     results: SimulationResults,
     p_comp: i64,
     d_comp: i64,
-    update_period: usize,
+    da_finalization_period: usize,
     file_path: &str,
 ) -> anyhow::Result<()> {
     let SimulationResults {
@@ -52,10 +52,10 @@ pub fn draw_chart(
         &projected_profit,
         &pessimistic_costs,
         &format!(
-            "Profit p_comp: {}, d_comp: {}, update_period: {}",
+            "Profit p_comp: {}, d_comp: {}, da_finalization_period: {}",
             prettify_number(p_comp),
             prettify_number(d_comp),
-            prettify_number(update_period)
+            prettify_number(da_finalization_period)
         ),
     )?;
     draw_gas_prices(

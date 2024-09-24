@@ -98,7 +98,8 @@ async fn main() -> anyhow::Result<()> {
                 prettify_number(da_finalization_period)
             );
             let simulator = Simulator::new(da_cost_per_byte);
-            let result = simulator.run_simulation(p, d, da_finalization_period);
+            let result =
+                simulator.run_simulation(p, d, UPDATE_PERIOD, da_finalization_period);
             (result, (p, d))
         }
         Mode::Optimization { iterations, source } => {
@@ -112,11 +113,12 @@ async fn main() -> anyhow::Result<()> {
             let (results, (p, d)) = naive_optimisation(
                 &simulator,
                 iterations as usize,
+                UPDATE_PERIOD,
                 da_finalization_period,
             )
             .await;
             println!(
-                "Optimization results: P: {}, D: {}, update_period: {}",
+                "Optimization results: P: {}, D: {}, da_finalization_period: {}",
                 prettify_number(p),
                 prettify_number(d),
                 prettify_number(da_finalization_period)
