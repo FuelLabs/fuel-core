@@ -1,4 +1,4 @@
-use fuel_core_gas_price_service::{
+use crate::{
     fuel_gas_price_updater::{
         da_source_adapter::{
             dummy_costs::DummyDaBlockCosts,
@@ -14,7 +14,6 @@ use fuel_core_gas_price_service::{
         },
         Algorithm,
         AlgorithmUpdater,
-        AlgorithmUpdaterV0,
         BlockInfo,
         FuelGasPriceUpdater,
         UpdaterMetadata,
@@ -48,6 +47,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
+use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 
 type Updater<GasPriceStore, SettingsProvider> = FuelGasPriceUpdater<
     FuelL2BlockSource<SettingsProvider>,

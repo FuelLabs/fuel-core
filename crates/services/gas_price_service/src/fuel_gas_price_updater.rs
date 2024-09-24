@@ -23,6 +23,7 @@ mod tests;
 
 pub mod fuel_core_storage_adapter;
 
+pub mod algorithm_updater;
 pub mod da_source_adapter;
 
 pub struct FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
