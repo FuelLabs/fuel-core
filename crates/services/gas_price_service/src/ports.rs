@@ -23,6 +23,7 @@ pub trait MetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
 }
 
+/// To be linked with the GasPriceDatabase: Database<GasPriceDatabase>
 pub trait GasPriceData: Send + Sync {
     fn latest_height(&self) -> Option<BlockHeight>;
 }
