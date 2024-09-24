@@ -493,7 +493,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         });
 
         // add at least one coin input
-        tx.add_random_fee_input();
+        tx.add_fee_input();
 
         let mut tx = tx
             .script_gas_limit(gas_limit)
@@ -529,7 +529,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             }
         }
 
-        let start_vm = vm.clone();
+        let vm_before_first_instruction = vm.clone();
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {
@@ -541,13 +541,15 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             }
         }
         let storage_diff = vm.storage_diff();
-        let vm = vm.remove_recording();
-        let mut diff = start_vm.diff(&vm);
+        let mut vm = vm.remove_recording();
+        let mut diff = vm.rollback_to(&vm_before_first_instruction);
         diff += storage_diff;
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
+        vm.reset_vm_state(&diff);
+        assert_eq!(vm_before_first_instruction, vm);
 
         Ok(Self {
-            vm: start_vm,
+            vm,
             instruction,
             diff,
         })
