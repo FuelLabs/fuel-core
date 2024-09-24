@@ -1,7 +1,9 @@
 use crate::ports::{
     BlockProducer,
     BlockProducerDatabase,
+    DryRunner,
     Relayer,
+    RelayerBlockInfo,
     TxPool,
 };
 use fuel_core_storage::{
@@ -37,6 +39,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            TransactionExecutionStatus,
             UncommittedResult,
         },
         txpool::ArcPoolTx,
@@ -57,7 +60,8 @@ use std::{
 pub struct MockRelayer {
     pub block_production_key: Address,
     pub latest_block_height: DaBlockHeight,
-    pub latest_da_blocks_with_costs: HashMap<DaBlockHeight, u64>,
+    pub latest_da_blocks_with_costs_and_transactions_number:
+        HashMap<DaBlockHeight, (u64, u64)>,
 }
 
 #[async_trait::async_trait]
@@ -70,13 +74,16 @@ impl Relayer for MockRelayer {
         Ok(highest)
     }
 
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
-        let cost = self
-            .latest_da_blocks_with_costs
+    async fn get_cost_and_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<RelayerBlockInfo> {
+        let (gas_cost, tx_count) = self
+            .latest_da_blocks_with_costs_and_transactions_number
             .get(height)
             .cloned()
             .unwrap_or_default();
-        Ok(cost)
+        Ok(RelayerBlockInfo { gas_cost, tx_count })
     }
 }
 
@@ -224,6 +231,18 @@ impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture<Transaction> {
             },
             Default::default(),
         ))
+    }
+}
+
+impl DryRunner for MockExecutorWithCapture<Transaction> {
+    fn dry_run(
+        &self,
+        block: Components<Vec<Transaction>>,
+        _utxo_validation: Option<bool>,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        *self.captured.lock().unwrap() = Some(block);
+
+        Ok(Vec::new())
     }
 }
 

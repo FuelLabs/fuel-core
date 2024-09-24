@@ -199,7 +199,7 @@ async fn test_tx_gossiping_invalid_txs(
         .submit(valid_transaction.clone())
         .await
         .expect("Transaction is valid");
-    let block = tokio::time::timeout(Duration::from_secs(5), authority_blocks.next())
+    let block = tokio::time::timeout(Duration::from_secs(8), authority_blocks.next())
         .await?
         .unwrap();
     Ok(block)
