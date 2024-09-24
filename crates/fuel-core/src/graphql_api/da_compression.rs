@@ -20,8 +20,6 @@ use fuel_core_storage::{
     not_found,
     StorageAsMut,
     StorageAsRef,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::block::Block,
@@ -37,8 +35,6 @@ pub fn da_compress_block<T>(
 ) -> anyhow::Result<()>
 where
     T: OffChainDatabaseTransaction,
-    T: StorageInspect<DaCompressionTemporalRegistry>,
-    T: StorageMutate<DaCompressionTemporalRegistryEvictor>,
 {
     let compressed = compress(CompressTx(transaction, events), block)
         .now_or_never()
@@ -56,7 +52,6 @@ struct CompressTx<'a, Tx>(&'a mut Tx, &'a [Event]);
 impl<'a, Tx> TemporalRegistry for CompressTx<'a, Tx>
 where
     Tx: OffChainDatabaseTransaction,
-    Tx: StorageInspect<DaCompressionTemporalRegistry>,
 {
     fn read_registry(
         &self,
