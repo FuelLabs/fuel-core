@@ -1,5 +1,3 @@
-use crate::service::adapters::ConsensusParametersProvider;
-
 use fuel_core_gas_price_service::{
     fuel_gas_price_updater::{
         da_source_adapter::{
@@ -51,16 +49,16 @@ use fuel_core_types::{
     services::block_importer::SharedImportResult,
 };
 
-type Updater<GasPriceStore> = FuelGasPriceUpdater<
-    FuelL2BlockSource<ConsensusParametersProvider>,
+type Updater<GasPriceStore, SettingsProvider> = FuelGasPriceUpdater<
+    FuelL2BlockSource<SettingsProvider>,
     StructuredStorage<GasPriceStore>,
     DaBlockCostsSharedState,
 >;
 
-pub struct InitializeTask<L2DataStoreView, GasPriceStore> {
+pub struct InitializeTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
     pub config: GasPriceServiceConfig,
     pub genesis_block_height: BlockHeight,
-    pub settings: ConsensusParametersProvider,
+    pub settings: SettingsProvider,
     pub gas_price_db: GasPriceStore,
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
@@ -68,19 +66,21 @@ pub struct InitializeTask<L2DataStoreView, GasPriceStore> {
     pub da_block_costs_provider: DaBlockCostsProvider<DummyDaBlockCosts>,
 }
 
-type Task<GasPriceStore> = GasPriceService<Algorithm, Updater<GasPriceStore>>;
+type Task<GasPriceStore, SettingsProvider> =
+    GasPriceService<Algorithm, Updater<GasPriceStore, SettingsProvider>>;
 
-impl<L2DataStore, L2DataStoreView, GasPriceStore>
-    InitializeTask<L2DataStoreView, GasPriceStore>
+impl<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider>
+    InitializeTask<L2DataStoreView, GasPriceStore, SettingsProvider>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: GasPriceData + MetadataStorage,
+    SettingsProvider: GasPriceSettingsProvider,
 {
     pub fn new(
         config: GasPriceServiceConfig,
         genesis_block_height: BlockHeight,
-        settings: ConsensusParametersProvider,
+        settings: SettingsProvider,
         block_stream: BoxStream<SharedImportResult>,
         gas_price_db: GasPriceStore,
         on_chain_db: L2DataStoreView,
@@ -144,8 +144,8 @@ where
     Ok(algo)
 }
 #[async_trait::async_trait]
-impl<L2DataStore, L2DataStoreView, GasPriceStore> RunnableService
-    for InitializeTask<L2DataStoreView, GasPriceStore>
+impl<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider> RunnableService
+    for InitializeTask<L2DataStoreView, GasPriceStore, SettingsProvider>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
@@ -153,10 +153,11 @@ where
         + MetadataStorage
         + KeyValueInspect<Column = GasPriceColumn>
         + Modifiable,
+    SettingsProvider: GasPriceSettingsProvider,
 {
     const NAME: &'static str = "GasPriceUpdater";
     type SharedData = SharedGasPriceAlgo<Algorithm>;
-    type Task = Task<GasPriceStore>;
+    type Task = Task<GasPriceStore, SettingsProvider>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -191,15 +192,20 @@ where
     }
 }
 
-pub fn get_synced_gas_price_updater<L2DataStore, L2DataStoreView, GasPriceStore>(
+pub fn get_synced_gas_price_updater<
+    L2DataStore,
+    L2DataStoreView,
+    GasPriceStore,
+    SettingsProvider,
+>(
     config: GasPriceServiceConfig,
     genesis_block_height: BlockHeight,
-    settings: ConsensusParametersProvider,
+    settings: SettingsProvider,
     mut gas_price_db: GasPriceStore,
     on_chain_db: &L2DataStoreView,
     block_stream: BoxStream<SharedImportResult>,
     da_block_costs: DaBlockCostsSharedState,
-) -> anyhow::Result<Updater<GasPriceStore>>
+) -> anyhow::Result<Updater<GasPriceStore, SettingsProvider>>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
@@ -207,6 +213,7 @@ where
         + MetadataStorage
         + KeyValueInspect<Column = GasPriceColumn>
         + Modifiable,
+    SettingsProvider: GasPriceSettingsProvider,
 {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
@@ -262,8 +269,13 @@ where
     }
 }
 
-fn sync_gas_price_db_with_on_chain_storage<L2DataStore, L2DataStoreView, GasPriceStore>(
-    settings: &ConsensusParametersProvider,
+fn sync_gas_price_db_with_on_chain_storage<
+    L2DataStore,
+    L2DataStoreView,
+    GasPriceStore,
+    SettingsProvider,
+>(
+    settings: &SettingsProvider,
     gas_price_db: &mut GasPriceStore,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
@@ -273,6 +285,7 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: MetadataStorage,
+    SettingsProvider: GasPriceSettingsProvider,
 {
     let metadata =
         gas_price_db
@@ -299,8 +312,8 @@ where
     Ok(())
 }
 
-fn sync_v0_metadata<L2DataStore, L2DataStoreView, GasPriceStore>(
-    settings: &ConsensusParametersProvider,
+fn sync_v0_metadata<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider>(
+    settings: &SettingsProvider,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
@@ -311,6 +324,7 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: MetadataStorage,
+    SettingsProvider: GasPriceSettingsProvider,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;

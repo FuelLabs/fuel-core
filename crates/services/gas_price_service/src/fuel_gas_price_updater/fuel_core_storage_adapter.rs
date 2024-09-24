@@ -113,7 +113,7 @@ pub struct GasPriceSettings {
     pub gas_price_factor: u64,
     pub block_gas_limit: u64,
 }
-pub trait GasPriceSettingsProvider {
+pub trait GasPriceSettingsProvider: Send + Sync + Clone {
     fn settings(
         &self,
         param_version: &ConsensusParametersVersion,

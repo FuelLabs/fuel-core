@@ -34,6 +34,7 @@ use std::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 
+#[derive(Clone)]
 struct FakeSettings {
     gas_price_factor: u64,
     block_gas_limit: u64,
