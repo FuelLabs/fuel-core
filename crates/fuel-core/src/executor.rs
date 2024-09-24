@@ -4,17 +4,22 @@
 #[cfg(test)]
 mod tests {
 
+    use std::{
+        cell::RefCell,
+        sync::Mutex,
+    };
+
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
         executor::{
-            BadTransactionsSource,
             OnceTransactionsSource,
             MAX_TX_COUNT,
         },
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
+            TransactionsSource,
         },
         refs::ContractRef,
     };
@@ -182,6 +187,32 @@ mod tests {
 
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(self.clone())
+        }
+    }
+
+    /// Bad transaction source: ignores the limit of `u16::MAX -1` transactions
+    /// that should be returned by [`TransactionsSource::next()`].
+    /// It is used only for testing purposes
+    pub struct BadTransactionsSource {
+        transactions: Mutex<RefCell<Vec<MaybeCheckedTransaction>>>,
+    }
+
+    impl BadTransactionsSource {
+        pub fn new(transactions: Vec<Transaction>) -> Self {
+            Self {
+                transactions: Mutex::new(RefCell::new(
+                    transactions
+                        .into_iter()
+                        .map(MaybeCheckedTransaction::Transaction)
+                        .collect(),
+                )),
+            }
+        }
+    }
+
+    impl TransactionsSource for BadTransactionsSource {
+        fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
+            std::mem::take(&mut *self.transactions.lock().unwrap().borrow_mut())
         }
     }
 

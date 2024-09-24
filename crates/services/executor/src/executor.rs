@@ -204,35 +204,6 @@ impl TransactionsSource for OnceTransactionsSource {
     }
 }
 
-/// Bad transaction source: ignores the limit of `u16::MAX -1` transactions
-/// that should be returned by [`TransactionsSource::next()`].
-/// It is used only for testing purposes
-#[cfg(feature = "test-helpers")]
-pub struct BadTransactionsSource {
-    transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
-}
-
-#[cfg(feature = "test-helpers")]
-impl BadTransactionsSource {
-    pub fn new(transactions: Vec<Transaction>) -> Self {
-        Self {
-            transactions: ParkingMutex::new(
-                transactions
-                    .into_iter()
-                    .map(MaybeCheckedTransaction::Transaction)
-                    .collect(),
-            ),
-        }
-    }
-}
-
-#[cfg(feature = "test-helpers")]
-impl TransactionsSource for BadTransactionsSource {
-    fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
-        std::mem::take(self.transactions.lock().as_mut())
-    }
-}
-
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
