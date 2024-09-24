@@ -77,21 +77,21 @@ impl<L2DataStore, L2DataStoreView, GasPriceStore>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: GasPriceData + MetadataStorage,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
 {
     pub fn new(
         config: Config,
         genesis_block_height: BlockHeight,
         settings: ConsensusParametersProvider,
         block_stream: BoxStream<SharedImportResult>,
-        gas_price_db: GasPriceStore,
+        mut gas_price_db: GasPriceStore,
         on_chain_db: L2DataStoreView,
     ) -> anyhow::Result<Self> {
         let view = on_chain_db.latest_view()?;
         let latest_block_height =
             view.latest_height().unwrap_or(genesis_block_height).into();
         let default_metadata = get_default_metadata(&config, latest_block_height);
-        let algo = get_best_algo(&gas_price_db, default_metadata)?;
+        let algo = get_best_algo(&mut gas_price_db, default_metadata)?;
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(algo);
         // there's no use of this source yet, so we can safely return an error
         let da_block_costs_source =
@@ -124,15 +124,16 @@ fn get_default_metadata(config: &Config, latest_block_height: u32) -> UpdaterMet
 }
 
 fn get_best_algo<GasPriceStore>(
-    gas_price_db: &GasPriceStore,
+    gas_price_db: &mut GasPriceStore,
     default_metadata: UpdaterMetadata,
 ) -> anyhow::Result<Algorithm>
 where
-    GasPriceStore: MetadataStorage + GasPriceData,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
 {
     let best_metadata: UpdaterMetadata =
         if let Some(height) = gas_price_db.latest_height() {
-            gas_price_db
+            let metadata_storage = StructuredStorage::new(gas_price_db);
+            metadata_storage
                 .get_metadata(&height)?
                 .unwrap_or(default_metadata)
         } else {
@@ -148,10 +149,7 @@ impl<L2DataStore, L2DataStoreView, GasPriceStore> RunnableService
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: GasPriceData
-        + MetadataStorage
-        + KeyValueInspect<Column = GasPriceColumn>
-        + Modifiable,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
 {
     const NAME: &'static str = "GasPriceUpdater";
     type SharedData = SharedGasPriceAlgo<Algorithm>;
@@ -194,7 +192,7 @@ pub fn get_synced_gas_price_updater<L2DataStore, L2DataStoreView, GasPriceStore>
     config: Config,
     genesis_block_height: BlockHeight,
     settings: ConsensusParametersProvider,
-    mut gas_price_db: GasPriceStore,
+    gas_price_db: GasPriceStore,
     on_chain_db: &L2DataStoreView,
     block_stream: BoxStream<SharedImportResult>,
     da_block_costs: DaBlockCostsSharedState,
@@ -202,10 +200,7 @@ pub fn get_synced_gas_price_updater<L2DataStore, L2DataStoreView, GasPriceStore>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: GasPriceData
-        + MetadataStorage
-        + KeyValueInspect<Column = GasPriceColumn>
-        + Modifiable,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
 {
     let mut first_run = false;
     let latest_block_height: u32 = on_chain_db
@@ -226,9 +221,9 @@ where
     let l2_block_source =
         FuelL2BlockSource::new(genesis_block_height, settings.clone(), block_stream);
 
-    if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
-        let metadata_storage = StructuredStorage::new(gas_price_db);
+    let mut metadata_storage = StructuredStorage::new(gas_price_db);
 
+    if BlockHeight::from(latest_block_height) == genesis_block_height || first_run {
         let updater = FuelGasPriceUpdater::new(
             default_metadata.into(),
             l2_block_source,
@@ -240,13 +235,12 @@ where
         if latest_block_height > metadata_height {
             sync_gas_price_db_with_on_chain_storage(
                 &settings,
-                &mut gas_price_db,
+                &mut metadata_storage,
                 on_chain_db,
                 metadata_height,
                 latest_block_height,
             )?;
         }
-        let metadata_storage = StructuredStorage::new(gas_price_db);
 
         FuelGasPriceUpdater::init(
             latest_block_height.into(),
@@ -263,7 +257,7 @@ where
 
 fn sync_gas_price_db_with_on_chain_storage<L2DataStore, L2DataStoreView, GasPriceStore>(
     settings: &ConsensusParametersProvider,
-    gas_price_db: &mut GasPriceStore,
+    metadata_storage: &mut StructuredStorage<GasPriceStore>,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
@@ -271,14 +265,13 @@ fn sync_gas_price_db_with_on_chain_storage<L2DataStore, L2DataStoreView, GasPric
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: MetadataStorage,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
 {
-    let metadata =
-        gas_price_db
-            .get_metadata(&metadata_height.into())?
-            .ok_or(anyhow::anyhow!(
-                "Expected metadata to exist for height: {metadata_height}"
-            ))?;
+    let metadata = metadata_storage
+        .get_metadata(&metadata_height.into())?
+        .ok_or(anyhow::anyhow!(
+            "Expected metadata to exist for height: {metadata_height}"
+        ))?;
     let mut inner: AlgorithmUpdater = metadata.into();
     match &mut inner {
         AlgorithmUpdater::V0(ref mut updater) => {
@@ -288,7 +281,7 @@ where
                 metadata_height,
                 latest_block_height,
                 updater,
-                gas_price_db,
+                metadata_storage,
             )?;
         }
         AlgorithmUpdater::V1(_) => {
@@ -304,12 +297,12 @@ fn sync_v0_metadata<L2DataStore, L2DataStoreView, GasPriceStore>(
     metadata_height: u32,
     latest_block_height: u32,
     updater: &mut AlgorithmUpdaterV0,
-    metadata_storage: &mut GasPriceStore,
+    metadata_storage: &mut StructuredStorage<GasPriceStore>,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: MetadataStorage,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
