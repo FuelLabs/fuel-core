@@ -97,15 +97,15 @@ criterion_main!(benches);
 //
 // fn main() {
 //     let criterio = Criterion::default();
-//     let mut criterio = criterio.with_filter("vm_initialization");
-//     alu::run(&mut criterio);
-//     crypto::run(&mut criterio);
-//     flow::run(&mut criterio);
+//     let mut criterio = criterio.with_filter("pshh");
+//     // alu::run(&mut criterio);
+//     // crypto::run(&mut criterio);
+//     // flow::run(&mut criterio);
 //     mem::run(&mut criterio);
-//     blockchain::run(&mut criterio);
-//     contract_root(&mut criterio);
-//     state_root(&mut criterio);
-//     vm_initialization(&mut criterio);
+//     // blockchain::run(&mut criterio);
+//     // contract_root(&mut criterio);
+//     // state_root(&mut criterio);
+//     // vm_initialization(&mut criterio);
 // }
 //
 // #[test]
