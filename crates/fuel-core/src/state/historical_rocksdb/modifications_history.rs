@@ -25,7 +25,7 @@ use fuel_core_storage::{
 };
 
 /// ModificationsHystory. The `const N: usize` generic parameter
-/// is used to specify different versions of the modificaiton history.
+/// is used to specify different versions of the modification history.
 /// This allows to define different layout implementations for different
 /// versions of the storage history (e.g. by defining different TableWithBlueprint
 /// implementations for V1 and V2 of the modification history.
