@@ -209,7 +209,7 @@ pub fn run(c: &mut Criterion) {
         &mut c.benchmark_group("pshh"),
         "pshh",
         VmBench::new(op::pshh(full_mask))
-            .with_prepare_script(vec![op::pshh(full_mask); 10000]),
+            .with_prepare_script(vec![op::pshh(full_mask); 9999]),
     );
 
     // pshl
@@ -217,6 +217,6 @@ pub fn run(c: &mut Criterion) {
         &mut c.benchmark_group("pshl"),
         "pshl",
         VmBench::new(op::pshl(full_mask))
-            .with_prepare_script(vec![op::pshl(full_mask); 10000]),
+            .with_prepare_script(vec![op::pshl(full_mask); 9999]),
     );
 }
