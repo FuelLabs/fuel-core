@@ -59,7 +59,6 @@ use serde::{
     Serialize,
 };
 use std::{
-    borrow::Cow,
     num::NonZeroU64,
     path::Path,
 };
@@ -208,25 +207,20 @@ where
 
         cleanup_old_changes(
             &height_u64,
-            self.migration_in_progress,
             storage_transaction,
             &self.state_rewind_policy,
+            self.migration_in_progress,
         )?;
 
         // We write directly to `ModificationsHistoryV2`.
-        // If the migration is in progress, we fallback to reading from
+        // If the migration is in progress, we fallback to taking from
         // `ModificationsHistoryV1` when no old_changes for `ModificationsHistoryV2` are found.
-        let v2_old_changes = storage_transaction
-            .storage_as_mut::<ModificationsHistoryV2<Description>>()
-            .replace(&height_u64, &reverse_changes)?;
-
-        let old_changes = match v2_old_changes {
-            None if self.migration_in_progress => storage_transaction
-                .storage_as_mut::<ModificationsHistoryV1<Description>>()
-                .get(&height_u64)?
-                .map(Cow::into_owned),
-            _ => v2_old_changes,
-        };
+        let old_changes = multiversion_replace(
+            storage_transaction,
+            height_u64,
+            &reverse_changes,
+            self.migration_in_progress,
+        )?;
 
         if let Some(old_changes) = old_changes {
             tracing::warn!(
@@ -274,25 +268,33 @@ where
         Ok(())
     }
 
-    fn oldest_changes_height(&self) -> StorageResult<Option<u64>> {
-        let v2_oldest_height = self
+    fn multiversion_changes_heights(
+        &self,
+        direction: IterDirection,
+        check_v1: bool,
+    ) -> (Option<StorageResult<u64>>, Option<StorageResult<u64>>) {
+        let v2_changes = self
             .db
-            .iter_all_keys::<ModificationsHistoryV2<Description>>(Some(
-                IterDirection::Forward,
-            ))
-            .next()
-            .transpose()?;
-
-        let v1_oldest_height = if self.migration_in_progress {
+            .iter_all_keys::<ModificationsHistoryV2<Description>>(Some(direction))
+            .next();
+        let v1_changes = if check_v1 {
             self.db
-                .iter_all_keys::<ModificationsHistoryV1<Description>>(Some(
-                    IterDirection::Forward,
-                ))
+                .iter_all_keys::<ModificationsHistoryV1<Description>>(Some(direction))
                 .next()
-                .transpose()?
         } else {
             None
         };
+        (v2_changes, v1_changes)
+    }
+
+    fn oldest_changes_height(&self) -> StorageResult<Option<u64>> {
+        let (v2_oldest_height, v1_oldest_height) = self.multiversion_changes_heights(
+            IterDirection::Forward,
+            self.migration_in_progress,
+        );
+
+        let v2_oldest_height = v2_oldest_height.transpose()?;
+        let v1_oldest_height = v1_oldest_height.transpose()?;
 
         let oldest_height = match (v1_oldest_height, v2_oldest_height) {
             (None, v2) => v2,
@@ -306,23 +308,10 @@ where
     // TODO: This method doesn't work properly because of
     //  https://github.com/FuelLabs/fuel-core/issues/2095
     fn rollback_last_block(&self) -> StorageResult<u64> {
-        let v2_latest_height = self
-            .db
-            .iter_all_keys::<ModificationsHistoryV2<Description>>(Some(
-                IterDirection::Reverse,
-            ))
-            .next();
-
-        // TODO: Maybe I could avoid iterating over V1, since it is broken anyway?
-        let v1_latest_height = if self.migration_in_progress {
-            self.db
-                .iter_all_keys::<ModificationsHistoryV1<Description>>(Some(
-                    IterDirection::Reverse,
-                ))
-                .next()
-        } else {
-            None
-        };
+        let (v2_latest_height, v1_latest_height) = self.multiversion_changes_heights(
+            IterDirection::Reverse,
+            self.migration_in_progress,
+        );
 
         let latest_height = match (v2_latest_height, v1_latest_height) {
             (None, None) => Err(DatabaseError::ReachedEndOfHistory)?,
@@ -341,19 +330,12 @@ where
     fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
         let mut storage_transaction = self.db.read_transaction();
 
-        let v2_last_changes = storage_transaction
-            .storage_as_mut::<ModificationsHistoryV2<Description>>()
-            .take(&height_to_rollback)?;
-
-        let last_changes = match v2_last_changes {
-            None if self.migration_in_progress => storage_transaction
-                .storage_as_mut::<ModificationsHistoryV1<Description>>()
-                .get(&height_to_rollback)?
-                .map(Cow::into_owned)
-                .ok_or(not_found!(ModificationsHistoryV1<Description>))?, /* Is this the right error? */
-            None => return Err(not_found!(ModificationsHistoryV2<Description>)),
-            Some(v2_last_changes) => v2_last_changes,
-        };
+        let last_changes = multiversion_take(
+            &mut storage_transaction,
+            height_to_rollback,
+            self.migration_in_progress,
+        )?
+        .ok_or(not_found!(ModificationsHistoryV1<Description>))?;
 
         remove_historical_modifications(
             &height_to_rollback,
@@ -375,11 +357,61 @@ where
     }
 }
 
+// Try to take the value from `ModificationsHistoryV2` first.
+// If the migration is still in progress, remove the value from
+// `ModificationsHistoryV1` and return it if no value for `ModificationsHistoryV2`
+// was found. This is necessary to avoid scenarious where it is possible to
+// roll back twice to the same block height
+fn multiversion_take<Description>(
+    storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
+    height: u64,
+    migration_in_progress: bool,
+) -> StorageResult<Option<Changes>>
+where
+    Description: DatabaseDescription,
+{
+    let v2_last_changes = storage_transaction
+        .storage_as_mut::<ModificationsHistoryV2<Description>>()
+        .take(&height)?;
+
+    if migration_in_progress {
+        let v1_last_changes = storage_transaction
+            .storage_as_mut::<ModificationsHistoryV1<Description>>()
+            .take(&height)?;
+        Ok(v2_last_changes.or(v1_last_changes))
+    } else {
+        Ok(v2_last_changes)
+    }
+}
+
+fn multiversion_replace<Description>(
+    storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
+    height: u64,
+    changes: &Changes,
+    migration_in_progress: bool,
+) -> StorageResult<Option<Changes>>
+where
+    Description: DatabaseDescription,
+{
+    let v2_last_changes = storage_transaction
+        .storage_as_mut::<ModificationsHistoryV2<Description>>()
+        .replace(&height, changes)?;
+
+    if migration_in_progress {
+        let v1_last_changes = storage_transaction
+            .storage_as_mut::<ModificationsHistoryV1<Description>>()
+            .take(&height)?;
+        Ok(v2_last_changes.or(v1_last_changes))
+    } else {
+        Ok(v2_last_changes)
+    }
+}
+
 fn cleanup_old_changes<Description>(
     height: &u64,
-    migration_in_progress: bool,
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
     state_rewind_policy: &StateRewindPolicy,
+    migration_in_progress: bool,
 ) -> StorageResult<()>
 where
     Description: DatabaseDescription,
@@ -394,17 +426,11 @@ where
         StateRewindPolicy::RewindRange { size } => {
             let old_height = height.saturating_sub(size.get());
 
-            let v2_old_changes = storage_transaction
-                .storage_as_mut::<ModificationsHistoryV2<Description>>()
-                .take(&old_height)?;
-
-            let old_changes = match v2_old_changes {
-                None if migration_in_progress => storage_transaction
-                    .storage_as_mut::<ModificationsHistoryV1<Description>>()
-                    .get(&old_height)?
-                    .map(Cow::into_owned),
-                _ => v2_old_changes,
-            };
+            let old_changes = multiversion_take(
+                storage_transaction,
+                old_height,
+                migration_in_progress,
+            )?;
 
             if let Some(old_changes) = old_changes {
                 remove_historical_modifications(
