@@ -323,4 +323,8 @@ where
             .map(|tx_id| pool.find_one(&tx_id))
             .collect()
     }
+
+    pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
+        self.pool.read().find_one(tx_id)
+    }
 }

@@ -1,3 +1,9 @@
-mod context;
 mod mocks;
-mod pool;
+mod pool_context;
+mod tests_e2e;
+mod tests_permits;
+mod tests_pool;
+mod tests_sending;
+mod tests_subscribe;
+mod tests_update_stream_state;
+mod utils;

@@ -14,6 +14,7 @@ use fuel_core_types::{
     blockchain::consensus::Consensus,
     entities::relayer::transaction,
     fuel_tx::{
+        Bytes32,
         Transaction,
         TxId,
     },
@@ -27,7 +28,10 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::PoolTransaction,
+        txpool::{
+            PoolTransaction,
+            TransactionStatus,
+        },
     },
 };
 use futures::StreamExt;

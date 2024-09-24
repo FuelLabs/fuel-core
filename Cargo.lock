@@ -3752,9 +3752,12 @@ dependencies = [
  "num-rational",
  "parking_lot",
  "petgraph",
+ "proptest",
  "rayon",
+ "test-strategy",
  "tokio",
  "tokio-rayon",
+ "tokio-stream",
  "tracing",
 ]
 

@@ -26,7 +26,14 @@ petgraph = "0.6.5"
 rayon = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-rayon = { workspace = true }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+proptest = { workspace = true }
+test-strategy = { workspace = true }
+
 
 [features]
 test-helpers = [
