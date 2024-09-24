@@ -8,8 +8,7 @@ use crate::{
     error::Error,
     ports::WasmValidityError,
     tests::{
-        mocks::MockWasmChecker,
-        pool_context::{
+        context::{
             create_contract_input,
             create_contract_output,
             create_message_predicate_from_message,
@@ -18,6 +17,7 @@ use crate::{
             GAS_LIMIT,
             TEST_COIN_AMOUNT,
         },
+        mocks::MockWasmChecker,
     },
 };
 use fuel_core_types::{

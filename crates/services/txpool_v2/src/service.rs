@@ -66,6 +66,7 @@ use crate::{
         GraphConfig,
         GraphStorage,
     },
+    update_sender::TxStatusChange,
     verifications::perform_all_verifications,
 };
 
@@ -369,6 +370,14 @@ where
         imported_block_results_stream: block_importer.block_events(),
         txs_ttl: config.max_txs_ttl,
         shared_state: SharedState {
+            tx_status_sender: TxStatusChange::new(
+                config.max_tx_update_subscriptions,
+                // The connection should be closed automatically after the `SqueezedOut` event.
+                // But because of slow/malicious consumers, the subscriber can still be occupied.
+                // We allow the subscriber to receive the event produced by TxPool's TTL.
+                // But we still want to drop subscribers after `2 * TxPool_TTL`.
+                config.max_txs_ttl.saturating_mul(2),
+            ),
             p2p: Arc::new(p2p),
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
             gas_price_provider: Arc::new(gas_price_provider),

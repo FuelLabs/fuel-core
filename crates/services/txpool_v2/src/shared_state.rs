@@ -48,6 +48,7 @@ use crate::{
         graph::GraphStorage,
         RemovedTransactions,
     },
+    update_sender::TxStatusChange,
     verifications::perform_all_verifications,
 };
 
@@ -72,6 +73,7 @@ pub struct SharedState<
     WasmChecker,
     MemoryPool,
 > {
+    pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) pool: TxPool<PSProvider>,
     pub(crate) current_height: Arc<RwLock<BlockHeight>>,
     pub(crate) consensus_parameters_provider: Arc<ConsensusParamsProvider>,
@@ -114,6 +116,7 @@ impl<
             heavy_async_processor: self.heavy_async_processor.clone(),
             new_txs_notifier: self.new_txs_notifier.clone(),
             time_txs_submitted: self.time_txs_submitted.clone(),
+            tx_status_sender: self.tx_status_sender.clone(),
             utxo_validation: self.utxo_validation,
         }
     }

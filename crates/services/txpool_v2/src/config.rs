@@ -119,6 +119,8 @@ impl BlackList {
 pub struct Config {
     /// Enable UTXO validation (will check if UTXO exists in the database and has correct data).
     pub utxo_validation: bool,
+    /// Maximum of subscriptions to listen to updates of a transaction.
+    pub max_tx_update_subscriptions: usize,
     /// Maximum transactions per dependencies chain.
     pub max_txs_chain_count: usize,
     /// Pool limits
@@ -156,6 +158,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             utxo_validation: true,
+            max_tx_update_subscriptions: 1000,
             max_txs_chain_count: 1000,
             ttl_check_interval: Duration::from_secs(60),
             max_txs_ttl: Duration::from_secs(60 * 10),
