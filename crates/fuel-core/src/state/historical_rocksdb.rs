@@ -14,7 +14,6 @@ use crate::{
                 Column,
                 Historical,
             },
-            modifications_history::ModificationsHistory,
             view_at_height::ViewAtHeight,
         },
         iterable_key_value_view::IterableKeyValueViewWrapper,
@@ -51,11 +50,16 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use itertools::Itertools;
+use modifications_history::{
+    ModificationsHistoryV1,
+    ModificationsHistoryV2,
+};
 use serde::{
     Deserialize,
     Serialize,
 };
 use std::{
+    borrow::Cow,
     num::NonZeroU64,
     path::Path,
 };
@@ -77,10 +81,16 @@ pub enum StateRewindPolicy {
     RewindRange { size: NonZeroU64 },
 }
 
+/// Implementation of a database
 #[derive(Debug)]
 pub struct HistoricalRocksDB<Description> {
+    /// The [`StateRewindPolicy`] used by the historical rocksdb
     state_rewind_policy: StateRewindPolicy,
+    /// The Description of the database.
     db: RocksDb<Historical<Description>>,
+    /// Indicates whether the [`Column::ModificationsHistory`]
+    /// is being migrated to [`Column::ModificationsHistoryV2`]
+    migration_in_progress: bool,
 }
 
 impl<Description> HistoricalRocksDB<Description>
@@ -94,6 +104,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
+            migration_in_progress: true,
         })
     }
 
@@ -106,6 +117,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
+            migration_in_progress: true,
         })
     }
 
@@ -194,11 +206,27 @@ where
         let reverse_changes =
             self.reverse_history_changes(storage_transaction.changes())?;
 
-        cleanup_old_changes(&height_u64, storage_transaction, &self.state_rewind_policy)?;
+        cleanup_old_changes(
+            &height_u64,
+            self.migration_in_progress,
+            storage_transaction,
+            &self.state_rewind_policy,
+        )?;
 
-        let old_changes = storage_transaction
-            .storage_as_mut::<ModificationsHistory<Description>>()
+        // We write directly to `ModificationsHistoryV2`.
+        // If the migration is in progress, we fallback to reading from
+        // `ModificationsHistoryV1` when no old_changes for `ModificationsHistoryV2` are found.
+        let v2_old_changes = storage_transaction
+            .storage_as_mut::<ModificationsHistoryV2<Description>>()
             .replace(&height_u64, &reverse_changes)?;
+
+        let old_changes = match v2_old_changes {
+            None if self.migration_in_progress => storage_transaction
+                .storage_as_mut::<ModificationsHistoryV1<Description>>()
+                .get(&height_u64)?
+                .map(Cow::into_owned),
+            _ => v2_old_changes,
+        };
 
         if let Some(old_changes) = old_changes {
             tracing::warn!(
@@ -247,13 +275,30 @@ where
     }
 
     fn oldest_changes_height(&self) -> StorageResult<Option<u64>> {
-        let oldest_height = self
+        let v2_oldest_height = self
             .db
-            .iter_all_keys::<ModificationsHistory<Description>>(Some(
+            .iter_all_keys::<ModificationsHistoryV2<Description>>(Some(
                 IterDirection::Forward,
             ))
             .next()
             .transpose()?;
+
+        let v1_oldest_height = if self.migration_in_progress {
+            self.db
+                .iter_all_keys::<ModificationsHistoryV1<Description>>(Some(
+                    IterDirection::Forward,
+                ))
+                .next()
+                .transpose()?
+        } else {
+            None
+        };
+
+        let oldest_height = match (v1_oldest_height, v2_oldest_height) {
+            (None, v2) => v2,
+            (v1, None) => v1,
+            (Some(v1), Some(v2)) => Some(v1.min(v2)),
+        };
         Ok(oldest_height)
     }
 
@@ -261,13 +306,32 @@ where
     // TODO: This method doesn't work properly because of
     //  https://github.com/FuelLabs/fuel-core/issues/2095
     fn rollback_last_block(&self) -> StorageResult<u64> {
-        let latest_height = self
+        let v2_latest_height = self
             .db
-            .iter_all_keys::<ModificationsHistory<Description>>(Some(
+            .iter_all_keys::<ModificationsHistoryV2<Description>>(Some(
                 IterDirection::Reverse,
             ))
-            .next()
-            .ok_or(DatabaseError::ReachedEndOfHistory)??;
+            .next();
+
+        // TODO: Maybe I could avoid iterating over V1, since it is broken anyway?
+        let v1_latest_height = if self.migration_in_progress {
+            self.db
+                .iter_all_keys::<ModificationsHistoryV1<Description>>(Some(
+                    IterDirection::Reverse,
+                ))
+                .next()
+        } else {
+            None
+        };
+
+        let latest_height = match (v2_latest_height, v1_latest_height) {
+            (None, None) => Err(DatabaseError::ReachedEndOfHistory)?,
+            (None, Some(v1_res)) => v1_res?,
+            (Some(v2_res), None) => v2_res?,
+            (Some(Err(_)), Some(v1_res)) => v1_res?,
+            (Some(v2_res), Some(Err(_))) => v2_res?,
+            (Some(Ok(v1)), Some(Ok(v2))) => v1.min(v2),
+        };
 
         self.rollback_block_to(latest_height)?;
 
@@ -277,10 +341,19 @@ where
     fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
         let mut storage_transaction = self.db.read_transaction();
 
-        let last_changes = storage_transaction
-            .storage_as_mut::<ModificationsHistory<Description>>()
-            .take(&height_to_rollback)?
-            .ok_or(not_found!(ModificationsHistory<Description>))?;
+        let v2_last_changes = storage_transaction
+            .storage_as_mut::<ModificationsHistoryV2<Description>>()
+            .take(&height_to_rollback)?;
+
+        let last_changes = match v2_last_changes {
+            None if self.migration_in_progress => storage_transaction
+                .storage_as_mut::<ModificationsHistoryV1<Description>>()
+                .get(&height_to_rollback)?
+                .map(Cow::into_owned)
+                .ok_or(not_found!(ModificationsHistoryV1<Description>))?, /* Is this the right error? */
+            None => return Err(not_found!(ModificationsHistoryV2<Description>)),
+            Some(v2_last_changes) => v2_last_changes,
+        };
 
         remove_historical_modifications(
             &height_to_rollback,
@@ -304,6 +377,7 @@ where
 
 fn cleanup_old_changes<Description>(
     height: &u64,
+    migration_in_progress: bool,
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
     state_rewind_policy: &StateRewindPolicy,
 ) -> StorageResult<()>
@@ -320,9 +394,17 @@ where
         StateRewindPolicy::RewindRange { size } => {
             let old_height = height.saturating_sub(size.get());
 
-            let old_changes = storage_transaction
-                .storage_as_mut::<ModificationsHistory<Description>>()
+            let v2_old_changes = storage_transaction
+                .storage_as_mut::<ModificationsHistoryV2<Description>>()
                 .take(&old_height)?;
+
+            let old_changes = match v2_old_changes {
+                None if migration_in_progress => storage_transaction
+                    .storage_as_mut::<ModificationsHistoryV1<Description>>()
+                    .get(&old_height)?
+                    .map(Cow::into_owned),
+                _ => v2_old_changes,
+            };
 
             if let Some(old_changes) = old_changes {
                 remove_historical_modifications(
@@ -724,7 +806,7 @@ mod tests {
             .unwrap();
         let entries = historical_rocks_db
             .db
-            .iter_all::<ModificationsHistory<OnChain>>(None)
+            .iter_all::<ModificationsHistoryV2<OnChain>>(None)
             .collect::<Vec<_>>();
         assert_eq!(entries.len(), 1);
 
@@ -735,7 +817,7 @@ mod tests {
         assert_eq!(result, Ok(1));
         let entries = historical_rocks_db
             .db
-            .iter_all::<ModificationsHistory<OnChain>>(None)
+            .iter_all::<ModificationsHistoryV2<OnChain>>(None)
             .collect::<Vec<_>>();
         assert_eq!(entries.len(), 0);
     }
@@ -804,7 +886,7 @@ mod tests {
             // Given
             let entries = historical_rocks_db
                 .db
-                .iter_all::<ModificationsHistory<OnChain>>(None)
+                .iter_all::<ModificationsHistoryV2<OnChain>>(None)
                 .collect::<Vec<_>>();
             assert_eq!(entries.len(), height);
 
@@ -815,7 +897,7 @@ mod tests {
             assert_eq!(result, Ok(height as u64));
             let entries = historical_rocks_db
                 .db
-                .iter_all::<ModificationsHistory<OnChain>>(None)
+                .iter_all::<ModificationsHistoryV2<OnChain>>(None)
                 .collect::<Vec<_>>();
             assert_eq!(entries.len(), height - 1);
         }

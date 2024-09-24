@@ -32,7 +32,7 @@ use fuel_core_storage::{
 /// The [`ModificationHistoryVersion`]` struct is private. This forces reads and writes
 /// to the modification history to go through the [`ModificationHistory`] struct,
 /// for which storage inspection and mutation primitives are defined via the [`VersionedStorage`].
-struct ModificationsHistoryVersion<Description, const N: usize>(
+pub struct ModificationsHistoryVersion<Description, const N: usize>(
     core::marker::PhantomData<Description>,
 )
 where
@@ -84,7 +84,7 @@ where
 }
 
 /// Blueprint for Modificaations History V2. Keys are stored in little endian
-/// using the `Column::HistoryV2Column` column family.
+/// using the `Column::HistoryColumnV2` column family.
 impl<Description> TableWithBlueprint for ModificationsHistoryVersion<Description, 1>
 where
     Description: DatabaseDescription,
@@ -98,23 +98,10 @@ where
     }
 }
 
-// TODO: Remove this data structure! It is currently needed to allow reading
-// and writing to the modifications history using the V1 of the key encoding.
-impl<Description> TableWithBlueprint for ModificationsHistory<Description>
-where
-    Description: DatabaseDescription,
-{
-    type Blueprint = Plain<Postcard, Postcard>;
-    type Column = Column<Description>;
-
-    // We store key-value pairs using the same column family as for V1
-    fn column() -> Self::Column {
-        Column::HistoryV2Column
-    }
-}
-
-type ModificationsHistoryV1<Description> = ModificationsHistoryVersion<Description, 0>;
-type ModificationsHistoryV2<Description> = ModificationsHistoryVersion<Description, 1>;
+pub type ModificationsHistoryV1<Description> =
+    ModificationsHistoryVersion<Description, 0>;
+pub type ModificationsHistoryV2<Description> =
+    ModificationsHistoryVersion<Description, 1>;
 
 /// [`VersionedStorage<S>`] wraps a StructuredStorage and adds versioning capabilities for the
 /// ModificationsHistory.
