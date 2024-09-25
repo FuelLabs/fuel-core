@@ -148,7 +148,7 @@ pub struct PoolLimits {
 #[derive(Clone)]
 pub struct HeavyWorkConfig {
     /// Maximum of threads for managing verifications/insertions.
-    pub number_threads_verif_insert_transactions: usize,
+    pub number_threads_to_verify_transactions: usize,
     /// Maximum of tasks in the heavy async processing queue.
     pub number_pending_tasks_threads_verif_insert_transactions: usize,
 }
