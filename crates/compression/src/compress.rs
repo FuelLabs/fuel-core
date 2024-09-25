@@ -1,17 +1,6 @@
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_compression::CompressibleBy,
-    fuel_tx::{
-        Bytes32,
-        Transaction,
-    },
-};
+use std::collections::HashSet;
 
 use crate::{
-    context::{
-        compress::CompressCtx,
-        prepare::PrepareCtx,
-    },
     eviction_policy::CacheEvictor,
     ports::{
         EvictorDb,
@@ -19,11 +8,27 @@ use crate::{
     },
     tables::{
         PerRegistryKeyspace,
+        PerRegistryKeyspaceMap,
         RegistrationsPerTable,
         TemporalRegistryAll,
     },
     CompressedBlockPayload,
     Header,
+};
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_compression::{
+        CompressibleBy,
+        ContextError,
+        RegistryKey,
+    },
+    fuel_tx::{
+        Bytes32,
+        CompressedUtxoId,
+        Transaction,
+        TxPointer,
+        UtxoId,
+    },
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -92,4 +97,49 @@ pub async fn compress<D: CompressDb + EvictorDb>(
         postcard::to_allocvec(&(version, compact)).expect("Serialization cannot fail");
 
     Ok(compressed)
+}
+
+/// Preparation pass through the block to collect all keys accessed during compression.
+/// Returns dummy values. The resulting "compressed block" should be discarded.
+pub struct PrepareCtx<D> {
+    /// Database handle
+    pub db: D,
+    /// Keys accessed during compression. Will not be overwritten.
+    pub accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
+}
+
+impl<D> ContextError for PrepareCtx<D> {
+    type Error = anyhow::Error;
+}
+
+impl<D: CompressDb> CompressibleBy<PrepareCtx<D>> for UtxoId {
+    async fn compress_with(
+        &self,
+        _ctx: &mut PrepareCtx<D>,
+    ) -> anyhow::Result<CompressedUtxoId> {
+        Ok(CompressedUtxoId {
+            tx_pointer: TxPointer::default(),
+            output_index: 0,
+        })
+    }
+}
+
+pub struct CompressCtx<D> {
+    pub db: D,
+    pub cache_evictor: CacheEvictor,
+    /// Changes to the temporary registry, to be included in the compressed block header
+    pub changes: PerRegistryKeyspaceMap,
+}
+
+impl<D> ContextError for CompressCtx<D> {
+    type Error = anyhow::Error;
+}
+
+impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for UtxoId {
+    async fn compress_with(
+        &self,
+        ctx: &mut CompressCtx<D>,
+    ) -> anyhow::Result<CompressedUtxoId> {
+        ctx.db.lookup(*self)
+    }
 }

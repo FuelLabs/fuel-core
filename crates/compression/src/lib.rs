@@ -8,11 +8,6 @@ pub mod decompress;
 mod eviction_policy;
 pub mod ports;
 mod tables;
-mod context {
-    pub mod compress;
-    pub mod decompress;
-    pub mod prepare;
-}
 
 pub use tables::{
     RegistryKeyspace,

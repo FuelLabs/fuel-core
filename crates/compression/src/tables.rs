@@ -15,13 +15,13 @@ use fuel_core_types::{
 use std::collections::HashMap;
 
 use crate::{
-    compress::CompressDb,
-    context::{
-        compress::CompressCtx,
-        decompress::DecompressCtx,
-        prepare::PrepareCtx,
+    compress::{
+        CompressCtx,
+        CompressDb,
+        PrepareCtx,
     },
     decompress::{
+        DecompressCtx,
         DecompressDb,
         DecompressError,
     },
@@ -34,29 +34,22 @@ use crate::{
 macro_rules! tables {
     ($($name:ident: $type:ty),*$(,)?) => {
         #[doc = "RegistryKey namespaces"]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        #[allow(non_camel_case_types)] // Match names in structs exactly
+        pub enum RegistryKeyspace {
+            $(
+                $name,
+            )*
+        }
+
+        #[doc = "RegistryKey namespace with an associated typed value"]
         #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
         #[allow(non_camel_case_types)] // Match names in structs exactly
-        #[derive(strum::EnumDiscriminants)]
-        #[strum_discriminants(name(RegistryKeyspace))]
-        #[strum_discriminants(derive(Hash, serde::Serialize, serde::Deserialize))]
-        #[strum_discriminants(allow(non_camel_case_types))]
         pub enum RegistryKeyspaceValue {
             $(
                 $name($type),
             )*
         }
-
-
-        impl RegistryKeyspaceValue {
-            pub fn keyspace(&self) -> RegistryKeyspace {
-                match self {
-                    $(
-                        RegistryKeyspaceValue::$name(_) => RegistryKeyspace::$name,
-                    )*
-                }
-            }
-        }
-
 
         #[doc = "A value for each keyspace"]
         #[derive(Debug, Clone, Default)]
