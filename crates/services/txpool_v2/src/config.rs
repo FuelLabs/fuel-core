@@ -169,8 +169,8 @@ impl Default for Config {
             max_txs_ttl: Duration::from_secs(60 * 10),
             black_list: BlackList::default(),
             heavy_work: HeavyWorkConfig {
-                number_threads_verif_insert_transactions: 4,
-                number_pending_tasks_threads_verif_insert_transactions: 100,
+                number_threads_to_verify_transactions: 4,
+                size_of_verification_queue: 100,
             },
         }
     }

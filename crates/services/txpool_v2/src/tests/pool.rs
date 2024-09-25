@@ -5,7 +5,10 @@ use crate::{
         Config,
         PoolLimits,
     },
-    error::Error,
+    error::{
+        CollisionReason,
+        Error,
+    },
     ports::WasmValidityError,
     tests::{
         context::{
@@ -223,8 +226,12 @@ async fn insert__tx2_collided_on_contract_id() {
     let result2 = universe.verify_and_insert(tx_faulty).await;
 
     assert!(result1.is_ok());
+
+    // Then
     let err = result2.unwrap_err();
-    assert!(matches!(err, Error::Collided(_)));
+    assert!(
+        matches!(err, Error::Collided(CollisionReason::ContractCreation(id)) if id == contract_id)
+    );
 }
 
 #[tokio::test]
@@ -281,7 +288,7 @@ async fn insert__already_known_tx() {
     // Then
     assert!(result1.is_ok());
     let err = result2.unwrap_err();
-    assert!(matches!(err, Error::Collided(_)));
+    assert!(matches!(err, Error::Collided(CollisionReason::Utxo(_))));
 }
 
 #[tokio::test]
@@ -329,7 +336,8 @@ async fn insert__colliding_dependent_underpriced() {
 
     let (output, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output]), 20);
-    let input = unset_input.into_input(UtxoId::new(tx1.id(&ChainId::default()), 0));
+    let utxo_id = UtxoId::new(tx1.id(&ChainId::default()), 0);
+    let input = unset_input.into_input(utxo_id);
 
     // Given
     let tx2 = universe.build_script_transaction(Some(vec![input.clone()]), None, 20);
@@ -344,7 +352,7 @@ async fn insert__colliding_dependent_underpriced() {
     assert!(result1.is_ok());
     assert!(result2.is_ok());
     let err = result3.unwrap_err();
-    assert!(matches!(err, Error::Collided(_)));
+    assert!(matches!(err, Error::Collided(CollisionReason::Utxo(id)) if id == utxo_id));
 }
 
 #[tokio::test]
@@ -869,7 +877,9 @@ async fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
     let err = universe.verify_and_insert(tx_low).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::Collided(_)));
+    assert!(
+        matches!(err, Error::Collided(CollisionReason::Message(msg_id)) if msg_id == *message.id())
+    );
 }
 
 #[tokio::test]
@@ -1103,7 +1113,7 @@ async fn insert__tx_with_blob_already_inserted_at_higher_tip() {
     let err = universe.verify_and_insert(same_blob_tx).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::Collided(_)));
+    assert!(matches!(err, Error::Collided(CollisionReason::Blob(b)) if b == blob_id));
 }
 
 #[tokio::test]
