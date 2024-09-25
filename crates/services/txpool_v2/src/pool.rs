@@ -1,16 +1,10 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::collections::HashMap;
 
 use fuel_core_types::{
     fuel_tx::{
-        consensus_parameters::gas,
         field::BlobId,
-        Transaction,
         TxId,
     },
-    fuel_vm::checked_transaction::Checked,
     services::txpool::{
         ArcPoolTx,
         PoolTransaction,
@@ -35,7 +29,6 @@ use crate::{
         RemovedTransactions,
         Storage,
     },
-    verifications::FullyVerifiedTx,
 };
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
@@ -166,7 +159,7 @@ where
         )?;
         let dependencies = self.storage.collect_transaction_dependencies(tx)?;
         self.check_pool_size_available(tx, &collision, &dependencies)?;
-        self.storage.can_store_transaction(tx, &dependencies);
+        self.storage.can_store_transaction(tx, &dependencies)?;
         Ok(())
     }
 

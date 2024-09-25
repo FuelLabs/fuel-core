@@ -83,7 +83,7 @@ async fn test_prune_transactions() {
         tx3.id(&Default::default()),
     ];
 
-    let mut service = universe.build_service(None, None);
+    let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
 
     service

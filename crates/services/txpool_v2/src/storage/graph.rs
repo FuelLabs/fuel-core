@@ -1,10 +1,7 @@
-use std::{
-    collections::{
-        BTreeSet,
-        HashMap,
-        HashSet,
-    },
-    time::Instant,
+use std::collections::{
+    BTreeSet,
+    HashMap,
+    HashSet,
 };
 
 use fuel_core_types::{
@@ -400,7 +397,7 @@ impl Storage for GraphStorage {
 
     fn can_store_transaction(
         &self,
-        transaction: &PoolTransaction,
+        _transaction: &PoolTransaction,
         dependencies: &[Self::StorageIndex],
     ) -> Result<(), Error> {
         for node_id in dependencies.iter() {
@@ -566,10 +563,10 @@ impl Storage for GraphStorage {
                         pool_dependencies.push(*node_id);
                     }
                 }
-                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
-                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
-                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
-                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {}
+                Input::MessageCoinSigned(MessageCoinSigned { .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { .. })
+                | Input::MessageDataSigned(MessageDataSigned { .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { .. }) => {}
                 Input::Contract(Contract { contract_id, .. }) => {
                     if let Some(node_id) = self.contracts_creators.get(contract_id) {
                         pool_dependencies.push(*node_id);

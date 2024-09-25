@@ -3,9 +3,7 @@ use std::{
     sync::Arc,
     time::{
         Duration,
-        Instant,
         SystemTime,
-        UNIX_EPOCH,
     },
 };
 
@@ -25,7 +23,6 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
-            PoolTransaction,
             TransactionStatus,
         },
     },
@@ -44,7 +41,6 @@ use crate::{
     pool::Pool,
     ports::{
         AtomicView,
-        BlockImporter as BlockImporterTrait,
         ConsensusParametersProvider,
         GasPriceProvider as GasPriceProviderTrait,
         MemoryPool as MemoryPoolTrait,
@@ -53,10 +49,7 @@ use crate::{
         P2P as P2PTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    storage::{
-        graph::GraphStorage,
-        RemovedTransactions,
-    },
+    storage::graph::GraphStorage,
     tx_status_stream::{
         TxStatusMessage,
         TxStatusStream,
@@ -67,8 +60,6 @@ use crate::{
     },
     verifications::perform_all_verifications,
 };
-
-pub type InsertionResult = Result<RemovedTransactions, Error>;
 
 pub type TxPool<PSProvider> = Arc<
     RwLock<
@@ -173,112 +164,122 @@ where
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
-        dbg!("Inserting transactions");
         for transaction in transactions {
-            self.heavy_async_processor.spawn({
-                let shared_state = self.clone();
-                let params = params.clone();
-                let from_peer_info = from_peer_info.clone();
-                async move {
-                    let tx_clone = Arc::clone(&transaction);
-                    // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
-                    let checked_tx = match perform_all_verifications(
-                        // TODO: This should be removed if the checked transactions can work with Arc in it (see https://github.com/FuelLabs/fuel-vm/issues/831)
-                        Arc::unwrap_or_clone(transaction),
-                        shared_state.pool.clone(),
-                        current_height,
-                        &params,
-                        version,
-                        shared_state.gas_price_provider.as_ref(),
-                        shared_state.wasm_checker.as_ref(),
-                        shared_state.memory.get_memory().await,
-                    )
-                    .await
-                    {
-                        Ok(tx) => tx,
-                        Err(Error::ConsensusValidity(_))
-                        | Err(Error::MintIsDisallowed) => {
-                            if let Some(from_peer_info) = from_peer_info {
-                                shared_state.p2p.notify_gossip_transaction_validity(
-                                    from_peer_info,
-                                    GossipsubMessageAcceptance::Reject,
-                                );
+            self.heavy_async_processor
+                .spawn({
+                    let shared_state = self.clone();
+                    let params = params.clone();
+                    let from_peer_info = from_peer_info.clone();
+                    async move {
+                        let tx_clone = Arc::clone(&transaction);
+                        // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
+                        let checked_tx = match perform_all_verifications(
+                            // TODO: This should be removed if the checked transactions can work with Arc in it (see https://github.com/FuelLabs/fuel-vm/issues/831)
+                            Arc::unwrap_or_clone(transaction),
+                            shared_state.pool.clone(),
+                            current_height,
+                            &params,
+                            version,
+                            shared_state.gas_price_provider.as_ref(),
+                            shared_state.wasm_checker.as_ref(),
+                            shared_state.memory.get_memory().await,
+                        )
+                        .await
+                        {
+                            Ok(tx) => tx,
+                            Err(Error::ConsensusValidity(_))
+                            | Err(Error::MintIsDisallowed) => {
+                                if let Some(from_peer_info) = from_peer_info {
+                                    let _ = shared_state
+                                        .p2p
+                                        .notify_gossip_transaction_validity(
+                                            from_peer_info,
+                                            GossipsubMessageAcceptance::Reject,
+                                        );
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        Err(e) => {
-                            if let Some(from_peer_info) = from_peer_info {
-                                shared_state.p2p.notify_gossip_transaction_validity(
-                                    from_peer_info,
-                                    GossipsubMessageAcceptance::Ignore,
-                                );
+                            Err(_) => {
+                                if let Some(from_peer_info) = from_peer_info {
+                                    let _ = shared_state
+                                        .p2p
+                                        .notify_gossip_transaction_validity(
+                                            from_peer_info,
+                                            GossipsubMessageAcceptance::Ignore,
+                                        );
+                                }
+                                return;
                             }
-                            return;
-                        }
-                    };
-                    let tx = Arc::new(checked_tx);
+                        };
+                        let tx = Arc::new(checked_tx);
 
-                    let result = {
-                        let mut pool = shared_state.pool.write();
-                        // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)
-                        pool.insert(tx.clone())
-                    };
+                        let result = {
+                            let mut pool = shared_state.pool.write();
+                            // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)
+                            pool.insert(tx.clone())
+                        };
 
-                    dbg!("Transaction inserted");
-
-                    // P2P notification
-                    match (from_peer_info, result.is_ok()) {
-                        (Some(from_peer_info), true) => {
-                            shared_state.p2p.notify_gossip_transaction_validity(
-                                from_peer_info,
-                                GossipsubMessageAcceptance::Accept,
-                            );
-                        }
-                        (Some(from_peer_info), false) => {
-                            shared_state.p2p.notify_gossip_transaction_validity(
-                                from_peer_info,
-                                GossipsubMessageAcceptance::Ignore,
-                            );
-                        }
-                        (None, _) => {
-                            if let Err(e) =
-                                shared_state.p2p.broadcast_transaction(tx_clone)
-                            {
-                                tracing::error!("Failed to broadcast transaction: {}", e);
+                        // P2P notification
+                        match (from_peer_info, result.is_ok()) {
+                            (Some(from_peer_info), true) => {
+                                let _ =
+                                    shared_state.p2p.notify_gossip_transaction_validity(
+                                        from_peer_info,
+                                        GossipsubMessageAcceptance::Accept,
+                                    );
                             }
-                        }
-                    };
+                            (Some(from_peer_info), false) => {
+                                let _ =
+                                    shared_state.p2p.notify_gossip_transaction_validity(
+                                        from_peer_info,
+                                        GossipsubMessageAcceptance::Ignore,
+                                    );
+                            }
+                            (None, _) => {
+                                if let Err(e) =
+                                    shared_state.p2p.broadcast_transaction(tx_clone)
+                                {
+                                    tracing::error!(
+                                        "Failed to broadcast transaction: {}",
+                                        e
+                                    );
+                                }
+                            }
+                        };
 
-                    if let Ok(removed) = &result {
-                        shared_state.new_txs_notifier.notify_waiters();
-                        let submitted_time = SystemTime::now();
-                        shared_state
-                            .time_txs_submitted
-                            .write()
-                            .push_front((submitted_time, tx.id()));
-                        for tx in removed {
+                        if let Ok(removed) = &result {
+                            shared_state.new_txs_notifier.notify_waiters();
+                            let submitted_time = SystemTime::now();
                             shared_state
-                                .tx_status_sender
-                                .send_squeezed_out(tx.id(), Error::Removed);
+                                .time_txs_submitted
+                                .write()
+                                .push_front((submitted_time, tx.id()));
+                            for tx in removed {
+                                shared_state
+                                    .tx_status_sender
+                                    .send_squeezed_out(tx.id(), Error::Removed);
+                            }
+                            shared_state.tx_status_sender.send_submitted(
+                                tx.id(),
+                                Tai64::from_unix(
+                                    submitted_time
+                                        .duration_since(SystemTime::UNIX_EPOCH)
+                                        .expect("Time can't be less than UNIX EPOCH")
+                                        .as_secs()
+                                        as i64,
+                                ),
+                            );
                         }
-                        shared_state.tx_status_sender.send_submitted(
-                            tx.id(),
-                            Tai64::from_unix(
-                                submitted_time
-                                    .duration_since(SystemTime::UNIX_EPOCH)
-                                    .expect("Time can't be less than UNIX EPOCH")
-                                    .as_secs() as i64,
-                            ),
-                        );
                     }
-                }
-            });
+                })
+                .map_err(|_| Error::TooManyQueuedTransactions)?;
         }
         Ok(())
     }
 
     pub fn new_peer_subscribed(&self, peer_id: PeerId) {
-        self.heavy_async_processor.spawn({
+        // We are not affected if there is too many queued job and we don't manage this peer.
+        let _ = self.heavy_async_processor.spawn({
             let shared_state = self.clone();
             async move {
                 let peer_tx_ids = shared_state
@@ -319,8 +320,8 @@ where
                 if txs.is_empty() {
                     return;
                 }
-                // Verifying them
-                shared_state.insert(txs, None);
+                // Verifying and insert them, not a big deal if we fail to insert them
+                let _ = shared_state.insert(txs, None);
             }
         });
     }

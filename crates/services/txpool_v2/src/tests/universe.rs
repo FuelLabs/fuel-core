@@ -1,7 +1,4 @@
-use std::{
-    cell::RefCell,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use fuel_core_types::{
     entities::{
@@ -52,7 +49,6 @@ use fuel_core_types::{
 };
 use parking_lot::RwLock;
 use tokio::sync::broadcast::Receiver;
-use tokio_stream::StreamExt;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -147,9 +143,7 @@ impl TestPoolUniverse {
         MockWasmChecker,
         MockMemoryPool,
     > {
-        let rng = RefCell::new(self.rng.clone());
         let gas_price = 0;
-
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
         // ordering of methods handlers: https://docs.rs/mockall/0.12.1/mockall/index.html#matching-multiple-calls

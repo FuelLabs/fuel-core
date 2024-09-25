@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    fmt::Debug,
-    time::Instant,
-};
+use std::fmt::Debug;
 
 use crate::{
     error::Error,

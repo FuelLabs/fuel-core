@@ -48,14 +48,6 @@ pub struct InputComputationVerifiedTx(Checked<Transaction>);
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct FullyVerifiedTx(Checked<Transaction>);
 
-pub enum TransactionVerifState {
-    Unverified(UnverifiedTx),
-    BasicVerified(BasicVerifiedTx),
-    InputDependenciesVerified(InputDependenciesVerifiedTx),
-    InputComputationVerified(InputComputationVerifiedTx),
-    FullyVerified(FullyVerifiedTx),
-}
-
 impl UnverifiedTx {
     pub async fn perform_basic_verifications(
         self,

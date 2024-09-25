@@ -96,6 +96,8 @@ pub enum Error {
     WasmValidity(WasmValidityError),
     #[display(fmt = "Transaction is not inserted. Mint transaction is not allowed")]
     MintIsDisallowed,
+    #[display(fmt = "Too much transactions are in queue to be inserted. Can't add more")]
+    TooManyQueuedTransactions,
 }
 
 impl From<CheckError> for Error {

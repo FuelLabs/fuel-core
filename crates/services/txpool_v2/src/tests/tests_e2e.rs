@@ -9,10 +9,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
     tai64::Tai64,
 };
-use proptest::{
-    prelude::*,
-    strategy,
-};
+use proptest::prelude::*;
 use test_strategy::{
     proptest,
     Arbitrary,

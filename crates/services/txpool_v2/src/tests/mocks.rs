@@ -21,10 +21,7 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coins::coin::{
-            Coin,
-            CompressedCoin,
-        },
+        coins::coin::CompressedCoin,
         relayer::message::Message,
     },
     fuel_tx::{
@@ -56,10 +53,7 @@ use fuel_core_types::{
     },
 };
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::HashMap,
     sync::{
         Arc,
         Mutex,
@@ -72,7 +66,6 @@ pub struct Data {
     pub contracts: HashMap<ContractId, Contract>,
     pub blobs: HashMap<BlobId, BlobBytes>,
     pub messages: HashMap<Nonce, Message>,
-    pub spent_messages: HashSet<Nonce>,
 }
 
 #[derive(Clone, Default)]
@@ -81,14 +74,6 @@ pub struct MockDb {
 }
 
 impl MockDb {
-    pub fn insert_coin(&self, coin: Coin) {
-        self.data
-            .lock()
-            .unwrap()
-            .coins
-            .insert(coin.utxo_id, coin.compress());
-    }
-
     pub fn insert_dummy_blob(&self, blob_id: BlobId) {
         self.data
             .lock()
@@ -103,10 +88,6 @@ impl MockDb {
             .unwrap()
             .messages
             .insert(*message.id(), message);
-    }
-
-    pub fn spend_message(&self, id: Nonce) {
-        self.data.lock().unwrap().spent_messages.insert(id);
     }
 }
 
@@ -153,10 +134,6 @@ impl MockTxPoolGasPrice {
         Self {
             gas_price: Some(gas_price),
         }
-    }
-
-    pub fn new_none() -> Self {
-        Self { gas_price: None }
     }
 }
 

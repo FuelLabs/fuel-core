@@ -6,7 +6,6 @@ use std::{
 
 use fuel_core_types::fuel_tx::Bytes32;
 use parking_lot::lock_api::Mutex;
-use proptest::strategy;
 use test_strategy::proptest;
 use tokio::time::Instant;
 

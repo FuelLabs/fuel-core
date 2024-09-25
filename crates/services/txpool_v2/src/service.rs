@@ -11,15 +11,8 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_types::{
-    blockchain::consensus::Consensus,
-    entities::relayer::transaction,
-    fuel_tx::{
-        Bytes32,
-        Transaction,
-        TxId,
-    },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    fuel_vm::checked_transaction::CheckedTransaction,
     services::{
         block_importer::SharedImportResult,
         p2p::{
@@ -28,26 +21,18 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::{
-            PoolTransaction,
-            TransactionStatus,
-        },
     },
 };
 use futures::StreamExt;
 use parking_lot::RwLock;
 use tokio::{
     sync::Notify,
-    time::{
-        Instant,
-        MissedTickBehavior,
-    },
+    time::MissedTickBehavior,
 };
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
-    error::Error,
     heavy_async_processing::HeavyAsyncProcessor,
     pool::Pool,
     ports::{
@@ -67,7 +52,6 @@ use crate::{
         GraphStorage,
     },
     update_sender::TxStatusChange,
-    verifications::perform_all_verifications,
 };
 
 pub type Service<
@@ -387,10 +371,10 @@ where
             utxo_validation: config.utxo_validation,
             heavy_async_processor: Arc::new(
                 HeavyAsyncProcessor::new(
+                    config.heavy_work.number_threads_verif_insert_transactions,
                     config
                         .heavy_work
                         .number_pending_tasks_threads_verif_insert_transactions,
-                    config.heavy_work.number_threads_verif_insert_transactions,
                 )
                 .unwrap(),
             ),

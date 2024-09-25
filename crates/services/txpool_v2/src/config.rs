@@ -169,7 +169,7 @@ impl Default for Config {
                 max_bytes_size: 10_000_000_000,
             },
             heavy_work: HeavyWorkConfig {
-                number_threads_verif_insert_transactions: 4,
+                number_threads_verif_insert_transactions: 1,
                 number_pending_tasks_threads_verif_insert_transactions: 100,
             },
         }

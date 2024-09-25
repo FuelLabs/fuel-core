@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -27,10 +26,7 @@ use tokio::{
     },
     time::Instant,
 };
-use tokio_stream::{
-    wrappers::ReceiverStream,
-    Stream,
-};
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
     error::Error,

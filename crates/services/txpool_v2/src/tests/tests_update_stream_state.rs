@@ -3,7 +3,6 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use fuel_core_types::services::txpool::TransactionStatus;
-use proptest::prelude::*;
 use test_strategy::{
     proptest,
     Arbitrary,

@@ -1,8 +1,4 @@
 use fuel_core_services::Service;
-use fuel_core_storage::rand::{
-    prelude::StdRng,
-    SeedableRng,
-};
 use fuel_core_types::{
     fuel_tx::{
         field::Inputs,
@@ -338,7 +334,7 @@ async fn test_gossipped_transaction_with_check_error_rejected() {
 
 #[tokio::test]
 async fn test_gossipped_mint_rejected() {
-    let mut universe = TestPoolUniverse::default();
+    let universe = TestPoolUniverse::default();
     // verify that gossipped mint transactions are rejected (punished)
     let tx1 = TransactionBuilder::mint(
         0u32.into(),
@@ -378,13 +374,12 @@ async fn test_gossipped_mint_rejected() {
 #[tokio::test]
 async fn test_gossipped_transaction_with_transient_error_ignored() {
     // verify that gossipped transactions that fails stateful checks are ignored (but not punished)
-    let mut rng = StdRng::seed_from_u64(100);
     let mut universe = TestPoolUniverse::default();
     // add coin to builder db and generate a valid tx
     // intentionally muck up the tx such that it will return a coin not found error
     // by adding an input that doesn't exist in the builder db
     let bad_input = universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
-    let mut tx1 = universe.build_script_transaction(Some(vec![bad_input]), None, 10);
+    let tx1 = universe.build_script_transaction(Some(vec![bad_input]), None, 10);
 
     // setup p2p mock - with tx incoming from p2p
     let txs = vec![tx1.clone()];

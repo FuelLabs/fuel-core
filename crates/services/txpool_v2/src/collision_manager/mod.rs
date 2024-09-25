@@ -1,17 +1,4 @@
-use std::{
-    collections::HashSet,
-    fmt::Debug,
-};
-
-use fuel_core_types::{
-    fuel_tx::{
-        BlobId,
-        ContractId,
-        UtxoId,
-    },
-    fuel_types::Nonce,
-    services::txpool::PoolTransaction,
-};
+use fuel_core_types::services::txpool::PoolTransaction;
 
 use crate::error::Error;
 

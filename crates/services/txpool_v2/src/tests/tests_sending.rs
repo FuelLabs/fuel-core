@@ -10,7 +10,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use parking_lot::lock_api::Mutex;
-use proptest::strategy;
 use test_strategy::proptest;
 
 use crate::{
