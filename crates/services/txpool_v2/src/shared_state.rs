@@ -1,11 +1,18 @@
 use std::{
     collections::VecDeque,
     sync::Arc,
-    time::Duration,
+    time::{
+        Duration,
+        Instant,
+        SystemTime,
+        UNIX_EPOCH,
+    },
 };
 
+use anyhow::anyhow;
 use fuel_core_types::{
     fuel_tx::{
+        Bytes32,
         Transaction,
         TxId,
     },
@@ -19,13 +26,15 @@ use fuel_core_types::{
         txpool::{
             ArcPoolTx,
             PoolTransaction,
+            TransactionStatus,
         },
     },
+    tai64::Tai64,
 };
 use parking_lot::RwLock;
-use tokio::{
-    sync::Notify,
-    time::Instant,
+use tokio::sync::{
+    broadcast,
+    Notify,
 };
 
 use crate::{
@@ -48,7 +57,14 @@ use crate::{
         graph::GraphStorage,
         RemovedTransactions,
     },
-    update_sender::TxStatusChange,
+    tx_status_stream::{
+        TxStatusMessage,
+        TxStatusStream,
+    },
+    update_sender::{
+        MpscChannel,
+        TxStatusChange,
+    },
     verifications::perform_all_verifications,
 };
 
@@ -84,7 +100,7 @@ pub struct SharedState<
     pub(crate) p2p: Arc<P2P>,
     pub(crate) new_txs_notifier: Arc<Notify>,
     pub(crate) utxo_validation: bool,
-    pub(crate) time_txs_submitted: Arc<RwLock<VecDeque<(Instant, TxId)>>>,
+    pub(crate) time_txs_submitted: Arc<RwLock<VecDeque<(SystemTime, TxId)>>>,
 }
 
 impl<
@@ -152,12 +168,12 @@ where
         &self,
         transactions: Vec<Arc<Transaction>>,
         from_peer_info: Option<GossipsubMessageInfo>,
-    ) -> Result<Vec<InsertionResult>, Error> {
+    ) -> Result<(), Error> {
         let current_height = *self.current_height.read();
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
-        let mut results = vec![];
+        dbg!("Inserting transactions");
         for transaction in transactions {
             self.heavy_async_processor.spawn({
                 let shared_state = self.clone();
@@ -166,7 +182,7 @@ where
                 async move {
                     let tx_clone = Arc::clone(&transaction);
                     // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
-                    let Ok(checked_tx) = perform_all_verifications(
+                    let checked_tx = match perform_all_verifications(
                         // TODO: This should be removed if the checked transactions can work with Arc in it (see https://github.com/FuelLabs/fuel-vm/issues/831)
                         Arc::unwrap_or_clone(transaction),
                         shared_state.pool.clone(),
@@ -178,14 +194,27 @@ where
                         shared_state.memory.get_memory().await,
                     )
                     .await
-                    else {
-                        if let Some(from_peer_info) = from_peer_info {
-                            shared_state.p2p.notify_gossip_transaction_validity(
-                                from_peer_info,
-                                GossipsubMessageAcceptance::Reject,
-                            );
+                    {
+                        Ok(tx) => tx,
+                        Err(Error::ConsensusValidity(_))
+                        | Err(Error::MintIsDisallowed) => {
+                            if let Some(from_peer_info) = from_peer_info {
+                                shared_state.p2p.notify_gossip_transaction_validity(
+                                    from_peer_info,
+                                    GossipsubMessageAcceptance::Reject,
+                                );
+                            }
+                            return;
                         }
-                        return;
+                        Err(e) => {
+                            if let Some(from_peer_info) = from_peer_info {
+                                shared_state.p2p.notify_gossip_transaction_validity(
+                                    from_peer_info,
+                                    GossipsubMessageAcceptance::Ignore,
+                                );
+                            }
+                            return;
+                        }
                     };
                     let tx = Arc::new(checked_tx);
 
@@ -194,36 +223,58 @@ where
                         // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)
                         pool.insert(tx.clone())
                     };
-                    if result.is_ok() {
-                        shared_state.new_txs_notifier.notify_waiters();
-                        let submitted_time = Instant::now();
-                        shared_state
-                            .time_txs_submitted
-                            .write()
-                            .push_front((submitted_time, tx.id()));
-                        if let Err(e) = shared_state.p2p.broadcast_transaction(tx_clone) {
-                            tracing::error!("Failed to broadcast transaction: {}", e);
-                        }
-                    }
-                    match (from_peer_info, result) {
-                        (Some(from_peer_info), Ok(_)) => {
+
+                    dbg!("Transaction inserted");
+
+                    // P2P notification
+                    match (from_peer_info, result.is_ok()) {
+                        (Some(from_peer_info), true) => {
                             shared_state.p2p.notify_gossip_transaction_validity(
                                 from_peer_info,
                                 GossipsubMessageAcceptance::Accept,
                             );
                         }
-                        (Some(from_peer_info), Err(_)) => {
+                        (Some(from_peer_info), false) => {
                             shared_state.p2p.notify_gossip_transaction_validity(
                                 from_peer_info,
                                 GossipsubMessageAcceptance::Ignore,
                             );
                         }
-                        (None, _) => {}
+                        (None, _) => {
+                            if let Err(e) =
+                                shared_state.p2p.broadcast_transaction(tx_clone)
+                            {
+                                tracing::error!("Failed to broadcast transaction: {}", e);
+                            }
+                        }
+                    };
+
+                    if let Ok(removed) = &result {
+                        shared_state.new_txs_notifier.notify_waiters();
+                        let submitted_time = SystemTime::now();
+                        shared_state
+                            .time_txs_submitted
+                            .write()
+                            .push_front((submitted_time, tx.id()));
+                        for tx in removed {
+                            shared_state
+                                .tx_status_sender
+                                .send_squeezed_out(tx.id(), Error::Removed);
+                        }
+                        shared_state.tx_status_sender.send_submitted(
+                            tx.id(),
+                            Tai64::from_unix(
+                                submitted_time
+                                    .duration_since(SystemTime::UNIX_EPOCH)
+                                    .expect("Time can't be less than UNIX EPOCH")
+                                    .as_secs() as i64,
+                            ),
+                        );
                     }
                 }
             });
         }
-        Ok(results)
+        Ok(())
     }
 
     pub fn new_peer_subscribed(&self, peer_id: PeerId) {
@@ -281,10 +332,14 @@ where
     pub fn prune_old_transactions(&mut self, ttl: Duration) {
         let txs_to_remove = {
             let mut time_txs_submitted = self.time_txs_submitted.write();
-            let now = Instant::now();
+            let now = SystemTime::now();
             let mut txs_to_remove = vec![];
             while let Some((time, _)) = time_txs_submitted.back() {
-                if now.duration_since(*time) < ttl {
+                let Ok(duration) = now.duration_since(*time) else {
+                    tracing::error!("Failed to calculate the duration since the transaction was submitted");
+                    return;
+                };
+                if duration < ttl {
                     break;
                 }
                 // SAFETY: We are removing the last element that we just checked
@@ -294,7 +349,13 @@ where
         };
         {
             let mut pool = self.pool.write();
-            pool.remove_transaction_and_dependents(txs_to_remove);
+            let removed = pool
+                .remove_transaction_and_dependents(txs_to_remove)
+                .unwrap_or_default();
+            for tx in removed {
+                self.tx_status_sender
+                    .send_squeezed_out(tx.id(), Error::TTLReason);
+            }
         }
     }
 
@@ -329,5 +390,37 @@ where
 
     pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
         self.pool.read().find_one(tx_id)
+    }
+
+    pub fn find(&self, tx_ids: Vec<TxId>) -> Vec<Option<ArcPoolTx>> {
+        let pool = self.pool.read();
+        tx_ids
+            .into_iter()
+            .map(|tx_id| pool.find_one(&tx_id))
+            .collect()
+    }
+
+    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
+        self.tx_status_sender.new_tx_notification_sender.subscribe()
+    }
+
+    pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
+        self.tx_status_sender
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx_id)
+            .ok_or(anyhow!("Maximum number of subscriptions reached"))
+    }
+
+    pub fn send_complete(
+        &self,
+        id: Bytes32,
+        block_height: &BlockHeight,
+        status: TransactionStatus,
+    ) {
+        self.tx_status_sender.send_complete(
+            id,
+            block_height,
+            TxStatusMessage::Status(status),
+        )
     }
 }

@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    cell::RefCell,
+    sync::Arc,
+};
 
 use fuel_core_types::{
     entities::{
@@ -27,6 +30,7 @@ use fuel_core_types::{
             contract::Contract as ContractInput,
             Input,
         },
+        Bytes32,
         ConsensusParameters,
         Contract,
         ContractId,
@@ -47,11 +51,14 @@ use fuel_core_types::{
     },
 };
 use parking_lot::RwLock;
+use tokio::sync::broadcast::Receiver;
+use tokio_stream::StreamExt;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
     error::Error,
+    new_service,
     pool::Pool,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     shared_state::TxPool,
@@ -68,9 +75,14 @@ use crate::{
     },
     verifications::perform_all_verifications,
     GasPrice,
+    Service,
 };
 
 use super::mocks::{
+    MockConsensusParametersProvider,
+    MockImporter,
+    MockMemoryPool,
+    MockP2P,
     MockTxPoolGasPrice,
     MockWasmChecker,
 };
@@ -110,7 +122,7 @@ impl TestPoolUniverse {
         Self { config, ..self }
     }
 
-    pub fn build_pool(&mut self) -> TxPool<MockDBProvider> {
+    pub fn build_pool(&mut self) {
         let pool = Arc::new(RwLock::new(Pool::new(
             MockDBProvider(self.mock_db.clone()),
             GraphStorage::new(GraphConfig {
@@ -121,7 +133,52 @@ impl TestPoolUniverse {
             self.config.clone(),
         )));
         self.pool = Some(pool.clone());
-        pool
+    }
+
+    pub fn build_service(
+        &self,
+        p2p: Option<MockP2P>,
+        importer: Option<MockImporter>,
+    ) -> Service<
+        MockP2P,
+        MockDBProvider,
+        MockConsensusParametersProvider,
+        MockTxPoolGasPrice,
+        MockWasmChecker,
+        MockMemoryPool,
+    > {
+        let rng = RefCell::new(self.rng.clone());
+        let gas_price = 0;
+
+        let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
+        // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
+        // ordering of methods handlers: https://docs.rs/mockall/0.12.1/mockall/index.html#matching-multiple-calls
+        p2p.expect_notify_gossip_transaction_validity()
+            .returning(move |_, _| Ok(()));
+        p2p.expect_broadcast_transaction()
+            .returning(move |_| Ok(()));
+        p2p.expect_subscribe_new_peers()
+            .returning(|| Box::pin(fuel_core_services::stream::pending()));
+
+        let importer = importer.unwrap_or_else(|| MockImporter::with_blocks(vec![]));
+        let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+        let mut consensus_parameters_provider =
+            MockConsensusParametersProvider::default();
+        consensus_parameters_provider
+            .expect_latest_consensus_parameters()
+            .returning(|| (0, Arc::new(Default::default())));
+
+        new_service(
+            self.config.clone(),
+            p2p,
+            importer,
+            MockDBProvider(self.mock_db.clone()),
+            consensus_parameters_provider,
+            Default::default(),
+            gas_price_provider,
+            MockWasmChecker { result: Ok(()) },
+            MockMemoryPool,
+        )
     }
 
     pub fn build_script_transaction(
@@ -286,6 +343,18 @@ impl TestPoolUniverse {
             code,
             vec![],
         )
+    }
+
+    pub async fn waiting_txs_insertion(
+        &self,
+        mut new_tx_notification_subscribe: Receiver<Bytes32>,
+        mut tx_ids: Vec<TxId>,
+    ) {
+        while !tx_ids.is_empty() {
+            let tx_id = new_tx_notification_subscribe.recv().await.unwrap();
+            let index = tx_ids.iter().position(|id| *id == tx_id).unwrap();
+            tx_ids.remove(index);
+        }
     }
 }
 

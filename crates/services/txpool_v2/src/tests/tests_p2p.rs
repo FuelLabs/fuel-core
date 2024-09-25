@@ -29,14 +29,24 @@ use tokio::sync::{
     broadcast,
     Notify,
 };
+use tokio_stream::StreamExt;
 
-use crate::tx_status_stream::TxStatusMessage;
+use crate::{
+    tests::{
+        mocks::MockP2P,
+        universe::{
+            TestPoolUniverse,
+            TEST_COIN_AMOUNT,
+        },
+    },
+    tx_status_stream::TxStatusMessage,
+};
 
 #[tokio::test]
 async fn test_new_subscription_p2p() {
-    let mut ctx_builder = TestContextBuilder::new();
-    let tx1 = ctx_builder.setup_script_tx(10);
-    let tx2 = ctx_builder.setup_script_tx(100);
+    let mut universe = TestPoolUniverse::default();
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 100);
 
     // Given
     let wait_notification = Arc::new(Notify::new());
@@ -78,10 +88,8 @@ async fn test_new_subscription_p2p() {
             notifier.notify_one();
             Ok(vec![Some(tx1_clone), Some(tx2_clone)])
         });
-    ctx_builder.with_p2p(p2p);
-    let ctx = ctx_builder.build();
-    let service = ctx.service();
 
+    let service = universe.build_service(Some(p2p), None);
     service.start_and_await().await.unwrap();
 
     wait_notification.notified().await;
@@ -107,9 +115,9 @@ async fn test_new_subscription_p2p() {
 
 #[tokio::test]
 async fn test_new_subscription_p2p_ask_subset_of_transactions() {
-    let mut ctx_builder = TestContextBuilder::new();
-    let tx1 = ctx_builder.setup_script_tx(10);
-    let tx2 = ctx_builder.setup_script_tx(100);
+    let mut universe = TestPoolUniverse::default();
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 100);
 
     // Given
     let wait_notification = Arc::new(Notify::new());
@@ -145,12 +153,21 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
             notifier.notify_one();
             Ok(vec![Some(tx2_clone)])
         });
-    ctx_builder.with_p2p(p2p);
-    let ctx = ctx_builder.build();
-    let service = ctx.service();
+
+    let service = universe.build_service(Some(p2p), None);
 
     service.start_and_await().await.unwrap();
-    service.shared.insert(vec![Arc::new(tx1.clone())]).await;
+    service
+        .shared
+        .insert(vec![Arc::new(tx1.clone())], None)
+        .unwrap();
+
+    universe
+        .waiting_txs_insertion(
+            service.shared.new_tx_notification_subscribe(),
+            vec![tx1.id(&Default::default())],
+        )
+        .await;
 
     wait_notification.notified().await;
     tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -171,14 +188,12 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
 
 #[tokio::test]
 async fn can_insert_from_p2p() {
-    let mut ctx_builder = TestContextBuilder::new();
-    let tx1 = ctx_builder.setup_script_tx(10);
+    let mut universe = TestPoolUniverse::default();
+    let tx1 = universe.build_script_transaction(None, None, 10);
 
     let p2p = MockP2P::new_with_txs(vec![tx1.clone()]);
-    ctx_builder.with_p2p(p2p);
+    let service = universe.build_service(Some(p2p), None);
 
-    let ctx = ctx_builder.build();
-    let service = ctx.service();
     let mut receiver = service
         .shared
         .tx_update_subscribe(tx1.id(&Default::default()))
@@ -195,16 +210,15 @@ async fn can_insert_from_p2p() {
     // fetch tx from pool
     let out = service.shared.find(vec![tx1.id(&Default::default())]);
 
-    let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
+    let got_tx: Transaction = out[0].as_ref().unwrap().clone().deref().into();
     assert_eq!(tx1, got_tx);
 }
 
 #[tokio::test]
 async fn insert_from_local_broadcasts_to_p2p() {
     // setup initial state
-    let mut ctx_builder = TestContextBuilder::new();
-    // add coin to builder db and generate a valid tx
-    let tx1 = ctx_builder.setup_script_tx(10);
+    let mut universe = TestPoolUniverse::default();
+    let tx1 = universe.build_script_transaction(None, None, 10);
 
     let mut p2p = MockP2P::new_with_txs(vec![]);
     let mock_tx1 = tx1.clone();
@@ -213,47 +227,43 @@ async fn insert_from_local_broadcasts_to_p2p() {
         .times(1)
         .returning(|_| Ok(()));
 
-    ctx_builder.with_p2p(p2p);
     // build and start the txpool service
-    let ctx = ctx_builder.build_and_start().await;
+    let service = universe.build_service(Some(p2p), None);
+    service.start_and_await().await.unwrap();
 
-    let service = ctx.service();
     let mut new_tx_notification = service.shared.new_tx_notification_subscribe();
     let mut subscribe_update = service
         .shared
         .tx_update_subscribe(tx1.cached_id().unwrap())
         .unwrap();
 
-    let out = service.shared.insert(vec![Arc::new(tx1.clone())]).await;
+    service
+        .shared
+        .insert(vec![Arc::new(tx1.clone())], None)
+        .unwrap();
 
-    if out[0].is_ok() {
-        // we are sure that included tx are already broadcasted.
-
-        // verify status updates
-        assert_eq!(
-            new_tx_notification.try_recv(),
-            Ok(tx1.cached_id().unwrap()),
-            "First added should be tx1"
-        );
-        let update = subscribe_update.next().await;
-        assert!(
-            matches!(
-                update,
-                Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
-            ),
-            "Got {:?}",
-            update
-        );
-    } else {
-        panic!("Tx1 should be OK, got err");
-    }
+    // verify status updates
+    assert_eq!(
+        new_tx_notification.recv().await,
+        Ok(tx1.cached_id().unwrap()),
+        "First added should be tx1"
+    );
+    let update = subscribe_update.next().await;
+    assert!(
+        matches!(
+            update,
+            Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
+        ),
+        "Got {:?}",
+        update
+    );
 }
 
 #[tokio::test]
 async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
-    let mut ctx_builder = TestContextBuilder::new();
-    // add coin to builder db and generate a valid tx
-    let tx1 = ctx_builder.setup_script_tx(10);
+    let mut universe = TestPoolUniverse::default();
+    let tx1 = universe.build_script_transaction(None, None, 10);
+
     // setup p2p mock - with tx incoming from p2p
     let txs = vec![tx1.clone()];
     let mut p2p = MockP2P::new_with_txs(txs);
@@ -262,17 +272,17 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
         send.send(()).unwrap();
         Ok(())
     });
-    ctx_builder.with_p2p(p2p);
 
-    // build and start the txpool service
-    let ctx = ctx_builder.build();
-    let service = ctx.service();
+    // build txpool service
+    let service = universe.build_service(Some(p2p), None);
+
     // verify tx status update from p2p injected tx is successful
     let mut receiver = service
         .shared
         .tx_update_subscribe(tx1.id(&Default::default()))
         .unwrap();
 
+    // start the service
     service.start_and_await().await.unwrap();
 
     let res = receiver.next().await;
@@ -293,10 +303,9 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
 #[tokio::test]
 async fn test_gossipped_transaction_with_check_error_rejected() {
     // verify that gossipped transactions which fail basic sanity checks are rejected (punished)
+    let mut universe = TestPoolUniverse::default();
+    let mut tx1 = universe.build_script_transaction(None, None, 10);
 
-    let mut ctx_builder = TestContextBuilder::new();
-    // add coin to builder db and generate a valid tx
-    let mut tx1 = ctx_builder.setup_script_tx(10);
     // now intentionally muck up the tx such that it will return a CheckError,
     // by duplicating an input
     let script = tx1.as_script_mut().unwrap();
@@ -314,11 +323,9 @@ async fn test_gossipped_transaction_with_check_error_rejected() {
             send.send(()).unwrap();
             Ok(())
         });
-    ctx_builder.with_p2p(p2p);
 
     // build and start the txpool service
-    let ctx = ctx_builder.build();
-    let service = ctx.service();
+    let service = universe.build_service(Some(p2p), None);
     service.start_and_await().await.unwrap();
     // verify p2p was notified about the transaction validity
     let gossip_validity_notified =
@@ -331,6 +338,7 @@ async fn test_gossipped_transaction_with_check_error_rejected() {
 
 #[tokio::test]
 async fn test_gossipped_mint_rejected() {
+    let mut universe = TestPoolUniverse::default();
     // verify that gossipped mint transactions are rejected (punished)
     let tx1 = TransactionBuilder::mint(
         0u32.into(),
@@ -354,13 +362,9 @@ async fn test_gossipped_mint_rejected() {
             send.send(()).unwrap();
             Ok(())
         });
-    // setup test context
-    let mut ctx_builder = TestContextBuilder::new();
-    ctx_builder.with_p2p(p2p);
 
     // build and start the txpool service
-    let ctx = ctx_builder.build();
-    let service = ctx.service();
+    let service = universe.build_service(Some(p2p), None);
     service.start_and_await().await.unwrap();
     // verify p2p was notified about the transaction validity
     let gossip_validity_notified =
@@ -375,18 +379,13 @@ async fn test_gossipped_mint_rejected() {
 async fn test_gossipped_transaction_with_transient_error_ignored() {
     // verify that gossipped transactions that fails stateful checks are ignored (but not punished)
     let mut rng = StdRng::seed_from_u64(100);
-    let mut ctx_builder = TestContextBuilder::new();
+    let mut universe = TestPoolUniverse::default();
     // add coin to builder db and generate a valid tx
-    let mut tx1 = ctx_builder.setup_script_tx(10);
-    // now intentionally muck up the tx such that it will return a coin not found error
-    // by replacing the default coin with one that is not in the database
-    let script = tx1.as_script_mut().unwrap();
-    script.inputs_mut()[0] = crate::test_helpers::random_predicate(
-        &mut rng,
-        AssetId::BASE,
-        TEST_COIN_AMOUNT,
-        None,
-    );
+    // intentionally muck up the tx such that it will return a coin not found error
+    // by adding an input that doesn't exist in the builder db
+    let bad_input = universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
+    let mut tx1 = universe.build_script_transaction(Some(vec![bad_input]), None, 10);
+
     // setup p2p mock - with tx incoming from p2p
     let txs = vec![tx1.clone()];
     let mut p2p = MockP2P::new_with_txs(txs);
@@ -399,11 +398,9 @@ async fn test_gossipped_transaction_with_transient_error_ignored() {
             send.send(()).unwrap();
             Ok(())
         });
-    ctx_builder.with_p2p(p2p);
 
     // build and start the txpool service
-    let ctx = ctx_builder.build();
-    let service = ctx.service();
+    let service = universe.build_service(Some(p2p), None);
     service.start_and_await().await.unwrap();
     // verify p2p was notified about the transaction validity
     let gossip_validity_notified =
@@ -411,5 +408,6 @@ async fn test_gossipped_transaction_with_transient_error_ignored() {
     assert!(
         gossip_validity_notified.is_ok(),
         "expected to receive gossip validity notification"
-    )
+    );
+    service.stop_and_await().await.unwrap();
 }

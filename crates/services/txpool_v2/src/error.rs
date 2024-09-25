@@ -17,8 +17,14 @@ pub enum Error {
     GasPriceNotFound(String),
     #[display(fmt = "Database error: {_0}")]
     Database(String),
+    #[display(fmt = "Transaction removed.")]
+    Removed,
     #[display(fmt = "Transaction not found: {_0}")]
     TransactionNotFound(String),
+    #[display(
+        fmt = "Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
+    )]
+    TTLReason,
     #[display(fmt = "Wrong number of outputs: {_0}")]
     WrongOutputNumber(String),
     #[display(

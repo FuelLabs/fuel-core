@@ -44,7 +44,6 @@ pub trait BlockImporter: Send + Sync {
 }
 
 /// Trait for getting the latest consensus parameters.
-#[cfg_attr(feature = "test-helpers", mockall::automock)]
 pub trait ConsensusParametersProvider {
     /// Get latest consensus parameters.
     fn latest_consensus_parameters(

@@ -64,7 +64,7 @@ impl UnverifiedTx {
         gas_price_provider: &impl GasPriceProvider,
     ) -> Result<BasicVerifiedTx, Error> {
         if self.0.is_mint() {
-            return Err(Error::NotSupportedTransactionType);
+            return Err(Error::MintIsDisallowed);
         }
         let tx = self
             .0

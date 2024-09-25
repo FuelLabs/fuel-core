@@ -230,16 +230,18 @@ where
     pub fn remove_transaction_and_dependents(
         &mut self,
         tx_ids: Vec<TxId>,
-    ) -> Result<(), Error> {
+    ) -> Result<Vec<ArcPoolTx>, Error> {
+        let mut removed_transactions = vec![];
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let removed = self
                     .storage
                     .remove_transaction_and_dependents_subtree(storage_id)?;
                 self.update_components_and_caches_on_removal(&removed)?;
+                removed_transactions.extend(removed);
             }
         }
-        Ok(())
+        Ok(removed_transactions)
     }
 
     /// Check if the pool has enough space to store a transaction.

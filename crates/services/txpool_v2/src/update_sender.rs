@@ -49,8 +49,8 @@ const BUFFER_SIZE: usize = 2;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
-    new_tx_notification_sender: broadcast::Sender<TxId>,
-    update_sender: UpdateSender,
+    pub new_tx_notification_sender: broadcast::Sender<TxId>,
+    pub update_sender: UpdateSender,
 }
 
 impl TxStatusChange {
