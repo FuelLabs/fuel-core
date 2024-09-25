@@ -37,7 +37,7 @@ pub struct DaCompressedBlockQuery;
 
 #[Object]
 impl DaCompressedBlockQuery {
-    #[graphql(complexity = "2 * QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "QUERY_COSTS.da_compressed_block_read")]
     async fn da_compressed_block(
         &self,
         ctx: &Context<'_>,
