@@ -278,7 +278,7 @@ fn sync_gas_price_db_with_on_chain_storage<
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
     SettingsProvider: GasPriceSettingsProvider,
 {
     let metadata = metadata_storage
@@ -316,7 +316,7 @@ fn sync_v0_metadata<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvide
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,,
+    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
     SettingsProvider: GasPriceSettingsProvider,
 {
     let first = metadata_height.saturating_add(1);
