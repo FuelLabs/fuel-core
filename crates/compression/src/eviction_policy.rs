@@ -28,9 +28,11 @@ impl CacheEvictor {
         // Pick first key not in the set
         // TODO: use a proper algo, maybe LRU?
         let mut key = db.read_latest(keyspace)?;
+
+        debug_assert!(self.keep_keys[keyspace].len() < 2usize.pow(24).saturating_sub(2));
+
         while self.keep_keys[keyspace].contains(&key) {
             key = key.next();
-            assert_ne!(key, RegistryKey::ZERO, "Ran out of keys");
         }
 
         db.write_latest(keyspace, key)?;
