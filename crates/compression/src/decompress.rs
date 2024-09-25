@@ -94,9 +94,9 @@ pub async fn decompress<D: DecompressDb + TemporalRegistryAll>(
                 generated: Empty,
             },
             consensus: ConsensusHeader {
-                prev_root: compressed.header.prev_root,
-                height: compressed.header.height,
-                time: compressed.header.time,
+                prev_root: *compressed.header.prev_root(),
+                height: *compressed.header.height(),
+                time: *compressed.header.time(),
                 generated: Empty,
             },
         },

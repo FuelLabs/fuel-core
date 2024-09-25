@@ -20,19 +20,9 @@ use serde::{
 };
 
 use fuel_core_types::{
-    blockchain::{
-        header::{
-            ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
-        },
-        primitives::DaBlockHeight,
-    },
+    blockchain::header::PartialBlockHeader,
     fuel_tx::CompressedTransaction,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
-    tai64::Tai64,
+    fuel_types::Bytes32,
 };
 use tables::RegistrationsPerTable;
 
@@ -44,25 +34,21 @@ struct CompressedBlockPayload {
     /// Merkle root of the temporal registry state
     registrations_root: Bytes32,
     /// Compressed block header
-    header: Header,
+    header: PartialBlockHeader,
     /// Compressed transactions
     transactions: Vec<CompressedTransaction>,
-}
-
-/// Fuel block header with only the fields required to reconstruct it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct Header {
-    da_height: DaBlockHeight,
-    prev_root: Bytes32,
-    height: BlockHeight,
-    time: Tai64,
-    consensus_parameters_version: ConsensusParametersVersion,
-    state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
 #[cfg(test)]
 mod tests {
     use fuel_core_types::{
+        blockchain::{
+            header::{
+                ApplicationHeader,
+                ConsensusHeader,
+            },
+            primitives::Empty,
+        },
         fuel_compression::RegistryKey,
         fuel_tx::{
             input::PredicateCode,
@@ -71,6 +57,7 @@ mod tests {
             ContractId,
             ScriptCode,
         },
+        tai64::Tai64,
     };
     use proptest::prelude::*;
     use tables::PerRegistryKeyspaceMap;
@@ -140,17 +127,24 @@ mod tests {
                 registrations.insert(key, ksv);
             }
 
+            let header = PartialBlockHeader {
+                application: ApplicationHeader {
+                    da_height: da_height.into(),
+                    consensus_parameters_version,
+                    state_transition_bytecode_version,
+                    generated: Empty,
+                },
+                consensus: ConsensusHeader {
+                    prev_root: prev_root.into(),
+                    height: height.into(),
+                    time: Tai64::UNIX_EPOCH,
+                    generated: Empty
+                }
+            };
             let original = CompressedBlockPayload {
                 registrations: RegistrationsPerTable::try_from(registrations).unwrap(),
                 registrations_root: registrations_root.into(),
-                header: Header {
-                    da_height: da_height.into(),
-                    prev_root: prev_root.into(),
-                    height: height.into(),
-                    consensus_parameters_version,
-                    state_transition_bytecode_version,
-                    time: Tai64::UNIX_EPOCH,
-                },
+                header,
                 transactions: vec![],
             };
 
@@ -169,8 +163,8 @@ mod tests {
             assert_eq!(registrations_root, original.registrations_root);
 
             assert_eq!(header.da_height, da_height.into());
-            assert_eq!(header.prev_root, prev_root.into());
-            assert_eq!(header.height, height.into());
+            assert_eq!(*header.prev_root(), prev_root.into());
+            assert_eq!(*header.height(), height.into());
             assert_eq!(header.consensus_parameters_version, consensus_parameters_version);
             assert_eq!(header.state_transition_bytecode_version, state_transition_bytecode_version);
 

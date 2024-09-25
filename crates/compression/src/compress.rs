@@ -13,7 +13,6 @@ use crate::{
         TemporalRegistryAll,
     },
     CompressedBlockPayload,
-    Header,
 };
 use fuel_core_types::{
     blockchain::block::Block,
@@ -78,16 +77,7 @@ pub async fn compress<D: CompressDb + EvictorDb>(
     let compact = CompressedBlockPayload {
         registrations,
         registrations_root: Bytes32::default(), /* TODO: https://github.com/FuelLabs/fuel-core/issues/2232 */
-        header: Header {
-            da_height: block.header().da_height,
-            prev_root: *block.header().prev_root(),
-            consensus_parameters_version: block.header().consensus_parameters_version,
-            state_transition_bytecode_version: block
-                .header()
-                .state_transition_bytecode_version,
-            height: *block.header().height(),
-            time: block.header().time(),
-        },
+        header: block.header().into(),
         transactions,
     };
 
