@@ -1,11 +1,17 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{
+        HashMap,
+        HashSet,
+    },
     fmt::Debug,
     time::Instant,
 };
 
 use crate::{
-    error::{CollisionReason, Error},
+    error::{
+        CollisionReason,
+        Error,
+    },
     ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::PoolTransaction;
@@ -49,7 +55,7 @@ pub trait Storage {
         transaction: &PoolTransaction,
         dependencies: &[Self::StorageIndex],
         collisions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
-        ) -> Result<(), Error>;
+    ) -> Result<(), Error>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;

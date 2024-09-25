@@ -38,7 +38,10 @@ use petgraph::{
 
 use crate::{
     collision_manager::basic::BasicCollisionManagerStorage,
-    error::{CollisionReason, Error},
+    error::{
+        CollisionReason,
+        Error,
+    },
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
 };
@@ -422,9 +425,7 @@ impl Storage for GraphStorage {
         colliding_transactions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
     ) -> Result<(), Error> {
         for collision in colliding_transactions.keys() {
-            if self
-                .is_in_dependencies_subtrees(*collision, &dependencies)?
-            {
+            if self.is_in_dependencies_subtrees(*collision, dependencies)? {
                 return Err(Error::NotInsertedCollisionIsDependency);
             }
         }

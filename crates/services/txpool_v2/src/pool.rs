@@ -113,7 +113,7 @@ where
                 &colliding_transactions,
                 &self.storage,
             )
-            .map_err(|e| Error::Collided(e))?;
+            .map_err(Error::Collided)?;
         let transactions_to_remove =
             self.check_pool_size_available(&tx, &colliding_transactions, &dependencies)?;
         let mut removed_transactions = vec![];
@@ -167,9 +167,10 @@ where
                 &colliding_transaction,
                 &self.storage,
             )
-            .map_err(|e| Error::Collided(e))?;
+            .map_err(Error::Collided)?;
         self.check_pool_size_available(tx, &colliding_transaction, &dependencies)?;
-        self.storage.can_store_transaction(tx, &dependencies, &colliding_transaction)?;
+        self.storage
+            .can_store_transaction(tx, &dependencies, &colliding_transaction)?;
         Ok(())
     }
 
