@@ -232,6 +232,12 @@ impl AlgorithmUpdaterV1 {
             // gas prices
             self.update_exec_gas_price(used, capacity);
             self.update_da_gas_price();
+
+            // metadata
+            self.unrecorded_blocks.push(BlockBytes {
+                height,
+                block_bytes,
+            });
             Ok(())
         }
     }
@@ -356,7 +362,7 @@ impl AlgorithmUpdaterV1 {
             .saturating_mul(upcast_percent)
             .saturating_div(100)
             .into();
-        let clamped_change = pd_change.abs().min(max_change);
+        let clamped_change = pd_change.saturating_abs().min(max_change);
         pd_change.signum().saturating_mul(clamped_change)
     }
 

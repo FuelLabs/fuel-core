@@ -1,5 +1,6 @@
 use crate::v1::{
     tests::UpdaterBuilder,
+    BlockBytes,
     Error,
 };
 
@@ -535,4 +536,72 @@ fn update_l2_block_data__negative_profit_increase_gas_price() {
         new_gas_price,
         old_gas_price
     );
+}
+
+#[test]
+fn update_l2_block_data__adds_l2_block_to_unrecorded_blocks() {
+    // given
+    let starting_block = 0;
+
+    let mut updater = UpdaterBuilder::new()
+        .with_l2_block_height(starting_block)
+        .build();
+
+    let height = 1;
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let new_gas_price = 100;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .unwrap();
+
+    //  then
+    let block_bytes = BlockBytes {
+        height,
+        block_bytes,
+    };
+    let contains_block_bytes = updater.unrecorded_blocks.contains(&block_bytes);
+    assert!(contains_block_bytes);
+}
+
+#[test]
+fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded_blocks()
+{
+    // given
+    let starting_block = 0;
+    let preexisting_block = BlockBytes {
+        height: 0,
+        block_bytes: 1000,
+    };
+
+    let mut updater = UpdaterBuilder::new()
+        .with_l2_block_height(starting_block)
+        .with_unrecorded_blocks(vec![preexisting_block.clone()])
+        .build();
+
+    let height = 1;
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let new_gas_price = 100;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .unwrap();
+
+    //  then
+    let block_bytes = BlockBytes {
+        height,
+        block_bytes,
+    };
+    let contains_block_bytes = updater.unrecorded_blocks.contains(&block_bytes);
+    assert!(contains_block_bytes);
+
+    let contains_preexisting_block_bytes =
+        updater.unrecorded_blocks.contains(&preexisting_block);
+    assert!(contains_preexisting_block_bytes);
 }
