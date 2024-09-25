@@ -3366,6 +3366,7 @@ dependencies = [
  "rand",
  "serde",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

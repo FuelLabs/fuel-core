@@ -12,7 +12,8 @@ use crate::{
         RegistrationsPerTable,
         TemporalRegistryAll,
     },
-    CompressedBlockPayload,
+    CompressedBlock,
+    CompressedBlockPayloadV0,
 };
 use fuel_core_types::{
     blockchain::block::Block,
@@ -74,17 +75,15 @@ pub async fn compress<D: CompressDb + EvictorDb>(
     registrations.write_to_registry(&mut ctx.db)?;
 
     // Construct the actual compacted block
-    let compact = CompressedBlockPayload {
+    let compact = CompressedBlockPayloadV0 {
         registrations,
         registrations_root: Bytes32::default(), /* TODO: https://github.com/FuelLabs/fuel-core/issues/2232 */
         header: block.header().into(),
         transactions,
     };
 
-    let version = 0u8;
-
-    let compressed =
-        postcard::to_allocvec(&(version, compact)).expect("Serialization cannot fail");
+    let compressed = postcard::to_allocvec(&CompressedBlock::V0(compact))
+        .expect("Serialization cannot fail");
 
     Ok(compressed)
 }

@@ -28,7 +28,7 @@ use tables::RegistrationsPerTable;
 
 /// Compressed block, without the preceding version byte.
 #[derive(Clone, Serialize, Deserialize)]
-struct CompressedBlockPayload {
+struct CompressedBlockPayloadV0 {
     /// Temporal registry insertions
     registrations: RegistrationsPerTable,
     /// Merkle root of the temporal registry state
@@ -37,6 +37,12 @@ struct CompressedBlockPayload {
     header: PartialBlockHeader,
     /// Compressed transactions
     transactions: Vec<CompressedTransaction>,
+}
+
+/// Versioned compressed block.
+#[derive(Clone, Serialize, Deserialize)]
+enum CompressedBlock {
+    V0(CompressedBlockPayloadV0),
 }
 
 #[cfg(test)]
@@ -141,7 +147,7 @@ mod tests {
                     generated: Empty
                 }
             };
-            let original = CompressedBlockPayload {
+            let original = CompressedBlockPayloadV0 {
                 registrations: RegistrationsPerTable::try_from(registrations).unwrap(),
                 registrations_root: registrations_root.into(),
                 header,
@@ -149,10 +155,10 @@ mod tests {
             };
 
             let compressed = postcard::to_allocvec(&original).unwrap();
-            let decompressed: CompressedBlockPayload =
+            let decompressed: CompressedBlockPayloadV0 =
                 postcard::from_bytes(&compressed).unwrap();
 
-            let CompressedBlockPayload {
+            let CompressedBlockPayloadV0 {
                 registrations,
                 registrations_root,
                 header,

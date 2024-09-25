@@ -1,7 +1,7 @@
 use crate::{
     ports::HistoryLookup,
     tables::TemporalRegistryAll,
-    CompressedBlockPayload,
+    CompressedBlock,
 };
 use fuel_core_types::{
     blockchain::{
@@ -42,9 +42,7 @@ use fuel_core_types::{
 pub enum DecompressError {
     #[error("Only the next sequential block can be decompressed")]
     NotLatest,
-    #[error("Unknown compression version")]
-    UnknownVersion,
-    #[error("Deserialization error: {0}")]
+    #[error("Deserialization error: {0} (possibly unknown version)")]
     Postcard(#[from] postcard::Error),
     /// Other errors
     #[error("Unknown error: {0}")]
@@ -58,11 +56,8 @@ pub async fn decompress<D: DecompressDb + TemporalRegistryAll>(
     mut db: D,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {
-    if block.is_empty() || block[0] != 0 {
-        return Err(DecompressError::UnknownVersion);
-    }
-
-    let compressed: CompressedBlockPayload = postcard::from_bytes(&block[1..])?;
+    let compressed: CompressedBlock = postcard::from_bytes(&block)?;
+    let CompressedBlock::V0(compressed) = compressed;
 
     // TODO: should be store height on da just to have this check?
     // if *block.header.height != db.next_block_height()? {
@@ -206,5 +201,91 @@ impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for Mint {
             c.mint_asset_id.decompress(ctx).await?,
             c.gas_price.decompress(ctx).await?,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ports::TemporalRegistry;
+
+    use super::*;
+    use fuel_core_types::{
+        fuel_compression::RegistryKey,
+        fuel_tx::{
+            input::PredicateCode,
+            Address,
+            AssetId,
+            ContractId,
+            ScriptCode,
+        },
+    };
+    use serde::{
+        Deserialize,
+        Serialize,
+    };
+
+    pub struct MockDb;
+    impl HistoryLookup for MockDb {
+        fn utxo_id(&self, _: CompressedUtxoId) -> anyhow::Result<UtxoId> {
+            unimplemented!()
+        }
+
+        fn coin(&self, _: UtxoId) -> anyhow::Result<crate::ports::CoinInfo> {
+            unimplemented!()
+        }
+
+        fn message(
+            &self,
+            _: fuel_core_types::fuel_types::Nonce,
+        ) -> anyhow::Result<crate::ports::MessageInfo> {
+            unimplemented!()
+        }
+    }
+    macro_rules! mock_temporal {
+        ($type:ty) => {
+            impl TemporalRegistry<$type> for MockDb {
+                fn read_registry(&self, _key: RegistryKey) -> anyhow::Result<$type> {
+                    todo!()
+                }
+
+                fn write_registry(
+                    &mut self,
+                    _key: RegistryKey,
+                    _value: $type,
+                ) -> anyhow::Result<()> {
+                    todo!()
+                }
+
+                fn registry_index_lookup(
+                    &self,
+                    _value: &$type,
+                ) -> anyhow::Result<Option<RegistryKey>> {
+                    todo!()
+                }
+            }
+        };
+    }
+    mock_temporal!(Address);
+    mock_temporal!(AssetId);
+    mock_temporal!(ContractId);
+    mock_temporal!(ScriptCode);
+    mock_temporal!(PredicateCode);
+
+    #[tokio::test]
+    async fn decompress_block_with_unknown_version() {
+        #[derive(Clone, Serialize, Deserialize)]
+        enum CompressedBlockWithNewVersions {
+            V0(crate::CompressedBlockPayloadV0),
+            NewVersion(u32),
+            #[serde(untagged)]
+            Unknown,
+        }
+
+        let block =
+            postcard::to_stdvec(&CompressedBlockWithNewVersions::NewVersion(1234))
+                .unwrap();
+
+        let result = decompress(MockDb, block).await;
+        assert!(matches!(result, Err(DecompressError::Postcard(_))));
     }
 }

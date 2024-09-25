@@ -2,7 +2,7 @@
 
 ## Compressed block header
 
-Each compressed block begins with a single-byte version field, so that it's possible to change the format later.
+Each compressed block begins with a version field, so that it's possible to change the format later.
 
 ## Temporal registry
 
