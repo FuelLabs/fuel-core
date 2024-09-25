@@ -3,6 +3,9 @@
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
+
+    use std::sync::Mutex;
+
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
@@ -13,6 +16,7 @@ mod tests {
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
+            TransactionsSource,
         },
         refs::ContractRef,
     };
@@ -180,6 +184,32 @@ mod tests {
 
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(self.clone())
+        }
+    }
+
+    /// Bad transaction source: ignores the limit of `u16::MAX -1` transactions
+    /// that should be returned by [`TransactionsSource::next()`].
+    /// It is used only for testing purposes
+    pub struct BadTransactionsSource {
+        transactions: Mutex<Vec<MaybeCheckedTransaction>>,
+    }
+
+    impl BadTransactionsSource {
+        pub fn new(transactions: Vec<Transaction>) -> Self {
+            Self {
+                transactions: Mutex::new(
+                    transactions
+                        .into_iter()
+                        .map(MaybeCheckedTransaction::Transaction)
+                        .collect(),
+                ),
+            }
+        }
+    }
+
+    impl TransactionsSource for BadTransactionsSource {
+        fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
+            std::mem::take(&mut *self.transactions.lock().unwrap())
         }
     }
 
@@ -3022,6 +3052,51 @@ mod tests {
         );
     }
 
+    #[test]
+    fn block_producer_never_includes_more_than_max_tx_count_transactions_with_bad_tx_source(
+    ) {
+        let block_height = 1u32;
+        let block_da_height = 2u64;
+
+        let mut consensus_parameters = ConsensusParameters::default();
+
+        // Given
+        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        consensus_parameters.set_block_gas_limit(u64::MAX);
+        let config = Config {
+            consensus_parameters,
+            ..Default::default()
+        };
+
+        let block = test_block(
+            block_height.into(),
+            block_da_height.into(),
+            transactions_in_tx_source,
+        );
+        let partial_fuel_block: PartialFuelBlock = block.into();
+        let components = Components {
+            header_to_produce: partial_fuel_block.header,
+            transactions_source: BadTransactionsSource::new(
+                partial_fuel_block.transactions,
+            ),
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        };
+
+        // When
+        let producer = create_executor(Database::default(), config);
+        let (result, _) = producer
+            .produce_without_commit_with_source(components)
+            .unwrap()
+            .into();
+
+        // Then
+        assert_eq!(
+            result.block.transactions().len(),
+            (MAX_TX_COUNT as usize + 1)
+        );
+    }
+
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
@@ -3566,11 +3641,11 @@ mod tests {
             );
 
             // when
-            let verifyer_db = database_with_genesis_block(genesis_da_height);
+            let verifier_db = database_with_genesis_block(genesis_da_height);
             let mut verifier_relayer_db = Database::<Relayer>::default();
             let events = vec![event];
             add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
-            let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
+            let verifier = create_relayer_executor(verifier_db, verifier_relayer_db);
             let (result, _) = verifier.validate(&produced_block).unwrap().into();
 
             // then
