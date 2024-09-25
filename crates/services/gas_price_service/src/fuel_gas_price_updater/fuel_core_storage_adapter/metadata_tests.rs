@@ -15,6 +15,11 @@ use fuel_core_storage::{
 };
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 
+fn arb_metadata() -> UpdaterMetadata {
+    let height = 111231u32.into();
+    arb_metadata_with_l2_height(height)
+}
+
 fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
     let inner = AlgorithmUpdaterV0 {
         new_exec_price: 100,
@@ -28,6 +33,25 @@ fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
 
 fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     InMemoryStorage::default().into_transaction()
+}
+
+#[tokio::test]
+async fn get_metadata__can_get_most_recent_version() {
+    // given
+    let mut database = database();
+    let block_height: BlockHeight = 1u32.into();
+    let metadata = arb_metadata();
+    database
+        .storage_as_mut::<GasPriceMetadata>()
+        .insert(&block_height, &metadata)
+        .unwrap();
+
+    // when
+    let actual = database.get_metadata(&block_height).unwrap();
+
+    // then
+    let expected = Some(metadata);
+    assert_eq!(expected, actual);
 }
 
 #[tokio::test]
