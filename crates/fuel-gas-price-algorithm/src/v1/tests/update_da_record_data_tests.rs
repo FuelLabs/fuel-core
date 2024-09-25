@@ -1,6 +1,8 @@
 use crate::v1::{
-    tests::UpdaterBuilder,
-    BlockBytes,
+    tests::{
+        BlockBytes,
+        UpdaterBuilder,
+    },
     Error,
     RecordedBlock,
 };

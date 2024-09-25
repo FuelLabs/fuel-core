@@ -188,12 +188,6 @@ pub struct RecordedBlock {
     pub block_cost: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct BlockBytes {
-    pub height: u32,
-    pub block_bytes: u64,
-}
-
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
