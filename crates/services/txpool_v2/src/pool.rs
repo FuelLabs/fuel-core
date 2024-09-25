@@ -114,14 +114,6 @@ where
                 &self.storage,
             )
             .map_err(|e| Error::Collided(e))?;
-        for collision in colliding_transactions.keys() {
-            if self
-                .storage
-                .is_in_dependencies_subtrees(*collision, &dependencies)?
-            {
-                return Err(Error::NotInsertedCollisionIsDependency);
-            }
-        }
         let transactions_to_remove =
             self.check_pool_size_available(&tx, &colliding_transactions, &dependencies)?;
         let mut removed_transactions = vec![];
@@ -177,7 +169,7 @@ where
             )
             .map_err(|e| Error::Collided(e))?;
         self.check_pool_size_available(tx, &colliding_transaction, &dependencies)?;
-        self.storage.can_store_transaction(tx, &dependencies);
+        self.storage.can_store_transaction(tx, &dependencies, &colliding_transaction)?;
         Ok(())
     }
 

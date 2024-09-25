@@ -1,11 +1,11 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     time::Instant,
 };
 
 use crate::{
-    error::Error,
+    error::{CollisionReason, Error},
     ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::PoolTransaction;
@@ -48,7 +48,8 @@ pub trait Storage {
         &self,
         transaction: &PoolTransaction,
         dependencies: &[Self::StorageIndex],
-    ) -> Result<(), Error>;
+        collisions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
+        ) -> Result<(), Error>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
@@ -69,13 +70,6 @@ pub trait Storage {
     fn get_worst_ratio_tip_gas_subtree_roots(
         &self,
     ) -> Result<Vec<Self::StorageIndex>, Error>;
-
-    /// Verify if an id is in the dependencies subtree of another ids
-    fn is_in_dependencies_subtrees(
-        &self,
-        index: Self::StorageIndex,
-        transactions: &[Self::StorageIndex],
-    ) -> Result<bool, Error>;
 
     /// Validate inputs of a transaction.
     fn validate_inputs(
