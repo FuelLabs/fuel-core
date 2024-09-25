@@ -4,6 +4,8 @@ use std::{
     path::PathBuf,
 };
 
+const ONE_GWEI: u64 = 1_000_000_000;
+
 pub fn draw_chart(
     results: SimulationResults,
     p_comp: i64,
@@ -76,16 +78,11 @@ pub fn draw_gas_prices(
     da_gas_prices: &[u64],
     title: &str,
 ) -> anyhow::Result<()> {
-    let gas_prices_gwei: Vec<_> =
-        gas_prices.into_iter().map(|x| x / 1_000_000_000).collect();
-    let _exec_gas_prices_gwei: Vec<_> = _exec_gas_prices
-        .into_iter()
-        .map(|x| x / 1_000_000_000)
-        .collect();
-    let da_gas_prices_gwei: Vec<_> = da_gas_prices
-        .into_iter()
-        .map(|x| x / 1_000_000_000)
-        .collect();
+    let gas_prices_gwei: Vec<_> = gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
+    let _exec_gas_prices_gwei: Vec<_> =
+        _exec_gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
+    let da_gas_prices_gwei: Vec<_> =
+        da_gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
     // const GAS_PRICE_COLOR: RGBColor = BLACK;
     // const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
     const DA_GAS_PRICE_COLOR: RGBColor = BLUE;
@@ -199,7 +196,7 @@ pub fn draw_bytes_and_cost_per_block(
     const BYTES_PER_BLOCK_COLOR: RGBColor = BLACK;
     let (bytes, costs): (Vec<u64>, Vec<u64>) =
         bytes_and_costs_per_block.iter().cloned().unzip();
-    let costs_gwei: Vec<_> = costs.into_iter().map(|x| x / 1_000_000_000).collect();
+    let costs_gwei: Vec<_> = costs.into_iter().map(|x| x / ONE_GWEI).collect();
 
     let min = 0;
     let max_left = *bytes.iter().max().unwrap();
@@ -270,15 +267,15 @@ pub fn draw_profit(
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
     let actual_profit_gwei: Vec<_> = actual_profit
         .into_iter()
-        .map(|x| x / 1_000_000_000)
+        .map(|x| x / ONE_GWEI as i128)
         .collect();
     let projected_profit_gwei: Vec<_> = projected_profit
         .into_iter()
-        .map(|x| x / 1_000_000_000)
+        .map(|x| x / ONE_GWEI as i128)
         .collect();
     let pessimistic_block_costs_gwei: Vec<_> = pessimistic_block_costs
         .into_iter()
-        .map(|x| x / 1_000_000_000)
+        .map(|x| x / ONE_GWEI as u128)
         .collect();
     let min = *std::cmp::min(
         actual_profit_gwei
@@ -317,7 +314,7 @@ pub fn draw_profit(
 
     chart
         .configure_mesh()
-        .y_desc("Profit (GWei)")
+        .y_desc("Profit (Gwei)")
         .x_desc("Block")
         .draw()?;
 
