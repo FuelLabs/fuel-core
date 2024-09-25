@@ -1,8 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc cc5569d588ba605fce71abb30155cf5234665a1fd8526128275b6d0f34db8a17 # shrinks to (cost, reward, blocks) = (0, 74140008300, [RecordedBlock { height: 1, block_cost: 74140008300 }])
-cc 15ea0d6f70d5b90b95085b130c444d0896286306336859b3e0199ff134b178ff # shrinks to (cost, reward, blocks) = (74140008300, 0, [RecordedBlock { height: 1, block_cost: 74140008300 }])
