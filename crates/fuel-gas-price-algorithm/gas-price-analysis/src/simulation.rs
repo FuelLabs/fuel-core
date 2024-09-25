@@ -187,7 +187,8 @@ impl Simulator {
         da_finalization_rate: usize,
         fullness_and_bytes: &Vec<(u64, u64)>,
     ) -> Vec<Option<Vec<RecordedBlock>>> {
-        let nones = std::iter::repeat(None).take(da_finalization_rate);
+        let l2_blocks_with_no_da_blocks =
+            std::iter::repeat(None).take(da_finalization_rate);
         let (_, da_blocks) = fullness_and_bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
@@ -213,7 +214,7 @@ impl Simulator {
                     }
                 },
             );
-        nones.chain(da_blocks).collect()
+        l2_blocks_with_no_da_blocks.chain(da_blocks).collect()
     }
 }
 
