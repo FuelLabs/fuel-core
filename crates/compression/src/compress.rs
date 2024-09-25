@@ -42,14 +42,11 @@ pub enum Error {
 pub trait CompressDb: TemporalRegistryAll + UtxoIdToPointer {}
 impl<T> CompressDb for T where T: TemporalRegistryAll + UtxoIdToPointer {}
 
+/// This must be called for all new blocks in sequence, otherwise the result will be garbage.
 pub async fn compress<D: CompressDb + EvictorDb>(
     db: D,
     block: &Block,
 ) -> Result<Vec<u8>, Error> {
-    // if *block.header().height() != db.next_block_height()? {
-    //     return Err(Error::NotLatest);
-    // }
-
     let target = block.transactions().to_vec();
 
     let mut prepare_ctx = PrepareCtx {

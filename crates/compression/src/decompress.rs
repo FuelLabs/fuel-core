@@ -52,17 +52,13 @@ pub enum DecompressError {
 pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
 impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 
+/// This must be called for all decompressed blocks in sequence, otherwise the result will be garbage.
 pub async fn decompress<D: DecompressDb + TemporalRegistryAll>(
     mut db: D,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {
     let compressed: CompressedBlock = postcard::from_bytes(&block)?;
     let CompressedBlock::V0(compressed) = compressed;
-
-    // TODO: should be store height on da just to have this check?
-    // if *block.header.height != db.next_block_height()? {
-    //     return Err(DecompressError::NotLatest);
-    // }
 
     // TODO: merkle root verification: https://github.com/FuelLabs/fuel-core/issues/2232
 
