@@ -49,14 +49,14 @@ impl CliArgs {
             Command::Transaction(sub_cmd) => match sub_cmd {
                 TransactionCommands::Submit { tx } => {
                     let tx: Transaction =
-                        serde_json::from_str(tx).expect("invalid transaction json");
+                        self.deserialize_tx(tx).expect("invalid transaction json");
 
                     let result = client.submit(&tx).await;
                     println!("{}", result.unwrap());
                 }
                 TransactionCommands::EstimatePredicates { tx } => {
                     let mut tx: Transaction =
-                        serde_json::from_str(tx).expect("invalid transaction json");
+                        self.deserialize_tx(tx).expect("invalid transaction json");
 
                     client
                         .estimate_predicates(&mut tx)
@@ -68,7 +68,7 @@ impl CliArgs {
                     let txs: Vec<Transaction> = txs
                         .iter()
                         .map(|tx| {
-                            serde_json::from_str(tx).expect("invalid transaction json")
+                            self.deserialize_tx(tx).expect("invalid transaction json")
                         })
                         .collect();
 
@@ -87,6 +87,10 @@ impl CliArgs {
                 }
             },
         }
+    }
+
+    fn deserialize_tx(&self, tx: &str) -> Result<Transaction, serde_json::Error> {
+        serde_json::from_str(tx)
     }
 }
 
