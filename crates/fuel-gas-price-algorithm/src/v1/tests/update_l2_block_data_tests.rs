@@ -563,8 +563,9 @@ fn update_l2_block_data__adds_l2_block_to_unrecorded_blocks() {
         height,
         block_bytes,
     };
-    let contains_block_bytes = updater.unrecorded_blocks.contains(&block_bytes);
-    assert!(contains_block_bytes);
+    let expected = block_bytes.block_bytes;
+    let actual = updater.unrecorded_blocks.get(&block_bytes.height).unwrap();
+    assert_eq!(expected, *actual);
 }
 
 #[test]
@@ -598,10 +599,12 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
         height,
         block_bytes,
     };
-    let contains_block_bytes = updater.unrecorded_blocks.contains(&block_bytes);
+    let contains_block_bytes =
+        updater.unrecorded_blocks.contains_key(&block_bytes.height);
     assert!(contains_block_bytes);
 
-    let contains_preexisting_block_bytes =
-        updater.unrecorded_blocks.contains(&preexisting_block);
+    let contains_preexisting_block_bytes = updater
+        .unrecorded_blocks
+        .contains_key(&preexisting_block.height);
     assert!(contains_preexisting_block_bytes);
 }

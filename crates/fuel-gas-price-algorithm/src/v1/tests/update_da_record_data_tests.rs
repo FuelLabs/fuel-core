@@ -15,25 +15,33 @@ use rand::SeedableRng;
 fn update_da_record_data__increases_block() {
     // given
     let da_recorded_block_height = 0;
-    let mut updater = UpdaterBuilder::new()
-        .with_da_recorded_block_height(da_recorded_block_height)
-        .build();
-
-    let blocks = vec![
+    let recorded_blocks = vec![
         RecordedBlock {
             height: 1,
-            block_bytes: 1000,
             block_cost: 100,
         },
         RecordedBlock {
             height: 2,
-            block_bytes: 1000,
             block_cost: 100,
         },
     ];
+    let unrecorded_blocks = vec![
+        BlockBytes {
+            height: 1,
+            block_bytes: 1000,
+        },
+        BlockBytes {
+            height: 2,
+            block_bytes: 2000,
+        },
+    ];
+    let mut updater = UpdaterBuilder::new()
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_unrecorded_blocks(unrecorded_blocks)
+        .build();
 
     // when
-    updater.update_da_record_data(&blocks).unwrap();
+    updater.update_da_record_data(&recorded_blocks).unwrap();
 
     // then
     let expected = 2;
@@ -45,22 +53,24 @@ fn update_da_record_data__increases_block() {
 fn update_da_record_data__throws_error_if_out_of_order() {
     // given
     let da_recorded_block_height = 0;
-    let mut updater = UpdaterBuilder::new()
-        .with_da_recorded_block_height(da_recorded_block_height)
-        .build();
-
     let blocks = vec![
         RecordedBlock {
             height: 1,
-            block_bytes: 1000,
             block_cost: 100,
         },
         RecordedBlock {
             height: 3,
-            block_bytes: 1000,
             block_cost: 100,
         },
     ];
+    let unrecorded_blocks = vec![BlockBytes {
+        height: 1,
+        block_bytes: 1000,
+    }];
+    let mut updater = UpdaterBuilder::new()
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_unrecorded_blocks(unrecorded_blocks)
+        .build();
 
     // when
     let actual_error = updater.update_da_record_data(&blocks).unwrap_err();
@@ -77,16 +87,20 @@ fn update_da_record_data__throws_error_if_out_of_order() {
 fn update_da_record_data__updates_cost_per_byte() {
     // given
     let da_cost_per_byte = 20;
+    let block_bytes = 1000;
+    let unrecorded_blocks = vec![BlockBytes {
+        height: 1,
+        block_bytes,
+    }];
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
+        .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    let block_bytes = 1000;
     let new_cost_per_byte = 100;
     let block_cost = block_bytes * new_cost_per_byte;
     let blocks = vec![RecordedBlock {
         height: 1,
-        block_bytes,
         block_cost,
     }];
     // when
@@ -106,30 +120,41 @@ fn update_da_record_data__updates_known_total_cost() {
     let l2_block_height = 15;
     let projected_total_cost = 2000;
     let known_total_cost = 1500;
+    let unrecorded_blocks = vec![
+        BlockBytes {
+            height: 11,
+            block_bytes: 1000,
+        },
+        BlockBytes {
+            height: 12,
+            block_bytes: 2000,
+        },
+        BlockBytes {
+            height: 13,
+            block_bytes: 1500,
+        },
+    ];
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
         .with_da_recorded_block_height(da_recorded_block_height)
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost)
         .with_known_total_cost(known_total_cost)
+        .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    let block_bytes = 1000;
     let block_cost = 100;
     let blocks = vec![
         RecordedBlock {
             height: 11,
-            block_bytes,
             block_cost,
         },
         RecordedBlock {
             height: 12,
-            block_bytes,
             block_cost,
         },
         RecordedBlock {
             height: 13,
-            block_bytes,
             block_cost,
         },
     ];
@@ -184,17 +209,14 @@ fn update_da_record_data__if_da_height_matches_l2_height_prjected_and_known_matc
     let blocks = vec![
         RecordedBlock {
             height: 11,
-            block_bytes,
             block_cost,
         },
         RecordedBlock {
             height: 12,
-            block_bytes,
             block_cost,
         },
         RecordedBlock {
             height: 13,
-            block_bytes,
             block_cost,
         },
     ];
@@ -216,7 +238,8 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
     let da_cost_per_byte = 20;
     let da_recorded_block_height = 10;
     let l2_block_height = 15;
-    let known_total_cost = 1500;
+    let original_known_total_cost = 1500;
+    let block_bytes = 1000;
     let mut unrecorded_blocks = vec![
         BlockBytes {
             height: 11,
@@ -235,54 +258,48 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
     let remaining = vec![
         BlockBytes {
             height: 14,
-            block_bytes: 1200,
+            block_bytes,
         },
         BlockBytes {
             height: 15,
-            block_bytes: 3000,
+            block_bytes,
         },
     ];
+    let to_be_removed = unrecorded_blocks.clone();
     unrecorded_blocks.extend(remaining.clone());
     let guessed_cost: u64 = unrecorded_blocks
         .iter()
         .map(|block| block.block_bytes * da_cost_per_byte)
         .sum();
-    let projected_total_cost = known_total_cost + guessed_cost;
+    let projected_total_cost = original_known_total_cost + guessed_cost;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_recorded_block_height(da_recorded_block_height)
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
-        .with_known_total_cost(known_total_cost as u128)
+        .with_known_total_cost(original_known_total_cost as u128)
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    let block_bytes = 1000;
     let new_cost_per_byte = 100;
-    let block_cost = block_bytes * new_cost_per_byte;
-    let blocks = vec![
-        RecordedBlock {
-            height: 11,
-            block_bytes,
-            block_cost,
-        },
-        RecordedBlock {
-            height: 12,
-            block_bytes,
-            block_cost,
-        },
-        RecordedBlock {
-            height: 13,
-            block_bytes,
-            block_cost,
-        },
-    ];
+    let recorded_blocks = to_be_removed
+        .iter()
+        .map(|block| RecordedBlock {
+            height: block.height,
+            block_cost: block.block_bytes * new_cost_per_byte,
+        })
+        .collect::<Vec<RecordedBlock>>();
+
     // when
-    updater.update_da_record_data(&blocks).unwrap();
+    updater.update_da_record_data(&recorded_blocks).unwrap();
 
     // then
     let actual = updater.projected_total_da_cost;
-    let new_known_total_cost = known_total_cost + 3 * block_cost;
+    let new_known_total_cost = original_known_total_cost
+        + recorded_blocks
+            .iter()
+            .map(|block| block.block_cost)
+            .sum::<u64>();
     let guessed_part: u64 = remaining
         .iter()
         .map(|block| block.block_bytes * new_cost_per_byte)
@@ -292,40 +309,46 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
 }
 
 prop_compose! {
-    fn arb_vec_of_da_blocks()(last_da_block: u32, count in 1..123usize, rng_seed: u64) -> Vec<RecordedBlock> {
+    fn arb_vec_of_da_blocks()(last_da_block: u32, count in 1..123usize, rng_seed: u64) -> (Vec<BlockBytes>, Vec<RecordedBlock>) {
         let rng = &mut rand::rngs::StdRng::seed_from_u64(rng_seed);
-        let mut blocks = Vec::with_capacity(count);
+        let mut unrecorded_blocks = Vec::with_capacity(count);
+        let mut recorded_blocks = Vec::with_capacity(count);
         for i in 0..count {
+            let height = last_da_block + 1 + i as u32;
             let block_bytes = rng.gen_range(100..131_072);
             let cost_per_byte = rng.gen_range(1..1000000);
             let block_cost = block_bytes * cost_per_byte;
-            blocks.push(RecordedBlock {
-                height: last_da_block + 1 + i as u32,
+            unrecorded_blocks.push(BlockBytes {
+                height,
                 block_bytes,
+            });
+            recorded_blocks.push(RecordedBlock {
+                height,
                 block_cost,
             });
         }
-        blocks
+        (unrecorded_blocks, recorded_blocks)
     }
 }
 
 prop_compose! {
-    fn reward_greater_than_cost_with_da_blocks()(cost: u64, extra: u64, blocks in arb_vec_of_da_blocks()) -> (u128, u128, Vec<RecordedBlock>) {
-        let cost_from_blocks = blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
+    fn reward_greater_than_cost_with_da_blocks()(cost: u64, extra: u64, (unrecorded_blocks, recorded_blocks) in arb_vec_of_da_blocks()) -> (u128, u128, Vec<BlockBytes>, Vec<RecordedBlock>) {
+        let cost_from_blocks = recorded_blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
         let reward = cost as u128 + cost_from_blocks + extra as u128;
-        (cost as u128, reward, blocks)
+        (cost as u128, reward, unrecorded_blocks, recorded_blocks)
     }
 }
 
 proptest! {
     #[test]
     fn update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
-        (cost, reward, blocks) in reward_greater_than_cost_with_da_blocks()
+        (cost, reward, unrecorded_blocks, recorded_blocks) in reward_greater_than_cost_with_da_blocks()
     ) {
         _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
             cost,
             reward,
-            blocks
+            unrecorded_blocks,
+            recorded_blocks,
         )
     }
 }
@@ -333,11 +356,12 @@ proptest! {
 fn _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
     known_total_cost: u128,
     total_rewards: u128,
-    blocks: Vec<RecordedBlock>,
+    unrecorded_blocks: Vec<BlockBytes>,
+    recorded_blocks: Vec<RecordedBlock>,
 ) {
     // given
     let da_cost_per_byte = 20;
-    let da_recorded_block_height = blocks.first().unwrap().height - 1;
+    let da_recorded_block_height = recorded_blocks.first().unwrap().height - 1;
     let l2_block_height = 15;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
@@ -345,12 +369,16 @@ fn _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_s
         .with_l2_block_height(l2_block_height)
         .with_known_total_cost(known_total_cost)
         .with_total_rewards(total_rewards)
+        .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    let new_costs = blocks.iter().map(|block| block.block_cost).sum::<u64>();
+    let new_costs = recorded_blocks
+        .iter()
+        .map(|block| block.block_cost)
+        .sum::<u64>();
 
     // when
-    updater.update_da_record_data(&blocks).unwrap();
+    updater.update_da_record_data(&recorded_blocks).unwrap();
 
     // then
     let expected = total_rewards - new_costs as u128 - known_total_cost;
@@ -363,22 +391,23 @@ fn _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_s
 }
 
 prop_compose! {
-    fn cost_greater_than_reward_with_da_blocks()(reward: u64, extra: u64, blocks in arb_vec_of_da_blocks()) -> (u128, u128, Vec<RecordedBlock>) {
-        let cost_from_blocks = blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
+    fn cost_greater_than_reward_with_da_blocks()(reward: u64, extra: u64, (unrecorded_blocks, recorded_blocks) in arb_vec_of_da_blocks()) -> (u128, u128, Vec<BlockBytes>, Vec<RecordedBlock>) {
+        let cost_from_blocks = recorded_blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
         let cost = reward as u128 + cost_from_blocks + extra as u128;
-        (cost, reward as u128, blocks)
+        (cost, reward as u128, unrecorded_blocks, recorded_blocks)
     }
 }
 
 proptest! {
     #[test]
     fn update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
-        (cost, reward, blocks) in cost_greater_than_reward_with_da_blocks()
+        (cost, reward, unrecorded_blocks, recorded_blocks) in cost_greater_than_reward_with_da_blocks()
     ) {
         _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
             cost,
             reward,
-            blocks
+            unrecorded_blocks,
+            recorded_blocks,
         )
     }
 }
@@ -386,11 +415,12 @@ proptest! {
 fn _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
     known_total_cost: u128,
     total_rewards: u128,
-    blocks: Vec<RecordedBlock>,
+    unrecorded_blocks: Vec<BlockBytes>,
+    recorded_blocks: Vec<RecordedBlock>,
 ) {
     // given
     let da_cost_per_byte = 20;
-    let da_recorded_block_height = blocks.first().unwrap().height - 1;
+    let da_recorded_block_height = recorded_blocks.first().unwrap().height - 1;
     let l2_block_height = 15;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
@@ -398,12 +428,16 @@ fn _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and
         .with_l2_block_height(l2_block_height)
         .with_known_total_cost(known_total_cost)
         .with_total_rewards(total_rewards)
+        .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    let new_costs = blocks.iter().map(|block| block.block_cost).sum::<u64>();
+    let new_costs = recorded_blocks
+        .iter()
+        .map(|block| block.block_cost)
+        .sum::<u64>();
 
     // when
-    updater.update_da_record_data(&blocks).unwrap();
+    updater.update_da_record_data(&recorded_blocks).unwrap();
 
     // then
     let expected = 0;

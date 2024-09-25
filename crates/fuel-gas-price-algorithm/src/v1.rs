@@ -1,10 +1,10 @@
+use crate::utils::cumulative_percentage_change;
 use std::{
     cmp::max,
+    collections::HashMap,
     num::NonZeroU64,
     ops::Div,
 };
-
-use crate::utils::cumulative_percentage_change;
 
 #[cfg(test)]
 mod tests;
@@ -19,6 +19,8 @@ pub enum Error {
     CouldNotCalculateCostPerByte { bytes: u64, cost: u64 },
     #[error("Failed to include L2 block data: {0}")]
     FailedTooIncludeL2BlockData(String),
+    #[error("L2 block expected but not found in unrecorded blocks: {0}")]
+    L2BlockExpectedNotFound(u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -94,6 +96,8 @@ impl AlgorithmV1 {
 /// The DA portion also uses a moving average of the profits over the last `avg_window` blocks
 /// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
 /// moving average.
+type Height = u32;
+type Bytes = u64;
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct AlgorithmUpdaterV1 {
     // Execution
@@ -144,8 +148,9 @@ pub struct AlgorithmUpdaterV1 {
     pub second_to_last_profit: i128,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u128,
+
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
-    pub unrecorded_blocks: Vec<BlockBytes>,
+    pub unrecorded_blocks: HashMap<Height, Bytes>,
 }
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
@@ -179,7 +184,7 @@ impl core::ops::Deref for ClampedPercentage {
 #[derive(Debug, Clone)]
 pub struct RecordedBlock {
     pub height: u32,
-    pub block_bytes: u64,
+    // pub block_bytes: u64,
     pub block_cost: u64,
 }
 
@@ -195,7 +200,7 @@ impl AlgorithmUpdaterV1 {
         blocks: &[RecordedBlock],
     ) -> Result<(), Error> {
         for block in blocks {
-            self.da_block_update(block.height, block.block_bytes, block.block_cost)?;
+            self.da_block_update(block.height, block.block_cost)?;
         }
         self.recalculate_projected_cost();
         self.normalize_rewards_and_costs();
@@ -234,10 +239,7 @@ impl AlgorithmUpdaterV1 {
             self.update_da_gas_price();
 
             // metadata
-            self.unrecorded_blocks.push(BlockBytes {
-                height,
-                block_bytes,
-            });
+            self.unrecorded_blocks.insert(height, block_bytes);
             Ok(())
         }
     }
@@ -372,12 +374,7 @@ impl AlgorithmUpdaterV1 {
             .saturating_div(100)
     }
 
-    fn da_block_update(
-        &mut self,
-        height: u32,
-        block_bytes: u64,
-        block_cost: u64,
-    ) -> Result<(), Error> {
+    fn da_block_update(&mut self, height: u32, block_cost: u64) -> Result<(), Error> {
         let expected = self.da_recorded_block_height.saturating_add(1);
         if height != expected {
             Err(Error::SkippedDABlock {
@@ -385,6 +382,10 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
+            let block_bytes = self
+                .unrecorded_blocks
+                .remove(&height)
+                .ok_or(Error::L2BlockExpectedNotFound(height))?;
             let new_cost_per_byte: u128 = (block_cost as u128)
                 .checked_div(block_bytes as u128)
                 .ok_or(Error::CouldNotCalculateCostPerByte {
@@ -402,15 +403,12 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn recalculate_projected_cost(&mut self) {
-        // remove all blocks that have been recorded
-        self.unrecorded_blocks
-            .retain(|block| block.height > self.da_recorded_block_height);
         // add the cost of the remaining blocks
         let projection_portion: u128 = self
             .unrecorded_blocks
             .iter()
-            .map(|block| {
-                (block.block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte)
+            .map(|(_, &bytes)| {
+                (bytes as u128).saturating_mul(self.latest_da_cost_per_byte)
             })
             .sum();
         self.projected_total_da_cost = self

@@ -175,7 +175,11 @@ impl UpdaterBuilder {
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost_excess: self.latest_known_total_cost,
-            unrecorded_blocks: self.unrecorded_blocks,
+            unrecorded_blocks: self
+                .unrecorded_blocks
+                .iter()
+                .map(|b| (b.height, b.block_bytes))
+                .collect(),
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
