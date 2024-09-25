@@ -356,7 +356,7 @@ impl AlgorithmUpdaterV1 {
             .saturating_mul(upcast_percent)
             .saturating_div(100)
             .into();
-        let clamped_change = pd_change.abs().min(max_change);
+        let clamped_change = pd_change.saturating_abs().min(max_change);
         pd_change.signum().saturating_mul(clamped_change)
     }
 
