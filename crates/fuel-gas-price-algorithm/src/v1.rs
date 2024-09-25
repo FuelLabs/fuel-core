@@ -232,6 +232,12 @@ impl AlgorithmUpdaterV1 {
             // gas prices
             self.update_exec_gas_price(used, capacity);
             self.update_da_gas_price();
+
+            // metadata
+            self.unrecorded_blocks.push(BlockBytes {
+                height,
+                block_bytes,
+            });
             Ok(())
         }
     }
