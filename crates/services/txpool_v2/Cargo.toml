@@ -35,7 +35,6 @@ proptest = { workspace = true }
 test-strategy = { workspace = true }
 tokio = { workspace = true, features = ["sync", "test-util"] }
 
-
 [features]
 test-helpers = [
   "fuel-core-types/test-helpers",
