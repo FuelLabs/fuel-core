@@ -21,14 +21,15 @@ pub use fuel_gas_price_algorithm::{
 mod tests;
 
 pub mod fuel_core_storage_adapter;
-pub mod fuel_da_source_adapter;
 
-pub struct FuelGasPriceUpdater<L2, Metadata, DaSource> {
+pub mod da_source_adapter;
+
+pub struct FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
     inner: AlgorithmUpdater,
     l2_block_source: L2,
     metadata_storage: Metadata,
     #[allow(dead_code)]
-    da_source: DaSource,
+    da_block_costs: DaBlockCosts,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,18 +54,18 @@ impl AlgorithmUpdater {
     }
 }
 
-impl<L2, Metadata, DaSource> FuelGasPriceUpdater<L2, Metadata, DaSource> {
+impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
     pub fn new(
         inner: AlgorithmUpdater,
         l2_block_source: L2,
         metadata_storage: Metadata,
-        da_source: DaSource,
+        da_block_costs: DaBlockCosts,
     ) -> Self {
         Self {
             inner,
             l2_block_source,
             metadata_storage,
-            da_source,
+            da_block_costs,
         }
     }
 }
@@ -113,16 +114,15 @@ pub trait L2BlockSource: Send + Sync {
     async fn get_l2_block(&mut self, height: BlockHeight) -> Result<BlockInfo>;
 }
 
-#[derive(Debug, Default)]
-pub struct DaCommitDetails {
+#[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
+pub struct DaBlockCosts {
     pub l2_block_range: core::ops::Range<u32>,
     pub blob_size_bytes: u32,
-    pub blob_cost_wei: u32,
-    pub partial_block_heights: Option<[u32; 2]>,
+    pub blob_cost_wei: u128,
 }
 
-pub trait DaCommitSource: Send + Sync {
-    fn get_da_commit_details(&mut self) -> Result<Option<DaCommitDetails>>;
+pub trait GetDaBlockCosts: Send + Sync {
+    fn get(&self) -> Result<Option<DaBlockCosts>>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -206,16 +206,16 @@ pub trait MetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
 }
 
-impl<L2, Metadata, DaSource> FuelGasPriceUpdater<L2, Metadata, DaSource>
+impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
     Metadata: MetadataStorage,
-    DaSource: DaCommitSource,
+    DaBlockCosts: GetDaBlockCosts,
 {
     pub fn init(
         target_block_height: BlockHeight,
         l2_block_source: L2,
         metadata_storage: Metadata,
-        da_source: DaSource,
+        da_block_costs: DaBlockCosts,
         min_exec_gas_price: u64,
         exec_gas_price_change_percent: u64,
         l2_block_fullness_threshold_percent: u64,
@@ -242,7 +242,7 @@ where
             inner,
             l2_block_source,
             metadata_storage,
-            da_source,
+            da_block_costs,
         };
         Ok(updater)
     }
@@ -306,12 +306,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L2, Metadata, DaSource> UpdateAlgorithm
-    for FuelGasPriceUpdater<L2, Metadata, DaSource>
+impl<L2, Metadata, DaBlockCosts> UpdateAlgorithm
+    for FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage + Send + Sync,
-    DaSource: DaCommitSource,
+    DaBlockCosts: GetDaBlockCosts,
 {
     type Algorithm = Algorithm;
 
@@ -343,14 +343,14 @@ impl GasPriceAlgorithm for Algorithm {
     fn next_gas_price(&self) -> u64 {
         match self {
             Algorithm::V0(v0) => v0.calculate(),
-            Algorithm::V1(v1) => v1.calculate(0),
+            Algorithm::V1(v1) => v1.calculate(),
         }
     }
 
     fn worst_case_gas_price(&self, height: BlockHeight) -> u64 {
         match self {
             Algorithm::V0(v0) => v0.worst_case(height.into()),
-            Algorithm::V1(v1) => v1.calculate(0),
+            Algorithm::V1(v1) => v1.worst_case(height.into()),
         }
     }
 }

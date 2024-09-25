@@ -7,9 +7,39 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
-- [2135](https://github.com/FuelLabs/fuel-core/pull/2135): Added metrics logging for number of blocks served over the p2p req/res protocol.
-- [2155](https://github.com/FuelLabs/fuel-core/pull/2155): Added trait declaration for block committer data
+- [2131](https://github.com/FuelLabs/fuel-core/pull/2131): Add flow in TxPool in order to ask to newly connected peers to share their transaction pool
+- [2182](https://github.com/FuelLabs/fuel-core/pull/2151): Limit number of transactions that can be fetched via TxSource::next
+- [2189](https://github.com/FuelLabs/fuel-core/pull/2151): Select next DA height to never include more than u16::MAX -1 transactions from L1.
 
+
+### Changed
+
+#### Breaking
+- [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
+- [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
+
+## [Version 0.36.0]
+
+### Added
+- [2135](https://github.com/FuelLabs/fuel-core/pull/2135): Added metrics logging for number of blocks served over the p2p req/res protocol.
+- [2151](https://github.com/FuelLabs/fuel-core/pull/2151): Added limitations on gas used during dry_run in API.
+- [2188](https://github.com/FuelLabs/fuel-core/pull/2188): Added the new variant `V2` for the `ConsensusParameters` which contains the new `block_transaction_size_limit` parameter.
+- [2163](https://github.com/FuelLabs/fuel-core/pull/2163): Added runnable task for fetching block committer data.
+- [2204](https://github.com/FuelLabs/fuel-core/pull/2204): Added `dnsaddr` resolution for TLD without suffixes.
+
+### Changed
+
+#### Breaking
+- [2199](https://github.com/FuelLabs/fuel-core/pull/2199): Applying several breaking changes to the WASM interface from backlog:
+  - Get the module to execute WASM byte code from the storage first, an fallback to the built-in version in the case of the `FUEL_ALWAYS_USE_WASM`.
+  - Added `host_v1` with a new `peek_next_txs_size` method, that accepts `tx_number_limit` and `size_limit`.
+  - Added new variant of the return type to pass the validation result. It removes block serialization and deserialization and should improve performance.
+  - Added a V1 execution result type that uses `JSONError` instead of postcard serialized error. It adds flexibility of how variants of the error can be managed. More information about it in https://github.com/FuelLabs/fuel-vm/issues/797. The change also moves `TooManyOutputs` error to the top. It shows that `JSONError` works as expected.
+- [2145](https://github.com/FuelLabs/fuel-core/pull/2145): feat: Introduce time port in PoA service.
+- [2155](https://github.com/FuelLabs/fuel-core/pull/2155): Added trait declaration for block committer data
+- [2142](https://github.com/FuelLabs/fuel-core/pull/2142): Added benchmarks for varied forms of db lookups to assist in optimizations.
+- [2158](https://github.com/FuelLabs/fuel-core/pull/2158): Log the public address of the signing key, if it is specified
+- [2188](https://github.com/FuelLabs/fuel-core/pull/2188): Upgraded the `fuel-vm` to `0.57.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.57.0).
 
 ## [Version 0.35.0]
 

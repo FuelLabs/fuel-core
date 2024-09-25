@@ -20,10 +20,7 @@ use fuel_core::{
         GenesisDatabase,
     },
     service::Config,
-    state::{
-        historical_rocksdb::HistoricalRocksDB,
-        rocks_db::ShallowTempDir,
-    },
+    state::historical_rocksdb::HistoricalRocksDB,
 };
 use fuel_core_benches::*;
 use fuel_core_storage::{
@@ -67,12 +64,12 @@ use rand::{
 pub struct BenchDb {
     db: GenesisDatabase,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
-    _tmp_dir: ShallowTempDir,
+    _tmp_dir: utils::ShallowTempDir,
 }
 
 impl BenchDb {
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
-        let tmp_dir = ShallowTempDir::new();
+        let tmp_dir = utils::ShallowTempDir::new();
 
         let db = HistoricalRocksDB::<OnChain>::default_open(
             tmp_dir.path(),
@@ -370,7 +367,7 @@ pub fn run(c: &mut Criterion) {
     let mut ccp = c.benchmark_group("ccp");
 
     for i in linear.clone() {
-        let mut code = vec![op::noop(); i as usize].into_iter().collect::<Vec<_>>();
+        let mut code = vec![0; i as usize];
 
         rng.fill_bytes(&mut code);
 
@@ -394,10 +391,7 @@ pub fn run(c: &mut Criterion) {
             op::movi(0x12, 100_000),
             op::movi(0x13, i.try_into().unwrap()),
             op::cfe(0x13),
-            op::movi(0x14, i.try_into().unwrap()),
             op::movi(0x15, i.try_into().unwrap()),
-            op::add(0x15, 0x15, 0x15),
-            op::addi(0x15, 0x15, 32),
             op::aloc(0x15),
             op::move_(0x15, RegId::HP),
         ];
@@ -415,6 +409,51 @@ pub fn run(c: &mut Criterion) {
     }
 
     ccp.finish();
+
+    let mut bldd = c.benchmark_group("bldd");
+
+    for i in linear.clone() {
+        let mut code = vec![0; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let blob = BlobCode::from(code);
+
+        let data = blob
+            .id
+            .iter()
+            .copied()
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain(AssetId::default().iter().copied())
+            .collect();
+
+        let prepare_script = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, BlobId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::movi(0x12, 100_000),
+            op::movi(0x13, i.try_into().unwrap()),
+            op::cfe(0x13),
+            op::movi(0x15, i.try_into().unwrap()),
+            op::aloc(0x15),
+            op::move_(0x15, RegId::HP),
+        ];
+
+        bldd.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut bldd,
+            format!("{i}"),
+            VmBench::new(op::bldd(0x15, 0x10, RegId::ZERO, 0x13))
+                .with_blob(blob)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
+    }
+
+    bldd.finish();
 
     let mut csiz = c.benchmark_group("csiz");
 
@@ -443,6 +482,33 @@ pub fn run(c: &mut Criterion) {
     }
 
     csiz.finish();
+
+    let mut bsiz = c.benchmark_group("bsiz");
+
+    for i in linear.clone() {
+        let mut code = vec![0u8; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let blob = BlobCode::from(code);
+
+        let data = blob.id.iter().copied().collect();
+
+        let prepare_script = vec![op::gtf_args(0x10, 0x00, GTFArgs::ScriptData)];
+
+        bsiz.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut bsiz,
+            format!("{i}"),
+            VmBench::new(op::bsiz(0x11, 0x10))
+                .with_blob(blob)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
+    }
+
+    bsiz.finish();
 
     run_group_ref(
         &mut c.benchmark_group("bhei"),

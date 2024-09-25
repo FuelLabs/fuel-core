@@ -6,7 +6,10 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource,
+        executor::{
+            OnceTransactionsSource,
+            MAX_TX_COUNT,
+        },
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
@@ -1435,6 +1438,59 @@ mod tests {
                 TransactionValidityError::ContractDoesNotExist(_)
             )
         ));
+    }
+
+    #[test]
+    fn transaction_consuming_too_much_gas_are_skipped() {
+        // Gather the gas consumption of the transaction
+        let mut executor = create_executor(Default::default(), Default::default());
+        let block: PartialFuelBlock = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(100_000_000)
+                .add_random_fee_input()
+                .script_gas_limit(0)
+                .tip(123)
+                .finalize_as_transaction()],
+        };
+
+        // When
+        let ExecutionResult { tx_status, .. } =
+            executor.produce_and_commit(block).unwrap();
+        let tx_gas_usage = tx_status[0].result.total_gas();
+
+        // Given
+        let mut txs = vec![];
+        for i in 0..10 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(100_000_000)
+                .add_random_fee_input()
+                .script_gas_limit(0)
+                .tip(i * 100)
+                .finalize_as_transaction();
+            txs.push(tx);
+        }
+        let mut config: Config = Default::default();
+        // Each TX consumes `tx_gas_usage` gas and so set the block gas limit to execute only 9 transactions.
+        config
+            .consensus_parameters
+            .set_block_gas_limit(tx_gas_usage * 9);
+        let mut executor = create_executor(Default::default(), config);
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: txs,
+        };
+
+        // When
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor.produce_and_commit(block).unwrap();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(skipped_transactions[0].1, ExecutorError::GasOverflow);
     }
 
     #[test]
@@ -2883,6 +2939,8 @@ mod tests {
         let expensive_consensus_parameters_version = 0;
         let mut expensive_consensus_parameters = ConsensusParameters::default();
         expensive_consensus_parameters.set_gas_costs(gas_costs.into());
+        // The block gas limit should cover `vm_initialization` cost
+        expensive_consensus_parameters.set_block_gas_limit(u64::MAX);
         let config = Config {
             consensus_parameters: expensive_consensus_parameters.clone(),
             ..Default::default()
@@ -2926,6 +2984,42 @@ mod tests {
             skipped_transactions[0].1,
             ExecutorError::InvalidTransaction(_)
         ));
+    }
+
+    #[test]
+    fn block_producer_never_includes_more_than_max_tx_count_transactions() {
+        let block_height = 1u32;
+        let block_da_height = 2u64;
+
+        let mut consensus_parameters = ConsensusParameters::default();
+
+        // Given
+        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        consensus_parameters.set_block_gas_limit(u64::MAX);
+        let config = Config {
+            consensus_parameters,
+            ..Default::default()
+        };
+
+        // When
+        let block = test_block(
+            block_height.into(),
+            block_da_height.into(),
+            transactions_in_tx_source,
+        );
+        let partial_fuel_block: PartialFuelBlock = block.into();
+
+        let producer = create_executor(Database::default(), config);
+        let (result, _) = producer
+            .produce_without_commit(partial_fuel_block)
+            .unwrap()
+            .into();
+
+        // Then
+        assert_eq!(
+            result.block.transactions().len(),
+            (MAX_TX_COUNT as usize + 1)
+        );
     }
 
     #[cfg(feature = "relayer")]

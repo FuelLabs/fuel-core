@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.75.0 AS chef
+FROM rust:1.79.0 AS chef
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
 WORKDIR /build/
 # hadolint ignore=DL3008
@@ -17,11 +17,11 @@ FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY --from=planner /build/recipe.json recipe.json
 # Build our project dependencies, not our application!
-RUN cargo chef cook --release -p fuel-core-e2e-client --features p2p --recipe-path recipe.json
+RUN cargo chef cook --release -p fuel-core-e2e-client --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
-RUN cargo build --release -p fuel-core-e2e-client --features p2p
+RUN cargo build --release -p fuel-core-e2e-client
 
 # Stage 2: Run
 FROM ubuntu:22.04 as run

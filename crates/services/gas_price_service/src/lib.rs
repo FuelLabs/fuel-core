@@ -18,6 +18,7 @@ use tokio::sync::RwLock;
 pub mod static_updater;
 
 pub mod fuel_gas_price_updater;
+pub mod ports;
 
 /// The service that updates the gas price algorithm.
 pub struct GasPriceService<A, U> {
@@ -183,10 +184,8 @@ mod tests {
         UpdateAlgorithm,
     };
     use fuel_core_services::{
-        RunnableService,
         Service,
         ServiceRunner,
-        StateWatcher,
     };
     use fuel_core_types::fuel_types::BlockHeight;
     use tokio::sync::mpsc;
@@ -238,11 +237,9 @@ mod tests {
         };
         let shared_algo = SharedGasPriceAlgo::new_with_algorithm(start_algo);
         let service = GasPriceService::new(0.into(), updater, shared_algo).await;
-        let watcher = StateWatcher::started();
         let read_algo = service.next_block_algorithm();
-        let task = service.into_task(&watcher, ()).await.unwrap();
-        let service = ServiceRunner::new(task);
-        service.start().unwrap();
+        let service = ServiceRunner::new(service);
+        service.start_and_await().await.unwrap();
 
         // when
         price_sender.send(expected_price).await.unwrap();
@@ -251,5 +248,6 @@ mod tests {
         // then
         let actual_price = read_algo.next_gas_price().await;
         assert_eq!(expected_price, actual_price);
+        service.stop_and_await().await.unwrap();
     }
 }

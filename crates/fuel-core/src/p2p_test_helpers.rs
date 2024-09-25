@@ -21,6 +21,10 @@ use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
+    request_response::messages::{
+        RequestMessage,
+        ResponseMessage,
+    },
     service::to_message_acceptance,
 };
 use fuel_core_poa::{
@@ -134,13 +138,13 @@ pub struct NamedNodes(pub HashMap<String, Node>);
 
 impl Bootstrap {
     /// Spawn a bootstrap node.
-    pub async fn new(node_config: &Config) -> Self {
+    pub async fn new(node_config: &Config) -> anyhow::Result<Self> {
         let bootstrap_config = extract_p2p_config(node_config).await;
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
         let (sender, _) =
             broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));
-        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec);
-        bootstrap.start().await.unwrap();
+        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec).await?;
+        bootstrap.start().await?;
 
         let listeners = bootstrap.multiaddrs();
         let (kill, mut shutdown) = broadcast::channel(1);
@@ -153,23 +157,37 @@ impl Bootstrap {
                     }
                     event = bootstrap.next_event() => {
                         // The bootstrap node only forwards data without validating it.
-                        if let Some(FuelP2PEvent::GossipsubMessage {
-                            peer_id,
-                            message_id,
-                            ..
-                        }) = event {
-                            bootstrap.report_message_validation_result(
-                                &message_id,
+                        match event {
+                            Some(FuelP2PEvent::GossipsubMessage {
                                 peer_id,
-                                to_message_acceptance(&GossipsubMessageAcceptance::Accept)
-                            )
+                                message_id,
+                                ..
+                            }) => {
+                                bootstrap.report_message_validation_result(
+                                    &message_id,
+                                    peer_id,
+                                    to_message_acceptance(&GossipsubMessageAcceptance::Accept)
+                                )
+                            },
+                            Some(FuelP2PEvent::InboundRequestMessage {
+                                request_id,
+                                request_message
+                            }) => {
+                                if request_message == RequestMessage::TxPoolAllTransactionsIds {
+                                    let _ = bootstrap.send_response_msg(
+                                        request_id,
+                                        ResponseMessage::TxPoolAllTransactionsIds(Some(vec![])),
+                                    );
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
             }
         });
 
-        Bootstrap { listeners, kill }
+        Ok(Bootstrap { listeners, kill })
     }
 
     pub fn listeners(&self) -> Vec<Multiaddr> {
@@ -269,7 +287,9 @@ pub async fn make_nodes(
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         update_signing_key(&mut node_config, pub_key);
                     }
-                    Bootstrap::new(&node_config).await
+                    Bootstrap::new(&node_config)
+                        .await
+                        .expect("Failed to create bootstrap node")
                 }
             })
             .collect()
