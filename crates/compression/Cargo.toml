@@ -26,6 +26,7 @@ fuel-core-types = { workspace = true, features = [
 postcard = { version = "1.0", features = ["use-std"] }
 rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
+strum = { version = "0.26", features = ["derive"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]

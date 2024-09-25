@@ -14,7 +14,10 @@ mod context {
     pub mod prepare;
 }
 
-pub use tables::RegistryKeyspace;
+pub use tables::{
+    RegistryKeyspace,
+    RegistryKeyspaceValue,
+};
 
 use serde::{
     Deserialize,
@@ -64,8 +67,6 @@ struct Header {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use fuel_core_types::{
         fuel_compression::RegistryKey,
         fuel_tx::{
@@ -77,10 +78,7 @@ mod tests {
         },
     };
     use proptest::prelude::*;
-    use tables::{
-        PerRegistryKeyspace,
-        PostcardSerialized,
-    };
+    use tables::PerRegistryKeyspaceMap;
 
     use super::*;
 
@@ -94,35 +92,31 @@ mod tests {
         ]
     }
 
-    fn keyspace_and_value(
-    ) -> impl Strategy<Value = (RegistryKeyspace, PostcardSerialized)> {
+    fn keyspace_value() -> impl Strategy<Value = RegistryKeyspaceValue> {
         (keyspace(), prop::array::uniform32(0..u8::MAX)).prop_map(|(keyspace, value)| {
-            let value = match keyspace {
+            match keyspace {
                 RegistryKeyspace::address => {
-                    PostcardSerialized::new(Address::new(value)).unwrap()
+                    RegistryKeyspaceValue::address(Address::new(value))
                 }
                 RegistryKeyspace::asset_id => {
-                    PostcardSerialized::new(AssetId::new(value)).unwrap()
+                    RegistryKeyspaceValue::asset_id(AssetId::new(value))
                 }
                 RegistryKeyspace::contract_id => {
-                    PostcardSerialized::new(ContractId::new(value)).unwrap()
+                    RegistryKeyspaceValue::contract_id(ContractId::new(value))
                 }
                 RegistryKeyspace::script_code => {
                     let len = (value[0] % 32) as usize;
-                    PostcardSerialized::new(ScriptCode {
+                    RegistryKeyspaceValue::script_code(ScriptCode {
                         bytes: value[..len].to_vec(),
                     })
-                    .unwrap()
                 }
                 RegistryKeyspace::predicate_code => {
                     let len = (value[0] % 32) as usize;
-                    PostcardSerialized::new(PredicateCode {
+                    RegistryKeyspaceValue::predicate_code(PredicateCode {
                         bytes: value[..len].to_vec(),
                     })
-                    .unwrap()
                 }
-            };
-            (keyspace, value)
+            }
         })
     }
 
@@ -138,17 +132,17 @@ mod tests {
             state_transition_bytecode_version in 0..u32::MAX,
             registrations_root in prop::array::uniform32(0..u8::MAX),
             registration_inputs in prop::collection::vec(
-                (keyspace_and_value(), prop::num::u16::ANY).prop_map(|((ks, v), rk)| {
+                (keyspace_value(), prop::num::u16::ANY).prop_map(|(v, rk)| {
                     let k = RegistryKey::try_from(rk as u32).unwrap();
-                    (ks, (k, v))
+                    (k, v)
                 }),
                 0..123
             ),
         ) {
-            let mut registrations: PerRegistryKeyspace<HashMap<RegistryKey, PostcardSerialized>> = Default::default();
+            let mut registrations: PerRegistryKeyspaceMap = Default::default();
 
-            for (keyspace, (key, data)) in registration_inputs {
-                registrations[keyspace].insert(key, data);
+            for (key, ksv) in registration_inputs {
+                registrations.insert(key, ksv);
             }
 
             let original = CompressedBlockPayload {

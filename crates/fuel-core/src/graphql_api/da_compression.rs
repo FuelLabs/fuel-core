@@ -15,6 +15,7 @@ use fuel_core_compression::{
         UtxoIdToPointer,
     },
     RegistryKeyspace,
+    RegistryKeyspaceValue,
 };
 use fuel_core_storage::{
     not_found,
@@ -66,7 +67,7 @@ where
         &self,
         keyspace: RegistryKeyspace,
         key: fuel_core_types::fuel_compression::RegistryKey,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> anyhow::Result<RegistryKeyspaceValue> {
         Ok(self
             .db_tx
             .storage_as_ref::<DaCompressionTemporalRegistry>()
@@ -77,37 +78,35 @@ where
 
     fn write_registry(
         &mut self,
-        keyspace: RegistryKeyspace,
         key: fuel_core_types::fuel_compression::RegistryKey,
-        value: Vec<u8>,
+        value: RegistryKeyspaceValue,
     ) -> anyhow::Result<()> {
         // Write the actual value
         self.db_tx
             .storage_as_mut::<DaCompressionTemporalRegistry>()
-            .insert(&(keyspace, key), &value)?;
+            .insert(&(value.keyspace(), key), &value)?;
 
         // Remove the overwritten value from index, if any
         self.db_tx
             .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
-            .remove(&(keyspace, value.clone()))?;
+            .remove(&value)?;
 
         // Add the new value to the index
         self.db_tx
             .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
-            .insert(&(keyspace, value), &key)?;
+            .insert(&value, &key)?;
 
         Ok(())
     }
 
     fn registry_index_lookup(
         &self,
-        keyspace: RegistryKeyspace,
-        value: Vec<u8>,
+        value: RegistryKeyspaceValue,
     ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
         Ok(self
             .db_tx
             .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
-            .get(&(keyspace, value))?
+            .get(&value)?
             .map(|v| v.into_owned()))
     }
 }

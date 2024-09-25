@@ -12,7 +12,10 @@ use fuel_core_types::{
     fuel_types::Nonce,
 };
 
-use crate::tables::RegistryKeyspace;
+use crate::tables::{
+    RegistryKeyspace,
+    RegistryKeyspaceValue,
+};
 
 /// Rolling cache for compression.
 /// Holds the latest state which can be event sourced from the compressed blocks.
@@ -24,21 +27,19 @@ pub trait TemporalRegistry {
         &self,
         keyspace: RegistryKeyspace,
         key: RegistryKey,
-    ) -> anyhow::Result<Vec<u8>>;
+    ) -> anyhow::Result<RegistryKeyspaceValue>;
 
     /// Reads a value from the registry at its current height.
     fn write_registry(
         &mut self,
-        keyspace: RegistryKeyspace,
         key: RegistryKey,
-        value: Vec<u8>,
+        value: RegistryKeyspaceValue,
     ) -> anyhow::Result<()>;
 
     /// Lookup registry key by the value.
     fn registry_index_lookup(
         &self,
-        keyspace: RegistryKeyspace,
-        value: Vec<u8>,
+        value: RegistryKeyspaceValue,
     ) -> anyhow::Result<Option<RegistryKey>>;
 }
 

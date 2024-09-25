@@ -4,7 +4,6 @@ use fuel_core_types::{
         ContextError,
         Decompress,
         DecompressibleBy,
-        RegistryKey,
     },
     fuel_tx::{
         input::{
@@ -17,25 +16,17 @@ use fuel_core_types::{
                 MessageSpecification,
             },
             AsField,
-            PredicateCode,
         },
-        Address,
-        AssetId,
         CompressedUtxoId,
-        ContractId,
         Mint,
-        ScriptCode,
         Transaction,
         UtxoId,
     },
 };
 
-use crate::{
-    decompress::{
-        DecompressDb,
-        DecompressError,
-    },
-    tables::RegistryKeyspace,
+use crate::decompress::{
+    DecompressDb,
+    DecompressError,
 };
 
 pub struct DecompressCtx<D> {
@@ -44,65 +35,6 @@ pub struct DecompressCtx<D> {
 
 impl<D: DecompressDb> ContextError for DecompressCtx<D> {
     type Error = DecompressError;
-}
-
-fn registry_desubstitute<
-    D: DecompressDb,
-    T: serde::de::DeserializeOwned + Default + PartialEq,
->(
-    keyspace: RegistryKeyspace,
-    key: RegistryKey,
-    ctx: &DecompressCtx<D>,
-) -> Result<T, DecompressError> {
-    if key == RegistryKey::DEFAULT_VALUE {
-        return Ok(T::default());
-    }
-    Ok(postcard::from_bytes(&ctx.db.read_registry(keyspace, key)?)?)
-}
-
-impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for Address {
-    async fn decompress_with(
-        c: RegistryKey,
-        ctx: &DecompressCtx<D>,
-    ) -> Result<Self, DecompressError> {
-        registry_desubstitute(RegistryKeyspace::address, c, ctx)
-    }
-}
-
-impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for AssetId {
-    async fn decompress_with(
-        c: RegistryKey,
-        ctx: &DecompressCtx<D>,
-    ) -> Result<Self, DecompressError> {
-        registry_desubstitute(RegistryKeyspace::asset_id, c, ctx)
-    }
-}
-
-impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for ContractId {
-    async fn decompress_with(
-        c: RegistryKey,
-        ctx: &DecompressCtx<D>,
-    ) -> Result<Self, DecompressError> {
-        registry_desubstitute(RegistryKeyspace::contract_id, c, ctx)
-    }
-}
-
-impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for ScriptCode {
-    async fn decompress_with(
-        c: RegistryKey,
-        ctx: &DecompressCtx<D>,
-    ) -> Result<Self, DecompressError> {
-        registry_desubstitute(RegistryKeyspace::script_code, c, ctx)
-    }
-}
-
-impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for PredicateCode {
-    async fn decompress_with(
-        c: RegistryKey,
-        ctx: &DecompressCtx<D>,
-    ) -> Result<Self, DecompressError> {
-        registry_desubstitute(RegistryKeyspace::predicate_code, c, ctx)
-    }
 }
 
 impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for UtxoId {
