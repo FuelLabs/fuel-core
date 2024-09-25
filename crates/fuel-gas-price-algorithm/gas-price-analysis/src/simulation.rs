@@ -117,13 +117,14 @@ impl Simulator {
             da_gas_prices.push(updater.new_scaled_da_gas_price);
             let gas_price = updater.algorithm().calculate();
             gas_prices.push(gas_price);
+            let total_fee = gas_price * fullness;
             updater
                 .update_l2_block_data(
                     height,
                     fullness,
                     capacity.try_into().unwrap(),
                     bytes,
-                    gas_price,
+                    total_fee,
                 )
                 .unwrap();
             pessimistic_costs
