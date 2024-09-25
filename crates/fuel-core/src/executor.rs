@@ -3566,11 +3566,11 @@ mod tests {
             );
 
             // when
-            let verifyer_db = database_with_genesis_block(genesis_da_height);
+            let verifier_db = database_with_genesis_block(genesis_da_height);
             let mut verifier_relayer_db = Database::<Relayer>::default();
             let events = vec![event];
             add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
-            let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
+            let verifier = create_relayer_executor(verifier_db, verifier_relayer_db);
             let (result, _) = verifier.validate(&produced_block).unwrap().into();
 
             // then

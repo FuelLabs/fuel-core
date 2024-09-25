@@ -48,7 +48,7 @@ pub enum SignMode {
 }
 
 impl SignMode {
-    /// Is block sigining (production) available
+    /// Is block signing (production) available
     pub fn is_available(&self) -> bool {
         !matches!(self, SignMode::Unavailable)
     }
