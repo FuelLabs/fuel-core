@@ -40,6 +40,7 @@ use crate::{
 };
 #[allow(unused_imports)]
 use fuel_core_gas_price_service::fuel_gas_price_updater::{
+    algorithm_updater,
     fuel_core_storage_adapter::FuelL2BlockSource,
     Algorithm,
     AlgorithmV0,
@@ -63,8 +64,6 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-mod algorithm_updater;
 
 pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
@@ -201,7 +200,7 @@ pub fn init_sub_services(
     let block_stream = importer_adapter.events_shared_result();
 
     let gas_price_init = algorithm_updater::InitializeTask::new(
-        config.clone(),
+        config.clone().into(),
         genesis_block_height,
         settings,
         block_stream,

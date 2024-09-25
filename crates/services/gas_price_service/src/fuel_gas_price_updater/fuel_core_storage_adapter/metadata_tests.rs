@@ -1,8 +1,10 @@
 #![allow(non_snake_case)]
 
+use super::*;
 use crate::fuel_gas_price_updater::{
     fuel_core_storage_adapter::storage::GasPriceColumn,
     AlgorithmUpdater,
+    UpdaterMetadata,
 };
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
@@ -10,11 +12,8 @@ use fuel_core_storage::{
         IntoTransaction,
         StorageTransaction,
     },
-    StorageAsMut,
 };
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
-
-use super::*;
 
 fn arb_metadata() -> UpdaterMetadata {
     let height = 111231u32.into();
@@ -79,7 +78,7 @@ async fn set_metadata__can_set_metadata() {
     // when
     let actual = database.get_metadata(&block_height).unwrap();
     assert_eq!(None, actual);
-    database.set_metadata(metadata.clone()).unwrap();
+    database.set_metadata(&metadata).unwrap();
     let actual = database.get_metadata(&block_height).unwrap();
 
     // then
