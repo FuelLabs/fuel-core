@@ -38,7 +38,7 @@ struct Arg {
     #[arg(short, long)]
     file_path: Option<String>,
     #[arg(short, long)]
-    /// DA finalization period in blocks
+    /// DA finalization period in L2 blocks
     da_finalization_period: usize,
 }
 
