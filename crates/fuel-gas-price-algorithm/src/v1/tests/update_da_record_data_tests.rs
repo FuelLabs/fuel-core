@@ -168,7 +168,7 @@ fn update_da_record_data__updates_known_total_cost() {
 }
 
 #[test]
-fn update_da_record_data__if_da_height_matches_l2_height_prjected_and_known_match() {
+fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_match() {
     // given
     let da_cost_per_byte = 20;
     let da_recorded_block_height = 10;

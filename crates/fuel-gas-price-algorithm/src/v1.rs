@@ -131,7 +131,7 @@ pub struct AlgorithmUpdaterV1 {
     pub max_da_gas_price_change_percent: u16,
     /// The cumulative reward from the DA portion of the gas price
     pub total_da_rewards_excess: u128,
-    /// The height of the las L2 block recorded on the DA chain
+    /// The height of the last L2 block recorded on the DA chain
     pub da_recorded_block_height: u32,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
     pub latest_known_total_da_cost_excess: u128,
