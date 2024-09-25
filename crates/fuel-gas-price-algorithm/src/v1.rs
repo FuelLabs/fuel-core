@@ -208,7 +208,7 @@ impl AlgorithmUpdaterV1 {
         used: u64,
         capacity: NonZeroU64,
         block_bytes: u64,
-        _gas_price: u64,
+        fee_wei: u64,
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
@@ -220,32 +220,63 @@ impl AlgorithmUpdaterV1 {
             self.l2_block_height = height;
 
             // rewards
-            let block_da_reward = used.saturating_mul(self.descaled_da_price());
-            self.total_da_rewards_excess = self
-                .total_da_rewards_excess
-                .saturating_add(block_da_reward.into());
-            let rewards = self.total_da_rewards_excess.try_into().unwrap_or(i128::MAX);
+            self.update_rewards(fee_wei);
+            let rewards = self.clamped_rewards_as_i128();
 
             // costs
-            let block_projected_da_cost =
-                (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
-            self.projected_total_da_cost = self
-                .projected_total_da_cost
-                .saturating_add(block_projected_da_cost);
-            let projected_total_da_cost = self.projected_cost_as_i128();
+            self.update_projected_cost(block_bytes);
+            let projected_total_da_cost = self.clamped_projected_cost_as_i128();
             let last_profit = rewards.saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
 
             // gas prices
             self.update_exec_gas_price(used, capacity);
             self.update_da_gas_price();
+
+            // metadata
+            self.unrecorded_blocks.push(BlockBytes {
+                height,
+                block_bytes,
+            });
             Ok(())
         }
     }
 
-    // We are assuming that the difference between u128::MAX and i128::MAX is negligible
-    fn projected_cost_as_i128(&self) -> i128 {
+    fn update_rewards(&mut self, fee_wei: u64) {
+        let block_da_reward = self.da_portion_of_fee(fee_wei);
+        self.total_da_rewards_excess = self
+            .total_da_rewards_excess
+            .saturating_add(block_da_reward.into());
+    }
+
+    fn update_projected_cost(&mut self, block_bytes: u64) {
+        let block_projected_da_cost =
+            (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
+        self.projected_total_da_cost = self
+            .projected_total_da_cost
+            .saturating_add(block_projected_da_cost);
+    }
+
+    // Take the `fee_wei` and return the portion of the fee that should be used for paying DA costs
+    fn da_portion_of_fee(&self, fee_wei: u64) -> u64 {
+        // fee_wei * (da_price / (exec_price + da_price))
+        let numerator = fee_wei.saturating_mul(self.descaled_da_price());
+        let denominator = self
+            .descaled_exec_price()
+            .saturating_add(self.descaled_da_price());
+        if denominator == 0 {
+            0
+        } else {
+            numerator.div_ceil(denominator)
+        }
+    }
+
+    fn clamped_projected_cost_as_i128(&self) -> i128 {
         i128::try_from(self.projected_total_da_cost).unwrap_or(i128::MAX)
+    }
+
+    fn clamped_rewards_as_i128(&self) -> i128 {
+        i128::try_from(self.total_da_rewards_excess).unwrap_or(i128::MAX)
     }
 
     fn update_last_profit(&mut self, new_profit: i128) {
@@ -331,7 +362,7 @@ impl AlgorithmUpdaterV1 {
             .saturating_mul(upcast_percent)
             .saturating_div(100)
             .into();
-        let clamped_change = pd_change.abs().min(max_change);
+        let clamped_change = pd_change.saturating_abs().min(max_change);
         pd_change.signum().saturating_mul(clamped_change)
     }
 
