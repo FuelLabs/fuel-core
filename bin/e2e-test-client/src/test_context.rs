@@ -1,51 +1,24 @@
 //! Utilities and helper methods for writing tests
 
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::{anyhow, Context};
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    types::{
-        CoinType,
-        TransactionStatus,
-    },
+    types::{CoinType, TransactionStatus},
     FuelClient,
 };
 use fuel_core_types::{
-    fuel_asm::{
-        op,
-        GTFArgs,
-        RegId,
-    },
+    fuel_asm::{op, GTFArgs, RegId},
     fuel_crypto::PublicKey,
     fuel_tx::{
-        ConsensusParameters,
-        Contract,
-        ContractId,
-        Finalizable,
-        Input,
-        Output,
-        Transaction,
-        TransactionBuilder,
-        TxId,
-        UniqueIdentifier,
-        UtxoId,
+        ConsensusParameters, Contract, ContractId, Finalizable, Input, Output, Transaction,
+        TransactionBuilder, TxId, UniqueIdentifier, UtxoId,
     },
-    fuel_types::{
-        canonical::Serialize,
-        Address,
-        AssetId,
-        Salt,
-    },
+    fuel_types::{canonical::Serialize, Address, AssetId, Salt},
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
 
-use crate::config::{
-    ClientConfig,
-    SuiteConfig,
-};
+use crate::config::{ClientConfig, SuiteConfig};
 
 // The base amount needed to cover the cost of a simple transaction
 pub const BASE_AMOUNT: u64 = 100_000_000;
@@ -84,7 +57,6 @@ impl Wallet {
     pub async fn new(secret: SecretKey, client: FuelClient) -> Self {
         let public_key: PublicKey = (&secret).into();
         let address = Input::owner(&public_key);
-        // get consensus params
         let consensus_params = client
             .chain_info()
             .await
@@ -98,7 +70,6 @@ impl Wallet {
         }
     }
 
-    /// returns the balance associated with a wallet
     pub async fn balance(&self, asset_id: Option<AssetId>) -> anyhow::Result<u64> {
         self.client
             .balance(&self.address, Some(&asset_id.unwrap_or_default()))
@@ -106,14 +77,10 @@ impl Wallet {
             .context("failed to retrieve balance")
     }
 
-    /// Checks if wallet has a coin (regardless of spent status)
     pub async fn owns_coin(&self, utxo_id: UtxoId) -> anyhow::Result<bool> {
-        let coin = self.client.coin(&utxo_id).await?;
-
-        Ok(coin.is_some())
+        self.client.coin(&utxo_id).await.map(|coin| coin.is_some())
     }
 
-    /// Creates the transfer transaction.
     pub async fn transfer_tx(
         &self,
         destination: Address,
@@ -122,13 +89,11 @@ impl Wallet {
     ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or(*self.consensus_params.base_asset_id());
         let total_amount = transfer_amount + BASE_AMOUNT;
-        // select coins
         let coins = &self
             .client
             .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
             .await?[0];
 
-        // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
         tx.max_fee_limit(BASE_AMOUNT);
         tx.script_gas_limit(0);
@@ -159,13 +124,11 @@ impl Wallet {
         Ok(tx.finalize_as_transaction())
     }
 
-    /// Creates the script transaction that collects fee.
     pub async fn collect_fee_tx(
         &self,
         coinbase_contract: ContractId,
         asset_id: AssetId,
     ) -> anyhow::Result<Transaction> {
-        // select coins
         let coins = &self
             .client
             .coins_to_spend(
@@ -177,9 +140,7 @@ impl Wallet {
 
         let output_index = 2u64;
         let call_struct_register = 0x10;
-        // Now call the fee collection contract to withdraw the fees
         let script = vec![
-            // Point to the call structure
             op::gtf_args(call_struct_register, 0x00, GTFArgs::ScriptData),
             op::addi(
                 call_struct_register,
@@ -190,7 +151,6 @@ impl Wallet {
             op::ret(RegId::ONE),
         ];
 
-        // build transaction
         let mut tx_builder = TransactionBuilder::script(
             script.into_iter().collect(),
             asset_id
@@ -244,7 +204,6 @@ impl Wallet {
         Ok(tx_builder.finalize_as_transaction())
     }
 
-    /// Transfers coins from this wallet to another
     pub async fn transfer(
         &self,
         destination: Address,
@@ -258,10 +217,8 @@ impl Wallet {
         println!("submitting tx... {:?}", tx_id);
         let status = self.client.submit_and_await_commit(&tx).await?;
 
-        // we know the transferred coin should be output 0 from above
         let transferred_utxo = UtxoId::new(tx_id, 0);
 
-        // get status and return the utxo id of transferred coin
         Ok(TransferResult {
             tx_id,
             transferred_utxo,
@@ -277,7 +234,6 @@ impl Wallet {
     ) -> anyhow::Result<()> {
         let asset_id = *self.consensus_params.base_asset_id();
         let total_amount = BASE_AMOUNT;
-        // select coins
         let coins = &self
             .client
             .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
@@ -329,11 +285,8 @@ impl Wallet {
             .submit_and_await_commit(&tx.clone().into())
             .await?;
 
-        // check status of contract deployment
-        if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
-            &status
-        {
-            return Err(anyhow!(format!("unexpected transaction status {status:?}")));
+        if matches!(status, TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. }) {
+            return Err(anyhow!("unexpected transaction status {status:?}"));
         }
 
         Ok(())
