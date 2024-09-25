@@ -239,17 +239,17 @@ where
     ) -> Result<Vec<S::StorageIndex>, Error> {
         let tx_gas = tx.max_gas();
         let bytes_size = tx.metered_bytes_size();
-        if self.current_gas.saturating_add(tx_gas) <= self.config.pool_limits.max_gas
-            && self.current_bytes_size.saturating_add(bytes_size)
-                <= self.config.pool_limits.max_bytes_size
-            && self.storage.count().saturating_add(1) <= self.config.pool_limits.max_txs
-        {
-            return Ok(vec![]);
-        }
         let mut removed_transactions = vec![];
         let mut gas_left = self.current_gas.saturating_add(tx_gas);
         let mut bytes_left = self.current_bytes_size.saturating_add(bytes_size);
         let mut txs_left = self.storage.count().saturating_add(1);
+        if gas_left <= self.config.pool_limits.max_gas
+            && bytes_left <= self.config.pool_limits.max_bytes_size
+            && txs_left <= self.config.pool_limits.max_txs
+        {
+            return Ok(vec![]);
+        }
+
         // If the transaction has a collision verify that by removing the transaction we can free enough space
         // otherwise return an error
         for collision in collided_transactions.keys() {
@@ -285,18 +285,12 @@ where
         {
             let storage_id = sorted_txs.next().ok_or(Error::NotInsertedLimitHit)?;
             let storage_data = self.storage.get(&storage_id)?;
-            let mut dependencies = self.storage.get_dependencies(storage_id)?;
-            match dependencies.next() {
-                Some(_) => {}
-                None => {
-                    let stored_ratio = Ratio::new(
-                        storage_data.transaction.tip(),
-                        storage_data.transaction.max_gas(),
-                    );
-                    if stored_ratio >= current_ratio {
-                        return Err(Error::NotInsertedLimitHit);
-                    }
-                }
+            let ratio = Ratio::new(
+                storage_data.dependents_cumulative_tip,
+                storage_data.dependents_cumulative_gas,
+            );
+            if ratio > current_ratio {
+                return Err(Error::NotInsertedLimitHit);
             }
             gas_left = gas_left.saturating_sub(storage_data.dependents_cumulative_gas);
             bytes_left =

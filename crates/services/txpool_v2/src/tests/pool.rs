@@ -534,7 +534,7 @@ async fn insert__tx_gas_limit() {
 async fn insert__tx_bytes_limit() {
     // Given
     let mut universe = TestPoolUniverse::default();
-    let tx1 = universe.build_script_transaction(None, None, 0);
+    let tx1 = universe.build_script_transaction(None, None, 10);
     let checked_tx: CheckedTransaction = tx1
         .clone()
         .into_checked_basic(Default::default(), &ConsensusParameters::default())
