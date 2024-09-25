@@ -221,11 +221,11 @@ impl AlgorithmUpdaterV1 {
 
             // rewards
             self.update_rewards(fee_wei);
-            let rewards = self.rewards_as_i128();
+            let rewards = self.clamped_rewards_as_i128();
 
             // costs
             self.update_projected_cost(block_bytes);
-            let projected_total_da_cost = self.projected_cost_as_i128();
+            let projected_total_da_cost = self.clamped_projected_cost_as_i128();
             let last_profit = rewards.saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
 
@@ -265,12 +265,11 @@ impl AlgorithmUpdaterV1 {
         }
     }
 
-    // We are assuming that the difference between u128::MAX and i128::MAX is negligible
-    fn projected_cost_as_i128(&self) -> i128 {
+    fn clamped_projected_cost_as_i128(&self) -> i128 {
         i128::try_from(self.projected_total_da_cost).unwrap_or(i128::MAX)
     }
 
-    fn rewards_as_i128(&self) -> i128 {
+    fn clamped_rewards_as_i128(&self) -> i128 {
         i128::try_from(self.total_da_rewards_excess).unwrap_or(i128::MAX)
     }
 
