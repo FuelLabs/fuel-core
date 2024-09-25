@@ -38,7 +38,10 @@ use petgraph::{
 
 use crate::{
     collision_manager::basic::BasicCollisionManagerStorage,
-    error::Error,
+    error::{
+        CollisionReason,
+        Error,
+    },
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
 };
@@ -318,6 +321,26 @@ impl GraphStorage {
             .graph
             .neighbors_directed(index, petgraph::Direction::Outgoing))
     }
+
+    fn is_in_dependencies_subtrees(
+        &self,
+        index: NodeIndex,
+        transactions: &[NodeIndex],
+    ) -> Result<bool, Error> {
+        let mut already_visited = HashSet::new();
+        let mut to_check = transactions.to_vec();
+        while let Some(node_id) = to_check.pop() {
+            if already_visited.contains(&node_id) {
+                continue;
+            }
+            if node_id == index {
+                return Ok(true);
+            }
+            already_visited.insert(node_id);
+            to_check.extend(self.get_dependencies(node_id)?);
+        }
+        Ok(false)
+    }
 }
 
 impl Storage for GraphStorage {
@@ -399,7 +422,13 @@ impl Storage for GraphStorage {
         &self,
         _transaction: &PoolTransaction,
         dependencies: &[Self::StorageIndex],
+        colliding_transactions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
     ) -> Result<(), Error> {
+        for collision in colliding_transactions.keys() {
+            if self.is_in_dependencies_subtrees(*collision, dependencies)? {
+                return Err(Error::NotInsertedCollisionIsDependency);
+            }
+        }
         for node_id in dependencies.iter() {
             let Some(dependency_node) = self.graph.node_weight(*node_id) else {
                 return Err(Error::Storage(format!(
@@ -455,26 +484,6 @@ impl Storage for GraphStorage {
             ));
         }
         Ok(sorted_nodes.iter().map(|(_, node_id)| *node_id).collect())
-    }
-
-    fn is_in_dependencies_subtrees(
-        &self,
-        index: Self::StorageIndex,
-        transactions: &[Self::StorageIndex],
-    ) -> Result<bool, Error> {
-        let mut already_visited = HashSet::new();
-        let mut to_check = transactions.to_vec();
-        while let Some(node_id) = to_check.pop() {
-            if already_visited.contains(&node_id) {
-                continue;
-            }
-            if node_id == index {
-                return Ok(true);
-            }
-            already_visited.insert(node_id);
-            to_check.extend(self.get_dependencies(node_id)?);
-        }
-        Ok(false)
     }
 
     fn validate_inputs(

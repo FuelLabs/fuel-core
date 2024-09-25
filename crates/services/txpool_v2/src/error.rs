@@ -35,9 +35,8 @@ pub enum Error {
         fmt = "Transaction is not inserted. Transaction chain dependency is already too big"
     )]
     NotInsertedChainDependencyTooBig,
-    // TODO: Make more specific errors: https://github.com/FuelLabs/fuel-core/issues/2185
     #[display(fmt = "Transaction collided: {_0}")]
-    Collided(String),
+    Collided(CollisionReason),
     #[display(fmt = "Transaction is not inserted. Collision is also a dependency")]
     NotInsertedCollisionIsDependency,
     #[display(fmt = "Utxo not found: {_0}")]
@@ -98,6 +97,32 @@ pub enum Error {
     MintIsDisallowed,
     #[display(fmt = "Too much transactions are in queue to be inserted. Can't add more")]
     TooManyQueuedTransactions,
+}
+
+#[derive(Debug, Clone, derive_more::Display)]
+pub enum CollisionReason {
+    #[display(
+        fmt = "Transaction with the same UTXO (id: {_0}) already exists and is more worth it"
+    )]
+    Utxo(UtxoId),
+    #[display(
+        fmt = "Transaction that create the same contract (id: {_0}) already exists and is more worth it"
+    )]
+    ContractCreation(ContractId),
+    #[display(
+        fmt = "Transaction that use the same blob (id: {_0}) already exists and is more worth it"
+    )]
+    Blob(BlobId),
+    #[display(
+        fmt = "Transaction that use the same message (id: {_0}) already exists and is more worth it"
+    )]
+    Message(Nonce),
+    #[display(fmt = "This transaction have an unknown collision")]
+    Unknown,
+    #[display(
+        fmt = "This transaction have dependencies and is colliding with multiple transactions"
+    )]
+    MultipleCollisions,
 }
 
 impl From<CheckError> for Error {

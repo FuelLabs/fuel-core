@@ -371,10 +371,8 @@ where
             utxo_validation: config.utxo_validation,
             heavy_async_processor: Arc::new(
                 HeavyAsyncProcessor::new(
-                    config.heavy_work.number_threads_verif_insert_transactions,
-                    config
-                        .heavy_work
-                        .number_pending_tasks_threads_verif_insert_transactions,
+                    config.heavy_work.number_threads_to_verify_transactions,
+                    config.heavy_work.size_of_verification_queue,
                 )
                 .unwrap(),
             ),
