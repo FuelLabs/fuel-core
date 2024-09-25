@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::{
     eviction_policy::CacheEvictor,
     ports::{
@@ -7,7 +5,6 @@ use crate::{
         UtxoIdToPointer,
     },
     tables::{
-        PerRegistryKeyspace,
         PerRegistryKeyspaceMap,
         RegistrationsPerTable,
         TemporalRegistryAll,
@@ -20,13 +17,10 @@ use fuel_core_types::{
     fuel_compression::{
         CompressibleBy,
         ContextError,
-        RegistryKey,
     },
     fuel_tx::{
         Bytes32,
         CompressedUtxoId,
-        Transaction,
-        TxPointer,
         UtxoId,
     },
 };
@@ -49,19 +43,9 @@ pub async fn compress<D: CompressDb + EvictorDb>(
 ) -> Result<Vec<u8>, Error> {
     let target = block.transactions().to_vec();
 
-    let mut prepare_ctx = PrepareCtx {
-        db,
-        accessed_keys: PerRegistryKeyspace::default(),
-    };
-    let _ =
-        <Vec<Transaction> as CompressibleBy<_>>::compress_with(&target, &mut prepare_ctx)
-            .await?;
-
     let mut ctx = CompressCtx {
-        db: prepare_ctx.db,
-        cache_evictor: CacheEvictor {
-            keep_keys: prepare_ctx.accessed_keys,
-        },
+        db,
+        cache_evictor: CacheEvictor::default(),
         changes: Default::default(),
     };
     let transactions = target.compress_with(&mut ctx).await?;
@@ -83,31 +67,6 @@ pub async fn compress<D: CompressDb + EvictorDb>(
         .expect("Serialization cannot fail");
 
     Ok(compressed)
-}
-
-/// Preparation pass through the block to collect all keys accessed during compression.
-/// Returns dummy values. The resulting "compressed block" should be discarded.
-pub struct PrepareCtx<D> {
-    /// Database handle
-    pub db: D,
-    /// Keys accessed during compression. Will not be overwritten.
-    pub accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
-}
-
-impl<D> ContextError for PrepareCtx<D> {
-    type Error = anyhow::Error;
-}
-
-impl<D: CompressDb> CompressibleBy<PrepareCtx<D>> for UtxoId {
-    async fn compress_with(
-        &self,
-        _ctx: &mut PrepareCtx<D>,
-    ) -> anyhow::Result<CompressedUtxoId> {
-        Ok(CompressedUtxoId {
-            tx_pointer: TxPointer::default(),
-            output_index: 0,
-        })
-    }
 }
 
 pub struct CompressCtx<D> {

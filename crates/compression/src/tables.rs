@@ -18,7 +18,6 @@ use crate::{
     compress::{
         CompressCtx,
         CompressDb,
-        PrepareCtx,
     },
     decompress::{
         DecompressCtx,
@@ -138,21 +137,6 @@ macro_rules! tables {
         }
 
         $(
-            impl<D: CompressDb> CompressibleBy<PrepareCtx<D>> for $type {
-                async fn compress_with(
-                    &self,
-                    ctx: &mut PrepareCtx<D>,
-                ) -> anyhow::Result<RegistryKey> {
-                    if *self == <$type>::default() {
-                        return Ok(RegistryKey::ZERO);
-                    }
-                    if let Some(found) = ctx.db.registry_index_lookup(self)? {
-                        ctx.accessed_keys[RegistryKeyspace::$name].insert(found);
-                    }
-                    Ok(RegistryKey::ZERO)
-                }
-            }
-
             impl<D: CompressDb + EvictorDb> CompressibleBy<CompressCtx<D>> for $type {
                 async fn compress_with(
                     &self,
@@ -162,7 +146,9 @@ macro_rules! tables {
                         return Ok(RegistryKey::DEFAULT_VALUE);
                     }
                     if let Some(found) = ctx.db.registry_index_lookup(self)? {
-                        return Ok(found);
+                        if ctx.cache_evictor.try_reserve(RegistryKeyspace::$name, &found) {
+                            return Ok(found);
+                        }
                     }
 
                     let key = ctx.cache_evictor.next_key(&mut ctx.db, RegistryKeyspace::$name)?;
