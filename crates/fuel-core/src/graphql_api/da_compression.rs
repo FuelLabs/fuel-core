@@ -30,24 +30,33 @@ use futures::FutureExt;
 /// Performs DA compression for a block and stores it in the database.
 pub fn da_compress_block<T>(
     block: &Block,
-    events: &[Event],
-    transaction: &mut T,
+    block_events: &[Event],
+    db_tx: &mut T,
 ) -> anyhow::Result<()>
 where
     T: OffChainDatabaseTransaction,
 {
-    let compressed = compress(CompressTx(transaction, events), block)
-        .now_or_never()
-        .expect("The current implementation resolved all futures instantly")?;
+    let compressed = compress(
+        CompressTx {
+            db_tx,
+            block_events,
+        },
+        block,
+    )
+    .now_or_never()
+    .expect("The current implementation resolved all futures instantly")?;
 
-    transaction
+    db_tx
         .storage_as_mut::<DaCompressedBlocks>()
         .insert(&block.header().consensus().height, &compressed)?;
 
     Ok(())
 }
 
-struct CompressTx<'a, Tx>(&'a mut Tx, &'a [Event]);
+struct CompressTx<'a, Tx> {
+    db_tx: &'a mut Tx,
+    block_events: &'a [Event],
+}
 
 impl<'a, Tx> TemporalRegistry for CompressTx<'a, Tx>
 where
@@ -59,7 +68,7 @@ where
         key: fuel_core_types::fuel_compression::RegistryKey,
     ) -> anyhow::Result<Vec<u8>> {
         Ok(self
-            .0
+            .db_tx
             .storage_as_ref::<DaCompressionTemporalRegistry>()
             .get(&(keyspace, key))?
             .ok_or(not_found!(DaCompressionTemporalRegistry))?
@@ -73,17 +82,17 @@ where
         value: Vec<u8>,
     ) -> anyhow::Result<()> {
         // Write the actual value
-        self.0
+        self.db_tx
             .storage_as_mut::<DaCompressionTemporalRegistry>()
             .insert(&(keyspace, key), &value)?;
 
         // Remove the overwritten value from index, if any
-        self.0
+        self.db_tx
             .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
             .remove(&(keyspace, value.clone()))?;
 
         // Add the new value to the index
-        self.0
+        self.db_tx
             .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
             .insert(&(keyspace, value), &key)?;
 
@@ -96,7 +105,7 @@ where
         value: Vec<u8>,
     ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
         Ok(self
-            .0
+            .db_tx
             .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
             .get(&(keyspace, value))?
             .map(|v| v.into_owned()))
@@ -111,7 +120,7 @@ where
         &self,
         utxo_id: fuel_core_types::fuel_tx::UtxoId,
     ) -> anyhow::Result<fuel_core_types::fuel_tx::CompressedUtxoId> {
-        for event in self.1 {
+        for event in self.block_events {
             match event {
                 Event::CoinCreated(coin) | Event::CoinConsumed(coin)
                     if coin.utxo_id == utxo_id =>
@@ -138,7 +147,7 @@ where
         keyspace: RegistryKeyspace,
         key: fuel_core_types::fuel_compression::RegistryKey,
     ) -> anyhow::Result<()> {
-        self.0
+        self.db_tx
             .storage_as_mut::<DaCompressionTemporalRegistryEvictor>()
             .insert(&keyspace, &key)?;
         Ok(())
@@ -149,7 +158,7 @@ where
         keyspace: RegistryKeyspace,
     ) -> anyhow::Result<fuel_core_types::fuel_compression::RegistryKey> {
         Ok(self
-            .0
+            .db_tx
             .storage_as_ref::<DaCompressionTemporalRegistryEvictor>()
             .get(&keyspace)?
             .ok_or(not_found!(DaCompressionTemporalRegistryEvictor))?

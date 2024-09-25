@@ -119,10 +119,10 @@ pub struct Task<TxPool, D> {
     continue_on_error: bool,
 }
 
-impl<'a, TxPool, D> Task<TxPool, D>
+impl<TxPool, D> Task<TxPool, D>
 where
     TxPool: ports::worker::TxPool,
-    D: ports::worker::OffChainDatabase + 'a,
+    D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
         let block = &result.sealed_block.entity;
