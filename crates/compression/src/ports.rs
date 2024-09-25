@@ -12,35 +12,21 @@ use fuel_core_types::{
     fuel_types::Nonce,
 };
 
-use crate::tables::{
-    RegistryKeyspace,
-    RegistryKeyspaceValue,
-};
+use crate::tables::RegistryKeyspace;
 
 /// Rolling cache for compression.
 /// Holds the latest state which can be event sourced from the compressed blocks.
 /// The changes done using this trait in a single call to `compress` or `decompress`
 /// must be committed atomically, after which block height must be incremented.
-pub trait TemporalRegistry {
+pub trait TemporalRegistry<T> {
     /// Reads a value from the registry at its current height.
-    fn read_registry(
-        &self,
-        keyspace: RegistryKeyspace,
-        key: RegistryKey,
-    ) -> anyhow::Result<RegistryKeyspaceValue>;
+    fn read_registry(&self, key: RegistryKey) -> anyhow::Result<T>;
 
     /// Reads a value from the registry at its current height.
-    fn write_registry(
-        &mut self,
-        key: RegistryKey,
-        value: RegistryKeyspaceValue,
-    ) -> anyhow::Result<()>;
+    fn write_registry(&mut self, key: RegistryKey, value: T) -> anyhow::Result<()>;
 
     /// Lookup registry key by the value.
-    fn registry_index_lookup(
-        &self,
-        value: RegistryKeyspaceValue,
-    ) -> anyhow::Result<Option<RegistryKey>>;
+    fn registry_index_lookup(&self, value: &T) -> anyhow::Result<Option<RegistryKey>>;
 }
 
 /// Lookup for UTXO pointers used for compression.

@@ -123,11 +123,20 @@ macro_rules! tables {
             }
         }
 
+        pub trait TemporalRegistryAll: Sized $(
+            + TemporalRegistry<$type>
+        )* {}
+
+        impl<T> TemporalRegistryAll for T where T: Sized $(
+            + TemporalRegistry<$type>
+        )* {}
+
+
         impl RegistrationsPerTable {
-            pub(crate) fn write_to_registry<R: TemporalRegistry>(&self, registry: &mut R) -> anyhow::Result<()> {
+            pub(crate) fn write_to_registry<R: TemporalRegistryAll>(&self, registry: &mut R) -> anyhow::Result<()> {
                 $(
                     for (key, value) in self.$name.iter() {
-                        registry.write_registry(*key, RegistryKeyspaceValue::$name(value.clone()))?;
+                        registry.write_registry(*key, value.clone())?;
                     }
                 )*
 
@@ -144,7 +153,7 @@ macro_rules! tables {
                     if *self == <$type>::default() {
                         return Ok(RegistryKey::ZERO);
                     }
-                    if let Some(found) = ctx.db.registry_index_lookup(RegistryKeyspaceValue::$name(self.clone()))? {
+                    if let Some(found) = ctx.db.registry_index_lookup(self)? {
                         ctx.accessed_keys[RegistryKeyspace::$name].insert(found);
                     }
                     Ok(RegistryKey::ZERO)
@@ -159,7 +168,7 @@ macro_rules! tables {
                     if *self == Default::default() {
                         return Ok(RegistryKey::DEFAULT_VALUE);
                     }
-                    if let Some(found) = ctx.db.registry_index_lookup(RegistryKeyspaceValue::$name(self.clone()))? {
+                    if let Some(found) = ctx.db.registry_index_lookup(self)? {
                         return Ok(found);
                     }
 
@@ -178,10 +187,7 @@ macro_rules! tables {
                     if key == RegistryKey::DEFAULT_VALUE {
                         return Ok(<$type>::default());
                     }
-                    match ctx.db.read_registry(RegistryKeyspace::$name, key)? {
-                        RegistryKeyspaceValue::$name(value) => Ok(value),
-                        _ => panic!("Registry returned incorrectly-typed value")
-                    }
+                    Ok(ctx.db.read_registry(key)?)
                 }
             }
         )*

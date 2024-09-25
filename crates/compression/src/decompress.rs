@@ -14,10 +14,8 @@ use fuel_core_types::{
 
 use crate::{
     context::decompress::DecompressCtx,
-    ports::{
-        HistoryLookup,
-        TemporalRegistry,
-    },
+    ports::HistoryLookup,
+    tables::TemporalRegistryAll,
     CompressedBlockPayload,
 };
 
@@ -34,10 +32,10 @@ pub enum DecompressError {
     Other(#[from] anyhow::Error),
 }
 
-pub trait DecompressDb: TemporalRegistry + HistoryLookup {}
-impl<T> DecompressDb for T where T: TemporalRegistry + HistoryLookup {}
+pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
+impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 
-pub async fn decompress<D: DecompressDb + TemporalRegistry>(
+pub async fn decompress<D: DecompressDb + TemporalRegistryAll>(
     mut db: D,
     block: Vec<u8>,
 ) -> Result<PartialFuelBlock, DecompressError> {

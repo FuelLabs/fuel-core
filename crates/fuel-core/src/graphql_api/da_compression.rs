@@ -24,6 +24,13 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::block::Block,
+    fuel_tx::{
+        input::PredicateCode,
+        Address,
+        AssetId,
+        ContractId,
+        ScriptCode,
+    },
     services::executor::Event,
 };
 use futures::FutureExt;
@@ -59,56 +66,76 @@ struct CompressTx<'a, Tx> {
     block_events: &'a [Event],
 }
 
-impl<'a, Tx> TemporalRegistry for CompressTx<'a, Tx>
-where
-    Tx: OffChainDatabaseTransaction,
-{
-    fn read_registry(
-        &self,
-        keyspace: RegistryKeyspace,
-        key: fuel_core_types::fuel_compression::RegistryKey,
-    ) -> anyhow::Result<RegistryKeyspaceValue> {
-        Ok(self
-            .db_tx
-            .storage_as_ref::<DaCompressionTemporalRegistry>()
-            .get(&(keyspace, key))?
-            .ok_or(not_found!(DaCompressionTemporalRegistry))?
-            .into_owned())
-    }
+macro_rules! impl_temporal_registry {
+    ($($name:ident: $type:ty),*$(,)?) => {
+        $(
+            impl<'a, Tx> TemporalRegistry<$type> for CompressTx<'a, Tx>
+            where
+                Tx: OffChainDatabaseTransaction,
+            {
+                fn read_registry(
+                    &self,
+                    key: fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<$type> {
+                    let v = self
+                        .db_tx
+                        .storage_as_ref::<DaCompressionTemporalRegistry>()
+                        .get(&(RegistryKeyspace::$name, key))?
+                        .ok_or(not_found!(DaCompressionTemporalRegistry))?
+                        .into_owned();
+                    match v {
+                        RegistryKeyspaceValue::$name(v) => Ok(v),
+                        _ => anyhow::bail!("Unexpected value in the registry"),
+                    }
+                }
 
-    fn write_registry(
-        &mut self,
-        key: fuel_core_types::fuel_compression::RegistryKey,
-        value: RegistryKeyspaceValue,
-    ) -> anyhow::Result<()> {
-        // Write the actual value
-        self.db_tx
-            .storage_as_mut::<DaCompressionTemporalRegistry>()
-            .insert(&(value.keyspace(), key), &value)?;
+                fn write_registry(
+                    &mut self,
+                    key: fuel_core_types::fuel_compression::RegistryKey,
+                    value: $type,
+                ) -> anyhow::Result<()> {
+                    // Write the actual value
+                    self.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistry>()
+                        .insert(&(RegistryKeyspace::$name, key), &RegistryKeyspaceValue::$name(value.clone()))?;
 
-        // Remove the overwritten value from index, if any
-        self.db_tx
-            .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
-            .remove(&value)?;
+                    // Remove the overwritten value from index, if any
+                    self.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                        .remove(&RegistryKeyspaceValue::$name(value.clone()))?;
 
-        // Add the new value to the index
-        self.db_tx
-            .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
-            .insert(&value, &key)?;
+                    // Add the new value to the index
+                    self.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                        .insert(&RegistryKeyspaceValue::$name(value), &key)?;
 
-        Ok(())
-    }
+                    Ok(())
+                }
 
-    fn registry_index_lookup(
-        &self,
-        value: RegistryKeyspaceValue,
-    ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
-        Ok(self
-            .db_tx
-            .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
-            .get(&value)?
-            .map(|v| v.into_owned()))
-    }
+                fn registry_index_lookup(
+                    &self,
+                    value: &$type,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+                {
+                    Ok(self
+                        .db_tx
+                        .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
+                        .get(&RegistryKeyspaceValue::$name(value.clone()))?
+                        .map(|v| v.into_owned()))
+                }
+            }
+
+        )*
+    };
+}
+
+// Arguments here should match the tables! macro from crates/compression/src/tables.rs
+impl_temporal_registry! {
+    address: Address,
+    asset_id: AssetId,
+    contract_id: ContractId,
+    script_code: ScriptCode,
+    predicate_code: PredicateCode,
 }
 
 impl<'a, Tx> UtxoIdToPointer for CompressTx<'a, Tx>

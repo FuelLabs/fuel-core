@@ -15,12 +15,12 @@ use crate::{
     eviction_policy::CacheEvictor,
     ports::{
         EvictorDb,
-        TemporalRegistry,
         UtxoIdToPointer,
     },
     tables::{
         PerRegistryKeyspace,
         RegistrationsPerTable,
+        TemporalRegistryAll,
     },
     CompressedBlockPayload,
     Header,
@@ -34,8 +34,8 @@ pub enum Error {
     Other(#[from] anyhow::Error),
 }
 
-pub trait CompressDb: TemporalRegistry + UtxoIdToPointer {}
-impl<T> CompressDb for T where T: TemporalRegistry + UtxoIdToPointer {}
+pub trait CompressDb: TemporalRegistryAll + UtxoIdToPointer {}
+impl<T> CompressDb for T where T: TemporalRegistryAll + UtxoIdToPointer {}
 
 pub async fn compress<D: CompressDb + EvictorDb>(
     db: D,
