@@ -355,6 +355,40 @@ where
 
         Ok(())
     }
+
+    /// Migrates a ModificationHistory key-value pair from V1 to V2. 
+    /// The migration fails if other 
+    pub fn migrate_modifications_history_at_height(&self, height: u64) -> StorageResult<()> {
+        let mut migration_transaction = StorageTransaction::transaction(
+            &self.db,
+            ConflictPolicy::Fail,
+            Changes::default(),
+        );
+
+        let v1_changes = migration_transaction
+            .storage_as_mut::<ModificationsHistoryV2<Description>>()
+            .take(&height)?;
+        if let Some(v1_changes) = v1_changes {
+        migration_transaction
+            .storage_as_mut::<ModificationsHistoryV2<Description>>()
+            .insert(&height, &v1_changes)
+            .unwrap();
+
+        let historical_column_changes = migration_transaction.changes().clone();
+
+        StorageTransaction::transaction(
+            &mut migration_transaction,
+            ConflictPolicy::Fail,
+            historical_column_changes,
+        )
+        .commit()?;
+
+        self
+            .db
+            .commit_changes(&migration_transaction.into_changes())?;
+        Ok(())
+    } else { Ok (())}
+    }
 }
 
 // Try to take the value from `ModificationsHistoryV2` first.
