@@ -194,7 +194,7 @@ impl TransactionsSource for OnceTransactionsSource {
         &self,
         _: u64,
         transactions_limit: u16,
-        _: u64,
+        _: u32,
     ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
@@ -209,7 +209,7 @@ impl TransactionsSource for OnceTransactionsSource {
 pub struct ExecutionData {
     coinbase: u64,
     used_gas: u64,
-    used_size: u64,
+    used_size: u32,
     tx_count: u16,
     found_mint: bool,
     message_ids: Vec<MessageId>,
@@ -579,8 +579,11 @@ where
             ..
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
-        let block_transaction_size_limit =
-            self.consensus_params.block_transaction_size_limit();
+        let block_transaction_size_limit = self
+            .consensus_params
+            .block_transaction_size_limit()
+            .try_into()
+            .unwrap_or(u32::MAX);
 
         let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
         let mut remaining_block_transaction_size_limit =
@@ -1429,7 +1432,7 @@ where
         tx_id: TxId,
     ) -> ExecutorResult<()> {
         let (used_gas, tx_fee) = self.total_fee_paid(tx, &receipts, gas_price)?;
-        let used_size = tx.metered_bytes_size() as u64;
+        let used_size = tx.metered_bytes_size().try_into().unwrap_or(u32::MAX);
 
         execution_data.coinbase = execution_data
             .coinbase

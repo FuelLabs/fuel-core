@@ -208,7 +208,7 @@ mod tests {
     }
 
     impl TransactionsSource for BadTransactionsSource {
-        fn next(&self, _: u64, _: u16, _: u64) -> Vec<MaybeCheckedTransaction> {
+        fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
             std::mem::take(&mut *self.transactions.lock().unwrap())
         }
     }

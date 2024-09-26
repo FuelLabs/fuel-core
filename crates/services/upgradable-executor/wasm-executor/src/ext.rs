@@ -84,7 +84,7 @@ mod host {
         pub(crate) fn peek_next_txs_size(
             gas_limit: u64,
             tx_count_limit: u32,
-            block_transaction_size_limit: u64,
+            block_transaction_size_limit: u32,
         ) -> u32;
     }
 
@@ -160,7 +160,7 @@ pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
 pub fn next_transactions(
     gas_limit: u64,
     tx_count_limit: u16,
-    block_transaction_size_limit: u64,
+    block_transaction_size_limit: u32,
 ) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
     let next_size = unsafe {
         host::peek_next_txs_size(

@@ -64,7 +64,7 @@ trait CallerHelper {
         source: Arc<Source>,
         gas_limit: u64,
         tx_number_limit: u16,
-        block_transaction_size_limit: u64,
+        block_transaction_size_limit: u32,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource;
@@ -84,7 +84,7 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
         source: Arc<Source>,
         gas_limit: u64,
         tx_number_limit: u16,
-        block_transaction_size_limit: u64,
+        block_transaction_size_limit: u32,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource,
@@ -241,7 +241,7 @@ impl Instance<Created> {
                 return Ok(0);
             };
 
-            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u64::MAX)
+            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -254,7 +254,7 @@ impl Instance<Created> {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             gas_limit: u64,
                             tx_number_limit: u32,
-                            block_transaction_size_limit: u64|
+                            block_transaction_size_limit: u32|
               -> anyhow::Result<u32> {
             let Some(source) = source.clone() else {
                 return Ok(0);

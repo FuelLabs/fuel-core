@@ -222,11 +222,11 @@ fn arb_large_script_tx<R: Rng + rand::CryptoRng>(
         .into()
 }
 
-fn config_with_size_limit(block_transaction_size_limit: u64) -> Config {
+fn config_with_size_limit(block_transaction_size_limit: u32) -> Config {
     let mut chain_config = ChainConfig::default();
     chain_config
         .consensus_parameters
-        .set_block_transaction_size_limit(block_transaction_size_limit)
+        .set_block_transaction_size_limit(block_transaction_size_limit as u64)
         .expect("should be able to set the limit");
     let state_config = StateConfig::default();
 
@@ -250,7 +250,7 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
             let size = tx
                 .as_script()
                 .expect("script tx expected")
-                .metered_bytes_size() as u64;
+                .metered_bytes_size() as u32;
             (tx, size)
         })
         .collect();
@@ -258,7 +258,7 @@ async fn transaction_selector_can_saturate_block_according_to_block_transaction_
     // Run 5 cases. Each one will allow one more transaction to be included due to size.
     for n in 1..=arb_tx_count {
         // Calculate proper size limit for 'n' transactions
-        let block_transaction_size_limit: u64 =
+        let block_transaction_size_limit: u32 =
             transactions.iter().take(n).map(|(_, size)| size).sum();
         let config = config_with_size_limit(block_transaction_size_limit);
         let srv = FuelService::new_node(config).await.unwrap();
@@ -300,7 +300,7 @@ async fn transaction_selector_can_select_a_transaction_that_fits_the_block_size_
             let size = tx
                 .as_script()
                 .expect("script tx expected")
-                .metered_bytes_size() as u64;
+                .metered_bytes_size() as u32;
             (tx, size)
         })
         .rev()

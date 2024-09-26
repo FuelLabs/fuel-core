@@ -395,7 +395,7 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
         &self,
         max_gas: u64,
         transactions_limit: u16,
-        block_transaction_size_limit: u64,
+        block_transaction_size_limit: u32,
     ) -> Vec<ArcPoolTx> {
         let mut guard = self.txpool.lock();
         let txs = guard.includable();
