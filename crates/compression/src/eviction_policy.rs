@@ -9,14 +9,14 @@ use crate::ports::EvictorDb;
 pub(crate) struct CacheEvictor<T> {
     /// Set of keys that must not be evicted
     keep_keys: HashSet<RegistryKey>,
-    _marker: std::marker::PhantomData<T>,
+    _keyspace_marker: std::marker::PhantomData<T>,
 }
 
 impl<T> CacheEvictor<T> {
     pub fn new(keep_keys: HashSet<RegistryKey>) -> Self {
         Self {
             keep_keys,
-            _marker: std::marker::PhantomData,
+            _keyspace_marker: std::marker::PhantomData,
         }
     }
 
