@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 /// The metadata key used by `DaCompressionTemporalRegistryMetadata` table to
 /// store progress of the evictor.
 #[derive(
@@ -23,6 +21,7 @@ pub enum MetadataKey {
 #[cfg(feature = "test-helpers")]
 impl rand::distributions::Distribution<MetadataKey> for rand::distributions::Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> MetadataKey {
+        use strum::EnumCount;
         match rng.next_u32() as usize % MetadataKey::COUNT {
             0 => MetadataKey::Address,
             1 => MetadataKey::AssetId,

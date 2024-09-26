@@ -11,7 +11,6 @@ use fuel_core_types::{
     },
 };
 use std::ops::Deref;
-use strum::EnumCount;
 
 #[derive(
     Debug,
@@ -70,6 +69,7 @@ impl From<&PredicateCode> for ReverseKey {
 #[cfg(feature = "test-helpers")]
 impl rand::distributions::Distribution<ReverseKey> for rand::distributions::Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> ReverseKey {
+        use strum::EnumCount;
         match rng.next_u32() as usize % ReverseKey::COUNT {
             0 => ReverseKey::Address(Address::default()),
             1 => ReverseKey::AssetId(AssetId::default()),
