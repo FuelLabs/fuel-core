@@ -148,7 +148,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     desired_nonce: Nonce,
     commit_block_height: BlockHeight,
 ) -> StorageResult<Option<MessageProof>> {
-    // Check if the receipts for this transaction actually contain this message id or exit.
+    // Check if the receipts for this transaction actually contain this nonce or exit.
     let receipt = database
         .receipts(&transaction_id)?
         .into_iter()
