@@ -3,7 +3,10 @@ use std::{
     cmp::max,
     collections::HashMap,
     num::NonZeroU64,
-    ops::Div,
+    ops::{
+        Div,
+        Range,
+    },
 };
 
 #[cfg(test)]
@@ -16,7 +19,7 @@ pub enum Error {
     #[error("Skipped DA block update: expected {expected:?}, got {got:?}")]
     SkippedDABlock { expected: u32, got: u32 },
     #[error("Could not calculate cost per byte: {bytes:?} bytes, {cost:?} cost")]
-    CouldNotCalculateCostPerByte { bytes: u64, cost: u64 },
+    CouldNotCalculateCostPerByte { bytes: u128, cost: u128 },
     #[error("Failed to include L2 block data: {0}")]
     FailedTooIncludeL2BlockData(String),
     #[error("L2 block expected but not found in unrecorded blocks: {0}")]
@@ -191,13 +194,14 @@ pub struct RecordedBlock {
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
-        blocks: &[RecordedBlock],
+        height_range: Range<u32>,
+        range_cost: u128,
     ) -> Result<(), Error> {
-        for block in blocks {
-            self.da_block_update(block.height, block.block_cost)?;
+        if height_range.len() != 0 {
+            self.da_block_update(height_range, range_cost)?;
+            self.recalculate_projected_cost();
+            self.normalize_rewards_and_costs();
         }
-        self.recalculate_projected_cost();
-        self.normalize_rewards_and_costs();
         Ok(())
     }
 
@@ -368,32 +372,50 @@ impl AlgorithmUpdaterV1 {
             .saturating_div(100)
     }
 
-    fn da_block_update(&mut self, height: u32, block_cost: u64) -> Result<(), Error> {
+    fn da_block_update(
+        &mut self,
+        height_range: Range<u32>,
+        range_cost: u128,
+    ) -> Result<(), Error> {
         let expected = self.da_recorded_block_height.saturating_add(1);
-        if height != expected {
+        let first = height_range.start;
+        if first != expected {
             Err(Error::SkippedDABlock {
-                expected: self.da_recorded_block_height.saturating_add(1),
-                got: height,
+                expected,
+                got: first,
             })
         } else {
-            let block_bytes = self
-                .unrecorded_blocks
-                .remove(&height)
-                .ok_or(Error::L2BlockExpectedNotFound(height))?;
-            let new_cost_per_byte: u128 = (block_cost as u128)
-                .checked_div(block_bytes as u128)
-                .ok_or(Error::CouldNotCalculateCostPerByte {
-                    bytes: block_bytes,
-                    cost: block_cost,
-                })?;
-            self.da_recorded_block_height = height;
+            let last = height_range.end - 1;
+            let range_bytes = self.drain_l2_block_bytes_for_range(height_range)?;
+            let new_cost_per_byte: u128 = range_cost.checked_div(range_bytes).ok_or(
+                Error::CouldNotCalculateCostPerByte {
+                    bytes: range_bytes,
+                    cost: range_cost,
+                },
+            )?;
+            self.da_recorded_block_height = last;
             let new_block_cost = self
                 .latest_known_total_da_cost_excess
-                .saturating_add(block_cost as u128);
+                .saturating_add(range_cost);
             self.latest_known_total_da_cost_excess = new_block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
         }
+    }
+
+    fn drain_l2_block_bytes_for_range(
+        &mut self,
+        height_range: Range<u32>,
+    ) -> Result<u128, Error> {
+        let mut total: u128 = 0;
+        for height in height_range {
+            let bytes = self
+                .unrecorded_blocks
+                .remove(&height)
+                .ok_or(Error::L2BlockExpectedNotFound(height))?;
+            total = total.saturating_add(bytes as u128);
+        }
+        Ok(total)
     }
 
     fn recalculate_projected_cost(&mut self) {
