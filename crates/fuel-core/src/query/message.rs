@@ -141,13 +141,12 @@ where
 }
 
 /// Generate an output proof.
-// TODO: Do we want to return `Option` here?
 pub fn message_proof<T: MessageProofData + ?Sized>(
     database: &T,
     transaction_id: Bytes32,
     desired_nonce: Nonce,
     commit_block_height: BlockHeight,
-) -> StorageResult<Option<MessageProof>> {
+) -> StorageResult<MessageProof> {
     // Check if the receipts for this transaction actually contain this nonce or exit.
     let receipt = database
         .receipts(&transaction_id)?
@@ -200,7 +199,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         message_receipts_proof(database, message_id, &message_block_txs)?
     else {
         return Err(anyhow::anyhow!("unable to calculate message receipts proof").into())
-        };
+    };
 
     // Get the commit fuel block header.
     let Some(commit_block_header) = database
@@ -221,7 +220,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         &verifiable_commit_block_height,
     )?;
 
-    Ok(Some(MessageProof {
+    Ok(MessageProof {
         message_proof,
         block_proof,
         message_block_header,
@@ -231,7 +230,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         nonce,
         amount,
         data,
-    }))
+    })
 }
 
 fn message_receipts_proof<T: MessageProofData + ?Sized>(

@@ -134,7 +134,7 @@ impl MessageQuery {
         nonce: Nonce,
         commit_block_id: Option<BlockId>,
         commit_block_height: Option<U32>,
-    ) -> async_graphql::Result<Option<MessageProof>> {
+    ) -> async_graphql::Result<MessageProof> {
         let query = ctx.read_view()?;
         let height = match (commit_block_id, commit_block_height) {
             (Some(commit_block_id), None) => {
@@ -148,13 +148,14 @@ impl MessageQuery {
             ))?,
         };
 
-        Ok(crate::query::message_proof(
+        let proof = crate::query::message_proof(
             query.as_ref(),
             transaction_id.into(),
             nonce.into(),
             height,
-        )?
-        .map(MessageProof))
+        )?;
+
+        Ok(MessageProof(proof))
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
