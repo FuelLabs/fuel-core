@@ -38,15 +38,13 @@ impl FakeMetadata {
 }
 
 impl MetadataStorage for FakeMetadata {
-    fn get_metadata(
-        &self,
-        _block_height: &BlockHeight,
-    ) -> Result<Option<UpdaterMetadata>> {
-        Ok(self.inner.lock().unwrap().clone())
+    fn get_metadata(&self, _: &BlockHeight) -> Result<Option<UpdaterMetadata>> {
+        let metadata = self.inner.lock().unwrap().clone();
+        Ok(metadata)
     }
 
-    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()> {
-        let _ = self.inner.lock().unwrap().replace(metadata);
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()> {
+        *self.inner.lock().unwrap() = Some(metadata.clone());
         Ok(())
     }
 }
