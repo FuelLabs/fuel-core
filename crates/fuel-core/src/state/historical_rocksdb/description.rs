@@ -111,8 +111,8 @@ mod tests {
         let variants = enum_iterator::all::<Column<OnChain>>().collect::<Vec<_>>();
         let original = <OnChain as DatabaseDescription>::Column::COUNT;
         let duplicated = <OnChain as DatabaseDescription>::Column::COUNT;
-        let history_modification = 1;
-        let expected_count = original + duplicated + history_modification;
+        let history_modification_versions = 2;
+        let expected_count = original + duplicated + history_modification_versions;
         assert_eq!(variants.len(), expected_count);
         assert_eq!(<Column<OnChain> as EnumCount>::COUNT, expected_count);
     }
@@ -122,8 +122,8 @@ mod tests {
         let variants = enum_iterator::all::<Column<OffChain>>().collect::<Vec<_>>();
         let original = <OffChain as DatabaseDescription>::Column::COUNT;
         let duplicated = <OffChain as DatabaseDescription>::Column::COUNT;
-        let history_modification = 1;
-        let expected_count = original + duplicated + history_modification;
+        let history_modification_versions = 2;
+        let expected_count = original + duplicated + history_modification_versions;
         assert_eq!(variants.len(), expected_count);
         assert_eq!(<Column<OffChain> as EnumCount>::COUNT, expected_count);
     }
@@ -133,8 +133,8 @@ mod tests {
         let variants = enum_iterator::all::<Column<Relayer>>().collect::<Vec<_>>();
         let original = <Relayer as DatabaseDescription>::Column::COUNT;
         let duplicated = <Relayer as DatabaseDescription>::Column::COUNT;
-        let history_modification = 1;
-        let expected_count = original + duplicated + history_modification;
+        let history_modification_versions = 2;
+        let expected_count = original + duplicated + history_modification_versions;
         assert_eq!(variants.len(), expected_count);
         assert_eq!(<Column<Relayer> as EnumCount>::COUNT, expected_count);
     }
