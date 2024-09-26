@@ -18,18 +18,44 @@ use fuel_core_types::{
 /// must be committed atomically, after which block height must be incremented.
 pub trait TemporalRegistry<T> {
     /// Reads a value from the registry at its current height.
-    fn read_registry(&self, key: RegistryKey) -> anyhow::Result<T>;
+    fn read_registry(&self, key: &RegistryKey) -> anyhow::Result<T>;
 
     /// Reads a value from the registry at its current height.
-    fn write_registry(&mut self, key: RegistryKey, value: &T) -> anyhow::Result<()>;
+    fn write_registry(&mut self, key: &RegistryKey, value: &T) -> anyhow::Result<()>;
 
     /// Lookup registry key by the value.
     fn registry_index_lookup(&self, value: &T) -> anyhow::Result<Option<RegistryKey>>;
 }
 
+impl<D, T> TemporalRegistry<T> for &mut D
+where
+    D: TemporalRegistry<T>,
+{
+    fn read_registry(&self, key: &RegistryKey) -> anyhow::Result<T> {
+        <D as TemporalRegistry<T>>::read_registry(self, key)
+    }
+
+    fn write_registry(&mut self, key: &RegistryKey, value: &T) -> anyhow::Result<()> {
+        <D as TemporalRegistry<T>>::write_registry(self, key, value)
+    }
+
+    fn registry_index_lookup(&self, value: &T) -> anyhow::Result<Option<RegistryKey>> {
+        <D as TemporalRegistry<T>>::registry_index_lookup(self, value)
+    }
+}
+
 /// Lookup for UTXO pointers used for compression.
 pub trait UtxoIdToPointer {
     fn lookup(&self, utxo_id: UtxoId) -> anyhow::Result<CompressedUtxoId>;
+}
+
+impl<D> UtxoIdToPointer for &mut D
+where
+    D: UtxoIdToPointer,
+{
+    fn lookup(&self, utxo_id: UtxoId) -> anyhow::Result<CompressedUtxoId> {
+        <D as UtxoIdToPointer>::lookup(self, utxo_id)
+    }
 }
 
 /// Lookup for history of UTXOs and messages, used for decompression.
@@ -56,10 +82,22 @@ pub struct MessageInfo {
     pub data: Vec<u8>,
 }
 
-/// Temporal registry evictor state storage,
-/// currently backed by a `DaCompressionTemporalRegistryEvictor*`
-/// columns in the offchain database.
+/// Evictor registry to keep track of the latest used key for the type `T`.
 pub trait EvictorDb<T> {
-    fn read_latest(&mut self) -> anyhow::Result<RegistryKey>;
+    fn read_latest(&self) -> anyhow::Result<RegistryKey>;
+
     fn write_latest(&mut self, key: RegistryKey) -> anyhow::Result<()>;
+}
+
+impl<D, T> EvictorDb<T> for &mut D
+where
+    D: EvictorDb<T>,
+{
+    fn read_latest(&self) -> anyhow::Result<RegistryKey> {
+        <D as EvictorDb<T>>::read_latest(self)
+    }
+
+    fn write_latest(&mut self, key: RegistryKey) -> anyhow::Result<()> {
+        <D as EvictorDb<T>>::write_latest(self, key)
+    }
 }

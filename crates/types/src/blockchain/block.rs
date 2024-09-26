@@ -186,6 +186,13 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
         }
     }
 
+    /// Get the executed transactions as a `Vec` type.
+    pub fn transactions_vec(&self) -> &Vec<TransactionRepresentation> {
+        match self {
+            Block::V1(inner) => &inner.transactions,
+        }
+    }
+
     /// Get the complete header.
     pub fn header(&self) -> &BlockHeader {
         match self {

@@ -44,6 +44,7 @@ enum CompressedBlock {
 
 #[cfg(test)]
 mod tests {
+    use fuel_core_compression as _;
     use fuel_core_types::{
         blockchain::{
             header::{
@@ -94,19 +95,19 @@ mod tests {
                 let value_len_limit = (key.as_u32() % 32) as usize;
                 match ks {
                     RegistryKeyspace::Address => {
-                        registrations.Address.push((key, arr.into()));
+                        registrations.address.push((key, arr.into()));
                     }
                     RegistryKeyspace::AssetId => {
-                        registrations.AssetId.push((key, arr.into()));
+                        registrations.asset_id.push((key, arr.into()));
                     }
                     RegistryKeyspace::ContractId => {
-                        registrations.ContractId.push((key, arr.into()));
+                        registrations.contract_id.push((key, arr.into()));
                     }
                     RegistryKeyspace::ScriptCode => {
-                        registrations.ScriptCode.push((key, arr[..value_len_limit].to_vec().into()));
+                        registrations.script_code.push((key, arr[..value_len_limit].to_vec().into()));
                     }
                     RegistryKeyspace::PredicateCode => {
-                        registrations.PredicateCode.push((key, arr[..value_len_limit].to_vec().into()));
+                        registrations.predicate_code.push((key, arr[..value_len_limit].to_vec().into()));
                     }
                 }
             }

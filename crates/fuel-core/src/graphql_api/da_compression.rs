@@ -71,25 +71,25 @@ macro_rules! impl_temporal_registry {
         {
             fn read_registry(
                 &self,
-                key: fuel_core_types::fuel_compression::RegistryKey,
+                key: &fuel_core_types::fuel_compression::RegistryKey,
             ) -> anyhow::Result<$type> {
                 Ok(self
                     .db_tx
                     .storage_as_ref::<[< DaCompressionTemporalRegistry $type >]>()
-                    .get(&key)?
+                    .get(key)?
                     .ok_or(not_found!([< DaCompressionTemporalRegistry $type>]))?
                     .into_owned())
             }
 
             fn write_registry(
                 &mut self,
-                key: fuel_core_types::fuel_compression::RegistryKey,
+                key: &fuel_core_types::fuel_compression::RegistryKey,
                 value: &$type,
             ) -> anyhow::Result<()> {
                 // Write the actual value
                 self.db_tx
                     .storage_as_mut::<[< DaCompressionTemporalRegistry $type >]>()
-                    .insert(&key, &value)?;
+                    .insert(key, value)?;
 
                 let value_in_index: [u8; 32] = ($index_value_fn)(value);
 
@@ -101,7 +101,7 @@ macro_rules! impl_temporal_registry {
                 // Add the new value to the index
                 self.db_tx
                     .storage_as_mut::<[< DaCompressionTemporalRegistryIndex $type >]>()
-                    .insert(&value_in_index, &key)?;
+                    .insert(&value_in_index, key)?;
 
                 Ok(())
             }
@@ -135,7 +135,7 @@ macro_rules! impl_temporal_registry {
             }
 
             fn read_latest(
-                &mut self,
+                &self,
             ) -> anyhow::Result<fuel_core_types::fuel_compression::RegistryKey> {
                 Ok(self
                     .db_tx

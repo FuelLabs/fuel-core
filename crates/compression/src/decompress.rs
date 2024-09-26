@@ -4,15 +4,7 @@ use crate::{
     CompressedBlock,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::PartialFuelBlock,
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
-        primitives::Empty,
-    },
+    blockchain::block::PartialFuelBlock,
     fuel_compression::{
         Compressible,
         ContextError,
@@ -42,10 +34,10 @@ pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
 impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 
 /// This must be called for all decompressed blocks in sequence, otherwise the result will be garbage.
-pub async fn decompress<D: DecompressDb + TemporalRegistryAll>(
-    mut db: D,
-    block: Vec<u8>,
-) -> anyhow::Result<PartialFuelBlock> {
+pub async fn decompress<D>(mut db: D, block: Vec<u8>) -> anyhow::Result<PartialFuelBlock>
+where
+    D: DecompressDb + TemporalRegistryAll,
+{
     let compressed: CompressedBlock = postcard::from_bytes(&block)?;
     let CompressedBlock::V0(compressed) = compressed;
 
@@ -62,24 +54,7 @@ pub async fn decompress<D: DecompressDb + TemporalRegistryAll>(
     .await?;
 
     Ok(PartialFuelBlock {
-        header: PartialBlockHeader {
-            application: ApplicationHeader {
-                da_height: compressed.header.da_height,
-                consensus_parameters_version: compressed
-                    .header
-                    .consensus_parameters_version,
-                state_transition_bytecode_version: compressed
-                    .header
-                    .state_transition_bytecode_version,
-                generated: Empty,
-            },
-            consensus: ConsensusHeader {
-                prev_root: *compressed.header.prev_root(),
-                height: *compressed.header.height(),
-                time: *compressed.header.time(),
-                generated: Empty,
-            },
-        },
+        header: compressed.header,
         transactions,
     })
 }
@@ -232,13 +207,13 @@ mod tests {
     macro_rules! mock_temporal {
         ($type:ty) => {
             impl TemporalRegistry<$type> for MockDb {
-                fn read_registry(&self, _key: RegistryKey) -> anyhow::Result<$type> {
+                fn read_registry(&self, _key: &RegistryKey) -> anyhow::Result<$type> {
                     todo!()
                 }
 
                 fn write_registry(
                     &mut self,
-                    _key: RegistryKey,
+                    _key: &RegistryKey,
                     _value: &$type,
                 ) -> anyhow::Result<()> {
                     todo!()
@@ -257,7 +232,7 @@ mod tests {
                     todo!()
                 }
 
-                fn read_latest(&mut self) -> anyhow::Result<RegistryKey> {
+                fn read_latest(&self) -> anyhow::Result<RegistryKey> {
                     todo!()
                 }
             }
