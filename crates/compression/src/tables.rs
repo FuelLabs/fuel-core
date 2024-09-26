@@ -41,14 +41,6 @@ macro_rules! tables {
             )*
         }
 
-        #[doc = "RegistryKey namespace with an associated typed value"]
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-        pub enum RegistryKeyspaceValue {
-            $(
-                [<$type>]($type),
-            )*
-        }
-
         #[doc = "A value for each keyspace"]
         #[derive(Debug, Clone, Default)]
         #[allow(non_snake_case)] // Match type names exactly
@@ -81,19 +73,6 @@ macro_rules! tables {
         #[allow(non_snake_case)] // Match type names exactly
         pub struct PerRegistryKeyspaceMap {
             $(pub [<$type>]: HashMap<RegistryKey, $type>,)*
-        }
-
-        impl PerRegistryKeyspaceMap {
-            #[cfg(test)]
-            pub fn insert(&mut self, key: RegistryKey, value: RegistryKeyspaceValue) {
-                match value {
-                    $(
-                        RegistryKeyspaceValue::[<$type>](value) => {
-                            self.[<$type>].insert(key, value);
-                        }
-                    )*
-                }
-            }
         }
 
         #[doc = "The set of registrations for each table, as used in the compressed block header"]

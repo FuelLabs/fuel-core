@@ -9,10 +9,7 @@ mod eviction_policy;
 pub mod ports;
 mod tables;
 
-pub use tables::{
-    RegistryKeyspace,
-    RegistryKeyspaceValue,
-};
+pub use tables::RegistryKeyspace;
 
 use serde::{
     Deserialize,
@@ -56,13 +53,6 @@ mod tests {
             primitives::Empty,
         },
         fuel_compression::RegistryKey,
-        fuel_tx::{
-            input::PredicateCode,
-            Address,
-            AssetId,
-            ContractId,
-            ScriptCode,
-        },
         tai64::Tai64,
     };
     use proptest::prelude::*;
@@ -80,57 +70,46 @@ mod tests {
         ]
     }
 
-    fn keyspace_value() -> impl Strategy<Value = RegistryKeyspaceValue> {
-        (keyspace(), prop::array::uniform32(0..u8::MAX)).prop_map(|(keyspace, value)| {
-            match keyspace {
-                RegistryKeyspace::Address => {
-                    RegistryKeyspaceValue::Address(Address::new(value))
-                }
-                RegistryKeyspace::AssetId => {
-                    RegistryKeyspaceValue::AssetId(AssetId::new(value))
-                }
-                RegistryKeyspace::ContractId => {
-                    RegistryKeyspaceValue::ContractId(ContractId::new(value))
-                }
-                RegistryKeyspace::ScriptCode => {
-                    let len = (value[0] % 32) as usize;
-                    RegistryKeyspaceValue::ScriptCode(ScriptCode {
-                        bytes: value[..len].to_vec(),
-                    })
-                }
-                RegistryKeyspace::PredicateCode => {
-                    let len = (value[0] % 32) as usize;
-                    RegistryKeyspaceValue::PredicateCode(PredicateCode {
-                        bytes: value[..len].to_vec(),
-                    })
-                }
-            }
-        })
-    }
-
     proptest! {
         /// Serialization for compressed transactions is already tested in fuel-vm,
         /// but the rest of the block de/serialization is be tested here.
         #[test]
         fn postcard_roundtrip(
-            da_height in 0..u64::MAX,
-            prev_root in prop::array::uniform32(0..u8::MAX),
-            height in 0..u32::MAX,
-            consensus_parameters_version in 0..u32::MAX,
-            state_transition_bytecode_version in 0..u32::MAX,
-            registrations_root in prop::array::uniform32(0..u8::MAX),
+            da_height in 0..=u64::MAX,
+            prev_root in prop::array::uniform32(0..=u8::MAX),
+            height in 0..=u32::MAX,
+            consensus_parameters_version in 0..=u32::MAX,
+            state_transition_bytecode_version in 0..=u32::MAX,
+            registrations_root in prop::array::uniform32(0..=u8::MAX),
             registration_inputs in prop::collection::vec(
-                (keyspace_value(), prop::num::u16::ANY).prop_map(|(v, rk)| {
+                (keyspace(), prop::num::u16::ANY, prop::array::uniform32(0..=u8::MAX)).prop_map(|(ks, rk, arr)| {
                     let k = RegistryKey::try_from(rk as u32).unwrap();
-                    (k, v)
+                    (ks, k, arr)
                 }),
                 0..123
             ),
         ) {
             let mut registrations: PerRegistryKeyspaceMap = Default::default();
 
-            for (key, ksv) in registration_inputs {
-                registrations.insert(key, ksv);
+            for (ks, key, arr) in registration_inputs {
+                let value_len_limit = (key.as_u32() % 32) as usize;
+                match ks {
+                    RegistryKeyspace::Address => {
+                        registrations.Address.insert(key, arr.into());
+                    }
+                    RegistryKeyspace::AssetId => {
+                        registrations.AssetId.insert(key, arr.into());
+                    }
+                    RegistryKeyspace::ContractId => {
+                        registrations.ContractId.insert(key, arr.into());
+                    }
+                    RegistryKeyspace::ScriptCode => {
+                        registrations.ScriptCode.insert(key, arr[..value_len_limit].to_vec().into());
+                    }
+                    RegistryKeyspace::PredicateCode => {
+                        registrations.PredicateCode.insert(key, arr[..value_len_limit].to_vec().into());
+                    }
+                }
             }
 
             let header = PartialBlockHeader {

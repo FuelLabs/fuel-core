@@ -63,7 +63,7 @@ macro_rules! temporal_registry {
 
             impl Mappable for [< DaCompressionTemporalRegistryIndex $type >] {
                 type Key = Self::OwnedKey;
-                type OwnedKey = [u8; 32]; // Hash
+                type OwnedKey = [u8; 32]; // if the value is larger than 32 bytes, it's hashed
                 type Value = Self::OwnedValue;
                 type OwnedValue = RegistryKey;
             }
