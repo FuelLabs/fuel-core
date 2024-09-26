@@ -360,7 +360,7 @@ where
 // Try to take the value from `ModificationsHistoryV2` first.
 // If the migration is still in progress, remove the value from
 // `ModificationsHistoryV1` and return it if no value for `ModificationsHistoryV2`
-// was found. This is necessary to avoid scenarious where it is possible to
+// was found. This is necessary to avoid scenarios where it is possible to
 // roll back twice to the same block height
 fn multiversion_take<Description>(
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
