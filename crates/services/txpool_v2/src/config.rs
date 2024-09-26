@@ -156,6 +156,10 @@ pub struct HeavyWorkConfig {
     pub number_threads_to_verify_transactions: usize,
     /// Maximum of tasks in the heavy async processing queue.
     pub size_of_verification_queue: usize,
+    /// Maximum number of threads for managing the p2p syncronisation
+    pub number_threads_p2p_sync: usize,
+    /// Maximum number of tasks in the p2p sync queue
+    pub size_of_p2p_sync_queue: usize,
 }
 
 #[cfg(test)]
@@ -176,6 +180,8 @@ impl Default for Config {
             heavy_work: HeavyWorkConfig {
                 number_threads_to_verify_transactions: 1,
                 size_of_verification_queue: 100,
+                number_threads_p2p_sync: 2,
+                size_of_p2p_sync_queue: 100,
             },
         }
     }

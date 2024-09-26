@@ -90,7 +90,8 @@ pub struct SharedState<
     pub(crate) gas_price_provider: Arc<GasPriceProvider>,
     pub(crate) wasm_checker: Arc<WasmChecker>,
     pub(crate) memory: Arc<MemoryPool>,
-    pub(crate) heavy_async_processor: Arc<HeavyAsyncProcessor>,
+    pub(crate) heavy_verif_insert_processor: Arc<HeavyAsyncProcessor>,
+    pub(crate) heavy_p2p_sync_processor: Arc<HeavyAsyncProcessor>,
     pub(crate) p2p: Arc<P2P>,
     pub(crate) new_txs_notifier: Arc<Notify>,
     pub(crate) utxo_validation: bool,
@@ -123,7 +124,8 @@ impl<
             gas_price_provider: self.gas_price_provider.clone(),
             wasm_checker: self.wasm_checker.clone(),
             memory: self.memory.clone(),
-            heavy_async_processor: self.heavy_async_processor.clone(),
+            heavy_p2p_sync_processor: self.heavy_p2p_sync_processor.clone(),
+            heavy_verif_insert_processor: self.heavy_verif_insert_processor.clone(),
             new_txs_notifier: self.new_txs_notifier.clone(),
             time_txs_submitted: self.time_txs_submitted.clone(),
             tx_status_sender: self.tx_status_sender.clone(),
@@ -168,7 +170,7 @@ where
             .consensus_parameters_provider
             .latest_consensus_parameters();
         for transaction in transactions {
-            self.heavy_async_processor
+            self.heavy_verif_insert_processor
                 .spawn({
                     let shared_state = self.clone();
                     let params = params.clone();
@@ -283,7 +285,7 @@ where
 
     pub fn new_peer_subscribed(&self, peer_id: PeerId) {
         // We are not affected if there is too many queued job and we don't manage this peer.
-        let _ = self.heavy_async_processor.spawn({
+        let _ = self.heavy_p2p_sync_processor.spawn({
             let shared_state = self.clone();
             async move {
                 let peer_tx_ids = shared_state

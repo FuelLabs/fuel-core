@@ -369,10 +369,17 @@ where
             memory: Arc::new(memory_pool),
             current_height: Arc::new(RwLock::new(current_height)),
             utxo_validation: config.utxo_validation,
-            heavy_async_processor: Arc::new(
+            heavy_verif_insert_processor: Arc::new(
                 HeavyAsyncProcessor::new(
                     config.heavy_work.number_threads_to_verify_transactions,
                     config.heavy_work.size_of_verification_queue,
+                )
+                .unwrap(),
+            ),
+            heavy_p2p_sync_processor: Arc::new(
+                HeavyAsyncProcessor::new(
+                    config.heavy_work.number_threads_p2p_sync,
+                    config.heavy_work.size_of_p2p_sync_queue,
                 )
                 .unwrap(),
             ),
