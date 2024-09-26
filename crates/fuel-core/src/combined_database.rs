@@ -311,6 +311,21 @@ impl CombinedDatabase {
 
         Ok(())
     }
+
+    pub fn sync_aux_db_heights<S>(&self, shutdown_listener: &mut S) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        if let Some(on_chain_height) = self.on_chain().latest_height_from_metadata()? {
+            // todo(https://github.com/FuelLabs/fuel-core/issues/2239): This is a temporary fix
+            let res = self.rollback_to(on_chain_height, shutdown_listener);
+            if res.is_err() {
+                tracing::warn!("Failed to rollback auxiliary databases to on-chain database height: {:?}", res);
+            }
+        };
+
+        Ok(())
+    }
 }
 
 /// A trait for listening to shutdown signals.

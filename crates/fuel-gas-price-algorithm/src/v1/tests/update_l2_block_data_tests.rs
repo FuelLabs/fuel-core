@@ -1,5 +1,6 @@
 use crate::v1::{
     tests::UpdaterBuilder,
+    BlockBytes,
     Error,
 };
 
@@ -16,11 +17,11 @@ fn update_l2_block_data__updates_l2_block() {
     let used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 100;
+    let fee = 100;
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     //  then
@@ -41,11 +42,11 @@ fn update_l2_block_data__skipped_block_height_throws_error() {
     let used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 100;
+    let fee = 100;
 
     // when
     let actual_error = updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap_err();
 
     // then
@@ -68,11 +69,11 @@ fn update_l2_block_data__updates_projected_cost() {
     let used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 100;
+    let fee = 100;
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -95,15 +96,16 @@ fn update_l2_block_data__updates_the_total_reward_value() {
     let gas_used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 200;
+    let fee = 10_000;
 
     // when
     updater
-        .update_l2_block_data(height, gas_used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, gas_used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
-    let expected = gas_used * starting_da_gas_price;
+    let expected = (fee * starting_da_gas_price)
+        .div_ceil(starting_da_gas_price + starting_exec_gas_price);
     let actual = updater.total_da_rewards_excess;
     assert_eq!(actual, expected as u128);
 }
@@ -122,11 +124,11 @@ fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
     let used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 200;
+    let fee = 200;
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -151,11 +153,11 @@ fn update_l2_block_data__below_threshold_will_decrease_exec_gas_price() {
     let used = 40;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 200;
+    let fee = 200;
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -182,11 +184,11 @@ fn update_l2_block_data__above_threshold_will_increase_exec_gas_price() {
     let used = 60;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 200;
+    let fee = 200;
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -214,11 +216,11 @@ fn update_l2_block_data__exec_price_will_not_go_below_min() {
     let used = 40;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 200;
+    let fee = 200;
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -244,11 +246,11 @@ fn update_l2_block_data__updates_last_and_last_last_profit() {
     let used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 100;
+    let fee = 0; // No fee so it's easier to calculate profit
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     //  then
@@ -341,9 +343,9 @@ fn update_l2_block_data__price_does_not_decrease_more_than_max_percent() {
     let used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 200;
+    let fee = 200;
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -387,9 +389,9 @@ fn update_l2_block_data__da_price_does_not_increase_more_than_max_percent() {
     let used = 50;
     let capacity = 100.try_into().unwrap();
     let block_bytes = 1000;
-    let new_gas_price = 200;
+    let fee = 200;
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -430,13 +432,14 @@ fn update_l2_block_data__never_drops_below_minimum_da_gas_price() {
         .build();
 
     // when
+    let fee = 200;
     updater
         .update_l2_block_data(
             updater.l2_block_height + 1,
             50,
             100.try_into().unwrap(),
             1000,
-            200,
+            fee,
         )
         .unwrap();
 
@@ -453,7 +456,7 @@ fn update_l2_block_data__even_profit_maintains_price() {
     let starting_exec_gas_price = 100;
     let starting_da_gas_price = 100;
     let starting_cost = 500;
-    let latest_gas_per_byte = 10;
+    let latest_cost_per_byte = 10;
     let da_gas_price_denominator = 1;
     let block_bytes = 500u64;
     let starting_reward = starting_cost;
@@ -464,17 +467,20 @@ fn update_l2_block_data__even_profit_maintains_price() {
         .with_total_rewards(starting_reward as u128)
         .with_known_total_cost(starting_cost as u128)
         .with_projected_total_cost(starting_cost as u128)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
+        .with_da_cost_per_byte(latest_cost_per_byte as u128)
         .build();
 
     // when
+    let da_fee = latest_cost_per_byte * block_bytes;
+    let total_fee = da_fee * (starting_da_gas_price + starting_exec_gas_price)
+        / starting_da_gas_price;
     updater
         .update_l2_block_data(
             updater.l2_block_height + 1,
             50,
             100.try_into().unwrap(),
             block_bytes,
-            starting_exec_gas_price + starting_da_gas_price,
+            total_fee,
         )
         .unwrap();
     let algo = updater.algorithm();
@@ -516,9 +522,9 @@ fn update_l2_block_data__negative_profit_increase_gas_price() {
     let used = 50;
     let capacity = 100u64.try_into().unwrap();
     let block_bytes = 500u64;
-    let gas_price = 10;
+    let fee = 0;
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, gas_price)
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
         .unwrap();
 
     // then
@@ -530,4 +536,72 @@ fn update_l2_block_data__negative_profit_increase_gas_price() {
         new_gas_price,
         old_gas_price
     );
+}
+
+#[test]
+fn update_l2_block_data__adds_l2_block_to_unrecorded_blocks() {
+    // given
+    let starting_block = 0;
+
+    let mut updater = UpdaterBuilder::new()
+        .with_l2_block_height(starting_block)
+        .build();
+
+    let height = 1;
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let new_gas_price = 100;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .unwrap();
+
+    //  then
+    let block_bytes = BlockBytes {
+        height,
+        block_bytes,
+    };
+    let contains_block_bytes = updater.unrecorded_blocks.contains(&block_bytes);
+    assert!(contains_block_bytes);
+}
+
+#[test]
+fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded_blocks()
+{
+    // given
+    let starting_block = 0;
+    let preexisting_block = BlockBytes {
+        height: 0,
+        block_bytes: 1000,
+    };
+
+    let mut updater = UpdaterBuilder::new()
+        .with_l2_block_height(starting_block)
+        .with_unrecorded_blocks(vec![preexisting_block.clone()])
+        .build();
+
+    let height = 1;
+    let used = 50;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let new_gas_price = 100;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .unwrap();
+
+    //  then
+    let block_bytes = BlockBytes {
+        height,
+        block_bytes,
+    };
+    let contains_block_bytes = updater.unrecorded_blocks.contains(&block_bytes);
+    assert!(contains_block_bytes);
+
+    let contains_preexisting_block_bytes =
+        updater.unrecorded_blocks.contains(&preexisting_block);
+    assert!(contains_preexisting_block_bytes);
 }
