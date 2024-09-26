@@ -366,22 +366,13 @@ where
         );
 
         let v1_changes = migration_transaction
-            .storage_as_mut::<ModificationsHistoryV2<Description>>()
+            .storage_as_mut::<ModificationsHistoryV1<Description>>()
             .take(&height)?;
         if let Some(v1_changes) = v1_changes {
         migration_transaction
             .storage_as_mut::<ModificationsHistoryV2<Description>>()
             .insert(&height, &v1_changes)
             .unwrap();
-
-        let historical_column_changes = migration_transaction.changes().clone();
-
-        StorageTransaction::transaction(
-            &mut migration_transaction,
-            ConflictPolicy::Fail,
-            historical_column_changes,
-        )
-        .commit()?;
 
         self
             .db
@@ -956,16 +947,6 @@ mod tests {
             .insert(&1u64, &v2_changes)
             .unwrap();
 
-        let historical_column_changes = migration_transaction.changes().clone();
-
-        StorageTransaction::transaction(
-            &mut migration_transaction,
-            ConflictPolicy::Overwrite,
-            historical_column_changes,
-        )
-        .commit()
-        .unwrap();
-
         historical_rocks_db
             .db
             .commit_changes(&migration_transaction.into_changes())
@@ -997,6 +978,80 @@ mod tests {
             .iter_all::<ModificationsHistoryV2<OnChain>>(None)
             .collect::<Vec<_>>();
         assert_eq!(v2_entries.len(), 0);
+        assert_eq!(v1_entries.len(), 0);
+    }
+
+    #[test]
+    fn state_rewind_policy__rewind_range_1__migrate_modifications_history_works() {
+        // Given
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
+        let historical_rocks_db = HistoricalRocksDB::new(
+            rocks_db,
+            StateRewindPolicy::RewindRange {
+                size: NonZeroU64::new(1).unwrap(),
+            },
+        )
+        .unwrap();
+
+        let mut transaction = historical_rocks_db.read_transaction();
+        transaction
+            .storage_as_mut::<ContractsAssets>()
+            .insert(&key(), &123)
+            .unwrap();
+        historical_rocks_db
+            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .unwrap();
+
+        // Migrate the changes from V2 to V1.
+
+        let mut migration_transaction = StorageTransaction::transaction(
+            &historical_rocks_db.db,
+            ConflictPolicy::Overwrite,
+            Changes::default(),
+        );
+
+        let v2_changes = migration_transaction
+            .storage_as_mut::<ModificationsHistoryV2<OnChain>>()
+            .take(&1u64)
+            .unwrap()
+            .unwrap();
+        migration_transaction
+            .storage_as_mut::<ModificationsHistoryV1<OnChain>>()
+            .insert(&1u64, &v2_changes)
+            .unwrap();
+
+        historical_rocks_db
+            .db
+            .commit_changes(&migration_transaction.into_changes())
+            .unwrap();
+
+        // Check that the history has indeed been written to V1
+        let v2_entries = historical_rocks_db
+            .db
+            .iter_all::<ModificationsHistoryV2<OnChain>>(None)
+            .collect::<Vec<_>>();
+        let v1_entries = historical_rocks_db
+            .db
+            .iter_all::<ModificationsHistoryV1<OnChain>>(None)
+            .collect::<Vec<_>>();
+
+        assert_eq!(v2_entries.len(), 0);
+        assert_eq!(v1_entries.len(), 1);
+
+        // Migrate back from V1 to V2, using the provided function
+        historical_rocks_db.migrate_modifications_history_at_height(1u64).unwrap();
+
+        // Then 
+        let v2_entries = historical_rocks_db
+            .db
+            .iter_all::<ModificationsHistoryV2<OnChain>>(None)
+            .collect::<Vec<_>>();
+        let v1_entries = historical_rocks_db
+            .db
+            .iter_all::<ModificationsHistoryV1<OnChain>>(None)
+            .collect::<Vec<_>>();
+
+        assert_eq!(v2_entries.len(), 1);
         assert_eq!(v1_entries.len(), 0);
     }
 
