@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::Instant,
+};
 
 use fuel_core_types::{
     fuel_tx::{
@@ -97,6 +100,7 @@ where
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
         let tx_id = tx.id();
         let gas = tx.max_gas();
+        let creation_instant = Instant::now();
         let bytes_size = tx.metered_bytes_size();
         self.config.black_list.check_blacklisting(&tx)?;
         Self::check_blob_does_not_exist(&tx, &latest_view)?;
@@ -127,7 +131,9 @@ where
                     .remove_transaction_and_dependents_subtree(*collision)?,
             );
         }
-        let storage_id = self.storage.store_transaction(tx, dependencies)?;
+        let storage_id =
+            self.storage
+                .store_transaction(tx, creation_instant, dependencies)?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
         self.current_gas = self.current_gas.saturating_add(gas);
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
@@ -140,6 +146,11 @@ where
         let tx = Storage::get(&self.storage, &storage_id)?;
         self.collision_manager
             .on_stored_transaction(&tx.transaction, storage_id)?;
+        self.selection_algorithm.on_stored_transaction(
+            &tx.transaction,
+            creation_instant,
+            storage_id,
+        );
         Ok(removed_transactions)
     }
 
@@ -265,10 +276,7 @@ where
         // Here the transaction has no dependencies which means that it's an executable transaction
         // and we want to make space for it
         let current_ratio = Ratio::new(tx.tip(), tx_gas);
-        let mut sorted_txs = self
-            .storage
-            .get_worst_ratio_tip_gas_subtree_roots()?
-            .into_iter();
+        let mut sorted_txs = self.selection_algorithm.get_less_worth_txs();
         while gas_left > self.config.pool_limits.max_gas
             || bytes_left > self.config.pool_limits.max_bytes_size
             || txs_left > self.config.pool_limits.max_txs

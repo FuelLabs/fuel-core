@@ -30,6 +30,8 @@ pub struct StorageData {
     pub dependents_cumulative_bytes_size: usize,
     /// Number of dependents
     pub number_txs_in_chain: usize,
+    /// The instant when the transaction was added to the pool.
+    pub creation_instant: Instant,
 }
 
 pub type RemovedTransactions = Vec<PoolTransaction>;
@@ -45,6 +47,7 @@ pub trait Storage {
     fn store_transaction(
         &mut self,
         transaction: PoolTransaction,
+        creation_instant: Instant,
         dependencies: Vec<Self::StorageIndex>,
     ) -> Result<Self::StorageIndex, Error>;
 
@@ -71,11 +74,6 @@ pub trait Storage {
         &self,
         index: Self::StorageIndex,
     ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
-
-    /// Get less worth subtree roots.
-    fn get_worst_ratio_tip_gas_subtree_roots(
-        &self,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
 
     /// Validate inputs of a transaction.
     fn validate_inputs(
