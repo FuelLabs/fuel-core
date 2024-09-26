@@ -1,6 +1,9 @@
 use crate::{
-    ports::HistoryLookup,
-    tables::TemporalRegistryAll,
+    ports::{
+        HistoryLookup,
+        TemporalRegistry,
+    },
+    registry::TemporalRegistryAll,
     CompressedBlock,
 };
 use fuel_core_types::{
@@ -10,6 +13,7 @@ use fuel_core_types::{
         ContextError,
         Decompress,
         DecompressibleBy,
+        RegistryKey,
     },
     fuel_tx::{
         input::{
@@ -22,11 +26,18 @@ use fuel_core_types::{
                 MessageSpecification,
             },
             AsField,
+            PredicateCode,
         },
+        AssetId,
         CompressedUtxoId,
         Mint,
+        ScriptCode,
         Transaction,
         UtxoId,
+    },
+    fuel_types::{
+        Address,
+        ContractId,
     },
 };
 
@@ -36,7 +47,7 @@ impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 /// This must be called for all decompressed blocks in sequence, otherwise the result will be garbage.
 pub async fn decompress<D>(mut db: D, block: Vec<u8>) -> anyhow::Result<PartialFuelBlock>
 where
-    D: DecompressDb + TemporalRegistryAll,
+    D: DecompressDb,
 {
     let compressed: CompressedBlock = postcard::from_bytes(&block)?;
     let CompressedBlock::V0(compressed) = compressed;
@@ -60,14 +71,23 @@ where
 }
 
 pub struct DecompressCtx<D> {
-    pub db: D,
+    db: D,
 }
 
-impl<D: DecompressDb> ContextError for DecompressCtx<D> {
+impl<D> DecompressCtx<D> {
+    pub fn new(db: D) -> Self {
+        Self { db }
+    }
+}
+
+impl<D> ContextError for DecompressCtx<D> {
     type Error = anyhow::Error;
 }
 
-impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for UtxoId {
+impl<D> DecompressibleBy<DecompressCtx<D>> for UtxoId
+where
+    D: HistoryLookup,
+{
     async fn decompress_with(
         c: CompressedUtxoId,
         ctx: &DecompressCtx<D>,
@@ -75,6 +95,29 @@ impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for UtxoId {
         ctx.db.utxo_id(c)
     }
 }
+
+macro_rules! decompress_impl {
+    ($($type:ty),*) => { paste::paste! {
+        $(
+            impl<D> DecompressibleBy<DecompressCtx<D>> for $type
+            where
+                D: TemporalRegistry<$type>
+            {
+                async fn decompress_with(
+                    key: RegistryKey,
+                    ctx: &DecompressCtx<D>,
+                ) -> anyhow::Result<Self> {
+                    if key == RegistryKey::DEFAULT_VALUE {
+                        return Ok(<$type>::default());
+                    }
+                    ctx.db.read_registry(&key)
+                }
+            }
+        )*
+    }};
+}
+
+decompress_impl!(AssetId, ContractId, Address, PredicateCode, ScriptCode);
 
 impl<D, Specification> DecompressibleBy<DecompressCtx<D>> for Coin<Specification>
 where
@@ -148,7 +191,10 @@ where
     }
 }
 
-impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for Mint {
+impl<D> DecompressibleBy<DecompressCtx<D>> for Mint
+where
+    D: DecompressDb,
+{
     async fn decompress_with(
         c: Self::Compressed,
         ctx: &DecompressCtx<D>,

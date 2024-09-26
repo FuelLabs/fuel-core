@@ -7,9 +7,9 @@ pub mod compress;
 pub mod decompress;
 mod eviction_policy;
 pub mod ports;
-mod tables;
+mod registry;
 
-pub use tables::RegistryKeyspace;
+pub use registry::RegistryKeyspace;
 
 use serde::{
     Deserialize,
@@ -21,7 +21,7 @@ use fuel_core_types::{
     fuel_tx::CompressedTransaction,
     fuel_types::Bytes32,
 };
-use tables::RegistrationsPerTable;
+use registry::RegistrationsPerTable;
 
 /// Compressed block, without the preceding version byte.
 #[derive(Clone, Serialize, Deserialize)]
