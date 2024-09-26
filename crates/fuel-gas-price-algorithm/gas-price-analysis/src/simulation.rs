@@ -121,9 +121,6 @@ impl Simulator {
             da_gas_prices.push(updater.new_scaled_da_gas_price);
             let gas_price = updater.algorithm().calculate();
             gas_prices.push(gas_price);
-            println!("height: {}", height);
-            println!("gas_price {}, fullness {}", gas_price, fullness);
-            println!("last_profit: {}", updater.last_profit);
             let total_fee = gas_price as u128 * fullness as u128;
             updater
                 .update_l2_block_data(
@@ -141,7 +138,6 @@ impl Simulator {
 
             // Update DA blocks on the occasion there is one
             if let Some((range, cost)) = da_block {
-                println!("############ cost: {}", cost);
                 for height in range.to_owned() {
                     let total_cost = updater.latest_known_total_da_cost_excess + cost;
                     actual_costs.push(total_cost);
@@ -205,10 +201,6 @@ impl Simulator {
                  (index, ((_fullness, bytes), cost_per_byte))| {
                     let total_cost = *bytes * cost_per_byte;
 
-                    println!(
-                        "@@@@@@@ bytes {}, cost_per_byte: {}, total_cost: {}",
-                        bytes, cost_per_byte, total_cost
-                    );
                     let height = index as u32 + 1;
                     let converted = (height, bytes, total_cost);
                     delayed.push(converted);
@@ -227,7 +219,6 @@ impl Simulator {
                 let min = heights_iter.clone().min().unwrap();
                 let max = heights_iter.max().unwrap();
                 let cost: u128 = list.iter().map(|(_, _, cost)| *cost as u128).sum();
-                println!("&&&&&&&&&& cost: {}", cost);
                 (min..(max + 1), cost)
             })
         });

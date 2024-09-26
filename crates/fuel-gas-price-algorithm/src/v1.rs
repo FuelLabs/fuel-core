@@ -244,9 +244,6 @@ impl AlgorithmUpdaterV1 {
     fn update_projected_cost(&mut self, block_bytes: u64) {
         let block_projected_da_cost =
             (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
-        println!("bytes: {}", block_bytes);
-        println!("latest_da_cost_per_byte: {}", self.latest_da_cost_per_byte);
-        println!("block_projected_da_cost: {}", block_projected_da_cost);
         self.projected_total_da_cost = self
             .projected_total_da_cost
             .saturating_add(block_projected_da_cost);
@@ -263,7 +260,6 @@ impl AlgorithmUpdaterV1 {
         } else {
             numerator.div_ceil(denominator)
         };
-        println!("reward: {}", reward);
         reward
     }
 
@@ -383,7 +379,6 @@ impl AlgorithmUpdaterV1 {
         } else {
             let last = height_range.end.saturating_sub(1);
             let range_bytes = self.drain_l2_block_bytes_for_range(height_range)?;
-            println!("range_bytes: {}", range_bytes);
             let new_cost_per_byte: u128 = range_cost.checked_div(range_bytes).ok_or(
                 Error::CouldNotCalculateCostPerByte {
                     bytes: range_bytes,
