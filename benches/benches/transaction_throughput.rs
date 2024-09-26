@@ -170,7 +170,9 @@ where
 
 fn signed_transfers(c: &mut Criterion) {
     let generator = |rng: &mut StdRng| {
-        TransactionBuilder::script(vec![], vec![])
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+        let owner = Input::predicate_owner(&predicate);
+        let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(rng),
@@ -179,16 +181,22 @@ fn signed_transfers(c: &mut Criterion) {
                 Default::default(),
                 Default::default(),
             )
-            .add_unsigned_coin_input(
-                SecretKey::random(rng),
+            .add_input(Input::coin_predicate(
                 rng.gen(),
+                owner,
                 1000,
                 Default::default(),
                 Default::default(),
-            )
+                Default::default(),
+                predicate.clone(),
+                vec![],
+            ))
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
-            .finalize()
+            .finalize();
+        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
+            .expect("Predicate check failed");
+        tx
     };
     bench_txs("signed transfers", c, generator);
 }
@@ -207,16 +215,6 @@ fn predicate_transfers(c: &mut Criterion) {
                 Default::default(),
                 Default::default(),
                 predicate.clone(),
-                vec![],
-            ))
-            .add_input(Input::coin_predicate(
-                rng.gen(),
-                owner,
-                1000,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                predicate,
                 vec![],
             ))
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
@@ -262,6 +260,8 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
             .chain(message.as_ref().iter().copied())
             .chain(public.as_ref().iter().copied())
             .collect();
+        let predicate_2 = op::ret(RegId::ONE).to_bytes().to_vec();
+        let owner_2 = Input::predicate_owner(&predicate_2);
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
@@ -277,13 +277,13 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
             ))
             .add_input(Input::coin_predicate(
                 rng.gen(),
-                owner,
+                owner_2,
                 1000,
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                predicate,
-                predicate_data,
+                predicate_2,
+                vec![],
             ))
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
@@ -330,6 +330,8 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
                     .chain(message.as_ref().iter().copied()),
             )
             .collect();
+        let predicate_2 = op::ret(RegId::ONE).to_bytes().to_vec();
+        let owner_2 = Input::predicate_owner(&predicate_2);
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
@@ -345,13 +347,13 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
             ))
             .add_input(Input::coin_predicate(
                 rng.gen(),
-                owner,
+                owner_2,
                 1000,
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                predicate,
-                predicate_data,
+                predicate_2,
+                vec![],
             ))
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
