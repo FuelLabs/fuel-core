@@ -185,6 +185,6 @@ where
                 _ => {}
             }
         }
-        panic!("UtxoId not found in the block events");
+        anyhow::bail!("UtxoId not found in the block events");
     }
 }
