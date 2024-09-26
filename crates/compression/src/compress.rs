@@ -1,11 +1,14 @@
-use std::collections::HashSet;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use crate::{
     eviction_policy::CacheEvictor,
     ports::UtxoIdToPointer,
     tables::{
+        CompressCtxKeyspaces,
         PerRegistryKeyspace,
-        PerRegistryKeyspaceMap,
         RegistrationsPerTable,
         TemporalRegistryAll,
     },
@@ -45,13 +48,10 @@ pub async fn compress<D: CompressDb>(db: D, block: &Block) -> anyhow::Result<Vec
 
     let mut ctx = CompressCtx {
         db: prepare_ctx.db,
-        cache_evictor: CacheEvictor {
-            keep_keys: prepare_ctx.accessed_keys,
-        },
-        changes: Default::default(),
+        per_keyspace: prepare_ctx.accessed_keys.into(),
     };
     let transactions = target.compress_with(&mut ctx).await?;
-    let registrations: RegistrationsPerTable = ctx.changes.into();
+    let registrations: RegistrationsPerTable = ctx.per_keyspace.into();
 
     // Apply changes to the db
     registrations.write_to_registry(&mut ctx.db)?;
@@ -95,11 +95,17 @@ impl<D: CompressDb> CompressibleBy<PrepareCtx<D>> for UtxoId {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct CompressCtxKeyspace<T> {
+    /// Cache evictor state for this keyspace
+    pub cache_evictor: CacheEvictor<T>,
+    /// Changes to the temporary registry, to be included in the compressed block header
+    pub changes: HashMap<RegistryKey, T>,
+}
+
 pub struct CompressCtx<D> {
     pub db: D,
-    pub cache_evictor: CacheEvictor,
-    /// Changes to the temporary registry, to be included in the compressed block header
-    pub changes: PerRegistryKeyspaceMap,
+    pub(crate) per_keyspace: CompressCtxKeyspaces,
 }
 
 impl<D> ContextError for CompressCtx<D> {

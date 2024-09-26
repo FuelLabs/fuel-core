@@ -56,7 +56,6 @@ mod tests {
         tai64::Tai64,
     };
     use proptest::prelude::*;
-    use tables::PerRegistryKeyspaceMap;
 
     use super::*;
 
@@ -89,25 +88,25 @@ mod tests {
                 0..123
             ),
         ) {
-            let mut registrations: PerRegistryKeyspaceMap = Default::default();
+            let mut registrations: RegistrationsPerTable = Default::default();
 
             for (ks, key, arr) in registration_inputs {
                 let value_len_limit = (key.as_u32() % 32) as usize;
                 match ks {
                     RegistryKeyspace::Address => {
-                        registrations.Address.insert(key, arr.into());
+                        registrations.Address.push((key, arr.into()));
                     }
                     RegistryKeyspace::AssetId => {
-                        registrations.AssetId.insert(key, arr.into());
+                        registrations.AssetId.push((key, arr.into()));
                     }
                     RegistryKeyspace::ContractId => {
-                        registrations.ContractId.insert(key, arr.into());
+                        registrations.ContractId.push((key, arr.into()));
                     }
                     RegistryKeyspace::ScriptCode => {
-                        registrations.ScriptCode.insert(key, arr[..value_len_limit].to_vec().into());
+                        registrations.ScriptCode.push((key, arr[..value_len_limit].to_vec().into()));
                     }
                     RegistryKeyspace::PredicateCode => {
-                        registrations.PredicateCode.insert(key, arr[..value_len_limit].to_vec().into());
+                        registrations.PredicateCode.push((key, arr[..value_len_limit].to_vec().into()));
                     }
                 }
             }
@@ -127,7 +126,7 @@ mod tests {
                 }
             };
             let original = CompressedBlockPayloadV0 {
-                registrations: RegistrationsPerTable::from(registrations),
+                registrations,
                 registrations_root: registrations_root.into(),
                 header,
                 transactions: vec![],

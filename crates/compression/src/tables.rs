@@ -1,19 +1,3 @@
-use fuel_core_types::{
-    fuel_compression::{
-        CompressibleBy,
-        DecompressibleBy,
-        RegistryKey,
-    },
-    fuel_tx::{
-        input::PredicateCode,
-        Address,
-        AssetId,
-        ContractId,
-        ScriptCode,
-    },
-};
-use std::collections::HashMap;
-
 use crate::{
     compress::{
         CompressCtx,
@@ -29,6 +13,21 @@ use crate::{
         TemporalRegistry,
     },
 };
+use fuel_core_types::{
+    fuel_compression::{
+        CompressibleBy,
+        DecompressibleBy,
+        RegistryKey,
+    },
+    fuel_tx::{
+        input::PredicateCode,
+        Address,
+        AssetId,
+        ContractId,
+        ScriptCode,
+    },
+};
+use std::collections::HashSet;
 
 macro_rules! tables {
     ($($type:ty),*$(,)?) => { paste::paste! {
@@ -67,11 +66,27 @@ macro_rules! tables {
             }
         }
 
-        #[doc = "Key-value mapping for each keyspace"]
-        #[derive(Debug, Clone, Default)]
+        // If Rust had HKTs, we wouldn't have to do this
+        #[derive(Debug)]
         #[allow(non_snake_case)] // Match type names exactly
-        pub struct PerRegistryKeyspaceMap {
-            $(pub [<$type>]: HashMap<RegistryKey, $type>,)*
+        pub(crate) struct CompressCtxKeyspaces {
+            $(pub [<$type>]: crate::compress::CompressCtxKeyspace<$type>,)*
+        }
+
+        impl From<PerRegistryKeyspace<HashSet<RegistryKey>>> for CompressCtxKeyspaces {
+            fn from(value: PerRegistryKeyspace<HashSet<RegistryKey>>) -> Self {
+                Self {
+                    $(
+                        [<$type>]: crate::compress::CompressCtxKeyspace {
+                            changes: Default::default(),
+                            cache_evictor: crate::eviction_policy::CacheEvictor {
+                                keyspace: std::marker::PhantomData,
+                                keep_keys: value.[<$type>],
+                            },
+                        },
+                    )*
+                }
+            }
         }
 
         #[doc = "The set of registrations for each table, as used in the compressed block header"]
@@ -81,11 +96,11 @@ macro_rules! tables {
             $(pub [<$type>]: Vec<(RegistryKey, $type)>,)*
         }
 
-        impl From<PerRegistryKeyspaceMap> for RegistrationsPerTable {
-            fn from(value: PerRegistryKeyspaceMap) -> Self {
+        impl From<CompressCtxKeyspaces> for RegistrationsPerTable {
+            fn from(value: CompressCtxKeyspaces) -> Self {
                 let mut result = Self::default();
                 $(
-                    for (key, value) in value.[<$type>].into_iter() {
+                    for (key, value) in value.[<$type>].changes.into_iter() {
                         result.[<$type>].push((key, value));
                     }
                 )*
@@ -144,8 +159,8 @@ macro_rules! tables {
                         return Ok(found);
                     }
 
-                    let key = ctx.cache_evictor.[< next_key_ $type >](&mut ctx.db)?;
-                    let old = ctx.changes.[<$type>].insert(key, self.clone());
+                    let key = ctx.per_keyspace.[<$type>].cache_evictor.next_key(&mut ctx.db)?;
+                    let old = ctx.per_keyspace.[<$type>].changes.insert(key, self.clone());
                     assert!(old.is_none(), "Key collision in registry substitution");
                     Ok(key)
                 }
