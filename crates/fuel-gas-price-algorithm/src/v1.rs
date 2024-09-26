@@ -1,7 +1,7 @@
 use crate::utils::cumulative_percentage_change;
 use std::{
     cmp::max,
-    collections::HashMap,
+    collections::BTreeMap,
     num::NonZeroU64,
     ops::{
         Div,
@@ -153,7 +153,7 @@ pub struct AlgorithmUpdaterV1 {
     pub latest_da_cost_per_byte: u128,
 
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
-    pub unrecorded_blocks: HashMap<Height, Bytes>,
+    pub unrecorded_blocks: BTreeMap<Height, Bytes>,
 }
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
