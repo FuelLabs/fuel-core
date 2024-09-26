@@ -204,7 +204,7 @@ impl AlgorithmUpdaterV1 {
         used: u64,
         capacity: NonZeroU64,
         block_bytes: u64,
-        fee_wei: u64,
+        fee_wei: u128,
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
@@ -235,33 +235,36 @@ impl AlgorithmUpdaterV1 {
         }
     }
 
-    fn update_rewards(&mut self, fee_wei: u64) {
+    fn update_rewards(&mut self, fee_wei: u128) {
         let block_da_reward = self.da_portion_of_fee(fee_wei);
-        self.total_da_rewards_excess = self
-            .total_da_rewards_excess
-            .saturating_add(block_da_reward.into());
+        self.total_da_rewards_excess =
+            self.total_da_rewards_excess.saturating_add(block_da_reward);
     }
 
     fn update_projected_cost(&mut self, block_bytes: u64) {
         let block_projected_da_cost =
             (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
+        println!("bytes: {}", block_bytes);
+        println!("latest_da_cost_per_byte: {}", self.latest_da_cost_per_byte);
+        println!("block_projected_da_cost: {}", block_projected_da_cost);
         self.projected_total_da_cost = self
             .projected_total_da_cost
             .saturating_add(block_projected_da_cost);
     }
 
     // Take the `fee_wei` and return the portion of the fee that should be used for paying DA costs
-    fn da_portion_of_fee(&self, fee_wei: u64) -> u64 {
+    fn da_portion_of_fee(&self, fee_wei: u128) -> u128 {
         // fee_wei * (da_price / (exec_price + da_price))
-        let numerator = fee_wei.saturating_mul(self.descaled_da_price());
-        let denominator = self
-            .descaled_exec_price()
-            .saturating_add(self.descaled_da_price());
-        if denominator == 0 {
+        let numerator = fee_wei.saturating_mul(self.descaled_da_price() as u128);
+        let denominator = (self.descaled_exec_price() as u128)
+            .saturating_add(self.descaled_da_price() as u128);
+        let reward = if denominator == 0 {
             0
         } else {
             numerator.div_ceil(denominator)
-        }
+        };
+        println!("reward: {}", reward);
+        reward
     }
 
     fn clamped_projected_cost_as_i128(&self) -> i128 {
@@ -380,6 +383,7 @@ impl AlgorithmUpdaterV1 {
         } else {
             let last = height_range.end.saturating_sub(1);
             let range_bytes = self.drain_l2_block_bytes_for_range(height_range)?;
+            println!("range_bytes: {}", range_bytes);
             let new_cost_per_byte: u128 = range_cost.checked_div(range_bytes).ok_or(
                 Error::CouldNotCalculateCostPerByte {
                     bytes: range_bytes,
