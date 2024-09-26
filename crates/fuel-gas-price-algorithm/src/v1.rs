@@ -190,7 +190,7 @@ impl AlgorithmUpdaterV1 {
         height_range: Range<u32>,
         range_cost: u128,
     ) -> Result<(), Error> {
-        if height_range.len() != 0 {
+        if !height_range.is_empty() {
             self.da_block_update(height_range, range_cost)?;
             self.recalculate_projected_cost();
             self.normalize_rewards_and_costs();
@@ -378,7 +378,7 @@ impl AlgorithmUpdaterV1 {
                 got: first,
             })
         } else {
-            let last = height_range.end - 1;
+            let last = height_range.end.saturating_sub(1);
             let range_bytes = self.drain_l2_block_bytes_for_range(height_range)?;
             let new_cost_per_byte: u128 = range_cost.checked_div(range_bytes).ok_or(
                 Error::CouldNotCalculateCostPerByte {
