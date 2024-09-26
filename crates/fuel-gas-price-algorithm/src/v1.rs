@@ -184,13 +184,6 @@ impl core::ops::Deref for ClampedPercentage {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct RecordedBlock {
-    pub height: u32,
-    // pub block_bytes: u64,
-    pub block_cost: u64,
-}
-
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,

@@ -4,7 +4,6 @@ use crate::v1::{
         UpdaterBuilder,
     },
     Error,
-    RecordedBlock,
 };
 use proptest::{
     prelude::Rng,
@@ -12,6 +11,7 @@ use proptest::{
     proptest,
 };
 use rand::SeedableRng;
+use std::ops::Range;
 
 #[test]
 fn update_da_record_data__increases_block() {
@@ -278,8 +278,15 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
     assert_eq!(actual, expected as u128);
 }
 
+#[derive(Debug, Clone)]
+pub struct RecordedBlock {
+    pub height: u32,
+    // pub block_bytes: u64,
+    pub block_cost: u64,
+}
+
 prop_compose! {
-    fn arb_vec_of_da_blocks()(last_da_block: u32, count in 1..123usize, rng_seed: u64) -> (Vec<BlockBytes>, Vec<RecordedBlock>) {
+    fn arb_vec_of_da_blocks()(last_da_block: u32, count in 1..123usize, rng_seed: u64) -> (Vec<BlockBytes>, (Range<u32>, u128)) {
         let rng = &mut rand::rngs::StdRng::seed_from_u64(rng_seed);
         let mut unrecorded_blocks = Vec::with_capacity(count);
         let mut recorded_blocks = Vec::with_capacity(count);
@@ -297,28 +304,40 @@ prop_compose! {
                 block_cost,
             });
         }
-        (unrecorded_blocks, recorded_blocks)
+        let recorded_heights = recorded_blocks
+            .iter()
+            .map(|block| block.height)
+            .collect::<Vec<u32>>();
+        let min = recorded_heights.iter().min().unwrap();
+        let max = recorded_heights.iter().max().unwrap();
+        let recorded_range = *min..(max + 1);
+        let recorded_cost = recorded_blocks
+        .iter()
+        .map(|block| block.block_cost as u128)
+        .sum();
+
+        (unrecorded_blocks, (recorded_range, recorded_cost))
     }
 }
 
 prop_compose! {
-    fn reward_greater_than_cost_with_da_blocks()(cost: u64, extra: u64, (unrecorded_blocks, recorded_blocks) in arb_vec_of_da_blocks()) -> (u128, u128, Vec<BlockBytes>, Vec<RecordedBlock>) {
-        let cost_from_blocks = recorded_blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
-        let reward = cost as u128 + cost_from_blocks + extra as u128;
-        (cost as u128, reward, unrecorded_blocks, recorded_blocks)
+    fn reward_greater_than_cost_with_da_blocks()(cost: u64, extra: u64, (unrecorded_blocks, (recorded_range, recorded_cost)) in arb_vec_of_da_blocks()) -> (u128, u128, Vec<BlockBytes>, (Range<u32>, u128)) {
+        let reward = cost as u128 + recorded_cost + extra as u128;
+        (cost as u128, reward, unrecorded_blocks, (recorded_range, recorded_cost))
     }
 }
 
 proptest! {
     #[test]
     fn update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
-        (cost, reward, unrecorded_blocks, recorded_blocks) in reward_greater_than_cost_with_da_blocks()
+        (cost, reward, unrecorded_blocks, (recorded_range, recorded_cost)) in reward_greater_than_cost_with_da_blocks()
     ) {
         _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
             cost,
             reward,
             unrecorded_blocks,
-            recorded_blocks,
+            recorded_range,
+            recorded_cost
         )
     }
 }
@@ -327,11 +346,12 @@ fn _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_s
     known_total_cost: u128,
     total_rewards: u128,
     unrecorded_blocks: Vec<BlockBytes>,
-    recorded_blocks: Vec<RecordedBlock>,
+    recorded_range: Range<u32>,
+    recorded_cost: u128,
 ) {
     // given
     let da_cost_per_byte = 20;
-    let da_recorded_block_height = recorded_blocks.first().unwrap().height - 1;
+    let da_recorded_block_height = recorded_range.start - 1;
     let l2_block_height = 15;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
@@ -341,19 +361,6 @@ fn _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_s
         .with_total_rewards(total_rewards)
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
-
-    let recorded_heights = recorded_blocks
-        .iter()
-        .map(|block| block.height)
-        .collect::<Vec<u32>>();
-    let min = recorded_heights.iter().min().unwrap();
-    let max = recorded_heights.iter().max().unwrap();
-    let recorded_range = *min..(max + 1);
-
-    let recorded_cost = recorded_blocks
-        .iter()
-        .map(|block| block.block_cost as u128)
-        .sum();
 
     // when
     updater
@@ -371,23 +378,23 @@ fn _update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_s
 }
 
 prop_compose! {
-    fn cost_greater_than_reward_with_da_blocks()(reward: u64, extra: u64, (unrecorded_blocks, recorded_blocks) in arb_vec_of_da_blocks()) -> (u128, u128, Vec<BlockBytes>, Vec<RecordedBlock>) {
-        let cost_from_blocks = recorded_blocks.iter().map(|block| block.block_cost as u128).sum::<u128>();
-        let cost = reward as u128 + cost_from_blocks + extra as u128;
-        (cost, reward as u128, unrecorded_blocks, recorded_blocks)
+    fn cost_greater_than_reward_with_da_blocks()(reward: u64, extra: u64, (unrecorded_blocks, (recorded_range, recorded_cost)) in arb_vec_of_da_blocks()) -> (u128, u128, Vec<BlockBytes>, (Range<u32>, u128)) {
+        let cost = reward as u128 + recorded_cost + extra as u128;
+        (cost, reward as u128, unrecorded_blocks, (recorded_range, recorded_cost))
     }
 }
 
 proptest! {
     #[test]
     fn update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
-        (cost, reward, unrecorded_blocks, recorded_blocks) in cost_greater_than_reward_with_da_blocks()
+        (cost, reward, unrecorded_blocks, (recorded_range, recorded_cost)) in cost_greater_than_reward_with_da_blocks()
     ) {
         _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
             cost,
             reward,
             unrecorded_blocks,
-            recorded_blocks,
+            recorded_range,
+            recorded_cost
         )
     }
 }
@@ -396,11 +403,12 @@ fn _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and
     known_total_cost: u128,
     total_rewards: u128,
     unrecorded_blocks: Vec<BlockBytes>,
-    recorded_blocks: Vec<RecordedBlock>,
+    recorded_range: Range<u32>,
+    recorded_cost: u128,
 ) {
     // given
     let da_cost_per_byte = 20;
-    let da_recorded_block_height = recorded_blocks.first().unwrap().height - 1;
+    let da_recorded_block_height = recorded_range.start - 1;
     let l2_block_height = 15;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
@@ -410,19 +418,6 @@ fn _update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and
         .with_total_rewards(total_rewards)
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
-
-    let recorded_heights = recorded_blocks
-        .iter()
-        .map(|block| block.height)
-        .collect::<Vec<u32>>();
-    let min = recorded_heights.iter().min().unwrap();
-    let max = recorded_heights.iter().max().unwrap();
-    let recorded_range = *min..(max + 1);
-
-    let recorded_cost = recorded_blocks
-        .iter()
-        .map(|block| block.block_cost as u128)
-        .sum();
 
     // when
     updater
