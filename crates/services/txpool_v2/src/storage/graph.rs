@@ -87,7 +87,6 @@ impl GraphStorage {
         root_id: NodeIndex,
     ) -> Result<Vec<PoolTransaction>, Error> {
         let Some(root) = self.graph.node_weight(root_id) else {
-            debug_assert!(false, "Node with id {:?} not found", root_id);
             return Ok(vec![])
         };
         let gas_removed = root.dependents_cumulative_gas;
