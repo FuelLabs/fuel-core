@@ -1,6 +1,9 @@
-use crate::{
-    fuel_core_graphql_api::ports::worker::OffChainDatabaseTransaction,
-    graphql_api::storage::da_compression::*,
+use crate::fuel_core_graphql_api::{
+    ports::worker::OffChainDatabaseTransaction,
+    storage::da_compression::{
+        metadata_key::MetadataKey,
+        *,
+    },
 };
 use fuel_core_compression::{
     compress::compress,
@@ -27,10 +30,6 @@ use fuel_core_types::{
     services::executor::Event,
 };
 use futures::FutureExt;
-use sha2::{
-    Digest,
-    Sha256,
-};
 
 /// Performs DA compression for a block and stores it in the database.
 pub fn da_compress_block<T>(
@@ -64,7 +63,7 @@ struct CompressTx<'a, Tx> {
 }
 
 macro_rules! impl_temporal_registry {
-    ($type:ty, $index_value_fn:expr) => { paste::paste! {
+    ($type:ty) => { paste::paste! {
         impl<'a, Tx> TemporalRegistry<$type> for CompressTx<'a, Tx>
         where
             Tx: OffChainDatabaseTransaction,
@@ -93,17 +92,17 @@ macro_rules! impl_temporal_registry {
 
                 // Remove the overwritten value from index, if any
                 if let Some(old_value) = old_value {
-                    let old_value_in_index: [u8; 32] = ($index_value_fn)(&old_value);
+                    let old_reverse_key = old_value.into();
                     self.db_tx
-                        .storage_as_mut::<[< DaCompressionTemporalRegistryIndex $type >]>()
-                        .remove(&old_value_in_index)?;
+                        .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                        .remove(&old_reverse_key)?;
                 }
 
                 // Add the new value to the index
-                let new_value_in_index: [u8; 32] = ($index_value_fn)(value);
+                let reverse_key = old_value.into();
                 self.db_tx
-                    .storage_as_mut::<[< DaCompressionTemporalRegistryIndex $type >]>()
-                    .insert(&new_value_in_index, key)?;
+                    .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                    .insert(&reverse_key, key)?;
 
                 Ok(())
             }
@@ -113,11 +112,11 @@ macro_rules! impl_temporal_registry {
                 value: &$type,
             ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
             {
-                let value_in_index: [u8; 32] = ($index_value_fn)(value);
+                let reverse_key = value.into();
                 Ok(self
                     .db_tx
-                    .storage_as_ref::<[< DaCompressionTemporalRegistryIndex $type >]>()
-                    .get(&value_in_index)?
+                    .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
+                    .get(&reverse_key)?
                     .map(|v| v.into_owned()))
             }
         }
@@ -131,39 +130,31 @@ macro_rules! impl_temporal_registry {
                 key: fuel_core_types::fuel_compression::RegistryKey,
             ) -> anyhow::Result<()> {
                 self.db_tx
-                    .storage_as_mut::<[< DaCompressionTemporalRegistryEvictor $type >]>()
-                    .insert(&(), &key)?;
+                    .storage_as_mut::<DaCompressionTemporalRegistryMetadata>()
+                    .insert(&MetadataKey::$type, &key)?;
                 Ok(())
             }
 
             fn get_latest_assigned_key(
                 &self,
-            ) -> anyhow::Result<fuel_core_types::fuel_compression::RegistryKey> {
+            ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
                 Ok(self
                     .db_tx
-                    .storage_as_ref::<[< DaCompressionTemporalRegistryEvictor $type >]>()
-                    .get(&())?
-                    .ok_or(not_found!([< DaCompressionTemporalRegistryEvictor $type >]))?
-                    .into_owned())
+                    .storage_as_ref::<DaCompressionTemporalRegistryMetadata>()
+                    .get(&MetadataKey::$type)?
+                    .map(|v| v.into_owned())
+                )
             }
         }
 
     }};
 }
 
-impl_temporal_registry!(Address, |v: &Address| **v);
-impl_temporal_registry!(AssetId, |v: &AssetId| **v);
-impl_temporal_registry!(ContractId, |v: &ContractId| **v);
-impl_temporal_registry!(ScriptCode, |v: &ScriptCode| {
-    let mut hasher = Sha256::new();
-    hasher.update(&v.bytes);
-    hasher.finalize().into()
-});
-impl_temporal_registry!(PredicateCode, |v: &PredicateCode| {
-    let mut hasher = Sha256::new();
-    hasher.update(&v.bytes);
-    hasher.finalize().into()
-});
+impl_temporal_registry!(Address);
+impl_temporal_registry!(AssetId);
+impl_temporal_registry!(ContractId);
+impl_temporal_registry!(ScriptCode);
+impl_temporal_registry!(PredicateCode);
 
 impl<'a, Tx> UtxoIdToPointer for CompressTx<'a, Tx>
 where

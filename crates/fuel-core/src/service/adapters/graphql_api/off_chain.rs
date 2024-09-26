@@ -11,27 +11,29 @@ use crate::{
         },
         storage::{
             contracts::ContractsInfo,
+            da_compression::DaCompressedBlocks,
             relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::{
-        da_compression::DaCompressedBlocks,
-        old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
-        },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use fuel_core_storage::{
+    blueprint::BlueprintInspect,
+    codec::Encode,
     iter::{
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
         IteratorOverTable,
     },
+    kv_store::KeyValueInspect,
     not_found,
+    structured_storage::TableWithBlueprint,
     transactional::{
         IntoTransaction,
         StorageTransaction,
@@ -73,10 +75,16 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     }
 
     fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
-        self.storage_as_ref::<DaCompressedBlocks>()
-            .get(height)?
-            .ok_or_else(|| not_found!("DaCompressedBlock"))
-            .map(std::borrow::Cow::into_owned)
+        let column = <DaCompressedBlocks as TableWithBlueprint>::column();
+        let encoder =
+            <<DaCompressedBlocks as TableWithBlueprint>::Blueprint as BlueprintInspect<
+                DaCompressedBlocks,
+                Self,
+            >>::KeyCodec::encode(height);
+
+        self.get(encoder.as_ref(), column)?
+            .ok_or_else(|| not_found!(DaCompressedBlocks))
+            .map(|value| value.as_ref().clone())
     }
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {

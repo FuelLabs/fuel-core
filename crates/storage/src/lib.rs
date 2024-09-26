@@ -70,7 +70,7 @@ pub enum Error {
     #[display(fmt = "error occurred in the underlying datastore `{_0:?}`")]
     DatabaseError(Box<dyn core::fmt::Debug + Send + Sync>),
     /// This error should be created with `not_found` macro.
-    #[display(fmt = "resource of type `{_0}` was not found at the: {_1}")]
+    #[display(fmt = "resource was not found in table `{_0}` at the: {_1}")]
     NotFound(&'static str, &'static str),
     // TODO: Do we need this type at all?
     /// Unknown or not expected(by architecture) error.
@@ -194,7 +194,7 @@ macro_rules! not_found {
     };
     ($ty: path) => {
         $crate::Error::NotFound(
-            ::core::any::type_name::<<$ty as $crate::Mappable>::OwnedValue>(),
+            ::core::any::type_name::<$ty>(),
             concat!(file!(), ":", line!()),
         )
     };

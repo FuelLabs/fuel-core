@@ -3206,7 +3206,6 @@ dependencies = [
  "rocksdb",
  "serde",
  "serde_json",
- "sha2 0.10.8",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "tempfile",
@@ -3369,6 +3368,8 @@ dependencies = [
  "proptest",
  "rand",
  "serde",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "tokio",
 ]
 
