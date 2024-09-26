@@ -156,7 +156,7 @@ pub struct HeavyWorkConfig {
     pub number_threads_to_verify_transactions: usize,
     /// Maximum of tasks in the heavy async processing queue.
     pub size_of_verification_queue: usize,
-    /// Maximum number of threads for managing the p2p syncronisation
+    /// Maximum number of threads for managing the p2p synchronisation
     pub number_threads_p2p_sync: usize,
     /// Maximum number of tasks in the p2p sync queue
     pub size_of_p2p_sync_queue: usize,
