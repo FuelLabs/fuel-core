@@ -356,9 +356,12 @@ where
         Ok(())
     }
 
-    /// Migrates a ModificationHistory key-value pair from V1 to V2. 
-    /// The migration fails if other 
-    pub fn migrate_modifications_history_at_height(&self, height: u64) -> StorageResult<()> {
+    /// Migrates a ModificationHistory key-value pair from V1 to V2.
+    /// The migration fails if other
+    pub fn migrate_modifications_history_at_height(
+        &self,
+        height: u64,
+    ) -> StorageResult<()> {
         let mut migration_transaction = StorageTransaction::transaction(
             &self.db,
             ConflictPolicy::Fail,
@@ -369,16 +372,17 @@ where
             .storage_as_mut::<ModificationsHistoryV1<Description>>()
             .take(&height)?;
         if let Some(v1_changes) = v1_changes {
-        migration_transaction
-            .storage_as_mut::<ModificationsHistoryV2<Description>>()
-            .insert(&height, &v1_changes)
-            .unwrap();
+            migration_transaction
+                .storage_as_mut::<ModificationsHistoryV2<Description>>()
+                .insert(&height, &v1_changes)
+                .unwrap();
 
-        self
-            .db
-            .commit_changes(&migration_transaction.into_changes())?;
-        Ok(())
-    } else { Ok (())}
+            self.db
+                .commit_changes(&migration_transaction.into_changes())?;
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -395,8 +399,8 @@ fn multiversion_take<Description>(
 where
     Description: DatabaseDescription,
 {
-    // This will cause the V2 key to be removed in case the storage transaction snapshot 
-    // a conflicting transaction writes a value for it, but that update is not reflected 
+    // This will cause the V2 key to be removed in case the storage transaction snapshot
+    // a conflicting transaction writes a value for it, but that update is not reflected
     // in the storage transaction snapshot.
     let v2_last_changes = storage_transaction
         .storage_as_mut::<ModificationsHistoryV2<Description>>()
@@ -1042,9 +1046,11 @@ mod tests {
         assert_eq!(v1_entries.len(), 1);
 
         // Migrate back from V1 to V2, using the provided function
-        historical_rocks_db.migrate_modifications_history_at_height(1u64).unwrap();
+        historical_rocks_db
+            .migrate_modifications_history_at_height(1u64)
+            .unwrap();
 
-        // Then 
+        // Then
         let v2_entries = historical_rocks_db
             .db
             .iter_all::<ModificationsHistoryV2<OnChain>>(None)
