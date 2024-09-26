@@ -48,9 +48,9 @@ where
     let mut prepare_ctx = PrepareCtx::new(&mut db);
     let _ = target.compress_with(&mut prepare_ctx).await?;
 
-    let mut ctx = prepare_ctx.into_compression_context();
+    let mut ctx = prepare_ctx.into_compression_context()?;
     let transactions = target.compress_with(&mut ctx).await?;
-    let registrations: RegistrationsPerTable = ctx.into();
+    let registrations: RegistrationsPerTable = ctx.finalize()?;
 
     // Apply changes to the db
     registrations.write_to_registry(&mut db)?;
@@ -122,31 +122,35 @@ macro_rules! compression {
             $($ident: CompressCtxKeyspace<$type>,)*
         }
 
-        impl<D> PrepareCtx<D> {
+        impl<D> PrepareCtx<D> where D: CompressDb {
             /// Converts the preparation context into a [`CompressCtx`]
             /// keeping accessed keys to avoid its eviction during compression.
-            pub fn into_compression_context(self) -> CompressCtx<D> {
-                CompressCtx {
-                    db: self.db,
+            /// Initializes the cache evictors from the database, which may fail.
+            pub fn into_compression_context(mut self) -> anyhow::Result<CompressCtx<D>> {
+                Ok(CompressCtx {
                     $(
                         $ident: CompressCtxKeyspace {
                             changes: Default::default(),
-                            cache_evictor: CacheEvictor::new(self.accessed_keys.$ident.into()),
+                            cache_evictor: CacheEvictor::new_from_db(&mut self.db, self.accessed_keys.$ident.into())?,
                         },
                     )*
-                }
+                    db: self.db,
+                })
             }
         }
 
-        impl<D> From<CompressCtx<D>> for RegistrationsPerTable {
-            fn from(value: CompressCtx<D>) -> Self {
-                let mut result = Self::default();
+        impl<D> CompressCtx<D> where D: CompressDb {
+            /// Finalizes the compression context, returning the changes to the registry.
+            /// Commits the cache evictor states to the database.
+            fn finalize(mut self) -> anyhow::Result<RegistrationsPerTable> {
+                let mut registrations = RegistrationsPerTable::default();
                 $(
-                    for (key, value) in value.$ident.changes.into_iter() {
-                        result.$ident.push((key, value));
+                    self.$ident.cache_evictor.commit(&mut self.db)?;
+                    for (key, value) in self.$ident.changes.into_iter() {
+                        registrations.$ident.push((key, value));
                     }
                 )*
-                result
+                Ok(registrations)
             }
         }
 
@@ -184,7 +188,7 @@ macro_rules! compression {
                         return Ok(found);
                     }
 
-                    let key = ctx.$ident.cache_evictor.next_key(&mut ctx.db)?;
+                    let key = ctx.$ident.cache_evictor.next_key();
                     let old = ctx.$ident.changes.insert(key, self.clone());
                     assert!(old.is_none(), "Key collision in registry substitution");
                     Ok(key)

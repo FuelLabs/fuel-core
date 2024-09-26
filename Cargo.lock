@@ -3362,6 +3362,7 @@ name = "fuel-core-compression"
 version = "0.36.0"
 dependencies = [
  "anyhow",
+ "fuel-core-compression",
  "fuel-core-types 0.36.0",
  "paste",
  "postcard",
