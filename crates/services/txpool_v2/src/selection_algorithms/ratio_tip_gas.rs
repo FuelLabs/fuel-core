@@ -173,9 +173,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
     }
 
     fn get_less_worth_txs(&self) -> impl Iterator<Item = Self::StorageIndex> {
-        self.all_transactions_sorted_tip_gas_ratio
-            .iter()
-            .map(|(_, storage_id)| *storage_id)
+        self.all_transactions_sorted_tip_gas_ratio.values().copied()
     }
 
     fn on_stored_transaction(
