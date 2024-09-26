@@ -11,9 +11,16 @@ use fuel_core_gas_price_service::{
         Error as GasPriceError,
         Result as GasPriceResult,
     },
-    ports::L2Data,
+    ports::{
+        GasPriceData,
+        GasPriceServiceConfig,
+        L2Data,
+    },
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    transactional::HistoricalView,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -21,6 +28,14 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
+};
+
+use crate::{
+    database::{
+        database_description::gas_price::GasPriceDatabase,
+        Database,
+    },
+    service::Config,
 };
 
 #[cfg(test)]
@@ -36,6 +51,23 @@ impl L2Data for OnChainIterableKeyValueView {
         height: &BlockHeight,
     ) -> StorageResult<Option<Block<Transaction>>> {
         self.get_full_block(height)
+    }
+}
+
+impl GasPriceData for Database<GasPriceDatabase> {
+    fn latest_height(&self) -> Option<BlockHeight> {
+        HistoricalView::latest_height(self)
+    }
+}
+
+impl From<Config> for GasPriceServiceConfig {
+    fn from(value: Config) -> Self {
+        GasPriceServiceConfig::new(
+            value.min_gas_price,
+            value.starting_gas_price,
+            value.gas_price_change_percent,
+            value.gas_price_threshold_percent,
+        )
     }
 }
 
