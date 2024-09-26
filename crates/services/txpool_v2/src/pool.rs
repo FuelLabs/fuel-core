@@ -136,7 +136,7 @@ where
             self.selection_algorithm
                 .new_executable_transactions(vec![storage_id], &self.storage)?;
         }
-        self.update_components_and_caches_on_removal(&removed_transactions)?;
+        self.update_components_and_caches_on_removal(removed_transactions.iter())?;
         let tx = Storage::get(&self.storage, &storage_id)?;
         self.collision_manager
             .on_stored_transaction(&tx.transaction, storage_id)?;
@@ -181,7 +181,8 @@ where
     pub fn extract_transactions_for_block(
         &mut self,
     ) -> Result<Vec<PoolTransaction>, Error> {
-        self.selection_algorithm
+        let extracted_transactions = self
+            .selection_algorithm
             .gather_best_txs(
                 Constraints {
                     max_gas: self.config.max_block_gas,
@@ -193,15 +194,11 @@ where
                 let storage_data = self
                     .storage
                     .remove_transaction_without_dependencies(storage_id)?;
-                self.collision_manager
-                    .on_removed_transaction(&storage_data.transaction)?;
-                self.selection_algorithm
-                    .on_removed_transaction(&storage_data.transaction)?;
-                self.tx_id_to_storage_id
-                    .remove(&storage_data.transaction.id());
                 Ok(storage_data.transaction)
             })
-            .collect()
+            .collect::<Result<Vec<PoolTransaction>, Error>>()?;
+        self.update_components_and_caches_on_removal(extracted_transactions.iter())?;
+        Ok(extracted_transactions)
     }
 
     /// Prune transactions from the pool.
@@ -310,9 +307,9 @@ where
         Ok(())
     }
 
-    fn update_components_and_caches_on_removal(
+    fn update_components_and_caches_on_removal<'a>(
         &mut self,
-        removed_transactions: &Vec<PoolTransaction>,
+        mut removed_transactions: impl Iterator<Item = &'a PoolTransaction>,
     ) -> Result<(), Error> {
         for tx in removed_transactions {
             self.collision_manager.on_removed_transaction(tx)?;
