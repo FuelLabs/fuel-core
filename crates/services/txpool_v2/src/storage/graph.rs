@@ -87,6 +87,7 @@ impl GraphStorage {
         root_id: NodeIndex,
     ) -> Result<Vec<PoolTransaction>, Error> {
         let Some(root) = self.graph.node_weight(root_id) else {
+            debug_assert!(false, "Node with id {:?} not found", root_id);
             return Ok(vec![])
         };
         let gas_removed = root.dependents_cumulative_gas;
@@ -95,9 +96,6 @@ impl GraphStorage {
         let removed = self.remove_dependent_sub_graph(root_id)?;
         let mut already_visited = HashSet::new();
         for dependency in dependencies {
-            if already_visited.contains(&dependency) {
-                continue;
-            }
             self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
                 dependency,
                 gas_removed,
@@ -121,6 +119,7 @@ impl GraphStorage {
         }
         already_visited.insert(root_id);
         let Some(root) = self.graph.node_weight_mut(root_id) else {
+            debug_assert!(false, "Node with id {:?} not found", root_id);
             return Err(Error::Storage(format!(
                 "Node with id {:?} not found",
                 root_id
@@ -155,6 +154,7 @@ impl GraphStorage {
         }
         already_visited.insert(root_id);
         let Some(root) = self.graph.node_weight_mut(root_id) else {
+            debug_assert!(false, "Node with id {:?} not found", root_id);
             return Err(Error::Storage(format!(
                 "Node with id {:?} not found",
                 root_id
@@ -183,7 +183,7 @@ impl GraphStorage {
         let Some(root) = self.graph.remove_node(root_id) else {
             return Ok(vec![]);
         };
-        self.clear_cache(root.transaction.outputs(), &root.transaction.id())?;
+        self.clear_cache(root.transaction.outputs(), &root.transaction.id());
         let mut removed_transactions = vec![root.transaction];
         for dependent in dependents {
             removed_transactions.extend(self.remove_dependent_sub_graph(dependent)?);
@@ -245,19 +245,12 @@ impl GraphStorage {
 
     /// Cache the transaction information in the storage caches.
     /// This is used to speed up the verification/dependencies searches of the transactions.
-    fn cache_tx_infos(
-        &mut self,
-        outputs: &[Output],
-        tx_id: &TxId,
-        node_id: NodeIndex,
-    ) -> Result<(), Error> {
+    fn cache_tx_infos(&mut self, outputs: &[Output], tx_id: &TxId, node_id: NodeIndex) {
         for (index, output) in outputs.iter().enumerate() {
-            let index = u16::try_from(index).map_err(|_| {
-                Error::WrongOutputNumber(format!(
-                    "The number of outputs in `{}` is more than `u8::max`",
-                    tx_id
-                ))
-            })?;
+            // SAFETY: We deal with CheckedTransaction there which should already check this
+            let index = u16::try_from(index).expect(
+                "The number of outputs in a transaction should be less than `u16::max`",
+            );
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin { .. } => {
@@ -269,18 +262,15 @@ impl GraphStorage {
                 _ => {}
             }
         }
-        Ok(())
     }
 
     /// Clear the caches of the storage when a transaction is removed.
-    fn clear_cache(&mut self, outputs: &[Output], tx_id: &TxId) -> Result<(), Error> {
+    fn clear_cache(&mut self, outputs: &[Output], tx_id: &TxId) {
         for (index, output) in outputs.iter().enumerate() {
-            let index = u16::try_from(index).map_err(|_| {
-                Error::WrongOutputNumber(format!(
-                    "The number of outputs in `{}` is more than `u16::max`",
-                    tx_id
-                ))
-            })?;
+            // SAFETY: We deal with CheckedTransaction there which should already check this
+            let index = u16::try_from(index).expect(
+                "The number of outputs in a transaction should be less than `u16::max`",
+            );
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
@@ -292,7 +282,6 @@ impl GraphStorage {
                 _ => {}
             }
         }
-        Ok(())
     }
 
     fn get_inner(&self, index: &NodeIndex) -> Result<&StorageData, Error> {
@@ -379,7 +368,7 @@ impl Storage for GraphStorage {
         for dependency in dependencies {
             self.graph.add_edge(dependency, node_id, ());
         }
-        self.cache_tx_infos(&outputs, &tx_id, node_id)?;
+        self.cache_tx_infos(&outputs, &tx_id, node_id);
 
         // Update the cumulative tip and gas of the dependencies transactions and recursively their dependencies, etc.
         for node_id in all_dependencies_recursively {
@@ -533,9 +522,8 @@ impl Storage for GraphStorage {
                 "Transaction with index {:?} not found",
                 index
             )))
-            .and_then(|node| {
-                self.clear_cache(node.transaction.outputs(), &node.transaction.id())?;
-                Ok(node)
+            .inspect(|node| {
+                self.clear_cache(node.transaction.outputs(), &node.transaction.id());
             })
     }
 
