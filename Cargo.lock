@@ -3756,7 +3756,6 @@ dependencies = [
  "rayon",
  "test-strategy",
  "tokio",
- "tokio-rayon",
  "tokio-stream",
  "tracing",
 ]

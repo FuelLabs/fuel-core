@@ -86,7 +86,7 @@ impl BasicVerifiedTx {
 }
 
 impl InputDependenciesVerifiedTx {
-    pub async fn perform_input_computation_verifications<M>(
+    pub fn perform_input_computation_verifications<M>(
         self,
         consensus_params: &ConsensusParameters,
         wasm_checker: &impl WasmChecker,
@@ -104,9 +104,7 @@ impl InputDependenciesVerifiedTx {
         }
 
         let parameters = CheckPredicateParams::from(consensus_params);
-        let tx =
-            tokio_rayon::spawn_fifo(move || self.0.check_predicates(&parameters, memory))
-                .await?;
+        let tx = self.0.check_predicates(&parameters, memory)?;
 
         Ok(InputComputationVerifiedTx(tx))
     }
@@ -155,8 +153,11 @@ where
     let inputs_verified_tx = basically_verified_tx
         .perform_inputs_verifications(pool, consensus_params_version)?;
     let input_computation_verified_tx = inputs_verified_tx
-        .perform_input_computation_verifications(consensus_params, wasm_checker, memory)
-        .await?;
+        .perform_input_computation_verifications(
+            consensus_params,
+            wasm_checker,
+            memory,
+        )?;
     let fully_verified_tx =
         input_computation_verified_tx.perform_final_verifications(consensus_params)?;
     fully_verified_tx.into_pool_transaction(consensus_params_version)
