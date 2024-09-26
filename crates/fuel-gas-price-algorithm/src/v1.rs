@@ -401,11 +401,14 @@ impl AlgorithmUpdaterV1 {
         height_range: Range<u32>,
     ) -> Result<u128, Error> {
         let mut total: u128 = 0;
-        for height in height_range {
-            let bytes = self
+        for expected_height in height_range {
+            let (actual_height, bytes) = self
                 .unrecorded_blocks
-                .remove(&height)
-                .ok_or(Error::L2BlockExpectedNotFound(height))?;
+                .pop_first()
+                .ok_or(Error::L2BlockExpectedNotFound(expected_height))?;
+            if actual_height != expected_height {
+                return Err(Error::L2BlockExpectedNotFound(expected_height));
+            }
             total = total.saturating_add(bytes as u128);
         }
         Ok(total)
