@@ -1,4 +1,5 @@
 use crate::{
+    ports::MetadataStorage,
     GasPriceAlgorithm,
     UpdateAlgorithm,
 };
@@ -22,6 +23,7 @@ mod tests;
 
 pub mod fuel_core_storage_adapter;
 
+pub mod algorithm_updater;
 pub mod da_source_adapter;
 
 pub struct FuelGasPriceUpdater<L2, Metadata, DaBlockCosts> {
@@ -200,12 +202,6 @@ impl From<AlgorithmUpdater> for UpdaterMetadata {
     }
 }
 
-pub trait MetadataStorage: Send + Sync {
-    fn get_metadata(&self, block_height: &BlockHeight)
-        -> Result<Option<UpdaterMetadata>>;
-    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()>;
-}
-
 impl<L2, Metadata, DaBlockCosts> FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
     Metadata: MetadataStorage,
@@ -220,12 +216,13 @@ where
         exec_gas_price_change_percent: u64,
         l2_block_fullness_threshold_percent: u64,
     ) -> Result<Self> {
-        let old_metadata = metadata_storage.get_metadata(&target_block_height)?.ok_or(
-            Error::CouldNotInitUpdater(anyhow::anyhow!(
+        let old_metadata = metadata_storage
+            .get_metadata(&target_block_height)
+            .map_err(|err| Error::CouldNotInitUpdater(anyhow::anyhow!(err)))?
+            .ok_or(Error::CouldNotInitUpdater(anyhow::anyhow!(
                 "No metadata found for block height: {:?}",
                 target_block_height
-            )),
-        )?;
+            )))?;
         let inner = match old_metadata {
             UpdaterMetadata::V0(old) => {
                 let v0 = AlgorithmUpdaterV0::new(
@@ -256,8 +253,9 @@ where
     }
 
     async fn set_metadata(&mut self) -> anyhow::Result<()> {
+        let metadata = self.inner.clone().into();
         self.metadata_storage
-            .set_metadata(self.inner.clone().into())
+            .set_metadata(&metadata)
             .map_err(|err| anyhow!(err))
     }
 
@@ -310,7 +308,7 @@ impl<L2, Metadata, DaBlockCosts> UpdateAlgorithm
     for FuelGasPriceUpdater<L2, Metadata, DaBlockCosts>
 where
     L2: L2BlockSource,
-    Metadata: MetadataStorage + Send + Sync,
+    Metadata: MetadataStorage,
     DaBlockCosts: GetDaBlockCosts,
 {
     type Algorithm = Algorithm;
