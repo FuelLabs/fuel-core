@@ -1,19 +1,23 @@
 use crate::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::storage::{
-        GasPriceColumn,
-        GasPriceMetadata,
-    },
     BlockInfo,
-    Error,
     Error as GasPriceError,
+    Error,
     L2BlockSource,
-    MetadataStorage,
     Result,
     Result as GasPriceResult,
     UpdaterMetadata,
 };
 use anyhow::anyhow;
 use fuel_core_services::stream::BoxStream;
+use fuel_core_types::fuel_types::BlockHeight;
+
+use crate::{
+    fuel_gas_price_updater::fuel_core_storage_adapter::storage::{
+        GasPriceColumn,
+        GasPriceMetadata,
+    },
+    ports::MetadataStorage,
+};
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
     structured_storage::StructuredStorage,
@@ -24,8 +28,6 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageAsRef,
 };
-use fuel_core_types::fuel_types::BlockHeight;
-
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -69,11 +71,11 @@ where
         Ok(metadata.map(|inner| inner.into_owned()))
     }
 
-    fn set_metadata(&mut self, metadata: UpdaterMetadata) -> Result<()> {
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()> {
         let block_height = metadata.l2_block_height();
         let mut tx = self.write_transaction();
         tx.storage_as_mut::<GasPriceMetadata>()
-            .insert(&block_height, &metadata)
+            .insert(&block_height, metadata)
             .map_err(|err| Error::CouldNotSetMetadata {
                 block_height,
                 source_error: err.into(),
@@ -111,7 +113,7 @@ pub struct GasPriceSettings {
     pub gas_price_factor: u64,
     pub block_gas_limit: u64,
 }
-pub trait GasPriceSettingsProvider {
+pub trait GasPriceSettingsProvider: Send + Sync + Clone {
     fn settings(
         &self,
         param_version: &ConsensusParametersVersion,
