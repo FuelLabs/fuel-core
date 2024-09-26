@@ -202,7 +202,10 @@ impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for Mint {
 
 #[cfg(test)]
 mod tests {
-    use crate::ports::TemporalRegistry;
+    use crate::ports::{
+        EvictorDb,
+        TemporalRegistry,
+    };
 
     use super::*;
     use fuel_core_types::{
@@ -247,7 +250,7 @@ mod tests {
                 fn write_registry(
                     &mut self,
                     _key: RegistryKey,
-                    _value: $type,
+                    _value: &$type,
                 ) -> anyhow::Result<()> {
                     todo!()
                 }
@@ -256,6 +259,16 @@ mod tests {
                     &self,
                     _value: &$type,
                 ) -> anyhow::Result<Option<RegistryKey>> {
+                    todo!()
+                }
+            }
+
+            impl EvictorDb<$type> for MockDb {
+                fn write_latest(&mut self, _key: RegistryKey) -> anyhow::Result<()> {
+                    todo!()
+                }
+
+                fn read_latest(&mut self) -> anyhow::Result<RegistryKey> {
                     todo!()
                 }
             }

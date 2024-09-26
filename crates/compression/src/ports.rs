@@ -12,8 +12,6 @@ use fuel_core_types::{
     fuel_types::Nonce,
 };
 
-use crate::tables::RegistryKeyspace;
-
 /// Rolling cache for compression.
 /// Holds the latest state which can be event sourced from the compressed blocks.
 /// The changes done using this trait in a single call to `compress` or `decompress`
@@ -23,7 +21,7 @@ pub trait TemporalRegistry<T> {
     fn read_registry(&self, key: RegistryKey) -> anyhow::Result<T>;
 
     /// Reads a value from the registry at its current height.
-    fn write_registry(&mut self, key: RegistryKey, value: T) -> anyhow::Result<()>;
+    fn write_registry(&mut self, key: RegistryKey, value: &T) -> anyhow::Result<()>;
 
     /// Lookup registry key by the value.
     fn registry_index_lookup(&self, value: &T) -> anyhow::Result<Option<RegistryKey>>;
@@ -59,14 +57,9 @@ pub struct MessageInfo {
 }
 
 /// Temporal registry evictor state storage,
-/// currently backed by a `DaCompressionTemporalRegistryEvictor`
-/// column in the offchain database.
-pub trait EvictorDb {
-    fn read_latest(&mut self, keyspace: RegistryKeyspace) -> anyhow::Result<RegistryKey>;
-
-    fn write_latest(
-        &mut self,
-        keyspace: RegistryKeyspace,
-        key: RegistryKey,
-    ) -> anyhow::Result<()>;
+/// currently backed by a `DaCompressionTemporalRegistryEvictor*`
+/// columns in the offchain database.
+pub trait EvictorDb<T> {
+    fn read_latest(&mut self) -> anyhow::Result<RegistryKey>;
+    fn write_latest(&mut self, key: RegistryKey) -> anyhow::Result<()>;
 }

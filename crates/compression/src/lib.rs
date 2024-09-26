@@ -72,35 +72,35 @@ mod tests {
 
     fn keyspace() -> impl Strategy<Value = RegistryKeyspace> {
         prop_oneof![
-            Just(RegistryKeyspace::address),
-            Just(RegistryKeyspace::asset_id),
-            Just(RegistryKeyspace::contract_id),
-            Just(RegistryKeyspace::script_code),
-            Just(RegistryKeyspace::predicate_code),
+            Just(RegistryKeyspace::Address),
+            Just(RegistryKeyspace::AssetId),
+            Just(RegistryKeyspace::ContractId),
+            Just(RegistryKeyspace::ScriptCode),
+            Just(RegistryKeyspace::PredicateCode),
         ]
     }
 
     fn keyspace_value() -> impl Strategy<Value = RegistryKeyspaceValue> {
         (keyspace(), prop::array::uniform32(0..u8::MAX)).prop_map(|(keyspace, value)| {
             match keyspace {
-                RegistryKeyspace::address => {
-                    RegistryKeyspaceValue::address(Address::new(value))
+                RegistryKeyspace::Address => {
+                    RegistryKeyspaceValue::Address(Address::new(value))
                 }
-                RegistryKeyspace::asset_id => {
-                    RegistryKeyspaceValue::asset_id(AssetId::new(value))
+                RegistryKeyspace::AssetId => {
+                    RegistryKeyspaceValue::AssetId(AssetId::new(value))
                 }
-                RegistryKeyspace::contract_id => {
-                    RegistryKeyspaceValue::contract_id(ContractId::new(value))
+                RegistryKeyspace::ContractId => {
+                    RegistryKeyspaceValue::ContractId(ContractId::new(value))
                 }
-                RegistryKeyspace::script_code => {
+                RegistryKeyspace::ScriptCode => {
                     let len = (value[0] % 32) as usize;
-                    RegistryKeyspaceValue::script_code(ScriptCode {
+                    RegistryKeyspaceValue::ScriptCode(ScriptCode {
                         bytes: value[..len].to_vec(),
                     })
                 }
-                RegistryKeyspace::predicate_code => {
+                RegistryKeyspace::PredicateCode => {
                     let len = (value[0] % 32) as usize;
-                    RegistryKeyspaceValue::predicate_code(PredicateCode {
+                    RegistryKeyspaceValue::PredicateCode(PredicateCode {
                         bytes: value[..len].to_vec(),
                     })
                 }

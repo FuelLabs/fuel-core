@@ -32,29 +32,28 @@ use crate::{
 };
 
 macro_rules! tables {
-    ($($name:ident: $type:ty),*$(,)?) => {
+    ($($type:ty),*$(,)?) => { paste::paste! {
         #[doc = "RegistryKey namespaces"]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-        #[allow(non_camel_case_types)] // Match names in structs exactly
         pub enum RegistryKeyspace {
             $(
-                $name,
+                [<$type>],
             )*
         }
 
         #[doc = "RegistryKey namespace with an associated typed value"]
         #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-        #[allow(non_camel_case_types)] // Match names in structs exactly
         pub enum RegistryKeyspaceValue {
             $(
-                $name($type),
+                [<$type>]($type),
             )*
         }
 
         #[doc = "A value for each keyspace"]
         #[derive(Debug, Clone, Default)]
+        #[allow(non_snake_case)] // Match type names exactly
         pub struct PerRegistryKeyspace<T> {
-            $(pub $name: T,)*
+            $(pub [<$type>]: T,)*
         }
         impl<T> core::ops::Index<RegistryKeyspace> for PerRegistryKeyspace<T> {
             type Output = T;
@@ -62,7 +61,7 @@ macro_rules! tables {
             fn index(&self, index: RegistryKeyspace) -> &Self::Output {
                 match index {
                     $(
-                        RegistryKeyspace::$name => &self.$name,
+                        RegistryKeyspace::[<$type>] => &self.[<$type>],
                     )*
                 }
             }
@@ -71,7 +70,7 @@ macro_rules! tables {
             fn index_mut(&mut self, index: RegistryKeyspace) -> &mut Self::Output {
                 match index {
                     $(
-                        RegistryKeyspace::$name => &mut self.$name,
+                        RegistryKeyspace::[<$type>] => &mut self.[<$type>],
                     )*
                 }
             }
@@ -79,8 +78,9 @@ macro_rules! tables {
 
         #[doc = "Key-value mapping for each keyspace"]
         #[derive(Debug, Clone, Default)]
+        #[allow(non_snake_case)] // Match type names exactly
         pub struct PerRegistryKeyspaceMap {
-            $(pub $name: HashMap<RegistryKey, $type>,)*
+            $(pub [<$type>]: HashMap<RegistryKey, $type>,)*
         }
 
         impl PerRegistryKeyspaceMap {
@@ -88,8 +88,8 @@ macro_rules! tables {
             pub fn insert(&mut self, key: RegistryKey, value: RegistryKeyspaceValue) {
                 match value {
                     $(
-                        RegistryKeyspaceValue::$name(value) => {
-                            self.$name.insert(key, value);
+                        RegistryKeyspaceValue::[<$type>](value) => {
+                            self.[<$type>].insert(key, value);
                         }
                     )*
                 }
@@ -98,8 +98,9 @@ macro_rules! tables {
 
         #[doc = "The set of registrations for each table, as used in the compressed block header"]
         #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+        #[allow(non_snake_case)] // Match type names exactly
         pub struct RegistrationsPerTable {
-            $(pub $name: Vec<(RegistryKey, $type)>,)*
+            $(pub [<$type>]: Vec<(RegistryKey, $type)>,)*
         }
 
         impl TryFrom<PerRegistryKeyspaceMap> for RegistrationsPerTable {
@@ -108,8 +109,8 @@ macro_rules! tables {
             fn try_from(value: PerRegistryKeyspaceMap) -> Result<Self, Self::Error> {
                 let mut result = Self::default();
                 $(
-                    for (key, value) in value.$name.into_iter() {
-                        result.$name.push((key, value));
+                    for (key, value) in value.[<$type>].into_iter() {
+                        result.[<$type>].push((key, value));
                     }
                 )*
                 Ok(result)
@@ -118,18 +119,20 @@ macro_rules! tables {
 
         pub trait TemporalRegistryAll: Sized $(
             + TemporalRegistry<$type>
+            + EvictorDb<$type>
         )* {}
 
         impl<T> TemporalRegistryAll for T where T: Sized $(
             + TemporalRegistry<$type>
+            + EvictorDb<$type>
         )* {}
 
 
         impl RegistrationsPerTable {
             pub(crate) fn write_to_registry<R: TemporalRegistryAll>(&self, registry: &mut R) -> anyhow::Result<()> {
                 $(
-                    for (key, value) in self.$name.iter() {
-                        registry.write_registry(*key, value.clone())?;
+                    for (key, value) in self.[<$type>].iter() {
+                        registry.write_registry(*key, value)?;
                     }
                 )*
 
@@ -147,13 +150,13 @@ macro_rules! tables {
                         return Ok(RegistryKey::ZERO);
                     }
                     if let Some(found) = ctx.db.registry_index_lookup(self)? {
-                        ctx.accessed_keys[RegistryKeyspace::$name].insert(found);
+                        ctx.accessed_keys[RegistryKeyspace::[<$type>]].insert(found);
                     }
                     Ok(RegistryKey::ZERO)
                 }
             }
 
-            impl<D: CompressDb + EvictorDb> CompressibleBy<CompressCtx<D>> for $type {
+            impl<D: CompressDb> CompressibleBy<CompressCtx<D>> for $type {
                 async fn compress_with(
                     &self,
                     ctx: &mut CompressCtx<D>,
@@ -165,8 +168,8 @@ macro_rules! tables {
                         return Ok(found);
                     }
 
-                    let key = ctx.cache_evictor.next_key(&mut ctx.db, RegistryKeyspace::$name)?;
-                    let old = ctx.changes.$name.insert(key, self.clone());
+                    let key = ctx.cache_evictor.[< next_key_ $type >](&mut ctx.db)?;
+                    let old = ctx.changes.[<$type>].insert(key, self.clone());
                     assert!(old.is_none(), "Key collision in registry substitution");
                     Ok(key)
                 }
@@ -184,27 +187,21 @@ macro_rules! tables {
                 }
             }
         )*
-    };
+    }};
 }
 
-tables!(
-    address: Address,
-    asset_id: AssetId,
-    contract_id: ContractId,
-    script_code: ScriptCode,
-    predicate_code: PredicateCode,
-);
+tables!(Address, AssetId, ContractId, ScriptCode, PredicateCode,);
 
 // TODO: move inside the macro when this stabilizes: https://github.com/rust-lang/rust/pull/122808
 #[cfg(any(test, feature = "test-helpers"))]
 impl rand::prelude::Distribution<RegistryKeyspace> for rand::distributions::Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> RegistryKeyspace {
         match rng.gen_range(0..5) {
-            0 => RegistryKeyspace::address,
-            1 => RegistryKeyspace::asset_id,
-            2 => RegistryKeyspace::contract_id,
-            3 => RegistryKeyspace::script_code,
-            _ => RegistryKeyspace::predicate_code,
+            0 => RegistryKeyspace::Address,
+            1 => RegistryKeyspace::AssetId,
+            2 => RegistryKeyspace::ContractId,
+            3 => RegistryKeyspace::ScriptCode,
+            _ => RegistryKeyspace::PredicateCode,
         }
     }
 }

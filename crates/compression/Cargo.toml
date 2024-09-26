@@ -23,6 +23,7 @@ fuel-core-types = { workspace = true, features = [
   "serde",
   "da-compression",
 ] }
+paste = "1"
 postcard = { version = "1.0", features = ["use-std"] }
 rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }

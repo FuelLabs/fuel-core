@@ -278,12 +278,7 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
-            da_compression::{
-                DaCompressedBlocks,
-                DaCompressionTemporalRegistry,
-                DaCompressionTemporalRegistryEvictor,
-                DaCompressionTemporalRegistryIndex,
-            },
+            da_compression::*,
             old::{
                 OldFuelBlockConsensus,
                 OldFuelBlocks,
@@ -327,8 +322,7 @@ pub mod worker {
         fn transaction(&mut self) -> Self::Transaction<'_>;
     }
 
-    pub trait OffChainDatabaseTransaction:
-        StorageMutate<OwnedMessageIds, Error = StorageError>
+    pub trait OffChainDatabaseTransaction: StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
@@ -338,9 +332,30 @@ pub mod worker {
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistry, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryEvictor, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryIndexAddress, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryEvictorAddress, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryIndexAssetId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryEvictorAssetId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryContractId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryIndexContractId, Error = StorageError>
+        + StorageMutate<
+            DaCompressionTemporalRegistryEvictorContractId,
+            Error = StorageError,
+        > + StorageMutate<DaCompressionTemporalRegistryScriptCode, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryIndexScriptCode, Error = StorageError>
+        + StorageMutate<
+            DaCompressionTemporalRegistryEvictorScriptCode,
+            Error = StorageError,
+        > + StorageMutate<DaCompressionTemporalRegistryPredicateCode, Error = StorageError>
+        + StorageMutate<
+            DaCompressionTemporalRegistryIndexPredicateCode,
+            Error = StorageError,
+        > + StorageMutate<
+            DaCompressionTemporalRegistryEvictorPredicateCode,
+            Error = StorageError,
+        >
     {
         fn record_tx_id_owner(
             &mut self,
