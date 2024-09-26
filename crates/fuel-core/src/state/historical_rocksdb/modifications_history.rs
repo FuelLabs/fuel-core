@@ -14,25 +14,17 @@ use fuel_core_storage::{
     Mappable,
 };
 
-/// ModificationsHystory. The `const N: usize` generic parameter
-/// is used to specify different versions of the modification history.
-/// This allows to define different layout implementations for different
-/// versions of the storage history (e.g. by defining different TableWithBlueprint
+/// Versioned modification hitory. The `const N: usize` generic parameter
+/// is used to specify the version.
+/// This allows to define different [`TableWithBlueprint`]
 /// implementations for V1 and V2 of the modification history.
-/// The [`ModificationHistoryVersion`]` struct is private. This forces reads and writes
-/// to the modification history to go through the [`ModificationHistory`] struct,
-/// for which storage inspection and mutation primitives are defined via the [`VersionedStorage`].
 pub struct ModificationsHistoryVersion<Description, const N: usize>(
     core::marker::PhantomData<Description>,
 )
 where
     Description: DatabaseDescription;
 
-pub struct ModificationsHistory<Description>(core::marker::PhantomData<Description>)
-where
-    Description: DatabaseDescription;
-
-/// ModificationsHistory Key-value pairs.
+/// [`ModificationsHistoryVersion`] keys and values for all versions.
 impl<Description, const N: usize> Mappable for ModificationsHistoryVersion<Description, N>
 where
     Description: DatabaseDescription,
@@ -45,20 +37,7 @@ where
     type OwnedValue = Self::Value;
 }
 
-/// ModificationsHistory Key-value pairs.
-impl<Description> Mappable for ModificationsHistory<Description>
-where
-    Description: DatabaseDescription,
-{
-    /// The height of the modifications.
-    type Key = u64;
-    type OwnedKey = Self::Key;
-    /// Reverse modification at the corresponding height.
-    type Value = Changes;
-    type OwnedValue = Self::Value;
-}
-
-/// Blueprint for Modifications History V1. Keys are stored in little endian
+/// Blueprint for Modifications History V1. Keys are stored in little endian order
 /// using the `Column::HistoryColumn` column family.
 impl<Description> TableWithBlueprint for ModificationsHistoryVersion<Description, 0>
 where
@@ -73,7 +52,7 @@ where
     }
 }
 
-/// Blueprint for Modificaations History V2. Keys are stored in little endian
+/// Blueprint for Modifications History V2. Keys are stored in big endian order
 /// using the `Column::HistoryColumnV2` column family.
 impl<Description> TableWithBlueprint for ModificationsHistoryVersion<Description, 1>
 where
