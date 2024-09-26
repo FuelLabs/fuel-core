@@ -29,9 +29,9 @@ rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
+postcard = { version = "1.0", features = ["use-std"] }
 proptest = { workspace = true }
 tokio = { workspace = true }
-postcard = { version = "1.0", features = ["use-std"] }
 
 [features]
 test-helpers = [
