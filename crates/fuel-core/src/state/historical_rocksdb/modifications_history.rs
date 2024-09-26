@@ -14,7 +14,7 @@ use fuel_core_storage::{
     Mappable,
 };
 
-/// Versioned modification hitory. The `const N: usize` generic parameter
+/// Versioned modification history. The `const N: usize` generic parameter
 /// is used to specify the version.
 /// This allows to define different [`TableWithBlueprint`]
 /// implementations for V1 and V2 of the modification history.
