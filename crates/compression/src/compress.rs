@@ -59,8 +59,7 @@ pub async fn compress<D: CompressDb>(db: D, block: &Block) -> Result<Vec<u8>, Er
         changes: Default::default(),
     };
     let transactions = target.compress_with(&mut ctx).await?;
-    let registrations = ctx.changes;
-    let registrations = RegistrationsPerTable::try_from(registrations)?;
+    let registrations: RegistrationsPerTable = ctx.changes.into();
 
     // Apply changes to the db
     registrations.write_to_registry(&mut ctx.db)?;

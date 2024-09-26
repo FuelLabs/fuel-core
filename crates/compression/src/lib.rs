@@ -127,7 +127,7 @@ mod tests {
                 }
             };
             let original = CompressedBlockPayloadV0 {
-                registrations: RegistrationsPerTable::try_from(registrations).unwrap(),
+                registrations: RegistrationsPerTable::from(registrations),
                 registrations_root: registrations_root.into(),
                 header,
                 transactions: vec![],

@@ -82,17 +82,15 @@ macro_rules! tables {
             $(pub [<$type>]: Vec<(RegistryKey, $type)>,)*
         }
 
-        impl TryFrom<PerRegistryKeyspaceMap> for RegistrationsPerTable {
-            type Error = anyhow::Error;
-
-            fn try_from(value: PerRegistryKeyspaceMap) -> Result<Self, Self::Error> {
+        impl From<PerRegistryKeyspaceMap> for RegistrationsPerTable {
+            fn from(value: PerRegistryKeyspaceMap) -> Self {
                 let mut result = Self::default();
                 $(
                     for (key, value) in value.[<$type>].into_iter() {
                         result.[<$type>].push((key, value));
                     }
                 )*
-                Ok(result)
+                result
             }
         }
 
