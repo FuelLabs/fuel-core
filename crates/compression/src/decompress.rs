@@ -38,17 +38,6 @@ use fuel_core_types::{
     },
 };
 
-#[derive(Debug, thiserror::Error)]
-pub enum DecompressError {
-    #[error("Only the next sequential block can be decompressed")]
-    NotLatest,
-    #[error("Deserialization error: {0} (possibly unknown version)")]
-    Postcard(#[from] postcard::Error),
-    /// Other errors
-    #[error("Unknown error: {0}")]
-    Other(#[from] anyhow::Error),
-}
-
 pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
 impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 
@@ -56,7 +45,7 @@ impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 pub async fn decompress<D: DecompressDb + TemporalRegistryAll>(
     mut db: D,
     block: Vec<u8>,
-) -> Result<PartialFuelBlock, DecompressError> {
+) -> anyhow::Result<PartialFuelBlock> {
     let compressed: CompressedBlock = postcard::from_bytes(&block)?;
     let CompressedBlock::V0(compressed) = compressed;
 
@@ -100,15 +89,15 @@ pub struct DecompressCtx<D> {
 }
 
 impl<D: DecompressDb> ContextError for DecompressCtx<D> {
-    type Error = DecompressError;
+    type Error = anyhow::Error;
 }
 
 impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for UtxoId {
     async fn decompress_with(
         c: CompressedUtxoId,
         ctx: &DecompressCtx<D>,
-    ) -> Result<Self, DecompressError> {
-        Ok(ctx.db.utxo_id(c)?)
+    ) -> anyhow::Result<Self> {
+        ctx.db.utxo_id(c)
     }
 }
 
@@ -124,7 +113,7 @@ where
     async fn decompress_with(
         c: <Coin<Specification> as Compressible>::Compressed,
         ctx: &DecompressCtx<D>,
-    ) -> Result<Coin<Specification>, DecompressError> {
+    ) -> anyhow::Result<Coin<Specification>> {
         let utxo_id = UtxoId::decompress_with(c.utxo_id, ctx).await?;
         let coin_info = ctx.db.coin(utxo_id)?;
         let witness_index = c.witness_index.decompress(ctx).await?;
@@ -158,7 +147,7 @@ where
     async fn decompress_with(
         c: <Message<Specification> as Compressible>::Compressed,
         ctx: &DecompressCtx<D>,
-    ) -> Result<Message<Specification>, DecompressError> {
+    ) -> anyhow::Result<Message<Specification>> {
         let msg = ctx.db.message(c.nonce)?;
         let witness_index = c.witness_index.decompress(ctx).await?;
         let predicate_gas_used = c.predicate_gas_used.decompress(ctx).await?;
@@ -188,7 +177,7 @@ impl<D: DecompressDb> DecompressibleBy<DecompressCtx<D>> for Mint {
     async fn decompress_with(
         c: Self::Compressed,
         ctx: &DecompressCtx<D>,
-    ) -> Result<Self, DecompressError> {
+    ) -> anyhow::Result<Self> {
         Ok(Transaction::mint(
             Default::default(), // TODO: what should this we do with this?
             c.input_contract.decompress(ctx).await?,
@@ -294,7 +283,8 @@ mod tests {
             postcard::to_stdvec(&CompressedBlockWithNewVersions::NewVersion(1234))
                 .unwrap();
 
-        let result = decompress(MockDb, block).await;
-        assert!(matches!(result, Err(DecompressError::Postcard(_))));
+        decompress(MockDb, block)
+            .await
+            .expect_err("Decompression should fail gracefully");
     }
 }

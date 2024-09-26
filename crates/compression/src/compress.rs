@@ -28,19 +28,11 @@ use fuel_core_types::{
     },
 };
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("Only the next sequential block can be compressed")]
-    NotLatest,
-    #[error("Unknown compression error")]
-    Other(#[from] anyhow::Error),
-}
-
 pub trait CompressDb: TemporalRegistryAll + UtxoIdToPointer {}
 impl<T> CompressDb for T where T: TemporalRegistryAll + UtxoIdToPointer {}
 
 /// This must be called for all new blocks in sequence, otherwise the result will be garbage.
-pub async fn compress<D: CompressDb>(db: D, block: &Block) -> Result<Vec<u8>, Error> {
+pub async fn compress<D: CompressDb>(db: D, block: &Block) -> anyhow::Result<Vec<u8>> {
     let target = block.transactions().to_vec();
 
     let mut prepare_ctx = PrepareCtx {

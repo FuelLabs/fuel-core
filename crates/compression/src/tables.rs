@@ -23,7 +23,6 @@ use crate::{
     decompress::{
         DecompressCtx,
         DecompressDb,
-        DecompressError,
     },
     ports::{
         EvictorDb,
@@ -156,11 +155,11 @@ macro_rules! tables {
                 async fn decompress_with(
                     key: RegistryKey,
                     ctx: &DecompressCtx<D>,
-                ) -> Result<Self, DecompressError> {
+                ) -> anyhow::Result<Self> {
                     if key == RegistryKey::DEFAULT_VALUE {
                         return Ok(<$type>::default());
                     }
-                    Ok(ctx.db.read_registry(key)?)
+                    ctx.db.read_registry(key)
                 }
             }
         )*

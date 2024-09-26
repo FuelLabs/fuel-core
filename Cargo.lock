@@ -3368,7 +3368,6 @@ dependencies = [
  "proptest",
  "rand",
  "serde",
- "thiserror",
  "tokio",
 ]
 
