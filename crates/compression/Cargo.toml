@@ -26,7 +26,7 @@ fuel-core-types = { workspace = true, features = [
 paste = "1"
 rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
-strum = { workspace = true, optional = true }
+strum = { workspace = true }
 strum_macros = { workspace = true }
 
 [dev-dependencies]
@@ -38,7 +38,6 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 [features]
 test-helpers = [
   "dep:rand",
-  "dep:strum",
   "fuel-core-types/test-helpers",
   "fuel-core-types/random",
   "fuel-core-types/std",
