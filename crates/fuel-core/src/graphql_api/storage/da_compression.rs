@@ -1,7 +1,6 @@
 use crate::fuel_core_graphql_api::storage::da_compression::{
     metadata_key::MetadataKey,
     predicate_code_codec::PredicateCodeCodec,
-    registry_key_codec::RegistryKeyCodec,
     reverse_key::ReverseKey,
     script_code_codec::ScriptCodeCodec,
 };
@@ -30,7 +29,6 @@ use fuel_core_types::{
 
 pub mod metadata_key;
 pub mod predicate_code_codec;
-pub mod registry_key_codec;
 pub mod reverse_key;
 pub mod script_code_codec;
 
@@ -64,7 +62,8 @@ impl Mappable for DaCompressionTemporalRegistryIndex {
 }
 
 impl TableWithBlueprint for DaCompressionTemporalRegistryIndex {
-    type Blueprint = Plain<Postcard, RegistryKeyCodec>;
+    // TODO: Use Raw codec for value instead of Postcard
+    type Blueprint = Plain<Postcard, Postcard>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -85,7 +84,8 @@ impl Mappable for DaCompressionTemporalRegistryMetadata {
 }
 
 impl TableWithBlueprint for DaCompressionTemporalRegistryMetadata {
-    type Blueprint = Plain<Postcard, RegistryKeyCodec>;
+    // TODO: Use Raw codec for value instead of Postcard
+    type Blueprint = Plain<Postcard, Postcard>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -106,7 +106,8 @@ macro_rules! temporal_registry {
             }
 
             impl TableWithBlueprint for [< DaCompressionTemporalRegistry $type >] {
-                type Blueprint = Plain<RegistryKeyCodec, $code>;
+                // TODO: Use Raw codec for value instead of Postcard
+                type Blueprint = Plain<Postcard, $code>;
                 type Column = super::Column;
 
                 fn column() -> Self::Column {
