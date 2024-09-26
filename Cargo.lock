@@ -3754,7 +3754,6 @@ dependencies = [
  "petgraph",
  "rayon",
  "tokio",
- "tokio-rayon",
  "tracing",
 ]
 
