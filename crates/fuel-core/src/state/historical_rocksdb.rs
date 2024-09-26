@@ -395,6 +395,9 @@ fn multiversion_take<Description>(
 where
     Description: DatabaseDescription,
 {
+    // This will cause the V2 key to be removed in case the storage transaction snapshot 
+    // a conflicting transaction writes a value for it, but that update is not reflected 
+    // in the storage transaction snapshot.
     let v2_last_changes = storage_transaction
         .storage_as_mut::<ModificationsHistoryV2<Description>>()
         .take(&height)?;
