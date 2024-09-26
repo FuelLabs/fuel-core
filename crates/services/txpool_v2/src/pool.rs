@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::Instant,
+};
 
 use fuel_core_types::{
     fuel_tx::{
@@ -98,6 +101,7 @@ where
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
         let tx_id = tx.id();
         let gas = tx.max_gas();
+        let creation_instant = Instant::now();
         let bytes_size = tx.metered_bytes_size();
         self.config
             .black_list
@@ -131,7 +135,9 @@ where
                     .remove_transaction_and_dependents_subtree(*collision)?,
             );
         }
-        let storage_id = self.storage.store_transaction(tx, dependencies)?;
+        let storage_id =
+            self.storage
+                .store_transaction(tx, creation_instant, dependencies)?;
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
         self.current_gas = self.current_gas.saturating_add(gas);
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
@@ -140,10 +146,15 @@ where
             self.selection_algorithm
                 .new_executable_transactions(vec![storage_id], &self.storage)?;
         }
-        self.update_components_and_caches_on_removal(&removed_transactions)?;
+        self.update_components_and_caches_on_removal(removed_transactions.iter())?;
         let tx = Storage::get(&self.storage, &storage_id)?;
         self.collision_manager
             .on_stored_transaction(&tx.transaction, storage_id)?;
+        self.selection_algorithm.on_stored_transaction(
+            &tx.transaction,
+            creation_instant,
+            storage_id,
+        )?;
         Ok(removed_transactions)
     }
 
@@ -189,21 +200,19 @@ where
         &mut self,
         max_gas: u64,
     ) -> Result<Vec<ArcPoolTx>, Error> {
-        self.selection_algorithm
+        let extracted_transactions = self
+            .selection_algorithm
             .gather_best_txs(Constraints { max_gas }, &self.storage)?
             .into_iter()
             .map(|storage_id| {
                 let transaction = self
                     .storage
                     .remove_transaction_without_dependencies(storage_id)?;
-                self.collision_manager
-                    .on_removed_transaction(&transaction)?;
-                self.selection_algorithm
-                    .on_removed_transaction(&transaction)?;
-                self.tx_id_to_storage_id.remove(&transaction.id());
                 Ok(transaction)
             })
-            .collect()
+            .collect::<Result<Vec<ArcPoolTx>, Error>>()?;
+        self.update_components_and_caches_on_removal(extracted_transactions.iter())?;
+        Ok(extracted_transactions)
     }
 
     pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
@@ -231,7 +240,7 @@ where
                     .remove_transaction_without_dependencies(storage_id)?;
                 self.selection_algorithm
                     .new_executable_transactions(dependents, &self.storage)?;
-                self.update_components_and_caches_on_removal(&[transaction])?;
+                self.update_components_and_caches_on_removal([transaction].iter())?;
             }
         }
         Ok(())
@@ -248,7 +257,7 @@ where
                 let removed = self
                     .storage
                     .remove_transaction_and_dependents_subtree(storage_id)?;
-                self.update_components_and_caches_on_removal(&removed)?;
+                self.update_components_and_caches_on_removal(removed.iter())?;
                 removed_transactions.extend(removed);
             }
         }
@@ -308,10 +317,7 @@ where
         // Here the transaction has no dependencies which means that it's an executable transaction
         // and we want to make space for it
         let current_ratio = Ratio::new(tx.tip(), tx_gas);
-        let mut sorted_txs = self
-            .storage
-            .get_worst_ratio_tip_gas_subtree_roots()?
-            .into_iter();
+        let mut sorted_txs = self.selection_algorithm.get_less_worth_txs();
         while gas_left > self.config.pool_limits.max_gas
             || bytes_left > self.config.pool_limits.max_bytes_size
             || txs_left > self.config.pool_limits.max_txs
@@ -346,15 +352,15 @@ where
             {
                 return Err(Error::InputValidation(
                     InputValidationError::NotInsertedBlobIdAlreadyTaken(*blob_id),
-                ))
+                ));
             }
         }
         Ok(())
     }
 
-    fn update_components_and_caches_on_removal(
+    fn update_components_and_caches_on_removal<'a>(
         &mut self,
-        removed_transactions: &[ArcPoolTx],
+        removed_transactions: impl Iterator<Item = &'a ArcPoolTx>,
     ) -> Result<(), Error> {
         for tx in removed_transactions {
             self.collision_manager.on_removed_transaction(tx)?;
