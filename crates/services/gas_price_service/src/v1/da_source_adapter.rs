@@ -1,12 +1,10 @@
-use crate::fuel_gas_price_updater::{
-    da_source_adapter::service::{
+use crate::{
+    common::utils::Result as GasPriceResult,
+    v1::da_source_adapter::service::{
         new_service,
         DaBlockCostsService,
         DaBlockCostsSource,
     },
-    DaBlockCosts,
-    GetDaBlockCosts,
-    Result as GasPriceUpdaterResult,
 };
 use fuel_core_services::ServiceRunner;
 use std::{
@@ -23,6 +21,17 @@ pub mod dummy_costs;
 pub mod service;
 
 pub const POLLING_INTERVAL_MS: u64 = 10_000;
+
+#[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
+pub struct DaBlockCosts {
+    pub l2_block_range: core::ops::Range<u32>,
+    pub blob_size_bytes: u32,
+    pub blob_cost_wei: u128,
+}
+
+pub trait GetDaBlockCosts: Send + Sync {
+    fn get(&self) -> GasPriceResult<Option<DaBlockCosts>>;
+}
 
 #[derive(Clone)]
 pub struct DaBlockCostsSharedState {
@@ -59,7 +68,7 @@ where
 }
 
 impl GetDaBlockCosts for DaBlockCostsSharedState {
-    fn get(&self) -> GasPriceUpdaterResult<Option<DaBlockCosts>> {
+    fn get(&self) -> GasPriceResult<Option<DaBlockCosts>> {
         if let Ok(mut guard) = self.inner.try_lock() {
             if let Ok(da_block_costs) = guard.try_recv() {
                 return Ok(Some(da_block_costs));
@@ -73,7 +82,7 @@ impl GetDaBlockCosts for DaBlockCostsSharedState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fuel_gas_price_updater::da_source_adapter::dummy_costs::DummyDaBlockCosts;
+    use crate::v1::da_source_adapter::dummy_costs::DummyDaBlockCosts;
     use fuel_core_services::Service;
     use std::time::Duration;
     use tokio::time::sleep;

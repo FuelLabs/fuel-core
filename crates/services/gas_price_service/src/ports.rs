@@ -1,6 +1,6 @@
-use crate::fuel_gas_price_updater::{
-    Result,
-    UpdaterMetadata,
+use crate::common::{
+    updater_metadata::UpdaterMetadata,
+    utils::Result,
 };
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
