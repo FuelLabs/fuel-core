@@ -213,12 +213,9 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     };
     let (commit_block_header, _) = commit_block_header.into_inner();
 
-    let block_height = *commit_block_header.height();
-    if block_height == 0u32.into() {
+    let Some(verifiable_commit_block_height) = commit_block_header.height().pred() else {
         return Err(anyhow::anyhow!("can not look beyond the genesis block").into())
-    }
-    let verifiable_commit_block_height =
-        block_height.pred().expect("We checked the height above");
+    };
     let block_proof = database.block_history_proof(
         message_block_header.height(),
         &verifiable_commit_block_height,
