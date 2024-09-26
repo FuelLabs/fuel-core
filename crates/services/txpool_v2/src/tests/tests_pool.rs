@@ -6,8 +6,11 @@ use crate::{
         PoolLimits,
     },
     error::{
+        BlacklistedError,
         CollisionReason,
+        DependencyError,
         Error,
+        InputValidationError,
     },
     ports::WasmValidityError,
     tests::{
@@ -90,7 +93,9 @@ async fn insert__tx_with_blacklisted_utxo_id() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::BlacklistedUTXO(id) if id == utxo_id));
+    assert!(
+        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedUTXO(id)) if id == utxo_id)
+    );
 }
 
 #[tokio::test]
@@ -108,7 +113,9 @@ async fn insert__tx_with_blacklisted_owner() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::BlacklistedOwner(id) if id == owner_addr));
+    assert!(
+        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedOwner(id)) if id == owner_addr)
+    );
 }
 
 #[tokio::test]
@@ -137,7 +144,9 @@ async fn insert__tx_with_blacklisted_contract() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::BlacklistedContract(id) if id == contract_id));
+    assert!(
+        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedContract(id)) if id == contract_id)
+    );
 }
 
 #[tokio::test]
@@ -155,7 +164,9 @@ async fn insert__tx_with_blacklisted_message() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::BlacklistedMessage(id) if id == nonce));
+    assert!(
+        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedMessage(id)) if id == nonce)
+    );
 }
 
 #[tokio::test]
@@ -265,8 +276,11 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
     // Then
     assert!(result1.is_ok());
     let err = result2.unwrap_err();
+    dbg!(&err);
 
-    assert!(matches!(err, Error::UtxoNotFound(id) if id == utxo_id));
+    assert!(
+        matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
+    );
 }
 
 #[tokio::test]
@@ -305,7 +319,9 @@ async fn insert__unknown_utxo() {
 
     // Then
     let err = result.unwrap_err();
-    assert!(matches!(err, Error::UtxoNotFound(id) if id == utxo_id));
+    assert!(
+        matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
+    );
 }
 
 #[tokio::test]
@@ -592,7 +608,10 @@ async fn insert__dependency_chain_length_hit() {
     assert!(result1.is_ok());
     assert!(result2.is_ok());
     let err = result3.unwrap_err();
-    assert!(matches!(err, Error::NotInsertedChainDependencyTooBig));
+    assert!(matches!(
+        err,
+        Error::Dependency(DependencyError::NotInsertedChainDependencyTooBig)
+    ));
 }
 
 #[tokio::test]
@@ -844,7 +863,7 @@ async fn insert__tx_when_input_message_id_do_not_exists_in_db() {
     // Then
     assert!(matches!(
         err,
-        Error::NotInsertedInputMessageUnknown(msg_id) if msg_id == *message.id()
+        Error::InputValidation(InputValidationError::NotInsertedInputMessageUnknown(msg_id)) if msg_id == *message.id()
     ));
 }
 
@@ -1179,7 +1198,7 @@ async fn insert__tx_blob_already_in_db() {
     // Then
     assert!(matches!(
         err,
-        Error::NotInsertedBlobIdAlreadyTaken(b) if b == blob_id
+        Error::InputValidation(InputValidationError::NotInsertedBlobIdAlreadyTaken(b)) if b == blob_id
     ));
 }
 
@@ -1210,7 +1229,10 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     let err = universe.verify_and_insert(tx3).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::NotInsertedCollisionIsDependency));
+    assert!(matches!(
+        err,
+        Error::Dependency(DependencyError::NotInsertedCollisionIsDependency)
+    ));
 }
 
 #[tokio::test]

@@ -197,7 +197,7 @@ fn verify_tx_min_gas_price(
             let (_, checked) = ready.decompose();
             CheckedTransaction::Blob(checked)
         }
-        CheckedTransaction::Mint(_) => return Err(Error::NotSupportedTransactionType),
+        CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
     };
     Ok(read)
 }

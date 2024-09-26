@@ -40,7 +40,9 @@ use crate::{
     collision_manager::basic::BasicCollisionManagerStorage,
     error::{
         CollisionReason,
+        DependencyError,
         Error,
+        InputValidationError,
     },
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
@@ -228,24 +230,40 @@ impl GraphStorage {
                     asset_id,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner);
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongOwner,
+                        ));
                     }
                     if amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount);
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAmount,
+                        ));
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId);
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAssetId,
+                        ));
                     }
                 }
-                Output::Contract(_) => return Err(Error::NotInsertedIoContractOutput),
+                Output::Contract(_) => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
+                }
                 Output::Change { .. } => {
-                    return Err(Error::NotInsertedInputDependentOnChangeOrVariable)
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
                 }
                 Output::Variable { .. } => {
-                    return Err(Error::NotInsertedInputDependentOnChangeOrVariable)
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
                 }
                 Output::ContractCreated { .. } => {
-                    return Err(Error::NotInsertedIoContractOutput)
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
                 }
             };
         }
@@ -262,10 +280,10 @@ impl GraphStorage {
     ) -> Result<(), Error> {
         for (index, output) in outputs.iter().enumerate() {
             let index = u16::try_from(index).map_err(|_| {
-                Error::WrongOutputNumber(format!(
-                    "The number of outputs in `{}` is more than `u8::max`",
+                Error::InputValidation(InputValidationError::WrongOutputNumber(format!(
+                    "The number of outputs in `{}` is more than `u16::max`",
                     tx_id
-                ))
+                )))
             })?;
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
@@ -285,10 +303,10 @@ impl GraphStorage {
     fn clear_cache(&mut self, outputs: &[Output], tx_id: &TxId) -> Result<(), Error> {
         for (index, output) in outputs.iter().enumerate() {
             let index = u16::try_from(index).map_err(|_| {
-                Error::WrongOutputNumber(format!(
+                Error::InputValidation(InputValidationError::WrongOutputNumber(format!(
                     "The number of outputs in `{}` is more than `u16::max`",
                     tx_id
-                ))
+                )))
             })?;
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
@@ -305,12 +323,10 @@ impl GraphStorage {
     }
 
     fn get_inner(&self, index: &NodeIndex) -> Result<&StorageData, Error> {
-        self.graph
-            .node_weight(*index)
-            .ok_or(Error::TransactionNotFound(format!(
-                "Transaction with index {:?} not found",
-                index
-            )))
+        self.graph.node_weight(*index).ok_or(Error::Storage(format!(
+            "Transaction with index {:?} not found",
+            index
+        )))
     }
 
     fn get_dependents_inner(
@@ -374,14 +390,18 @@ impl Storage for GraphStorage {
                 )));
             };
             if dependency_node.number_txs_in_chain >= self.config.max_txs_chain_count {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
             all_dependencies_recursively.insert(node_id);
             to_check.extend(self.get_dependencies(node_id)?);
         }
 
         if all_dependencies_recursively.len() >= self.config.max_txs_chain_count {
-            return Err(Error::NotInsertedChainDependencyTooBig);
+            return Err(Error::Dependency(
+                DependencyError::NotInsertedChainDependencyTooBig,
+            ));
         }
 
         let node = StorageData {
@@ -426,7 +446,9 @@ impl Storage for GraphStorage {
     ) -> Result<(), Error> {
         for collision in colliding_transactions.keys() {
             if self.is_in_dependencies_subtrees(*collision, dependencies)? {
-                return Err(Error::NotInsertedCollisionIsDependency);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedCollisionIsDependency,
+                ));
             }
         }
         for node_id in dependencies.iter() {
@@ -437,7 +459,9 @@ impl Storage for GraphStorage {
                 )));
             };
             if dependency_node.number_txs_in_chain >= self.config.max_txs_chain_count {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
         }
         Ok(())
@@ -513,10 +537,14 @@ impl Storage for GraphStorage {
                             .utxo(utxo_id)
                             .map_err(|e| Error::Database(format!("{:?}", e)))?
                         else {
-                            return Err(Error::UtxoNotFound(*utxo_id));
+                            return Err(Error::InputValidation(
+                                InputValidationError::UtxoNotFound(*utxo_id),
+                            ));
                         };
                         if !coin.matches_input(input).expect("The input is coin above") {
-                            return Err(Error::NotInsertedIoCoinMismatch);
+                            return Err(Error::InputValidation(
+                                InputValidationError::NotInsertedIoCoinMismatch,
+                            ));
                         }
                     }
                 }
@@ -536,10 +564,16 @@ impl Storage for GraphStorage {
                                 .matches_input(input)
                                 .expect("Input is a message above")
                             {
-                                return Err(Error::NotInsertedIoMessageMismatch);
+                                return Err(Error::InputValidation(
+                                    InputValidationError::NotInsertedIoMessageMismatch,
+                                ));
                             }
                         } else {
-                            return Err(Error::NotInsertedInputMessageUnknown(*nonce));
+                            return Err(Error::InputValidation(
+                                InputValidationError::NotInsertedInputMessageUnknown(
+                                    *nonce,
+                                ),
+                            ));
                         }
                     }
                 }
@@ -549,8 +583,10 @@ impl Storage for GraphStorage {
                             .contract_exist(contract_id)
                             .map_err(|e| Error::Database(format!("{:?}", e)))?
                     {
-                        return Err(Error::NotInsertedInputContractDoesNotExist(
-                            *contract_id,
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedInputContractDoesNotExist(
+                                *contract_id,
+                            ),
                         ));
                     }
                 }
@@ -597,7 +633,7 @@ impl Storage for GraphStorage {
         self.reduce_dependents_chain_count(index, 1, &mut already_visited)?;
         self.graph
             .remove_node(index)
-            .ok_or(Error::TransactionNotFound(format!(
+            .ok_or(Error::Storage(format!(
                 "Transaction with index {:?} not found",
                 index
             )))

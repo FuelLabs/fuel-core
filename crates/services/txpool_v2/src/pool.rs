@@ -19,6 +19,7 @@ use crate::{
     error::{
         CollisionReason,
         Error,
+        InputValidationError,
     },
     ports::{
         AtomicView,
@@ -98,7 +99,10 @@ where
         let tx_id = tx.id();
         let gas = tx.max_gas();
         let bytes_size = tx.metered_bytes_size();
-        self.config.black_list.check_blacklisting(&tx)?;
+        self.config
+            .black_list
+            .check_blacklisting(&tx)
+            .map_err(Error::Blacklisted)?;
         Self::check_blob_does_not_exist(&tx, &latest_view)?;
         self.storage
             .validate_inputs(&tx, &latest_view, self.config.utxo_validation)?;
@@ -149,7 +153,10 @@ where
             .persistent_storage_provider
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
-        self.config.black_list.check_blacklisting(tx)?;
+        self.config
+            .black_list
+            .check_blacklisting(tx)
+            .map_err(Error::Blacklisted)?;
         Self::check_blob_does_not_exist(tx, &persistent_storage)?;
         let colliding_transaction =
             self.collision_manager.collect_colliding_transactions(tx)?;
@@ -337,7 +344,9 @@ where
                 .blob_exist(blob_id)
                 .map_err(|e| Error::Database(format!("{:?}", e)))?
             {
-                return Err(Error::NotInsertedBlobIdAlreadyTaken(*blob_id))
+                return Err(Error::InputValidation(
+                    InputValidationError::NotInsertedBlobIdAlreadyTaken(*blob_id),
+                ))
             }
         }
         Ok(())

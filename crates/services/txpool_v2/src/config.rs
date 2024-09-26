@@ -26,7 +26,7 @@ use fuel_core_types::{
     services::txpool::PoolTransaction,
 };
 
-use crate::error::Error;
+use crate::error::BlacklistedError;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct BlackList {
@@ -57,21 +57,26 @@ impl BlackList {
     }
 
     /// Check if the transaction has blacklisted inputs.
-    pub fn check_blacklisting(&self, tx: &PoolTransaction) -> Result<(), Error> {
+    pub fn check_blacklisting(
+        &self,
+        tx: &PoolTransaction,
+    ) -> Result<(), BlacklistedError> {
         for input in tx.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
                     if self.coins.contains(utxo_id) {
-                        return Err(Error::BlacklistedUTXO(*utxo_id));
+                        return Err(BlacklistedError::BlacklistedUTXO(*utxo_id));
                     }
                     if self.owners.contains(owner) {
-                        return Err(Error::BlacklistedOwner(*owner));
+                        return Err(BlacklistedError::BlacklistedOwner(*owner));
                     }
                 }
                 Input::Contract(contract) => {
                     if self.contracts.contains(&contract.contract_id) {
-                        return Err(Error::BlacklistedContract(contract.contract_id));
+                        return Err(BlacklistedError::BlacklistedContract(
+                            contract.contract_id,
+                        ));
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned {
@@ -99,13 +104,13 @@ impl BlackList {
                     ..
                 }) => {
                     if self.messages.contains(nonce) {
-                        return Err(Error::BlacklistedMessage(*nonce));
+                        return Err(BlacklistedError::BlacklistedMessage(*nonce));
                     }
                     if self.owners.contains(sender) {
-                        return Err(Error::BlacklistedOwner(*sender));
+                        return Err(BlacklistedError::BlacklistedOwner(*sender));
                     }
                     if self.owners.contains(recipient) {
-                        return Err(Error::BlacklistedOwner(*recipient));
+                        return Err(BlacklistedError::BlacklistedOwner(*recipient));
                     }
                 }
             }

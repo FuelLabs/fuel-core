@@ -36,7 +36,10 @@ use tokio::sync::{
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
-    error::Error,
+    error::{
+        Error,
+        RemovedReason,
+    },
     heavy_async_processing::HeavyAsyncProcessor,
     pool::Pool,
     ports::{
@@ -255,9 +258,10 @@ where
                                 .write()
                                 .push_front((submitted_time, tx.id()));
                             for tx in removed {
-                                shared_state
-                                    .tx_status_sender
-                                    .send_squeezed_out(tx.id(), Error::Removed);
+                                shared_state.tx_status_sender.send_squeezed_out(
+                                    tx.id(),
+                                    Error::Removed(RemovedReason::LessWorth(tx.id())),
+                                );
                             }
                             shared_state.tx_status_sender.send_submitted(
                                 tx.id(),
@@ -355,7 +359,7 @@ where
                 .unwrap_or_default();
             for tx in removed {
                 self.tx_status_sender
-                    .send_squeezed_out(tx.id(), Error::TTLReason);
+                    .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
             }
         }
     }
