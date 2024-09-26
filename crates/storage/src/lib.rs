@@ -209,12 +209,12 @@ mod test {
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!("BlockId")),
-            format!("resource of type `BlockId` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource was not found in table `BlockId` at the: {}:{}", file!(), line!() - 1)
         );
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_types::entities::coins::coin::CompressedCoin` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource was not found in table `fuel_core_storage::tables::Coins` at the: {}:{}", file!(), line!() - 1)
         );
     }
 }
