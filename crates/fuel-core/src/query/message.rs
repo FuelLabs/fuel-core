@@ -166,52 +166,56 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
             _ => None,
         });
 
-    let (sender, recipient, nonce, amount, data) = match receipt {
-        Some(r) => r,
-        None => return Ok(None),
+    let Some((sender, recipient, nonce, amount, data)) = receipt else {
+        return Err(
+            anyhow::anyhow!("desired `nonce` missing in transaction receipts").into(),
+        )
     };
-    let data =
-        data.ok_or(anyhow::anyhow!("Output message doesn't contain any `data`"))?;
+
+    let Some(data) = data else {
+        return Err(anyhow::anyhow!("output message doesn't contain any `data`").into())
+    };
 
     // Get the block id from the transaction status if it's ready.
-    let message_block_height = match database
+    let Some(TransactionStatus::Success { block_height, .. }) = database
         .transaction_status(&transaction_id)
-        .into_api_result::<TransactionStatus, StorageError>(
-    )? {
-        Some(TransactionStatus::Success { block_height, .. }) => block_height,
-        _ => return Ok(None),
+        .into_api_result::<TransactionStatus, StorageError>()?
+    else {
+        return Err(anyhow::anyhow!("unable to obtain block height").into())
     };
 
     // Get the message fuel block header.
-    let (message_block_header, message_block_txs) = match database
-        .block(&message_block_height)
+    let Some(block) = database
+        .block(&block_height)
         .into_api_result::<CompressedBlock, StorageError>()?
-    {
-        Some(t) => t.into_inner(),
-        None => return Ok(None),
+    else {
+        return Err(anyhow::anyhow!("unable to get block from database").into())
     };
+    let (message_block_header, message_block_txs) = block.into_inner();
 
     let message_id = compute_message_id(&sender, &recipient, &nonce, amount, &data);
 
-    let message_proof =
-        match message_receipts_proof(database, message_id, &message_block_txs)? {
-            Some(proof) => proof,
-            None => return Ok(None),
+    let Some(message_proof) =
+        // TODO[RC]: Shall `message_receipts_proof()` also return the reason?
+        message_receipts_proof(database, message_id, &message_block_txs)?
+    else {
+        return Err(anyhow::anyhow!("unable to calculate message receipts proof").into())
         };
 
     // Get the commit fuel block header.
-    let commit_block_header = match database
+    let Some(commit_block_header) = database
         .block(&commit_block_height)
         .into_api_result::<CompressedBlock, StorageError>()?
-    {
-        Some(t) => t.into_inner().0,
-        None => return Ok(None),
+    else {
+        return Err(
+            anyhow::anyhow!("unable to get commit block header from database").into(),
+        )
     };
+    let (commit_block_header, _) = commit_block_header.into_inner();
 
     let block_height = *commit_block_header.height();
     if block_height == 0u32.into() {
-        // Cannot look beyond the genesis block
-        return Ok(None)
+        return Err(anyhow::anyhow!("can not look beyond the genesis block").into())
     }
     let verifiable_commit_block_height =
         block_height.pred().expect("We checked the height above");
