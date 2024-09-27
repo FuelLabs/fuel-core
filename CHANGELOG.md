@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 #### Breaking
 - [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
 - [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
-- [2258](https://github.com/FuelLabs/fuel-core/pull/2258): Updated `message_proof()` to a descriptive error when proof cannot be generated.
+- [2258](https://github.com/FuelLabs/fuel-core/pull/2258): Updated `message_proof()` to return a descriptive error instead of `None` when proof cannot be generated.
 
 ## [Version 0.36.0]
 
