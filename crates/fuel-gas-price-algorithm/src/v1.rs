@@ -255,12 +255,11 @@ impl AlgorithmUpdaterV1 {
         let numerator = fee_wei.saturating_mul(self.descaled_da_price() as u128);
         let denominator = (self.descaled_exec_price() as u128)
             .saturating_add(self.descaled_da_price() as u128);
-        let reward = if denominator == 0 {
+        if denominator == 0 {
             0
         } else {
             numerator.div_ceil(denominator)
-        };
-        reward
+        }
     }
 
     fn clamped_projected_cost_as_i128(&self) -> i128 {

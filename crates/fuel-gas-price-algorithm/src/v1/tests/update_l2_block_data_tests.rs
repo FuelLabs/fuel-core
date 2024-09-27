@@ -106,10 +106,10 @@ fn update_l2_block_data__updates_the_total_reward_value() {
         .unwrap();
 
     // then
-    let expected = (fee * starting_da_gas_price)
-        .div_ceil(starting_da_gas_price + starting_exec_gas_price);
+    let expected = (fee * starting_da_gas_price as u128)
+        .div_ceil(starting_da_gas_price as u128 + starting_exec_gas_price as u128);
     let actual = updater.total_da_rewards_excess;
-    assert_eq!(actual, expected as u128);
+    assert_eq!(actual, expected);
 }
 
 #[test]
@@ -482,7 +482,7 @@ fn update_l2_block_data__even_profit_maintains_price() {
             50,
             100.try_into().unwrap(),
             block_bytes,
-            total_fee,
+            total_fee.into(),
         )
         .unwrap();
     let algo = updater.algorithm();
