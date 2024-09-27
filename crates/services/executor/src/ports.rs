@@ -38,30 +38,7 @@ pub enum MaybeCheckedTransaction {
 impl MaybeCheckedTransaction {
     pub fn id(&self, chain_id: &ChainId) -> TxId {
         match self {
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Script(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Create(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Mint(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Upgrade(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Upload(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Blob(tx),
-                _,
-            ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
         }
     }
@@ -76,14 +53,14 @@ impl TransactionExt for Transaction {
         let fee_params = consensus_params.fee_params();
         let gas_costs = consensus_params.gas_costs();
         match self {
-            Transaction::Script(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Create(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+            Transaction::Script(tx)
+            | Transaction::Create(tx)
+            | Transaction::Upgrade(tx)
+            | Transaction::Upload(tx)
+            | Transaction::Blob(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
             Transaction::Mint(_) => Err(ExecutorError::Other(
                 "Mint transaction doesn't have max_gas".to_string(),
             )),
-            Transaction::Upgrade(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Upload(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Blob(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
         }
     }
 }
@@ -91,14 +68,14 @@ impl TransactionExt for Transaction {
 impl TransactionExt for CheckedTransaction {
     fn max_gas(&self, _: &ConsensusParameters) -> ExecutorResult<u64> {
         match self {
-            CheckedTransaction::Script(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Create(tx) => Ok(tx.metadata().max_gas),
+            CheckedTransaction::Script(tx)
+            | CheckedTransaction::Create(tx)
+            | CheckedTransaction::Upgrade(tx)
+            | CheckedTransaction::Upload(tx)
+            | CheckedTransaction::Blob(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
                 "Mint transaction doesn't have max_gas".to_string(),
             )),
-            CheckedTransaction::Upgrade(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Upload(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Blob(tx) => Ok(tx.metadata().max_gas),
         }
     }
 }
@@ -106,9 +83,7 @@ impl TransactionExt for CheckedTransaction {
 impl TransactionExt for MaybeCheckedTransaction {
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64> {
         match self {
-            MaybeCheckedTransaction::CheckedTransaction(tx, _) => {
-                tx.max_gas(consensus_params)
-            }
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.max_gas(consensus_params),
             MaybeCheckedTransaction::Transaction(tx) => tx.max_gas(consensus_params),
         }
     }
