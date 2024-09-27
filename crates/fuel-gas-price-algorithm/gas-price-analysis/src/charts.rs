@@ -264,6 +264,12 @@ pub fn draw_profit(
     pessimistic_block_costs: &[u128],
     title: &str,
 ) -> anyhow::Result<()> {
+    println!("projected_profit len: {}", projected_profit.len());
+    println!("actual_profit len: {}", actual_profit.len());
+    println!(
+        "pessimistic_block_costs len: {}",
+        pessimistic_block_costs.len()
+    );
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
@@ -307,10 +313,10 @@ pub fn draw_profit(
         .x_label_area_size(40)
         .y_label_area_size(100)
         .right_y_label_area_size(100)
-        .build_cartesian_2d(0..actual_profit_gwei.len(), min..max)
+        .build_cartesian_2d(0..projected_profit.len(), min..max)
         .unwrap()
         .set_secondary_coord(
-            0..actual_profit_gwei.len(),
+            0..projected_profit.len(),
             0..*pessimistic_block_costs_gwei.iter().max().unwrap(),
         );
 

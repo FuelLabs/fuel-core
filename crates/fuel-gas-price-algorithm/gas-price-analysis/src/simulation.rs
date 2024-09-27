@@ -104,7 +104,6 @@ impl Simulator {
         capacity: u64,
         max_block_bytes: u64,
         fullness_and_bytes: Vec<(u64, u64)>,
-        // blocks: Enumerate<Zip<Iter<(u64, u64)>, Iter<Option<Vec<RecordedBlock>>>>>,
         blocks: impl Iterator<Item = (usize, ((u64, u64), &'a Option<(Range<u32>, u128)>))>,
         mut updater: AlgorithmUpdaterV1,
     ) -> SimulationResults {
