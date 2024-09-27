@@ -126,7 +126,7 @@ macro_rules! impl_temporal_registry {
         where
             Tx: OffChainDatabaseTransaction,
         {
-            fn write_latest(
+            fn set_latest_assigned_key(
                 &mut self,
                 key: fuel_core_types::fuel_compression::RegistryKey,
             ) -> anyhow::Result<()> {
@@ -136,7 +136,7 @@ macro_rules! impl_temporal_registry {
                 Ok(())
             }
 
-            fn read_latest(
+            fn get_latest_assigned_key(
                 &self,
             ) -> anyhow::Result<fuel_core_types::fuel_compression::RegistryKey> {
                 Ok(self

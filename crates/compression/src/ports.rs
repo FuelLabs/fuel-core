@@ -84,20 +84,19 @@ pub struct MessageInfo {
 
 /// Evictor registry to keep track of the latest used key for the type `T`.
 pub trait EvictorDb<T> {
-    fn read_latest(&self) -> anyhow::Result<RegistryKey>;
-
-    fn write_latest(&mut self, key: RegistryKey) -> anyhow::Result<()>;
+    fn get_latest_assigned_key(&self) -> anyhow::Result<RegistryKey>;
+    fn set_latest_assigned_key(&mut self, key: RegistryKey) -> anyhow::Result<()>;
 }
 
 impl<D, T> EvictorDb<T> for &mut D
 where
     D: EvictorDb<T>,
 {
-    fn read_latest(&self) -> anyhow::Result<RegistryKey> {
-        <D as EvictorDb<T>>::read_latest(self)
+    fn get_latest_assigned_key(&self) -> anyhow::Result<RegistryKey> {
+        <D as EvictorDb<T>>::get_latest_assigned_key(self)
     }
 
-    fn write_latest(&mut self, key: RegistryKey) -> anyhow::Result<()> {
-        <D as EvictorDb<T>>::write_latest(self, key)
+    fn set_latest_assigned_key(&mut self, key: RegistryKey) -> anyhow::Result<()> {
+        <D as EvictorDb<T>>::set_latest_assigned_key(self, key)
     }
 }

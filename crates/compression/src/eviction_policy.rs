@@ -27,7 +27,7 @@ impl<T> CacheEvictor<T> {
     {
         Ok(Self {
             keep_keys,
-            next_key: db.read_latest()?,
+            next_key: db.get_latest_assigned_key()?,
             _keyspace_marker: std::marker::PhantomData,
         })
     }
@@ -51,6 +51,6 @@ impl<T> CacheEvictor<T> {
     where
         D: EvictorDb<T>,
     {
-        db.write_latest(self.next_key)
+        db.set_latest_assigned_key(self.next_key)
     }
 }

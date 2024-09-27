@@ -274,11 +274,14 @@ mod tests {
             }
 
             impl EvictorDb<$type> for MockDb {
-                fn write_latest(&mut self, _key: RegistryKey) -> anyhow::Result<()> {
+                fn set_latest_assigned_key(
+                    &mut self,
+                    _key: RegistryKey,
+                ) -> anyhow::Result<()> {
                     todo!()
                 }
 
-                fn read_latest(&self) -> anyhow::Result<RegistryKey> {
+                fn get_latest_assigned_key(&self) -> anyhow::Result<RegistryKey> {
                     todo!()
                 }
             }
