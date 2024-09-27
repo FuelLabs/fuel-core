@@ -31,7 +31,7 @@ pub enum CollisionReason {
 #[derive(Default, Debug)]
 pub struct Collisions<Idx> {
     reasons: HashSet<CollisionReason>,
-    colliding_txs: Vec<Idx>,
+    colliding_txs: HashSet<Idx>,
 }
 
 impl<Idx> Collisions<Idx> {
@@ -39,7 +39,7 @@ impl<Idx> Collisions<Idx> {
     pub fn new() -> Self {
         Self {
             reasons: HashSet::default(),
-            colliding_txs: vec![],
+            colliding_txs: HashSet::default(),
         }
     }
 
@@ -49,7 +49,7 @@ impl<Idx> Collisions<Idx> {
     }
 
     /// Get the transactions that collide with the transaction.
-    pub fn colliding_txs(&self) -> &[Idx] {
+    pub fn colliding_txs(&self) -> &HashSet<Idx> {
         &self.colliding_txs
     }
 }

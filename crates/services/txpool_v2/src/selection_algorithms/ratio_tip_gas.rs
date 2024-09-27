@@ -31,7 +31,7 @@ pub trait RatioTipGasSelectionAlgorithmStorage {
     fn get_dependents(
         &self,
         index: &Self::StorageIndex,
-    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
+    ) -> impl Iterator<Item = Self::StorageIndex>;
 }
 
 pub type RatioTipGas = Ratio<u64>;
@@ -113,7 +113,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
                     stored_transaction.transaction.max_gas() <= gas_left
                 };
                 if enough_gas {
-                    new_executables.extend(storage.get_dependents(storage_id)?);
+                    new_executables.extend(storage.get_dependents(storage_id));
                     let stored_tx = storage.get(storage_id)?;
                     gas_left = gas_left.saturating_sub(stored_tx.transaction.max_gas());
                     best_transaction = Some((*key, *storage_id));

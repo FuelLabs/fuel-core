@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::Debug, hash::Hash,
 };
 
 use fuel_core_types::{
@@ -41,7 +41,7 @@ use super::{
 };
 
 pub trait BasicCollisionManagerStorage {
-    type StorageIndex: Copy + Debug;
+    type StorageIndex: Copy + Debug + Hash + PartialEq + Eq;
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
 }
@@ -84,7 +84,7 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
             let blob_id = checked_tx.transaction().blob_id();
             if let Some(state) = self.blobs_users.get(blob_id) {
                 collisions.reasons.insert(CollisionReason::Blob(*blob_id));
-                collisions.colliding_txs.push(*state);
+                collisions.colliding_txs.insert(*state);
             }
         }
         for input in tx.inputs() {
@@ -94,7 +94,7 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
                     // Check if the utxo is already spent by another transaction in the pool
                     if let Some(tx_id) = self.coins_spenders.get(utxo_id) {
                         collisions.reasons.insert(CollisionReason::Coin(*utxo_id));
-                        collisions.colliding_txs.push(*tx_id);
+                        collisions.colliding_txs.insert(*tx_id);
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
@@ -104,7 +104,7 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
                     // Check if the message is already spent by another transaction in the pool
                     if let Some(tx_id) = self.messages_spenders.get(nonce) {
                         collisions.reasons.insert(CollisionReason::Message(*nonce));
-                        collisions.colliding_txs.push(*tx_id);
+                        collisions.colliding_txs.insert(*tx_id);
                     }
                 }
                 // No collision for contract inputs
@@ -119,7 +119,7 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
                     collisions
                         .reasons
                         .insert(CollisionReason::ContractCreation(*contract_id));
-                    collisions.colliding_txs.push(*tx_id);
+                    collisions.colliding_txs.insert(*tx_id);
                 }
             }
         }

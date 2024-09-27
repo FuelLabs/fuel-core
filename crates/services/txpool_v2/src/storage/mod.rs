@@ -39,7 +39,7 @@ pub trait Storage {
         &mut self,
         transaction: PoolTransaction,
         dependencies: Vec<Self::StorageIndex>,
-        collided_transactions: &[Self::StorageIndex],
+        collided_transactions: &HashSet<Self::StorageIndex>,
     ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
 
     /// Get the storage data by its index.
@@ -49,13 +49,13 @@ pub trait Storage {
     fn get_dependencies(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
+    ) -> impl Iterator<Item = Self::StorageIndex>;
 
     /// Get the storage indexes of the dependents of a transaction.
     fn get_dependents(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
+    ) -> impl Iterator<Item = Self::StorageIndex>;
 
     /// Validate inputs of a transaction.
     fn validate_inputs(
