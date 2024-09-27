@@ -29,7 +29,7 @@ pub struct StorageData {
     /// The cumulative of space used by a transaction and all of its children.
     pub dependents_cumulative_bytes_size: usize,
     /// Number of dependents
-    pub number_txs_in_chain: usize,
+    pub number_dependents_in_chain: usize,
     /// The instant when the transaction was added to the pool.
     pub creation_instant: Instant,
 }
@@ -67,13 +67,13 @@ pub trait Storage {
     fn get_dependencies(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
+    ) -> impl Iterator<Item = Self::StorageIndex>;
 
     /// Get the storage indexes of the dependents of a transaction.
     fn get_dependents(
         &self,
         index: Self::StorageIndex,
-    ) -> Result<impl Iterator<Item = Self::StorageIndex>, Error>;
+    ) -> impl Iterator<Item = Self::StorageIndex>;
 
     /// Validate inputs of a transaction.
     fn validate_inputs(

@@ -41,7 +41,7 @@ use crate::{
 use super::CollisionManager;
 
 pub trait BasicCollisionManagerStorage {
-    type StorageIndex: Copy + Debug + PartialEq + Eq + Hash;
+    type StorageIndex: Copy + Debug + Hash + PartialEq + Eq;
 
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
 }
