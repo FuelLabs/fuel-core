@@ -22,7 +22,7 @@ pub struct StorageData {
     /// The cumulative gas of a transaction and all of its children.
     pub dependents_cumulative_gas: u64,
     /// Number of dependents
-    pub number_txs_in_chain: usize,
+    pub number_dependents_in_chain: usize,
 }
 
 pub type RemovedTransactions = Vec<PoolTransaction>;

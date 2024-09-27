@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    fmt::Debug, hash::Hash,
+    fmt::Debug,
+    hash::Hash,
 };
 
 use fuel_core_types::{

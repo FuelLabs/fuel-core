@@ -153,11 +153,6 @@ where
         Ok(extracted_transactions)
     }
 
-    /// Prune transactions from the pool.
-    pub fn prune(&mut self) -> Result<Vec<PoolTransaction>, Error> {
-        Ok(vec![])
-    }
-
     #[cfg(test)]
     pub fn find_one(&self, tx_id: &TxId) -> Option<&PoolTransaction> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
