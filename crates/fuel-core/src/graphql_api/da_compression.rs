@@ -87,21 +87,23 @@ macro_rules! impl_temporal_registry {
                 value: &$type,
             ) -> anyhow::Result<()> {
                 // Write the actual value
-                self.db_tx
+                let old_value = self.db_tx
                     .storage_as_mut::<[< DaCompressionTemporalRegistry $type >]>()
-                    .insert(key, value)?;
-
-                let value_in_index: [u8; 32] = ($index_value_fn)(value);
+                    .replace(key, value)?;
 
                 // Remove the overwritten value from index, if any
-                self.db_tx
-                    .storage_as_mut::<[< DaCompressionTemporalRegistryIndex $type >]>()
-                    .remove(&value_in_index)?;
+                if let Some(old_value) = old_value {
+                    let old_value_in_index: [u8; 32] = ($index_value_fn)(&old_value);
+                    self.db_tx
+                        .storage_as_mut::<[< DaCompressionTemporalRegistryIndex $type >]>()
+                        .remove(&old_value_in_index)?;
+                }
 
                 // Add the new value to the index
+                let new_value_in_index: [u8; 32] = ($index_value_fn)(value);
                 self.db_tx
                     .storage_as_mut::<[< DaCompressionTemporalRegistryIndex $type >]>()
-                    .insert(&value_in_index, key)?;
+                    .insert(&new_value_in_index, key)?;
 
                 Ok(())
             }
