@@ -194,12 +194,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
 
     let message_id = compute_message_id(&sender, &recipient, &nonce, amount, &data);
 
-    let Some(message_proof) =
-        // TODO[RC]: Shall `message_receipts_proof()` also return the reason?
-        message_receipts_proof(database, message_id, &message_block_txs)?
-    else {
-        return Err(anyhow::anyhow!("unable to calculate message receipts proof").into())
-    };
+    let message_proof = message_receipts_proof(database, message_id, &message_block_txs)?;
 
     // Get the commit fuel block header.
     let Some(commit_block_header) = database
@@ -237,7 +232,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     database: &T,
     message_id: MessageId,
     message_block_txs: &[Bytes32],
-) -> StorageResult<Option<MerkleProof>> {
+) -> StorageResult<MerkleProof> {
     // Get the message receipts from the block.
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()
@@ -266,20 +261,21 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
         tree.push(id.as_ref());
     }
 
-    // If we found the leaf proof index then return the proof.
-    match proof_index {
-        Some(proof_index) => {
-            // Generate the actual merkle proof.
-            match tree.prove(proof_index) {
-                Some((_, proof_set)) => Ok(Some(MerkleProof {
-                    proof_set,
-                    proof_index,
-                })),
-                None => Ok(None),
-            }
-        }
-        None => Ok(None),
-    }
+    // Check if we found a leaf.
+    let Some(proof_index) = proof_index else {
+        return Err(anyhow::anyhow!("unable to find leaf").into())
+    };
+
+    // Get the proof set.
+    let Some((_, proof_set)) = tree.prove(proof_index) else {
+        return Err(anyhow::anyhow!("unable to get proof set").into());
+    };
+
+    // Return the proof.
+    Ok(MerkleProof {
+        proof_set,
+        proof_index,
+    })
 }
 
 pub fn message_status<T>(

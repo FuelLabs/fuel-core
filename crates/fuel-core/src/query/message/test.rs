@@ -213,7 +213,6 @@ async fn can_build_message_proof() {
         nonce.to_owned(),
         *commit_block.header().height(),
     )
-    .unwrap()
     .unwrap();
     assert_eq!(
         proof.message_block_header.message_outbox_root,
