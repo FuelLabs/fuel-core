@@ -102,7 +102,7 @@ async fn test_new_subscription_p2p() {
     for (tx_pool, tx_expected) in out.into_iter().zip(&[tx1, tx2]) {
         assert!(tx_pool.is_some(), "Tx should be some:{tx_pool:?}");
         assert_eq!(
-            tx_pool.unwrap().id(),
+            tx_pool.unwrap().tx().id(),
             tx_expected.id(&Default::default()),
             "Found tx id didn't match"
         );
@@ -175,7 +175,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     for (tx_pool, tx_expected) in out.into_iter().zip(&[tx1, tx2]) {
         assert!(tx_pool.is_some(), "Tx should be some:{tx_pool:?}");
         assert_eq!(
-            tx_pool.unwrap().id(),
+            tx_pool.unwrap().tx().id(),
             tx_expected.id(&Default::default()),
             "Found tx id didn't match"
         );
@@ -206,7 +206,7 @@ async fn can_insert_from_p2p() {
     // fetch tx from pool
     let out = service.shared.find(vec![tx1.id(&Default::default())]);
 
-    let got_tx: Transaction = out[0].as_ref().unwrap().clone().deref().into();
+    let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
 }
 

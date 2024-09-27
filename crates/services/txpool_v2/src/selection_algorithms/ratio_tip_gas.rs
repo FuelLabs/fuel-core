@@ -110,6 +110,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         // then promote all its dependents to the list of transactions to be executed
         // and repeat the process until the gas limit is reached
         while gas_left > 0
+            && best_transactions.len() > constraints.maximum_txs as usize
             && !self.executable_transactions_sorted_tip_gas_ratio.is_empty()
         {
             let mut new_executables = vec![];

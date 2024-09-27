@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
     time::{
         Duration,
+        Instant,
         SystemTime,
     },
 };
@@ -63,6 +64,26 @@ use crate::{
     },
     verifications::perform_all_verifications,
 };
+
+/// Structure returned to others modules containing the transaction and
+/// some useful infos
+#[derive(Debug)]
+pub struct TxInfo {
+    /// The transaction
+    tx: ArcPoolTx,
+    /// The creation instant of the transaction
+    creation_instant: Instant,
+}
+
+impl TxInfo {
+    pub fn tx(&self) -> &ArcPoolTx {
+        &self.tx
+    }
+
+    pub fn creation_instant(&self) -> &Instant {
+        &self.creation_instant
+    }
+}
 
 pub type TxPool<PSProvider> = Arc<
     RwLock<
@@ -332,8 +353,14 @@ where
         });
     }
 
-    pub fn select_transactions(&self, max_gas: u64) -> Result<Vec<ArcPoolTx>, Error> {
-        self.pool.write().extract_transactions_for_block(max_gas)
+    pub fn select_transactions(
+        &self,
+        max_gas: u64,
+        transactions_limit: u16,
+    ) -> Result<Vec<ArcPoolTx>, Error> {
+        self.pool
+            .write()
+            .extract_transactions_for_block(max_gas, transactions_limit)
     }
 
     pub fn prune_old_transactions(&mut self, ttl: Duration) {
@@ -392,18 +419,30 @@ where
         tx_ids
             .into_iter()
             .map(|tx_id| pool.find_one(&tx_id))
+            .map(|option_storage_data| {
+                option_storage_data.map(|storage_data| storage_data.transaction)
+            })
             .collect()
     }
 
-    pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
-        self.pool.read().find_one(tx_id)
+    pub fn find_one(&self, tx_id: &TxId) -> Option<TxInfo> {
+        self.pool.read().find_one(tx_id).map(|storage_data| TxInfo {
+            tx: storage_data.transaction,
+            creation_instant: storage_data.creation_instant,
+        })
     }
 
-    pub fn find(&self, tx_ids: Vec<TxId>) -> Vec<Option<ArcPoolTx>> {
+    pub fn find(&self, tx_ids: Vec<TxId>) -> Vec<Option<TxInfo>> {
         let pool = self.pool.read();
         tx_ids
             .into_iter()
             .map(|tx_id| pool.find_one(&tx_id))
+            .map(|option_storage_data| {
+                option_storage_data.map(|storage_data| TxInfo {
+                    tx: storage_data.transaction,
+                    creation_instant: storage_data.creation_instant,
+                })
+            })
             .collect()
     }
 

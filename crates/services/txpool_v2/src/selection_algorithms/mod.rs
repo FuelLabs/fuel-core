@@ -8,7 +8,10 @@ pub mod ratio_tip_gas;
 
 /// Constraints that the selection algorithm has to respect.
 pub struct Constraints {
+    /// Maximum gas that all transaction must consume
     pub max_gas: u64,
+    /// Maximum transactions that can be selected
+    pub maximum_txs: u16,
 }
 
 /// The selection algorithm is responsible for selecting the best transactions to include in a block.

@@ -24,10 +24,7 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::{
-    service::TxStatusMessage,
-    types::TxId,
-};
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     entities::relayer::message::MerkleProof,
@@ -35,6 +32,7 @@ use fuel_core_types::{
         Bytes32,
         ConsensusParameters,
         Transaction,
+        TxId,
     },
     fuel_types::BlockHeight,
     services::{
@@ -60,14 +58,14 @@ mod on_chain;
 impl TxPoolPort for TxPoolAdapter {
     fn transaction(&self, id: TxId) -> Option<Transaction> {
         self.service
-            .find_one(id)
+            .find_one(&id)
             .map(|info| info.tx().clone().deref().into())
     }
 
     fn submission_time(&self, id: TxId) -> Option<Tai64> {
         self.service
-            .find_one(id)
-            .map(|info| Tai64::from_unix(info.submitted_time().as_secs() as i64))
+            .find_one(&id)
+            .map(|info| Tai64::from_unix(info.creation_instant().as_secs() as i64))
     }
 
     async fn insert(
@@ -75,7 +73,7 @@ impl TxPoolPort for TxPoolAdapter {
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         self.service
-            .insert(txs)
+            .insert(txs, None)
             .await
             .into_iter()
             .map(|res| res.map_err(|e| anyhow::anyhow!(e)))

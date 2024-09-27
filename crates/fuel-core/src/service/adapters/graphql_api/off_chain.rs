@@ -37,10 +37,6 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::types::{
-    ContractId,
-    TxId,
-};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -51,8 +47,10 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         Bytes32,
+        ContractId,
         Salt,
         Transaction,
+        TxId,
         TxPointer,
         UtxoId,
     },

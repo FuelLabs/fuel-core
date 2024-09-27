@@ -22,14 +22,13 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_txpool::{
+    error::Error,
     ports::{
         BlockImporter,
         ConsensusParametersProvider as ConsensusParametersProviderTrait,
         GasPriceProvider,
         MemoryPool,
     },
-    types::TxId,
-    Result as TxPoolResult,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -41,6 +40,7 @@ use fuel_core_types::{
         BlobId,
         ConsensusParameters,
         Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::{
@@ -68,7 +68,7 @@ impl BlockImporter for BlockImporterAdapter {
 
 #[cfg(feature = "p2p")]
 #[async_trait::async_trait]
-impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
+impl fuel_core_txpool::ports::P2P for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()> {
@@ -185,7 +185,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 }
 
-impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
+impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValueView {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)
@@ -209,7 +209,7 @@ impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn next_gas_price(&self) -> TxPoolResult<u64> {
+    async fn next_gas_price(&self) -> Result<u64, Error> {
         Ok(self.gas_price)
     }
 }

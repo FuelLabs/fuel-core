@@ -3716,34 +3716,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "derive_more",
- "fuel-core-metrics",
- "fuel-core-services",
- "fuel-core-storage",
- "fuel-core-trace",
- "fuel-core-txpool",
- "fuel-core-types 0.36.0",
- "futures",
- "itertools 0.12.1",
- "mockall",
- "num-rational",
- "parking_lot",
- "proptest",
- "rayon",
- "rstest",
- "test-strategy",
- "tokio",
- "tokio-rayon",
- "tokio-stream",
- "tracing",
-]
-
-[[package]]
-name = "fuel-core-txpool-v2"
-version = "0.36.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "derive_more",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types 0.36.0",

@@ -10,12 +10,12 @@ use fuel_core_p2p::ports::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     blockchain::{
         consensus::Genesis,
         SealedBlockHeader,
     },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::p2p::{
         NetworkableTransactionPool,

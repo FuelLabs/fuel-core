@@ -4,11 +4,11 @@
 #![deny(warnings)]
 
 mod collision_manager;
-mod config;
-mod error;
+pub mod config;
+pub mod error;
 mod heavy_async_processing;
 mod pool;
-mod ports;
+pub mod ports;
 mod selection_algorithms;
 mod service;
 mod shared_state;
@@ -28,3 +28,4 @@ pub use service::{
     Service,
 };
 pub use shared_state::SharedState;
+pub use tx_status_stream::TxStatusMessage;

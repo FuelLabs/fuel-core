@@ -18,7 +18,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageInspect,
 };
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,

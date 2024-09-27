@@ -45,7 +45,7 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::{
     ports::MemoryPool,
-    service::TxStatusMessage,
+    TxStatusMessage,
 };
 use fuel_core_types::{
     fuel_tx::{

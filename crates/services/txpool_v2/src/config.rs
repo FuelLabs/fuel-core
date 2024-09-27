@@ -120,7 +120,7 @@ impl BlackList {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Config {
     /// Enable UTXO validation (will check if UTXO exists in the database and has correct data).
     pub utxo_validation: bool,
@@ -140,7 +140,7 @@ pub struct Config {
     pub black_list: BlackList,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoolLimits {
     /// Maximum number of transactions in the pool.
     pub max_txs: usize,
@@ -150,7 +150,7 @@ pub struct PoolLimits {
     pub max_bytes_size: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HeavyWorkConfig {
     /// Maximum of threads for managing verifications/insertions.
     pub number_threads_to_verify_transactions: usize,
@@ -162,7 +162,7 @@ pub struct HeavyWorkConfig {
     pub size_of_p2p_sync_queue: usize,
 }
 
-#[cfg(test)]
+// TODO: Find real values
 impl Default for Config {
     fn default() -> Self {
         Self {

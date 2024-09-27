@@ -35,6 +35,7 @@ use crate::{
     storage::{
         RemovedTransactions,
         Storage,
+        StorageData,
     },
 };
 
@@ -199,10 +200,17 @@ where
     pub fn extract_transactions_for_block(
         &mut self,
         max_gas: u64,
+        maximum_txs: u16,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let extracted_transactions = self
             .selection_algorithm
-            .gather_best_txs(Constraints { max_gas }, &self.storage)?
+            .gather_best_txs(
+                Constraints {
+                    max_gas,
+                    maximum_txs,
+                },
+                &self.storage,
+            )?
             .into_iter()
             .map(|storage_id| {
                 let transaction = self
@@ -215,9 +223,9 @@ where
         Ok(extracted_transactions)
     }
 
-    pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
+    pub fn find_one(&self, tx_id: &TxId) -> Option<StorageData> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
-            .map(|data| data.transaction.clone())
+            .map(|data| data.clone())
             .ok()
     }
 

@@ -18,7 +18,7 @@ use fuel_core_types::services::txpool::{
 
 pub mod graph;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StorageData {
     /// The transaction.
     /// We are forced to take an arc here as we need to be able to send a transaction that still exists here to p2p and API.

@@ -16,16 +16,27 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         transactions_limit: u16,
         _: u32,
     ) -> Vec<MaybeCheckedTransaction> {
-        self.txpool
+        match self
+            .txpool
             .select_transactions(gas_limit, transactions_limit)
-            .into_iter()
-            .map(|tx| {
-                MaybeCheckedTransaction::CheckedTransaction(
-                    tx.as_ref().into(),
-                    tx.used_consensus_parameters_version(),
-                )
-            })
-            .collect()
+        {
+            Ok(txs) => txs
+                .into_iter()
+                .map(|tx| {
+                    MaybeCheckedTransaction::CheckedTransaction(
+                        tx.as_ref().into(),
+                        tx.used_consensus_parameters_version(),
+                    )
+                })
+                .collect(),
+            Err(e) => {
+                tracing::warn!(
+                    "Error when trying to get the transactions {}",
+                    e.to_string()
+                );
+                Vec::new()
+            }
+        }
     }
 }
 
