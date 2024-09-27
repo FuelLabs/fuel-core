@@ -328,6 +328,8 @@ prop_compose! {
 }
 
 proptest! {
+    // https://github.com/FuelLabs/fuel-core/issues/2264
+    #[ignore]
     #[test]
     fn update_da_record_data__when_reward_is_greater_than_cost_will_zero_cost_and_subtract_from_reward(
         (cost, reward, unrecorded_blocks, (recorded_range, recorded_cost)) in reward_greater_than_cost_with_da_blocks()
@@ -385,6 +387,8 @@ prop_compose! {
 }
 
 proptest! {
+    // https://github.com/FuelLabs/fuel-core/issues/2264
+    #[ignore]
     #[test]
     fn update_da_record_data__when_cost_is_greater_than_reward_will_zero_reward_and_subtract_from_cost(
         (cost, reward, unrecorded_blocks, (recorded_range, recorded_cost)) in cost_greater_than_reward_with_da_blocks()

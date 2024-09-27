@@ -264,12 +264,6 @@ pub fn draw_profit(
     pessimistic_block_costs: &[u128],
     title: &str,
 ) -> anyhow::Result<()> {
-    println!("projected_profit len: {}", projected_profit.len());
-    println!("actual_profit len: {}", actual_profit.len());
-    println!(
-        "pessimistic_block_costs len: {}",
-        pessimistic_block_costs.len()
-    );
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;

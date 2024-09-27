@@ -138,11 +138,10 @@ impl Simulator {
             // Update DA blocks on the occasion there is one
             if let Some((range, cost)) = da_block {
                 for height in range.to_owned() {
-                    let total_cost = updater.latest_known_total_da_cost_excess + cost;
-                    actual_costs.push(total_cost);
                     updater
                         .update_da_record_data(height..(height + 1), *cost)
                         .unwrap();
+                    actual_costs.push(updater.latest_known_total_da_cost_excess)
                 }
             }
         }
