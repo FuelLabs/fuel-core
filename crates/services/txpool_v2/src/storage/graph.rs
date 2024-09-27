@@ -90,20 +90,9 @@ impl GraphStorage {
             debug_assert!(false, "Node with id {:?} not found", root_id);
             return vec![];
         };
-        let gas_removed = root.dependents_cumulative_gas;
-        let tip_removed = root.dependents_cumulative_tip;
-        let dependencies: Vec<NodeIndex> = self.get_dependencies(root_id).collect();
-        let removed = self.remove_dependent_sub_graph(root_id);
-        let mut already_visited = HashSet::new();
-        for dependency in dependencies {
-            self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
-                dependency,
-                gas_removed,
-                tip_removed,
-                &mut already_visited,
-            );
-        }
-        removed
+        let gas_reduction = root.dependents_cumulative_gas;
+        let tip_reduction = root.dependents_cumulative_tip;
+        self.remove_dependent_sub_graph(root_id)
     }
     fn reduce_dependencies_cumulative_gas_tip_and_chain_count(
         &mut self,
@@ -136,6 +125,7 @@ impl GraphStorage {
     }
 
     fn remove_dependent_sub_graph(&mut self, root_id: NodeIndex) -> Vec<PoolTransaction> {
+        let dependencies: Vec<NodeIndex> = self.get_dependencies(root_id).collect();
         let dependents: Vec<_> = self
             .graph
             .neighbors_directed(root_id, petgraph::Direction::Outgoing)
@@ -143,6 +133,15 @@ impl GraphStorage {
         let Some(root) = self.graph.remove_node(root_id) else {
             return vec![];
         };
+        let mut dependency_visited = HashSet::default();
+        for dependency in dependencies {
+            self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
+                dependency,
+                root.dependents_cumulative_gas,
+                root.dependents_cumulative_tip,
+                &mut dependency_visited,
+            );
+        }
         self.clear_cache(root.transaction.outputs(), &root.transaction.id());
         let mut removed_transactions = vec![root.transaction];
         for dependent in dependents {
@@ -302,16 +301,15 @@ impl Storage for GraphStorage {
             {
                 return Err(Error::NotInsertedChainDependencyTooBig);
             }
+            all_dependencies_recursively.insert(node_id);
             if all_dependencies_recursively.len() >= self.config.max_txs_chain_count {
                 return Err(Error::NotInsertedChainDependencyTooBig);
             }
-            all_dependencies_recursively.insert(node_id);
             to_check.extend(self.get_dependencies(node_id));
         }
 
         // Remove collisions and their dependencies from the graph
         let mut removed_transactions = vec![];
-        dbg!(&collided_transactions);
         for collision in collided_transactions {
             removed_transactions
                 .extend(self.remove_node_and_dependent_sub_graph(*collision));
