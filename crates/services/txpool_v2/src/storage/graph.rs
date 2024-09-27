@@ -81,16 +81,6 @@ impl GraphStorage {
 }
 
 impl GraphStorage {
-    /// Remove a node and all its dependent sub-graph.
-    /// Edit the data of dependencies transactions accordingly.
-    /// Returns the removed transactions.
-    fn remove_node_and_dependent_sub_graph(
-        &mut self,
-        root_id: NodeIndex,
-    ) -> Vec<PoolTransaction> {
-        self.remove_dependent_sub_graph(root_id)
-    }
-
     fn reduce_dependencies_cumulative_gas_tip_and_chain_count(
         &mut self,
         root_id: NodeIndex,
@@ -121,7 +111,13 @@ impl GraphStorage {
         }
     }
 
-    fn remove_dependent_sub_graph(&mut self, root_id: NodeIndex) -> Vec<PoolTransaction> {
+    /// Remove a node and all its dependent sub-graph.
+    /// Edit the data of dependencies transactions accordingly.
+    /// Returns the removed transactions.
+    fn remove_node_and_dependent_sub_graph(
+        &mut self,
+        root_id: NodeIndex,
+    ) -> Vec<PoolTransaction> {
         let dependencies: Vec<NodeIndex> = self.get_dependencies(root_id).collect();
         let dependents: Vec<_> = self
             .graph
@@ -142,7 +138,8 @@ impl GraphStorage {
         self.clear_cache(root.transaction.outputs(), &root.transaction.id());
         let mut removed_transactions = vec![root.transaction];
         for dependent in dependents {
-            removed_transactions.extend(self.remove_dependent_sub_graph(dependent));
+            removed_transactions
+                .extend(self.remove_node_and_dependent_sub_graph(dependent));
         }
         removed_transactions
     }
