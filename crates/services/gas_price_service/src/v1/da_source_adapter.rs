@@ -24,7 +24,7 @@ pub const POLLING_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
 pub struct DaBlockCosts {
-    pub l2_block_range: core::ops::Range<u32>,
+    pub l2_block_range: core::ops::Range<u64>,
     pub blob_size_bytes: u32,
     pub blob_cost_wei: u128,
 }
