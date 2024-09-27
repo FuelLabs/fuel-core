@@ -233,7 +233,7 @@ impl GraphStorage {
             );
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
-                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                Output::Coin { .. } => {
                     self.coins_creators.remove(&utxo_id);
                 }
                 Output::ContractCreated { contract_id, .. } => {
