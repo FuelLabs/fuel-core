@@ -150,7 +150,7 @@ impl BlockHeader {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+#[derive(Default)]
 /// A partially complete fuel block header that does not
 /// have any generated fields because it has not been executed yet.
 pub struct PartialBlockHeader {
@@ -188,7 +188,6 @@ pub struct ApplicationHeader<Generated> {
     pub generated: Generated,
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 impl<Generated> Default for ApplicationHeader<Generated>
 where
     Generated: Default,
@@ -543,7 +542,6 @@ impl ConsensusHeader<GeneratedConsensusFields> {
     }
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 impl<T> Default for ConsensusHeader<T>
 where
     T: Default,

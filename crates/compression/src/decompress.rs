@@ -4,7 +4,7 @@ use crate::{
         TemporalRegistry,
     },
     registry::TemporalRegistryAll,
-    CompressedBlock,
+    VersionedCompressedBlock,
 };
 use fuel_core_types::{
     blockchain::block::PartialFuelBlock,
@@ -45,12 +45,14 @@ pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
 impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 
 /// This must be called for all decompressed blocks in sequence, otherwise the result will be garbage.
-pub async fn decompress<D>(mut db: D, block: Vec<u8>) -> anyhow::Result<PartialFuelBlock>
+pub async fn decompress<D>(
+    mut db: D,
+    block: VersionedCompressedBlock,
+) -> anyhow::Result<PartialFuelBlock>
 where
     D: DecompressDb,
 {
-    let compressed: CompressedBlock = postcard::from_bytes(&block)?;
-    let CompressedBlock::V0(compressed) = compressed;
+    let VersionedCompressedBlock::V0(compressed) = block;
 
     // TODO: merkle root verification: https://github.com/FuelLabs/fuel-core/issues/2232
 
@@ -281,7 +283,7 @@ mod tests {
                     todo!()
                 }
 
-                fn get_latest_assigned_key(&self) -> anyhow::Result<RegistryKey> {
+                fn get_latest_assigned_key(&self) -> anyhow::Result<Option<RegistryKey>> {
                     todo!()
                 }
             }
@@ -303,12 +305,17 @@ mod tests {
             Unknown,
         }
 
-        let block =
+        // Given
+        let bad_block =
             postcard::to_stdvec(&CompressedBlockWithNewVersions::NewVersion(1234))
                 .unwrap();
 
-        decompress(MockDb, block)
-            .await
-            .expect_err("Decompression should fail gracefully");
+        // When
+        let result: Result<VersionedCompressedBlock, _> =
+            postcard::from_bytes(&bad_block);
+
+        // Then
+        let _ =
+            result.expect_err("should fail to deserialize because of unknown version");
     }
 }

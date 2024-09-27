@@ -97,38 +97,20 @@ pub enum Column {
     /// DA compression and postcard serialized blocks.
     /// See [`DaCompressedBlocks`](da_compression::DaCompressedBlocks)
     DaCompressedBlocks = 14,
-    /// DA compression metadata.
-    DaCompressionMetadata = 15,
+    /// See [`DaCompressionTemporalRegistryIndex`](da_compression::DaCompressionTemporalRegistryIndex)
+    DaCompressionTemporalRegistryIndex = 15,
+    /// See [`DaCompressionTemporalRegistryMetadata`](da_compression::DaCompressionTemporalRegistryMetadata)
+    DaCompressionTemporalRegistryMetadata = 16,
     /// See [`DaCompressionTemporalRegistryAddress`](da_compression::DaCompressionTemporalRegistryAddress)
-    DaCompressionTemporalRegistryAddress = 16,
-    /// See [`DaCompressionTemporalRegistryIndexAddress`](da_compression::DaCompressionTemporalRegistryIndexAddress)
-    DaCompressionTemporalRegistryIndexAddress = 17,
-    /// See [`DaCompressionTemporalRegistryEvictorAddress`](da_compression::DaCompressionTemporalRegistryEvictorAddress)
-    DaCompressionTemporalRegistryEvictorAddress = 18,
+    DaCompressionTemporalRegistryAddress = 17,
     /// See [`DaCompressionTemporalRegistryAssetId`](da_compression::DaCompressionTemporalRegistryAssetId)
-    DaCompressionTemporalRegistryAssetId = 19,
-    /// See [`DaCompressionTemporalRegistryIndexAssetId`](da_compression::DaCompressionTemporalRegistryIndexAssetId)
-    DaCompressionTemporalRegistryIndexAssetId = 20,
-    /// See [`DaCompressionTemporalRegistryEvictorAssetId`](da_compression::DaCompressionTemporalRegistryEvictorAssetId)
-    DaCompressionTemporalRegistryEvictorAssetId = 21,
+    DaCompressionTemporalRegistryAssetId = 18,
     /// See [`DaCompressionTemporalRegistryContractId`](da_compression::DaCompressionTemporalRegistryContractId)
-    DaCompressionTemporalRegistryContractId = 22,
-    /// See [`DaCompressionTemporalRegistryIndexContractId`](da_compression::DaCompressionTemporalRegistryIndexContractId)
-    DaCompressionTemporalRegistryIndexContractId = 23,
-    /// See [`DaCompressionTemporalRegistryEvictorContractId`](da_compression::DaCompressionTemporalRegistryEvictorContractId)
-    DaCompressionTemporalRegistryEvictorContractId = 24,
+    DaCompressionTemporalRegistryContractId = 19,
     /// See [`DaCompressionTemporalRegistryScriptCode`](da_compression::DaCompressionTemporalRegistryScriptCode)
-    DaCompressionTemporalRegistryScriptCode = 25,
-    /// See [`DaCompressionTemporalRegistryIndexScriptCode`](da_compression::DaCompressionTemporalRegistryIndexScriptCode)
-    DaCompressionTemporalRegistryIndexScriptCode = 26,
-    /// See [`DaCompressionTemporalRegistryEvictorScriptCode`](da_compression::DaCompressionTemporalRegistryEvictorScriptCode)
-    DaCompressionTemporalRegistryEvictorScriptCode = 27,
+    DaCompressionTemporalRegistryScriptCode = 20,
     /// See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
-    DaCompressionTemporalRegistryPredicateCode = 28,
-    /// See [`DaCompressionTemporalRegistryIndexPredicateCode`](da_compression::DaCompressionTemporalRegistryIndexPredicateCode)
-    DaCompressionTemporalRegistryIndexPredicateCode = 29,
-    /// See [`DaCompressionTemporalRegistryEvictorPredicateCode`](da_compression::DaCompressionTemporalRegistryEvictorPredicateCode)
-    DaCompressionTemporalRegistryEvictorPredicateCode = 30,
+    DaCompressionTemporalRegistryPredicateCode = 21,
 }
 
 impl Column {

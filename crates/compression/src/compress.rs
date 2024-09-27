@@ -6,8 +6,8 @@ use crate::{
         RegistrationsPerTable,
         TemporalRegistryAll,
     },
-    CompressedBlock,
     CompressedBlockPayloadV0,
+    VersionedCompressedBlock,
 };
 use fuel_core_types::{
     blockchain::block::Block,
@@ -39,7 +39,10 @@ pub trait CompressDb: TemporalRegistryAll + UtxoIdToPointer {}
 impl<T> CompressDb for T where T: TemporalRegistryAll + UtxoIdToPointer {}
 
 /// This must be called for all new blocks in sequence, otherwise the result will be garbage.
-pub async fn compress<D>(mut db: D, block: &Block) -> anyhow::Result<Vec<u8>>
+pub async fn compress<D>(
+    mut db: D,
+    block: &Block,
+) -> anyhow::Result<VersionedCompressedBlock>
 where
     D: CompressDb,
 {
@@ -63,10 +66,7 @@ where
         transactions,
     };
 
-    let compressed = postcard::to_allocvec(&CompressedBlock::V0(compact))
-        .expect("Serialization cannot fail");
-
-    Ok(compressed)
+    Ok(VersionedCompressedBlock::V0(compact))
 }
 
 /// Preparation pass through the block to collect all keys accessed during compression.

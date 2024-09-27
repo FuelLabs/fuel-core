@@ -1,3 +1,10 @@
+use crate::fuel_core_graphql_api::storage::da_compression::{
+    metadata_key::MetadataKey,
+    predicate_code_codec::PredicateCodeCodec,
+    reverse_key::ReverseKey,
+    script_code_codec::ScriptCodeCodec,
+};
+use fuel_core_compression::VersionedCompressedBlock;
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -20,17 +27,23 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
+pub mod metadata_key;
+pub mod predicate_code_codec;
+pub mod reverse_key;
+pub mod script_code_codec;
+
+/// The table for the compressed blocks sent to DA.
 pub struct DaCompressedBlocks;
 
 impl Mappable for DaCompressedBlocks {
     type Key = Self::OwnedKey;
     type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = Vec<u8>;
+    type OwnedValue = VersionedCompressedBlock;
 }
 
 impl TableWithBlueprint for DaCompressedBlocks {
-    type Blueprint = Plain<Primitive<4>, Raw>;
+    type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -38,8 +51,50 @@ impl TableWithBlueprint for DaCompressedBlocks {
     }
 }
 
+/// Mapping from the type to the register key in the temporal registry.
+pub struct DaCompressionTemporalRegistryIndex;
+
+impl Mappable for DaCompressionTemporalRegistryIndex {
+    type Key = Self::OwnedKey;
+    type OwnedKey = ReverseKey;
+    type Value = Self::OwnedValue;
+    type OwnedValue = RegistryKey;
+}
+
+impl TableWithBlueprint for DaCompressionTemporalRegistryIndex {
+    // TODO: Use Raw codec for value instead of Postcard
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::DaCompressionTemporalRegistryIndex
+    }
+}
+
+/// This table is used to hold "next key to evict" for each keyspace.
+/// In the future we'll likely switch to use LRU or something, in which
+/// case this table can be repurposed.
+pub struct DaCompressionTemporalRegistryMetadata;
+
+impl Mappable for DaCompressionTemporalRegistryMetadata {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MetadataKey;
+    type Value = Self::OwnedValue;
+    type OwnedValue = RegistryKey;
+}
+
+impl TableWithBlueprint for DaCompressionTemporalRegistryMetadata {
+    // TODO: Use Raw codec for value instead of Postcard
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::DaCompressionTemporalRegistryMetadata
+    }
+}
+
 macro_rules! temporal_registry {
-    ($type:ty) => {
+    ($type:ty, $code:ty) => {
         paste::paste! {
             pub struct [< DaCompressionTemporalRegistry $type >];
 
@@ -51,50 +106,12 @@ macro_rules! temporal_registry {
             }
 
             impl TableWithBlueprint for [< DaCompressionTemporalRegistry $type >] {
-                type Blueprint = Plain<Postcard, Postcard>;
+                // TODO: Use Raw codec for value instead of Postcard
+                type Blueprint = Plain<Postcard, $code>;
                 type Column = super::Column;
 
                 fn column() -> Self::Column {
                     Self::Column::[< DaCompressionTemporalRegistry $type >]
-                }
-            }
-
-            pub struct [< DaCompressionTemporalRegistryIndex $type >];
-
-            impl Mappable for [< DaCompressionTemporalRegistryIndex $type >] {
-                type Key = Self::OwnedKey;
-                type OwnedKey = [u8; 32]; // if the value is larger than 32 bytes, it's hashed
-                type Value = Self::OwnedValue;
-                type OwnedValue = RegistryKey;
-            }
-
-            impl TableWithBlueprint for [< DaCompressionTemporalRegistryIndex $type >] {
-                type Blueprint = Plain<Raw, Postcard>;
-                type Column = super::Column;
-
-                fn column() -> Self::Column {
-                    Self::Column::[< DaCompressionTemporalRegistryIndex $type >]
-                }
-            }
-
-            /// This table is used to hold "next key to evict" for each keyspace.
-            /// In the future we'll likely switch to use LRU or something, in which
-            /// case this table can be repurposed.
-            pub struct [< DaCompressionTemporalRegistryEvictor $type >];
-
-            impl Mappable for [< DaCompressionTemporalRegistryEvictor $type >] {
-                type Key = Self::OwnedKey;
-                type OwnedKey = ();
-                type Value = Self::OwnedValue;
-                type OwnedValue = RegistryKey;
-            }
-
-            impl TableWithBlueprint for [< DaCompressionTemporalRegistryEvictor $type >] {
-                type Blueprint = Plain<Postcard, Postcard>;
-                type Column = super::Column;
-
-                fn column() -> Self::Column {
-                    Self::Column::[< DaCompressionTemporalRegistryEvictor $type >]
                 }
             }
 
@@ -107,33 +124,33 @@ macro_rules! temporal_registry {
                 <[< DaCompressionTemporalRegistry $type >] as Mappable>::Value::default(),
                 tests::generate_key
             );
-
-            #[cfg(test)]
-            fuel_core_storage::basic_storage_tests!(
-                [< DaCompressionTemporalRegistryIndex $type >],
-                [0u8; 32],
-                RegistryKey::ZERO
-            );
-
-            #[cfg(test)]
-            fuel_core_storage::basic_storage_tests!(
-                [< DaCompressionTemporalRegistryEvictor $type >],
-                (),
-                RegistryKey::ZERO
-            );
         }
     };
 }
 
-temporal_registry!(Address);
-temporal_registry!(AssetId);
-temporal_registry!(ContractId);
-temporal_registry!(ScriptCode);
-temporal_registry!(PredicateCode);
+temporal_registry!(Address, Raw);
+temporal_registry!(AssetId, Raw);
+temporal_registry!(ContractId, Raw);
+temporal_registry!(ScriptCode, ScriptCodeCodec);
+temporal_registry!(PredicateCode, PredicateCodeCodec);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(test)]
+    fuel_core_storage::basic_storage_tests!(
+        DaCompressionTemporalRegistryIndex,
+        ReverseKey::Address(Address::zeroed()),
+        RegistryKey::ZERO
+    );
+
+    #[cfg(test)]
+    fuel_core_storage::basic_storage_tests!(
+        DaCompressionTemporalRegistryMetadata,
+        MetadataKey::Address,
+        RegistryKey::ZERO
+    );
 
     fuel_core_storage::basic_storage_tests!(
         DaCompressedBlocks,

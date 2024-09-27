@@ -25,9 +25,16 @@ impl<T> CacheEvictor<T> {
     where
         D: EvictorDb<T>,
     {
+        let latest_key = db.get_latest_assigned_key()?;
+        let next_key = if let Some(latest_key) = latest_key {
+            latest_key.next()
+        } else {
+            RegistryKey::ZERO
+        };
+
         Ok(Self {
             keep_keys,
-            next_key: db.get_latest_assigned_key()?,
+            next_key,
             _keyspace_marker: std::marker::PhantomData,
         })
     }

@@ -11,11 +11,6 @@ mod registry;
 
 pub use registry::RegistryKeyspace;
 
-use serde::{
-    Deserialize,
-    Serialize,
-};
-
 use fuel_core_types::{
     blockchain::header::PartialBlockHeader,
     fuel_tx::CompressedTransaction,
@@ -24,22 +19,28 @@ use fuel_core_types::{
 use registry::RegistrationsPerTable;
 
 /// Compressed block, without the preceding version byte.
-#[derive(Clone, Serialize, Deserialize)]
-struct CompressedBlockPayloadV0 {
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct CompressedBlockPayloadV0 {
     /// Temporal registry insertions
-    registrations: RegistrationsPerTable,
+    pub registrations: RegistrationsPerTable,
     /// Merkle root of the temporal registry state
-    registrations_root: Bytes32,
+    pub registrations_root: Bytes32,
     /// Compressed block header
-    header: PartialBlockHeader,
+    pub header: PartialBlockHeader,
     /// Compressed transactions
-    transactions: Vec<CompressedTransaction>,
+    pub transactions: Vec<CompressedTransaction>,
 }
 
 /// Versioned compressed block.
-#[derive(Clone, Serialize, Deserialize)]
-enum CompressedBlock {
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum VersionedCompressedBlock {
     V0(CompressedBlockPayloadV0),
+}
+
+impl Default for VersionedCompressedBlock {
+    fn default() -> Self {
+        Self::V0(Default::default())
+    }
 }
 
 #[cfg(test)]

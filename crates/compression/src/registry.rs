@@ -16,7 +16,7 @@ use fuel_core_types::{
 macro_rules! tables {
     ($($ident:ty: $type:ty),*) => { paste::paste! {
         #[doc = "RegistryKey namespaces"]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, strum_macros::EnumCount)]
         pub enum RegistryKeyspace {
             $(
                 [<$type>],
@@ -24,7 +24,7 @@ macro_rules! tables {
         }
 
         #[doc = "A value for each keyspace"]
-        #[derive(Debug, Clone, Default)]
+        #[derive(Debug, Clone, PartialEq, Eq, Default)]
         pub struct PerRegistryKeyspace<T> {
             $(pub $ident: T,)*
         }
@@ -50,7 +50,7 @@ macro_rules! tables {
         }
 
         #[doc = "The set of registrations for each table, as used in the compressed block header"]
-        #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
         pub struct RegistrationsPerTable {
             $(pub $ident: Vec<(RegistryKey, $type)>,)*
         }
@@ -97,12 +97,14 @@ tables!(
 #[cfg(any(test, feature = "test-helpers"))]
 impl rand::prelude::Distribution<RegistryKeyspace> for rand::distributions::Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> RegistryKeyspace {
-        match rng.gen_range(0..5) {
+        use strum::EnumCount;
+        match rng.gen_range(0..RegistryKeyspace::COUNT) {
             0 => RegistryKeyspace::Address,
             1 => RegistryKeyspace::AssetId,
             2 => RegistryKeyspace::ContractId,
             3 => RegistryKeyspace::ScriptCode,
-            _ => RegistryKeyspace::PredicateCode,
+            4 => RegistryKeyspace::PredicateCode,
+            _ => unreachable!("New keyspace is added but not supported here"),
         }
     }
 }
