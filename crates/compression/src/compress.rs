@@ -113,6 +113,8 @@ struct CompressCtxKeyspace<T> {
     cache_evictor: CacheEvictor<T>,
     /// Changes to the temporary registry, to be included in the compressed block header
     changes: HashMap<RegistryKey, T>,
+    /// Reverse lookup into changes
+    changes_lookup: HashMap<T, RegistryKey>,
 }
 
 macro_rules! compression {
@@ -131,6 +133,7 @@ macro_rules! compression {
                     $(
                         $ident: CompressCtxKeyspace {
                             changes: Default::default(),
+                            changes_lookup: Default::default(),
                             cache_evictor: CacheEvictor::new_from_db(&mut self.db, self.accessed_keys.$ident.into())?,
                         },
                     )*
@@ -187,10 +190,15 @@ macro_rules! compression {
                     if let Some(found) = ctx.db.registry_index_lookup(self)? {
                         return Ok(found);
                     }
+                    if let Some(found) = ctx.$ident.changes_lookup.get(self) {
+                        return Ok(*found);
+                    }
 
                     let key = ctx.$ident.cache_evictor.next_key();
                     let old = ctx.$ident.changes.insert(key, self.clone());
+                    let old_rev = ctx.$ident.changes_lookup.insert(self.clone(), key);
                     assert!(old.is_none(), "Key collision in registry substitution");
+                    assert!(old_rev.is_none(), "Key collision in registry substitution");
                     Ok(key)
                 }
             }

@@ -92,14 +92,14 @@ macro_rules! impl_temporal_registry {
 
                 // Remove the overwritten value from index, if any
                 if let Some(old_value) = old_value {
-                    let old_reverse_key = old_value.into();
+                    let old_reverse_key = (&old_value).into();
                     self.db_tx
                         .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
                         .remove(&old_reverse_key)?;
                 }
 
                 // Add the new value to the index
-                let reverse_key = old_value.into();
+                let reverse_key = value.into();
                 self.db_tx
                     .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
                     .insert(&reverse_key, key)?;
