@@ -9,7 +9,7 @@ use std::{
 };
 
 // TODO: Remove this codec when the `PredicateCode` implements
-//  `AsRef<[u8]>` and from `TryFrom<[u8]>` and use `Raw` codec instead.
+//  `AsRef<[u8]>` and `TryFrom<[u8]>` and use `Raw` codec instead.
 
 pub struct PredicateCodeCodec;
 
