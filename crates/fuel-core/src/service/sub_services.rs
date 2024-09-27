@@ -75,12 +75,12 @@ pub type PoAService = fuel_core_poa::Service<
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
-pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
+pub type TxPoolSharedState = fuel_core_txpool::SharedState<
     P2PAdapter,
     Database,
-    ExecutorAdapter,
-    FuelGasPriceProvider<Algorithm>,
     ConsensusParametersProvider,
+    FuelGasPriceProvider<Algorithm>,
+    ExecutorAdapter,
     SharedMemoryPool,
 >;
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
@@ -213,13 +213,13 @@ pub fn init_sub_services(
     let gas_price_provider = FuelGasPriceProvider::new(next_algo);
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
-        database.on_chain().clone(),
-        importer_adapter.clone(),
         p2p_adapter.clone(),
-        executor.clone(),
+        importer_adapter.clone(),
+        database.on_chain().clone(),
+        consensus_parameters_provider.clone(),
         last_height,
         gas_price_provider.clone(),
-        consensus_parameters_provider.clone(),
+        executor.clone(),
         SharedMemoryPool::new(config.memory_pool_size),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());

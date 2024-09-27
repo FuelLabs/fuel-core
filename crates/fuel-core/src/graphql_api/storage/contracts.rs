@@ -7,8 +7,7 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_txpool::types::ContractId;
-use fuel_core_types::entities::contract::ContractsInfoType;
+use fuel_core_types::{entities::contract::ContractsInfoType, fuel_tx::ContractId};
 
 /// Contract info
 pub struct ContractsInfo;

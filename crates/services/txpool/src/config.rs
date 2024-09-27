@@ -1,29 +1,47 @@
-use crate::types::ContractId;
-use fuel_core_types::{
-    fuel_tx::{
-        Address,
-        UtxoId,
-    },
-    fuel_types::Nonce,
-};
 use std::{
     collections::HashSet,
     time::Duration,
 };
 
+use fuel_core_types::{
+    fuel_tx::{
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
+        },
+        Address,
+        ContractId,
+        Input,
+        UtxoId,
+    },
+    fuel_types::Nonce,
+    services::txpool::PoolTransaction,
+};
+
+use crate::error::BlacklistedError;
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct BlackList {
     /// Blacklisted addresses.
-    pub(crate) owners: HashSet<Address>,
+    pub owners: HashSet<Address>,
     /// Blacklisted UTXO ids.
-    pub(crate) coins: HashSet<UtxoId>,
+    pub coins: HashSet<UtxoId>,
     /// Blacklisted messages by `Nonce`.
-    pub(crate) messages: HashSet<Nonce>,
+    pub messages: HashSet<Nonce>,
     /// Blacklisted contracts.
-    pub(crate) contracts: HashSet<ContractId>,
+    pub contracts: HashSet<ContractId>,
 }
 
 impl BlackList {
+    /// Create a new blacklist.
     pub fn new(
         owners: Vec<Address>,
         utxo_ids: Vec<UtxoId>,
@@ -38,84 +56,133 @@ impl BlackList {
         }
     }
 
-    pub fn contains_address(&self, address: &Address) -> bool {
-        self.owners.contains(address)
-    }
+    /// Check if the transaction has blacklisted inputs.
+    pub fn check_blacklisting(
+        &self,
+        tx: &PoolTransaction,
+    ) -> Result<(), BlacklistedError> {
+        for input in tx.inputs() {
+            match input {
+                Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
+                    if self.coins.contains(utxo_id) {
+                        return Err(BlacklistedError::BlacklistedUTXO(*utxo_id));
+                    }
+                    if self.owners.contains(owner) {
+                        return Err(BlacklistedError::BlacklistedOwner(*owner));
+                    }
+                }
+                Input::Contract(contract) => {
+                    if self.contracts.contains(&contract.contract_id) {
+                        return Err(BlacklistedError::BlacklistedContract(
+                            contract.contract_id,
+                        ));
+                    }
+                }
+                Input::MessageCoinSigned(MessageCoinSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageCoinPredicate(MessageCoinPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataSigned(MessageDataSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataPredicate(MessageDataPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                }) => {
+                    if self.messages.contains(nonce) {
+                        return Err(BlacklistedError::BlacklistedMessage(*nonce));
+                    }
+                    if self.owners.contains(sender) {
+                        return Err(BlacklistedError::BlacklistedOwner(*sender));
+                    }
+                    if self.owners.contains(recipient) {
+                        return Err(BlacklistedError::BlacklistedOwner(*recipient));
+                    }
+                }
+            }
+        }
 
-    pub fn contains_coin(&self, utxo_id: &UtxoId) -> bool {
-        self.coins.contains(utxo_id)
-    }
-
-    pub fn contains_message(&self, nonce: &Nonce) -> bool {
-        self.messages.contains(nonce)
-    }
-
-    pub fn contains_contract(&self, contract_id: &ContractId) -> bool {
-        self.contracts.contains(contract_id)
+        Ok(())
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
-    /// Maximum number of transactions inside the pool
-    pub max_tx: usize,
-    /// max depth of connected UTXO excluding contracts
-    pub max_depth: usize,
-    /// Flag to disable utxo existence and signature checks
+    /// Enable UTXO validation (will check if UTXO exists in the database and has correct data).
     pub utxo_validation: bool,
-    /// Enables prometheus metrics for this fuel-service
-    pub metrics: bool,
-    /// Transaction TTL
-    pub transaction_ttl: Duration,
-    /// The number of allowed active transaction status subscriptions.
-    pub number_of_active_subscription: usize,
-    /// The blacklist used to validate transaction.
-    pub blacklist: BlackList,
+    /// Maximum of subscriptions to listen to updates of a transaction.
+    pub max_tx_update_subscriptions: usize,
+    /// Maximum transactions per dependencies chain.
+    pub max_txs_chain_count: usize,
+    /// Pool limits
+    pub pool_limits: PoolLimits,
+    /// Interval for checking the time to live of transactions.
+    pub ttl_check_interval: Duration,
+    /// Maximum transaction time to live.
+    pub max_txs_ttl: Duration,
+    /// Heavy async processing configuration.
+    pub heavy_work: HeavyWorkConfig,
+    /// Blacklist. Transactions with blacklisted inputs will not be accepted.
+    pub black_list: BlackList,
 }
 
-#[cfg(feature = "test-helpers")]
+#[derive(Clone)]
+pub struct PoolLimits {
+    /// Maximum number of transactions in the pool.
+    pub max_txs: usize,
+    /// Maximum number of gas in the pool.
+    pub max_gas: u64,
+    /// Maximum number of bytes in the pool.
+    pub max_bytes_size: usize,
+}
+
+#[derive(Clone)]
+pub struct HeavyWorkConfig {
+    /// Maximum of threads for managing verifications/insertions.
+    pub number_threads_to_verify_transactions: usize,
+    /// Maximum of tasks in the heavy async processing queue.
+    pub size_of_verification_queue: usize,
+    /// Maximum number of threads for managing the p2p synchronisation
+    pub number_threads_p2p_sync: usize,
+    /// Maximum number of tasks in the p2p sync queue
+    pub size_of_p2p_sync_queue: usize,
+}
+
+#[cfg(test)]
 impl Default for Config {
     fn default() -> Self {
-        let max_tx = 4064;
-        let max_depth = 10;
-        let utxo_validation = true;
-        let metrics = false;
-        // 5 minute TTL
-        let transaction_ttl = Duration::from_secs(60 * 5);
-        let number_of_active_subscription = max_tx;
-        Self::new(
-            max_tx,
-            max_depth,
-            utxo_validation,
-            metrics,
-            transaction_ttl,
-            number_of_active_subscription,
-            Default::default(),
-        )
-    }
-}
-
-impl Config {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        max_tx: usize,
-        max_depth: usize,
-        utxo_validation: bool,
-        metrics: bool,
-        transaction_ttl: Duration,
-        number_of_active_subscription: usize,
-        blacklist: BlackList,
-    ) -> Self {
-        // # Dev-note: If you add a new field, be sure that this field is propagated correctly
-        //  in all places where `new` is used.
         Self {
-            max_tx,
-            max_depth,
-            utxo_validation,
-            metrics,
-            transaction_ttl,
-            number_of_active_subscription,
-            blacklist,
+            utxo_validation: true,
+            max_tx_update_subscriptions: 1000,
+            max_txs_chain_count: 1000,
+            ttl_check_interval: Duration::from_secs(60),
+            max_txs_ttl: Duration::from_secs(60 * 10),
+            black_list: BlackList::default(),
+            pool_limits: PoolLimits {
+                max_txs: 10000,
+                max_gas: 100_000_000_000,
+                max_bytes_size: 10_000_000_000,
+            },
+            heavy_work: HeavyWorkConfig {
+                number_threads_to_verify_transactions: 1,
+                size_of_verification_queue: 100,
+                number_threads_p2p_sync: 2,
+                size_of_p2p_sync_queue: 100,
+            },
         }
     }
 }

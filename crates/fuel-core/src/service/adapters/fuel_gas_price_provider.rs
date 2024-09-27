@@ -6,7 +6,7 @@ use fuel_core_gas_price_service::{
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_txpool::{
     ports::GasPriceProvider as TxPoolGasPriceProvider,
-    Result as TxPoolResult,
+    error::Error as TxPoolError,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
@@ -73,7 +73,7 @@ impl<A> TxPoolGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn next_gas_price(&self) -> TxPoolResult<u64> {
+    async fn next_gas_price(&self) -> Result<u64, TxPoolError> {
         Ok(self.next_gas_price().await)
     }
 }

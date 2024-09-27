@@ -8,7 +8,7 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_txpool::types::TxId;
+use fuel_core_txpool::TxId;
 use fuel_core_types::fuel_tx::{
     Address,
     UtxoId,

@@ -25,8 +25,8 @@ use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::{
-    service::TxStatusMessage,
-    types::TxId,
+    TxStatusMessage,
+    TxId,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -60,13 +60,13 @@ mod on_chain;
 impl TxPoolPort for TxPoolAdapter {
     fn transaction(&self, id: TxId) -> Option<Transaction> {
         self.service
-            .find_one(id)
-            .map(|info| info.tx().clone().deref().into())
+            .find_one(&id)
+            .map(|info| info.clone().deref().into())
     }
 
     fn submission_time(&self, id: TxId) -> Option<Tai64> {
         self.service
-            .find_one(id)
+            .find_one(&id)
             .map(|info| Tai64::from_unix(info.submitted_time().as_secs() as i64))
     }
 
@@ -75,11 +75,10 @@ impl TxPoolPort for TxPoolAdapter {
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         self.service
-            .insert(txs)
-            .await
-            .into_iter()
-            .map(|res| res.map_err(|e| anyhow::anyhow!(e)))
-            .collect()
+            .insert(txs, None)
+            .map(|res| res.map_err(|e| anyhow::anyhow!(e)))?;
+        // TODO
+        return Err(anyhow::anyhow!("Not implemented"));
     }
 
     fn tx_update_subscribe(

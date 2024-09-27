@@ -10,7 +10,7 @@ use fuel_core_p2p::ports::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::types::TxId;
+use fuel_core_txpool::TxId;
 use fuel_core_types::{
     blockchain::{
         consensus::Genesis,
@@ -69,7 +69,7 @@ impl TxPool for TxPoolAdapter {
             .into_iter()
             .map(|tx_info| {
                 tx_info.map(|tx| {
-                    NetworkableTransactionPool::PoolTransaction(tx.tx().clone())
+                    NetworkableTransactionPool::PoolTransaction(tx.clone())
                 })
             })
             .collect()
