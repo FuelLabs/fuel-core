@@ -3,9 +3,7 @@ use fuel_core_types::fuel_types::BlockHeight;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to find L2 block: {source_error:?}")]
-    CouldNotFetchL2Block {
-        source_error: anyhow::Error,
-    },
+    CouldNotFetchL2Block { source_error: anyhow::Error },
     #[error("Failed to find DA records: {0:?}")]
     CouldNotFetchDARecord(anyhow::Error),
     #[error("Failed to retrieve updater metadata: {source_error:?}")]

@@ -69,11 +69,7 @@ where
         let mut tx = self.write_transaction();
         tx.storage_as_mut::<GasPriceMetadata>()
             .insert(&block_height, metadata)
-            .map_err(|err| GasPriceError::CouldNotSetMetadata {
-                block_height,
-                source_error: err.into(),
-            })?;
-        tx.commit()
+            .and_then(|_| tx.commit())
             .map_err(|err| GasPriceError::CouldNotSetMetadata {
                 block_height,
                 source_error: err.into(),
@@ -100,8 +96,7 @@ pub fn get_block_info(
     block_gas_limit: u64,
 ) -> GasPriceResult<BlockInfo> {
     let (fee, gas_price) = mint_values(block)?;
-    let used_gas =
-        block_used_gas(fee, gas_price, gas_price_factor, block_gas_limit)?;
+    let used_gas = block_used_gas(fee, gas_price, gas_price_factor, block_gas_limit)?;
     let info = BlockInfo::Block {
         height: (*block.header().height()).into(),
         gas_used: used_gas,
