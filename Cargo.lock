@@ -3747,10 +3747,13 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types 0.36.0",
+ "futures",
+ "mockall",
  "num-rational",
+ "parking_lot",
  "petgraph",
+ "rayon",
  "tokio",
- "tokio-rayon",
  "tracing",
 ]
 

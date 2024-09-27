@@ -1,12 +1,17 @@
 use std::{
-    collections::HashSet,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     fmt::Debug,
     time::Instant,
 };
 
 use crate::{
-    collision_manager::CollisionReason,
-    error::Error,
+    error::{
+        CollisionReason,
+        Error,
+    },
     ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::PoolTransaction;
@@ -21,8 +26,12 @@ pub struct StorageData {
     pub dependents_cumulative_tip: u64,
     /// The cumulative gas of a transaction and all of its children.
     pub dependents_cumulative_gas: u64,
+    /// The cumulative of space used by a transaction and all of its children.
+    pub dependents_cumulative_bytes_size: usize,
     /// Number of dependents
     pub number_dependents_in_chain: usize,
+    /// The instant when the transaction was added to the pool.
+    pub creation_instant: Instant,
 }
 
 pub type RemovedTransactions = Vec<PoolTransaction>;
@@ -33,14 +42,23 @@ pub trait Storage {
     /// The index type used in the storage and allow other components to reference transactions.
     type StorageIndex: Copy + Debug;
 
-    /// Store a transaction in the storage according to the dependencies and collisions.
-    /// Returns the index of the stored transaction and the transactions that were removed from the storage in favor of the new transaction.
+    /// Store a transaction in the storage according to the dependencies.
+    /// Returns the index of the stored transaction.
     fn store_transaction(
         &mut self,
         transaction: PoolTransaction,
+        creation_instant: Instant,
         dependencies: Vec<Self::StorageIndex>,
-        collided_transactions: &HashSet<Self::StorageIndex>,
-    ) -> Result<(Self::StorageIndex, RemovedTransactions), Error>;
+    ) -> Result<Self::StorageIndex, Error>;
+
+    /// Check if a transaction could be stored in the storage. This shouldn't be expected to be called before store_transaction.
+    /// Its just a way to perform some checks without storing the transaction.
+    fn can_store_transaction(
+        &self,
+        transaction: &PoolTransaction,
+        dependencies: &[Self::StorageIndex],
+        collisions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
+    ) -> Result<(), Error>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
@@ -79,6 +97,12 @@ pub trait Storage {
         index: Self::StorageIndex,
     ) -> Result<StorageData, Error>;
 
+    /// Remove a transaction along with its dependents subtree.
+    fn remove_transaction_and_dependents_subtree(
+        &mut self,
+        index: Self::StorageIndex,
+    ) -> Result<RemovedTransactions, Error>;
+
     /// Count the number of transactions in the storage.
-    fn count(&self) -> u64;
+    fn count(&self) -> usize;
 }

@@ -1,3 +1,3 @@
 mod context;
-mod mock_db;
+mod mocks;
 mod pool;

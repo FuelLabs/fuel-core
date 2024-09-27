@@ -31,15 +31,14 @@ use fuel_core_types::{
 use num_rational::Ratio;
 
 use crate::{
-    error::Error,
+    error::{
+        CollisionReason,
+        Error,
+    },
     storage::StorageData,
 };
 
-use super::{
-    CollisionManager,
-    CollisionReason,
-    Collisions,
-};
+use super::CollisionManager;
 
 pub trait BasicCollisionManagerStorage {
     type StorageIndex: Copy + Debug + Hash + PartialEq + Eq;
@@ -76,81 +75,21 @@ impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
 }
 
 impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
-    fn gather_colliding_txs(
+    fn is_better_than_collision(
         &self,
         tx: &PoolTransaction,
-    ) -> Result<Collisions<S::StorageIndex>, Error> {
-        let mut collisions = Collisions::new();
-        if let PoolTransaction::Blob(checked_tx, _) = tx {
-            let blob_id = checked_tx.transaction().blob_id();
-            if let Some(state) = self.blobs_users.get(blob_id) {
-                collisions.reasons.insert(CollisionReason::Blob(*blob_id));
-                collisions.colliding_txs.insert(*state);
-            }
-        }
-        for input in tx.inputs() {
-            match input {
-                Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // Check if the utxo is already spent by another transaction in the pool
-                    if let Some(tx_id) = self.coins_spenders.get(utxo_id) {
-                        collisions.reasons.insert(CollisionReason::Coin(*utxo_id));
-                        collisions.colliding_txs.insert(*tx_id);
-                    }
-                }
-                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
-                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
-                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
-                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                    // Check if the message is already spent by another transaction in the pool
-                    if let Some(tx_id) = self.messages_spenders.get(nonce) {
-                        collisions.reasons.insert(CollisionReason::Message(*nonce));
-                        collisions.colliding_txs.insert(*tx_id);
-                    }
-                }
-                // No collision for contract inputs
-                _ => {}
-            }
-        }
-
-        for output in tx.outputs() {
-            if let Output::ContractCreated { contract_id, .. } = output {
-                // Check if the contract is already created by another transaction in the pool
-                if let Some(tx_id) = self.contracts_creators.get(contract_id) {
-                    collisions
-                        .reasons
-                        .insert(CollisionReason::ContractCreation(*contract_id));
-                    collisions.colliding_txs.insert(*tx_id);
-                }
-            }
-        }
-        Ok(collisions)
-    }
-
-    fn is_better_than_collisions(
-        &self,
-        tx: &PoolTransaction,
-        collisions: &Collisions<S::StorageIndex>,
+        collision: S::StorageIndex,
         storage: &S,
     ) -> bool {
         let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
-        let (total_tip, total_gas) = collisions.colliding_txs.iter().fold(
-            (0u64, 0u64),
-            |(total_tip, total_gas), node_id| {
-                let dependent_tx = storage
-                    .get(node_id)
-                    .expect("Transaction always should exist in storage");
-                let total_tip =
-                    total_tip.saturating_add(dependent_tx.dependents_cumulative_tip);
-                let total_gas =
-                    total_gas.saturating_add(dependent_tx.dependents_cumulative_gas);
-                (total_tip, total_gas)
-            },
+        let colliding_tx = storage
+            .get(&collision)
+            .expect("Transaction always should exist in storage");
+        let colliding_tx_ratio = Ratio::new(
+            colliding_tx.dependents_cumulative_tip,
+            colliding_tx.dependents_cumulative_gas,
         );
-
-        let collision_tx_ratio = Ratio::new(total_tip, total_gas);
-
-        new_tx_ratio > collision_tx_ratio
+        new_tx_ratio > colliding_tx_ratio
     }
 }
 
@@ -161,19 +100,88 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
     fn collect_colliding_transactions(
         &self,
         transaction: &PoolTransaction,
-        storage: &S,
-    ) -> Result<Collisions<S::StorageIndex>, Error> {
-        let collisions = self.gather_colliding_txs(transaction)?;
-        if collisions.colliding_txs.is_empty() {
-            Ok(Collisions::new())
-        } else if self.is_better_than_collisions(transaction, &collisions, storage) {
-            Ok(collisions)
-        } else {
-            Err(Error::Collided(format!(
-                "Transaction collides with other transactions: {:?}",
-                collisions.colliding_txs
-            )))
+    ) -> Result<HashMap<Self::StorageIndex, Vec<CollisionReason>>, Error> {
+        let mut collisions = HashMap::new();
+        if let PoolTransaction::Blob(checked_tx, _) = transaction {
+            let blob_id = checked_tx.transaction().blob_id();
+            if let Some(state) = self.blobs_users.get(blob_id) {
+                collisions.insert(*state, vec![CollisionReason::Blob(*blob_id)]);
+            }
         }
+        for input in transaction.inputs() {
+            match input {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                    // Check if the utxo is already spent by another transaction in the pool
+                    if let Some(storage_id) = self.coins_spenders.get(utxo_id) {
+                        let entry = collisions.entry(*storage_id).or_default();
+                        entry.push(CollisionReason::Utxo(*utxo_id));
+                    }
+                }
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
+                    // Check if the message is already spent by another transaction in the pool
+                    if let Some(storage_id) = self.messages_spenders.get(nonce) {
+                        let entry = collisions.entry(*storage_id).or_default();
+                        entry.push(CollisionReason::Message(*nonce));
+                    }
+                }
+                // No collision for contract inputs
+                _ => {}
+            }
+        }
+
+        for output in transaction.outputs() {
+            if let Output::ContractCreated { contract_id, .. } = output {
+                // Check if the contract is already created by another transaction in the pool
+                if let Some(storage_id) = self.contracts_creators.get(contract_id) {
+                    let entry = collisions.entry(*storage_id).or_default();
+                    entry.push(CollisionReason::ContractCreation(*contract_id));
+                }
+            }
+        }
+        Ok(collisions)
+    }
+
+    /// Rules:
+    // A transaction with dependencies can collide only with one other transaction if it is less worth it
+    // A transaction without dependencies can collide with multiple transaction if they are less worth it
+    fn can_store_transaction(
+        &self,
+        transaction: &PoolTransaction,
+        has_dependencies: bool,
+        colliding_transactions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
+        storage: &Self::Storage,
+    ) -> Result<(), CollisionReason> {
+        if colliding_transactions.is_empty() {
+            return Ok(());
+        }
+        if has_dependencies {
+            if colliding_transactions.len() > 1 {
+                return Err(CollisionReason::MultipleCollisions);
+            }
+            let (collision, reason) = colliding_transactions.iter().next().unwrap();
+            if !self.is_better_than_collision(transaction, *collision, storage) {
+                if let Some(reason) = reason.first() {
+                    return Err(reason.clone());
+                } else {
+                    return Err(CollisionReason::Unknown);
+                }
+            }
+        } else {
+            for (collision, reason) in colliding_transactions.iter() {
+                if !self.is_better_than_collision(transaction, *collision, storage) {
+                    if let Some(reason) = reason.first() {
+                        return Err(reason.clone());
+                    } else {
+                        return Err(CollisionReason::Unknown);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn on_stored_transaction(

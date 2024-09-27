@@ -160,6 +160,40 @@ impl PoolTransaction {
     }
 }
 
+impl From<PoolTransaction> for Transaction {
+    fn from(tx: PoolTransaction) -> Self {
+        match tx {
+            PoolTransaction::Script(tx, _) => {
+                Transaction::Script(Into::<(Script, _)>::into(tx).0)
+            }
+            PoolTransaction::Create(tx, _) => {
+                Transaction::Create(Into::<(Create, _)>::into(tx).0)
+            }
+            PoolTransaction::Upgrade(tx, _) => {
+                Transaction::Upgrade(Into::<(Upgrade, _)>::into(tx).0)
+            }
+            PoolTransaction::Upload(tx, _) => {
+                Transaction::Upload(Into::<(Upload, _)>::into(tx).0)
+            }
+            PoolTransaction::Blob(tx, _) => {
+                Transaction::Blob(Into::<(Blob, _)>::into(tx).0)
+            }
+        }
+    }
+}
+
+impl From<PoolTransaction> for CheckedTransaction {
+    fn from(tx: PoolTransaction) -> Self {
+        match tx {
+            PoolTransaction::Script(tx, _) => CheckedTransaction::Script(tx),
+            PoolTransaction::Create(tx, _) => CheckedTransaction::Create(tx),
+            PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx),
+            PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx),
+            PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx),
+        }
+    }
+}
+
 impl From<&PoolTransaction> for Transaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {

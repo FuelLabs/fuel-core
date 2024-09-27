@@ -1,5 +1,8 @@
 use std::{
-    collections::HashSet,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     fmt::Debug,
 };
 
@@ -13,46 +16,12 @@ use fuel_core_types::{
     services::txpool::PoolTransaction,
 };
 
-use crate::error::Error;
+use crate::error::{
+    CollisionReason,
+    Error,
+};
 
 pub mod basic;
-
-/// The reason why a transaction collides with another.
-/// It also contains additional information about the collision.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum CollisionReason {
-    Coin(UtxoId),
-    Blob(BlobId),
-    Message(Nonce),
-    ContractCreation(ContractId),
-}
-
-/// Contains all the information about the collisions of a transaction.
-#[derive(Default, Debug)]
-pub struct Collisions<Idx> {
-    reasons: HashSet<CollisionReason>,
-    colliding_txs: HashSet<Idx>,
-}
-
-impl<Idx> Collisions<Idx> {
-    /// Create a new empty collision information.
-    pub fn new() -> Self {
-        Self {
-            reasons: HashSet::default(),
-            colliding_txs: HashSet::default(),
-        }
-    }
-
-    /// Get the reasons of the collisions.
-    pub fn reasons(&self) -> &HashSet<CollisionReason> {
-        &self.reasons
-    }
-
-    /// Get the transactions that collide with the transaction.
-    pub fn colliding_txs(&self) -> &HashSet<Idx> {
-        &self.colliding_txs
-    }
-}
 
 pub trait CollisionManager {
     /// Storage type of the collision manager.
@@ -60,14 +29,22 @@ pub trait CollisionManager {
     /// Index that identifies a transaction in the storage.
     type StorageIndex;
 
-    /// Collect all the transactions that collide with the given transaction.
-    /// It returns an error if the transaction is less worthy than the colliding transactions.
-    /// It returns the information about the collisions.
+    /// Collect the transaction that collide with the given transaction.
+    /// Returns a list of storage indexes of the colliding transactions and the reason of the collision.
     fn collect_colliding_transactions(
         &self,
         transaction: &PoolTransaction,
+    ) -> Result<HashMap<Self::StorageIndex, Vec<CollisionReason>>, Error>;
+
+    /// Determine if the collisions allow the transaction to be stored.
+    /// Returns the reason of the collision if the transaction cannot be stored.
+    fn can_store_transaction(
+        &self,
+        transaction: &PoolTransaction,
+        has_dependencies: bool,
+        colliding_transactions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
         storage: &Self::Storage,
-    ) -> Result<Collisions<Self::StorageIndex>, Error>;
+    ) -> Result<(), CollisionReason>;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(

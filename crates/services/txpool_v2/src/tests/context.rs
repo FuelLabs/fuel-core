@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -25,7 +27,6 @@ use fuel_core_types::{
             contract::Contract as ContractInput,
             Input,
         },
-        Bytes32,
         ConsensusParameters,
         Contract,
         ContractId,
@@ -41,39 +42,254 @@ use fuel_core_types::{
         Word,
     },
     fuel_vm::{
-        checked_transaction::{
-            Checked,
-            EstimatePredicates,
-        },
+        checked_transaction::EstimatePredicates,
         interpreter::MemoryInstance,
     },
 };
+use parking_lot::RwLock;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
     error::Error,
     pool::Pool,
-    ports::{
-        GasPriceProvider,
-        WasmChecker,
-        WasmValidityError,
-    },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
+    service::{
+        RemovedTransactions,
+        TxPool,
+    },
     storage::graph::{
         GraphConfig,
         GraphStorage,
     },
-    tests::mock_db::{
+    tests::mocks::{
         MockDBProvider,
         MockDb,
     },
-    transaction_conversion::check_single_tx,
+    verifications::perform_all_verifications,
     GasPrice,
 };
-// TDOO: Reorganize this file
 
-pub(crate) fn create_message_predicate_from_message(
+use super::mocks::{
+    MockTxPoolGasPrice,
+    MockWasmChecker,
+};
+
+// use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
+// the byte and gas price fees.
+pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
+pub const GAS_LIMIT: Word = 100000;
+
+pub struct TestPoolUniverse {
+    mock_db: MockDb,
+    rng: StdRng,
+    pub config: Config,
+    pool: Option<TxPool<MockDBProvider>>,
+}
+
+impl Default for TestPoolUniverse {
+    fn default() -> Self {
+        Self {
+            mock_db: MockDb::default(),
+            rng: StdRng::seed_from_u64(0),
+            config: Default::default(),
+            pool: None,
+        }
+    }
+}
+
+impl TestPoolUniverse {
+    pub fn database_mut(&mut self) -> &mut MockDb {
+        &mut self.mock_db
+    }
+
+    pub fn config(self, config: Config) -> Self {
+        if self.pool.is_some() {
+            panic!("Pool already built");
+        }
+        Self { config, ..self }
+    }
+
+    pub fn build_pool(&mut self) -> TxPool<MockDBProvider> {
+        let pool = Arc::new(RwLock::new(Pool::new(
+            MockDBProvider(self.mock_db.clone()),
+            GraphStorage::new(GraphConfig {
+                max_txs_chain_count: self.config.max_txs_chain_count,
+            }),
+            BasicCollisionManager::new(),
+            RatioTipGasSelection::new(),
+            self.config.clone(),
+        )));
+        self.pool = Some(pool.clone());
+        pool
+    }
+
+    pub fn build_script_transaction(
+        &mut self,
+        inputs: Option<Vec<Input>>,
+        outputs: Option<Vec<Output>>,
+        tip: u64,
+    ) -> Transaction {
+        let mut inputs = inputs.unwrap_or_default();
+        let (_, gas_coin) = self.setup_coin();
+        inputs.push(gas_coin);
+        let outputs = outputs.unwrap_or_default();
+        let mut tx_builder = TransactionBuilder::script(vec![], vec![]);
+        tx_builder.script_gas_limit(GAS_LIMIT);
+        for input in inputs {
+            tx_builder.add_input(input);
+        }
+        for output in outputs {
+            tx_builder.add_output(output);
+        }
+        tx_builder.tip(tip);
+        tx_builder.max_fee_limit(10000);
+        tx_builder.finalize().into()
+    }
+
+    pub async fn verify_and_insert(
+        &mut self,
+        tx: Transaction,
+    ) -> Result<RemovedTransactions, Error> {
+        if let Some(pool) = &self.pool {
+            let tx = perform_all_verifications(
+                tx,
+                pool.clone(),
+                Default::default(),
+                &ConsensusParameters::default(),
+                0,
+                &MockTxPoolGasPrice::new(0),
+                &MockWasmChecker::new(Ok(())),
+                MemoryInstance::new(),
+            )
+            .await?;
+            pool.write().insert(tx)
+        } else {
+            panic!("Pool needs to be built first");
+        }
+    }
+
+    pub async fn verify_and_insert_with_gas_price(
+        &mut self,
+        tx: Transaction,
+        gas_price: GasPrice,
+    ) -> Result<RemovedTransactions, Error> {
+        if let Some(pool) = &self.pool {
+            let tx = perform_all_verifications(
+                tx,
+                pool.clone(),
+                Default::default(),
+                &ConsensusParameters::default(),
+                0,
+                &MockTxPoolGasPrice::new(gas_price),
+                &MockWasmChecker::new(Ok(())),
+                MemoryInstance::new(),
+            )
+            .await?;
+            pool.write().insert(tx)
+        } else {
+            panic!("Pool needs to be built first");
+        }
+    }
+
+    pub async fn verify_and_insert_with_consensus_params_wasm_checker(
+        &mut self,
+        tx: Transaction,
+        consensus_params: ConsensusParameters,
+        wasm_checker: MockWasmChecker,
+    ) -> Result<RemovedTransactions, Error> {
+        if let Some(pool) = &self.pool {
+            let tx = perform_all_verifications(
+                tx,
+                pool.clone(),
+                Default::default(),
+                &consensus_params,
+                0,
+                &MockTxPoolGasPrice::new(0),
+                &wasm_checker,
+                MemoryInstance::new(),
+            )
+            .await?;
+            pool.write().insert(tx)
+        } else {
+            panic!("Pool needs to be built first");
+        }
+    }
+
+    pub fn get_pool(&self) -> TxPool<MockDBProvider> {
+        self.pool.clone().unwrap()
+    }
+
+    pub fn setup_coin(&mut self) -> (Coin, Input) {
+        let input = self.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
+
+        // add coin to the state
+        let mut coin = CompressedCoin::default();
+        coin.set_owner(*input.input_owner().unwrap());
+        coin.set_amount(TEST_COIN_AMOUNT);
+        coin.set_asset_id(*input.asset_id(&AssetId::BASE).unwrap());
+        let utxo_id = *input.utxo_id().unwrap();
+        self.mock_db
+            .data
+            .lock()
+            .unwrap()
+            .coins
+            .insert(utxo_id, coin.clone());
+        (coin.uncompress(utxo_id), input)
+    }
+
+    pub fn create_output_and_input(&mut self) -> (Output, UnsetInput) {
+        let input = self.random_predicate(AssetId::BASE, 1, None);
+        let output = Output::coin(*input.input_owner().unwrap(), 1, AssetId::BASE);
+        (output, UnsetInput(input))
+    }
+
+    pub fn random_predicate(
+        &mut self,
+        asset_id: AssetId,
+        amount: Word,
+        utxo_id: Option<UtxoId>,
+    ) -> Input {
+        // use predicate inputs to avoid expensive cryptography for signatures
+        let mut predicate_code: Vec<u8> = vec![op::ret(1)].into_iter().collect();
+        // append some randomizing bytes after the predicate has already returned.
+        predicate_code.push(self.rng.gen());
+        let owner = Input::predicate_owner(&predicate_code);
+        Input::coin_predicate(
+            utxo_id.unwrap_or_else(|| self.rng.gen()),
+            owner,
+            amount,
+            asset_id,
+            Default::default(),
+            Default::default(),
+            predicate_code,
+            vec![],
+        )
+        .into_default_estimated()
+    }
+
+    pub fn custom_predicate(
+        &mut self,
+        asset_id: AssetId,
+        amount: Word,
+        code: Vec<u8>,
+        utxo_id: Option<UtxoId>,
+    ) -> Input {
+        let owner = Input::predicate_owner(&code);
+        Input::coin_predicate(
+            utxo_id.unwrap_or_else(|| self.rng.gen()),
+            owner,
+            amount,
+            asset_id,
+            Default::default(),
+            Default::default(),
+            code,
+            vec![],
+        )
+    }
+}
+
+pub fn create_message_predicate_from_message(
     amount: Word,
     nonce: u64,
 ) -> (Message, Input) {
@@ -102,11 +318,7 @@ pub(crate) fn create_message_predicate_from_message(
     )
 }
 
-pub(crate) fn create_coin_output() -> Output {
-    Output::coin(Default::default(), Default::default(), Default::default())
-}
-
-pub(crate) fn create_contract_input(
+pub fn create_contract_input(
     tx_id: TxId,
     output_index: u16,
     contract_id: ContractId,
@@ -120,158 +332,8 @@ pub(crate) fn create_contract_input(
     )
 }
 
-pub(crate) fn create_contract_output(contract_id: ContractId) -> Output {
+pub fn create_contract_output(contract_id: ContractId) -> Output {
     Output::contract_created(contract_id, Contract::default_state_root())
-}
-
-// use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
-// the byte and gas price fees.
-pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
-
-pub(crate) struct PoolContext {
-    mock_db: MockDb,
-    rng: StdRng,
-    pub(crate) config: Config,
-}
-
-impl Default for PoolContext {
-    fn default() -> Self {
-        Self {
-            mock_db: MockDb::default(),
-            rng: StdRng::seed_from_u64(0),
-            config: Default::default(),
-        }
-    }
-}
-
-impl PoolContext {
-    pub(crate) fn database_mut(&mut self) -> &mut MockDb {
-        &mut self.mock_db
-    }
-
-    pub(crate) fn config(self, config: Config) -> Self {
-        Self { config, ..self }
-    }
-
-    pub(crate) fn build(
-        self,
-    ) -> Pool<
-        MockDBProvider,
-        GraphStorage,
-        BasicCollisionManager<GraphStorage>,
-        RatioTipGasSelection<GraphStorage>,
-    > {
-        Pool::new(
-            MockDBProvider(self.mock_db),
-            GraphStorage::new(GraphConfig {
-                max_txs_chain_count: self.config.max_txs_chain_count,
-            }),
-            BasicCollisionManager::new(),
-            RatioTipGasSelection::new(),
-            self.config,
-        )
-    }
-
-    pub(crate) fn setup_coin(&mut self) -> (Coin, Input) {
-        setup_coin(&mut self.rng, Some(&self.mock_db))
-    }
-
-    pub(crate) fn create_output_and_input(
-        &mut self,
-        amount: Word,
-    ) -> (Output, UnsetInput) {
-        let input = self.random_predicate(AssetId::BASE, amount, None);
-        let output = Output::coin(*input.input_owner().unwrap(), amount, AssetId::BASE);
-        (output, UnsetInput(input))
-    }
-
-    pub(crate) fn random_predicate(
-        &mut self,
-        asset_id: AssetId,
-        amount: Word,
-        utxo_id: Option<UtxoId>,
-    ) -> Input {
-        random_predicate(&mut self.rng, asset_id, amount, utxo_id)
-    }
-
-    pub(crate) fn custom_predicate(
-        &mut self,
-        asset_id: AssetId,
-        amount: Word,
-        code: Vec<u8>,
-        utxo_id: Option<UtxoId>,
-    ) -> Input {
-        let owner = Input::predicate_owner(&code);
-        Input::coin_predicate(
-            utxo_id.unwrap_or_else(|| self.rng.gen()),
-            owner,
-            amount,
-            asset_id,
-            Default::default(),
-            Default::default(),
-            code,
-            vec![],
-        )
-    }
-}
-
-pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, Input) {
-    let input = random_predicate(rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
-    add_coin_to_state(input, mock_db)
-}
-
-pub(crate) fn add_coin_to_state(input: Input, mock_db: Option<&MockDb>) -> (Coin, Input) {
-    let mut coin = CompressedCoin::default();
-    coin.set_owner(*input.input_owner().unwrap());
-    coin.set_amount(TEST_COIN_AMOUNT);
-    coin.set_asset_id(*input.asset_id(&AssetId::BASE).unwrap());
-    let utxo_id = *input.utxo_id().unwrap();
-    if let Some(mock_db) = mock_db {
-        mock_db
-            .data
-            .lock()
-            .unwrap()
-            .coins
-            .insert(utxo_id, coin.clone());
-    }
-    (coin.uncompress(utxo_id), input)
-}
-
-pub(crate) fn random_predicate(
-    rng: &mut StdRng,
-    asset_id: AssetId,
-    amount: Word,
-    utxo_id: Option<UtxoId>,
-) -> Input {
-    // use predicate inputs to avoid expensive cryptography for signatures
-    let mut predicate_code: Vec<u8> = vec![op::ret(1)].into_iter().collect();
-    // append some randomizing bytes after the predicate has already returned.
-    predicate_code.push(rng.gen());
-    let owner = Input::predicate_owner(&predicate_code);
-    Input::coin_predicate(
-        utxo_id.unwrap_or_else(|| rng.gen()),
-        owner,
-        amount,
-        asset_id,
-        Default::default(),
-        Default::default(),
-        predicate_code,
-        vec![],
-    )
-    .into_default_estimated()
-}
-
-pub struct MockWasmChecker {
-    pub result: Result<(), WasmValidityError>,
-}
-
-impl WasmChecker for MockWasmChecker {
-    fn validate_uploaded_wasm(
-        &self,
-        _wasm_root: &Bytes32,
-    ) -> Result<(), WasmValidityError> {
-        self.result
-    }
 }
 
 pub struct UnsetInput(Input);
@@ -310,73 +372,4 @@ impl IntoEstimated for Input {
         let _ = tx.estimate_predicates(&params.into(), MemoryInstance::new());
         tx.inputs()[0].clone()
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct MockTxPoolGasPrice {
-    pub gas_price: Option<GasPrice>,
-}
-
-impl MockTxPoolGasPrice {
-    pub fn new(gas_price: GasPrice) -> Self {
-        Self {
-            gas_price: Some(gas_price),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl GasPriceProvider for MockTxPoolGasPrice {
-    async fn next_gas_price(&self) -> Result<GasPrice, Error> {
-        self.gas_price
-            .ok_or(Error::GasPriceNotFound("Gas price not found".to_string()))
-    }
-}
-
-pub async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transaction> {
-    let gas_price = 0;
-    check_unwrap_tx_with_gas_price(tx, config, gas_price).await
-}
-
-pub async fn check_unwrap_tx_with_gas_price(
-    tx: Transaction,
-    config: &Config,
-    gas_price: GasPrice,
-) -> Checked<Transaction> {
-    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-    check_single_tx(
-        tx,
-        Default::default(),
-        config.utxo_validation,
-        &ConsensusParameters::default(),
-        &gas_price_provider,
-        MemoryInstance::new(),
-    )
-    .await
-    .expect("Transaction should be checked")
-}
-
-pub async fn check_tx(
-    tx: Transaction,
-    config: &Config,
-) -> Result<Checked<Transaction>, Error> {
-    let gas_price = 0;
-    check_tx_with_gas_price(tx, config, gas_price).await
-}
-
-pub async fn check_tx_with_gas_price(
-    tx: Transaction,
-    config: &Config,
-    gas_price: GasPrice,
-) -> Result<Checked<Transaction>, Error> {
-    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-    check_single_tx(
-        tx,
-        Default::default(),
-        config.utxo_validation,
-        &ConsensusParameters::default(),
-        &gas_price_provider,
-        MemoryInstance::new(),
-    )
-    .await
 }

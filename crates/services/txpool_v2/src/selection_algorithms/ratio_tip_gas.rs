@@ -3,7 +3,10 @@ use std::{
         Ordering,
         Reverse,
     },
-    collections::BTreeMap,
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
     fmt::Debug,
     time::Instant,
 };
@@ -69,13 +72,17 @@ impl PartialOrd for Key {
 
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
 pub struct RatioTipGasSelection<S: RatioTipGasSelectionAlgorithmStorage> {
-    transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
+    executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
+    all_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
+    tx_id_to_creation_instant: HashMap<TxId, Instant>,
 }
 
 impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
     pub fn new() -> Self {
         Self {
-            transactions_sorted_tip_gas_ratio: BTreeMap::new(),
+            executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
+            all_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
+            tx_id_to_creation_instant: HashMap::new(),
         }
     }
 }
@@ -102,11 +109,13 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         // Take the first transaction with the highest tip/gas ratio if it fits in the gas limit
         // then promote all its dependents to the list of transactions to be executed
         // and repeat the process until the gas limit is reached
-        while gas_left > 0 && !self.transactions_sorted_tip_gas_ratio.is_empty() {
+        while gas_left > 0
+            && !self.executable_transactions_sorted_tip_gas_ratio.is_empty()
+        {
             let mut new_executables = vec![];
             let mut best_transaction = None;
 
-            let sorted_iter = self.transactions_sorted_tip_gas_ratio.iter();
+            let sorted_iter = self.executable_transactions_sorted_tip_gas_ratio.iter();
             for (key, storage_id) in sorted_iter {
                 let enough_gas = {
                     let stored_transaction = storage.get(storage_id)?;
@@ -125,7 +134,8 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
             self.new_executable_transactions(new_executables, storage)?;
             // Remove the best transaction from the sorted list
             if let Some((key, best_transaction)) = best_transaction {
-                self.transactions_sorted_tip_gas_ratio.remove(&key);
+                self.executable_transactions_sorted_tip_gas_ratio
+                    .remove(&key);
                 best_transactions.push(best_transaction);
             } else {
                 // If no transaction fits in the gas limit,
@@ -149,12 +159,39 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
             );
             let key = Key {
                 ratio: tip_gas_ratio,
-                creation_instant: Instant::now(),
+                creation_instant: stored_transaction.creation_instant,
                 tx_id: stored_transaction.transaction.id(),
             };
-            self.transactions_sorted_tip_gas_ratio
+            self.executable_transactions_sorted_tip_gas_ratio
                 .insert(Reverse(key), storage_id);
+            self.tx_id_to_creation_instant.insert(
+                stored_transaction.transaction.id(),
+                stored_transaction.creation_instant,
+            );
         }
+        Ok(())
+    }
+
+    fn get_less_worth_txs(&self) -> impl Iterator<Item = Self::StorageIndex> {
+        self.all_transactions_sorted_tip_gas_ratio.values().copied()
+    }
+
+    fn on_stored_transaction(
+        &mut self,
+        transaction: &PoolTransaction,
+        creation_instant: Instant,
+        transaction_id: Self::StorageIndex,
+    ) -> Result<(), Error> {
+        let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
+        let key = Key {
+            ratio: tip_gas_ratio,
+            creation_instant,
+            tx_id: transaction.id(),
+        };
+        self.all_transactions_sorted_tip_gas_ratio
+            .insert(Reverse(key), transaction_id);
+        self.tx_id_to_creation_instant
+            .insert(transaction.id(), creation_instant);
         Ok(())
     }
 
@@ -163,12 +200,23 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         transaction: &PoolTransaction,
     ) -> Result<(), Error> {
         let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
+        let creation_instant = *self
+            .tx_id_to_creation_instant
+            .get(&transaction.id())
+            .ok_or(Error::TransactionNotFound(
+                "Expected the transaction to be in the tx_id_to_creation_instant map"
+                    .to_string(),
+            ))?;
         let key = Key {
             ratio: tip_gas_ratio,
-            creation_instant: Instant::now(),
+            creation_instant,
             tx_id: transaction.id(),
         };
-        self.transactions_sorted_tip_gas_ratio.remove(&Reverse(key));
+        self.executable_transactions_sorted_tip_gas_ratio
+            .remove(&Reverse(key));
+        self.all_transactions_sorted_tip_gas_ratio
+            .remove(&Reverse(key));
+        self.tx_id_to_creation_instant.remove(&transaction.id());
         Ok(())
     }
 }
