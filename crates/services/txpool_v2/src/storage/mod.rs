@@ -48,7 +48,6 @@ pub trait Storage {
         &mut self,
         transaction: PoolTransaction,
         creation_instant: Instant,
-        dependencies: Vec<Self::StorageIndex>,
     ) -> Result<Self::StorageIndex, Error>;
 
     /// Check if a transaction could be stored in the storage. This shouldn't be expected to be called before store_transaction.
@@ -56,21 +55,23 @@ pub trait Storage {
     fn can_store_transaction(
         &self,
         transaction: &PoolTransaction,
-        dependencies: &[Self::StorageIndex],
-        collisions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
+        collisions: Option<Vec<Self::StorageIndex>>,
     ) -> Result<(), Error>;
 
     /// Get the storage data by its index.
-    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
+    fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
 
-    /// Get the storage indexes of the dependencies of a transaction.
-    fn get_dependencies(
+    /// Returns `true` if the transaction has dependencies.
+    fn has_dependencies(&self, transaction: &PoolTransaction) -> bool;
+
+    /// Get the storage indexes of the direct dependencies of a transaction.
+    fn get_direct_dependencies(
         &self,
         index: Self::StorageIndex,
     ) -> impl Iterator<Item = Self::StorageIndex>;
 
-    /// Get the storage indexes of the dependents of a transaction.
-    fn get_dependents(
+    /// Get the storage indexes of the direct dependents of a transaction.
+    fn get_direct_dependents(
         &self,
         index: Self::StorageIndex,
     ) -> impl Iterator<Item = Self::StorageIndex>;
@@ -82,12 +83,6 @@ pub trait Storage {
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<(), Error>;
-
-    /// Collect the storage indexes of the transactions that are dependent on the given transaction.
-    fn collect_transaction_dependencies(
-        &self,
-        transaction: &PoolTransaction,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
 
     /// Remove a transaction from the storage by its index.
     /// The transaction is removed only if it has no dependencies.
@@ -101,7 +96,7 @@ pub trait Storage {
     fn remove_transaction_and_dependents_subtree(
         &mut self,
         index: Self::StorageIndex,
-    ) -> Result<RemovedTransactions, Error>;
+    ) -> RemovedTransactions;
 
     /// Count the number of transactions in the storage.
     fn count(&self) -> usize;

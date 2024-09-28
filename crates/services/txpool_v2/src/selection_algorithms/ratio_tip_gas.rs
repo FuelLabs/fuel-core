@@ -30,7 +30,8 @@ use super::{
 pub trait RatioTipGasSelectionAlgorithmStorage {
     type StorageIndex: Copy + Debug;
 
-    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
+    fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
+
     fn get_dependents(
         &self,
         index: &Self::StorageIndex,
@@ -73,7 +74,6 @@ impl PartialOrd for Key {
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
 pub struct RatioTipGasSelection<S: RatioTipGasSelectionAlgorithmStorage> {
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
-    all_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
     tx_id_to_creation_instant: HashMap<TxId, Instant>,
 }
 
@@ -81,8 +81,34 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
     pub fn new() -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
-            all_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
             tx_id_to_creation_instant: HashMap::new(),
+        }
+    }
+
+    fn on_stored_transaction_inner(&mut self, store_entry: &StorageData) -> Key {
+        let transaction = &store_entry.transaction;
+        let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
+        let key = Key {
+            ratio: tip_gas_ratio,
+            creation_instant: store_entry.creation_instant,
+            tx_id: transaction.id(),
+        };
+        self.tx_id_to_creation_instant
+            .insert(transaction.id(), store_entry.creation_instant);
+        key
+    }
+
+    fn on_removed_transaction_inner(&mut self, ratio: RatioTipGas, tx_id: TxId) {
+        let creation_instant = self.tx_id_to_creation_instant.remove(&tx_id);
+
+        if let Some(creation_instant) = creation_instant {
+            let key = Key {
+                ratio,
+                creation_instant,
+                tx_id,
+            };
+            self.executable_transactions_sorted_tip_gas_ratio
+                .remove(&Reverse(key));
         }
     }
 }
@@ -98,125 +124,106 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
 {
     type Storage = S;
     type StorageIndex = S::StorageIndex;
+
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,
         storage: &S,
     ) -> Result<Vec<S::StorageIndex>, Error> {
         let mut gas_left = constraints.max_gas;
-        let mut best_transactions = Vec::new();
+        let mut result = Vec::new();
 
-        // Take the first transaction with the highest tip/gas ratio if it fits in the gas limit
-        // then promote all its dependents to the list of transactions to be executed
-        // and repeat the process until the gas limit is reached
+        // Take iterate over all transactions with the highest tip/gas ratio. If transaction
+        // fits in the gas limit select it and mark all its dependents to be promoted.
+        // Do that until end of the list or gas limit is reached. If gas limit is not
+        // reached, but we have promoted transactions we can start again from the beginning.
+        // Otherwise, we can break the loop.
+        // It is done in this way to minimize number of iteration of the list of executable
+        // transactions.
         while gas_left > 0
             && !self.executable_transactions_sorted_tip_gas_ratio.is_empty()
         {
-            let mut new_executables = vec![];
-            let mut best_transaction = None;
+            let mut best_transactions = Vec::new();
+            let mut transactions_to_remove = Vec::new();
+            let mut transactions_to_promote = Vec::new();
 
             let sorted_iter = self.executable_transactions_sorted_tip_gas_ratio.iter();
             for (key, storage_id) in sorted_iter {
-                let enough_gas = {
-                    let stored_transaction = storage.get(storage_id)?;
-                    stored_transaction.transaction.max_gas() <= gas_left
+                let Some(stored_transaction) = storage.get(storage_id) else {
+                    debug_assert!(
+                        false,
+                        "Transaction not found in the storage during `gather_best_txs`."
+                    );
+                    tracing::warn!(
+                        "Transaction not found in the storage during `gather_best_txs`."
+                    );
+                    transactions_to_remove.push(*key);
+                    continue
                 };
-                if enough_gas {
-                    new_executables.extend(storage.get_dependents(storage_id));
-                    let stored_tx = storage.get(storage_id)?;
-                    gas_left = gas_left.saturating_sub(stored_tx.transaction.max_gas());
-                    best_transaction = Some((*key, *storage_id));
-                    break;
+
+                if stored_transaction.transaction.max_gas() > gas_left {
+                    continue;
                 }
+
+                gas_left =
+                    gas_left.saturating_sub(stored_transaction.transaction.max_gas());
+                best_transactions.push((*key, *storage_id));
+
+                transactions_to_promote.extend(storage.get_dependents(storage_id));
             }
 
-            // Promote its dependents
-            self.new_executable_transactions(new_executables, storage)?;
-            // Remove the best transaction from the sorted list
-            if let Some((key, best_transaction)) = best_transaction {
-                self.executable_transactions_sorted_tip_gas_ratio
-                    .remove(&key);
-                best_transactions.push(best_transaction);
-            } else {
-                // If no transaction fits in the gas limit,
-                // we can break the loop
+            for remove in transactions_to_remove {
+                let key = remove.0;
+                self.on_removed_transaction_inner(key.ratio, key.tx_id);
+            }
+
+            // If no transaction fits in the gas limit and no one to promote, we can break the loop
+            if best_transactions.is_empty() && transactions_to_promote.is_empty() {
                 break;
             }
+
+            for (key, storage_id) in best_transactions {
+                let key = key.0;
+                // Remove the best transaction from the sorted list
+                self.on_removed_transaction_inner(key.ratio, key.tx_id);
+                result.push(storage_id);
+            }
+
+            for promote in transactions_to_promote {
+                let storage = storage.get(&promote).expect(
+                    "We just get the dependent from the storage, it should exist.",
+                );
+
+                self.new_executable_transaction(promote, storage);
+            }
         }
-        Ok(best_transactions)
+
+        Ok(result)
     }
 
-    fn new_executable_transactions(
+    fn new_executable_transaction(
         &mut self,
-        transactions_ids: Vec<S::StorageIndex>,
-        storage: &S,
-    ) -> Result<(), Error> {
-        for storage_id in transactions_ids {
-            let stored_transaction = storage.get(&storage_id)?;
-            let tip_gas_ratio = RatioTipGas::new(
-                stored_transaction.transaction.tip(),
-                stored_transaction.transaction.max_gas(),
-            );
-            let key = Key {
-                ratio: tip_gas_ratio,
-                creation_instant: stored_transaction.creation_instant,
-                tx_id: stored_transaction.transaction.id(),
-            };
-            self.executable_transactions_sorted_tip_gas_ratio
-                .insert(Reverse(key), storage_id);
-            self.tx_id_to_creation_instant.insert(
-                stored_transaction.transaction.id(),
-                stored_transaction.creation_instant,
-            );
-        }
-        Ok(())
-    }
-
-    fn get_less_worth_txs(&self) -> impl Iterator<Item = Self::StorageIndex> {
-        self.all_transactions_sorted_tip_gas_ratio.values().copied()
-    }
-
-    fn on_stored_transaction(
-        &mut self,
-        transaction: &PoolTransaction,
-        creation_instant: Instant,
-        transaction_id: Self::StorageIndex,
-    ) -> Result<(), Error> {
-        let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
-        let key = Key {
-            ratio: tip_gas_ratio,
-            creation_instant,
-            tx_id: transaction.id(),
-        };
-        self.all_transactions_sorted_tip_gas_ratio
-            .insert(Reverse(key), transaction_id);
-        self.tx_id_to_creation_instant
-            .insert(transaction.id(), creation_instant);
-        Ok(())
-    }
-
-    fn on_removed_transaction(
-        &mut self,
-        transaction: &PoolTransaction,
-    ) -> Result<(), Error> {
-        let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
-        let creation_instant = *self
-            .tx_id_to_creation_instant
-            .get(&transaction.id())
-            .ok_or(Error::TransactionNotFound(
-                "Expected the transaction to be in the tx_id_to_creation_instant map"
-                    .to_string(),
-            ))?;
-        let key = Key {
-            ratio: tip_gas_ratio,
-            creation_instant,
-            tx_id: transaction.id(),
-        };
+        storage_id: Self::StorageIndex,
+        store_entry: &StorageData,
+    ) {
+        let key = self.on_stored_transaction_inner(store_entry);
         self.executable_transactions_sorted_tip_gas_ratio
-            .remove(&Reverse(key));
-        self.all_transactions_sorted_tip_gas_ratio
-            .remove(&Reverse(key));
-        self.tx_id_to_creation_instant.remove(&transaction.id());
-        Ok(())
+            .insert(Reverse(key), storage_id);
+    }
+
+    fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex> {
+        self.executable_transactions_sorted_tip_gas_ratio
+            .values()
+            .rev()
+    }
+
+    fn on_stored_transaction(&mut self, store_entry: &StorageData) {
+        self.on_stored_transaction_inner(store_entry);
+    }
+
+    fn on_removed_transaction(&mut self, transaction: &PoolTransaction) {
+        let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
+        let tx_id = transaction.id();
+        self.on_removed_transaction_inner(tip_gas_ratio, tx_id)
     }
 }
