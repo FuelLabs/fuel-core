@@ -7,14 +7,8 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_types::{
-    blockchain::consensus::Consensus,
-    entities::relayer::transaction,
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    fuel_vm::checked_transaction::CheckedTransaction,
     services::txpool::PoolTransaction,
 };
 use parking_lot::RwLock;
@@ -126,7 +120,7 @@ where
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
-        let mut results = vec![];
+        let results = vec![];
         for transaction in transactions {
             self.heavy_async_processor.spawn({
                 let shared_state = self.clone();
@@ -145,6 +139,7 @@ where
                     )
                     .await
                     .unwrap();
+                    #[allow(unused_variables)]
                     let result = {
                         let mut pool = shared_state.pool.write();
                         // TODO: Return the result of the insertion (see: https://github.com/FuelLabs/fuel-core/issues/2185)

@@ -27,6 +27,10 @@ rayon = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tracing = { workspace = true }
 
+[dev-dependencies]
+fuel-core-trace = { workspace = true }
+rand = { workspace = true }
+
 [features]
 test-helpers = [
   "dep:mockall",

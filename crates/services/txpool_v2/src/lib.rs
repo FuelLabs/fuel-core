@@ -20,6 +20,8 @@ type GasPrice = Word;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();
 
 use fuel_core_types::fuel_asm::Word;
 pub use service::{

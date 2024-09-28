@@ -36,6 +36,10 @@ pub trait RatioTipGasSelectionAlgorithmStorage {
         &self,
         index: &Self::StorageIndex,
     ) -> impl Iterator<Item = Self::StorageIndex>;
+
+    fn has_dependencies(&self, index: &Self::StorageIndex) -> bool;
+
+    fn remove(&mut self, index: &Self::StorageIndex) -> Option<StorageData>;
 }
 
 pub type RatioTipGas = Ratio<u64>;
@@ -85,6 +89,11 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.executable_transactions_sorted_tip_gas_ratio.is_empty()
+            && self.tx_id_to_creation_instant.is_empty()
+    }
+
     fn on_stored_transaction_inner(&mut self, store_entry: &StorageData) -> Key {
         let transaction = &store_entry.transaction;
         let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
@@ -128,8 +137,8 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,
-        storage: &S,
-    ) -> Result<Vec<S::StorageIndex>, Error> {
+        storage: &mut S,
+    ) -> Result<Vec<PoolTransaction>, Error> {
         let mut gas_left = constraints.max_gas;
         let mut result = Vec::new();
 
@@ -143,7 +152,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         while gas_left > 0
             && !self.executable_transactions_sorted_tip_gas_ratio.is_empty()
         {
-            let mut best_transactions = Vec::new();
+            let mut clean_up_list = Vec::new();
             let mut transactions_to_remove = Vec::new();
             let mut transactions_to_promote = Vec::new();
 
@@ -167,9 +176,20 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
 
                 gas_left =
                     gas_left.saturating_sub(stored_transaction.transaction.max_gas());
-                best_transactions.push((*key, *storage_id));
 
-                transactions_to_promote.extend(storage.get_dependents(storage_id));
+                let dependents = storage.get_dependents(storage_id).collect::<Vec<_>>();
+                debug_assert!(!storage.has_dependencies(storage_id));
+                let removed = storage.remove(storage_id).expect(
+                    "We just get the transaction from the storage above, it should exist.",
+                );
+                clean_up_list.push(*key);
+                result.push(removed.transaction);
+
+                for dependent in dependents {
+                    if !storage.has_dependencies(&dependent) {
+                        transactions_to_promote.push(dependent);
+                    }
+                }
             }
 
             for remove in transactions_to_remove {
@@ -178,15 +198,14 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
             }
 
             // If no transaction fits in the gas limit and no one to promote, we can break the loop
-            if best_transactions.is_empty() && transactions_to_promote.is_empty() {
+            if clean_up_list.is_empty() && transactions_to_promote.is_empty() {
                 break;
             }
 
-            for (key, storage_id) in best_transactions {
+            for key in clean_up_list {
                 let key = key.0;
-                // Remove the best transaction from the sorted list
+                // Remove selected transactions from the sorted list
                 self.on_removed_transaction_inner(key.ratio, key.tx_id);
-                result.push(storage_id);
             }
 
             for promote in transactions_to_promote {

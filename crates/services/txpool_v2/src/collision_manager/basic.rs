@@ -28,14 +28,10 @@ use fuel_core_types::{
     fuel_types::Nonce,
     services::txpool::PoolTransaction,
 };
-use num_rational::Ratio;
 
 use crate::{
     collision_manager::collision::SimpleCollision,
-    error::{
-        CollisionReason,
-        Error,
-    },
+    error::CollisionReason,
     storage::StorageData,
 };
 
@@ -43,8 +39,6 @@ use super::CollisionManager;
 
 pub trait BasicCollisionManagerStorage {
     type StorageIndex: Copy + Debug + Hash + PartialEq + Eq;
-
-    fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
 }
 
 pub struct BasicCollisionManager<S: BasicCollisionManagerStorage> {
@@ -67,6 +61,13 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
             blobs_users: HashMap::new(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.messages_spenders.is_empty()
+            && self.coins_spenders.is_empty()
+            && self.contracts_creators.is_empty()
+            && self.blobs_users.is_empty()
+    }
 }
 
 impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
@@ -78,14 +79,11 @@ impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
 impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager<S> {
     type Storage = S;
     type StorageIndex = S::StorageIndex;
-    type Collision<'a> = SimpleCollision<'a, S::StorageIndex>;
+    type Collision = SimpleCollision<S::StorageIndex>;
 
-    fn find_collision<'a>(
-        &self,
-        transaction: &'a PoolTransaction,
-    ) -> Option<Self::Collision<'a>> {
+    fn find_collision(&self, transaction: PoolTransaction) -> Self::Collision {
         let mut collisions = HashMap::new();
-        if let PoolTransaction::Blob(checked_tx, _) = transaction {
+        if let PoolTransaction::Blob(checked_tx, _) = &transaction {
             let blob_id = checked_tx.transaction().blob_id();
             if let Some(state) = self.blobs_users.get(blob_id) {
                 collisions.insert(*state, vec![CollisionReason::Blob(*blob_id)]);
@@ -126,11 +124,7 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
             }
         }
 
-        if collisions.is_empty() {
-            None
-        } else {
-            Some(SimpleCollision::new(transaction, collisions))
-        }
+        SimpleCollision::new(transaction, collisions)
     }
 
     fn on_stored_transaction(

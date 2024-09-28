@@ -4,6 +4,7 @@ use std::{
         HashSet,
     },
     fmt::Debug,
+    hash::Hash,
     time::Instant,
 };
 
@@ -16,6 +17,7 @@ use crate::{
 };
 use fuel_core_types::services::txpool::PoolTransaction;
 
+pub mod checked_collision;
 pub mod graph;
 
 #[derive(Debug)]
@@ -36,33 +38,52 @@ pub struct StorageData {
 
 pub type RemovedTransactions = Vec<PoolTransaction>;
 
+pub trait Collision<StorageIndex> {
+    /// Returns the instigator of the collision.
+    fn tx(&self) -> &PoolTransaction;
+
+    /// Returns the transactions that collide with the given transaction.
+    fn colliding_transactions(&self) -> &HashMap<StorageIndex, Vec<CollisionReason>>;
+
+    /// Unwraps the collision into a instigator transaction.
+    fn into_instigator(self) -> PoolTransaction;
+}
+
+pub trait CheckedCollision<StorageIndex>: Collision<StorageIndex> {
+    /// Returns the list of all dependencies of the transaction.
+    fn all_dependencies(&self) -> &HashSet<StorageIndex>;
+}
+
 /// The storage trait is responsible for storing transactions.
 /// It has to manage somehow the dependencies between transactions.
 pub trait Storage {
     /// The index type used in the storage and allow other components to reference transactions.
-    type StorageIndex: Copy + Debug;
+    type StorageIndex: Copy + Debug + Eq + Hash;
+    type CheckedCollision<C>: CheckedCollision<Self::StorageIndex>
+    where
+        C: Collision<Self::StorageIndex>;
 
     /// Store a transaction in the storage according to the dependencies.
     /// Returns the index of the stored transaction.
-    fn store_transaction(
+    fn store_transaction<C>(
         &mut self,
-        transaction: PoolTransaction,
+        checked_collision: Self::CheckedCollision<C>,
         creation_instant: Instant,
-    ) -> Result<Self::StorageIndex, Error>;
+    ) -> Self::StorageIndex
+    where
+        C: Collision<Self::StorageIndex>;
 
     /// Check if a transaction could be stored in the storage. This shouldn't be expected to be called before store_transaction.
     /// Its just a way to perform some checks without storing the transaction.
-    fn can_store_transaction(
+    fn can_store_transaction<C>(
         &self,
-        transaction: &PoolTransaction,
-        collisions: Option<Vec<Self::StorageIndex>>,
-    ) -> Result<(), Error>;
+        collision: C,
+    ) -> Result<Self::CheckedCollision<C>, Error>
+    where
+        C: Collision<Self::StorageIndex>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
-
-    /// Returns `true` if the transaction has dependencies.
-    fn has_dependencies(&self, transaction: &PoolTransaction) -> bool;
 
     /// Get the storage indexes of the direct dependencies of a transaction.
     fn get_direct_dependencies(
@@ -83,14 +104,6 @@ pub trait Storage {
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<(), Error>;
-
-    /// Remove a transaction from the storage by its index.
-    /// The transaction is removed only if it has no dependencies.
-    /// Doesn't remove the dependents.
-    fn remove_transaction_without_dependencies(
-        &mut self,
-        index: Self::StorageIndex,
-    ) -> Result<StorageData, Error>;
 
     /// Remove a transaction along with its dependents subtree.
     fn remove_transaction_and_dependents_subtree(

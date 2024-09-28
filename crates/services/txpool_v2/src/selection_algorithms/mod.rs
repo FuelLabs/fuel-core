@@ -1,13 +1,8 @@
-use std::time::Instant;
-
 use fuel_core_types::services::txpool::PoolTransaction;
 
 use crate::{
     error::Error,
-    storage::{
-        Storage,
-        StorageData,
-    },
+    storage::StorageData,
 };
 
 pub mod ratio_tip_gas;
@@ -27,8 +22,8 @@ pub trait SelectionAlgorithm {
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,
-        storage: &Self::Storage,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
+        storage: &mut Self::Storage,
+    ) -> Result<Vec<PoolTransaction>, Error>;
 
     /// Update the selection algorithm with the new transaction that are executable.
     fn new_executable_transaction(

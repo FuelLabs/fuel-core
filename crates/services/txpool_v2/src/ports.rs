@@ -16,7 +16,6 @@ use fuel_core_types::{
     },
     fuel_types::Nonce,
     fuel_vm::interpreter::Memory,
-    tai64::Tai64,
 };
 
 use crate::{
@@ -63,10 +62,6 @@ pub trait MemoryPool {
 
     /// Get the memory instance.
     async fn get_memory(&self) -> Self::Memory;
-}
-
-pub trait GetTime: Send + Sync {
-    fn now(&self) -> Tai64;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

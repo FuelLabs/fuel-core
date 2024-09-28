@@ -3,6 +3,7 @@ use fuel_core_types::{
         Address,
         BlobId,
         ContractId,
+        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
@@ -89,6 +90,10 @@ pub enum Error {
     WasmValidity(WasmValidityError),
     #[display(fmt = "Transaction is not inserted. Mint transaction is not allowed")]
     MintIsDisallowed,
+    #[display(fmt = "Don't allow transactions with zero max gas")]
+    ZeroMaxGas,
+    #[display(fmt = "Transaction with the same tx_id(_0) already exists in the pool")]
+    DuplicateTxId(TxId),
 }
 
 #[derive(Debug, Clone, derive_more::Display)]

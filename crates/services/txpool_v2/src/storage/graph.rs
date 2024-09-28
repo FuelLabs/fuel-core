@@ -1,6 +1,5 @@
 use std::{
     collections::{
-        BTreeSet,
         HashMap,
         HashSet,
     },
@@ -30,7 +29,6 @@ use fuel_core_types::{
     },
     services::txpool::PoolTransaction,
 };
-use num_rational::Ratio;
 use petgraph::{
     graph::NodeIndex,
     prelude::StableDiGraph,
@@ -38,15 +36,15 @@ use petgraph::{
 
 use crate::{
     collision_manager::basic::BasicCollisionManagerStorage,
-    error::{
-        CollisionReason,
-        Error,
-    },
+    error::Error,
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
+    storage::checked_collision::CheckedCollision,
 };
 
 use super::{
+    CheckedCollision as StorageCheckedCollision,
+    Collision,
     RemovedTransactions,
     Storage,
     StorageData,
@@ -78,16 +76,19 @@ impl GraphStorage {
             contracts_creators: HashMap::new(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.graph.node_count() == 0
+            && self.coins_creators.is_empty()
+            && self.contracts_creators.is_empty()
+    }
 }
 
 impl GraphStorage {
     fn reduce_dependencies_cumulative_gas_tip_and_chain_count(
         &mut self,
         root_id: NodeIndex,
-        gas_reduction: u64,
-        tip_reduction: u64,
-        dependent_number_reduction: usize,
-        bytes_size_reduction: usize,
+        removed_node: &StorageData,
         already_visited: &mut HashSet<NodeIndex>,
     ) {
         if already_visited.contains(&root_id) {
@@ -98,25 +99,28 @@ impl GraphStorage {
             debug_assert!(false, "Node with id {:?} not found", root_id);
             return;
         };
-        root.dependents_cumulative_gas =
-            root.dependents_cumulative_gas.saturating_sub(gas_reduction);
-        root.dependents_cumulative_tip =
-            root.dependents_cumulative_tip.saturating_sub(tip_reduction);
+        root.dependents_cumulative_gas = root
+            .dependents_cumulative_gas
+            .saturating_sub(removed_node.dependents_cumulative_gas);
+        root.dependents_cumulative_tip = root
+            .dependents_cumulative_tip
+            .saturating_sub(removed_node.dependents_cumulative_tip);
         root.number_dependents_in_chain = root
             .number_dependents_in_chain
-            .saturating_sub(dependent_number_reduction);
+            .saturating_sub(removed_node.number_dependents_in_chain);
         root.dependents_cumulative_bytes_size = root
             .dependents_cumulative_bytes_size
-            .saturating_sub(bytes_size_reduction);
+            .saturating_sub(removed_node.dependents_cumulative_bytes_size);
+
+        debug_assert!(root.dependents_cumulative_gas != 0);
+        debug_assert!(root.number_dependents_in_chain != 0);
+        debug_assert!(root.dependents_cumulative_bytes_size != 0);
 
         let dependencies: Vec<_> = self.get_direct_dependencies(root_id).collect();
         for dependency in dependencies {
             self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
                 dependency,
-                gas_reduction,
-                tip_reduction,
-                dependent_number_reduction,
-                bytes_size_reduction,
+                removed_node,
                 already_visited,
             );
         }
@@ -129,27 +133,66 @@ impl GraphStorage {
         &mut self,
         root_id: NodeIndex,
     ) -> Vec<PoolTransaction> {
+        let mut dependency_visited = HashSet::default();
+
+        // We need to keep track of all visited dependencies via the
+        // `remove_node_and_dependent_sub_graph_recursion` method, because
+        // one of dependent may have the same dependency as the root node.
+        //
+        // An example:
+        //
+        // P - parent or dependency of the root node.
+        // R - the root node.
+        // C - child or dependent of the root node.
+        //
+        //     P
+        //    / \
+        //   R  /
+        //    \/
+        //    C
+        //
+        // Recursion first go to P, updates it, after that goes down to the C and goes over all
+        // parents of the C(it will be the same P).
+        self.remove_node_and_dependent_sub_graph_recursion(
+            root_id,
+            &mut dependency_visited,
+        )
+    }
+
+    fn remove_node_and_dependent_sub_graph_recursion(
+        &mut self,
+        root_id: NodeIndex,
+        dependency_visited: &mut HashSet<NodeIndex>,
+    ) -> Vec<PoolTransaction> {
         let dependencies: Vec<_> = self.get_direct_dependencies(root_id).collect();
         let dependents: Vec<_> = self.get_direct_dependents(root_id).collect();
         let Some(root) = self.graph.remove_node(root_id) else {
+            // It is possible that the node was already removed during
+            // `remove_node_and_dependent_sub_graph` call. An example:
+            //
+            //     1
+            //    / \
+            //   2  /
+            //    \/
+            //    3
             return vec![];
         };
-        let mut dependency_visited = HashSet::default();
         for dependency in dependencies {
             self.reduce_dependencies_cumulative_gas_tip_and_chain_count(
                 dependency,
-                root.dependents_cumulative_gas,
-                root.dependents_cumulative_tip,
-                root.number_dependents_in_chain,
-                root.dependents_cumulative_bytes_size,
-                &mut dependency_visited,
+                &root,
+                dependency_visited,
             );
         }
         self.clear_cache(root.transaction.outputs(), &root.transaction.id());
         let mut removed_transactions = vec![root.transaction];
         for dependent in dependents {
-            removed_transactions
-                .extend(self.remove_node_and_dependent_sub_graph(dependent));
+            removed_transactions.extend(
+                self.remove_node_and_dependent_sub_graph_recursion(
+                    dependent,
+                    dependency_visited,
+                ),
+            );
         }
         removed_transactions
     }
@@ -268,29 +311,6 @@ impl GraphStorage {
             .neighbors_directed(index, petgraph::Direction::Outgoing)
     }
 
-    fn has_direct_dependencies(&self, transaction: &PoolTransaction) -> bool {
-        for input in transaction.inputs() {
-            match input {
-                Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    if let Some(node_id) = self.coins_creators.get(utxo_id) {
-                        return true
-                    }
-                }
-                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
-                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
-                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
-                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {}
-                Input::Contract(Contract { contract_id, .. }) => {
-                    if let Some(node_id) = self.contracts_creators.get(contract_id) {
-                        return true
-                    }
-                }
-            }
-        }
-        false
-    }
-
     fn collect_transaction_direct_dependencies(
         &self,
         transaction: &PoolTransaction,
@@ -304,10 +324,10 @@ impl GraphStorage {
                         direct_dependencies.push(*node_id);
                     }
                 }
-                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
-                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
-                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
-                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {}
+                Input::MessageCoinSigned(MessageCoinSigned { .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { .. })
+                | Input::MessageDataSigned(MessageDataSigned { .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { .. }) => {}
                 Input::Contract(Contract { contract_id, .. }) => {
                     if let Some(node_id) = self.contracts_creators.get(contract_id) {
                         direct_dependencies.push(*node_id);
@@ -346,12 +366,19 @@ impl GraphStorage {
 
 impl Storage for GraphStorage {
     type StorageIndex = NodeIndex;
+    type CheckedCollision<C> = CheckedCollision<C, Self::StorageIndex>
+        where
+            C: Collision<Self::StorageIndex>;
 
-    fn store_transaction(
+    fn store_transaction<C>(
         &mut self,
-        transaction: PoolTransaction,
+        checked_collision: Self::CheckedCollision<C>,
         creation_instant: Instant,
-    ) -> Result<Self::StorageIndex, Error> {
+    ) -> Self::StorageIndex
+    where
+        C: Collision<Self::StorageIndex>,
+    {
+        let transaction = checked_collision.tx();
         let tx_id = transaction.id();
 
         // Add the new transaction to the graph and update the others in consequence
@@ -359,48 +386,9 @@ impl Storage for GraphStorage {
         let gas = transaction.max_gas();
         let size = transaction.metered_bytes_size();
 
-        // Check if the dependency chain is too big
-        let direct_dependencies =
-            self.collect_transaction_direct_dependencies(&transaction);
-        let all_dependencies = self.collect_all_dependencies(direct_dependencies.clone());
-        if all_dependencies.len() >= self.config.max_txs_chain_count {
-            return Err(Error::NotInsertedChainDependencyTooBig);
-        }
-
-        for dependency in &all_dependencies {
-            let Some(dependency_node) = self.graph.node_weight(*dependency) else {
-                // We got all dependencies from the graph it shouldn't be possible
-                debug_assert!(false, "Node with id {:?} not found", dependency);
-                tracing::warn!("Node with id {:?} not found", dependency);
-
-                continue
-            };
-            if dependency_node.number_dependents_in_chain
-                >= self.config.max_txs_chain_count
-            {
-                return Err(Error::NotInsertedChainDependencyTooBig);
-            }
-        }
-
-        let node = StorageData {
-            dependents_cumulative_tip: tip,
-            dependents_cumulative_gas: gas,
-            dependents_cumulative_bytes_size: size,
-            transaction,
-            creation_instant,
-            number_dependents_in_chain: 1,
-        };
-
-        // Add the transaction to the graph
-        let node_id = self.graph.add_node(node);
-        for dependency in direct_dependencies {
-            self.graph.add_edge(dependency, node_id, ());
-        }
-        self.cache_tx_infos(&tx_id, node_id);
-
         // Update the cumulative tip and gas of the dependencies transactions and recursively their dependencies, etc.
-        for node_id in all_dependencies {
-            let Some(node) = self.graph.node_weight_mut(node_id) else {
+        for node_id in checked_collision.all_dependencies() {
+            let Some(node) = self.graph.node_weight_mut(*node_id) else {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
@@ -416,31 +404,59 @@ impl Storage for GraphStorage {
                 node.dependents_cumulative_gas.saturating_add(gas);
             node.dependents_cumulative_bytes_size =
                 node.dependents_cumulative_bytes_size.saturating_add(size);
+
+            debug_assert!(node.dependents_cumulative_gas != 0);
+            debug_assert!(node.number_dependents_in_chain != 0);
+            debug_assert!(node.dependents_cumulative_bytes_size != 0);
         }
-        Ok(node_id)
+
+        let direct_dependencies =
+            self.collect_transaction_direct_dependencies(transaction);
+
+        let node = StorageData {
+            dependents_cumulative_tip: tip,
+            dependents_cumulative_gas: gas,
+            dependents_cumulative_bytes_size: size,
+            transaction: checked_collision.into_instigator(),
+            creation_instant,
+            number_dependents_in_chain: 1,
+        };
+
+        // Add the transaction to the graph
+        let node_id = self.graph.add_node(node);
+        for dependency in direct_dependencies {
+            debug_assert!(
+                !self.graph.contains_edge(dependency, node_id),
+                "Edge already exists"
+            );
+            self.graph.add_edge(dependency, node_id, ());
+        }
+        self.cache_tx_infos(&tx_id, node_id);
+
+        node_id
     }
 
-    fn can_store_transaction(
+    fn can_store_transaction<C>(
         &self,
-        transaction: &PoolTransaction,
-        colliding_transactions: Option<Vec<Self::StorageIndex>>,
-    ) -> Result<(), Error> {
-        let all_dependencies = self.collect_transaction_all_dependencies(transaction);
+        collision: C,
+    ) -> Result<Self::CheckedCollision<C>, Error>
+    where
+        C: Collision<Self::StorageIndex>,
+    {
+        let all_dependencies = self.collect_transaction_all_dependencies(collision.tx());
 
         if all_dependencies.len() >= self.config.max_txs_chain_count {
             return Err(Error::NotInsertedChainDependencyTooBig);
         }
 
-        if let Some(colliding_transactions) = colliding_transactions {
-            for collision in colliding_transactions {
-                if all_dependencies.contains(&collision) {
-                    return Err(Error::NotInsertedCollisionIsDependency);
-                }
+        for collision in collision.colliding_transactions().keys() {
+            if all_dependencies.contains(collision) {
+                return Err(Error::NotInsertedCollisionIsDependency);
             }
         }
 
-        for dependency in all_dependencies {
-            let Some(dependency_node) = self.graph.node_weight(dependency) else {
+        for dependency in all_dependencies.iter() {
+            let Some(dependency_node) = self.graph.node_weight(*dependency) else {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", dependency);
                 tracing::warn!("Node with id {:?} not found", dependency);
@@ -455,15 +471,11 @@ impl Storage for GraphStorage {
             }
         }
 
-        Ok(())
+        Ok(CheckedCollision::new(collision, all_dependencies))
     }
 
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData> {
         self.get_inner(index)
-    }
-
-    fn has_dependencies(&self, transaction: &PoolTransaction) -> bool {
-        self.has_direct_dependencies(transaction)
     }
 
     fn get_direct_dependencies(
@@ -554,24 +566,6 @@ impl Storage for GraphStorage {
         Ok(())
     }
 
-    fn remove_transaction_without_dependencies(
-        &mut self,
-        index: Self::StorageIndex,
-    ) -> Result<StorageData, Error> {
-        if self.get_direct_dependencies(index).next().is_some() {
-            return Err(Error::Storage("Tried to remove a transaction without dependencies but it has dependencies".to_string()));
-        }
-        self.graph
-            .remove_node(index)
-            .ok_or(Error::TransactionNotFound(format!(
-                "Transaction with index {:?} not found",
-                index
-            )))
-            .inspect(|node| {
-                self.clear_cache(node.transaction.outputs(), &node.transaction.id());
-            })
-    }
-
     fn remove_transaction_and_dependents_subtree(
         &mut self,
         index: Self::StorageIndex,
@@ -586,10 +580,6 @@ impl Storage for GraphStorage {
 
 impl BasicCollisionManagerStorage for GraphStorage {
     type StorageIndex = NodeIndex;
-
-    fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData> {
-        self.get_inner(index)
-    }
 }
 
 impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
@@ -604,5 +594,19 @@ impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
         index: &Self::StorageIndex,
     ) -> impl Iterator<Item = Self::StorageIndex> {
         self.get_dependents_inner(*index)
+    }
+
+    fn has_dependencies(&self, index: &Self::StorageIndex) -> bool {
+        self.get_direct_dependencies(*index).next().is_some()
+    }
+
+    fn remove(&mut self, index: &Self::StorageIndex) -> Option<StorageData> {
+        self.graph.remove_node(*index).map(|storage_entry| {
+            self.clear_cache(
+                storage_entry.transaction.outputs(),
+                &storage_entry.transaction.id(),
+            );
+            storage_entry
+        })
     }
 }
