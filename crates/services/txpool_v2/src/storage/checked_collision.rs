@@ -7,6 +7,7 @@ use std::collections::{
 
 pub struct CheckedTransaction<StorageIndex> {
     tx: PoolTransaction,
+    direct_dependencies: HashSet<StorageIndex>,
     all_dependencies: HashSet<StorageIndex>,
 }
 
@@ -16,12 +17,28 @@ impl<StorageIndex> CheckedTransaction<StorageIndex> {
     /// It is a private method called by the `GraphStorage`.
     pub(super) fn new(
         tx: PoolTransaction,
+        direct_dependencies: HashSet<StorageIndex>,
         all_dependencies: HashSet<StorageIndex>,
     ) -> Self {
         Self {
             tx,
+            direct_dependencies,
             all_dependencies,
         }
+    }
+
+    pub fn direct_dependencies(&self) -> &HashSet<StorageIndex> {
+        &self.direct_dependencies
+    }
+
+    pub fn unpack(
+        self,
+    ) -> (
+        PoolTransaction,
+        HashSet<StorageIndex>,
+        HashSet<StorageIndex>,
+    ) {
+        (self.tx, self.direct_dependencies, self.all_dependencies)
     }
 }
 

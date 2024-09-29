@@ -75,18 +75,6 @@ pub trait Storage {
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
 
-    /// Get the storage indexes of the direct dependencies of a transaction.
-    fn get_direct_dependencies(
-        &self,
-        index: Self::StorageIndex,
-    ) -> impl Iterator<Item = Self::StorageIndex>;
-
-    /// Get the storage indexes of the direct dependents of a transaction.
-    fn get_direct_dependents(
-        &self,
-        index: Self::StorageIndex,
-    ) -> impl Iterator<Item = Self::StorageIndex>;
-
     /// Validate inputs of a transaction.
     fn validate_inputs(
         &self,
