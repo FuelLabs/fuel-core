@@ -3,18 +3,18 @@ use fuel_core_types::services::txpool::PoolTransaction;
 use crate::storage::StorageData;
 
 pub mod basic;
-pub mod collision;
+pub mod collisions;
 
 pub trait CollisionManager {
     /// Storage type of the collision manager.
     type Storage;
     /// Index that identifies a transaction in the storage.
     type StorageIndex;
-    /// The collision type returned by the collision manager.
-    type Collision;
+    /// The type to represent collisions of the transaction.
+    type Collisions;
 
-    /// Finds collision for the transaction. Returns `Self::Collision`, if find any.
-    fn find_collision(&self, transaction: PoolTransaction) -> Self::Collision;
+    /// Finds collisions for the transaction.
+    fn find_collisions(&self, transaction: PoolTransaction) -> Self::Collisions;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(

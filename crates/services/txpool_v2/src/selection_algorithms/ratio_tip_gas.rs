@@ -19,7 +19,10 @@ use num_rational::Ratio;
 
 use crate::{
     error::Error,
-    storage::StorageData,
+    storage::{
+        RemovedTransactions,
+        StorageData,
+    },
 };
 
 use super::{
@@ -78,23 +81,20 @@ impl PartialOrd for Key {
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
 pub struct RatioTipGasSelection<S: RatioTipGasSelectionAlgorithmStorage> {
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
-    tx_id_to_creation_instant: HashMap<TxId, Instant>,
 }
 
 impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
     pub fn new() -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
-            tx_id_to_creation_instant: HashMap::new(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.executable_transactions_sorted_tip_gas_ratio.is_empty()
-            && self.tx_id_to_creation_instant.is_empty()
     }
 
-    fn on_stored_transaction_inner(&mut self, store_entry: &StorageData) -> Key {
+    fn key(store_entry: &StorageData) -> Key {
         let transaction = &store_entry.transaction;
         let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
         let key = Key {
@@ -102,23 +102,12 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
             creation_instant: store_entry.creation_instant,
             tx_id: transaction.id(),
         };
-        self.tx_id_to_creation_instant
-            .insert(transaction.id(), store_entry.creation_instant);
         key
     }
 
-    fn on_removed_transaction_inner(&mut self, ratio: RatioTipGas, tx_id: TxId) {
-        let creation_instant = self.tx_id_to_creation_instant.remove(&tx_id);
-
-        if let Some(creation_instant) = creation_instant {
-            let key = Key {
-                ratio,
-                creation_instant,
-                tx_id,
-            };
-            self.executable_transactions_sorted_tip_gas_ratio
-                .remove(&Reverse(key));
-        }
+    fn on_removed_transaction_inner(&mut self, key: Key) {
+        self.executable_transactions_sorted_tip_gas_ratio
+            .remove(&Reverse(key));
     }
 }
 
@@ -138,7 +127,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         &mut self,
         constraints: Constraints,
         storage: &mut S,
-    ) -> Result<Vec<PoolTransaction>, Error> {
+    ) -> Result<RemovedTransactions, Error> {
         let mut gas_left = constraints.max_gas;
         let mut result = Vec::new();
 
@@ -156,8 +145,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
             let mut transactions_to_remove = Vec::new();
             let mut transactions_to_promote = Vec::new();
 
-            let sorted_iter = self.executable_transactions_sorted_tip_gas_ratio.iter();
-            for (key, storage_id) in sorted_iter {
+            for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
                 let Some(stored_transaction) = storage.get(storage_id) else {
                     debug_assert!(
                         false,
@@ -183,7 +171,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
                     "We just get the transaction from the storage above, it should exist.",
                 );
                 clean_up_list.push(*key);
-                result.push(removed.transaction);
+                result.push(removed);
 
                 for dependent in dependents {
                     if !storage.has_dependencies(&dependent) {
@@ -194,7 +182,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
 
             for remove in transactions_to_remove {
                 let key = remove.0;
-                self.on_removed_transaction_inner(key.ratio, key.tx_id);
+                self.on_removed_transaction_inner(key);
             }
 
             // If no transaction fits in the gas limit and no one to promote, we can break the loop
@@ -205,7 +193,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
             for key in clean_up_list {
                 let key = key.0;
                 // Remove selected transactions from the sorted list
-                self.on_removed_transaction_inner(key.ratio, key.tx_id);
+                self.on_removed_transaction_inner(key);
             }
 
             for promote in transactions_to_promote {
@@ -225,7 +213,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         storage_id: Self::StorageIndex,
         store_entry: &StorageData,
     ) {
-        let key = self.on_stored_transaction_inner(store_entry);
+        let key = Self::key(store_entry);
         self.executable_transactions_sorted_tip_gas_ratio
             .insert(Reverse(key), storage_id);
     }
@@ -236,13 +224,8 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
             .rev()
     }
 
-    fn on_stored_transaction(&mut self, store_entry: &StorageData) {
-        self.on_stored_transaction_inner(store_entry);
-    }
-
-    fn on_removed_transaction(&mut self, transaction: &PoolTransaction) {
-        let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
-        let tx_id = transaction.id();
-        self.on_removed_transaction_inner(tip_gas_ratio, tx_id)
+    fn on_removed_transaction(&mut self, storage_entry: &StorageData) {
+        let key = Self::key(storage_entry);
+        self.on_removed_transaction_inner(key)
     }
 }

@@ -5,13 +5,13 @@ use crate::{
 use fuel_core_types::services::txpool::PoolTransaction;
 use std::collections::HashMap;
 
-pub struct SimpleCollision<StorageIndex> {
+pub struct SimpleCollisions<StorageIndex> {
     tx: PoolTransaction,
     /// Colliding transactions.
     transactions: HashMap<StorageIndex, Vec<CollisionReason>>,
 }
 
-impl<StorageIndex> SimpleCollision<StorageIndex> {
+impl<StorageIndex> SimpleCollisions<StorageIndex> {
     /// Creates a new collision from its colliding transactions.
     pub(super) fn new(
         tx: PoolTransaction,
@@ -21,7 +21,9 @@ impl<StorageIndex> SimpleCollision<StorageIndex> {
     }
 }
 
-impl<StorageIndex> storage::Collision<StorageIndex> for SimpleCollision<StorageIndex> {
+impl<StorageIndex> storage::TransactionWithCollisions<StorageIndex>
+    for SimpleCollisions<StorageIndex>
+{
     fn tx(&self) -> &PoolTransaction {
         &self.tx
     }

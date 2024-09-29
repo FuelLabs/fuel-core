@@ -33,7 +33,7 @@ use crate::{
         WasmChecker,
     },
     service::TxPool,
-    storage::Collision,
+    storage::TransactionWithCollisions,
     GasPrice,
 };
 

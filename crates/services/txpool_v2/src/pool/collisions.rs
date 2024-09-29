@@ -1,15 +1,15 @@
 use crate::{
     error::CollisionReason,
     storage::{
-        Collision,
         Storage,
+        TransactionWithCollisions,
     },
 };
 use fuel_core_types::services::txpool::PoolTransaction;
 use num_rational::Ratio;
 
 /// Trait that extends the `Collision` type functionality used by the pool.
-pub trait CollisionExt<S> {
+pub trait CollisionsExt<S> {
     /// Determine if the collisions allow the transaction to be stored.
     /// Returns the reason of the collision if the transaction cannot be stored.
     fn check_collision_requirements(
@@ -19,10 +19,10 @@ pub trait CollisionExt<S> {
     ) -> Result<(), CollisionReason>;
 }
 
-impl<S, C> CollisionExt<S> for C
+impl<S, C> CollisionsExt<S> for C
 where
     S: Storage,
-    C: Collision<S::StorageIndex>,
+    C: TransactionWithCollisions<S::StorageIndex>,
 {
     /// Rules:
     /// - A transaction has dependencies:

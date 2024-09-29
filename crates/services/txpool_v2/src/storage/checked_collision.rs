@@ -23,10 +23,10 @@ impl<Collision, StorageIndex> CheckedCollision<Collision, StorageIndex> {
     }
 }
 
-impl<StorageIndex, Collision> super::Collision<StorageIndex>
+impl<StorageIndex, Collision> super::TransactionWithCollisions<StorageIndex>
     for CheckedCollision<Collision, StorageIndex>
 where
-    Collision: super::Collision<StorageIndex>,
+    Collision: super::TransactionWithCollisions<StorageIndex>,
 {
     fn tx(&self) -> &PoolTransaction {
         self.collision.tx()
@@ -41,10 +41,10 @@ where
     }
 }
 
-impl<StorageIndex, Collision> super::CheckedCollision<StorageIndex>
+impl<StorageIndex, Collision> super::CheckedTransactionWithCollisions<StorageIndex>
     for CheckedCollision<Collision, StorageIndex>
 where
-    Collision: super::Collision<StorageIndex>,
+    Collision: super::TransactionWithCollisions<StorageIndex>,
 {
     fn all_dependencies(&self) -> &HashSet<StorageIndex> {
         &self.all_dependencies

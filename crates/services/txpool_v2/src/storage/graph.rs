@@ -43,11 +43,11 @@ use crate::{
 };
 
 use super::{
-    CheckedCollision as StorageCheckedCollision,
-    Collision,
+    CheckedTransactionWithCollisions as StorageCheckedCollision,
     RemovedTransactions,
     Storage,
     StorageData,
+    TransactionWithCollisions,
 };
 
 pub struct GraphStorage {
@@ -132,7 +132,7 @@ impl GraphStorage {
     fn remove_node_and_dependent_sub_graph(
         &mut self,
         root_id: NodeIndex,
-    ) -> Vec<PoolTransaction> {
+    ) -> Vec<StorageData> {
         let mut dependency_visited = HashSet::default();
 
         // We need to keep track of all visited dependencies via the
@@ -163,7 +163,7 @@ impl GraphStorage {
         &mut self,
         root_id: NodeIndex,
         dependency_visited: &mut HashSet<NodeIndex>,
-    ) -> Vec<PoolTransaction> {
+    ) -> Vec<StorageData> {
         let dependencies: Vec<_> = self.get_direct_dependencies(root_id).collect();
         let dependents: Vec<_> = self.get_direct_dependents(root_id).collect();
         let Some(root) = self.graph.remove_node(root_id) else {
@@ -185,7 +185,7 @@ impl GraphStorage {
             );
         }
         self.clear_cache(root.transaction.outputs(), &root.transaction.id());
-        let mut removed_transactions = vec![root.transaction];
+        let mut removed_transactions = vec![root];
         for dependent in dependents {
             removed_transactions.extend(
                 self.remove_node_and_dependent_sub_graph_recursion(
@@ -366,19 +366,19 @@ impl GraphStorage {
 
 impl Storage for GraphStorage {
     type StorageIndex = NodeIndex;
-    type CheckedCollision<C> = CheckedCollision<C, Self::StorageIndex>
+    type CheckedTransaction<C> = CheckedCollision<C, Self::StorageIndex>
         where
-            C: Collision<Self::StorageIndex>;
+            C: TransactionWithCollisions<Self::StorageIndex>;
 
-    fn store_transaction<C>(
+    fn store_transaction<Tx>(
         &mut self,
-        checked_collision: Self::CheckedCollision<C>,
+        checked_transaction: Self::CheckedTransaction<Tx>,
         creation_instant: Instant,
     ) -> Self::StorageIndex
     where
-        C: Collision<Self::StorageIndex>,
+        Tx: TransactionWithCollisions<Self::StorageIndex>,
     {
-        let transaction = checked_collision.tx();
+        let transaction = checked_transaction.tx();
         let tx_id = transaction.id();
 
         // Add the new transaction to the graph and update the others in consequence
@@ -387,7 +387,7 @@ impl Storage for GraphStorage {
         let size = transaction.metered_bytes_size();
 
         // Update the cumulative tip and gas of the dependencies transactions and recursively their dependencies, etc.
-        for node_id in checked_collision.all_dependencies() {
+        for node_id in checked_transaction.all_dependencies() {
             let Some(node) = self.graph.node_weight_mut(*node_id) else {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
@@ -417,7 +417,7 @@ impl Storage for GraphStorage {
             dependents_cumulative_tip: tip,
             dependents_cumulative_gas: gas,
             dependents_cumulative_bytes_size: size,
-            transaction: checked_collision.into_instigator(),
+            transaction: checked_transaction.into_instigator(),
             creation_instant,
             number_dependents_in_chain: 1,
         };
@@ -436,20 +436,21 @@ impl Storage for GraphStorage {
         node_id
     }
 
-    fn can_store_transaction<C>(
+    fn can_store_transaction<Tx>(
         &self,
-        collision: C,
-    ) -> Result<Self::CheckedCollision<C>, Error>
+        transaction: Tx,
+    ) -> Result<Self::CheckedTransaction<Tx>, Error>
     where
-        C: Collision<Self::StorageIndex>,
+        Tx: TransactionWithCollisions<Self::StorageIndex>,
     {
-        let all_dependencies = self.collect_transaction_all_dependencies(collision.tx());
+        let all_dependencies =
+            self.collect_transaction_all_dependencies(transaction.tx());
 
         if all_dependencies.len() >= self.config.max_txs_chain_count {
             return Err(Error::NotInsertedChainDependencyTooBig);
         }
 
-        for collision in collision.colliding_transactions().keys() {
+        for collision in transaction.colliding_transactions().keys() {
             if all_dependencies.contains(collision) {
                 return Err(Error::NotInsertedCollisionIsDependency);
             }
@@ -471,7 +472,7 @@ impl Storage for GraphStorage {
             }
         }
 
-        Ok(CheckedCollision::new(collision, all_dependencies))
+        Ok(CheckedCollision::new(transaction, all_dependencies))
     }
 
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData> {

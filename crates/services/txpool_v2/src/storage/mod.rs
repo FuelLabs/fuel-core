@@ -36,9 +36,9 @@ pub struct StorageData {
     pub creation_instant: Instant,
 }
 
-pub type RemovedTransactions = Vec<PoolTransaction>;
+pub type RemovedTransactions = Vec<StorageData>;
 
-pub trait Collision<StorageIndex> {
+pub trait TransactionWithCollisions<StorageIndex> {
     /// Returns the instigator of the collision.
     fn tx(&self) -> &PoolTransaction;
 
@@ -49,7 +49,9 @@ pub trait Collision<StorageIndex> {
     fn into_instigator(self) -> PoolTransaction;
 }
 
-pub trait CheckedCollision<StorageIndex>: Collision<StorageIndex> {
+pub trait CheckedTransactionWithCollisions<StorageIndex>:
+    TransactionWithCollisions<StorageIndex>
+{
     /// Returns the list of all dependencies of the transaction.
     fn all_dependencies(&self) -> &HashSet<StorageIndex>;
 }
@@ -59,28 +61,28 @@ pub trait CheckedCollision<StorageIndex>: Collision<StorageIndex> {
 pub trait Storage {
     /// The index type used in the storage and allow other components to reference transactions.
     type StorageIndex: Copy + Debug + Eq + Hash;
-    type CheckedCollision<C>: CheckedCollision<Self::StorageIndex>
+    type CheckedTransaction<Tx>: CheckedTransactionWithCollisions<Self::StorageIndex>
     where
-        C: Collision<Self::StorageIndex>;
+        Tx: TransactionWithCollisions<Self::StorageIndex>;
 
     /// Store a transaction in the storage according to the dependencies.
     /// Returns the index of the stored transaction.
-    fn store_transaction<C>(
+    fn store_transaction<Tx>(
         &mut self,
-        checked_collision: Self::CheckedCollision<C>,
+        checked_transaction: Self::CheckedTransaction<Tx>,
         creation_instant: Instant,
     ) -> Self::StorageIndex
     where
-        C: Collision<Self::StorageIndex>;
+        Tx: TransactionWithCollisions<Self::StorageIndex>;
 
     /// Check if a transaction could be stored in the storage. This shouldn't be expected to be called before store_transaction.
     /// Its just a way to perform some checks without storing the transaction.
-    fn can_store_transaction<C>(
+    fn can_store_transaction<Tx>(
         &self,
-        collision: C,
-    ) -> Result<Self::CheckedCollision<C>, Error>
+        transaction: Tx,
+    ) -> Result<Self::CheckedTransaction<Tx>, Error>
     where
-        C: Collision<Self::StorageIndex>;
+        Tx: TransactionWithCollisions<Self::StorageIndex>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;

@@ -1,4 +1,4 @@
-mod collision;
+mod collisions;
 
 use std::{
     collections::HashMap,
@@ -20,7 +20,7 @@ use crate::{
     collision_manager::CollisionManager,
     config::Config,
     error::Error,
-    pool::collision::CollisionExt,
+    pool::collisions::CollisionsExt,
     ports::{
         AtomicView,
         TxPoolPersistentStorage,
@@ -30,9 +30,10 @@ use crate::{
         SelectionAlgorithm,
     },
     storage::{
-        CheckedCollision,
-        Collision,
+        CheckedTransactionWithCollisions,
         Storage,
+        StorageData,
+        TransactionWithCollisions,
     },
 };
 
@@ -85,7 +86,7 @@ where
     View: TxPoolPersistentStorage,
     S: Storage,
     CM: CollisionManager<Storage = S, StorageIndex = S::StorageIndex>,
-    CM::Collision: Collision<S::StorageIndex>,
+    CM::Collisions: TransactionWithCollisions<S::StorageIndex>,
     SA: SelectionAlgorithm<Storage = S, StorageIndex = S::StorageIndex>,
 {
     /// Insert transactions into the pool.
@@ -136,9 +137,12 @@ where
         if !has_dependencies {
             self.selection_algorithm
                 .new_executable_transaction(storage_id, tx);
-        } else {
-            self.selection_algorithm.on_stored_transaction(tx);
         }
+
+        let removed_transactions = removed_transactions
+            .into_iter()
+            .map(|data| data.transaction)
+            .collect::<Vec<_>>();
 
         Ok(removed_transactions)
     }
@@ -148,13 +152,24 @@ where
     pub fn can_insert_transaction(
         &self,
         tx: PoolTransaction,
-    ) -> Result<(S::CheckedCollision<CM::Collision>, Vec<S::StorageIndex>), Error> {
+    ) -> Result<(S::CheckedTransaction<CM::Collisions>, Vec<S::StorageIndex>), Error>
+    {
         let persistent_storage = self
             .persistent_storage_provider
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
 
-        self.transaction_basic_checks(&tx)?;
+        if tx.max_gas() == 0 {
+            return Err(Error::ZeroMaxGas)
+        }
+
+        let tx_id = tx.id();
+        if self.tx_id_to_storage_id.contains_key(&tx_id) {
+            return Err(Error::DuplicateTxId(tx_id))
+        }
+
+        self.config.black_list.check_blacklisting(&tx)?;
+
         Self::check_blob_does_not_exist(&tx, &persistent_storage)?;
         self.storage.validate_inputs(
             &tx,
@@ -162,7 +177,7 @@ where
             self.config.utxo_validation,
         )?;
 
-        let collision = self.collision_manager.find_collision(tx);
+        let collision = self.collision_manager.find_collisions(tx);
         let checked_collision = self.storage.can_store_transaction(collision)?;
         let has_dependencies = !checked_collision.all_dependencies().is_empty();
 
@@ -197,10 +212,10 @@ where
                 &mut self.storage,
             )?
             .into_iter()
-            .map(|transaction| {
-                self.update_components_and_caches_on_removal(iter::once(&transaction));
+            .map(|storage_entry| {
+                self.update_components_and_caches_on_removal(iter::once(&storage_entry));
 
-                transaction
+                storage_entry.transaction
             })
             .collect::<Vec<_>>();
 
@@ -224,7 +239,7 @@ where
     /// If none of the above is not true, return `false`.
     fn can_fit_into_pool(
         &self,
-        collision: &S::CheckedCollision<CM::Collision>,
+        collision: &S::CheckedTransaction<CM::Collisions>,
         has_dependencies: bool,
     ) -> Result<SpaceCheckResult, Error> {
         let tx = collision.tx();
@@ -288,7 +303,7 @@ where
     fn find_free_space(
         &self,
         left: NotEnoughSpace,
-        checked_collision: &S::CheckedCollision<CM::Collision>,
+        checked_collision: &S::CheckedTransaction<CM::Collisions>,
     ) -> Result<Vec<S::StorageIndex>, Error> {
         let tx = checked_collision.tx();
         let tx_gas = tx.max_gas();
@@ -355,21 +370,6 @@ where
         Ok(transactions_to_remove)
     }
 
-    fn transaction_basic_checks(&self, tx: &PoolTransaction) -> Result<(), Error> {
-        if tx.max_gas() == 0 {
-            return Err(Error::ZeroMaxGas)
-        }
-
-        let tx_id = tx.id();
-        if self.tx_id_to_storage_id.contains_key(&tx_id) {
-            return Err(Error::DuplicateTxId(tx_id))
-        }
-
-        self.config.black_list.check_blacklisting(tx)?;
-
-        Ok(())
-    }
-
     fn check_blob_does_not_exist(
         tx: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
@@ -388,16 +388,18 @@ where
 
     fn update_components_and_caches_on_removal<'a>(
         &mut self,
-        removed_transactions: impl Iterator<Item = &'a PoolTransaction>,
+        removed_transactions: impl Iterator<Item = &'a StorageData>,
     ) {
-        for tx in removed_transactions {
+        for storage_entry in removed_transactions {
+            let tx = &storage_entry.transaction;
             self.current_gas = self.current_gas.saturating_sub(tx.max_gas());
             self.current_bytes_size = self
                 .current_bytes_size
                 .saturating_sub(tx.metered_bytes_size());
             self.tx_id_to_storage_id.remove(&tx.id());
             self.collision_manager.on_removed_transaction(tx);
-            self.selection_algorithm.on_removed_transaction(tx);
+            self.selection_algorithm
+                .on_removed_transaction(storage_entry);
         }
     }
 }
