@@ -189,7 +189,6 @@ async fn insert__tx2_collided_on_contract_id() {
 
     // contract creation tx
     let (_, gas_coin) = universe.setup_coin();
-    let (output, unset_input) = universe.create_output_and_input();
     let tx = TransactionBuilder::create(
         Default::default(),
         Default::default(),
@@ -199,11 +198,9 @@ async fn insert__tx2_collided_on_contract_id() {
     .max_fee_limit(10)
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
-    .add_output(output)
     .finalize_as_transaction();
 
     let (_, gas_coin) = universe.setup_coin();
-    let input = unset_input.into_input(UtxoId::new(tx.id(&Default::default()), 1));
 
     // Given
     // attempt to insert a different creation tx with a valid dependency on the first tx,
@@ -216,9 +213,7 @@ async fn insert__tx2_collided_on_contract_id() {
     .tip(9)
     .max_fee_limit(9)
     .add_input(gas_coin)
-    .add_input(input)
     .add_output(create_contract_output(contract_id))
-    .add_output(output)
     .finalize_as_transaction();
 
     // When
@@ -288,7 +283,7 @@ async fn insert__already_known_tx() {
     // Then
     assert!(result1.is_ok());
     let err = result2.unwrap_err();
-    assert!(matches!(err, Error::Collided(CollisionReason::Utxo(_))));
+    assert!(matches!(err, Error::DuplicateTxId(_)));
 }
 
 #[tokio::test]
