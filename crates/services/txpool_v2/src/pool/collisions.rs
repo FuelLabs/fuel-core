@@ -1,12 +1,11 @@
 use crate::{
+    collision_manager::Collisions,
     error::CollisionReason,
-    storage::{
-        Storage,
-        TransactionWithCollisions,
-    },
+    storage::Storage,
 };
 use fuel_core_types::services::txpool::PoolTransaction;
 use num_rational::Ratio;
+use std::collections::HashMap;
 
 /// Trait that extends the `Collision` type functionality used by the pool.
 pub trait CollisionsExt<S> {
@@ -14,15 +13,15 @@ pub trait CollisionsExt<S> {
     /// Returns the reason of the collision if the transaction cannot be stored.
     fn check_collision_requirements(
         &self,
+        tx: &PoolTransaction,
         has_dependencies: bool,
         storage: &S,
     ) -> Result<(), CollisionReason>;
 }
 
-impl<S, C> CollisionsExt<S> for C
+impl<S> CollisionsExt<S> for Collisions<S::StorageIndex>
 where
     S: Storage,
-    C: TransactionWithCollisions<S::StorageIndex>,
 {
     /// Rules:
     /// - A transaction has dependencies:
@@ -36,15 +35,16 @@ where
     ///         than the collided subtrees'.
     fn check_collision_requirements(
         &self,
+        tx: &PoolTransaction,
         has_dependencies: bool,
         storage: &S,
     ) -> Result<(), CollisionReason> {
-        if has_dependencies && self.colliding_transactions().len() > 1 {
+        if has_dependencies && self.len() > 1 {
             return Err(CollisionReason::MultipleCollisions);
         }
 
-        for (collision, reason) in self.colliding_transactions().iter() {
-            if !is_better_than_collision(self.tx(), collision, storage)? {
+        for (collision, reason) in self.iter() {
+            if !is_better_than_collision(tx, collision, storage)? {
                 if let Some(reason) = reason.first() {
                     return Err(reason.clone());
                 } else {

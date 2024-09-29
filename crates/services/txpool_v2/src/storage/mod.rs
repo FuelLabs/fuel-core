@@ -38,20 +38,13 @@ pub struct StorageData {
 
 pub type RemovedTransactions = Vec<StorageData>;
 
-pub trait TransactionWithCollisions<StorageIndex> {
-    /// Returns the instigator of the collision.
+pub trait CheckedTransaction<StorageIndex> {
+    /// Returns the underlying transaction.
     fn tx(&self) -> &PoolTransaction;
 
-    /// Returns the transactions that collide with the given transaction.
-    fn colliding_transactions(&self) -> &HashMap<StorageIndex, Vec<CollisionReason>>;
+    /// Unwraps the transaction.
+    fn into_tx(self) -> PoolTransaction;
 
-    /// Unwraps the collision into a instigator transaction.
-    fn into_instigator(self) -> PoolTransaction;
-}
-
-pub trait CheckedTransactionWithCollisions<StorageIndex>:
-    TransactionWithCollisions<StorageIndex>
-{
     /// Returns the list of all dependencies of the transaction.
     fn all_dependencies(&self) -> &HashSet<StorageIndex>;
 }
@@ -61,28 +54,23 @@ pub trait CheckedTransactionWithCollisions<StorageIndex>:
 pub trait Storage {
     /// The index type used in the storage and allow other components to reference transactions.
     type StorageIndex: Copy + Debug + Eq + Hash;
-    type CheckedTransaction<Tx>: CheckedTransactionWithCollisions<Self::StorageIndex>
-    where
-        Tx: TransactionWithCollisions<Self::StorageIndex>;
+    type CheckedTransaction: CheckedTransaction<Self::StorageIndex>;
 
     /// Store a transaction in the storage according to the dependencies.
     /// Returns the index of the stored transaction.
-    fn store_transaction<Tx>(
+    fn store_transaction(
         &mut self,
-        checked_transaction: Self::CheckedTransaction<Tx>,
+        checked_transaction: Self::CheckedTransaction,
         creation_instant: Instant,
-    ) -> Self::StorageIndex
-    where
-        Tx: TransactionWithCollisions<Self::StorageIndex>;
+    ) -> Self::StorageIndex;
 
-    /// Check if a transaction could be stored in the storage. This shouldn't be expected to be called before store_transaction.
-    /// Its just a way to perform some checks without storing the transaction.
-    fn can_store_transaction<Tx>(
+    /// The function performs checks on the transaction and returns a checked transaction.
+    ///
+    /// [`Self::CheckedTransaction`] is required to call [`Self::store_transaction`].
+    fn can_store_transaction(
         &self,
-        transaction: Tx,
-    ) -> Result<Self::CheckedTransaction<Tx>, Error>
-    where
-        Tx: TransactionWithCollisions<Self::StorageIndex>;
+        transaction: PoolTransaction,
+    ) -> Result<Self::CheckedTransaction, Error>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;

@@ -30,12 +30,14 @@ use fuel_core_types::{
 };
 
 use crate::{
-    collision_manager::collisions::SimpleCollisions,
     error::CollisionReason,
     storage::StorageData,
 };
 
-use super::CollisionManager;
+use super::{
+    CollisionManager,
+    Collisions,
+};
 
 pub trait BasicCollisionManagerStorage {
     type StorageIndex: Copy + Debug + Hash + PartialEq + Eq;
@@ -79,9 +81,11 @@ impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
 impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager<S> {
     type Storage = S;
     type StorageIndex = S::StorageIndex;
-    type Collisions = SimpleCollisions<S::StorageIndex>;
 
-    fn find_collisions(&self, transaction: PoolTransaction) -> Self::Collisions {
+    fn find_collisions(
+        &self,
+        transaction: &PoolTransaction,
+    ) -> Collisions<Self::StorageIndex> {
         let mut collisions = HashMap::new();
         if let PoolTransaction::Blob(checked_tx, _) = &transaction {
             let blob_id = checked_tx.transaction().blob_id();
@@ -124,7 +128,7 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
             }
         }
 
-        SimpleCollisions::new(transaction, collisions)
+        collisions
     }
 
     fn on_stored_transaction(

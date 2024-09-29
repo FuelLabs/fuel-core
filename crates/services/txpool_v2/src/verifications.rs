@@ -33,7 +33,6 @@ use crate::{
         WasmChecker,
     },
     service::TxPool,
-    storage::TransactionWithCollisions,
     GasPrice,
 };
 
@@ -91,8 +90,11 @@ impl BasicVerifiedTx {
     {
         let pool_tx = checked_tx_into_pool(self.0, version)?;
 
-        let (checked, _) = pool.read().can_insert_transaction(pool_tx)?;
-        let checked_transaction: CheckedTransaction = checked.into_instigator().into();
+        let transaction = pool
+            .read()
+            .can_insert_transaction(pool_tx)?
+            .into_transaction();
+        let checked_transaction: CheckedTransaction = transaction.into();
         Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
     }
 }

@@ -17,7 +17,10 @@ use num_rational::Ratio;
 use tracing::instrument;
 
 use crate::{
-    collision_manager::CollisionManager,
+    collision_manager::{
+        CollisionManager,
+        Collisions,
+    },
     config::Config,
     error::Error,
     pool::collisions::CollisionsExt,
@@ -30,10 +33,9 @@ use crate::{
         SelectionAlgorithm,
     },
     storage::{
-        CheckedTransactionWithCollisions,
+        CheckedTransaction,
         Storage,
         StorageData,
-        TransactionWithCollisions,
     },
 };
 
@@ -86,7 +88,6 @@ where
     View: TxPoolPersistentStorage,
     S: Storage,
     CM: CollisionManager<Storage = S, StorageIndex = S::StorageIndex>,
-    CM::Collisions: TransactionWithCollisions<S::StorageIndex>,
     SA: SelectionAlgorithm<Storage = S, StorageIndex = S::StorageIndex>,
 {
     /// Insert transactions into the pool.
@@ -95,9 +96,14 @@ where
     /// because of the insertion of the new transaction.
     #[instrument(skip(self))]
     pub fn insert(&mut self, tx: PoolTransaction) -> Result<Vec<PoolTransaction>, Error> {
-        let (checked_collision, transactions_to_remove) =
-            self.can_insert_transaction(tx)?;
-        let has_dependencies = !checked_collision.all_dependencies().is_empty();
+        let CanStoreTransaction {
+            checked_transaction,
+            transactions_to_remove,
+            collisions,
+            _guard,
+        } = self.can_insert_transaction(tx)?;
+
+        let has_dependencies = !checked_transaction.all_dependencies().is_empty();
 
         let mut removed_transactions = vec![];
         for tx in transactions_to_remove {
@@ -106,7 +112,7 @@ where
             removed_transactions.extend(removed);
         }
 
-        for collided_tx in checked_collision.colliding_transactions().keys() {
+        for collided_tx in collisions.keys() {
             let removed = self
                 .storage
                 .remove_transaction_and_dependents_subtree(*collided_tx);
@@ -115,7 +121,7 @@ where
             removed_transactions.extend(removed);
         }
 
-        let tx = checked_collision.tx();
+        let tx = checked_transaction.tx();
         let tx_id = tx.id();
         let gas = tx.max_gas();
         let creation_instant = Instant::now();
@@ -123,7 +129,7 @@ where
 
         let storage_id = self
             .storage
-            .store_transaction(checked_collision, creation_instant);
+            .store_transaction(checked_transaction, creation_instant);
 
         self.current_gas = self.current_gas.saturating_add(gas);
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
@@ -152,8 +158,7 @@ where
     pub fn can_insert_transaction(
         &self,
         tx: PoolTransaction,
-    ) -> Result<(S::CheckedTransaction<CM::Collisions>, Vec<S::StorageIndex>), Error>
-    {
+    ) -> Result<CanStoreTransaction<S>, Error> {
         let persistent_storage = self
             .persistent_storage_provider
             .latest_view()
@@ -177,23 +182,42 @@ where
             self.config.utxo_validation,
         )?;
 
-        let collision = self.collision_manager.find_collisions(tx);
-        let checked_collision = self.storage.can_store_transaction(collision)?;
-        let has_dependencies = !checked_collision.all_dependencies().is_empty();
+        let collisions = self.collision_manager.find_collisions(&tx);
+        let checked_transaction = self.storage.can_store_transaction(tx)?;
 
-        checked_collision
-            .check_collision_requirements(has_dependencies, &self.storage)
+        for collision in collisions.keys() {
+            if checked_transaction.all_dependencies().contains(collision) {
+                return Err(Error::NotInsertedCollisionIsDependency);
+            }
+        }
+
+        let has_dependencies = !checked_transaction.all_dependencies().is_empty();
+
+        collisions
+            .check_collision_requirements(
+                checked_transaction.tx(),
+                has_dependencies,
+                &self.storage,
+            )
             .map_err(Error::Collided)?;
 
         let can_fit_into_pool =
-            self.can_fit_into_pool(&checked_collision, has_dependencies)?;
+            self.can_fit_into_pool(&checked_transaction, &collisions)?;
 
         let mut transactions_to_remove = vec![];
         if let SpaceCheckResult::NotEnoughSpace(left) = can_fit_into_pool {
-            transactions_to_remove = self.find_free_space(left, &checked_collision)?;
+            transactions_to_remove =
+                self.find_free_space(left, &checked_transaction, &collisions)?;
         }
 
-        Ok((checked_collision, transactions_to_remove))
+        let can_store_transaction = CanStoreTransaction {
+            checked_transaction,
+            transactions_to_remove,
+            collisions,
+            _guard: &self.storage,
+        };
+
+        Ok(can_store_transaction)
     }
 
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
@@ -239,10 +263,10 @@ where
     /// If none of the above is not true, return `false`.
     fn can_fit_into_pool(
         &self,
-        collision: &S::CheckedTransaction<CM::Collisions>,
-        has_dependencies: bool,
+        checked_transaction: &S::CheckedTransaction,
+        collisions: &Collisions<S::StorageIndex>,
     ) -> Result<SpaceCheckResult, Error> {
-        let tx = collision.tx();
+        let tx = checked_transaction.tx();
         let tx_gas = tx.max_gas();
         let bytes_size = tx.metered_bytes_size();
         let mut gas_left = self.current_gas.saturating_add(tx_gas);
@@ -258,7 +282,7 @@ where
         // If the transaction has a collision verify that by
         // removing the transaction we can free enough space
         // otherwise return an error
-        for collision in collision.colliding_transactions().keys() {
+        for collision in collisions.keys() {
             let Some(collision_data) = self.storage.get(collision) else {
                 debug_assert!(false, "Collision data not found");
                 tracing::warn!(
@@ -279,6 +303,8 @@ where
         {
             return Ok(SpaceCheckResult::EnoughSpace);
         }
+
+        let has_dependencies = !checked_transaction.all_dependencies().is_empty();
 
         // If the transaction has a dependency and the pool is full, we refuse it
         if has_dependencies {
@@ -303,9 +329,10 @@ where
     fn find_free_space(
         &self,
         left: NotEnoughSpace,
-        checked_collision: &S::CheckedTransaction<CM::Collisions>,
+        checked_transaction: &S::CheckedTransaction,
+        collisions: &Collisions<S::StorageIndex>,
     ) -> Result<Vec<S::StorageIndex>, Error> {
-        let tx = checked_collision.tx();
+        let tx = checked_transaction.tx();
         let tx_gas = tx.max_gas();
         let mut gas_left = left.gas_left;
         let mut bytes_left = left.bytes_left;
@@ -328,14 +355,11 @@ where
         {
             let storage_id = sorted_txs.next().ok_or(Error::NotInsertedLimitHit)?;
 
-            if checked_collision.all_dependencies().contains(storage_id) {
+            if checked_transaction.all_dependencies().contains(storage_id) {
                 continue
             }
 
-            if checked_collision
-                .colliding_transactions()
-                .contains_key(storage_id)
-            {
+            if collisions.contains_key(storage_id) {
                 continue
             }
 
@@ -414,4 +438,27 @@ pub struct NotEnoughSpace {
 pub enum SpaceCheckResult {
     EnoughSpace,
     NotEnoughSpace(NotEnoughSpace),
+}
+
+pub struct CanStoreTransaction<'a, S>
+where
+    S: Storage,
+{
+    /// The checked transaction by the storage.
+    checked_transaction: S::CheckedTransaction,
+    /// List of transactions to remove to fit the new transaction into the pool.
+    transactions_to_remove: Vec<S::StorageIndex>,
+    /// List of collided transactions that we need to remove to insert transaction.
+    collisions: Collisions<S::StorageIndex>,
+    /// Protects the pool from modifications while this type is active.
+    _guard: &'a S,
+}
+
+impl<'a, S> CanStoreTransaction<'a, S>
+where
+    S: Storage,
+{
+    pub fn into_transaction(self) -> PoolTransaction {
+        self.checked_transaction.into_tx()
+    }
 }

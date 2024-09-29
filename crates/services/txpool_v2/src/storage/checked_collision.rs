@@ -5,47 +5,37 @@ use std::collections::{
     HashSet,
 };
 
-pub struct CheckedCollision<Collision, StorageIndex> {
-    collision: Collision,
+pub struct CheckedTransaction<StorageIndex> {
+    tx: PoolTransaction,
     all_dependencies: HashSet<StorageIndex>,
 }
 
-impl<Collision, StorageIndex> CheckedCollision<Collision, StorageIndex> {
-    /// Creates a new checked collision.
+impl<StorageIndex> CheckedTransaction<StorageIndex> {
+    /// Creates a new checked transactions.
+    ///
+    /// It is a private method called by the `GraphStorage`.
     pub(super) fn new(
-        collision: Collision,
+        tx: PoolTransaction,
         all_dependencies: HashSet<StorageIndex>,
     ) -> Self {
         Self {
-            collision,
+            tx,
             all_dependencies,
         }
     }
 }
 
-impl<StorageIndex, Collision> super::TransactionWithCollisions<StorageIndex>
-    for CheckedCollision<Collision, StorageIndex>
-where
-    Collision: super::TransactionWithCollisions<StorageIndex>,
+impl<StorageIndex> super::CheckedTransaction<StorageIndex>
+    for CheckedTransaction<StorageIndex>
 {
     fn tx(&self) -> &PoolTransaction {
-        self.collision.tx()
+        &self.tx
     }
 
-    fn colliding_transactions(&self) -> &HashMap<StorageIndex, Vec<CollisionReason>> {
-        self.collision.colliding_transactions()
+    fn into_tx(self) -> PoolTransaction {
+        self.tx
     }
 
-    fn into_instigator(self) -> PoolTransaction {
-        self.collision.into_instigator()
-    }
-}
-
-impl<StorageIndex, Collision> super::CheckedTransactionWithCollisions<StorageIndex>
-    for CheckedCollision<Collision, StorageIndex>
-where
-    Collision: super::TransactionWithCollisions<StorageIndex>,
-{
     fn all_dependencies(&self) -> &HashSet<StorageIndex> {
         &self.all_dependencies
     }

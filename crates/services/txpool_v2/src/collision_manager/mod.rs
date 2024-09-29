@@ -1,20 +1,24 @@
+use crate::error::CollisionReason;
 use fuel_core_types::services::txpool::PoolTransaction;
+use std::collections::HashMap;
 
 use crate::storage::StorageData;
 
 pub mod basic;
-pub mod collisions;
+
+pub type Collisions<StorageIndex> = HashMap<StorageIndex, Vec<CollisionReason>>;
 
 pub trait CollisionManager {
     /// Storage type of the collision manager.
     type Storage;
     /// Index that identifies a transaction in the storage.
     type StorageIndex;
-    /// The type to represent collisions of the transaction.
-    type Collisions;
 
     /// Finds collisions for the transaction.
-    fn find_collisions(&self, transaction: PoolTransaction) -> Self::Collisions;
+    fn find_collisions(
+        &self,
+        transaction: &PoolTransaction,
+    ) -> Collisions<Self::StorageIndex>;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(
