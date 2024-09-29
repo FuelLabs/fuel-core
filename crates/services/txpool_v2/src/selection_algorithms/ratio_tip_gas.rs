@@ -97,12 +97,12 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
     fn key(store_entry: &StorageData) -> Key {
         let transaction = &store_entry.transaction;
         let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
-        let key = Key {
+
+        Key {
             ratio: tip_gas_ratio,
             creation_instant: store_entry.creation_instant,
             tx_id: transaction.id(),
-        };
-        key
+        }
     }
 
     fn on_removed_transaction_inner(&mut self, key: Key) {
