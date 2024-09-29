@@ -9,15 +9,18 @@ use fuel_core_types::{
 };
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
-    // TODO: Use `size_limit` https://github.com/FuelLabs/fuel-core/issues/2133
     fn next(
         &self,
         gas_limit: u64,
         transactions_limit: u16,
-        _: u32,
+        block_transaction_size_limit: u32,
     ) -> Vec<MaybeCheckedTransaction> {
         self.txpool
-            .select_transactions(gas_limit, transactions_limit)
+            .select_transactions(
+                gas_limit,
+                transactions_limit,
+                block_transaction_size_limit,
+            )
             .into_iter()
             .map(|tx| {
                 MaybeCheckedTransaction::CheckedTransaction(
