@@ -277,13 +277,13 @@ where
             .db
             .iter_all_keys::<ModificationsHistoryV2<Description>>(Some(direction))
             .next();
-        let v1_changes = if check_v1 {
-            self.db
-                .iter_all_keys::<ModificationsHistoryV1<Description>>(Some(direction))
-                .next()
-        } else {
-            None
-        };
+        let v1_changes = check_v1
+            .then(|| {
+                self.db
+                    .iter_all_keys::<ModificationsHistoryV1<Description>>(Some(direction))
+                    .next()
+            })
+            .flatten();
         (v2_changes, v1_changes)
     }
 
