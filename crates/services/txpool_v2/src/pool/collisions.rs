@@ -5,7 +5,6 @@ use crate::{
 };
 use fuel_core_types::services::txpool::PoolTransaction;
 use num_rational::Ratio;
-use std::collections::HashMap;
 
 /// Trait that extends the `Collision` type functionality used by the pool.
 pub trait CollisionsExt<S> {

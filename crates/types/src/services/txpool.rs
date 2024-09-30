@@ -103,6 +103,7 @@ impl PoolTransaction {
     }
 
     /// Used for accounting purposes when charging byte based fees.
+    // TODO: Cache the `metered_bytes_size` value in metadata.
     pub fn metered_bytes_size(&self) -> usize {
         match self {
             PoolTransaction::Script(tx, _) => tx.transaction().metered_bytes_size(),

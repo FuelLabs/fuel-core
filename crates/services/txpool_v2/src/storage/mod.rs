@@ -1,18 +1,12 @@
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::HashSet,
     fmt::Debug,
     hash::Hash,
     time::Instant,
 };
 
 use crate::{
-    error::{
-        CollisionReason,
-        Error,
-    },
+    error::Error,
     ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::PoolTransaction;
@@ -74,6 +68,9 @@ pub trait Storage {
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
+
+    /// Returns `true` if the transaction has dependencies.
+    fn has_dependencies(&self, index: &Self::StorageIndex) -> bool;
 
     /// Validate inputs of a transaction.
     fn validate_inputs(

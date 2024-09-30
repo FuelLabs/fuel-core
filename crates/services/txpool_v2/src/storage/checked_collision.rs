@@ -1,9 +1,5 @@
-use crate::error::CollisionReason;
 use fuel_core_types::services::txpool::PoolTransaction;
-use std::collections::{
-    HashMap,
-    HashSet,
-};
+use std::collections::HashSet;
 
 pub struct CheckedTransaction<StorageIndex> {
     tx: PoolTransaction,
@@ -25,10 +21,6 @@ impl<StorageIndex> CheckedTransaction<StorageIndex> {
             direct_dependencies,
             all_dependencies,
         }
-    }
-
-    pub fn direct_dependencies(&self) -> &HashSet<StorageIndex> {
-        &self.direct_dependencies
     }
 
     pub fn unpack(

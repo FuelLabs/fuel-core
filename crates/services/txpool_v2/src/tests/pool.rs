@@ -1206,7 +1206,7 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     let err = universe.verify_and_insert(tx3).await.unwrap_err();
 
     // Then
-    assert!(matches!(err, Error::NotInsertedCollisionIsDependency));
+    assert!(matches!(err, Error::DependentTransactionIsADiamondDeath));
 }
 
 #[tokio::test]

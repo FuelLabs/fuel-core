@@ -1,5 +1,3 @@
-use fuel_core_types::services::txpool::PoolTransaction;
-
 use crate::{
     error::Error,
     storage::{

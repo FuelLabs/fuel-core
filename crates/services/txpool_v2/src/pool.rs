@@ -132,8 +132,12 @@ where
             .store_transaction(checked_transaction, creation_instant);
 
         self.current_gas = self.current_gas.saturating_add(gas);
+        debug_assert!(self.current_gas <= self.config.pool_limits.max_gas);
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
+        debug_assert!(self.current_bytes_size <= self.config.pool_limits.max_bytes_size);
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
+        debug_assert!(self.tx_id_to_storage_id.len() <= self.config.pool_limits.max_txs);
+        debug_assert!(self.storage.count() <= self.config.pool_limits.max_txs);
 
         let tx =
             Storage::get(&self.storage, &storage_id).expect("Transaction is set above");
@@ -182,7 +186,7 @@ where
             self.config.utxo_validation,
         )?;
 
-        let collisions = self.collision_manager.find_collisions(&tx);
+        let collisions = self.collision_manager.find_collisions(&tx)?;
         let checked_transaction = self.storage.can_store_transaction(tx)?;
 
         for collision in collisions.keys() {
@@ -201,13 +205,11 @@ where
             )
             .map_err(Error::Collided)?;
 
-        let can_fit_into_pool =
-            self.can_fit_into_pool(&checked_transaction, &collisions)?;
+        let can_fit_into_pool = self.can_fit_into_pool(&checked_transaction)?;
 
         let mut transactions_to_remove = vec![];
         if let SpaceCheckResult::NotEnoughSpace(left) = can_fit_into_pool {
-            transactions_to_remove =
-                self.find_free_space(left, &checked_transaction, &collisions)?;
+            transactions_to_remove = self.find_free_space(left, &checked_transaction)?;
         }
 
         let can_store_transaction = CanStoreTransaction {
@@ -264,39 +266,13 @@ where
     fn can_fit_into_pool(
         &self,
         checked_transaction: &S::CheckedTransaction,
-        collisions: &Collisions<S::StorageIndex>,
     ) -> Result<SpaceCheckResult, Error> {
         let tx = checked_transaction.tx();
         let tx_gas = tx.max_gas();
         let bytes_size = tx.metered_bytes_size();
-        let mut gas_left = self.current_gas.saturating_add(tx_gas);
-        let mut bytes_left = self.current_bytes_size.saturating_add(bytes_size);
-        let mut txs_left = self.storage.count().saturating_add(1);
-        if gas_left <= self.config.pool_limits.max_gas
-            && bytes_left <= self.config.pool_limits.max_bytes_size
-            && txs_left <= self.config.pool_limits.max_txs
-        {
-            return Ok(SpaceCheckResult::EnoughSpace);
-        }
-
-        // If the transaction has a collision verify that by
-        // removing the transaction we can free enough space
-        // otherwise return an error
-        for collision in collisions.keys() {
-            let Some(collision_data) = self.storage.get(collision) else {
-                debug_assert!(false, "Collision data not found");
-                tracing::warn!(
-                    "Collision data not found in the storage during `can_fit_into_pool`."
-                );
-                continue
-            };
-
-            gas_left = gas_left.saturating_sub(collision_data.dependents_cumulative_gas);
-            bytes_left = bytes_left
-                .saturating_sub(collision_data.dependents_cumulative_bytes_size);
-            txs_left = txs_left.saturating_sub(collision_data.number_dependents_in_chain);
-        }
-
+        let gas_left = self.current_gas.saturating_add(tx_gas);
+        let bytes_left = self.current_bytes_size.saturating_add(bytes_size);
+        let txs_left = self.tx_id_to_storage_id.len().saturating_add(1);
         if gas_left <= self.config.pool_limits.max_gas
             && bytes_left <= self.config.pool_limits.max_bytes_size
             && txs_left <= self.config.pool_limits.max_txs
@@ -330,17 +306,17 @@ where
         &self,
         left: NotEnoughSpace,
         checked_transaction: &S::CheckedTransaction,
-        collisions: &Collisions<S::StorageIndex>,
     ) -> Result<Vec<S::StorageIndex>, Error> {
         let tx = checked_transaction.tx();
-        let tx_gas = tx.max_gas();
-        let mut gas_left = left.gas_left;
-        let mut bytes_left = left.bytes_left;
-        let mut txs_left = left.txs_left;
+        let NotEnoughSpace {
+            mut gas_left,
+            mut bytes_left,
+            mut txs_left,
+        } = left;
 
         // Here the transaction has no dependencies which means that it's an executable transaction
         // and we want to make space for it
-        let new_tx_ratio = Ratio::new(tx.tip(), tx_gas);
+        let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
 
         // We want to go over executable transactions and remove the less profitable ones.
         // It is imported to go over executable transactions, not dependent ones, because we
@@ -359,9 +335,7 @@ where
                 continue
             }
 
-            if collisions.contains_key(storage_id) {
-                continue
-            }
+            debug_assert!(!self.storage.has_dependencies(storage_id));
 
             let Some(storage_data) = self.storage.get(storage_id) else {
                 debug_assert!(
@@ -383,10 +357,13 @@ where
                 return Err(Error::NotInsertedLimitHit);
             }
 
-            gas_left = gas_left.saturating_sub(storage_data.dependents_cumulative_gas);
-            bytes_left =
-                bytes_left.saturating_sub(storage_data.dependents_cumulative_bytes_size);
-            txs_left = txs_left.saturating_sub(storage_data.number_dependents_in_chain);
+            let gas = storage_data.dependents_cumulative_gas;
+            let bytes = storage_data.dependents_cumulative_bytes_size;
+            let txs = storage_data.number_dependents_in_chain;
+
+            gas_left = gas_left.saturating_sub(gas);
+            bytes_left = bytes_left.saturating_sub(bytes);
+            txs_left = txs_left.saturating_sub(txs);
 
             transactions_to_remove.push(*storage_id);
         }

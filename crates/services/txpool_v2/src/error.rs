@@ -34,6 +34,9 @@ pub enum Error {
     Collided(CollisionReason),
     #[display(fmt = "Transaction is not inserted. Collision is also a dependency")]
     NotInsertedCollisionIsDependency,
+    #[display(fmt = "The dependent transaction creates a diamond problem, \
+        causing cycles in the dependency graph.")]
+    DependentTransactionIsADiamondDeath,
     #[display(fmt = "Utxo not found: {_0}")]
     UtxoNotFound(UtxoId),
     #[display(fmt = "The UTXO `{_0}` is blacklisted")]
