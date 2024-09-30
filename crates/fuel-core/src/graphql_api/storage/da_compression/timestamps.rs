@@ -29,6 +29,17 @@ pub enum TimestampKeyspace {
 }
 
 #[cfg(feature = "test-helpers")]
+impl rand::distributions::Distribution<TimestampKey> for rand::distributions::Standard {
+    #![allow(clippy::arithmetic_side_effects)] // Test-only code, and also safe
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> TimestampKey {
+        TimestampKey {
+            keyspace: rng.gen(),
+            key: RegistryKey::try_from(rng.gen_range(0..2u32.pow(24) - 2)).unwrap(),
+        }
+    }
+}
+
+#[cfg(feature = "test-helpers")]
 impl rand::distributions::Distribution<TimestampKeyspace>
     for rand::distributions::Standard
 {

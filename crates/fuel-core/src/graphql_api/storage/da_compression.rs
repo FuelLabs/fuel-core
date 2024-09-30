@@ -171,6 +171,16 @@ mod tests {
 
     #[cfg(test)]
     fuel_core_storage::basic_storage_tests!(
+        DaCompressionTemporalRegistryTimestamps,
+        TimestampKey {
+            keyspace: timestamps::TimestampKeyspace::Address,
+            key: RegistryKey::ZERO
+        },
+        Tai64::UNIX_EPOCH
+    );
+
+    #[cfg(test)]
+    fuel_core_storage::basic_storage_tests!(
         DaCompressionTemporalRegistryEvictorCache,
         MetadataKey::Address,
         RegistryKey::ZERO
