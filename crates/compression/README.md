@@ -6,7 +6,7 @@ Each compressed block begins with a version field, so that it's possible to chan
 
 ## Temporal registry
 
-This crate provides offchain registries for different types such as `AssetId`, `ContractId`, scripts, and predicates. Each registry is a key-value store with three-byte key. The registires are essentially compression caches. The three byte key allows cache size of 16 million values before reregistering the older values.
+This crate provides offchain registries for different types such as `AssetId`, `ContractId`, scripts, and predicates. Each registry is a key-value store with three-byte key. The registries are essentially compression caches. The three byte key allows cache size of 16 million values before reregistering the older values.
 
 The registries allow replacing repeated objects with their respective keys, so if an object
 is used multiple times in a short interval (couple of months, maybe), then the full value
