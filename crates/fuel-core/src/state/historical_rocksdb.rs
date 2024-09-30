@@ -89,7 +89,7 @@ pub struct HistoricalRocksDB<Description> {
     db: RocksDb<Historical<Description>>,
     /// Indicates whether the [`Column::ModificationsHistory`]
     /// is being migrated to [`Column::ModificationsHistoryV2`]
-    migration_in_progress: bool,
+    modifications_history_migration_in_progress: bool,
 }
 
 impl<Description> HistoricalRocksDB<Description>
@@ -103,7 +103,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
-            migration_in_progress: true,
+            modifications_history_migration_in_progress: true,
         })
     }
 
@@ -116,7 +116,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
-            migration_in_progress: true,
+            modifications_history_migration_in_progress: true,
         })
     }
 
@@ -209,7 +209,7 @@ where
             &height_u64,
             storage_transaction,
             &self.state_rewind_policy,
-            self.migration_in_progress,
+            self.modifications_history_migration_in_progress,
         )?;
 
         // We write directly to `ModificationsHistoryV2`.
@@ -219,7 +219,7 @@ where
             storage_transaction,
             height_u64,
             &reverse_changes,
-            self.migration_in_progress,
+            self.modifications_history_migration_in_progress,
         )?;
 
         if let Some(old_changes) = old_changes {
@@ -290,7 +290,7 @@ where
     fn oldest_changes_height(&self) -> StorageResult<Option<u64>> {
         let (v2_oldest_height, v1_oldest_height) = self.multiversion_changes_heights(
             IterDirection::Forward,
-            self.migration_in_progress,
+            self.modifications_history_migration_in_progress,
         );
 
         let v2_oldest_height = v2_oldest_height.transpose()?;
@@ -310,7 +310,7 @@ where
     fn rollback_last_block(&self) -> StorageResult<u64> {
         let (v2_latest_height, v1_latest_height) = self.multiversion_changes_heights(
             IterDirection::Reverse,
-            self.migration_in_progress,
+            self.modifications_history_migration_in_progress,
         );
 
         let latest_height = match (v2_latest_height, v1_latest_height) {
@@ -333,7 +333,7 @@ where
         let last_changes = multiversion_take(
             &mut storage_transaction,
             height_to_rollback,
-            self.migration_in_progress,
+            self.modifications_history_migration_in_progress,
         )?
         .ok_or(not_found!(ModificationsHistoryV1<Description>))?;
 
@@ -394,7 +394,7 @@ where
 fn multiversion_take<Description>(
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
     height: u64,
-    migration_in_progress: bool,
+    modifications_history_migration_in_progress: bool,
 ) -> StorageResult<Option<Changes>>
 where
     Description: DatabaseDescription,
@@ -406,7 +406,7 @@ where
         .storage_as_mut::<ModificationsHistoryV2<Description>>()
         .take(&height)?;
 
-    if migration_in_progress {
+    if modifications_history_migration_in_progress {
         let v1_last_changes = storage_transaction
             .storage_as_mut::<ModificationsHistoryV1<Description>>()
             .take(&height)?;
@@ -420,7 +420,7 @@ fn multiversion_replace<Description>(
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
     height: u64,
     changes: &Changes,
-    migration_in_progress: bool,
+    modifications_history_migration_in_progress: bool,
 ) -> StorageResult<Option<Changes>>
 where
     Description: DatabaseDescription,
@@ -429,7 +429,7 @@ where
         .storage_as_mut::<ModificationsHistoryV2<Description>>()
         .replace(&height, changes)?;
 
-    if migration_in_progress {
+    if modifications_history_migration_in_progress {
         let v1_last_changes = storage_transaction
             .storage_as_mut::<ModificationsHistoryV1<Description>>()
             .take(&height)?;
@@ -443,7 +443,7 @@ fn cleanup_old_changes<Description>(
     height: &u64,
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
     state_rewind_policy: &StateRewindPolicy,
-    migration_in_progress: bool,
+    modifications_history_migration_in_progress: bool,
 ) -> StorageResult<()>
 where
     Description: DatabaseDescription,
@@ -461,7 +461,7 @@ where
             let old_changes = multiversion_take(
                 storage_transaction,
                 old_height,
-                migration_in_progress,
+                modifications_history_migration_in_progress,
             )?;
 
             if let Some(old_changes) = old_changes {
