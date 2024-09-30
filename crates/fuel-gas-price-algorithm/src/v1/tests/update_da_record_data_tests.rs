@@ -281,7 +281,6 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
 #[derive(Debug, Clone)]
 pub struct RecordedBlock {
     pub height: u32,
-    // pub block_bytes: u64,
     pub block_cost: u64,
 }
 

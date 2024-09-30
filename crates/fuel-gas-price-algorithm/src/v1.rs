@@ -193,6 +193,7 @@ impl AlgorithmUpdaterV1 {
         if !height_range.is_empty() {
             self.da_block_update(height_range, range_cost)?;
             self.recalculate_projected_cost();
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/2264
             // self.normalize_rewards_and_costs();
         }
         Ok(())
