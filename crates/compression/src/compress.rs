@@ -24,7 +24,6 @@ use fuel_core_types::{
     },
     fuel_tx::{
         input::PredicateCode,
-        Bytes32,
         CompressedUtxoId,
         ScriptCode,
         TxPointer,
@@ -74,7 +73,6 @@ where
     // Construct the actual compacted block
     let compact = CompressedBlockPayloadV0 {
         registrations,
-        registrations_root: Bytes32::default(), /* TODO: https://github.com/FuelLabs/fuel-core/issues/2232 */
         header: block.header().into(),
         transactions,
     };
