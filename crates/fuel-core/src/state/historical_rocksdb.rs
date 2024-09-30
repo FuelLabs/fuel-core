@@ -356,7 +356,9 @@ where
     }
 
     /// Migrates a ModificationHistory key-value pair from V1 to V2.
-    /// The migration fails if other
+    /// The migration fails if a concurrent transaction which rollbacks
+    /// to the `height` being migrated commits before this
+    /// migration transaction commits.
     pub fn migrate_modifications_history_at_height(
         &self,
         height: u64,
