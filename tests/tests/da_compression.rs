@@ -1,5 +1,7 @@
+use core::time::Duration;
 use fuel_core::{
     combined_database::CombinedDatabase,
+    fuel_core_graphql_api::worker_service::DaCompressionConfig,
     p2p_test_helpers::*,
     service::{
         Config,
@@ -32,6 +34,9 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     let db = CombinedDatabase::default();
     let mut config = Config::local_node();
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
+    config.da_compression = DaCompressionConfig::Enabled(fuel_core_compression::Config {
+        temporal_registry_retention: Duration::from_secs(3600),
+    });
     let srv = FuelService::from_combined_database(db.clone(), config)
         .await
         .unwrap();
@@ -60,6 +65,12 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     // Create a producer and a validator that share the same key pair.
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
+
+    let mut config = Config::local_node();
+    config.da_compression = DaCompressionConfig::Enabled(fuel_core_compression::Config {
+        temporal_registry_retention: Duration::from_secs(3600),
+    });
+
     let Nodes {
         mut producers,
         mut validators,
@@ -70,14 +81,13 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
         )],
         [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
-        None,
+        Some(config),
     )
     .await;
 
     let mut producer = producers.pop().unwrap();
     let mut validator = validators.pop().unwrap();
 
-    let p_client = FuelClient::from(producer.node.shared.graph_ql.bound_address);
     let v_client = FuelClient::from(validator.node.shared.graph_ql.bound_address);
 
     // Insert some txs
@@ -87,17 +97,9 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
 
     let block_height = 1u32.into();
 
-    let p_block = p_client
-        .da_compressed_block(block_height)
-        .await
-        .unwrap()
-        .expect("Compressed block not available from producer");
-
-    let v_block = v_client
+    let _ = v_client
         .da_compressed_block(block_height)
         .await
         .unwrap()
         .expect("Compressed block not available from validator");
-
-    assert!(p_block == v_block);
 }

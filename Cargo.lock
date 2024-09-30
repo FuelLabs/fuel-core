@@ -3699,6 +3699,7 @@ dependencies = [
  "fuel-core-benches",
  "fuel-core-bin",
  "fuel-core-client",
+ "fuel-core-compression",
  "fuel-core-executor",
  "fuel-core-gas-price-service",
  "fuel-core-p2p",
