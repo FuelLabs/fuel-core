@@ -14,6 +14,7 @@ use crate::{
     v0::{
         metadata::V0Metadata,
         service::GasPriceServiceV0,
+        uninitialized_task::initialize_algorithm,
     },
 };
 use anyhow::anyhow;
@@ -129,10 +130,14 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let metadata_storage = FakeMetadata::empty();
 
     let starting_metadata = arb_metadata();
-    let service =
-        GasPriceServiceV0::new(l2_block_source, metadata_storage, starting_metadata)
-            .unwrap();
-
+    let (algo_updater, shared_algo) =
+        initialize_algorithm(starting_metadata.clone(), &metadata_storage).unwrap();
+    let service = GasPriceServiceV0::new(
+        l2_block_source,
+        metadata_storage,
+        shared_algo,
+        algo_updater,
+    );
     let service = ServiceRunner::new(service);
     let shared = service.shared.clone();
     let initial = shared.next_gas_price().await;
@@ -166,10 +171,15 @@ async fn next__new_l2_block_saves_old_metadata() {
     };
 
     let starting_metadata = arb_metadata();
+    let (algo_updater, shared_algo) =
+        initialize_algorithm(starting_metadata.clone(), &metadata_storage).unwrap();
 
-    let service =
-        GasPriceServiceV0::new(l2_block_source, metadata_storage, starting_metadata)
-            .unwrap();
+    let service = GasPriceServiceV0::new(
+        l2_block_source,
+        metadata_storage,
+        shared_algo,
+        algo_updater,
+    );
 
     // when
     let service = ServiceRunner::new(service);
@@ -205,10 +215,16 @@ async fn new__if_exists_already_reload_old_values_with_overrides() {
         min_exec_gas_price: new_min_exec_gas_price,
         l2_block_height: original.l2_block_height().into(),
     };
+    let (algo_updater, shared_algo) =
+        initialize_algorithm(new_metadata, &metadata_storage).unwrap();
 
     // when
-    let service =
-        GasPriceServiceV0::new(l2_block_source, metadata_storage, new_metadata).unwrap();
+    let service = GasPriceServiceV0::new(
+        l2_block_source,
+        metadata_storage,
+        shared_algo,
+        algo_updater,
+    );
 
     // then
     let expected = original;
@@ -217,14 +233,13 @@ async fn new__if_exists_already_reload_old_values_with_overrides() {
 }
 
 #[tokio::test]
-async fn new__if_couldnt_fetch_metadata_should_fail() {
+async fn initialize_algorithm__should_fail_if_cannot_fetch_metadata() {
     // given
     let metadata_storage = ErroringMetadata;
-    let l2_block_source = PendingL2BlockSource;
 
     // when
     let metadata = different_arb_metadata();
-    let res = GasPriceServiceV0::new(l2_block_source, metadata_storage, metadata);
+    let res = initialize_algorithm(metadata, &metadata_storage);
 
     // then
     assert!(matches!(res, Err(GasPriceError::CouldNotInitUpdater(_))));

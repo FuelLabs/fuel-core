@@ -1,19 +1,11 @@
 use crate::{
     common::{
-        gas_price_algorithm::SharedGasPriceAlgo,
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
-        utils::{
-            BlockInfo,
-            Error as GasPriceError,
-            Result as GasPriceResult,
-        },
+        utils::BlockInfo,
     },
     ports::MetadataStorage,
-    v0::{
-        metadata::V0Metadata,
-        uninitialized_task::SharedV0Algorithm,
-    },
+    v0::uninitialized_task::SharedV0Algorithm,
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -48,48 +40,15 @@ where
     pub fn new(
         l2_block_source: L2,
         metadata_storage: Metadata,
-        starting_metadata: V0Metadata,
-    ) -> GasPriceResult<Self> {
-        let V0Metadata {
-            min_exec_gas_price,
-            exec_gas_price_change_percent,
-            new_exec_price,
-            l2_block_fullness_threshold_percent,
-            l2_block_height,
-        } = starting_metadata;
-
-        let algorithm_updater;
-        if let Some(old_metadata) = metadata_storage
-            .get_metadata(&l2_block_height.into())
-            .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
-        {
-            algorithm_updater = match old_metadata {
-                UpdaterMetadata::V0(old) => AlgorithmUpdaterV0::new(
-                    old.new_exec_price,
-                    min_exec_gas_price,
-                    exec_gas_price_change_percent,
-                    old.l2_block_height,
-                    l2_block_fullness_threshold_percent,
-                ),
-            };
-        } else {
-            algorithm_updater = AlgorithmUpdaterV0::new(
-                new_exec_price,
-                min_exec_gas_price,
-                exec_gas_price_change_percent,
-                l2_block_height,
-                l2_block_fullness_threshold_percent,
-            );
-        }
-
-        let shared_algo =
-            SharedGasPriceAlgo::new_with_algorithm(algorithm_updater.algorithm());
-        Ok(Self {
+        shared_algo: SharedV0Algorithm,
+        algorithm_updater: AlgorithmUpdaterV0,
+    ) -> Self {
+        Self {
             shared_algo,
             l2_block_source,
             metadata_storage,
             algorithm_updater,
-        })
+        }
     }
 
     pub fn algorithm_updater(&self) -> &AlgorithmUpdaterV0 {
@@ -235,6 +194,7 @@ mod tests {
         v0::{
             metadata::V0Metadata,
             service::GasPriceServiceV0,
+            uninitialized_task::initialize_algorithm,
         },
     };
     use fuel_core_services::{
@@ -305,10 +265,15 @@ mod tests {
             l2_block_fullness_threshold_percent: 0,
             l2_block_height: 0,
         };
+        let (algo_updater, shared_algo) =
+            initialize_algorithm(starting_metadata.clone(), &metadata_storage).unwrap();
 
-        let service =
-            GasPriceServiceV0::new(l2_block_source, metadata_storage, starting_metadata)
-                .unwrap();
+        let service = GasPriceServiceV0::new(
+            l2_block_source,
+            metadata_storage,
+            shared_algo,
+            algo_updater,
+        );
         let read_algo = service.next_block_algorithm();
         let service = ServiceRunner::new(service);
         let prev = read_algo.next_gas_price().await;

@@ -9,7 +9,11 @@ use crate::{
         gas_price_algorithm::SharedGasPriceAlgo,
         l2_block_source::FuelL2BlockSource,
         updater_metadata::UpdaterMetadata,
-        utils::BlockInfo,
+        utils::{
+            BlockInfo,
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
     ports::{
         GasPriceData,
@@ -24,7 +28,9 @@ use crate::{
 };
 use fuel_core_services::{
     stream::BoxStream,
+    RunnableService,
     ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
@@ -45,13 +51,16 @@ pub use fuel_gas_price_algorithm::v0::AlgorithmV0;
 
 pub type SharedV0Algorithm = SharedGasPriceAlgo<AlgorithmV0>;
 
-struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
+pub struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
     pub config: GasPriceServiceConfig,
     pub genesis_block_height: BlockHeight,
     pub settings: SettingsProvider,
     pub gas_price_db: GasPriceStore,
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
+    shared_algo: SharedV0Algorithm,
+    algo_updater: AlgorithmUpdaterV0,
+    metadata_storage: StructuredStorage<GasPriceStore>,
 }
 
 fn get_default_metadata(
@@ -72,7 +81,8 @@ impl<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
+    GasPriceStore:
+        GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
     SettingsProvider: GasPriceSettingsProvider,
 {
     pub fn new(
@@ -83,6 +93,19 @@ where
         gas_price_db: GasPriceStore,
         on_chain_db: L2DataStoreView,
     ) -> anyhow::Result<Self> {
+        let latest_block_height: u32 = on_chain_db
+            .latest_view()?
+            .latest_height()
+            .unwrap_or(genesis_block_height)
+            .into();
+
+        let metadata_storage = StructuredStorage::new(gas_price_db.clone());
+
+        let (algo_updater, shared_algo) = initialize_algorithm(
+            get_default_metadata(&config, latest_block_height),
+            &metadata_storage,
+        )?;
+
         let task = Self {
             config,
             genesis_block_height,
@@ -90,12 +113,15 @@ where
             gas_price_db,
             on_chain_db,
             block_stream,
+            algo_updater,
+            shared_algo,
+            metadata_storage,
         };
         Ok(task)
     }
 
     pub fn init(
-        self,
+        mut self,
     ) -> anyhow::Result<
         GasPriceServiceV0<
             FuelL2BlockSource<SettingsProvider>,
@@ -124,22 +150,21 @@ where
             self.block_stream,
         );
 
-        let mut metadata_storage = StructuredStorage::new(self.gas_price_db);
-
         if BlockHeight::from(latest_block_height) == self.genesis_block_height
             || first_run
         {
             let service = GasPriceServiceV0::new(
                 l2_block_source,
-                metadata_storage,
-                get_default_metadata(&self.config, latest_block_height),
-            )?;
+                self.metadata_storage,
+                self.shared_algo,
+                self.algo_updater,
+            );
             Ok(service)
         } else {
             if latest_block_height > metadata_height {
                 sync_gas_price_db_with_on_chain_storage(
                     &self.settings,
-                    &mut metadata_storage,
+                    &mut self.metadata_storage,
                     &self.on_chain_db,
                     metadata_height,
                     latest_block_height,
@@ -148,12 +173,89 @@ where
 
             let service = GasPriceServiceV0::new(
                 l2_block_source,
-                metadata_storage,
-                get_default_metadata(&self.config, latest_block_height),
-            )?;
+                self.metadata_storage,
+                self.shared_algo,
+                self.algo_updater,
+            );
             Ok(service)
         }
     }
+}
+
+#[async_trait::async_trait]
+impl<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider> RunnableService
+    for UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider>
+where
+    L2DataStore: L2Data,
+    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
+    GasPriceStore:
+        GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
+    SettingsProvider: GasPriceSettingsProvider,
+{
+    const NAME: &'static str = "UninitializedGasPriceServiceV0";
+    type SharedData = SharedV0Algorithm;
+    type Task = GasPriceServiceV0<
+        FuelL2BlockSource<SettingsProvider>,
+        StructuredStorage<GasPriceStore>,
+    >;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {
+        self.shared_algo.clone()
+    }
+
+    async fn into_task(
+        self,
+        _state_watcher: &StateWatcher,
+        _params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        UninitializedTask::init(self)
+    }
+}
+
+pub fn initialize_algorithm<Metadata>(
+    starting_metadata: V0Metadata,
+    metadata_storage: &Metadata,
+) -> GasPriceResult<(AlgorithmUpdaterV0, SharedV0Algorithm)>
+where
+    Metadata: MetadataStorage,
+{
+    let V0Metadata {
+        min_exec_gas_price,
+        exec_gas_price_change_percent,
+        new_exec_price,
+        l2_block_fullness_threshold_percent,
+        l2_block_height,
+    } = starting_metadata;
+
+    let algorithm_updater;
+    if let Some(old_metadata) = metadata_storage
+        .get_metadata(&l2_block_height.into())
+        .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
+    {
+        algorithm_updater = match old_metadata {
+            UpdaterMetadata::V0(old) => AlgorithmUpdaterV0::new(
+                old.new_exec_price,
+                min_exec_gas_price,
+                exec_gas_price_change_percent,
+                old.l2_block_height,
+                l2_block_fullness_threshold_percent,
+            ),
+        };
+    } else {
+        algorithm_updater = AlgorithmUpdaterV0::new(
+            new_exec_price,
+            min_exec_gas_price,
+            exec_gas_price_change_percent,
+            l2_block_height,
+            l2_block_fullness_threshold_percent,
+        );
+    }
+
+    let shared_algo =
+        SharedGasPriceAlgo::new_with_algorithm(algorithm_updater.algorithm());
+
+    Ok((algorithm_updater, shared_algo))
 }
 
 fn sync_gas_price_db_with_on_chain_storage<
@@ -251,17 +353,13 @@ pub fn new_gas_price_service_v0<
     gas_price_db: GasPriceStore,
     on_chain_db: L2DataStoreView,
 ) -> anyhow::Result<
-    ServiceRunner<
-        GasPriceServiceV0<
-            FuelL2BlockSource<SettingsProvider>,
-            StructuredStorage<GasPriceStore>,
-        >,
-    >,
+    ServiceRunner<UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider>>,
 >
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
+    GasPriceStore:
+        GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
     SettingsProvider: GasPriceSettingsProvider,
 {
     let gas_price_init = UninitializedTask::new(
@@ -272,6 +370,5 @@ where
         gas_price_db,
         on_chain_db,
     )?;
-    let gas_price_service_v0 = gas_price_init.init()?;
-    Ok(ServiceRunner::new(gas_price_service_v0))
+    Ok(ServiceRunner::new(gas_price_init))
 }
