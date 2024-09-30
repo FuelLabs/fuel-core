@@ -375,8 +375,7 @@ where
         if let Some(v1_changes) = v1_changes {
             migration_transaction
                 .storage_as_mut::<ModificationsHistoryV2<Description>>()
-                .insert(&height, &v1_changes)
-                .unwrap();
+                .insert(&height, &v1_changes)?;
 
             self.db
                 .commit_changes(&migration_transaction.into_changes())?;
