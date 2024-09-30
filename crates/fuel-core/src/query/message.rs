@@ -148,7 +148,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     commit_block_height: BlockHeight,
 ) -> StorageResult<MessageProof> {
     // Check if the receipts for this transaction actually contain this nonce or exit.
-    let receipt = database
+    let (sender, recipient, nonce, amount, data) = database
         .receipts(&transaction_id)?
         .into_iter()
         .find_map(|r| match r {
@@ -163,13 +163,10 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                 Some((sender, recipient, nonce, amount, data))
             }
             _ => None,
-        });
-
-    let Some((sender, recipient, nonce, amount, data)) = receipt else {
-        return Err(
+        })
+        .ok_or::<StorageError>(
             anyhow::anyhow!("desired `nonce` missing in transaction receipts").into(),
-        )
-    };
+        )?;
 
     let Some(data) = data else {
         return Err(anyhow::anyhow!("output message doesn't contain any `data`").into())
