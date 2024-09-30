@@ -14,7 +14,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Given timestamp of the currnet block and a key in an older block,
+    /// Given timestamp of the current block and a key in an older block,
     /// is the key is still accessible?
     /// Returns error if the arguments are not valid block timestamps,
     /// or if the block is older than the key.
