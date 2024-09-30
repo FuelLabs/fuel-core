@@ -132,12 +132,8 @@ where
             .store_transaction(checked_transaction, creation_instant);
 
         self.current_gas = self.current_gas.saturating_add(gas);
-        debug_assert!(self.current_gas <= self.config.pool_limits.max_gas);
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
-        debug_assert!(self.current_bytes_size <= self.config.pool_limits.max_bytes_size);
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
-        debug_assert!(self.tx_id_to_storage_id.len() <= self.config.pool_limits.max_txs);
-        debug_assert!(self.storage.count() <= self.config.pool_limits.max_txs);
 
         let tx =
             Storage::get(&self.storage, &storage_id).expect("Transaction is set above");
@@ -357,6 +353,22 @@ where
                 return Err(Error::NotInsertedLimitHit);
             }
 
+            // It is not a correct way of deciding how many gas and bytes we will free
+            // by removing this transaction, but the fastest way.
+            // It will return incorrect values if several transactions have the same
+            // dependents. An example:
+            //
+            // E - Executable transaction
+            // D - Dependent transaction
+            //
+            //   E   E
+            //    \ /
+            //     D
+            //    / \
+            //   D   D
+            //
+            // Removing both E frees (E + E + 3D), while this loop assumes 2 * (E + 3D).
+            // But it is okay since the limits for the TxPool are not strict.
             let gas = storage_data.dependents_cumulative_gas;
             let bytes = storage_data.dependents_cumulative_bytes_size;
             let txs = storage_data.number_dependents_in_chain;

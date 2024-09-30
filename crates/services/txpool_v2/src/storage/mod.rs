@@ -85,7 +85,4 @@ pub trait Storage {
         &mut self,
         index: Self::StorageIndex,
     ) -> RemovedTransactions;
-
-    /// Count the number of transactions in the storage.
-    fn count(&self) -> usize;
 }

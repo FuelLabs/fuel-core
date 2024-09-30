@@ -564,10 +564,6 @@ impl Storage for GraphStorage {
     ) -> RemovedTransactions {
         self.remove_node_and_dependent_sub_graph(index)
     }
-
-    fn count(&self) -> usize {
-        self.graph.node_count()
-    }
 }
 
 impl BasicCollisionManagerStorage for GraphStorage {
