@@ -100,11 +100,9 @@ where
             .into();
 
         let metadata_storage = StructuredStorage::new(gas_price_db.clone());
-
-        let (algo_updater, shared_algo) = initialize_algorithm(
-            get_default_metadata(&config, latest_block_height),
-            &metadata_storage,
-        )?;
+        let starting_metadata = get_default_metadata(&config, latest_block_height);
+        let (algo_updater, shared_algo) =
+            initialize_algorithm(starting_metadata, &metadata_storage)?;
 
         let task = Self {
             config,
