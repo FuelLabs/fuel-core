@@ -10,6 +10,7 @@ use fuel_core_types::{
         Word,
     },
     fuel_types::Nonce,
+    tai64::Tai64,
 };
 
 /// Rolling cache for compression.
@@ -20,8 +21,17 @@ pub trait TemporalRegistry<T> {
     /// Reads a value from the registry at its current height.
     fn read_registry(&self, key: &RegistryKey) -> anyhow::Result<T>;
 
-    /// Reads a value from the registry at its current height.
-    fn write_registry(&mut self, key: &RegistryKey, value: &T) -> anyhow::Result<()>;
+    /// Reads timestamp of the value from the registry.
+    fn read_timestamp(&self, key: &RegistryKey) -> anyhow::Result<Tai64>;
+
+    /// Writes a value from to the registry. The timestamp is the time of the block,
+    /// and it is used for key retention.
+    fn write_registry(
+        &mut self,
+        key: &RegistryKey,
+        value: &T,
+        timestamp: Tai64,
+    ) -> anyhow::Result<()>;
 
     /// Lookup registry key by the value.
     fn registry_index_lookup(&self, value: &T) -> anyhow::Result<Option<RegistryKey>>;
@@ -35,8 +45,17 @@ where
         <D as TemporalRegistry<T>>::read_registry(self, key)
     }
 
-    fn write_registry(&mut self, key: &RegistryKey, value: &T) -> anyhow::Result<()> {
-        <D as TemporalRegistry<T>>::write_registry(self, key, value)
+    fn read_timestamp(&self, key: &RegistryKey) -> anyhow::Result<Tai64> {
+        <D as TemporalRegistry<T>>::read_timestamp(self, key)
+    }
+
+    fn write_registry(
+        &mut self,
+        key: &RegistryKey,
+        value: &T,
+        timestamp: Tai64,
+    ) -> anyhow::Result<()> {
+        <D as TemporalRegistry<T>>::write_registry(self, key, value, timestamp)
     }
 
     fn registry_index_lookup(&self, value: &T) -> anyhow::Result<Option<RegistryKey>> {

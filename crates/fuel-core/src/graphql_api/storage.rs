@@ -99,18 +99,20 @@ pub enum Column {
     DaCompressedBlocks = 14,
     /// See [`DaCompressionTemporalRegistryIndex`](da_compression::DaCompressionTemporalRegistryIndex)
     DaCompressionTemporalRegistryIndex = 15,
-    /// See [`DaCompressionTemporalRegistryMetadata`](da_compression::DaCompressionTemporalRegistryMetadata)
-    DaCompressionTemporalRegistryMetadata = 16,
+    /// See [`DaCompressionTemporalRegistryTimestamps`](da_compression::DaCompressionTemporalRegistryTimestamps)
+    DaCompressionTemporalRegistryTimestamps = 16,
+    /// See [`DaCompressionTemporalRegistryEvictorCache`](da_compression::DaCompressionTemporalRegistryEvictorCache)
+    DaCompressionTemporalRegistryEvictorCache = 17,
     /// See [`DaCompressionTemporalRegistryAddress`](da_compression::DaCompressionTemporalRegistryAddress)
-    DaCompressionTemporalRegistryAddress = 17,
+    DaCompressionTemporalRegistryAddress = 18,
     /// See [`DaCompressionTemporalRegistryAssetId`](da_compression::DaCompressionTemporalRegistryAssetId)
-    DaCompressionTemporalRegistryAssetId = 18,
+    DaCompressionTemporalRegistryAssetId = 19,
     /// See [`DaCompressionTemporalRegistryContractId`](da_compression::DaCompressionTemporalRegistryContractId)
-    DaCompressionTemporalRegistryContractId = 19,
+    DaCompressionTemporalRegistryContractId = 20,
     /// See [`DaCompressionTemporalRegistryScriptCode`](da_compression::DaCompressionTemporalRegistryScriptCode)
-    DaCompressionTemporalRegistryScriptCode = 20,
+    DaCompressionTemporalRegistryScriptCode = 21,
     /// See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
-    DaCompressionTemporalRegistryPredicateCode = 21,
+    DaCompressionTemporalRegistryPredicateCode = 22,
 }
 
 impl Column {

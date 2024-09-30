@@ -1,6 +1,11 @@
 use crate::{
+    config::Config,
     eviction_policy::CacheEvictor,
-    ports::UtxoIdToPointer,
+    ports::{
+        EvictorDb,
+        TemporalRegistry,
+        UtxoIdToPointer,
+    },
     registry::{
         PerRegistryKeyspace,
         RegistrationsPerTable,
@@ -9,6 +14,7 @@ use crate::{
     CompressedBlockPayloadV0,
     VersionedCompressedBlock,
 };
+use anyhow::Context;
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_compression::{
@@ -29,6 +35,7 @@ use fuel_core_types::{
         AssetId,
         ContractId,
     },
+    tai64::Tai64,
 };
 use std::collections::{
     HashMap,
@@ -40,6 +47,7 @@ impl<T> CompressDb for T where T: TemporalRegistryAll + UtxoIdToPointer {}
 
 /// This must be called for all new blocks in sequence, otherwise the result will be garbage.
 pub async fn compress<D>(
+    config: Config,
     mut db: D,
     block: &Block,
 ) -> anyhow::Result<VersionedCompressedBlock>
@@ -48,7 +56,12 @@ where
 {
     let target = block.transactions_vec();
 
-    let mut prepare_ctx = PrepareCtx::new(&mut db);
+    let mut prepare_ctx = PrepareCtx {
+        config,
+        timestamp: block.header().time(),
+        db: &mut db,
+        accessed_keys: Default::default(),
+    };
     let _ = target.compress_with(&mut prepare_ctx).await?;
 
     let mut ctx = prepare_ctx.into_compression_context()?;
@@ -56,7 +69,7 @@ where
     let registrations: RegistrationsPerTable = ctx.finalize()?;
 
     // Apply changes to the db
-    registrations.write_to_registry(&mut db)?;
+    registrations.write_to_registry(&mut db, block.header().consensus().time)?;
 
     // Construct the actual compacted block
     let compact = CompressedBlockPayloadV0 {
@@ -72,20 +85,13 @@ where
 /// Preparation pass through the block to collect all keys accessed during compression.
 /// Returns dummy values. The resulting "compressed block" should be discarded.
 pub struct PrepareCtx<D> {
+    pub config: Config,
+    /// Current timestamp
+    pub timestamp: Tai64,
     /// Database handle
-    db: D,
+    pub db: D,
     /// Keys accessed during the compression.
-    accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
-}
-
-impl<D> PrepareCtx<D> {
-    /// Create a new PrepareCtx around the given database.
-    pub fn new(db: D) -> Self {
-        Self {
-            db,
-            accessed_keys: PerRegistryKeyspace::default(),
-        }
-    }
+    pub accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
 }
 
 impl<D> ContextError for PrepareCtx<D> {
@@ -120,6 +126,8 @@ struct CompressCtxKeyspace<T> {
 macro_rules! compression {
     ($($ident:ty: $type:ty),*) => { paste::paste! {
         pub struct CompressCtx<D> {
+            config: Config,
+            timestamp: Tai64,
             db: D,
             $($ident: CompressCtxKeyspace<$type>,)*
         }
@@ -137,6 +145,8 @@ macro_rules! compression {
                             cache_evictor: CacheEvictor::new_from_db(&mut self.db, self.accessed_keys.$ident.into())?,
                         },
                     )*
+                    config: self.config,
+                    timestamp: self.timestamp,
                     db: self.db,
                 })
             }
@@ -160,7 +170,7 @@ macro_rules! compression {
         $(
             impl<D> CompressibleBy<PrepareCtx<D>> for $type
             where
-                D: CompressDb
+                D: TemporalRegistry<$type> + EvictorDb<$type>
             {
                 async fn compress_with(
                     &self,
@@ -170,7 +180,11 @@ macro_rules! compression {
                         return Ok(RegistryKey::ZERO);
                     }
                     if let Some(found) = ctx.db.registry_index_lookup(self)? {
-                        ctx.accessed_keys.$ident.insert(found);
+                        let key_timestamp = ctx.db.read_timestamp(&found)
+                            .context("Database invariant violated: no timestamp stored but key found")?;
+                        if ctx.config.is_timestamp_accessible(ctx.timestamp, key_timestamp)? {
+                            ctx.accessed_keys.$ident.insert(found);
+                        }
                     }
                     Ok(RegistryKey::ZERO)
                 }
@@ -178,7 +192,7 @@ macro_rules! compression {
 
             impl<D> CompressibleBy<CompressCtx<D>> for $type
             where
-                D: CompressDb
+                D: TemporalRegistry<$type> + EvictorDb<$type>
             {
                 async fn compress_with(
                     &self,
@@ -188,7 +202,11 @@ macro_rules! compression {
                         return Ok(RegistryKey::DEFAULT_VALUE);
                     }
                     if let Some(found) = ctx.db.registry_index_lookup(self)? {
-                        return Ok(found);
+                        let key_timestamp = ctx.db.read_timestamp(&found)
+                            .context("Database invariant violated: no timestamp stored but key found")?;
+                        if ctx.config.is_timestamp_accessible(ctx.timestamp, key_timestamp)? {
+                            return Ok(found);
+                        }
                     }
                     if let Some(found) = ctx.$ident.changes_lookup.get(self) {
                         return Ok(*found);

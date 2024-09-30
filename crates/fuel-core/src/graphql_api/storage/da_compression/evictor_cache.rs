@@ -1,4 +1,4 @@
-/// The metadata key used by `DaCompressionTemporalRegistryMetadata` table to
+/// The metadata key used by `DaCompressionTemporalRegistryEvictorCache` table to
 /// store progress of the evictor.
 #[derive(
     Debug,

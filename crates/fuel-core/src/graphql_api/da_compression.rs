@@ -1,12 +1,17 @@
 use crate::fuel_core_graphql_api::{
     ports::worker::OffChainDatabaseTransaction,
     storage::da_compression::{
-        metadata_key::MetadataKey,
+        evictor_cache::MetadataKey,
+        timestamps::{
+            TimestampKey,
+            TimestampKeyspace,
+        },
         *,
     },
 };
 use fuel_core_compression::{
     compress::compress,
+    config::Config,
     ports::{
         EvictorDb,
         TemporalRegistry,
@@ -28,11 +33,13 @@ use fuel_core_types::{
         ScriptCode,
     },
     services::executor::Event,
+    tai64::Tai64,
 };
 use futures::FutureExt;
 
 /// Performs DA compression for a block and stores it in the database.
 pub fn da_compress_block<T>(
+    config: Config,
     block: &Block,
     block_events: &[Event],
     db_tx: &mut T,
@@ -41,6 +48,7 @@ where
     T: OffChainDatabaseTransaction,
 {
     let compressed = compress(
+        config,
         CompressTx {
             db_tx,
             block_events,
@@ -80,10 +88,26 @@ macro_rules! impl_temporal_registry {
                     .into_owned())
             }
 
+            fn read_timestamp(
+                &self,
+                key: &fuel_core_types::fuel_compression::RegistryKey,
+            ) -> anyhow::Result<Tai64> {
+                Ok(self
+                    .db_tx
+                    .storage_as_ref::<[< DaCompressionTemporalRegistryTimestamps >]>()
+                    .get(&TimestampKey {
+                        keyspace: TimestampKeyspace::$type,
+                        key: *key,
+                    })?
+                    .ok_or(not_found!(DaCompressionTemporalRegistryTimestamps))?
+                    .into_owned())
+            }
+
             fn write_registry(
                 &mut self,
                 key: &fuel_core_types::fuel_compression::RegistryKey,
                 value: &$type,
+                timestamp: Tai64,
             ) -> anyhow::Result<()> {
                 // Write the actual value
                 let old_value = self.db_tx
@@ -103,6 +127,11 @@ macro_rules! impl_temporal_registry {
                 self.db_tx
                     .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
                     .insert(&reverse_key, key)?;
+
+                // Update the timestamp
+                self.db_tx
+                    .storage_as_mut::<DaCompressionTemporalRegistryTimestamps>()
+                    .insert(&TimestampKey { keyspace: TimestampKeyspace::$type, key: *key }, &timestamp)?;
 
                 Ok(())
             }
@@ -130,7 +159,7 @@ macro_rules! impl_temporal_registry {
                 key: fuel_core_types::fuel_compression::RegistryKey,
             ) -> anyhow::Result<()> {
                 self.db_tx
-                    .storage_as_mut::<DaCompressionTemporalRegistryMetadata>()
+                    .storage_as_mut::<DaCompressionTemporalRegistryEvictorCache>()
                     .insert(&MetadataKey::$type, &key)?;
                 Ok(())
             }
@@ -140,7 +169,7 @@ macro_rules! impl_temporal_registry {
             ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
                 Ok(self
                     .db_tx
-                    .storage_as_ref::<DaCompressionTemporalRegistryMetadata>()
+                    .storage_as_ref::<DaCompressionTemporalRegistryEvictorCache>()
                     .get(&MetadataKey::$type)?
                     .map(|v| v.into_owned())
                 )

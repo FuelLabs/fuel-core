@@ -4,11 +4,13 @@
 #![deny(warnings)]
 
 pub mod compress;
+pub mod config;
 pub mod decompress;
 mod eviction_policy;
 pub mod ports;
 mod registry;
 
+pub use config::Config;
 pub use registry::RegistryKeyspace;
 
 use fuel_core_types::{

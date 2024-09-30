@@ -11,6 +11,7 @@ use fuel_core_types::{
         ContractId,
         ScriptCode,
     },
+    tai64::Tai64,
 };
 
 macro_rules! tables {
@@ -57,25 +58,23 @@ macro_rules! tables {
 
         pub trait TemporalRegistryAll
         where
-            Self: Sized,
             $(Self: TemporalRegistry<$type> + EvictorDb<$type>,)*
         {}
 
         impl<T> TemporalRegistryAll for T
         where
-            T: Sized,
             $(T: TemporalRegistry<$type> + EvictorDb<$type>,)*
         {}
 
 
         impl RegistrationsPerTable {
-            pub(crate) fn write_to_registry<R>(&self, registry: &mut R) -> anyhow::Result<()>
+            pub(crate) fn write_to_registry<R>(&self, registry: &mut R, timestamp: Tai64) -> anyhow::Result<()>
             where
                 R: TemporalRegistryAll
             {
                 $(
                     for (key, value) in self.$ident.iter() {
-                        registry.write_registry(key, value)?;
+                        registry.write_registry(key, value, timestamp)?;
                     }
                 )*
 

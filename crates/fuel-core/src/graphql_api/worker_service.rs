@@ -98,9 +98,16 @@ use std::{
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug, Clone)]
+pub enum DaCompressionConfig {
+    Disabled,
+    Enabled(fuel_core_compression::config::Config),
+}
+
 /// The initialization task recovers the state of the GraphQL service database on startup.
 pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     chain_id: ChainId,
+    da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
     tx_pool: TxPool,
     blocks_events: BoxStream<SharedImportResult>,
@@ -116,6 +123,7 @@ pub struct Task<TxPool, D> {
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
+    da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
 }
 
@@ -151,7 +159,12 @@ where
             &mut transaction,
         )?;
 
-        da_compress_block(block, &result.events, &mut transaction)?;
+        match self.da_compression_config {
+            DaCompressionConfig::Disabled => {}
+            DaCompressionConfig::Enabled(config) => {
+                da_compress_block(config, block, &result.events, &mut transaction)?;
+            }
+        }
 
         transaction.commit()?;
 
@@ -462,6 +475,7 @@ where
 
         let InitializeTask {
             chain_id,
+            da_compression_config,
             tx_pool,
             block_importer,
             blocks_events,
@@ -475,6 +489,7 @@ where
             block_importer: blocks_events,
             database: off_chain_database,
             chain_id,
+            da_compression_config,
             continue_on_error,
         };
 
@@ -586,6 +601,7 @@ pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
     on_chain_database: OnChain,
     off_chain_database: OffChain,
     chain_id: ChainId,
+    da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
 ) -> ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>
 where
@@ -601,6 +617,7 @@ where
         on_chain_database,
         off_chain_database,
         chain_id,
+        da_compression_config,
         continue_on_error,
     })
 }

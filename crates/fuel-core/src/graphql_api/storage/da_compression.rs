@@ -1,8 +1,9 @@
-use crate::fuel_core_graphql_api::storage::da_compression::{
-    metadata_key::MetadataKey,
+use self::{
+    evictor_cache::MetadataKey,
     predicate_code_codec::PredicateCodeCodec,
     reverse_key::ReverseKey,
     script_code_codec::ScriptCodeCodec,
+    timestamps::TimestampKey,
 };
 use fuel_core_compression::VersionedCompressedBlock;
 use fuel_core_storage::{
@@ -25,12 +26,14 @@ use fuel_core_types::{
         ScriptCode,
     },
     fuel_types::BlockHeight,
+    tai64::Tai64,
 };
 
-pub mod metadata_key;
+pub mod evictor_cache;
 pub mod predicate_code_codec;
 pub mod reverse_key;
 pub mod script_code_codec;
+pub mod timestamps;
 
 /// The table for the compressed blocks sent to DA.
 pub struct DaCompressedBlocks;
@@ -51,7 +54,7 @@ impl TableWithBlueprint for DaCompressedBlocks {
     }
 }
 
-/// Mapping from the type to the register key in the temporal registry.
+/// Mapping from the type to the registry key in the temporal registry.
 pub struct DaCompressionTemporalRegistryIndex;
 
 impl Mappable for DaCompressionTemporalRegistryIndex {
@@ -71,25 +74,46 @@ impl TableWithBlueprint for DaCompressionTemporalRegistryIndex {
     }
 }
 
+/// This table keeps track of last written timestamp for each key,
+/// so that we can keep track of expiration.
+pub struct DaCompressionTemporalRegistryTimestamps;
+
+impl Mappable for DaCompressionTemporalRegistryTimestamps {
+    type Key = Self::OwnedKey;
+    type OwnedKey = TimestampKey;
+    type Value = Self::OwnedValue;
+    type OwnedValue = Tai64;
+}
+
+impl TableWithBlueprint for DaCompressionTemporalRegistryTimestamps {
+    // TODO: Use Raw codec for value instead of Postcard
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::DaCompressionTemporalRegistryTimestamps
+    }
+}
+
 /// This table is used to hold "next key to evict" for each keyspace.
 /// In the future we'll likely switch to use LRU or something, in which
 /// case this table can be repurposed.
-pub struct DaCompressionTemporalRegistryMetadata;
+pub struct DaCompressionTemporalRegistryEvictorCache;
 
-impl Mappable for DaCompressionTemporalRegistryMetadata {
+impl Mappable for DaCompressionTemporalRegistryEvictorCache {
     type Key = Self::OwnedKey;
     type OwnedKey = MetadataKey;
     type Value = Self::OwnedValue;
     type OwnedValue = RegistryKey;
 }
 
-impl TableWithBlueprint for DaCompressionTemporalRegistryMetadata {
+impl TableWithBlueprint for DaCompressionTemporalRegistryEvictorCache {
     // TODO: Use Raw codec for value instead of Postcard
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
-        Self::Column::DaCompressionTemporalRegistryMetadata
+        Self::Column::DaCompressionTemporalRegistryEvictorCache
     }
 }
 
@@ -147,7 +171,7 @@ mod tests {
 
     #[cfg(test)]
     fuel_core_storage::basic_storage_tests!(
-        DaCompressionTemporalRegistryMetadata,
+        DaCompressionTemporalRegistryEvictorCache,
         MetadataKey::Address,
         RegistryKey::ZERO
     );

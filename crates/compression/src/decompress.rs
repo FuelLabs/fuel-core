@@ -1,4 +1,5 @@
 use crate::{
+    config::Config,
     ports::{
         HistoryLookup,
         TemporalRegistry,
@@ -39,6 +40,7 @@ use fuel_core_types::{
         Address,
         ContractId,
     },
+    tai64::Tai64,
 };
 
 pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
@@ -46,6 +48,7 @@ impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
 
 /// This must be called for all decompressed blocks in sequence, otherwise the result will be garbage.
 pub async fn decompress<D>(
+    config: Config,
     mut db: D,
     block: VersionedCompressedBlock,
 ) -> anyhow::Result<PartialFuelBlock>
@@ -56,9 +59,15 @@ where
 
     // TODO: merkle root verification: https://github.com/FuelLabs/fuel-core/issues/2232
 
-    compressed.registrations.write_to_registry(&mut db)?;
+    compressed
+        .registrations
+        .write_to_registry(&mut db, compressed.header.consensus.time)?;
 
-    let ctx = DecompressCtx { db };
+    let ctx = DecompressCtx {
+        config,
+        timestamp: compressed.header.consensus.time,
+        db,
+    };
 
     let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress_with(
         compressed.transactions,
@@ -73,13 +82,10 @@ where
 }
 
 pub struct DecompressCtx<D> {
-    db: D,
-}
-
-impl<D> DecompressCtx<D> {
-    pub fn new(db: D) -> Self {
-        Self { db }
-    }
+    pub config: Config,
+    /// Timestamp of the block being decompressed
+    pub timestamp: Tai64,
+    pub db: D,
 }
 
 impl<D> ContextError for DecompressCtx<D> {
@@ -111,6 +117,10 @@ macro_rules! decompress_impl {
                 ) -> anyhow::Result<Self> {
                     if key == RegistryKey::DEFAULT_VALUE {
                         return Ok(<$type>::default());
+                    }
+                    let key_timestamp = ctx.db.read_timestamp(&key)?;
+                    if !ctx.config.is_timestamp_accessible(ctx.timestamp, key_timestamp)? {
+                        anyhow::bail!("Timestamp not accessible");
                     }
                     ctx.db.read_registry(&key)
                 }
@@ -259,10 +269,15 @@ mod tests {
                     todo!()
                 }
 
+                fn read_timestamp(&self, _key: &RegistryKey) -> anyhow::Result<Tai64> {
+                    todo!()
+                }
+
                 fn write_registry(
                     &mut self,
                     _key: &RegistryKey,
                     _value: &$type,
+                    _timestamp: Tai64,
                 ) -> anyhow::Result<()> {
                     todo!()
                 }

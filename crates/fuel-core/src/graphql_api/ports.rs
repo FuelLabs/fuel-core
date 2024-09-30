@@ -339,7 +339,8 @@ pub mod worker {
         + StorageMutate<DaCompressionTemporalRegistryScriptCode, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryPredicateCode, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryMetadata, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryTimestamps, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryEvictorCache, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,
