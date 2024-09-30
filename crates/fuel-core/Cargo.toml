@@ -45,7 +45,7 @@ hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
-paste = "1"
+paste = { workspace = true }
 postcard = { workspace = true, optional = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
