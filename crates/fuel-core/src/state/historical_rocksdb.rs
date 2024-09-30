@@ -284,6 +284,7 @@ where
                     .next()
             })
             .flatten();
+
         (v2_changes, v1_changes)
     }
 
@@ -315,11 +316,9 @@ where
 
         let latest_height = match (v2_latest_height, v1_latest_height) {
             (None, None) => Err(DatabaseError::ReachedEndOfHistory)?,
-            (None, Some(v1_res)) => v1_res?,
-            (Some(v2_res), None) => v2_res?,
-            (Some(Err(_)), Some(v1_res)) => v1_res?,
-            (Some(v2_res), Some(Err(_))) => v2_res?,
             (Some(Ok(v1)), Some(Ok(v2))) => v1.min(v2),
+            (_, Some(v1_res)) => v1_res?,
+            (Some(v2_res), _) => v2_res?,
         };
 
         self.rollback_block_to(latest_height)?;
