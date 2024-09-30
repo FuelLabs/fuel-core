@@ -294,12 +294,15 @@ impl Dependency {
                                 }
                             } else {
                                 // tx output is in pool
-                                let output_tx = txs.get(utxo_id.tx_id()).unwrap();
-                                let output =
-                                    &output_tx.outputs()[utxo_id.output_index() as usize];
-                                Self::check_if_coin_input_can_spend_output(
-                                    output, input, false,
-                                )?;
+                                let output_tx = txs.get(utxo_id.tx_id());
+                                let output = output_tx.and_then(|tx| {
+                                    tx.outputs().get(utxo_id.output_index() as usize)
+                                });
+                                if let Some(output) = output {
+                                    Self::check_if_coin_input_can_spend_output(
+                                        output, input, false,
+                                    )?;
+                                }
                             }
 
                             collided.push(*spend_by);
