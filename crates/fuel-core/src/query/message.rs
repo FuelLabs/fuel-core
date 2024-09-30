@@ -173,7 +173,10 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     };
 
     // Get the block id from the transaction status if it's ready.
-    let Some(TransactionStatus::Success { block_height, .. }) = database
+    let Some(TransactionStatus::Success {
+        block_height: message_block_height,
+        ..
+    }) = database
         .transaction_status(&transaction_id)
         .into_api_result::<TransactionStatus, StorageError>()?
     else {
@@ -181,13 +184,13 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     };
 
     // Get the message fuel block header.
-    let Some(block) = database
-        .block(&block_height)
+    let Some(message_block) = database
+        .block(&message_block_height)
         .into_api_result::<CompressedBlock, StorageError>()?
     else {
         return Err(anyhow::anyhow!("unable to get block from database").into())
     };
-    let (message_block_header, message_block_txs) = block.into_inner();
+    let (message_block_header, message_block_txs) = message_block.into_inner();
 
     let message_id = compute_message_id(&sender, &recipient, &nonce, amount, &data);
 
