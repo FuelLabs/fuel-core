@@ -18,14 +18,15 @@ use fuel_core_storage::{
 /// is used to specify the version.
 /// This allows to define different [`TableWithBlueprint`]
 /// implementations for V1 and V2 of the modification history.
-pub struct ModificationsHistoryVersion<Description, const N: usize>(
+pub struct ModificationsHistoryVersion<Description, const VERSION: usize>(
     core::marker::PhantomData<Description>,
 )
 where
     Description: DatabaseDescription;
 
 /// [`ModificationsHistoryVersion`] keys and values for all versions.
-impl<Description, const N: usize> Mappable for ModificationsHistoryVersion<Description, N>
+impl<Description, const VERSION: usize> Mappable
+    for ModificationsHistoryVersion<Description, VERSION>
 where
     Description: DatabaseDescription,
 {
@@ -37,9 +38,14 @@ where
     type OwnedValue = Self::Value;
 }
 
+pub type ModificationsHistoryV1<Description> =
+    ModificationsHistoryVersion<Description, 0>;
+pub type ModificationsHistoryV2<Description> =
+    ModificationsHistoryVersion<Description, 1>;
+
 /// Blueprint for Modifications History V1. Keys are stored in little endian order
 /// using the `Column::HistoryColumn` column family.
-impl<Description> TableWithBlueprint for ModificationsHistoryVersion<Description, 0>
+impl<Description> TableWithBlueprint for ModificationsHistoryV1<Description>
 where
     Description: DatabaseDescription,
 {
@@ -54,7 +60,7 @@ where
 
 /// Blueprint for Modifications History V2. Keys are stored in big endian order
 /// using the `Column::HistoryColumnV2` column family.
-impl<Description> TableWithBlueprint for ModificationsHistoryVersion<Description, 1>
+impl<Description> TableWithBlueprint for ModificationsHistoryV2<Description>
 where
     Description: DatabaseDescription,
 {
@@ -66,8 +72,3 @@ where
         Column::HistoryV2Column
     }
 }
-
-pub type ModificationsHistoryV1<Description> =
-    ModificationsHistoryVersion<Description, 0>;
-pub type ModificationsHistoryV2<Description> =
-    ModificationsHistoryVersion<Description, 1>;
