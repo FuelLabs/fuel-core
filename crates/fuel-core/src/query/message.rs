@@ -165,11 +165,11 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
             _ => None,
         })
         .ok_or::<StorageError>(
-            anyhow::anyhow!("desired `nonce` missing in transaction receipts").into(),
+            anyhow::anyhow!("Desired `nonce` missing in transaction receipts").into(),
         )?;
 
     let Some(data) = data else {
-        return Err(anyhow::anyhow!("output message doesn't contain any `data`").into())
+        return Err(anyhow::anyhow!("Output message doesn't contain any `data`").into())
     };
 
     // Get the block id from the transaction status if it's ready.
@@ -180,7 +180,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         .transaction_status(&transaction_id)
         .into_api_result::<TransactionStatus, StorageError>()?
     else {
-        return Err(anyhow::anyhow!("unable to obtain block height").into())
+        return Err(anyhow::anyhow!("Unable to obtain the message block height").into())
     };
 
     // Get the message fuel block header.
@@ -188,7 +188,9 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         .block(&message_block_height)
         .into_api_result::<CompressedBlock, StorageError>()?
     else {
-        return Err(anyhow::anyhow!("unable to get block from database").into())
+        return Err(
+            anyhow::anyhow!("Unable to get the message block from the database").into(),
+        )
     };
     let (message_block_header, message_block_txs) = message_block.into_inner();
 
@@ -202,13 +204,16 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         .into_api_result::<CompressedBlock, StorageError>()?
     else {
         return Err(
-            anyhow::anyhow!("unable to get commit block header from database").into(),
+            anyhow::anyhow!("Unable to get commit block header from database").into(),
         )
     };
     let (commit_block_header, _) = commit_block_header.into_inner();
 
     let Some(verifiable_commit_block_height) = commit_block_header.height().pred() else {
-        return Err(anyhow::anyhow!("can not look beyond the genesis block").into())
+        return Err(anyhow::anyhow!(
+            "Impossible to generate proof beyond the genesis block"
+        )
+        .into())
     };
     let block_proof = database.block_history_proof(
         message_block_header.height(),
@@ -263,12 +268,18 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
 
     // Check if we found a leaf.
     let Some(proof_index) = proof_index else {
-        return Err(anyhow::anyhow!("unable to find leaf").into())
+        return Err(anyhow::anyhow!(
+            "Unable to find the message receipt in the transaction to generate the proof"
+        )
+        .into())
     };
 
     // Get the proof set.
     let Some((_, proof_set)) = tree.prove(proof_index) else {
-        return Err(anyhow::anyhow!("unable to get proof set").into());
+        return Err(anyhow::anyhow!(
+            "Unable to generate the Merkle proof for the message from its receipts"
+        )
+        .into());
     };
 
     // Return the proof.
