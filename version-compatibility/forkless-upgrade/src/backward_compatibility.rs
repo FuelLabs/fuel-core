@@ -1,7 +1,7 @@
 use crate::tests_helper::{
     default_multiaddr,
-    GenesisFuelCoreDriver,
     LatestFuelCoreDriver,
+    Version36FuelCoreDriver,
     IGNITION_TESTNET_SNAPSHOT,
     POA_SECRET_KEY,
 };
@@ -47,15 +47,14 @@ async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
 }
 
 #[tokio::test]
-async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_genesis_binary(
-) {
+async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_binary() {
     // Given
-    let genesis_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = "30333";
-    let genesis_node = GenesisFuelCoreDriver::spawn(&[
+    let v36_keypair = SecpKeypair::generate();
+    let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
+    let v36_port = "30333";
+    let v36_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
-        "GenesisProducer",
+        "V36Producer",
         "--debug",
         "--poa-instant",
         "true",
@@ -67,16 +66,16 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
         "--keypair",
         hexed_secret.as_str(),
         "--peering-port",
-        genesis_port,
+        v36_port,
     ])
     .await
     .unwrap();
-    let public_key = Keypair::from(genesis_keypair).public();
-    let genesis_peer_id = PeerId::from_public_key(&public_key);
-    let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
+    let public_key = Keypair::from(v36_keypair).public();
+    let v36_peer_id = PeerId::from_public_key(&public_key);
+    let v36_multiaddr = default_multiaddr(v36_port, v36_peer_id);
 
     // Starting node that uses latest fuel core.
-    // It will connect to the genesis node and sync blocks.
+    // It will connect to the v36 node and sync blocks.
     let latest_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
     let latest_node = LatestFuelCoreDriver::spawn(&[
@@ -91,7 +90,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
         "--keypair",
         hexed_secret.as_str(),
         "--reserved-nodes",
-        genesis_multiaddr.as_str(),
+        v36_multiaddr.as_str(),
         "--peering-port",
         "0",
     ])
@@ -101,7 +100,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
 
     // When
     const BLOCKS_TO_PRODUCE: u32 = 10;
-    genesis_node
+    v36_node
         .client
         .produce_blocks(BLOCKS_TO_PRODUCE, None)
         .await
@@ -117,15 +116,15 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
 }
 
 #[tokio::test]
-async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_genesis_binary(
-) {
+async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_v36_binary()
+{
     // Given
-    let genesis_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = "30333";
-    let node_with_genesis_transition = LatestFuelCoreDriver::spawn(&[
+    let v36_keypair = SecpKeypair::generate();
+    let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
+    let v36_port = "30333";
+    let node_with_v36_transition = LatestFuelCoreDriver::spawn(&[
         "--service-name",
-        "GenesisProducer",
+        "V36Producer",
         "--debug",
         "--poa-instant",
         "true",
@@ -137,7 +136,7 @@ async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_ge
         "--keypair",
         hexed_secret.as_str(),
         "--peering-port",
-        genesis_port,
+        v36_port,
         "--utxo-validation",
     ])
     .await
@@ -147,13 +146,13 @@ async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_ge
     let invalid_transaction = Transaction::default_test_tx();
     let mut component: Components<Vec<Transaction>> = Default::default();
     component.header_to_produce.consensus.height = 1u32.into();
-    // Use version of the genesis state transition
+    // Use version of the v36 state transition
     component
         .header_to_produce
         .application
         .state_transition_bytecode_version = 0;
     component.transactions_source = vec![invalid_transaction];
-    let result = node_with_genesis_transition
+    let result = node_with_v36_transition
         .node
         .shared
         .executor

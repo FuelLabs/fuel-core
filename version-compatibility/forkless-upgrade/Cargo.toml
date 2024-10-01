@@ -17,8 +17,8 @@ tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
 
 # Neutral deps
 fuel-core-trace = { path = "../../crates/trace" }
-fuel-crypto = { version = "0.49.0" }
-fuel-tx = { version = "0.49.0", features = ["random"] }
+fuel-crypto = { version = "0.57.0" }
+fuel-tx = { version = "0.57.0", features = ["random"] }
 
 # Latest fuel-core
 latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", features = [
@@ -29,15 +29,14 @@ latest-fuel-core-type = { path = "../../crates/types", package = "fuel-core-type
   "test-helpers",
 ] }
 latest-fuel-core-client = { path = "../../crates/client", package = "fuel-core-client" }
-# TODO: https://github.com/FuelLabs/fuel-core/issues/2198
-#latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
-#  "wasm-executor",
-#] }
+latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
+  "wasm-executor",
+] }
 
-# Genesis fuel-core
-genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", features = [
+# Fuel core version 0.36.0
+version-36-fuel-core-bin = { version = "0.36.0", package = "fuel-core-bin", features = [
   "parquet",
   "p2p",
 ] }
-genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
-genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
+version-36-fuel-core-client = { version = "0.36.0", package = "fuel-core-client" }
+version-36-fuel-core-services = { version = "0.36.0", package = "fuel-core-services" }

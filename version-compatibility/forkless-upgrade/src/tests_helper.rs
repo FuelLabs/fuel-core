@@ -15,9 +15,9 @@ use fuel_tx::{
     UploadSubsection,
     Witness,
 };
-use genesis_fuel_core_bin::FuelService as GenesisFuelService;
-use genesis_fuel_core_client::client::FuelClient as GenesisClient;
-use genesis_fuel_core_services::Service as _;
+use version_36_fuel_core_bin::FuelService as Version36FuelService;
+use version_36_fuel_core_client::client::FuelClient as Version36Client;
+use version_36_fuel_core_services as _;
 use latest_fuel_core_bin::FuelService as LatestFuelService;
 use latest_fuel_core_client::client::FuelClient as LatestClient;
 use libp2p::PeerId;
@@ -85,11 +85,11 @@ macro_rules! define_core_driver {
 }
 
 define_core_driver!(
-    genesis_fuel_core_bin,
-    GenesisFuelService,
-    GenesisClient,
-    GenesisFuelCoreDriver,
-    false
+    version_36_fuel_core_bin,
+    Version36FuelService,
+    Version36Client,
+    Version36FuelCoreDriver,
+    true
 );
 
 define_core_driver!(
