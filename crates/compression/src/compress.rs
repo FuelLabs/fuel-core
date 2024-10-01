@@ -76,14 +76,14 @@ where
 
 /// Preparation pass through the block to collect all keys accessed during compression.
 /// Returns dummy values. The resulting "compressed block" should be discarded.
-pub struct PrepareCtx<D> {
-    pub config: Config,
+struct PrepareCtx<D> {
+    config: Config,
     /// Current timestamp
-    pub timestamp: Tai64,
+    timestamp: Tai64,
     /// Database handle
-    pub db: D,
+    db: D,
     /// Keys accessed during the compression.
-    pub accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
+    accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
 }
 
 impl<D> ContextError for PrepareCtx<D> {
