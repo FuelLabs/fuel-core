@@ -9,7 +9,6 @@ use fuel_core::{
     },
 };
 use fuel_core_storage::transactional::AtomicView;
-use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     fuel_tx::{
         AssetId,
@@ -17,6 +16,7 @@ use fuel_core_types::{
         Output,
         Transaction,
         TransactionBuilder,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::BlockHeight,

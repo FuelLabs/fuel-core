@@ -61,7 +61,7 @@ async fn can_manually_produce_block(
     let txs = (0..num_txns).map(|_| make_tx(&mut rng)).collect::<Vec<_>>();
     let TxPoolContext {
         txpool,
-        status_sender,
+        new_txs_notifier,
         ..
     } = MockTransactionPool::new_with_txs(txs.clone());
     ctx_builder.with_txpool(txpool);
@@ -103,9 +103,7 @@ async fn can_manually_produce_block(
         .manually_produce_block(Some(start_time), Mode::Blocks { number_of_blocks })
         .await
         .unwrap();
-    for tx in txs {
-        status_sender.send_replace(Some(tx.id(&ChainId::default())));
-    }
+    new_txs_notifier.notify_waiters();
 
     for t in times.into_iter() {
         let block_time = rx.recv().await.unwrap();

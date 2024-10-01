@@ -10,13 +10,13 @@ use tokio::{
     sync::{
         mpsc,
         oneshot,
+        Notify,
     },
     time::{
         sleep_until,
         Instant,
     },
 };
-use tokio_stream::StreamExt;
 
 use crate::{
     ports::{
@@ -37,10 +37,7 @@ use crate::{
     Trigger,
 };
 use fuel_core_services::{
-    stream::{
-        BoxFuture,
-        BoxStream,
-    },
+    stream::BoxFuture,
     RunnableService,
     RunnableTask,
     Service as OtherService,
@@ -132,7 +129,7 @@ pub struct MainTask<T, B, I, S, PB, C> {
     block_producer: B,
     block_importer: I,
     txpool: T,
-    tx_status_update_stream: BoxStream<TxId>,
+    new_txs_notifier: Arc<Notify>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
     last_height: BlockHeight,
@@ -164,7 +161,7 @@ where
         predefined_blocks: PB,
         clock: C,
     ) -> Self {
-        let tx_status_update_stream = txpool.transaction_status_events();
+        let new_txs_notifier = txpool.new_txs_notifier();
         let (request_sender, request_receiver) = mpsc::channel(1024);
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(clock.now(), last_block);
@@ -194,7 +191,7 @@ where
             txpool,
             block_producer,
             block_importer,
-            tx_status_update_stream,
+            new_txs_notifier,
             request_receiver,
             shared_state: SharedState { request_sender },
             last_height,
@@ -540,7 +537,7 @@ where
                 _ = sync_state.changed() => {
                     break;
                 }
-                _ = self.tx_status_update_stream.next() => {
+                _ = self.new_txs_notifier.notified() => {
                     // ignore txpool events while syncing
                 }
             }
@@ -586,19 +583,9 @@ where
                     should_continue = false;
                 }
             }
-            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
-            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
-            //       into the first block production trigger, we'll still call the event handler
-            //       for each tx after they've already been included into a block.
-            //       The poa service also doesn't care about events unrelated to new tx submissions,
-            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-            txpool_event = self.tx_status_update_stream.next() => {
-                if txpool_event.is_some()  {
-                    self.on_txpool_event().await.context("While processing txpool event")?;
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
+            _ = self.new_txs_notifier.notified() => {
+                self.on_txpool_event().await.context("While processing txpool event")?;
+                should_continue = true;
             }
             _ = next_block_production => {
                 match self.on_timer().await.context("While processing timer event") {

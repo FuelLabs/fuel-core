@@ -26,7 +26,6 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
-    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
         block_importer::{
@@ -37,10 +36,14 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::path::{
-    Path,
-    PathBuf,
+use std::{
+    path::{
+        Path,
+        PathBuf,
+    },
+    sync::Arc,
 };
+use tokio::sync::Notify;
 use tokio_stream::{
     wrappers::BroadcastStream,
     StreamExt,
@@ -81,11 +84,8 @@ impl TransactionPool for TxPoolAdapter {
         self.service.count()
     }
 
-    fn transaction_status_events(&self) -> BoxStream<TxId> {
-        Box::pin(
-            BroadcastStream::new(self.service.new_tx_notification_subscribe())
-                .filter_map(|result| result.ok()),
-        )
+    fn new_txs_notifier(&self) -> Arc<Notify> {
+        self.service.get_new_txs_notifier()
     }
 }
 

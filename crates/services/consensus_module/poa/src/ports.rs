@@ -10,10 +10,7 @@ use fuel_core_types::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -27,14 +24,18 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
+use tokio::sync::Notify;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
     /// Returns the number of pending transactions in the `TxPool`.
     fn pending_number(&self) -> usize;
 
-    fn transaction_status_events(&self) -> BoxStream<TxId>;
+    fn new_txs_notifier(&self) -> Arc<Notify>;
 }
 
 /// The source of transactions for the block.

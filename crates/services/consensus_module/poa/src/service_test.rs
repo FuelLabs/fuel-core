@@ -23,7 +23,6 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
-    stream::pending,
     Service as StorageTrait,
     ServiceRunner,
     State,
@@ -42,10 +41,7 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::*,
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_types::BlockHeight,
     secrecy::Secret,
     services::executor::{
         ExecutionResult,
@@ -73,7 +69,7 @@ use std::{
 use tokio::{
     sync::{
         broadcast,
-        watch,
+        Notify,
     },
     time,
 };
@@ -232,45 +228,27 @@ impl TestContext {
 pub struct TxPoolContext {
     pub txpool: MockTransactionPool,
     pub txs: Arc<Mutex<Vec<Script>>>,
-    pub status_sender: Arc<watch::Sender<Option<TxId>>>,
+    pub new_txs_notifier: Arc<Notify>,
 }
 
 impl MockTransactionPool {
     fn no_tx_updates() -> Self {
         let mut txpool = MockTransactionPool::default();
         txpool
-            .expect_transaction_status_events()
-            .returning(|| Box::pin(pending()));
+            .expect_new_txs_notifier()
+            .returning(|| Arc::new(Notify::new()));
         txpool
     }
 
     pub fn new_with_txs(txs: Vec<Script>) -> TxPoolContext {
         let mut txpool = MockTransactionPool::default();
         let txs = Arc::new(StdMutex::new(txs));
-        let (status_sender, status_receiver) = watch::channel(None);
-        let status_sender = Arc::new(status_sender);
-        let status_sender_clone = status_sender.clone();
+        let new_txs_notifier = Arc::new(Notify::new());
 
-        txpool
-            .expect_transaction_status_events()
-            .returning(move || {
-                let status_channel =
-                    (status_sender_clone.clone(), status_receiver.clone());
-                let stream = fuel_core_services::stream::unfold(
-                    status_channel,
-                    |(sender, mut receiver)| async {
-                        loop {
-                            let status = *receiver.borrow_and_update();
-                            if let Some(status) = status {
-                                sender.send_replace(None);
-                                return Some((status, (sender, receiver)))
-                            }
-                            receiver.changed().await.unwrap();
-                        }
-                    },
-                );
-                Box::pin(stream)
-            });
+        txpool.expect_new_txs_notifier().returning({
+            let new_txs_notifier = new_txs_notifier.clone();
+            move || new_txs_notifier.clone()
+        });
 
         let pending = txs.clone();
         txpool
@@ -280,7 +258,7 @@ impl MockTransactionPool {
         TxPoolContext {
             txpool,
             txs,
-            status_sender,
+            new_txs_notifier,
         }
     }
 }
