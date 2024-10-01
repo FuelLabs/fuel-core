@@ -1,3 +1,8 @@
+//! This module is basically a fuzzer that throws random dependent transactions into the pool.
+//! It checks that TxPool can't panic and that its graph and state are
+//! correct(not in the unexpected state).
+//! It relies on the `debug_assert` which are present in the code.
+
 #![allow(non_snake_case)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::arithmetic_side_effects)]
