@@ -253,13 +253,10 @@ mod tests {
         );
 
         // when
-        let initial = block_committer.request_da_block_cost().await.unwrap();
         let updated = block_committer.request_da_block_cost().await.unwrap();
 
         // then
-        // assert_eq!(initial.blob_size_bytes, updated.blob_size_bytes);
-        // assert_eq!(initial.blob_cost_wei, updated.blob_cost_wei);
-        assert_ne!(initial.l2_block_range, updated.l2_block_range);
+        assert_ne!(da_block_costs.blocks_range, updated.l2_block_range);
     }
 
     #[tokio::test]
