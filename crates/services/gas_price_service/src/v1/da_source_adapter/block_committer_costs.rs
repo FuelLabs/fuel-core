@@ -51,6 +51,16 @@ pub struct RawDaBlockCosts {
     pub total_size_bytes: u32,
 }
 
+impl From<&RawDaBlockCosts> for DaBlockCosts {
+    fn from(raw_da_block_costs: &RawDaBlockCosts) -> Self {
+        DaBlockCosts {
+            l2_block_range: raw_da_block_costs.blocks_range.clone(),
+            blob_size_bytes: raw_da_block_costs.total_size_bytes,
+            blob_cost_wei: raw_da_block_costs.total_cost,
+        }
+    }
+}
+
 impl<BlockCommitter> BlockCommitterDaBlockCosts<BlockCommitter> {
     /// Create a new instance of the block committer da block costs source
     pub fn new(client: BlockCommitter, last_value: Option<RawDaBlockCosts>) -> Self {
@@ -79,32 +89,32 @@ where
             raw_da_block_costs = self.client.get_latest_costs().await?;
         }
 
-        if let Some(raw_da_block_costs) = raw_da_block_costs {
-            let da_block_costs;
-            if let Some(last_value) = &self.last_raw_da_block_costs {
-                da_block_costs = DaBlockCosts {
-                    l2_block_range: raw_da_block_costs.blocks_range.clone(),
-                    blob_size_bytes: raw_da_block_costs
-                        .total_size_bytes
-                        .checked_sub(last_value.total_size_bytes)
-                        .ok_or(anyhow!("Blob size bytes underflow"))?,
-                    blob_cost_wei: raw_da_block_costs
-                        .total_cost
-                        .checked_sub(last_value.total_cost)
-                        .ok_or(anyhow!("Blob cost wei underflow"))?,
-                };
-            } else {
-                da_block_costs = DaBlockCosts {
-                    l2_block_range: raw_da_block_costs.blocks_range.clone(),
-                    blob_size_bytes: raw_da_block_costs.total_size_bytes,
-                    blob_cost_wei: raw_da_block_costs.total_cost,
-                };
-            }
-            self.last_raw_da_block_costs = Some(raw_da_block_costs.clone());
-            Ok(da_block_costs)
-        } else {
-            Err(anyhow!("No response from block committer"))
-        }
+        let Some(ref raw_da_block_costs) = raw_da_block_costs else {
+            return Err(anyhow!("No response from block committer"))
+        };
+
+        let da_block_costs = self.last_raw_da_block_costs.iter().fold(
+            Ok(raw_da_block_costs.into()),
+            |costs: DaBlockCostsResult<DaBlockCosts>, last_value| {
+                let costs = costs.expect("Defined to be OK");
+                let blob_size_bytes = costs
+                    .blob_size_bytes
+                    .checked_sub(last_value.total_size_bytes)
+                    .ok_or(anyhow!("Blob size bytes underflow"))?;
+                let blob_cost_wei = raw_da_block_costs
+                    .total_cost
+                    .checked_sub(last_value.total_cost)
+                    .ok_or(anyhow!("Blob cost wei underflow"))?;
+                Ok(DaBlockCosts {
+                    blob_size_bytes,
+                    blob_cost_wei,
+                    ..costs
+                })
+            },
+        )?;
+
+        self.last_raw_da_block_costs = Some(raw_da_block_costs.clone());
+        Ok(da_block_costs)
     }
 }
 
@@ -223,12 +233,8 @@ mod tests {
     ) {
         // given
         let da_block_costs = test_da_block_costs();
-        let expected = DaBlockCosts {
-            l2_block_range: da_block_costs.blocks_range.clone(),
-            blob_size_bytes: da_block_costs.total_size_bytes,
-            blob_cost_wei: da_block_costs.total_cost,
-        };
-        let mock_api = MockBlockCommitterApi::new(Some(da_block_costs.clone()));
+        let expected = (&da_block_costs).into();
+        let mock_api = MockBlockCommitterApi::new(Some(da_block_costs));
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
@@ -311,13 +317,8 @@ mod tests {
     async fn request_da_block_cost__when_underflow__then_error() {
         // given
         let da_block_costs = test_da_block_costs();
-        let expected = DaBlockCosts {
-            l2_block_range: da_block_costs.blocks_range.clone(),
-            blob_size_bytes: da_block_costs.total_size_bytes,
-            blob_cost_wei: da_block_costs.total_cost,
-        };
-        let mock_api =
-            UnderflowingMockBlockCommitterApi::new(Some(da_block_costs.clone()));
+        let expected = (&da_block_costs).into();
+        let mock_api = UnderflowingMockBlockCommitterApi::new(Some(da_block_costs));
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
