@@ -55,7 +55,8 @@ use fuel_core_types::{
         },
         GTFArgs,
         Instruction,
-        RegId, Word,
+        RegId,
+        Word,
     },
     fuel_crypto::{
         secp256r1,
