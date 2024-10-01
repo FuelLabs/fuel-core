@@ -67,17 +67,11 @@ where
     let transactions = target.compress_with(&mut ctx).await?;
     let registrations: RegistrationsPerTable = ctx.finalize()?;
 
-    // Apply changes to the db
-    registrations.write_to_registry(&mut db, block.header().consensus().time)?;
-
-    // Construct the actual compacted block
-    let compact = CompressedBlockPayloadV0 {
+    Ok(VersionedCompressedBlock::V0(CompressedBlockPayloadV0 {
         registrations,
         header: block.header().into(),
         transactions,
-    };
-
-    Ok(VersionedCompressedBlock::V0(compact))
+    }))
 }
 
 /// Preparation pass through the block to collect all keys accessed during compression.
@@ -152,7 +146,7 @@ macro_rules! compression {
 
         impl<D> CompressCtx<D> where D: CompressDb {
             /// Finalizes the compression context, returning the changes to the registry.
-            /// Commits the cache evictor states to the database.
+            /// Commits the registrations and cache evictor states to the database.
             fn finalize(mut self) -> anyhow::Result<RegistrationsPerTable> {
                 let mut registrations = RegistrationsPerTable::default();
                 $(
@@ -161,6 +155,7 @@ macro_rules! compression {
                         registrations.$ident.push((key, value));
                     }
                 )*
+                registrations.write_to_registry(&mut self.db, self.timestamp)?;
                 Ok(registrations)
             }
         }
