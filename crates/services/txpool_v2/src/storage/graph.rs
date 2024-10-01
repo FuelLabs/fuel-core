@@ -40,7 +40,6 @@ use petgraph::{
 use crate::{
     collision_manager::basic::BasicCollisionManagerStorage,
     error::{
-        CollisionReason,
         DependencyError,
         Error,
         InputValidationError,
@@ -51,7 +50,6 @@ use crate::{
 };
 
 use super::{
-    CheckedTransaction as StorageCheckedCollision,
     RemovedTransactions,
     Storage,
     StorageData,
@@ -355,7 +353,9 @@ impl GraphStorage {
                         direct_dependencies.insert(*node_id);
 
                         if direct_dependencies.len() >= self.config.max_txs_chain_count {
-                            return Err(Error::NotInsertedChainDependencyTooBig);
+                            return Err(Error::Dependency(
+                                DependencyError::NotInsertedChainDependencyTooBig,
+                            ));
                         }
                     }
                 }
@@ -368,7 +368,9 @@ impl GraphStorage {
                         direct_dependencies.insert(*node_id);
 
                         if direct_dependencies.len() >= self.config.max_txs_chain_count {
-                            return Err(Error::NotInsertedChainDependencyTooBig);
+                            return Err(Error::Dependency(
+                                DependencyError::NotInsertedChainDependencyTooBig,
+                            ));
                         }
                     }
                 }
@@ -392,7 +394,9 @@ impl GraphStorage {
             already_visited.insert(node_id);
 
             if already_visited.len() >= self.config.max_txs_chain_count {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
 
             let Some(dependency_node) = self.graph.node_weight(node_id) else {
@@ -406,7 +410,9 @@ impl GraphStorage {
             if dependency_node.number_dependents_in_chain
                 >= self.config.max_txs_chain_count
             {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
 
             to_check.extend(self.get_direct_dependencies(node_id));
@@ -430,7 +436,7 @@ impl GraphStorage {
                 return Ok(true);
             }
             already_visited.insert(node_id);
-            to_check.extend(self.get_dependencies(node_id)?);
+            to_check.extend(self.get_direct_dependencies(node_id));
         }
         Ok(false)
     }
@@ -503,7 +509,7 @@ impl Storage for GraphStorage {
 
     fn can_store_transaction(
         &self,
-        transaction: PoolTransaction,
+        transaction: ArcPoolTx,
     ) -> Result<Self::CheckedTransaction, Error> {
         let direct_dependencies =
             self.collect_transaction_direct_dependencies(&transaction)?;
@@ -521,9 +527,16 @@ impl Storage for GraphStorage {
         self.get_inner(index)
     }
 
+    fn get_direct_dependents(
+        &self,
+        index: Self::StorageIndex,
+    ) -> impl Iterator<Item = Self::StorageIndex> {
+        self.get_direct_dependents(index)
+    }
+
     fn validate_inputs(
         &self,
-        transaction: &PoolTransaction,
+        transaction: &ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<(), Error> {
@@ -611,6 +624,16 @@ impl Storage for GraphStorage {
         index: Self::StorageIndex,
     ) -> RemovedTransactions {
         self.remove_node_and_dependent_sub_graph(index)
+    }
+
+    fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData> {
+        self.graph.remove_node(index).map(|storage_entry| {
+            self.clear_cache(
+                storage_entry.transaction.outputs(),
+                &storage_entry.transaction.id(),
+            );
+            storage_entry
+        })
     }
 
     fn count(&self) -> usize {

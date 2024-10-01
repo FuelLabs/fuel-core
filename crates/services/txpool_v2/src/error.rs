@@ -106,6 +106,10 @@ pub enum InputValidationError {
     WrongOutputNumber(String),
     #[display(fmt = "UTXO (id: {_0}) does not exist")]
     UtxoNotFound(UtxoId),
+    #[display(fmt = "Max gas can't be 0")]
+    MaxGasZero,
+    #[display(fmt = "Transaction id already exists (id: {_0})")]
+    DuplicateTxId(TxId),
 }
 
 #[derive(Debug, Clone, derive_more::Display)]

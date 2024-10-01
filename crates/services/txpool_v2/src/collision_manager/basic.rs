@@ -136,7 +136,7 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
         storage_id: S::StorageIndex,
         store_entry: &StorageData,
     ) {
-        if let PoolTransaction::Blob(checked_tx, _) = &store_entry.transaction {
+        if let PoolTransaction::Blob(checked_tx, _) = store_entry.transaction.as_ref() {
             let blob_id = checked_tx.transaction().blob_id();
             self.blobs_users.insert(*blob_id, storage_id);
         }

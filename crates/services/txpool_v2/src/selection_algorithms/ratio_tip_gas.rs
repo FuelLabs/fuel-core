@@ -3,18 +3,12 @@ use std::{
         Ordering,
         Reverse,
     },
-    collections::{
-        BTreeMap,
-        HashMap,
-    },
+    collections::BTreeMap,
     fmt::Debug,
     time::Instant,
 };
 
-use fuel_core_types::{
-    fuel_tx::TxId,
-    services::txpool::PoolTransaction,
-};
+use fuel_core_types::fuel_tx::TxId;
 use num_rational::Ratio;
 
 use crate::{

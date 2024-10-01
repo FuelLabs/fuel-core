@@ -1,7 +1,3 @@
-use std::time::Instant;
-
-use fuel_core_types::services::txpool::PoolTransaction;
-
 use crate::{
     error::Error,
     storage::{
@@ -39,17 +35,6 @@ pub trait SelectionAlgorithm {
 
     /// Get less worth transactions iterator
     fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex>;
-
-    /// Get less worth transactions iterator
-    fn get_less_worth_txs(&self) -> impl Iterator<Item = Self::StorageIndex>;
-
-    /// Inform the collision manager that a transaction was stored.
-    fn on_stored_transaction(
-        &mut self,
-        transaction: &PoolTransaction,
-        creation_instant: Instant,
-        transaction_id: Self::StorageIndex,
-    ) -> Result<(), Error>;
 
     /// Inform the selection algorithm that a transaction was removed from the pool.
     fn on_removed_transaction(&mut self, storage_entry: &StorageData);

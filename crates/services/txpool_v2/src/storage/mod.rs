@@ -6,16 +6,10 @@ use std::{
 };
 
 use crate::{
-    error::{
-        CollisionReason,
-        Error,
-    },
+    error::Error,
     ports::TxPoolPersistentStorage,
 };
-use fuel_core_types::services::txpool::{
-    ArcPoolTx,
-    PoolTransaction,
-};
+use fuel_core_types::services::txpool::ArcPoolTx;
 
 pub mod checked_collision;
 pub mod graph;
@@ -41,10 +35,10 @@ pub type RemovedTransactions = Vec<StorageData>;
 
 pub trait CheckedTransaction<StorageIndex> {
     /// Returns the underlying transaction.
-    fn tx(&self) -> &PoolTransaction;
+    fn tx(&self) -> &ArcPoolTx;
 
     /// Unwraps the transaction.
-    fn into_tx(self) -> PoolTransaction;
+    fn into_tx(self) -> ArcPoolTx;
 
     /// Returns the list of all dependencies of the transaction.
     fn all_dependencies(&self) -> &HashSet<StorageIndex>;
@@ -70,16 +64,22 @@ pub trait Storage {
     /// [`Self::CheckedTransaction`] is required to call [`Self::store_transaction`].
     fn can_store_transaction(
         &self,
-        transaction: PoolTransaction,
+        transaction: ArcPoolTx,
     ) -> Result<Self::CheckedTransaction, Error>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
 
+    /// Get direct dependents of a transaction.
+    fn get_direct_dependents(
+        &self,
+        index: Self::StorageIndex,
+    ) -> impl Iterator<Item = Self::StorageIndex>;
+
     /// Validate inputs of a transaction.
     fn validate_inputs(
         &self,
-        transaction: &PoolTransaction,
+        transaction: &ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<(), Error>;
@@ -89,6 +89,9 @@ pub trait Storage {
         &mut self,
         index: Self::StorageIndex,
     ) -> RemovedTransactions;
+
+    /// Remove a transaction from the storage.
+    fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData>;
 
     /// Count the number of transactions in the storage.
     fn count(&self) -> usize;

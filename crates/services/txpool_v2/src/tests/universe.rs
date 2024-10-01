@@ -46,6 +46,7 @@ use fuel_core_types::{
         checked_transaction::EstimatePredicates,
         interpreter::MemoryInstance,
     },
+    services::txpool::ArcPoolTx,
 };
 use parking_lot::RwLock;
 use tokio::sync::broadcast::Receiver;
@@ -58,12 +59,9 @@ use crate::{
     pool::Pool,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     shared_state::TxPool,
-    storage::{
-        graph::{
-            GraphConfig,
-            GraphStorage,
-        },
-        RemovedTransactions,
+    storage::graph::{
+        GraphConfig,
+        GraphStorage,
     },
     tests::mocks::{
         MockDBProvider,
@@ -201,7 +199,7 @@ impl TestPoolUniverse {
     pub async fn verify_and_insert(
         &mut self,
         tx: Transaction,
-    ) -> Result<RemovedTransactions, Error> {
+    ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
             let tx = perform_all_verifications(
                 tx,
@@ -224,7 +222,7 @@ impl TestPoolUniverse {
         &mut self,
         tx: Transaction,
         gas_price: GasPrice,
-    ) -> Result<RemovedTransactions, Error> {
+    ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
             let tx = perform_all_verifications(
                 tx,
@@ -248,7 +246,7 @@ impl TestPoolUniverse {
         tx: Transaction,
         consensus_params: ConsensusParameters,
         wasm_checker: MockWasmChecker,
-    ) -> Result<RemovedTransactions, Error> {
+    ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
             let tx = perform_all_verifications(
                 tx,

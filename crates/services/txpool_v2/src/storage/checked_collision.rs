@@ -1,12 +1,8 @@
-use crate::error::CollisionReason;
-use fuel_core_types::services::txpool::PoolTransaction;
-use std::collections::{
-    HashMap,
-    HashSet,
-};
+use fuel_core_types::services::txpool::ArcPoolTx;
+use std::collections::HashSet;
 
 pub struct CheckedTransaction<StorageIndex> {
-    tx: PoolTransaction,
+    tx: ArcPoolTx,
     direct_dependencies: HashSet<StorageIndex>,
     all_dependencies: HashSet<StorageIndex>,
 }
@@ -16,7 +12,7 @@ impl<StorageIndex> CheckedTransaction<StorageIndex> {
     ///
     /// It is a private method called by the `GraphStorage`.
     pub(super) fn new(
-        tx: PoolTransaction,
+        tx: ArcPoolTx,
         direct_dependencies: HashSet<StorageIndex>,
         all_dependencies: HashSet<StorageIndex>,
     ) -> Self {
@@ -31,13 +27,7 @@ impl<StorageIndex> CheckedTransaction<StorageIndex> {
         &self.direct_dependencies
     }
 
-    pub fn unpack(
-        self,
-    ) -> (
-        PoolTransaction,
-        HashSet<StorageIndex>,
-        HashSet<StorageIndex>,
-    ) {
+    pub fn unpack(self) -> (ArcPoolTx, HashSet<StorageIndex>, HashSet<StorageIndex>) {
         (self.tx, self.direct_dependencies, self.all_dependencies)
     }
 }
@@ -45,11 +35,11 @@ impl<StorageIndex> CheckedTransaction<StorageIndex> {
 impl<StorageIndex> super::CheckedTransaction<StorageIndex>
     for CheckedTransaction<StorageIndex>
 {
-    fn tx(&self) -> &PoolTransaction {
+    fn tx(&self) -> &ArcPoolTx {
         &self.tx
     }
 
-    fn into_tx(self) -> PoolTransaction {
+    fn into_tx(self) -> ArcPoolTx {
         self.tx
     }
 
