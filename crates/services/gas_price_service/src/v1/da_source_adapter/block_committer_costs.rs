@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 #![allow(clippy::arithmetic_side_effects)]
 
 use crate::v1::da_source_adapter::{
@@ -166,6 +165,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
 
