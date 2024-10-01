@@ -76,8 +76,6 @@ use std::{
 };
 
 #[cfg(test)]
-mod stability_test;
-#[cfg(test)]
 mod test_helpers;
 #[cfg(test)]
 mod tests;
@@ -349,16 +347,6 @@ where
     ) -> Result<InsertionResult, Error> {
         let view = self.database.latest_view().unwrap();
         self.insert_inner(tx, Metadata::new(ConsensusParametersVersion::MIN), &view)
-    }
-
-    #[cfg(test)]
-    fn insert_single_with_metadata(
-        &mut self,
-        tx: Checked<Transaction>,
-        metadata: Metadata,
-    ) -> Result<InsertionResult, Error> {
-        let view = self.database.latest_view().unwrap();
-        self.insert_inner(tx, metadata, &view)
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions

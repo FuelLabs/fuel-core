@@ -48,7 +48,7 @@ struct Limits {
     gas_limit_range: u64,
 }
 
-fn some_transaction(
+fn transaction_with_random_inputs_and_outputs(
     limits: Limits,
     tip: u64,
     rng: &mut StdRng,
@@ -155,7 +155,8 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
     let mut txpool = txpool.write();
 
     for tip in 0..ROUNDS_PER_TXPOOL {
-        let (checked, metadata) = some_transaction(limits, tip as u64, &mut rng);
+        let (checked, metadata) =
+            transaction_with_random_inputs_and_outputs(limits, tip as u64, &mut rng);
         let pool_tx = PoolTransaction::Script(checked, metadata);
 
         let result = txpool.insert(pool_tx);

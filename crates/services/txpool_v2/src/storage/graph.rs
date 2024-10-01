@@ -36,7 +36,6 @@ use petgraph::{
 };
 
 use crate::{
-    collision_manager::basic::BasicCollisionManagerStorage,
     error::Error,
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
@@ -564,10 +563,6 @@ impl Storage for GraphStorage {
     ) -> RemovedTransactions {
         self.remove_node_and_dependent_sub_graph(index)
     }
-}
-
-impl BasicCollisionManagerStorage for GraphStorage {
-    type StorageIndex = NodeIndex;
 }
 
 impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {

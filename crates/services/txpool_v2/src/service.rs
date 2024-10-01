@@ -28,9 +28,12 @@ use crate::{
         WasmChecker as WasmCheckerTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    storage::graph::{
-        GraphConfig,
-        GraphStorage,
+    storage::{
+        graph::{
+            GraphConfig,
+            GraphStorage,
+        },
+        Storage,
     },
     verifications::perform_all_verifications,
 };
@@ -43,7 +46,7 @@ pub type TxPool<PSProvider> = Arc<
         Pool<
             PSProvider,
             GraphStorage,
-            BasicCollisionManager<GraphStorage>,
+            BasicCollisionManager<<GraphStorage as Storage>::StorageIndex>,
             RatioTipGasSelection<GraphStorage>,
         >,
     >,

@@ -42,22 +42,18 @@ use super::{
     Collisions,
 };
 
-pub trait BasicCollisionManagerStorage {
-    type StorageIndex: Copy + Debug + Hash + PartialEq + Eq;
-}
-
-pub struct BasicCollisionManager<S: BasicCollisionManagerStorage> {
+pub struct BasicCollisionManager<StorageIndex> {
     /// Message -> Transaction that currently use the Message
-    messages_spenders: HashMap<Nonce, S::StorageIndex>,
+    messages_spenders: HashMap<Nonce, StorageIndex>,
     /// Coins -> Transaction that currently use the UTXO
-    coins_spenders: HashMap<UtxoId, S::StorageIndex>,
+    coins_spenders: HashMap<UtxoId, StorageIndex>,
     /// Contract -> Transaction that currently create the contract
-    contracts_creators: HashMap<ContractId, S::StorageIndex>,
+    contracts_creators: HashMap<ContractId, StorageIndex>,
     /// Blob -> Transaction that currently create the blob
-    blobs_users: HashMap<BlobId, S::StorageIndex>,
+    blobs_users: HashMap<BlobId, StorageIndex>,
 }
 
-impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
+impl<StorageIndex> BasicCollisionManager<StorageIndex> {
     pub fn new() -> Self {
         Self {
             messages_spenders: HashMap::new(),
@@ -76,15 +72,17 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
     }
 }
 
-impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
+impl<StorageIndex> Default for BasicCollisionManager<StorageIndex> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager<S> {
-    type Storage = S;
-    type StorageIndex = S::StorageIndex;
+impl<StorageIndex> CollisionManager for BasicCollisionManager<StorageIndex>
+where
+    StorageIndex: Copy + Debug + Hash + PartialEq + Eq,
+{
+    type StorageIndex = StorageIndex;
 
     fn find_collisions(
         &self,
@@ -151,7 +149,7 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
 
     fn on_stored_transaction(
         &mut self,
-        storage_id: S::StorageIndex,
+        storage_id: StorageIndex,
         store_entry: &StorageData,
     ) {
         if let PoolTransaction::Blob(checked_tx, _) = &store_entry.transaction {
