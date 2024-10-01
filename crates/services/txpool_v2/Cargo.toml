@@ -28,7 +28,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-storage = { workspace = true, features = ["std", "test-helpers"] }
-fuel-core-trace = { workspace = true }
+fuel-core-trace = { path = "../../trace" }
 mockall = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
