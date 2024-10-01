@@ -15,9 +15,6 @@ use fuel_tx::{
     UploadSubsection,
     Witness,
 };
-use version_36_fuel_core_bin::FuelService as Version36FuelService;
-use version_36_fuel_core_client::client::FuelClient as Version36Client;
-use version_36_fuel_core_services as _;
 use latest_fuel_core_bin::FuelService as LatestFuelService;
 use latest_fuel_core_client::client::FuelClient as LatestClient;
 use libp2p::PeerId;
@@ -26,20 +23,12 @@ use rand::{
     Rng,
 };
 use std::str::FromStr;
-
-// Awful version compatibility hack.
-// `$bin_crate::cli::run::get_service` is async in the later versions of fuel-core-bin.
-macro_rules! maybe_await {
-    (true, $expr:expr) => {
-        $expr.await
-    };
-    (false, $expr:expr) => {
-        $expr
-    };
-}
+use version_36_fuel_core_bin::FuelService as Version36FuelService;
+use version_36_fuel_core_client::client::FuelClient as Version36Client;
+use version_36_fuel_core_services as _;
 
 macro_rules! define_core_driver {
-    ($bin_crate:ident, $service:ident, $client:ident, $name:ident, $bin_crate_get_service_is_async:tt) => {
+    ($bin_crate:ident, $service:ident, $client:ident, $name:ident) => {
         pub struct $name {
             /// This must be before the _db_dir as the drop order matters here.
             pub node: $service,
@@ -64,12 +53,10 @@ macro_rules! define_core_driver {
                 ];
                 args.extend(extra_args);
 
-                let node = maybe_await!(
-                    $bin_crate_get_service_is_async,
-                    $bin_crate::cli::run::get_service(
-                        $bin_crate::cli::run::Command::parse_from(args),
-                    )
-                )?;
+                let node = $bin_crate::cli::run::get_service(
+                    $bin_crate::cli::run::Command::parse_from(args),
+                )
+                .await?;
 
                 node.start_and_await().await?;
 
@@ -88,16 +75,14 @@ define_core_driver!(
     version_36_fuel_core_bin,
     Version36FuelService,
     Version36Client,
-    Version36FuelCoreDriver,
-    true
+    Version36FuelCoreDriver
 );
 
 define_core_driver!(
     latest_fuel_core_bin,
     LatestFuelService,
     LatestClient,
-    LatestFuelCoreDriver,
-    true
+    LatestFuelCoreDriver
 );
 
 pub const IGNITION_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition";
