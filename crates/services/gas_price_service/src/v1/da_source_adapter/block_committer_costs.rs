@@ -34,7 +34,7 @@ trait BlockCommitterApi: Send + Sync {
 /// which receives data from the block committer (only http api for now)
 pub struct BlockCommitterDaBlockCosts<BlockCommitter> {
     client: BlockCommitter,
-    last_value: Option<RawDaBlockCosts>,
+    last_raw_da_block_costs: Option<RawDaBlockCosts>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
@@ -54,7 +54,10 @@ pub struct RawDaBlockCosts {
 impl<BlockCommitter> BlockCommitterDaBlockCosts<BlockCommitter> {
     /// Create a new instance of the block committer da block costs source
     pub fn new(client: BlockCommitter, last_value: Option<RawDaBlockCosts>) -> Self {
-        Self { client, last_value }
+        Self {
+            client,
+            last_raw_da_block_costs: last_value,
+        }
     }
 }
 
@@ -66,7 +69,7 @@ where
     async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
         let response;
 
-        if let Some(last_value) = &self.last_value {
+        if let Some(last_value) = &self.last_raw_da_block_costs {
             response = self
                 .client
                 .get_costs_by_seqno(last_value.sequence_number + 1)
@@ -78,7 +81,7 @@ where
 
         if let Some(response) = response {
             let res;
-            if let Some(last_value) = &self.last_value {
+            if let Some(last_value) = &self.last_raw_da_block_costs {
                 res = DaBlockCosts {
                     l2_block_range: response.blocks_range.clone(),
                     blob_size_bytes: response
@@ -97,7 +100,7 @@ where
                     blob_cost_wei: response.total_cost,
                 };
             }
-            self.last_value = Some(response.clone());
+            self.last_raw_da_block_costs = Some(response.clone());
             Ok(res)
         } else {
             Err(anyhow!("No response from block committer"))
@@ -232,7 +235,7 @@ mod tests {
 
         // then
         assert_eq!(actual, expected);
-        assert!(block_committer.last_value.is_some());
+        assert!(block_committer.last_raw_da_block_costs.is_some());
     }
 
     #[tokio::test]
@@ -262,7 +265,7 @@ mod tests {
 
         // then
         assert!(result.is_err());
-        assert!(block_committer.last_value.is_none());
+        assert!(block_committer.last_raw_da_block_costs.is_none());
     }
 
     struct UnderflowingMockBlockCommitterApi {
