@@ -25,7 +25,7 @@ trait BlockCommitterApi: Send + Sync {
         number: u64,
     ) -> DaBlockCostsResult<Option<RawDaBlockCosts>>;
     /// Used to get the costs for a range of blocks (inclusive)
-    async fn get_bundles_by_range(
+    async fn get_cost_bundles_by_range(
         &self,
         range: core::ops::Range<u64>,
     ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>>;
@@ -150,7 +150,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         Ok(Some(response))
     }
 
-    async fn get_bundles_by_range(
+    async fn get_cost_bundles_by_range(
         &self,
         range: core::ops::Range<u64>,
     ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
@@ -200,7 +200,7 @@ mod tests {
             }
             Ok(value)
         }
-        async fn get_bundles_by_range(
+        async fn get_cost_bundles_by_range(
             &self,
             _: core::ops::Range<u64>,
         ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
@@ -299,7 +299,7 @@ mod tests {
             }
             Ok(value)
         }
-        async fn get_bundles_by_range(
+        async fn get_cost_bundles_by_range(
             &self,
             _: core::ops::Range<u64>,
         ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
