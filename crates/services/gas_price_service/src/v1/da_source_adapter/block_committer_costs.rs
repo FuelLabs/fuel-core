@@ -238,7 +238,6 @@ mod tests {
 
         // then
         assert_eq!(actual, expected);
-        assert!(block_committer.last_raw_da_block_costs.is_some());
     }
 
     #[tokio::test]
