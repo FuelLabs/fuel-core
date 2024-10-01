@@ -33,11 +33,7 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImporterResult,
         },
-        executor::{
-            Error as ExecutorError,
-            UncommittedResult,
-        },
-        txpool::ArcPoolTx,
+        executor::UncommittedResult,
     },
     tai64::Tai64,
 };
@@ -82,19 +78,7 @@ impl ConsensusModulePort for PoAAdapter {
 
 impl TransactionPool for TxPoolAdapter {
     fn pending_number(&self) -> usize {
-        self.service.pending_number()
-    }
-
-    fn total_consumable_gas(&self) -> u64 {
-        self.service.total_consumable_gas()
-    }
-
-    fn remove_txs(&self, ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx> {
-        self.service.remove_txs(
-            ids.into_iter()
-                .map(|(tx_id, err)| (tx_id, err.to_string()))
-                .collect(),
-        )
+        self.service.count()
     }
 
     fn transaction_status_events(&self) -> BoxStream<TxId> {

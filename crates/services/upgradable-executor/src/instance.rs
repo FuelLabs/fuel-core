@@ -64,7 +64,7 @@ trait CallerHelper {
         source: Arc<Source>,
         gas_limit: u64,
         tx_number_limit: u16,
-        size_limit: u32,
+        block_transaction_size_limit: u32,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource;
@@ -84,13 +84,13 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
         source: Arc<Source>,
         gas_limit: u64,
         tx_number_limit: u16,
-        size_limit: u32,
+        block_transaction_size_limit: u32,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource,
     {
         let txs: Vec<_> = source
-            .next(gas_limit, tx_number_limit, size_limit)
+            .next(gas_limit, tx_number_limit, block_transaction_size_limit)
             .into_iter()
             .map(|tx| match tx {
                 MaybeCheckedTransaction::CheckedTransaction(checked, _) => {
@@ -254,7 +254,7 @@ impl Instance<Created> {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             gas_limit: u64,
                             tx_number_limit: u32,
-                            size_limit: u32|
+                            block_transaction_size_limit: u32|
               -> anyhow::Result<u32> {
             let Some(source) = source.clone() else {
                 return Ok(0);
@@ -264,7 +264,12 @@ impl Instance<Created> {
                 anyhow::anyhow!("The number of transactions is more than `u16::MAX`: {e}")
             })?;
 
-            caller.peek_next_txs_bytes(source, gas_limit, tx_number_limit, size_limit)
+            caller.peek_next_txs_bytes(
+                source,
+                gas_limit,
+                tx_number_limit,
+                block_transaction_size_limit,
+            )
         };
 
         Func::wrap(&mut self.store, closure)

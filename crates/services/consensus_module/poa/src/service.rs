@@ -352,7 +352,6 @@ where
             );
             tx_ids_to_remove.push((tx_id, err));
         }
-        self.txpool.remove_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
         let seal = self.signer.seal_block(&block).await?;

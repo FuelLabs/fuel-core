@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_tx::{
@@ -18,7 +20,10 @@ use fuel_core_types::{
         },
         interpreter::Memory,
     },
-    services::txpool::PoolTransaction,
+    services::txpool::{
+        Metadata,
+        PoolTransaction,
+    },
 };
 
 use crate::{
@@ -79,8 +84,13 @@ impl BasicVerifiedTx {
     {
         let pool_tx = checked_tx_into_pool(self.0, version)?;
 
-        pool.read().can_insert_transaction(&pool_tx)?;
-        let checked_transaction: CheckedTransaction = pool_tx.into();
+        let transaction = pool
+            .read()
+            .can_insert_transaction(Arc::new(pool_tx))?
+            .into_transaction();
+        // SAFETY: We created the arc just above and it's not shared.
+        let transaction = Arc::try_unwrap(transaction).unwrap();
+        let checked_transaction: CheckedTransaction = transaction.into();
         Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
     }
 }
@@ -206,12 +216,13 @@ pub fn checked_tx_into_pool(
     tx: CheckedTransaction,
     version: ConsensusParametersVersion,
 ) -> Result<PoolTransaction, Error> {
+    let metadata = Metadata::new(version);
     match tx {
-        CheckedTransaction::Script(tx) => Ok(PoolTransaction::Script(tx, version)),
-        CheckedTransaction::Create(tx) => Ok(PoolTransaction::Create(tx, version)),
+        CheckedTransaction::Script(tx) => Ok(PoolTransaction::Script(tx, metadata)),
+        CheckedTransaction::Create(tx) => Ok(PoolTransaction::Create(tx, metadata)),
         CheckedTransaction::Mint(_) => Err(Error::MintIsDisallowed),
-        CheckedTransaction::Upgrade(tx) => Ok(PoolTransaction::Upgrade(tx, version)),
-        CheckedTransaction::Upload(tx) => Ok(PoolTransaction::Upload(tx, version)),
-        CheckedTransaction::Blob(tx) => Ok(PoolTransaction::Blob(tx, version)),
+        CheckedTransaction::Upgrade(tx) => Ok(PoolTransaction::Upgrade(tx, metadata)),
+        CheckedTransaction::Upload(tx) => Ok(PoolTransaction::Upload(tx, metadata)),
+        CheckedTransaction::Blob(tx) => Ok(PoolTransaction::Blob(tx, metadata)),
     }
 }

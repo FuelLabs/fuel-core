@@ -251,8 +251,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
 
     let mut ctx_builder = TestContextBuilder::new();
     ctx_builder.with_config(config);
-    let mut mock_tx_pool = MockTransactionPool::no_tx_updates();
-    mock_tx_pool.expect_remove_txs().returning(|_| vec![]);
+    let mock_tx_pool = MockTransactionPool::no_tx_updates();
     ctx_builder.with_txpool(mock_tx_pool);
 
     let mut importer = MockBlockImporter::default();

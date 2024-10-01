@@ -39,10 +39,7 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         executor::TransactionExecutionStatus,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -63,21 +60,20 @@ impl TxPoolPort for TxPoolAdapter {
     }
 
     fn submission_time(&self, id: TxId) -> Option<Tai64> {
-        self.service
-            .find_one(&id)
-            .map(|info| Tai64::from_unix(info.creation_instant().as_secs() as i64))
+        self.service.find_one(&id).map(|info| {
+            Tai64::from_unix(
+                info.creation_instant()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time can't be lower than 0")
+                    .as_secs() as i64,
+            )
+        })
     }
 
-    async fn insert(
-        &self,
-        txs: Vec<Arc<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>> {
+    fn insert(&self, txs: Vec<Arc<Transaction>>) -> anyhow::Result<()> {
         self.service
             .insert(txs, None)
-            .await
-            .into_iter()
-            .map(|res| res.map_err(|e| anyhow::anyhow!(e)))
-            .collect()
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     fn tx_update_subscribe(

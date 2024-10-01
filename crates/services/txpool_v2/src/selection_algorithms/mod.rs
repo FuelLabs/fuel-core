@@ -1,8 +1,10 @@
-use std::time::Instant;
-
-use fuel_core_types::services::txpool::PoolTransaction;
-
-use crate::error::Error;
+use crate::{
+    error::Error,
+    storage::{
+        RemovedTransactions,
+        StorageData,
+    },
+};
 
 pub mod ratio_tip_gas;
 
@@ -12,6 +14,8 @@ pub struct Constraints {
     pub max_gas: u64,
     /// Maximum transactions that can be selected
     pub maximum_txs: u16,
+    /// Maximum size of the block
+    pub maximum_block_size: u32,
 }
 
 /// The selection algorithm is responsible for selecting the best transactions to include in a block.
@@ -24,30 +28,19 @@ pub trait SelectionAlgorithm {
     fn gather_best_txs(
         &mut self,
         constraints: Constraints,
-        storage: &Self::Storage,
-    ) -> Result<Vec<Self::StorageIndex>, Error>;
+        storage: &mut Self::Storage,
+    ) -> Result<RemovedTransactions, Error>;
 
-    /// Update the selection algorithm with the new transactions that are executable.
-    fn new_executable_transactions(
+    /// Update the selection algorithm with the new transaction that are executable.
+    fn new_executable_transaction(
         &mut self,
-        transactions_ids: Vec<Self::StorageIndex>,
-        storage: &Self::Storage,
-    ) -> Result<(), Error>;
+        storage_id: Self::StorageIndex,
+        store_entry: &StorageData,
+    );
 
     /// Get less worth transactions iterator
-    fn get_less_worth_txs(&self) -> impl Iterator<Item = Self::StorageIndex>;
-
-    /// Inform the collision manager that a transaction was stored.
-    fn on_stored_transaction(
-        &mut self,
-        transaction: &PoolTransaction,
-        creation_instant: Instant,
-        transaction_id: Self::StorageIndex,
-    ) -> Result<(), Error>;
+    fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex>;
 
     /// Inform the selection algorithm that a transaction was removed from the pool.
-    fn on_removed_transaction(
-        &mut self,
-        transaction: &PoolTransaction,
-    ) -> Result<(), Error>;
+    fn on_removed_transaction(&mut self, storage_entry: &StorageData);
 }

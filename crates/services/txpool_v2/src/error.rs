@@ -72,6 +72,9 @@ pub enum DependencyError {
     NotInsertedCollisionIsDependency,
     #[display(fmt = "Transaction chain dependency is already too big")]
     NotInsertedChainDependencyTooBig,
+    #[display(fmt = "The dependent transaction creates a diamond problem, \
+    causing cycles in the dependency graph.")]
+    DependentTransactionIsADiamondDeath,
 }
 
 #[derive(Debug, derive_more::Display)]
@@ -106,6 +109,10 @@ pub enum InputValidationError {
     WrongOutputNumber(String),
     #[display(fmt = "UTXO (id: {_0}) does not exist")]
     UtxoNotFound(UtxoId),
+    #[display(fmt = "Max gas can't be 0")]
+    MaxGasZero,
+    #[display(fmt = "Transaction id already exists (id: {_0})")]
+    DuplicateTxId(TxId),
 }
 
 #[derive(Debug, Clone, derive_more::Display)]

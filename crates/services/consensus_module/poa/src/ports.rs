@@ -23,11 +23,7 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImportResult,
         },
-        executor::{
-            Error as ExecutorError,
-            UncommittedResult as UncommittedExecutionResult,
-        },
-        txpool::ArcPoolTx,
+        executor::UncommittedResult as UncommittedExecutionResult,
     },
     tai64::Tai64,
 };
@@ -37,10 +33,6 @@ use std::collections::HashMap;
 pub trait TransactionPool: Send + Sync {
     /// Returns the number of pending transactions in the `TxPool`.
     fn pending_number(&self) -> usize;
-
-    fn total_consumable_gas(&self) -> u64;
-
-    fn remove_txs(&self, tx_ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx>;
 
     fn transaction_status_events(&self) -> BoxStream<TxId>;
 }

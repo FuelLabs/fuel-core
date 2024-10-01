@@ -199,7 +199,6 @@ async fn insert__tx2_collided_on_contract_id() {
 
     // contract creation tx
     let (_, gas_coin) = universe.setup_coin();
-    let (output, unset_input) = universe.create_output_and_input();
     let tx = TransactionBuilder::create(
         Default::default(),
         Default::default(),
@@ -209,11 +208,9 @@ async fn insert__tx2_collided_on_contract_id() {
     .max_fee_limit(10)
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
-    .add_output(output)
     .finalize_as_transaction();
 
     let (_, gas_coin) = universe.setup_coin();
-    let input = unset_input.into_input(UtxoId::new(tx.id(&Default::default()), 1));
 
     // Given
     // attempt to insert a different creation tx with a valid dependency on the first tx,
@@ -226,9 +223,7 @@ async fn insert__tx2_collided_on_contract_id() {
     .tip(9)
     .max_fee_limit(9)
     .add_input(gas_coin)
-    .add_input(input)
     .add_output(create_contract_output(contract_id))
-    .add_output(output)
     .finalize_as_transaction();
 
     // When
@@ -296,12 +291,14 @@ async fn insert__already_known_tx() {
 
     // When
     let result1 = universe.verify_and_insert(tx.clone()).await;
-    let result2 = universe.verify_and_insert(tx).await;
+    let result2 = universe.verify_and_insert(tx.clone()).await;
 
     // Then
     assert!(result1.is_ok());
     let err = result2.unwrap_err();
-    assert!(matches!(err, Error::Collided(CollisionReason::Utxo(_))));
+    assert!(
+        matches!(err, Error::InputValidation(InputValidationError::DuplicateTxId(id)) if id == tx.id(&ChainId::default()))
+    );
 }
 
 #[tokio::test]
@@ -636,7 +633,7 @@ async fn get_sorted_out_tx1_2_3() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX)
+        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
         .unwrap();
 
     // Then
@@ -688,7 +685,7 @@ async fn get_sorted_out_tx_same_tips() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX)
+        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
         .unwrap();
 
     // Then
@@ -740,7 +737,7 @@ async fn get_sorted_out_tx_profitable_ratios() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX)
+        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
         .unwrap();
 
     // Then
@@ -774,7 +771,7 @@ async fn get_sorted_out_tx_by_creation_instant() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX)
+        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
         .unwrap();
 
     // Then
@@ -1231,7 +1228,7 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     // Then
     assert!(matches!(
         err,
-        Error::Dependency(DependencyError::NotInsertedCollisionIsDependency)
+        Error::Dependency(DependencyError::DependentTransactionIsADiamondDeath)
     ));
 }
 

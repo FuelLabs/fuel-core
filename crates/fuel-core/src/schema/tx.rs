@@ -328,11 +328,9 @@ impl TxMutation {
             .latest_consensus_params();
         let tx = FuelTx::from_bytes(&tx.0)?;
 
-        let _: Vec<_> = txpool
+        txpool
             .insert(vec![Arc::new(tx.clone())])
-            .await
-            .into_iter()
-            .try_collect()?;
+            .map_err(|e| anyhow::anyhow!(e))?;
         let id = tx.id(&params.chain_id());
 
         let tx = Transaction(tx, id);
@@ -427,11 +425,7 @@ async fn submit_and_await_status<'a>(
     let tx_id = tx.id(&params.chain_id());
     let subscription = txpool.tx_update_subscribe(tx_id)?;
 
-    let _: Vec<_> = txpool
-        .insert(vec![Arc::new(tx)])
-        .await
-        .into_iter()
-        .try_collect()?;
+    txpool.insert(vec![Arc::new(tx)])?;
 
     Ok(subscription
         .map(move |event| match event {

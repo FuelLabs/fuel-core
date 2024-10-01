@@ -57,10 +57,7 @@ use fuel_core_types::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -192,10 +189,7 @@ pub trait TxPoolPort: Send + Sync {
 
     fn submission_time(&self, id: TxId) -> Option<Tai64>;
 
-    async fn insert(
-        &self,
-        txs: Vec<Arc<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>>;
+    fn insert(&self, txs: Vec<Arc<Transaction>>) -> anyhow::Result<()>;
 
     fn tx_update_subscribe(
         &self,

@@ -1,4 +1,5 @@
 mod mocks;
+mod stability_test;
 mod tests_e2e;
 mod tests_p2p;
 mod tests_permits;

@@ -533,20 +533,20 @@ impl Node {
     pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
-            let tx_result = self
+            self.node
+                .shared
+                .txpool_shared_state
+                .insert(vec![Arc::new(tx.clone())], None)
+                .unwrap();
+
+            let mut subscriber = self
                 .node
                 .shared
                 .txpool_shared_state
-                .insert(vec![Arc::new(tx.clone())])
-                .await
-                .pop()
-                .unwrap()
-                .unwrap();
-
-            let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(&ChainId::default()), tx);
-
-            assert!(tx_result.removed.is_empty());
+                .new_tx_notification_subscribe();
+            let tx_result = subscriber.recv().await.unwrap();
+            assert_eq!(tx_result, tx.id(&ChainId::default()));
+            expected.insert(tx.id(&ChainId::default()), tx.clone());
         }
         expected
     }

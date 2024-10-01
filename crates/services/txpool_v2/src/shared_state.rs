@@ -3,7 +3,6 @@ use std::{
     sync::Arc,
     time::{
         Duration,
-        Instant,
         SystemTime,
     },
 };
@@ -72,7 +71,7 @@ pub struct TxInfo {
     /// The transaction
     tx: ArcPoolTx,
     /// The creation instant of the transaction
-    creation_instant: Instant,
+    creation_instant: SystemTime,
 }
 
 impl TxInfo {
@@ -80,8 +79,22 @@ impl TxInfo {
         &self.tx
     }
 
-    pub fn creation_instant(&self) -> &Instant {
+    pub fn creation_instant(&self) -> &SystemTime {
         &self.creation_instant
+    }
+}
+
+impl From<TxInfo> for TransactionStatus {
+    fn from(tx_info: TxInfo) -> Self {
+        Self::Submitted {
+            time: Tai64::from_unix(
+                tx_info
+                    .creation_instant
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Time can't be less than UNIX EPOCH")
+                    .as_secs() as i64,
+            ),
+        }
     }
 }
 
@@ -357,10 +370,13 @@ where
         &self,
         max_gas: u64,
         transactions_limit: u16,
+        block_transaction_size_limit: u32,
     ) -> Result<Vec<ArcPoolTx>, Error> {
-        self.pool
-            .write()
-            .extract_transactions_for_block(max_gas, transactions_limit)
+        self.pool.write().extract_transactions_for_block(
+            max_gas,
+            transactions_limit,
+            block_transaction_size_limit,
+        )
     }
 
     pub fn prune_old_transactions(&mut self, ttl: Duration) {
@@ -420,14 +436,18 @@ where
             .into_iter()
             .map(|tx_id| pool.find_one(&tx_id))
             .map(|option_storage_data| {
-                option_storage_data.map(|storage_data| storage_data.transaction)
+                option_storage_data.map(|storage_data| storage_data.transaction.clone())
             })
             .collect()
     }
 
+    pub fn count(&self) -> usize {
+        self.pool.read().count()
+    }
+
     pub fn find_one(&self, tx_id: &TxId) -> Option<TxInfo> {
         self.pool.read().find_one(tx_id).map(|storage_data| TxInfo {
-            tx: storage_data.transaction,
+            tx: storage_data.transaction.clone(),
             creation_instant: storage_data.creation_instant,
         })
     }
@@ -439,7 +459,7 @@ where
             .map(|tx_id| pool.find_one(&tx_id))
             .map(|option_storage_data| {
                 option_storage_data.map(|storage_data| TxInfo {
-                    tx: storage_data.transaction,
+                    tx: storage_data.transaction.clone(),
                     creation_instant: storage_data.creation_instant,
                 })
             })

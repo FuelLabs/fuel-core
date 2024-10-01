@@ -153,7 +153,7 @@ impl Config {
             txpool: TxPoolConfig {
                 utxo_validation,
                 max_txs_ttl: Duration::from_secs(60 * 100000000),
-                .. Default::default()
+                ..Default::default()
             },
             block_producer: fuel_core_producer::Config {
                 ..Default::default()

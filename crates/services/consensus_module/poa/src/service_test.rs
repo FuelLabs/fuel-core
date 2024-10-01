@@ -41,17 +41,13 @@ use fuel_core_types::{
         SealedBlock,
     },
     fuel_crypto::SecretKey,
-    fuel_tx::{
-        field::ScriptGasLimit,
-        *,
-    },
+    fuel_tx::*,
     fuel_types::{
         BlockHeight,
         ChainId,
     },
     secrecy::Secret,
     services::executor::{
-        Error as ExecutorError,
         ExecutionResult,
         UncommittedResult,
     },
@@ -66,10 +62,7 @@ use rand::{
     SeedableRng,
 };
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::HashMap,
     sync::{
         Arc,
         Mutex as StdMutex,
@@ -283,25 +276,6 @@ impl MockTransactionPool {
         txpool
             .expect_pending_number()
             .returning(move || pending.lock().unwrap().len());
-        let consumable = txs.clone();
-        txpool.expect_total_consumable_gas().returning(move || {
-            consumable
-                .lock()
-                .unwrap()
-                .iter()
-                .map(|tx| *tx.script_gas_limit())
-                .sum()
-        });
-        let removed = txs.clone();
-        txpool.expect_remove_txs().returning(
-            move |tx_ids: Vec<(TxId, ExecutorError)>| {
-                let mut guard = removed.lock().unwrap();
-                for (id, _) in tx_ids {
-                    guard.retain(|tx| tx.id(&ChainId::default()) == id);
-                }
-                vec![]
-            },
-        );
 
         TxPoolContext {
             txpool,
@@ -316,106 +290,6 @@ fn make_tx(rng: &mut StdRng) -> Script {
         .max_fee_limit(0)
         .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx()))
         .finalize_without_signature()
-}
-
-#[tokio::test]
-async fn remove_skipped_transactions() {
-    // The test verifies that if `BlockProducer` returns skipped transactions, they would
-    // be propagated to `TxPool` for removal.
-    let mut rng = StdRng::seed_from_u64(2322);
-    let secret_key = SecretKey::random(&mut rng);
-
-    const TX_NUM: usize = 100;
-    let skipped_transactions: Vec<_> = (0..TX_NUM).map(|_| make_tx(&mut rng)).collect();
-
-    let mock_skipped_txs = skipped_transactions.clone();
-
-    let mut block_producer = MockBlockProducer::default();
-    block_producer
-        .expect_produce_and_execute_block()
-        .times(1)
-        .returning(move |_, _, _| {
-            Ok(UncommittedResult::new(
-                ExecutionResult {
-                    block: Default::default(),
-                    skipped_transactions: mock_skipped_txs
-                        .clone()
-                        .into_iter()
-                        .map(|tx| {
-                            (
-                                tx.id(&ChainId::default()),
-                                ExecutorError::OutputAlreadyExists,
-                            )
-                        })
-                        .collect(),
-                    tx_status: Default::default(),
-                    events: Default::default(),
-                },
-                Default::default(),
-            ))
-        });
-
-    let mut block_importer = MockBlockImporter::default();
-
-    block_importer
-        .expect_commit_result()
-        .times(1)
-        .returning(|_| Ok(()));
-
-    block_importer
-        .expect_block_stream()
-        .returning(|| Box::pin(tokio_stream::pending()));
-
-    let mut txpool = MockTransactionPool::no_tx_updates();
-    // Test created for only for this check.
-    txpool.expect_remove_txs().returning(move |skipped_ids| {
-        let skipped_ids: Vec<_> = skipped_ids.into_iter().map(|(id, _)| id).collect();
-        // Transform transactions into ids.
-        let skipped_transactions: Vec<_> = skipped_transactions
-            .iter()
-            .map(|tx| tx.id(&ChainId::default()))
-            .collect();
-
-        // Check that all transactions are unique.
-        let expected_skipped_ids_set: HashSet<_> =
-            skipped_transactions.clone().into_iter().collect();
-        assert_eq!(expected_skipped_ids_set.len(), TX_NUM);
-
-        // Check that `TxPool::remove_txs` was called with the same ids in the same order.
-        assert_eq!(skipped_ids.len(), TX_NUM);
-        assert_eq!(skipped_transactions.len(), TX_NUM);
-        assert_eq!(skipped_transactions, skipped_ids);
-        vec![]
-    });
-
-    let signer = SignMode::Key(Secret::new(secret_key.into()));
-
-    let config = Config {
-        trigger: Trigger::Instant,
-        signer: signer.clone(),
-        metrics: false,
-        ..Default::default()
-    };
-
-    let p2p_port = generate_p2p_port();
-
-    let predefined_blocks: InMemoryPredefinedBlocks = HashMap::new().into();
-
-    let time = TestTime::at_unix_epoch();
-
-    let mut task = MainTask::new(
-        &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
-        config,
-        txpool,
-        block_producer,
-        block_importer,
-        p2p_port,
-        FakeBlockSigner { succeeds: true },
-        predefined_blocks,
-        time.watch(),
-    );
-
-    assert!(task.produce_next_block().await.is_ok());
 }
 
 #[tokio::test]
@@ -441,7 +315,6 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         .returning(|| Box::pin(tokio_stream::pending()));
 
     let mut txpool = MockTransactionPool::no_tx_updates();
-    txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
     let signer = SignMode::Key(Secret::new(secret_key.into()));

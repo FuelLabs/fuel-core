@@ -7,7 +7,6 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::Bytes32,
-    services::txpool::InsertionResult,
 };
 use futures::{
     Stream,
@@ -23,19 +22,11 @@ use super::*;
 
 impl FuelService {
     /// Submit a transaction to the txpool.
-    pub async fn submit(&self, tx: Transaction) -> anyhow::Result<InsertionResult> {
-        let results: Vec<_> = self
-            .shared
+    pub async fn submit(&self, tx: Transaction) -> anyhow::Result<()> {
+        self.shared
             .txpool_shared_state
-            .insert(vec![Arc::new(tx)])
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()
-            .map_err(|e| anyhow::anyhow!(e))?;
-        results
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("Nothing was inserted"))
+            .insert(vec![Arc::new(tx)], None)
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Submit a transaction to the txpool and return a stream of status changes.
@@ -89,7 +80,7 @@ impl FuelService {
         Ok(transaction_status_change(
             move |id| match db.get_tx_status(&id)? {
                 Some(status) => Ok(Some(status)),
-                None => Ok(txpool.find_one(id).map(Into::into)),
+                None => Ok(txpool.find_one(&id).map(Into::into)),
             },
             rx,
             id,

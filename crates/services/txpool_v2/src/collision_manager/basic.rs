@@ -28,22 +28,23 @@ use fuel_core_types::{
     fuel_types::Nonce,
     services::txpool::PoolTransaction,
 };
-use num_rational::Ratio;
 
 use crate::{
     error::{
         CollisionReason,
         Error,
+        InputValidationError,
     },
     storage::StorageData,
 };
 
-use super::CollisionManager;
+use super::{
+    CollisionManager,
+    Collisions,
+};
 
 pub trait BasicCollisionManagerStorage {
-    type StorageIndex: Copy + Debug + PartialEq + Eq + Hash;
-
-    fn get(&self, index: &Self::StorageIndex) -> Result<&StorageData, Error>;
+    type StorageIndex: Copy + Debug + Hash + PartialEq + Eq;
 }
 
 pub struct BasicCollisionManager<S: BasicCollisionManagerStorage> {
@@ -66,6 +67,14 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
             blobs_users: HashMap::new(),
         }
     }
+
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.messages_spenders.is_empty()
+            && self.coins_spenders.is_empty()
+            && self.contracts_creators.is_empty()
+            && self.blobs_users.is_empty()
+    }
 }
 
 impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
@@ -74,35 +83,16 @@ impl<S: BasicCollisionManagerStorage> Default for BasicCollisionManager<S> {
     }
 }
 
-impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
-    fn is_better_than_collision(
-        &self,
-        tx: &PoolTransaction,
-        collision: S::StorageIndex,
-        storage: &S,
-    ) -> bool {
-        let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
-        let colliding_tx = storage
-            .get(&collision)
-            .expect("Transaction always should exist in storage");
-        let colliding_tx_ratio = Ratio::new(
-            colliding_tx.dependents_cumulative_tip,
-            colliding_tx.dependents_cumulative_gas,
-        );
-        new_tx_ratio > colliding_tx_ratio
-    }
-}
-
 impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager<S> {
     type Storage = S;
     type StorageIndex = S::StorageIndex;
 
-    fn collect_colliding_transactions(
+    fn find_collisions(
         &self,
         transaction: &PoolTransaction,
-    ) -> Result<HashMap<Self::StorageIndex, Vec<CollisionReason>>, Error> {
+    ) -> Result<Collisions<Self::StorageIndex>, Error> {
         let mut collisions = HashMap::new();
-        if let PoolTransaction::Blob(checked_tx, _) = transaction {
+        if let PoolTransaction::Blob(checked_tx, _) = &transaction {
             let blob_id = checked_tx.transaction().blob_id();
             if let Some(state) = self.blobs_users.get(blob_id) {
                 collisions.insert(*state, vec![CollisionReason::Blob(*blob_id)]);
@@ -133,85 +123,62 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
             }
         }
 
-        for output in transaction.outputs() {
-            if let Output::ContractCreated { contract_id, .. } = output {
-                // Check if the contract is already created by another transaction in the pool
-                if let Some(storage_id) = self.contracts_creators.get(contract_id) {
-                    let entry = collisions.entry(*storage_id).or_default();
-                    entry.push(CollisionReason::ContractCreation(*contract_id));
-                }
-            }
-        }
-        Ok(collisions)
-    }
-
-    /// Rules:
-    // A transaction with dependencies can collide only with one other transaction if it is less worth it
-    // A transaction without dependencies can collide with multiple transaction if they are less worth it
-    fn can_store_transaction(
-        &self,
-        transaction: &PoolTransaction,
-        has_dependencies: bool,
-        colliding_transactions: &HashMap<Self::StorageIndex, Vec<CollisionReason>>,
-        storage: &Self::Storage,
-    ) -> Result<(), CollisionReason> {
-        if colliding_transactions.is_empty() {
-            return Ok(());
-        }
-        if has_dependencies {
-            if colliding_transactions.len() > 1 {
-                return Err(CollisionReason::MultipleCollisions);
-            }
-            let (collision, reason) = colliding_transactions.iter().next().unwrap();
-            if !self.is_better_than_collision(transaction, *collision, storage) {
-                if let Some(reason) = reason.first() {
-                    return Err(reason.clone());
-                } else {
-                    return Err(CollisionReason::Unknown);
-                }
-            }
-        } else {
-            for (collision, reason) in colliding_transactions.iter() {
-                if !self.is_better_than_collision(transaction, *collision, storage) {
-                    if let Some(reason) = reason.first() {
-                        return Err(reason.clone());
-                    } else {
-                        return Err(CollisionReason::Unknown);
+        for (i, output) in transaction.outputs().iter().enumerate() {
+            match output {
+                Output::ContractCreated { contract_id, .. } => {
+                    // Check if the contract is already created by another transaction in the pool
+                    if let Some(storage_id) = self.contracts_creators.get(contract_id) {
+                        let entry = collisions.entry(*storage_id).or_default();
+                        entry.push(CollisionReason::ContractCreation(*contract_id));
                     }
                 }
+                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                    let utxo_id = UtxoId::new(
+                        transaction.id(),
+                        u16::try_from(i)
+                            .expect("`Checked` transaction has less than 2^16 outputs"),
+                    );
+
+                    if self.coins_spenders.contains_key(&utxo_id) {
+                        return Err(Error::InputValidation(
+                            InputValidationError::DuplicateTxId(transaction.id()),
+                        ));
+                    }
+                }
+                Output::Contract(_) => {}
             }
         }
-        Ok(())
+
+        Ok(collisions)
     }
 
     fn on_stored_transaction(
         &mut self,
-        transaction: &PoolTransaction,
-        transaction_storage_id: S::StorageIndex,
-    ) -> Result<(), Error> {
-        if let PoolTransaction::Blob(checked_tx, _) = transaction {
+        storage_id: S::StorageIndex,
+        store_entry: &StorageData,
+    ) {
+        if let PoolTransaction::Blob(checked_tx, _) = store_entry.transaction.as_ref() {
             let blob_id = checked_tx.transaction().blob_id();
-            self.blobs_users.insert(*blob_id, transaction_storage_id);
+            self.blobs_users.insert(*blob_id, storage_id);
         }
-        for input in transaction.inputs() {
+        for input in store_entry.transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // insert coin
-                    self.coins_spenders.insert(*utxo_id, transaction_storage_id);
+                    self.coins_spenders.insert(*utxo_id, storage_id);
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // insert message
-                    self.messages_spenders
-                        .insert(*nonce, transaction_storage_id);
+                    self.messages_spenders.insert(*nonce, storage_id);
                 }
                 _ => {}
             }
         }
-        for output in transaction.outputs().iter() {
+        for output in store_entry.transaction.outputs().iter() {
             match output {
                 Output::Coin { .. }
                 | Output::Change { .. }
@@ -219,18 +186,13 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
                 | Output::Contract(_) => {}
                 Output::ContractCreated { contract_id, .. } => {
                     // insert contract
-                    self.contracts_creators
-                        .insert(*contract_id, transaction_storage_id);
+                    self.contracts_creators.insert(*contract_id, storage_id);
                 }
             };
         }
-        Ok(())
     }
 
-    fn on_removed_transaction(
-        &mut self,
-        transaction: &PoolTransaction,
-    ) -> Result<(), Error> {
+    fn on_removed_transaction(&mut self, transaction: &PoolTransaction) {
         if let PoolTransaction::Blob(checked_tx, _) = transaction {
             let blob_id = checked_tx.transaction().blob_id();
             self.blobs_users.remove(blob_id);
@@ -264,6 +226,5 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
                 }
             };
         }
-        Ok(())
     }
 }

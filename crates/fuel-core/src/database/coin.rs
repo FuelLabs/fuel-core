@@ -22,8 +22,8 @@ use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_tx::{
         Address,
+        TxId,
         UtxoId,
-        TxId
     },
 };
 

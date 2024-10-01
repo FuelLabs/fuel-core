@@ -119,6 +119,12 @@ fn dev_config() -> Config {
         .consensus_parameters
         .set_tx_params(tx_parameters);
     chain_config.consensus_parameters.set_fee_params(fee_params);
+    if let Err(_e) = chain_config
+        .consensus_parameters
+        .set_block_transaction_size_limit(u64::MAX)
+    {
+        eprintln!("failed to set block transaction size limit");
+    }
     chain_config.state_transition_bytecode =
         fuel_core::upgradable_executor::WASM_BYTECODE.to_vec();
     let reader = reader.with_chain_config(chain_config);
