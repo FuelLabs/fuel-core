@@ -114,6 +114,7 @@ impl PoolTransaction {
         }
     }
 
+    #[cfg(feature = "test-helpers")]
     fn id_inner(&self) -> TxId {
         match self {
             PoolTransaction::Script(tx, _) => tx.id(),
@@ -124,6 +125,7 @@ impl PoolTransaction {
         }
     }
 
+    #[cfg(feature = "test-helpers")]
     fn max_gas_inner(&self) -> Word {
         match self {
             PoolTransaction::Script(tx, _) => tx.metadata().max_gas,
