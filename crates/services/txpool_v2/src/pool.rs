@@ -27,7 +27,6 @@ use crate::{
     },
     config::Config,
     error::{
-        CollisionReason,
         DependencyError,
         Error,
         InputValidationError,
@@ -444,87 +443,6 @@ where
                 removed_transactions
                     .extend(removed.iter().map(|data| data.transaction.clone()));
             }
-        }
-        Ok(removed_transactions)
-    }
-
-    /// Check if the pool has enough space to store a transaction.
-    /// It will try to see if we can free some space depending on defined rules
-    /// If the pool is not full, it will return an empty list
-    /// If the pool is full, it will return the list of transactions that must be removed from the pool along all of their dependent subtree
-    /// If the pool is full and we can't make enough space by removing transactions, it will return an error
-    /// Currently, the rules are:
-    /// If a transaction is colliding with another verify if deleting the colliding transaction and dependents subtree is enough otherwise refuses the tx
-    /// If a transaction is dependent and not enough space, don't accept transaction
-    /// If a transaction is executable, try to free has much space used by less profitable transactions as possible in the pool to include it
-    fn check_pool_size_available(
-        &self,
-        tx: &PoolTransaction,
-        collided_transactions: &HashMap<S::StorageIndex, Vec<CollisionReason>>,
-        dependencies: &[S::StorageIndex],
-    ) -> Result<Vec<S::StorageIndex>, Error> {
-        let tx_gas = tx.max_gas();
-        let bytes_size = tx.metered_bytes_size();
-        let mut removed_transactions = vec![];
-        let mut gas_left = self.current_gas.saturating_add(tx_gas);
-        let mut bytes_left = self.current_bytes_size.saturating_add(bytes_size);
-        let mut txs_left = self.storage.count().saturating_add(1);
-        if gas_left <= self.config.pool_limits.max_gas
-            && bytes_left <= self.config.pool_limits.max_bytes_size
-            && txs_left <= self.config.pool_limits.max_txs
-        {
-            return Ok(vec![]);
-        }
-
-        // If the transaction has a collision verify that by removing the transaction we can free enough space
-        // otherwise return an error
-        for collision in collided_transactions.keys() {
-            let collision_data = self.storage.get(collision).ok_or(Error::Database(
-                "Collision data not found in the storage during `check_pool_size_available`.".to_string(),
-            ))?;
-            gas_left = gas_left.saturating_sub(collision_data.dependents_cumulative_gas);
-            bytes_left = bytes_left
-                .saturating_sub(collision_data.dependents_cumulative_bytes_size);
-            txs_left = txs_left.saturating_sub(1);
-            removed_transactions.push(*collision);
-            if gas_left <= self.config.pool_limits.max_gas
-                && bytes_left <= self.config.pool_limits.max_bytes_size
-                && txs_left <= self.config.pool_limits.max_txs
-            {
-                return Ok(removed_transactions);
-            }
-        }
-
-        // If the transaction has a dependency and the pool is full, we refuse it
-        if !dependencies.is_empty() {
-            return Err(Error::NotInsertedLimitHit);
-        }
-
-        // Here the transaction has no dependencies which means that it's an executable transaction
-        // and we want to make space for it
-        let current_ratio = Ratio::new(tx.tip(), tx_gas);
-        let mut sorted_txs = self.selection_algorithm.get_less_worth_txs();
-        while gas_left > self.config.pool_limits.max_gas
-            || bytes_left > self.config.pool_limits.max_bytes_size
-            || txs_left > self.config.pool_limits.max_txs
-        {
-            let storage_id = sorted_txs.next().ok_or(Error::NotInsertedLimitHit)?;
-            let storage_data = self.storage.get(&storage_id).ok_or(Error::Database(
-                "Storage data not found for one of the less worth transactions"
-                    .to_string(),
-            ))?;
-            let ratio = Ratio::new(
-                storage_data.dependents_cumulative_tip,
-                storage_data.dependents_cumulative_gas,
-            );
-            if ratio > current_ratio {
-                return Err(Error::NotInsertedLimitHit);
-            }
-            gas_left = gas_left.saturating_sub(storage_data.dependents_cumulative_gas);
-            bytes_left =
-                bytes_left.saturating_sub(storage_data.dependents_cumulative_bytes_size);
-            txs_left = txs_left.saturating_sub(1);
-            removed_transactions.push(*storage_id);
         }
         Ok(removed_transactions)
     }

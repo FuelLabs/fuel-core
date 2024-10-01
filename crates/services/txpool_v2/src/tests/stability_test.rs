@@ -2,12 +2,14 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::arithmetic_side_effects)]
 
+use std::sync::Arc;
+
 use crate::{
     config::{
         Config,
         PoolLimits,
     },
-    tests::context::TestPoolUniverse,
+    tests::universe::TestPoolUniverse,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -46,6 +48,7 @@ struct Limits {
     max_outputs: u16,
     utxo_id_range: u8,
     gas_limit_range: u64,
+    max_block_gas: u64,
 }
 
 fn some_transaction(
@@ -151,39 +154,46 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
 
     let mut errors = 0;
 
-    let txpool = TestPoolUniverse::default().config(config).build_pool();
-    let mut txpool = txpool.write();
+    let mut universe = TestPoolUniverse::default().config(config);
+    universe.build_pool();
+    let txpool = universe.get_pool();
 
     for tip in 0..ROUNDS_PER_TXPOOL {
         let (checked, metadata) = some_transaction(limits, tip as u64, &mut rng);
         let pool_tx = PoolTransaction::Script(checked, metadata);
 
-        let result = txpool.insert(pool_tx);
+        let result = txpool.write().insert(Arc::new(pool_tx));
         errors += result.is_err() as usize;
 
         if tip % 10 == 0 {
-            txpool.storage.check_integrity();
+            txpool.read().storage.check_integrity();
         }
     }
 
     assert_ne!(ROUNDS_PER_TXPOOL, errors);
 
     loop {
-        let result = txpool.extract_transactions_for_block().unwrap();
+        let result = txpool
+            .write()
+            .extract_transactions_for_block(limits.max_block_gas)
+            .unwrap();
 
         if result.is_empty() {
             break
         }
 
-        txpool.storage.check_integrity();
+        txpool.read().storage.check_integrity();
     }
 
-    assert_eq!(txpool.current_gas, 0);
-    assert_eq!(txpool.current_bytes_size, 0);
-    assert!(txpool.tx_id_to_storage_id.is_empty());
-    assert!(txpool.selection_algorithm.is_empty());
-    assert!(txpool.storage.is_empty());
-    assert!(txpool.collision_manager.is_empty());
+    {
+        let txpool = txpool.read();
+        assert_eq!(txpool.current_gas, 0);
+        assert_eq!(txpool.current_bytes_size, 0);
+        assert!(txpool.tx_id_to_storage_id.is_empty());
+        assert!(txpool.selection_algorithm.is_empty());
+        assert!(txpool.storage.is_empty());
+        assert!(txpool.collision_manager.is_empty());
+    }
 }
 
 const ROUNDS_PER_TEST: usize = 30;
@@ -202,6 +212,7 @@ fn stability_test__average_transactions() {
         max_outputs: 4,
         utxo_id_range: 12,
         gas_limit_range: 1000,
+        max_block_gas: 10_000,
     };
 
     for _ in 0..ROUNDS_PER_TEST {
@@ -213,7 +224,6 @@ fn stability_test__average_transactions() {
 fn stability_test__many_non_conflicting_dependencies() {
     let config = Config {
         utxo_validation: false,
-        max_block_gas: 100_000,
         max_txs_chain_count: 32,
         ..Default::default()
     };
@@ -224,6 +234,7 @@ fn stability_test__many_non_conflicting_dependencies() {
         max_outputs: 3,
         utxo_id_range: 128,
         gas_limit_range: 10_000,
+        max_block_gas: 100_000,
     };
 
     for _ in 0..ROUNDS_PER_TEST {
@@ -235,7 +246,6 @@ fn stability_test__many_non_conflicting_dependencies() {
 fn stability_test__many_dependencies() {
     let config = Config {
         utxo_validation: false,
-        max_block_gas: 10_000,
         ..Default::default()
     };
 
@@ -245,6 +255,7 @@ fn stability_test__many_dependencies() {
         max_outputs: 10,
         utxo_id_range: 255,
         gas_limit_range: 1_000,
+        max_block_gas: 10_000,
     };
 
     for _ in 0..ROUNDS_PER_TEST {
@@ -256,7 +267,6 @@ fn stability_test__many_dependencies() {
 fn stability_test__many_conflicting_transactions_with_different_priority() {
     let config = Config {
         utxo_validation: false,
-        max_block_gas: 10_000,
         pool_limits: PoolLimits {
             max_txs: 32,
             max_gas: 80_000,
@@ -271,6 +281,7 @@ fn stability_test__many_conflicting_transactions_with_different_priority() {
         max_outputs: 10,
         utxo_id_range: 255,
         gas_limit_range: 10_000,
+        max_block_gas: 10_000,
     };
 
     for _ in 0..ROUNDS_PER_TEST {
@@ -282,7 +293,6 @@ fn stability_test__many_conflicting_transactions_with_different_priority() {
 fn stability_test__long_chain_of_transactions() {
     let config = Config {
         utxo_validation: false,
-        max_block_gas: 10_000,
         max_txs_chain_count: 128,
         pool_limits: PoolLimits {
             max_txs: 1_000,
@@ -298,6 +308,7 @@ fn stability_test__long_chain_of_transactions() {
         max_outputs: 2,
         utxo_id_range: 255,
         gas_limit_range: 100,
+        max_block_gas: 10_000,
     };
 
     for _ in 0..ROUNDS_PER_TEST {
@@ -309,7 +320,6 @@ fn stability_test__long_chain_of_transactions() {
 fn stability_test__long_chain_of_transactions_with_conflicts() {
     let config = Config {
         utxo_validation: false,
-        max_block_gas: 10_000,
         max_txs_chain_count: 32,
         pool_limits: PoolLimits {
             max_txs: 1_000,
@@ -325,6 +335,7 @@ fn stability_test__long_chain_of_transactions_with_conflicts() {
         max_outputs: 2,
         utxo_id_range: 255,
         gas_limit_range: 10_000,
+        max_block_gas: 10_000,
     };
 
     for _ in 0..ROUNDS_PER_TEST {
@@ -336,7 +347,6 @@ fn stability_test__long_chain_of_transactions_with_conflicts() {
 fn stability_test__wide_chain_of_transactions_with_conflicts() {
     let config = Config {
         utxo_validation: false,
-        max_block_gas: 10_000,
         max_txs_chain_count: 32,
         pool_limits: PoolLimits {
             max_txs: 1_000,
@@ -352,6 +362,7 @@ fn stability_test__wide_chain_of_transactions_with_conflicts() {
         max_outputs: 5,
         utxo_id_range: 255,
         gas_limit_range: 10_000,
+        max_block_gas: 10_000,
     };
 
     for _ in 0..ROUNDS_PER_TEST {

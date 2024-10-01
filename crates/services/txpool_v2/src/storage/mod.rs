@@ -9,7 +9,10 @@ use crate::{
     error::Error,
     ports::TxPoolPersistentStorage,
 };
-use fuel_core_types::services::txpool::ArcPoolTx;
+use fuel_core_types::services::txpool::{
+    ArcPoolTx,
+    PoolTransaction,
+};
 
 pub mod checked_collision;
 pub mod graph;
@@ -82,7 +85,7 @@ pub trait Storage {
     /// Validate inputs of a transaction.
     fn validate_inputs(
         &self,
-        transaction: &ArcPoolTx,
+        transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<(), Error>;
@@ -95,7 +98,4 @@ pub trait Storage {
 
     /// Remove a transaction from the storage.
     fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData>;
-
-    /// Count the number of transactions in the storage.
-    fn count(&self) -> usize;
 }

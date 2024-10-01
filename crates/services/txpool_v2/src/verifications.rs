@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_tx::{
@@ -84,8 +86,10 @@ impl BasicVerifiedTx {
 
         let transaction = pool
             .read()
-            .can_insert_transaction(pool_tx)?
+            .can_insert_transaction(Arc::new(pool_tx))?
             .into_transaction();
+        // SAFETY: We created the arc just above and it's not shared.
+        let transaction = Arc::try_unwrap(transaction).unwrap();
         let checked_transaction: CheckedTransaction = transaction.into();
         Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
     }

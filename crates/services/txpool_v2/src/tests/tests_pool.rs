@@ -291,12 +291,14 @@ async fn insert__already_known_tx() {
 
     // When
     let result1 = universe.verify_and_insert(tx.clone()).await;
-    let result2 = universe.verify_and_insert(tx).await;
+    let result2 = universe.verify_and_insert(tx.clone()).await;
 
     // Then
     assert!(result1.is_ok());
     let err = result2.unwrap_err();
-    assert!(matches!(err, Error::Collided(CollisionReason::Utxo(_))));
+    assert!(
+        matches!(err, Error::InputValidation(InputValidationError::DuplicateTxId(id)) if id == tx.id(&ChainId::default()))
+    );
 }
 
 #[tokio::test]
@@ -336,7 +338,7 @@ async fn insert_higher_priced_tx_removes_lower_priced_tx() {
     let result = universe.verify_and_insert(tx2).await.unwrap();
 
     // Then
-    assert_eq!(result[0].transaction.id(), tx_id);
+    assert_eq!(result[0].id(), tx_id);
 }
 
 #[tokio::test]
@@ -440,8 +442,8 @@ async fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
     assert!(result3.is_ok());
     let removed_txs = result3.unwrap();
     assert_eq!(removed_txs.len(), 2);
-    assert_eq!(removed_txs[0].transaction.id(), tx1_id);
-    assert_eq!(removed_txs[1].transaction.id(), tx2_id);
+    assert_eq!(removed_txs[0].id(), tx1_id);
+    assert_eq!(removed_txs[1].id(), tx2_id);
 }
 
 #[tokio::test]
@@ -472,11 +474,11 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     assert!(result2.is_ok());
     let removed_txs = result2.unwrap();
     assert_eq!(removed_txs.len(), 1);
-    assert_eq!(removed_txs[0].transaction.id(), tx1_id);
+    assert_eq!(removed_txs[0].id(), tx1_id);
     assert!(result3.is_ok());
     let removed_txs = result3.unwrap();
     assert_eq!(removed_txs.len(), 1);
-    assert_eq!(removed_txs[0].transaction.id(), tx2_id);
+    assert_eq!(removed_txs[0].id(), tx2_id);
 }
 
 #[tokio::test]
@@ -928,7 +930,7 @@ async fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     assert!(result2.is_ok());
     let removed_txs = result2.unwrap();
     assert_eq!(removed_txs.len(), 1);
-    assert_eq!(removed_txs[0].transaction.id(), tx_high_id);
+    assert_eq!(removed_txs[0].id(), tx_high_id);
 }
 
 #[tokio::test]

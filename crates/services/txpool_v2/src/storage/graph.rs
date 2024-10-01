@@ -369,26 +369,6 @@ impl GraphStorage {
     fn has_dependent(&self, index: NodeIndex) -> bool {
         self.get_direct_dependents(index).next().is_some()
     }
-
-    fn is_in_dependencies_subtrees(
-        &self,
-        index: NodeIndex,
-        transactions: &[NodeIndex],
-    ) -> Result<bool, Error> {
-        let mut already_visited = HashSet::new();
-        let mut to_check = transactions.to_vec();
-        while let Some(node_id) = to_check.pop() {
-            if already_visited.contains(&node_id) {
-                continue;
-            }
-            if node_id == index {
-                return Ok(true);
-            }
-            already_visited.insert(node_id);
-            to_check.extend(self.get_direct_dependencies(node_id));
-        }
-        Ok(false)
-    }
 }
 
 impl Storage for GraphStorage {
@@ -491,13 +471,17 @@ impl Storage for GraphStorage {
                 //     D      D  D  D    |
                 //    / \    / \        / \
                 //   D   D  D   D      D   D
-                return Err(Error::DependentTransactionIsADiamondDeath);
+                return Err(Error::Dependency(
+                    DependencyError::DependentTransactionIsADiamondDeath,
+                ));
             }
 
             all_dependencies.insert(node_id);
 
             if all_dependencies.len() >= self.config.max_txs_chain_count {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
 
             let Some(dependency_node) = self.graph.node_weight(node_id) else {
@@ -511,7 +495,9 @@ impl Storage for GraphStorage {
             if dependency_node.number_dependents_in_chain
                 >= self.config.max_txs_chain_count
             {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
 
             to_check.extend(self.get_direct_dependencies(node_id));
@@ -541,7 +527,7 @@ impl Storage for GraphStorage {
 
     fn validate_inputs(
         &self,
-        transaction: &ArcPoolTx,
+        transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
     ) -> Result<(), Error> {
@@ -633,16 +619,9 @@ impl Storage for GraphStorage {
 
     fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData> {
         self.graph.remove_node(index).map(|storage_entry| {
-            self.clear_cache(
-                storage_entry.transaction.outputs(),
-                &storage_entry.transaction.id(),
-            );
+            self.clear_cache(&storage_entry);
             storage_entry
         })
-    }
-
-    fn count(&self) -> usize {
-        self.graph.node_count()
     }
 }
 

@@ -84,6 +84,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
         }
     }
 
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.executable_transactions_sorted_tip_gas_ratio.is_empty()
     }

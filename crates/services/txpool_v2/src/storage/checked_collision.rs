@@ -23,10 +23,6 @@ impl<StorageIndex> CheckedTransaction<StorageIndex> {
         }
     }
 
-    pub fn direct_dependencies(&self) -> &HashSet<StorageIndex> {
-        &self.direct_dependencies
-    }
-
     pub fn unpack(self) -> (ArcPoolTx, HashSet<StorageIndex>, HashSet<StorageIndex>) {
         (self.tx, self.direct_dependencies, self.all_dependencies)
     }

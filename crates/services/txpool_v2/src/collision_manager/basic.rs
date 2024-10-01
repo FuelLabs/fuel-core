@@ -33,6 +33,7 @@ use crate::{
     error::{
         CollisionReason,
         Error,
+        InputValidationError,
     },
     storage::StorageData,
 };
@@ -139,7 +140,9 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
                     );
 
                     if self.coins_spenders.contains_key(&utxo_id) {
-                        return Err(Error::DuplicateTxId(transaction.id()));
+                        return Err(Error::InputValidation(
+                            InputValidationError::DuplicateTxId(transaction.id()),
+                        ));
                     }
                 }
                 Output::Contract(_) => {}
