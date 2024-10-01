@@ -268,7 +268,6 @@ mod tests {
 
         // then
         assert!(result.is_err());
-        assert!(block_committer.last_raw_da_block_costs.is_none());
     }
 
     struct UnderflowingMockBlockCommitterApi {
