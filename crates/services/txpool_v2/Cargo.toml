@@ -9,7 +9,6 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = { workspace = true }
 repository = { workspace = true }
 description = "Transaction pool v2"
-publish = false
 
 [dependencies]
 anyhow = { workspace = true }
