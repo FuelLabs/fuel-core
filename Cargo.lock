@@ -3977,18 +3977,11 @@ dependencies = [
  "bitflags 2.6.0",
  "derivative",
  "derive_more",
-<<<<<<< HEAD
- "fuel-asm 0.57.0",
- "fuel-compression",
- "fuel-crypto 0.57.0",
- "fuel-merkle 0.57.0",
- "fuel-types 0.57.0",
-=======
  "fuel-asm 0.57.1",
+ "fuel-compression",
  "fuel-crypto 0.57.1",
  "fuel-merkle 0.57.1",
  "fuel-types 0.57.1",
->>>>>>> master
  "hashbrown 0.14.5",
  "itertools 0.10.5",
  "postcard",
