@@ -76,6 +76,9 @@ pub trait Storage {
         index: Self::StorageIndex,
     ) -> impl Iterator<Item = Self::StorageIndex>;
 
+    /// Returns `true` if the transaction has dependencies.
+    fn has_dependencies(&self, index: &Self::StorageIndex) -> bool;
+
     /// Validate inputs of a transaction.
     fn validate_inputs(
         &self,

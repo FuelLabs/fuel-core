@@ -30,7 +30,10 @@ use fuel_core_types::{
 };
 
 use crate::{
-    error::CollisionReason,
+    error::{
+        CollisionReason,
+        Error,
+    },
     storage::StorageData,
 };
 
@@ -64,6 +67,7 @@ impl<S: BasicCollisionManagerStorage> BasicCollisionManager<S> {
         }
     }
 
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.messages_spenders.is_empty()
             && self.coins_spenders.is_empty()
@@ -85,7 +89,7 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
     fn find_collisions(
         &self,
         transaction: &PoolTransaction,
-    ) -> Collisions<Self::StorageIndex> {
+    ) -> Result<Collisions<Self::StorageIndex>, Error> {
         let mut collisions = HashMap::new();
         if let PoolTransaction::Blob(checked_tx, _) = &transaction {
             let blob_id = checked_tx.transaction().blob_id();
@@ -118,17 +122,31 @@ impl<S: BasicCollisionManagerStorage> CollisionManager for BasicCollisionManager
             }
         }
 
-        for output in transaction.outputs() {
-            if let Output::ContractCreated { contract_id, .. } = output {
-                // Check if the contract is already created by another transaction in the pool
-                if let Some(storage_id) = self.contracts_creators.get(contract_id) {
-                    let entry = collisions.entry(*storage_id).or_default();
-                    entry.push(CollisionReason::ContractCreation(*contract_id));
+        for (i, output) in transaction.outputs().iter().enumerate() {
+            match output {
+                Output::ContractCreated { contract_id, .. } => {
+                    // Check if the contract is already created by another transaction in the pool
+                    if let Some(storage_id) = self.contracts_creators.get(contract_id) {
+                        let entry = collisions.entry(*storage_id).or_default();
+                        entry.push(CollisionReason::ContractCreation(*contract_id));
+                    }
                 }
+                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                    let utxo_id = UtxoId::new(
+                        transaction.id(),
+                        u16::try_from(i)
+                            .expect("`Checked` transaction has less than 2^16 outputs"),
+                    );
+
+                    if self.coins_spenders.contains_key(&utxo_id) {
+                        return Err(Error::DuplicateTxId(transaction.id()));
+                    }
+                }
+                Output::Contract(_) => {}
             }
         }
 
-        collisions
+        Ok(collisions)
     }
 
     fn on_stored_transaction(

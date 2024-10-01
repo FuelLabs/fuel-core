@@ -1,4 +1,7 @@
-use crate::error::CollisionReason;
+use crate::error::{
+    CollisionReason,
+    Error,
+};
 use fuel_core_types::services::txpool::PoolTransaction;
 use std::collections::HashMap;
 
@@ -18,7 +21,7 @@ pub trait CollisionManager {
     fn find_collisions(
         &self,
         transaction: &PoolTransaction,
-    ) -> Collisions<Self::StorageIndex>;
+    ) -> Result<Collisions<Self::StorageIndex>, Error>;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(

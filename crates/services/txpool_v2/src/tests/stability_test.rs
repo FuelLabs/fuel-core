@@ -10,11 +10,6 @@ use crate::{
     tests::context::TestPoolUniverse,
 };
 use fuel_core_types::{
-    fuel_asm::{
-        op,
-        RegId,
-    },
-    fuel_crypto::SecretKey,
     fuel_tx::{
         field::Tip,
         ConsensusParameters,
@@ -28,13 +23,9 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::AssetId,
-    fuel_vm::{
-        checked_transaction::{
-            Checked,
-            EstimatePredicates,
-            IntoChecked,
-        },
-        interpreter::MemoryInstance,
+    fuel_vm::checked_transaction::{
+        Checked,
+        IntoChecked,
     },
     services::txpool::{
         Metadata,
@@ -46,10 +37,6 @@ use rand::{
     rngs::StdRng,
     Rng,
     SeedableRng,
-};
-use std::{
-    collections::HashSet,
-    time::Instant,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -79,19 +66,33 @@ fn some_transaction(
     owner[1] = 222;
     let owner = owner.into();
 
-    let mut random_ids = (0..limits.utxo_id_range)
-        .map(|_| rng.gen_range(0..limits.utxo_id_range))
-        .collect::<Vec<_>>();
-    random_ids.sort();
-    random_ids.dedup();
-    random_ids.shuffle(rng);
+    let mut random_ids;
+
+    loop {
+        let mut random_ids_unsorted = (0..limits.utxo_id_range)
+            .map(|_| rng.gen_range(0..limits.utxo_id_range))
+            .collect::<Vec<_>>();
+        random_ids_unsorted.sort();
+        random_ids_unsorted.dedup();
+
+        if random_ids_unsorted.len() > 1 {
+            random_ids_unsorted.shuffle(rng);
+            random_ids = random_ids_unsorted;
+            break;
+        }
+    }
 
     let tx_id_byte = random_ids.pop().expect("No random ids");
     let tx_id: TxId = [tx_id_byte; 32].into();
     let max_gas = rng.gen_range(0..limits.gas_limit_range);
 
     let inputs_count = limits.max_inputs.min(random_ids.len());
-    let inputs_count = rng.gen_range(1..inputs_count);
+    let inputs_count = if inputs_count == 1 {
+        1
+    } else {
+        rng.gen_range(1..inputs_count)
+    };
+
     let inputs = random_ids.into_iter().take(inputs_count);
 
     for input_utxo_id in inputs {
@@ -159,6 +160,10 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
 
         let result = txpool.insert(pool_tx);
         errors += result.is_err() as usize;
+
+        if tip % 10 == 0 {
+            txpool.storage.check_integrity();
+        }
     }
 
     assert_ne!(ROUNDS_PER_TXPOOL, errors);
@@ -169,6 +174,8 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
         if result.is_empty() {
             break
         }
+
+        txpool.storage.check_integrity();
     }
 
     assert_eq!(txpool.current_gas, 0);

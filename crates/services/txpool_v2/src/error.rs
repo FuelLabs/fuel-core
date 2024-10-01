@@ -72,6 +72,9 @@ pub enum DependencyError {
     NotInsertedCollisionIsDependency,
     #[display(fmt = "Transaction chain dependency is already too big")]
     NotInsertedChainDependencyTooBig,
+    #[display(fmt = "The dependent transaction creates a diamond problem, \
+    causing cycles in the dependency graph.")]
+    DependentTransactionIsADiamondDeath,
 }
 
 #[derive(Debug, derive_more::Display)]

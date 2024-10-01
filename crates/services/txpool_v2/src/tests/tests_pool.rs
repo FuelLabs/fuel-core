@@ -1226,7 +1226,7 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     // Then
     assert!(matches!(
         err,
-        Error::Dependency(DependencyError::NotInsertedCollisionIsDependency)
+        Error::Dependency(DependencyError::DependentTransactionIsADiamondDeath)
     ));
 }
 

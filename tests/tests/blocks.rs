@@ -445,6 +445,9 @@ mod full_block {
         let chain_config = local_node_config.snapshot_reader.chain_config().clone();
         let mut consensus_parameters = chain_config.consensus_parameters;
         consensus_parameters.set_block_gas_limit(u64::MAX);
+        consensus_parameters
+            .set_block_transaction_size_limit(u64::MAX)
+            .expect("should be able to set the limit");
         let snapshot_reader = local_node_config.snapshot_reader.with_chain_config(
             fuel_core::chain_config::ChainConfig {
                 consensus_parameters,
