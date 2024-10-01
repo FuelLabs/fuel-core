@@ -219,10 +219,8 @@ mod tests {
     ) {
         // given
         let da_block_costs = test_da_block_costs();
-        let mock_block_committer =
-            MockBlockCommitterApi::new(Some(da_block_costs.clone()));
-        let mut block_committer =
-            BlockCommitterDaBlockCosts::new(mock_block_committer, None);
+        let mock_api = MockBlockCommitterApi::new(Some(da_block_costs.clone()));
+        let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
         let block_committer_da_block_costs =
@@ -245,12 +243,9 @@ mod tests {
     ) {
         // given
         let mut da_block_costs = test_da_block_costs();
-        let mock_block_committer =
-            MockBlockCommitterApi::new(Some(da_block_costs.clone()));
-        let mut block_committer = BlockCommitterDaBlockCosts::new(
-            mock_block_committer,
-            Some(da_block_costs.clone()),
-        );
+        let mock_api = MockBlockCommitterApi::new(Some(da_block_costs.clone()));
+        let mut block_committer =
+            BlockCommitterDaBlockCosts::new(mock_api, Some(da_block_costs.clone()));
 
         // when
         let updated = block_committer.request_da_block_cost().await.unwrap();
@@ -262,9 +257,8 @@ mod tests {
     #[tokio::test]
     async fn request_da_block_cost__when_response_is_none__then_error() {
         // given
-        let mock_block_committer = MockBlockCommitterApi::new(None);
-        let mut block_committer =
-            BlockCommitterDaBlockCosts::new(mock_block_committer, None);
+        let mock_api = MockBlockCommitterApi::new(None);
+        let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
         let result = block_committer.request_da_block_cost().await;
@@ -316,10 +310,9 @@ mod tests {
     async fn request_da_block_cost__when_underflow__then_error() {
         // given
         let da_block_costs = test_da_block_costs();
-        let mock_block_committer =
+        let mock_api =
             UnderflowingMockBlockCommitterApi::new(Some(da_block_costs.clone()));
-        let mut block_committer =
-            BlockCommitterDaBlockCosts::new(mock_block_committer, None);
+        let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
         let initial = block_committer.request_da_block_cost().await.unwrap();
