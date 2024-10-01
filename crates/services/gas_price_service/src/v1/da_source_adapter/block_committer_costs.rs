@@ -67,41 +67,41 @@ where
     BlockCommitter: BlockCommitterApi,
 {
     async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
-        let response;
+        let raw_da_block_costs;
 
         if let Some(last_value) = &self.last_raw_da_block_costs {
-            response = self
+            raw_da_block_costs = self
                 .client
                 .get_costs_by_seqno(last_value.sequence_number + 1)
                 .await?;
         } else {
             // we have to error if we cannot find the first set of costs
-            response = self.client.get_latest_costs().await?;
+            raw_da_block_costs = self.client.get_latest_costs().await?;
         }
 
-        if let Some(response) = response {
-            let res;
+        if let Some(raw_da_block_costs) = raw_da_block_costs {
+            let da_block_costs;
             if let Some(last_value) = &self.last_raw_da_block_costs {
-                res = DaBlockCosts {
-                    l2_block_range: response.blocks_range.clone(),
-                    blob_size_bytes: response
+                da_block_costs = DaBlockCosts {
+                    l2_block_range: raw_da_block_costs.blocks_range.clone(),
+                    blob_size_bytes: raw_da_block_costs
                         .total_size_bytes
                         .checked_sub(last_value.total_size_bytes)
                         .ok_or(anyhow!("Blob size bytes underflow"))?,
-                    blob_cost_wei: response
+                    blob_cost_wei: raw_da_block_costs
                         .total_cost
                         .checked_sub(last_value.total_cost)
                         .ok_or(anyhow!("Blob cost wei underflow"))?,
                 };
             } else {
-                res = DaBlockCosts {
-                    l2_block_range: response.blocks_range.clone(),
-                    blob_size_bytes: response.total_size_bytes,
-                    blob_cost_wei: response.total_cost,
+                da_block_costs = DaBlockCosts {
+                    l2_block_range: raw_da_block_costs.blocks_range.clone(),
+                    blob_size_bytes: raw_da_block_costs.total_size_bytes,
+                    blob_cost_wei: raw_da_block_costs.total_cost,
                 };
             }
-            self.last_raw_da_block_costs = Some(response.clone());
-            Ok(res)
+            self.last_raw_da_block_costs = Some(raw_da_block_costs.clone());
+            Ok(da_block_costs)
         } else {
             Err(anyhow!("No response from block committer"))
         }
