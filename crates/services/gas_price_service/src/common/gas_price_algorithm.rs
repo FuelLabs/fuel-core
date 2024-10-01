@@ -28,10 +28,6 @@ where
         let mut write_lock = self.0.write().await;
         *write_lock = new_algo;
     }
-
-    pub fn inner(&self) -> Arc<RwLock<A>> {
-        self.0.clone()
-    }
 }
 
 impl<A> SharedGasPriceAlgo<A>
