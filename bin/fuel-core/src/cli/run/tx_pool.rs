@@ -24,11 +24,11 @@ pub struct TxPoolArgs {
     pub tx_max_number: usize,
 
     /// The max number of gas the `TxPool` can simultaneously store.
-    #[clap(long = "tx-max-total-gas", default_value = "3_000_000_000", env)]
+    #[clap(long = "tx-max-total-gas", default_value = "3000000000", env)]
     pub tx_max_total_gas: u64,
 
     /// The max number of bytes that the `TxPool` can simultaneously store.
-    #[clap(long = "tx-max-total-bytes", default_value = "10_000_000", env)]
+    #[clap(long = "tx-max-total-bytes", default_value = "10000000", env)]
     pub tx_max_total_bytes: usize,
 
     /// The max number of tx in a chain of dependent transactions that supported by the `TxPool`.
