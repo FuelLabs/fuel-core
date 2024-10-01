@@ -219,22 +219,19 @@ mod tests {
     ) {
         // given
         let da_block_costs = test_da_block_costs();
+        let expected = DaBlockCosts {
+            l2_block_range: da_block_costs.blocks_range.clone(),
+            blob_size_bytes: da_block_costs.total_size_bytes,
+            blob_cost_wei: da_block_costs.total_cost,
+        };
         let mock_api = MockBlockCommitterApi::new(Some(da_block_costs.clone()));
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
-        let block_committer_da_block_costs =
-            block_committer.request_da_block_cost().await.unwrap();
+        let actual = block_committer.request_da_block_cost().await.unwrap();
 
         // then
-        assert_eq!(
-            block_committer_da_block_costs,
-            DaBlockCosts {
-                l2_block_range: da_block_costs.blocks_range.clone(),
-                blob_size_bytes: da_block_costs.total_size_bytes,
-                blob_cost_wei: da_block_costs.total_cost,
-            }
-        );
+        assert_eq!(actual, expected);
         assert!(block_committer.last_value.is_some());
     }
 
@@ -248,10 +245,10 @@ mod tests {
             BlockCommitterDaBlockCosts::new(mock_api, Some(da_block_costs.clone()));
 
         // when
-        let updated = block_committer.request_da_block_cost().await.unwrap();
+        let actual = block_committer.request_da_block_cost().await.unwrap();
 
         // then
-        assert_ne!(da_block_costs.blocks_range, updated.l2_block_range);
+        assert_ne!(da_block_costs.blocks_range, actual.l2_block_range);
     }
 
     #[tokio::test]
@@ -310,23 +307,21 @@ mod tests {
     async fn request_da_block_cost__when_underflow__then_error() {
         // given
         let da_block_costs = test_da_block_costs();
+        let expected = DaBlockCosts {
+            l2_block_range: da_block_costs.blocks_range.clone(),
+            blob_size_bytes: da_block_costs.total_size_bytes,
+            blob_cost_wei: da_block_costs.total_cost,
+        };
         let mock_api =
             UnderflowingMockBlockCommitterApi::new(Some(da_block_costs.clone()));
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
-        let initial = block_committer.request_da_block_cost().await.unwrap();
+        let actual = block_committer.request_da_block_cost().await.unwrap();
         let result = block_committer.request_da_block_cost().await;
 
         // then
         assert!(result.is_err());
-        assert_eq!(
-            initial,
-            DaBlockCosts {
-                l2_block_range: da_block_costs.blocks_range.clone(),
-                blob_size_bytes: da_block_costs.total_size_bytes,
-                blob_cost_wei: da_block_costs.total_cost,
-            }
-        );
+        assert_eq!(actual, expected);
     }
 }
