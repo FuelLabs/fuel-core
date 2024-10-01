@@ -3151,12 +3151,12 @@ dependencies = [
 
 [[package]]
 name = "fuel-compression"
-version = "0.57.0"
+version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ddebdc0c7440995bd89ae62bc5bbc7196ffd8dcff8cad78ffc55d5b2744e4d8"
+checksum = "83d62c1ba6352f7bbcf1f2abcdd1c1092c7f5155653d75243b915c4e9ae500b4"
 dependencies = [
- "fuel-derive 0.57.0",
- "fuel-types 0.57.0",
+ "fuel-derive 0.57.1",
+ "fuel-types 0.57.1",
  "serde",
 ]
 
