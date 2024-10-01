@@ -4,7 +4,6 @@ license = "BUSL-1.1"
 name = "forkless-upgrade"
 publish = false
 version = "0.0.0"
-build = "build.rs"
 
 [dev-dependencies]
 anyhow = "1.0"
