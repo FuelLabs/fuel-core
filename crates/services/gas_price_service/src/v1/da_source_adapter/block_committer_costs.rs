@@ -17,13 +17,14 @@ use serde::{
 
 #[async_trait::async_trait]
 trait BlockCommitterApi: Send + Sync {
-    // Used on first run to get the latest costs and seqno
+    /// Used on first run to get the latest costs and seqno
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>>;
-    // Used to get the costs for a specific seqno
+    /// Used to get the costs for a specific seqno
     async fn get_costs_by_seqno(
         &self,
         number: u64,
     ) -> DaBlockCostsResult<Option<RawDaBlockCosts>>;
+    /// Used to get the costs for a range of blocks (inclusive)
     async fn get_bundles_by_range(
         &self,
         range: core::ops::Range<u64>,
@@ -39,15 +40,15 @@ pub struct BlockCommitterDaBlockCosts<BlockCommitter> {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
 pub struct RawDaBlockCosts {
-    // Sequence number (Monotonically increasing nonce)
+    /// Sequence number (Monotonically increasing nonce)
     pub sequence_number: u64,
-    // The range of blocks that the costs apply to
+    /// The range of blocks that the costs apply to
     pub blocks_range: core::ops::Range<u64>,
-    // The DA block height of the last transaction for the range of blocks
+    /// The DA block height of the last transaction for the range of blocks
     pub da_block_height: DaBlockHeight,
-    // Rolling sum cost of posting blobs (wei)
+    /// Rolling sum cost of posting blobs (wei)
     pub total_cost: u128,
-    // Rolling sum size of blobs (bytes)
+    /// Rolling sum size of blobs (bytes)
     pub total_size_bytes: u32,
 }
 
