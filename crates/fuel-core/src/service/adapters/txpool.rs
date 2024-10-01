@@ -146,7 +146,7 @@ impl fuel_core_txpool::ports::P2P for P2PAdapter {
 
 #[cfg(not(feature = "p2p"))]
 #[async_trait::async_trait]
-impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
+impl fuel_core_txpool::ports::P2P for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
     fn broadcast_transaction(
