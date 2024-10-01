@@ -77,17 +77,13 @@ where
     BlockCommitter: BlockCommitterApi,
 {
     async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
-        let raw_da_block_costs;
-
-        if let Some(last_value) = &self.last_raw_da_block_costs {
-            raw_da_block_costs = self
+        let raw_da_block_costs = match self.last_raw_da_block_costs {
+            Some(ref last_value) => self
                 .client
-                .get_costs_by_seqno(last_value.sequence_number + 1)
-                .await?;
-        } else {
-            // we have to error if we cannot find the first set of costs
-            raw_da_block_costs = self.client.get_latest_costs().await?;
+                .get_costs_by_seqno(last_value.sequence_number + 1),
+            _ => self.client.get_latest_costs(),
         }
+        .await?;
 
         let Some(ref raw_da_block_costs) = raw_da_block_costs else {
             return Err(anyhow!("No response from block committer"))
