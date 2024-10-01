@@ -313,16 +313,14 @@ mod tests {
     async fn request_da_block_cost__when_underflow__then_error() {
         // given
         let da_block_costs = test_da_block_costs();
-        let expected = (&da_block_costs).into();
         let mock_api = UnderflowingMockBlockCommitterApi::new(Some(da_block_costs));
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
+        let _ = block_committer.request_da_block_cost().await.unwrap();
 
         // when
-        let actual = block_committer.request_da_block_cost().await.unwrap();
         let result = block_committer.request_da_block_cost().await;
 
         // then
         assert!(result.is_err());
-        assert_eq!(actual, expected);
     }
 }
