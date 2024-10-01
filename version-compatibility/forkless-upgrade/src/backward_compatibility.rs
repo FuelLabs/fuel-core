@@ -187,15 +187,15 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
 }
 
 #[tokio::test]
-async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_v36_binary()
-{
+async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_genesis_binary(
+) {
     // Given
-    let v36_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
-    let v36_port = "30333";
-    let node_with_v36_transition = LatestFuelCoreDriver::spawn(&[
+    let genesis_keypair = SecpKeypair::generate();
+    let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
+    let genesis_port = "30333";
+    let node_with_genesis_transition = LatestFuelCoreDriver::spawn(&[
         "--service-name",
-        "V36Producer",
+        "GenesisProducer",
         "--debug",
         "--poa-instant",
         "true",
@@ -207,7 +207,7 @@ async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_v3
         "--keypair",
         hexed_secret.as_str(),
         "--peering-port",
-        v36_port,
+        genesis_port,
         "--utxo-validation",
     ])
     .await
@@ -217,13 +217,13 @@ async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_v3
     let invalid_transaction = Transaction::default_test_tx();
     let mut component: Components<Vec<Transaction>> = Default::default();
     component.header_to_produce.consensus.height = 1u32.into();
-    // Use version of the v36 state transition
+    // Use version of the genesis state transition
     component
         .header_to_produce
         .application
         .state_transition_bytecode_version = 0;
     component.transactions_source = vec![invalid_transaction];
-    let result = node_with_v36_transition
+    let result = node_with_genesis_transition
         .node
         .shared
         .executor
