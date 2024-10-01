@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module.
 - [2193](https://github.com/FuelLabs/fuel-core/pull/2193): Insertion in PoolV2 and tests refactoring
 - [2216](https://github.com/FuelLabs/fuel-core/pull/2216): Add more function to the state and task of TxPoolV2 to handle the future interactions with others modules (PoA, BlockProducer, BlockImporter and P2P)
+- [2263](https://github.com/FuelLabs/fuel-core/pull/2263): Use the Txpool v2 in the whole codebase
 
 ### Changed
 
