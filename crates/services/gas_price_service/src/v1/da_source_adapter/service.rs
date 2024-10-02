@@ -1,7 +1,3 @@
-use crate::fuel_gas_price_updater::{
-    da_source_adapter::POLLING_INTERVAL_MS,
-    DaBlockCosts,
-};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -20,6 +16,10 @@ use tokio::{
     },
 };
 
+use crate::v1::da_source_adapter::{
+    DaBlockCosts,
+    POLLING_INTERVAL_MS,
+};
 pub use anyhow::Result;
 
 /// This struct houses the shared_state, polling interval
