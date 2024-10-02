@@ -171,8 +171,23 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     // Get the block id from the transaction status if it's ready.
     let message_block_height = match database.transaction_status(&transaction_id) {
         Ok(TransactionStatus::Success { block_height, .. }) => block_height,
-        Ok(_) => {
-            return Err(anyhow::anyhow!("Unable to obtain the message block height").into())
+        Ok(TransactionStatus::Submitted { .. }) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height. The transaction has not been processed yet"
+            )
+            .into())
+        }
+        Ok(TransactionStatus::SqueezedOut { reason }) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height. The transaction was squeezed out: {reason}"
+            )
+            .into())
+        }
+        Ok(TransactionStatus::Failed { .. }) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height. The transaction failed"
+            )
+            .into())
         }
         Err(err) => {
             return Err(anyhow::anyhow!(
