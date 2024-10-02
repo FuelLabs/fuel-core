@@ -39,15 +39,18 @@ use fuel_core_storage::{
         WriteOperation,
     },
     not_found,
+    structured_storage::StructuredStorage,
     transactional::{
         Changes,
         ConflictPolicy,
+        InMemoryTransaction,
         ReadTransaction,
         StorageTransaction,
     },
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
+    StorageMut,
 };
 use itertools::Itertools;
 use modifications_history::{
@@ -215,11 +218,11 @@ where
         // We write directly to `ModificationsHistoryV2`.
         // If the migration is in progress, we fallback to taking from
         // `ModificationsHistoryV1` when no old_changes for `ModificationsHistoryV2` are found.
-        let old_changes = multiversion_replace(
+        let old_changes = multiversion_op(
             storage_transaction,
             height_u64,
-            &reverse_changes,
             self.modifications_history_migration_in_progress,
+            |storage| storage.replace(&height_u64, &reverse_changes),
         )?;
 
         if let Some(old_changes) = old_changes {
@@ -329,10 +332,11 @@ where
     fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
         let mut storage_transaction = self.db.read_transaction();
 
-        let last_changes = multiversion_take(
+        let last_changes = multiversion_op(
             &mut storage_transaction,
             height_to_rollback,
             self.modifications_history_migration_in_progress,
+            |storage| storage.take(&height_to_rollback),
         )?
         .ok_or(not_found!(ModificationsHistoryV1<Description>))?;
 
@@ -386,48 +390,24 @@ where
     }
 }
 
-// Try to take the value from `ModificationsHistoryV2` first.
-// If the migration is still in progress, remove the value from
-// `ModificationsHistoryV1` and return it if no value for `ModificationsHistoryV2`
-// was found. This is necessary to avoid scenarios where it is possible to
-// roll back twice to the same block height
-fn multiversion_take<Description>(
+fn multiversion_op<F, Description>(
     storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
     height: u64,
     modifications_history_migration_in_progress: bool,
+    f: F,
 ) -> StorageResult<Option<Changes>>
 where
     Description: DatabaseDescription,
+    F: FnOnce(
+        StorageMut<
+            '_,
+            StructuredStorage<InMemoryTransaction<&RocksDb<Historical<Description>>>>,
+            ModificationsHistoryV2<Description>,
+        >,
+    ) -> StorageResult<Option<Changes>>,
 {
-    // This will cause the V2 key to be removed in case the storage transaction snapshot
-    // a conflicting transaction writes a value for it, but that update is not reflected
-    // in the storage transaction snapshot.
-    let v2_last_changes = storage_transaction
-        .storage_as_mut::<ModificationsHistoryV2<Description>>()
-        .take(&height)?;
-
-    if modifications_history_migration_in_progress {
-        let v1_last_changes = storage_transaction
-            .storage_as_mut::<ModificationsHistoryV1<Description>>()
-            .take(&height)?;
-        Ok(v2_last_changes.or(v1_last_changes))
-    } else {
-        Ok(v2_last_changes)
-    }
-}
-
-fn multiversion_replace<Description>(
-    storage_transaction: &mut StorageTransaction<&RocksDb<Historical<Description>>>,
-    height: u64,
-    changes: &Changes,
-    modifications_history_migration_in_progress: bool,
-) -> StorageResult<Option<Changes>>
-where
-    Description: DatabaseDescription,
-{
-    let v2_last_changes = storage_transaction
-        .storage_as_mut::<ModificationsHistoryV2<Description>>()
-        .replace(&height, changes)?;
+    let v2_last_changes =
+        f(storage_transaction.storage_as_mut::<ModificationsHistoryV2<Description>>())?;
 
     if modifications_history_migration_in_progress {
         let v1_last_changes = storage_transaction
@@ -458,10 +438,11 @@ where
         StateRewindPolicy::RewindRange { size } => {
             let old_height = height.saturating_sub(size.get());
 
-            let old_changes = multiversion_take(
+            let old_changes = multiversion_op(
                 storage_transaction,
                 old_height,
                 modifications_history_migration_in_progress,
+                |storage| storage.take(&old_height),
             )?;
 
             if let Some(old_changes) = old_changes {
