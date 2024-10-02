@@ -38,9 +38,15 @@ pub struct Costs {
     pub status_change: usize,
     pub raw_payload: usize,
     pub storage_read: usize,
+    pub tx_get: usize,
+    pub tx_status_read: usize,
+    pub tx_raw_payload: usize,
+    pub block_header: usize,
+    pub block_transactions: usize,
+    pub block_transactions_ids: usize,
     pub storage_iterator: usize,
     pub bytecode_read: usize,
-    pub get_block: usize,
+    pub state_transition_bytecode_read: usize,
 }
 
 pub const QUERY_COSTS: Costs = Costs {
@@ -58,9 +64,15 @@ pub const QUERY_COSTS: Costs = Costs {
     status_change: 10001,
     raw_payload: 10,
     storage_read: 10,
+    tx_get: 50,
+    tx_status_read: 50,
+    tx_raw_payload: 150,
+    block_header: 150,
+    block_transactions: 1500,
+    block_transactions_ids: 50,
     storage_iterator: 100,
     bytecode_read: 2000,
-    get_block: 1990,
+    state_transition_bytecode_read: 19_000,
 };
 
 #[derive(Clone, Debug)]
