@@ -51,6 +51,7 @@ use fuel_core_types::{
         UniqueIdentifier,
         UpgradePurpose,
         UtxoId,
+        ValidityError,
     },
     fuel_types::ChainId,
     fuel_vm::{
@@ -976,8 +977,8 @@ async fn insert__tx_with_predicates_incorrect_owner() {
     // Then
     assert!(matches!(
         err,
-        Error::ConsensusValidity(CheckError::PredicateVerificationFailed(
-            PredicateVerificationFailed::InvalidOwner
+        Error::ConsensusValidity(CheckError::Validity(
+            ValidityError::InputPredicateOwner { index: 0 }
         ))
     ));
 }
@@ -1037,7 +1038,7 @@ async fn insert__tx_with_predicate_that_returns_false() {
         .custom_predicate(
             AssetId::BASE,
             TEST_COIN_AMOUNT,
-            // forever loop
+            // ret false
             vec![op::ret(RegId::ZERO)].into_iter().collect(),
             None,
         )
@@ -1227,23 +1228,14 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
     });
     universe.build_pool();
 
-    let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
-    let privileged_address = Input::predicate_owner(predicate.clone());
-
     // Given
+    let random_predicate =
+        universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
+    let privileged_address = *random_predicate.input_owner().unwrap();
     let tx = TransactionBuilder::upgrade(UpgradePurpose::StateTransition {
         root: Bytes32::new([1; 32]),
     })
-    .add_input(Input::coin_predicate(
-        UtxoId::new(Bytes32::new([1; 32]), 0),
-        privileged_address,
-        1_000_000_000,
-        AssetId::BASE,
-        Default::default(),
-        Default::default(),
-        predicate,
-        vec![],
-    ))
+    .add_input(random_predicate)
     .finalize_as_transaction();
     let mut params = ConsensusParameters::default();
     params.set_privileged_address(privileged_address);
@@ -1259,6 +1251,7 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
         .unwrap_err();
 
     // Then
+    dbg!(&result);
     assert!(matches!(
         result,
         Error::WasmValidity(WasmValidityError::NotEnabled)
