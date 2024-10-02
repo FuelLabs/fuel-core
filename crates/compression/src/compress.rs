@@ -211,7 +211,7 @@ macro_rules! compression {
                     let old = ctx.$ident.changes.insert(key, self.clone());
                     let old_rev = ctx.$ident.changes_lookup.insert(self.clone(), key);
                     assert!(old.is_none(), "Key collision in registry substitution");
-                    assert!(old_rev.is_none(), "Key collision in registry substitution");
+                    debug_assert!(old_rev.is_none(), "Key collision in registry substitution");
                     Ok(key)
                 }
             }
