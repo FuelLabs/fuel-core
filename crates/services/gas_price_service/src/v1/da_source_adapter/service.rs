@@ -19,6 +19,18 @@ use tokio::{
 use crate::v1::da_source_adapter::DaBlockCosts;
 pub use anyhow::Result;
 
+#[derive(Clone)]
+pub struct DaBlockCostsSharedState(Sender<DaBlockCosts>);
+
+impl DaBlockCostsSharedState {
+    fn new(sender: Sender<DaBlockCosts>) -> Self {
+        Self(sender)
+    }
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<DaBlockCosts> {
+        self.0.subscribe()
+    }
+}
+
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
 pub struct DaBlockCostsService<Source>
@@ -27,7 +39,7 @@ where
 {
     poll_interval: Interval,
     source: Source,
-    shared_state: Sender<DaBlockCosts>,
+    shared_state: DaBlockCostsSharedState,
     cache: HashSet<DaBlockCosts>,
 }
 
@@ -42,7 +54,7 @@ where
         let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
         #[allow(clippy::arithmetic_side_effects)]
         Self {
-            shared_state: sender,
+            shared_state: DaBlockCostsSharedState::new(sender),
             poll_interval: interval(
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
@@ -66,7 +78,7 @@ where
 {
     const NAME: &'static str = "DaBlockCostsService";
 
-    type SharedData = Sender<DaBlockCosts>;
+    type SharedData = DaBlockCostsSharedState;
 
     type Task = Self;
 
@@ -105,7 +117,7 @@ where
                 let da_block_costs = self.source.request_da_block_cost().await?;
                 if !self.cache.contains(&da_block_costs) {
                     self.cache.insert(da_block_costs.clone());
-                    self.shared_state.send(da_block_costs)?;
+                    self.shared_state.0.send(da_block_costs)?;
                 }
                 continue_running = true;
             }
