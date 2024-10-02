@@ -617,9 +617,8 @@ impl Storage for GraphStorage {
     }
 
     fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData> {
-        self.graph.remove_node(index).map(|storage_entry| {
-            self.clear_cache(&storage_entry);
-            storage_entry
+        self.graph.remove_node(index).inspect(|storage_entry| {
+            self.clear_cache(storage_entry);
         })
     }
 }
@@ -643,9 +642,8 @@ impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
     }
 
     fn remove(&mut self, index: &Self::StorageIndex) -> Option<StorageData> {
-        self.graph.remove_node(*index).map(|storage_entry| {
-            self.clear_cache(&storage_entry);
-            storage_entry
+        self.graph.remove_node(*index).inspect(|storage_entry| {
+            self.clear_cache(storage_entry);
         })
     }
 }

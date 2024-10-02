@@ -43,6 +43,7 @@ async fn test_find() {
     service
         .shared
         .insert(vec![tx1.clone(), tx2.clone()], None)
+        .await
         .unwrap();
 
     universe
@@ -50,10 +51,14 @@ async fn test_find() {
         .await;
 
     // When
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx3.id(&Default::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx3.id(&Default::default()),
+        ])
+        .await
+        .unwrap();
 
     // Then
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
@@ -89,17 +94,23 @@ async fn test_prune_transactions() {
     service
         .shared
         .insert(vec![tx1.clone(), tx2.clone(), tx3.clone()], None)
+        .await
         .unwrap();
 
     universe
         .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
         .await;
 
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx2.id(&Default::default()),
-        tx3.id(&Default::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+            tx3.id(&Default::default()),
+        ])
+        .await
+        .unwrap();
+
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
     assert!(out[0].is_some(), "Tx1 should exist");
     assert!(out[1].is_some(), "Tx2 should exist");
@@ -108,11 +119,15 @@ async fn test_prune_transactions() {
     // When
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx2.id(&Default::default()),
-        tx3.id(&Default::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+            tx3.id(&Default::default()),
+        ])
+        .await
+        .unwrap();
 
     // Then
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
@@ -142,12 +157,20 @@ async fn test_prune_transactions_the_oldest() {
 
     // Given
     // insert tx1 at time `0`
-    service.shared.insert(vec![tx1.clone()], None).unwrap();
+    service
+        .shared
+        .insert(vec![tx1.clone()], None)
+        .await
+        .unwrap();
 
     // sleep for `4` seconds
     tokio::time::sleep(Duration::from_secs(4)).await;
     // insert tx2 at time `4`
-    service.shared.insert(vec![tx2.clone()], None).unwrap();
+    service
+        .shared
+        .insert(vec![tx2.clone()], None)
+        .await
+        .unwrap();
 
     universe
         .waiting_txs_insertion(
@@ -156,23 +179,36 @@ async fn test_prune_transactions_the_oldest() {
         )
         .await;
     // check that tx1 and tx2 are still there at time `4`
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx2.id(&Default::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+        ])
+        .await
+        .unwrap();
+
     assert!(out[0].is_some(), "Tx1 should exist");
     assert!(out[1].is_some(), "Tx2 should exist");
 
     // sleep for another `4` seconds
     tokio::time::sleep(Duration::from_secs(4)).await;
     // insert tx3 at time `8`
-    service.shared.insert(vec![tx3.clone()], None).unwrap();
+    service
+        .shared
+        .insert(vec![tx3.clone()], None)
+        .await
+        .unwrap();
 
     // sleep for `3` seconds
     tokio::time::sleep(Duration::from_secs(3)).await;
 
     // insert tx4 at time `11`
-    service.shared.insert(vec![tx4.clone()], None).unwrap();
+    service
+        .shared
+        .insert(vec![tx4.clone()], None)
+        .await
+        .unwrap();
 
     universe
         .waiting_txs_insertion(
@@ -181,12 +217,17 @@ async fn test_prune_transactions_the_oldest() {
         )
         .await;
     // time is now `11`, tx1 and tx2 should be pruned
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx2.id(&Default::default()),
-        tx3.id(&Default::default()),
-        tx4.id(&ChainId::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+            tx3.id(&Default::default()),
+            tx4.id(&ChainId::default()),
+        ])
+        .await
+        .unwrap();
+
     assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should be pruned");
     assert!(out[2].is_some(), "Tx3 should exist");
@@ -196,12 +237,17 @@ async fn test_prune_transactions_the_oldest() {
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
 
     // time is now `16`, tx3 should be pruned
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx2.id(&Default::default()),
-        tx3.id(&Default::default()),
-        tx4.id(&ChainId::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+            tx3.id(&Default::default()),
+            tx4.id(&ChainId::default()),
+        ])
+        .await
+        .unwrap();
+
     assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should be pruned");
     assert!(out[2].is_none(), "Tx3 should be pruned");
@@ -238,6 +284,7 @@ async fn simple_insert_removal_subscription() {
     service
         .shared
         .insert(vec![tx1.clone(), tx2.clone()], None)
+        .await
         .unwrap();
 
     assert_eq!(

@@ -58,7 +58,7 @@ use crate::{
     new_service,
     pool::Pool,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    shared_state::TxPool,
+    service::TxPool,
     storage::graph::{
         GraphConfig,
         GraphStorage,
@@ -203,7 +203,7 @@ impl TestPoolUniverse {
         if let Some(pool) = &self.pool {
             let tx = perform_all_verifications(
                 tx,
-                pool.clone(),
+                &pool.clone(),
                 Default::default(),
                 &ConsensusParameters::default(),
                 0,
@@ -226,7 +226,7 @@ impl TestPoolUniverse {
         if let Some(pool) = &self.pool {
             let tx = perform_all_verifications(
                 tx,
-                pool.clone(),
+                &pool.clone(),
                 Default::default(),
                 &ConsensusParameters::default(),
                 0,
@@ -250,7 +250,7 @@ impl TestPoolUniverse {
         if let Some(pool) = &self.pool {
             let tx = perform_all_verifications(
                 tx,
-                pool.clone(),
+                &pool.clone(),
                 Default::default(),
                 &consensus_params,
                 0,

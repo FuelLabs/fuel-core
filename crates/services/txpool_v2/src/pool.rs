@@ -238,11 +238,11 @@ where
     /// based on the constraints given in the configuration and the selection algorithm used.
     pub fn extract_transactions_for_block(
         &mut self,
-        max_gas: u64,
+        constaints: Constraints,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let extracted_transactions = self
             .selection_algorithm
-            .gather_best_txs(Constraints { max_gas }, &mut self.storage)?
+            .gather_best_txs(constaints, &mut self.storage)?
             .into_iter()
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));

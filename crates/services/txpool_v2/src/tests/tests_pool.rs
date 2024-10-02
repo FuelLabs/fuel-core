@@ -13,6 +13,7 @@ use crate::{
         InputValidationError,
     },
     ports::WasmValidityError,
+    selection_algorithms::Constraints,
     tests::{
         mocks::MockWasmChecker,
         universe::{
@@ -269,7 +270,6 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
 
     // Then
     let err = result2.unwrap_err();
-    dbg!(&err);
 
     assert!(
         matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
@@ -620,7 +620,7 @@ async fn get_sorted_out_tx1_2_3() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX)
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
         .unwrap();
 
     // Then
@@ -672,7 +672,7 @@ async fn get_sorted_out_tx_same_tips() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX)
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
         .unwrap();
 
     // Then
@@ -724,7 +724,7 @@ async fn get_sorted_out_tx_profitable_ratios() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX)
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
         .unwrap();
 
     // Then
@@ -758,7 +758,7 @@ async fn get_sorted_out_tx_by_creation_instant() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX)
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
         .unwrap();
 
     // Then
@@ -1251,7 +1251,6 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
         .unwrap_err();
 
     // Then
-    dbg!(&result);
     assert!(matches!(
         result,
         Error::WasmValidity(WasmValidityError::NotEnabled)

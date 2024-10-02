@@ -34,7 +34,7 @@ use crate::{
         TxPoolPersistentStorage,
         WasmChecker,
     },
-    shared_state::TxPool,
+    service::TxPool,
     GasPrice,
 };
 
@@ -72,7 +72,7 @@ impl UnverifiedTx {
 impl BasicVerifiedTx {
     pub fn perform_inputs_verifications<PSView, PSProvider>(
         self,
-        pool: TxPool<PSProvider>,
+        pool: &TxPool<PSProvider>,
         version: ConsensusParametersVersion,
     ) -> Result<InputDependenciesVerifiedTx, Error>
     where
@@ -133,7 +133,7 @@ impl FullyVerifiedTx {
 #[allow(clippy::too_many_arguments)]
 pub async fn perform_all_verifications<M, PSView, PSProvider>(
     tx: Transaction,
-    pool: TxPool<PSProvider>,
+    pool: &TxPool<PSProvider>,
     current_height: BlockHeight,
     consensus_params: &ConsensusParameters,
     consensus_params_version: ConsensusParametersVersion,

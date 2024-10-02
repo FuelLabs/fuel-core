@@ -40,6 +40,8 @@ pub enum Error {
     Removed(RemovedReason),
     #[display(fmt = "Too much transactions are in queue to be inserted. Can't add more")]
     TooManyQueuedTransactions,
+    #[display(fmt = "Request failed to be sent to the service")]
+    ServiceCommunicationFailed,
 }
 
 #[derive(Debug, derive_more::Display)]

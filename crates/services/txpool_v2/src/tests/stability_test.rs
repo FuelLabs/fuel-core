@@ -181,7 +181,9 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
     loop {
         let result = txpool
             .write()
-            .extract_transactions_for_block(limits.max_block_gas)
+            .extract_transactions_for_block(crate::selection_algorithms::Constraints {
+                max_gas: limits.max_block_gas,
+            })
             .unwrap();
 
         if result.is_empty() {
