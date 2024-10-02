@@ -47,7 +47,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run__when_da_block_cost_source_gives_value_shared_value_is_marked_stale() {
+    async fn run__when_da_block_cost_source_gives_value_shared_state_is_marked_stale() {
         // given
         let expected_da_cost = DaBlockCosts {
             l2_block_range: 0..10,
@@ -63,16 +63,20 @@ mod tests {
         sleep(Duration::from_millis(10)).await;
         service.stop_and_await().await.unwrap();
 
-        let initial = shared_state.try_recv().unwrap();
-        assert_eq!(initial, expected_da_cost);
+        let actual = shared_state.try_recv().unwrap();
+        assert_eq!(actual, expected_da_cost);
 
         // then
         let da_block_costs_res = shared_state.try_recv();
         assert!(da_block_costs_res.is_err());
+        assert!(matches!(
+            da_block_costs_res.err().unwrap(),
+            tokio::sync::broadcast::error::TryRecvError::Empty
+        ));
     }
 
     #[tokio::test]
-    async fn run__when_da_block_cost_source_errors_shared_value_is_not_updated() {
+    async fn run__when_da_block_cost_source_errors_shared_state_is_not_updated() {
         // given
         let da_block_costs_source = DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")));
         let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
@@ -86,5 +90,9 @@ mod tests {
         // then
         let da_block_costs_res = shared_state.try_recv();
         assert!(da_block_costs_res.is_err());
+        assert!(matches!(
+            da_block_costs_res.err().unwrap(),
+            tokio::sync::broadcast::error::TryRecvError::Empty
+        ));
     }
 }
