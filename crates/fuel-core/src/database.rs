@@ -272,40 +272,19 @@ where
 impl<Description> Database<Description>
 where
     Description: DatabaseDescription,
-    Description::Height: PartialOrd,
 {
     pub fn rollback_last_block(&self) -> StorageResult<()> {
-        self.perform_rollback(None)
-    }
-
-    pub fn rollback_to(&self, to_height: Description::Height) -> StorageResult<()> {
-        self.perform_rollback(Some(to_height))
-    }
-
-    fn perform_rollback(
-        &self,
-        to_height: Option<Description::Height>,
-    ) -> StorageResult<()> {
         let mut lock = self.inner_storage().stage.height.lock();
-        let current_height = *lock;
+        let height = *lock;
 
-        let current_height = current_height.ok_or_else(|| {
-            anyhow::anyhow!("Database doesn't have a height to rollback")
-        })?;
-
-        let to_height = to_height.unwrap_or(current_height);
-
-        if to_height > current_height {
+        let Some(height) = height else {
             return Err(
-                anyhow::anyhow!("Can't rollback to the height {:?} because it's greater than the current height {:?}",
-                    to_height, current_height).into(),
+                anyhow::anyhow!("Database doesn't have a height to rollback").into(),
             );
-        }
-
-        self.inner_storage().data.rollback_block_to(&to_height)?;
-        let new_height = to_height.rollback_height();
+        };
+        self.inner_storage().data.rollback_block_to(&height)?;
+        let new_height = height.rollback_height();
         *lock = new_height;
-
         tracing::info!(
             "Rollback of the {} to the height {:?} was successful",
             Description::name(),

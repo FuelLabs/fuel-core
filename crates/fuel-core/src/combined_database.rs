@@ -318,26 +318,38 @@ impl CombinedDatabase {
     /// we leave it to the caller to decide how to bring them up to date.
     /// We don't rollback the on-chain database as it is the source of truth.
     /// The target height of the rollback is the latest height of the on-chain database.
-    pub fn sync_aux_db_heights(&self) -> anyhow::Result<()> {
-        let on_chain_height = match self.on_chain().latest_height_from_metadata()? {
-            Some(height) => height,
-            None => return Ok(()), // Exit loop if on-chain height is None
-        };
+    pub fn sync_aux_db_heights<S>(&self, shutdown_listener: &mut S) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        while !shutdown_listener.is_cancelled() {
+            let on_chain_height = match self.on_chain().latest_height_from_metadata()? {
+                Some(height) => height,
+                None => break, // Exit loop if on-chain height is None
+            };
 
-        let off_chain_height = self.off_chain().latest_height_from_metadata()?;
-        let gas_price_height = self.gas_price().latest_height_from_metadata()?;
+            let off_chain_height = self.off_chain().latest_height_from_metadata()?;
+            let gas_price_height = self.gas_price().latest_height_from_metadata()?;
 
-        // Handle off-chain rollback if necessary
-        if let Some(off_height) = off_chain_height {
-            if off_height > on_chain_height {
-                self.off_chain().rollback_to(on_chain_height)?;
+            // Handle off-chain rollback if necessary
+            if let Some(off_height) = off_chain_height {
+                if off_height > on_chain_height {
+                    self.off_chain().rollback_last_block()?;
+                }
             }
-        }
 
-        // Handle gas price rollback if necessary
-        if let Some(gas_height) = gas_price_height {
-            if gas_height > on_chain_height {
-                self.gas_price().rollback_to(on_chain_height)?;
+            // Handle gas price rollback if necessary
+            if let Some(gas_height) = gas_price_height {
+                if gas_height > on_chain_height {
+                    self.gas_price().rollback_last_block()?;
+                }
+            }
+
+            // If both off-chain and gas price heights are synced, break
+            if off_chain_height.map_or(true, |h| h <= on_chain_height)
+                && gas_price_height.map_or(true, |h| h <= on_chain_height)
+            {
+                break;
             }
         }
 

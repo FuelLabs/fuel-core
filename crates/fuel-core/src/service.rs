@@ -134,7 +134,7 @@ impl FuelService {
 
         // initialize sub services
         tracing::info!("Initializing sub services");
-        database.sync_aux_db_heights()?;
+        database.sync_aux_db_heights(shutdown_listener)?;
         let (services, shared) = sub_services::init_sub_services(&config, database)?;
 
         let sub_services = Arc::new(services);
