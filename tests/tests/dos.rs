@@ -83,99 +83,143 @@ async fn complex_queries__10_blocks__works() {
     let query = r#"
         query {
           blocks(first: 10) {
-            nodes {
-              transactions {
-                status {
+            edges {
+              cursor
+              node {
+                id
+                header {
+                  id
+                  daHeight
+                  consensusParametersVersion
+                  stateTransitionBytecodeVersion
+                  transactionsCount
+                  messageReceiptCount
+                  transactionsRoot
+                  messageOutboxRoot
+                  eventInboxRoot
+                  height
+                  prevRoot
+                  time
+                  applicationHash
+                }
+                consensus {
                   __typename
-                  ... on SubmittedStatus {
-                    time
+                  ... on Genesis {
+                    chainConfigHash
+                    coinsRoot
+                    contractsRoot
+                    messagesRoot
+                    transactionsRoot
                   }
-                  ... on SuccessStatus {
-                    blockHeight
-                    time
-                    programState {
-                      returnType
-                      data
+                  ... on PoAConsensus {
+                    signature
+                  }
+                }
+                transactions {
+                  rawPayload
+                  status {
+                    ... on SubmittedStatus {
+                      time
                     }
-                    receipts {
-                      param1
-                      param2
-                      amount
-                      assetId
-                      gas
-                      digest
-                      id
-                      is
-                      pc
-                      ptr
-                      ra
-                      rb
-                      rc
-                      rd
+                    ... on SuccessStatus {
+                      transactionId
+                      block {
+                        height
+                      }
+                      time
+                      programState {
+                        returnType
+                        data
+                      }
+                      receipts {
+                        param1
+                        param2
+                        amount
+                        assetId
+                        gas
+                        digest
+                        id
+                        is
+                        pc
+                        ptr
+                        ra
+                        rb
+                        rc
+                        rd
+                        reason
+                        receiptType
+                        to
+                        toAddress
+                        val
+                        len
+                        result
+                        gasUsed
+                        data
+                        sender
+                        recipient
+                        nonce
+                        contractId
+                        subId
+                      }
+                      totalGas
+                      totalFee
+                    }
+                    ... on SqueezedOutStatus {
                       reason
-                      receiptType
-                      to
-                      toAddress
-                      val
-                      len
-                      result
-                      gasUsed
-                      data
-                      sender
-                      recipient
-                      nonce
-                      contractId
-                      subId
                     }
-                    totalGas
-                    totalFee
-                  }
-                  ... on SqueezedOutStatus {
-                    reason
-                  }
-                  ... on FailureStatus {
-                    blockHeight
-                    time
-                    reason
-                    programState {
-                      returnType
-                      data
-                    }
-                    receipts {
-                      param1
-                      param2
-                      amount
-                      assetId
-                      gas
-                      digest
-                      id
-                      is
-                      pc
-                      ptr
-                      ra
-                      rb
-                      rc
-                      rd
+                    ... on FailureStatus {
+                      transactionId
+                      block {
+                        height
+                      }
+                      time
                       reason
-                      receiptType
-                      to
-                      toAddress
-                      val
-                      len
-                      result
-                      gasUsed
-                      data
-                      sender
-                      recipient
-                      nonce
-                      contractId
-                      subId
+                      programState {
+                        returnType
+                        data
+                      }
+                      receipts {
+                        param1
+                        param2
+                        amount
+                        assetId
+                        gas
+                        digest
+                        id
+                        is
+                        pc
+                        ptr
+                        ra
+                        rb
+                        rc
+                        rd
+                        reason
+                        receiptType
+                        to
+                        toAddress
+                        val
+                        len
+                        result
+                        gasUsed
+                        data
+                        sender
+                        recipient
+                        nonce
+                        contractId
+                        subId
+                      }
+                      totalGas
+                      totalFee
                     }
-                    totalGas
-                    totalFee
                   }
                 }
               }
+            }
+            pageInfo {
+              endCursor
+              hasNextPage
+              hasPreviousPage
+              startCursor
             }
           }
         }
@@ -185,6 +229,7 @@ async fn complex_queries__10_blocks__works() {
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
     let result = send_graph_ql_query(&url, query).await;
+    dbg!(&result);
     assert!(result.contains("transactions"));
 }
 
