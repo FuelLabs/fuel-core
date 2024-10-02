@@ -44,7 +44,9 @@ use std::collections::{
 pub trait CompressDb: TemporalRegistryAll + UtxoIdToPointer {}
 impl<T> CompressDb for T where T: TemporalRegistryAll + UtxoIdToPointer {}
 
-/// This must be called for all new blocks in sequence, otherwise the result will be garbage.
+/// This must be called for all new blocks in sequence, otherwise the result will be garbage, since
+/// the registry is valid for only the current block height. On any other height you could be
+/// referring to keys that have already been overwritten, or have not been written to yet.
 pub async fn compress<D>(
     config: Config,
     mut db: D,
@@ -194,15 +196,15 @@ macro_rules! compression {
                     if self == &Default::default() {
                         return Ok(RegistryKey::DEFAULT_VALUE);
                     }
+                    if let Some(found) = ctx.$ident.changes_lookup.get(self) {
+                        return Ok(*found);
+                    }
                     if let Some(found) = ctx.db.registry_index_lookup(self)? {
                         let key_timestamp = ctx.db.read_timestamp(&found)
                             .context("Database invariant violated: no timestamp stored but key found")?;
                         if ctx.config.is_timestamp_accessible(ctx.timestamp, key_timestamp)? {
                             return Ok(found);
                         }
-                    }
-                    if let Some(found) = ctx.$ident.changes_lookup.get(self) {
-                        return Ok(*found);
                     }
 
                     let key = ctx.$ident.cache_evictor.next_key();
