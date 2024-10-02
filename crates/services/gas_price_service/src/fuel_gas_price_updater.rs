@@ -14,6 +14,7 @@ pub use fuel_gas_price_algorithm::{
     v1::{
         AlgorithmUpdaterV1,
         AlgorithmV1,
+        RecordedBlock,
     },
 };
 
