@@ -85,7 +85,96 @@ async fn complex_queries__10_blocks__works() {
           blocks(first: 10) {
             nodes {
               transactions {
-                id
+                status {
+                  __typename
+                  ... on SubmittedStatus {
+                    time
+                  }
+                  ... on SuccessStatus {
+                    blockHeight
+                    time
+                    programState {
+                      returnType
+                      data
+                    }
+                    receipts {
+                      param1
+                      param2
+                      amount
+                      assetId
+                      gas
+                      digest
+                      id
+                      is
+                      pc
+                      ptr
+                      ra
+                      rb
+                      rc
+                      rd
+                      reason
+                      receiptType
+                      to
+                      toAddress
+                      val
+                      len
+                      result
+                      gasUsed
+                      data
+                      sender
+                      recipient
+                      nonce
+                      contractId
+                      subId
+                    }
+                    totalGas
+                    totalFee
+                  }
+                  ... on SqueezedOutStatus {
+                    reason
+                  }
+                  ... on FailureStatus {
+                    blockHeight
+                    time
+                    reason
+                    programState {
+                      returnType
+                      data
+                    }
+                    receipts {
+                      param1
+                      param2
+                      amount
+                      assetId
+                      gas
+                      digest
+                      id
+                      is
+                      pc
+                      ptr
+                      ra
+                      rb
+                      rc
+                      rd
+                      reason
+                      receiptType
+                      to
+                      toAddress
+                      val
+                      len
+                      result
+                      gasUsed
+                      data
+                      sender
+                      recipient
+                      nonce
+                      contractId
+                      subId
+                    }
+                    totalGas
+                    totalFee
+                  }
+                }
               }
             }
           }

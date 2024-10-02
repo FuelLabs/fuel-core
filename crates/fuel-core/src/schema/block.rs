@@ -246,7 +246,7 @@ pub struct BlockQuery;
 
 #[Object]
 impl BlockQuery {
-    #[graphql(complexity = "2 * QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "QUERY_COSTS.get_block")]
     async fn block(
         &self,
         ctx: &Context<'_>,
@@ -277,8 +277,8 @@ impl BlockQuery {
 
     #[graphql(complexity = "{\
         QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        + (QUERY_COSTS.get_block * first.unwrap_or_default() as usize) \
+        + (QUERY_COSTS.get_block * last.unwrap_or_default() as usize) \
     }")]
     async fn blocks(
         &self,

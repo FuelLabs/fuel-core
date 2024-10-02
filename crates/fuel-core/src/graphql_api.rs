@@ -40,6 +40,7 @@ pub struct Costs {
     pub storage_read: usize,
     pub storage_iterator: usize,
     pub bytecode_read: usize,
+    pub get_block: usize,
 }
 
 pub const QUERY_COSTS: Costs = Costs {
@@ -59,6 +60,7 @@ pub const QUERY_COSTS: Costs = Costs {
     storage_read: 10,
     storage_iterator: 100,
     bytecode_read: 2000,
+    get_block: 1990,
 };
 
 #[derive(Clone, Debug)]
