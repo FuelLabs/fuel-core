@@ -24,6 +24,13 @@ pub struct Simulator {
     da_cost_per_byte: Vec<u64>,
 }
 
+// (usize, ((u64, u64), &'a Option<(Range<u32>, u128)
+struct BlockData {
+    fullness: u64,
+    bytes: u64,
+    maybe_da_block: Option<(Range<u32>, u128)>,
+}
+
 impl Simulator {
     pub fn new(da_cost_per_byte: Vec<u64>) -> Self {
         Simulator { da_cost_per_byte }
@@ -49,7 +56,14 @@ impl Simulator {
             &fullness_and_bytes,
         );
 
-        let blocks = l2_blocks.zip(da_blocks.iter()).enumerate();
+        let blocks = l2_blocks
+            .zip(da_blocks.iter())
+            .map(|((fullness, bytes), maybe_da_block)| BlockData {
+                fullness,
+                bytes,
+                maybe_da_block: maybe_da_block.clone(),
+            })
+            .enumerate();
 
         let updater = self.build_updater(da_p_component, da_d_component);
 
@@ -104,7 +118,7 @@ impl Simulator {
         capacity: u64,
         max_block_bytes: u64,
         fullness_and_bytes: Vec<(u64, u64)>,
-        blocks: impl Iterator<Item = (usize, ((u64, u64), &'a Option<(Range<u32>, u128)>))>,
+        blocks: impl Iterator<Item = (usize, BlockData)>,
         mut updater: AlgorithmUpdaterV1,
     ) -> SimulationResults {
         let mut gas_prices = vec![];
@@ -114,7 +128,12 @@ impl Simulator {
         let mut projected_cost_totals = vec![];
         let mut actual_costs = vec![];
         let mut pessimistic_costs = vec![];
-        for (index, ((fullness, bytes), da_block)) in blocks {
+        for (index, block_data) in blocks {
+            let BlockData {
+                fullness,
+                bytes,
+                maybe_da_block: da_block,
+            } = block_data;
             let height = index as u32 + 1;
             exec_gas_prices.push(updater.new_scaled_exec_price);
             da_gas_prices.push(updater.new_scaled_da_gas_price);
@@ -139,7 +158,7 @@ impl Simulator {
             if let Some((range, cost)) = da_block {
                 for height in range.to_owned() {
                     updater
-                        .update_da_record_data(height..(height + 1), *cost)
+                        .update_da_record_data(height..(height + 1), cost)
                         .unwrap();
                     actual_costs.push(updater.latest_known_total_da_cost_excess)
                 }
