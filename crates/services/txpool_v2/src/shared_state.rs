@@ -52,7 +52,10 @@ use crate::{
         P2P as P2PTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    storage::graph::GraphStorage,
+    storage::{
+        graph::GraphStorage,
+        Storage,
+    },
     tx_status_stream::{
         TxStatusMessage,
         TxStatusStream,
@@ -69,7 +72,7 @@ pub type TxPool<PSProvider> = Arc<
         Pool<
             PSProvider,
             GraphStorage,
-            BasicCollisionManager<GraphStorage>,
+            BasicCollisionManager<<GraphStorage as Storage>::StorageIndex>,
             RatioTipGasSelection<GraphStorage>,
         >,
     >,

@@ -48,9 +48,6 @@ pub struct BasicVerifiedTx(CheckedTransaction);
 pub struct InputDependenciesVerifiedTx(Checked<Transaction>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct InputComputationVerifiedTx(Checked<Transaction>);
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct FullyVerifiedTx(Checked<Transaction>);
 
 impl UnverifiedTx {
@@ -101,11 +98,16 @@ impl InputDependenciesVerifiedTx {
         consensus_params: &ConsensusParameters,
         wasm_checker: &impl WasmChecker,
         memory: M,
-    ) -> Result<InputComputationVerifiedTx, Error>
+    ) -> Result<FullyVerifiedTx, Error>
     where
         M: Memory + Send + Sync + 'static,
     {
-        if let Transaction::Upgrade(upgrade) = self.0.transaction() {
+        let tx = self.0.check_signatures(&consensus_params.chain_id())?;
+
+        let parameters = CheckPredicateParams::from(consensus_params);
+        let tx = tx.check_predicates(&parameters, memory)?;
+
+        if let Transaction::Upgrade(upgrade) = tx.transaction() {
             if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
                 wasm_checker
                     .validate_uploaded_wasm(root)
@@ -113,20 +115,8 @@ impl InputDependenciesVerifiedTx {
             }
         }
 
-        let parameters = CheckPredicateParams::from(consensus_params);
-        let tx = self.0.check_predicates(&parameters, memory)?;
-
-        Ok(InputComputationVerifiedTx(tx))
-    }
-}
-
-impl InputComputationVerifiedTx {
-    pub fn perform_final_verifications(
-        self,
-        consensus_params: &ConsensusParameters,
-    ) -> Result<FullyVerifiedTx, Error> {
-        let tx = self.0.check_signatures(&consensus_params.chain_id())?;
         debug_assert!(tx.checks().contains(Checks::all()));
+
         Ok(FullyVerifiedTx(tx))
     }
 }
@@ -162,14 +152,11 @@ where
         .await?;
     let inputs_verified_tx = basically_verified_tx
         .perform_inputs_verifications(pool, consensus_params_version)?;
-    let input_computation_verified_tx = inputs_verified_tx
-        .perform_input_computation_verifications(
-            consensus_params,
-            wasm_checker,
-            memory,
-        )?;
-    let fully_verified_tx =
-        input_computation_verified_tx.perform_final_verifications(consensus_params)?;
+    let fully_verified_tx = inputs_verified_tx.perform_input_computation_verifications(
+        consensus_params,
+        wasm_checker,
+        memory,
+    )?;
     fully_verified_tx.into_pool_transaction(consensus_params_version)
 }
 

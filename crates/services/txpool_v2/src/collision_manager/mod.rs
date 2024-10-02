@@ -12,8 +12,6 @@ pub mod basic;
 pub type Collisions<StorageIndex> = HashMap<StorageIndex, Vec<CollisionReason>>;
 
 pub trait CollisionManager {
-    /// Storage type of the collision manager.
-    type Storage;
     /// Index that identifies a transaction in the storage.
     type StorageIndex;
 

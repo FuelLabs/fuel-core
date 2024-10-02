@@ -94,7 +94,7 @@ where
     PS: AtomicView<LatestView = View>,
     View: TxPoolPersistentStorage,
     S: Storage,
-    CM: CollisionManager<Storage = S, StorageIndex = S::StorageIndex>,
+    CM: CollisionManager<StorageIndex = S::StorageIndex>,
     SA: SelectionAlgorithm<Storage = S, StorageIndex = S::StorageIndex>,
 {
     /// Insert transactions into the pool.
