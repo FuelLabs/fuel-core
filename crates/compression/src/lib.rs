@@ -72,7 +72,7 @@ mod tests {
 
     proptest! {
         /// Serialization for compressed transactions is already tested in fuel-vm,
-        /// but the rest of the block de/serialization is be tested here.
+        /// but the rest of the block de/serialization is tested here.
         #[test]
         fn postcard_roundtrip(
             da_height in 0..=u64::MAX,
