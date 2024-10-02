@@ -1,5 +1,5 @@
-use crate::fuel_gas_price_updater::{
-    da_source_adapter::service::{
+use crate::v1::da_source_adapter::{
+    service::{
         DaBlockCostsSource,
         Result as DaBlockCostsResult,
     },

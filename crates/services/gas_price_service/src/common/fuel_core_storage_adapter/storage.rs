@@ -1,4 +1,4 @@
-use crate::fuel_gas_price_updater::UpdaterMetadata;
+use crate::common::updater_metadata::UpdaterMetadata;
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -10,6 +10,7 @@ use fuel_core_storage::{
     Mappable,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+
 #[repr(u32)]
 #[derive(
     Copy,

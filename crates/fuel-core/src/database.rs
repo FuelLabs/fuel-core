@@ -65,6 +65,7 @@ pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
+use crate::database::database_description::gas_price::GasPriceDatabase;
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -74,10 +75,9 @@ use crate::state::{
     },
     rocks_db::RocksDb,
 };
+use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::storage::GasPriceMetadata;
-use crate::database::database_description::gas_price::GasPriceDatabase;
 
 // Storages implementation
 pub mod balances;
