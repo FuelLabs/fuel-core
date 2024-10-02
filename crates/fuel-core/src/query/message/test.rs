@@ -2,10 +2,13 @@ use std::ops::Deref;
 
 use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
-    blockchain::header::{
-        ApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
+    blockchain::{
+        block::CompressedBlock,
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
     },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
