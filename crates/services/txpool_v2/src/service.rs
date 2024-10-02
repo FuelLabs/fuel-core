@@ -115,15 +115,11 @@ where
     WasmChecker: WasmCheckerTrait + Send + Sync + 'static,
     MemoryPool: MemoryPoolTrait + Send + Sync + 'static,
 {
-    async fn insert(
-        &self,
-        transactions: Vec<Transaction>,
-    ) -> Result<Vec<InsertionResult>, Error> {
+    async fn insert(&self, transactions: Vec<Transaction>) -> Result<(), Error> {
         let current_height = *self.current_height.read();
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
-        let results = vec![];
         for transaction in transactions {
             self.heavy_async_processor.spawn({
                 let shared_state = self.clone();
@@ -151,7 +147,7 @@ where
                 }
             });
         }
-        Ok(results)
+        Ok(())
     }
 }
 
