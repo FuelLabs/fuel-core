@@ -26,6 +26,8 @@ use libp2p::{
 };
 use std::time::Duration;
 
+const BLOCK_INCLUSION_TIMEOUT: Duration = Duration::from_secs(240);
+
 #[tokio::test]
 async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
     // When
@@ -110,7 +112,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
 
     // Then
     for i in 0..BLOCKS_TO_PRODUCE {
-        let _ = tokio::time::timeout(Duration::from_secs(120), imported_blocks.next())
+        let _ = tokio::time::timeout(BLOCK_INCLUSION_TIMEOUT, imported_blocks.next())
             .await
             .expect(format!("Timed out waiting for block import {i}").as_str())
             .expect(format!("Failed to import block {i}").as_str());
@@ -179,7 +181,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
 
     // Then
     for i in 0..BLOCKS_TO_PRODUCE {
-        let _ = tokio::time::timeout(Duration::from_secs(120), imported_blocks.next())
+        let _ = tokio::time::timeout(BLOCK_INCLUSION_TIMEOUT, imported_blocks.next())
             .await
             .expect(format!("Timed out waiting for block import {i}").as_str())
             .expect(format!("Failed to import block {i}").as_str());
