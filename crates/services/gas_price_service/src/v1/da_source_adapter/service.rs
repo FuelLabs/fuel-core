@@ -9,17 +9,14 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    sync::mpsc::Sender,
+    sync::broadcast::Sender,
     time::{
         interval,
         Interval,
     },
 };
 
-use crate::v1::da_source_adapter::{
-    DaBlockCosts,
-    POLLING_INTERVAL_MS,
-};
+use crate::v1::da_source_adapter::DaBlockCosts;
 pub use anyhow::Result;
 
 /// This struct houses the shared_state, polling interval
@@ -30,22 +27,22 @@ where
 {
     poll_interval: Interval,
     source: Source,
-    sender: Sender<DaBlockCosts>,
+    shared_state: Sender<DaBlockCosts>,
     cache: HashSet<DaBlockCosts>,
 }
+
+const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 10;
+const POLLING_INTERVAL_MS: u64 = 10_000;
 
 impl<Source> DaBlockCostsService<Source>
 where
     Source: DaBlockCostsSource,
 {
-    pub fn new(
-        source: Source,
-        sender: Sender<DaBlockCosts>,
-        poll_interval: Option<Duration>,
-    ) -> Self {
+    pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
+        let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
         #[allow(clippy::arithmetic_side_effects)]
         Self {
-            sender,
+            shared_state: sender,
             poll_interval: interval(
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
@@ -69,13 +66,15 @@ where
 {
     const NAME: &'static str = "DaBlockCostsService";
 
-    type SharedData = ();
+    type SharedData = Sender<DaBlockCosts>;
 
     type Task = Self;
 
     type TaskParams = ();
 
-    fn shared_data(&self) -> Self::SharedData {}
+    fn shared_data(&self) -> Self::SharedData {
+        self.shared_state.clone()
+    }
 
     async fn into_task(
         mut self,
@@ -106,7 +105,7 @@ where
                 let da_block_costs = self.source.request_da_block_cost().await?;
                 if !self.cache.contains(&da_block_costs) {
                     self.cache.insert(da_block_costs.clone());
-                    self.sender.send(da_block_costs).await?;
+                    self.shared_state.send(da_block_costs)?;
                 }
                 continue_running = true;
             }
@@ -123,8 +122,7 @@ where
 
 pub fn new_service<S: DaBlockCostsSource>(
     da_source: S,
-    sender: Sender<DaBlockCosts>,
     poll_interval: Option<Duration>,
 ) -> ServiceRunner<DaBlockCostsService<S>> {
-    ServiceRunner::new(DaBlockCostsService::new(da_source, sender, poll_interval))
+    ServiceRunner::new(DaBlockCostsService::new(da_source, poll_interval))
 }
