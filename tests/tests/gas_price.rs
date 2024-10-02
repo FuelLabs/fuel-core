@@ -19,10 +19,12 @@ use fuel_core_client::client::{
     types::gas_price::LatestGasPrice,
     FuelClient,
 };
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::storage::GasPriceMetadata,
-    UpdaterMetadata,
-    V0Metadata,
+use fuel_core_gas_price_service::{
+    common::{
+        fuel_core_storage_adapter::storage::GasPriceMetadata,
+        updater_metadata::UpdaterMetadata,
+    },
+    v0::metadata::V0Metadata,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
