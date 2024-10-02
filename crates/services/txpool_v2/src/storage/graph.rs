@@ -39,7 +39,6 @@ use petgraph::{
 };
 
 use crate::{
-    collision_manager::basic::BasicCollisionManagerStorage,
     error::{
         DependencyError,
         Error,
@@ -620,10 +619,6 @@ impl Storage for GraphStorage {
             self.clear_cache(storage_entry);
         })
     }
-}
-
-impl BasicCollisionManagerStorage for GraphStorage {
-    type StorageIndex = NodeIndex;
 }
 
 impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {

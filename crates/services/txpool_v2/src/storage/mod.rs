@@ -52,6 +52,10 @@ pub trait CheckedTransaction<StorageIndex> {
 pub trait Storage {
     /// The index type used in the storage and allow other components to reference transactions.
     type StorageIndex: Copy + Debug + Eq + Hash;
+
+    /// The checked type wraps the transaction inside to show that it was verified by the
+    /// [`store_transaction`] method. Later checked transaction can be passed
+    /// to the [`store_transaction`] method.
     type CheckedTransaction: CheckedTransaction<Self::StorageIndex>;
 
     /// Store a transaction in the storage according to the dependencies.

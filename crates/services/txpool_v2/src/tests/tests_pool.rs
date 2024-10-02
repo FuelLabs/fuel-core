@@ -51,6 +51,7 @@ use fuel_core_types::{
         UniqueIdentifier,
         UpgradePurpose,
         UtxoId,
+        ValidityError,
     },
     fuel_types::ChainId,
     fuel_vm::{
@@ -170,7 +171,7 @@ async fn insert__tx_with_blacklisted_message() {
 }
 
 #[tokio::test]
-async fn insert_tx2_dependent_tx1() {
+async fn insert__tx2_succeeds_after_dependent_tx1() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -225,12 +226,10 @@ async fn insert__tx2_collided_on_contract_id() {
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();
+    universe.verify_and_insert(tx).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx).await;
     let result2 = universe.verify_and_insert(tx_faulty).await;
-
-    assert!(result1.is_ok());
 
     // Then
     let err = result2.unwrap_err();
@@ -263,13 +262,12 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
         universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, Some(utxo_id));
     let tx_faulty =
         universe.build_script_transaction(Some(vec![random_predicate]), None, 0);
+    universe.verify_and_insert(tx).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx).await;
     let result2 = universe.verify_and_insert(tx_faulty).await;
 
     // Then
-    assert!(result1.is_ok());
     let err = result2.unwrap_err();
     dbg!(&err);
 
@@ -279,7 +277,7 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
 }
 
 #[tokio::test]
-async fn insert__already_known_tx() {
+async fn insert__already_known_tx_returns_error() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -288,13 +286,12 @@ async fn insert__already_known_tx() {
 
     // Given
     let tx = universe.build_script_transaction(None, None, 0);
+    universe.verify_and_insert(tx.clone()).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx.clone()).await;
     let result2 = universe.verify_and_insert(tx.clone()).await;
 
     // Then
-    assert!(result1.is_ok());
     let err = result2.unwrap_err();
     assert!(
         matches!(err, Error::InputValidation(InputValidationError::DuplicateTxId(id)) if id == tx.id(&ChainId::default()))
@@ -302,7 +299,7 @@ async fn insert__already_known_tx() {
 }
 
 #[tokio::test]
-async fn insert__unknown_utxo() {
+async fn insert__unknown_utxo_returns_error() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -322,7 +319,7 @@ async fn insert__unknown_utxo() {
 }
 
 #[tokio::test]
-async fn insert_higher_priced_tx_removes_lower_priced_tx() {
+async fn insert__higher_priced_tx_removes_lower_priced_tx() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -342,7 +339,7 @@ async fn insert_higher_priced_tx_removes_lower_priced_tx() {
 }
 
 #[tokio::test]
-async fn insert__colliding_dependent_underpriced() {
+async fn insert__colliding_dependent_and_underpriced_returns_error() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -354,15 +351,13 @@ async fn insert__colliding_dependent_underpriced() {
     // Given
     let tx2 = universe.build_script_transaction(Some(vec![input.clone()]), None, 20);
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 10);
+    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx2).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
-    let result2 = universe.verify_and_insert(tx2).await;
     let result3 = universe.verify_and_insert(tx3).await;
 
     // Then
-    assert!(result1.is_ok());
-    assert!(result2.is_ok());
     let err = result3.unwrap_err();
     assert!(matches!(err, Error::Collided(CollisionReason::Utxo(id)) if id == utxo_id));
 }
@@ -428,18 +423,15 @@ async fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
 
     let tx2 = universe.build_script_transaction(Some(vec![input.clone()]), None, 10);
     let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx2).await.unwrap();
 
     let tx3 = universe.build_script_transaction(Some(vec![common_coin]), None, 20);
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
-    let result2 = universe.verify_and_insert(tx2).await;
     let result3 = universe.verify_and_insert(tx3).await;
 
     // Then
-    assert!(result1.is_ok());
-    assert!(result2.is_ok());
-    assert!(result3.is_ok());
     let removed_txs = result3.unwrap();
     assert_eq!(removed_txs.len(), 2);
     assert_eq!(removed_txs[0].id(), tx1_id);
@@ -458,6 +450,8 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
         universe.build_script_transaction(Some(vec![common_coin.clone()]), None, 10);
     let tx1_id = tx1.id(&ChainId::default());
 
+    universe.verify_and_insert(tx1).await.unwrap();
+
     let tx2 =
         universe.build_script_transaction(Some(vec![common_coin.clone()]), None, 11);
     let tx2_id = tx2.id(&ChainId::default());
@@ -465,12 +459,10 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let tx3 = universe.build_script_transaction(Some(vec![common_coin]), None, 12);
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
     let result2 = universe.verify_and_insert(tx2).await;
     let result3 = universe.verify_and_insert(tx3).await;
 
     // Then
-    assert!(result1.is_ok());
     assert!(result2.is_ok());
     let removed_txs = result2.unwrap();
     assert_eq!(removed_txs.len(), 1);
@@ -496,13 +488,12 @@ async fn insert__tx_limit_hit() {
     // Given
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx2 = universe.build_script_transaction(None, None, 0);
+    universe.verify_and_insert(tx1).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
     let result2 = universe.verify_and_insert(tx2).await;
 
     // Then
-    assert!(result1.is_ok());
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
 }
@@ -531,13 +522,12 @@ async fn insert__tx_gas_limit() {
         ..Default::default()
     });
     universe.build_pool();
+    universe.verify_and_insert(tx1).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
     let result2 = universe.verify_and_insert(tx2).await;
 
     // Then
-    assert!(result1.is_ok());
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
 }
@@ -566,13 +556,12 @@ async fn insert__tx_bytes_limit() {
         ..Default::default()
     });
     universe.build_pool();
+    universe.verify_and_insert(tx1).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
     let result2 = universe.verify_and_insert(tx2).await;
 
     // Then
-    assert!(result1.is_ok());
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
 }
@@ -595,15 +584,13 @@ async fn insert__dependency_chain_length_hit() {
     let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
 
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 0);
+    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx2).await.unwrap();
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
-    let result2 = universe.verify_and_insert(tx2).await;
     let result3 = universe.verify_and_insert(tx3).await;
 
     // Then
-    assert!(result1.is_ok());
-    assert!(result2.is_ok());
     let err = result3.unwrap_err();
     assert!(matches!(
         err,
@@ -990,8 +977,8 @@ async fn insert__tx_with_predicates_incorrect_owner() {
     // Then
     assert!(matches!(
         err,
-        Error::ConsensusValidity(CheckError::PredicateVerificationFailed(
-            PredicateVerificationFailed::InvalidOwner
+        Error::ConsensusValidity(CheckError::Validity(
+            ValidityError::InputPredicateOwner { index: 0 }
         ))
     ));
 }
@@ -1051,7 +1038,7 @@ async fn insert__tx_with_predicate_that_returns_false() {
         .custom_predicate(
             AssetId::BASE,
             TEST_COIN_AMOUNT,
-            // forever loop
+            // ret false
             vec![op::ret(RegId::ZERO)].into_iter().collect(),
             None,
         )
@@ -1218,11 +1205,12 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     // Given
     // tx3 {inputs: {coinA, coinB}, outputs:{}, tip: 20}
     let input_b = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
+    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx2).await.unwrap();
+
     let tx3 = universe.build_script_transaction(Some(vec![input_a, input_b]), None, 20);
 
     // When
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
     let err = universe.verify_and_insert(tx3).await.unwrap_err();
 
     // Then
@@ -1240,23 +1228,14 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
     });
     universe.build_pool();
 
-    let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
-    let privileged_address = Input::predicate_owner(predicate.clone());
-
     // Given
+    let random_predicate =
+        universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
+    let privileged_address = *random_predicate.input_owner().unwrap();
     let tx = TransactionBuilder::upgrade(UpgradePurpose::StateTransition {
         root: Bytes32::new([1; 32]),
     })
-    .add_input(Input::coin_predicate(
-        UtxoId::new(Bytes32::new([1; 32]), 0),
-        privileged_address,
-        1_000_000_000,
-        AssetId::BASE,
-        Default::default(),
-        Default::default(),
-        predicate,
-        vec![],
-    ))
+    .add_input(random_predicate)
     .finalize_as_transaction();
     let mut params = ConsensusParameters::default();
     params.set_privileged_address(privileged_address);
@@ -1272,6 +1251,7 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
         .unwrap_err();
 
     // Then
+    dbg!(&result);
     assert!(matches!(
         result,
         Error::WasmValidity(WasmValidityError::NotEnabled)
