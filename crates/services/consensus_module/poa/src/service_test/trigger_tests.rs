@@ -158,6 +158,9 @@ async fn instant_trigger_produces_block_instantly() {
         metrics: false,
         ..Default::default()
     });
+
+    // Let some time pass to make sure the service is initialized
+    time::sleep(Duration::from_millis(100)).await;
     ctx.new_txs_notifier.notify_waiters();
 
     // Make sure it's produced
