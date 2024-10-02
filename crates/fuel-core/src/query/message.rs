@@ -1,13 +1,10 @@
 use crate::{
-    fuel_core_graphql_api::{
-        ports::{
-            DatabaseBlocks,
-            DatabaseMessageProof,
-            DatabaseMessages,
-            OffChainDatabase,
-            OnChainDatabase,
-        },
-        IntoApiResult,
+    fuel_core_graphql_api::ports::{
+        DatabaseBlocks,
+        DatabaseMessageProof,
+        DatabaseMessages,
+        OffChainDatabase,
+        OnChainDatabase,
     },
     query::{
         SimpleBlockData,
@@ -28,7 +25,6 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    blockchain::block::CompressedBlock,
     entities::relayer::message::{
         MerkleProof,
         Message,
@@ -173,41 +169,45 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     };
 
     // Get the block id from the transaction status if it's ready.
-    let Some(TransactionStatus::Success {
-        block_height: message_block_height,
-        ..
-    }) = database
-        .transaction_status(&transaction_id)
-        .into_api_result::<TransactionStatus, StorageError>()?
-    else {
-        return Err(anyhow::anyhow!("Unable to obtain the message block height").into())
+    let message_block_height = match database.transaction_status(&transaction_id) {
+        Ok(TransactionStatus::Success { block_height, .. }) => block_height,
+        Ok(_) => {
+            return Err(anyhow::anyhow!("Unable to obtain the message block height").into())
+        }
+        Err(err) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height: {err}"
+            )
+            .into())
+        }
     };
 
     // Get the message fuel block header.
-    let Some(message_block) = database
-        .block(&message_block_height)
-        .into_api_result::<CompressedBlock, StorageError>()?
-    else {
-        return Err(
-            anyhow::anyhow!("Unable to get the message block from the database").into(),
-        )
-    };
-    let (message_block_header, message_block_txs) = message_block.into_inner();
+    let (message_block_header, message_block_txs) =
+        match database.block(&message_block_height) {
+            Ok(message_block) => message_block.into_inner(),
+            Err(err) => {
+                return Err(anyhow::anyhow!(
+                    "Unable to get the message block from the database: {err}"
+                )
+                .into())
+            }
+        };
 
     let message_id = compute_message_id(&sender, &recipient, &nonce, amount, &data);
 
     let message_proof = message_receipts_proof(database, message_id, &message_block_txs)?;
 
     // Get the commit fuel block header.
-    let Some(commit_block_header) = database
-        .block(&commit_block_height)
-        .into_api_result::<CompressedBlock, StorageError>()?
-    else {
-        return Err(
-            anyhow::anyhow!("Unable to get commit block header from database").into(),
-        )
+    let (commit_block_header, _) = match database.block(&commit_block_height) {
+        Ok(commit_block_header) => commit_block_header.into_inner(),
+        Err(err) => {
+            return Err(anyhow::anyhow!(
+                "Unable to get commit block header from database: {err}"
+            )
+            .into())
+        }
     };
-    let (commit_block_header, _) = commit_block_header.into_inner();
 
     let Some(verifiable_commit_block_height) = commit_block_header.height().pred() else {
         return Err(anyhow::anyhow!(
@@ -242,7 +242,6 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()
         .map(|id| database.receipts(id))
-        .filter_map(|result| result.into_api_result::<_, StorageError>().transpose())
         .try_collect()?;
     let leaves = leaves.into_iter()
         // Flatten the receipts after filtering on output messages
