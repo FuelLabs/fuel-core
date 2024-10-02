@@ -125,6 +125,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
     ) -> Result<RemovedTransactions, Error> {
         let mut gas_left = constraints.max_gas;
         let mut space_left = constraints.maximum_block_size as usize;
+        let mut nb_left = constraints.maximum_txs;
         let mut result = Vec::new();
 
         // Take iterate over all transactions with the highest tip/gas ratio. If transaction
@@ -135,7 +136,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         // It is done in this way to minimize number of iteration of the list of executable
         // transactions.
         while gas_left > 0
-            && result.len() > constraints.maximum_txs as usize
+            && nb_left > 0
             && space_left > 0
             && !self.executable_transactions_sorted_tip_gas_ratio.is_empty()
         {
@@ -166,6 +167,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
                     gas_left.saturating_sub(stored_transaction.transaction.max_gas());
                 space_left = space_left
                     .saturating_sub(stored_transaction.transaction.metered_bytes_size());
+                nb_left = nb_left.saturating_sub(1);
 
                 let dependents = storage.get_dependents(storage_id).collect::<Vec<_>>();
                 debug_assert!(!storage.has_dependencies(storage_id));
