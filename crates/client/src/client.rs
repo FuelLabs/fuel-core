@@ -28,6 +28,7 @@ use crate::client::{
     },
 };
 use anyhow::Context;
+use base64::prelude::*;
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
@@ -247,7 +248,6 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        use base64::prelude::*;
         use core::ops::Deref;
         use eventsource_client as es;
         use hyper_rustls as _;
