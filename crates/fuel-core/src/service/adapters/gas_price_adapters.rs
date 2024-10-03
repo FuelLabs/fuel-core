@@ -3,13 +3,15 @@ use crate::{
     service::adapters::ConsensusParametersProvider,
 };
 use fuel_core_gas_price_service::{
-    fuel_gas_price_updater::{
+    common::{
         fuel_core_storage_adapter::{
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
-        Error as GasPriceError,
-        Result as GasPriceResult,
+        utils::{
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
     ports::{
         GasPriceData,
