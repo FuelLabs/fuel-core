@@ -64,7 +64,10 @@ use fuel_core_types::{
         checked_transaction::CheckPredicateParams,
         interpreter::Memory,
     },
-    services::executor::TransactionExecutionStatus,
+    services::{
+        executor::TransactionExecutionStatus,
+        txpool::Metadata,
+    },
 };
 use std::{
     collections::HashMap,
@@ -343,26 +346,25 @@ where
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {
         let view = self.database.latest_view().unwrap();
-        self.insert_inner(tx, ConsensusParametersVersion::MIN, &view)
+        self.insert_inner(tx, Metadata::new(ConsensusParametersVersion::MIN), &view)
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
         tx: Checked<Transaction>,
-        version: ConsensusParametersVersion,
+        metadata: Metadata,
         view: &View,
     ) -> Result<InsertionResult, Error> {
         let tx: CheckedTransaction = tx.into();
 
         let tx = Arc::new(match tx {
-            CheckedTransaction::Script(tx) => PoolTransaction::Script(tx, version),
-            CheckedTransaction::Create(tx) => PoolTransaction::Create(tx, version),
+            CheckedTransaction::Script(tx) => PoolTransaction::Script(tx, metadata),
+            CheckedTransaction::Create(tx) => PoolTransaction::Create(tx, metadata),
             CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
-            CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx, version),
-            CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx, version),
-            CheckedTransaction::Blob(tx) => PoolTransaction::Blob(tx, version),
+            CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx, metadata),
+            CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx, metadata),
+            CheckedTransaction::Blob(tx) => PoolTransaction::Blob(tx, metadata),
         });
 
         self.check_blacklisting(tx.as_ref())?;
@@ -450,7 +452,7 @@ where
         };
 
         for tx in txs.into_iter() {
-            res.push(self.insert_inner(tx, version, &view));
+            res.push(self.insert_inner(tx, Metadata::new(version), &view));
         }
 
         // announce to subscribers
