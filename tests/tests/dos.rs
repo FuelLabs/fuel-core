@@ -222,9 +222,9 @@ const FULL_BLOCK_QUERY: &str = r#"
 "#;
 
 #[tokio::test]
-async fn complex_queries__10_full_blocks__works() {
+async fn complex_queries__40_full_blocks__works() {
     let query = FULL_BLOCK_QUERY.to_string();
-    let query = query.replace("$NUMBER_OF_BLOCKS", "10");
+    let query = query.replace("$NUMBER_OF_BLOCKS", "40");
 
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
@@ -234,9 +234,9 @@ async fn complex_queries__10_full_blocks__works() {
 }
 
 #[tokio::test]
-async fn complex_queries__11_full_block__query_to_complex() {
+async fn complex_queries__41_full_block__query_to_complex() {
     let query = FULL_BLOCK_QUERY.to_string();
-    let query = query.replace("$NUMBER_OF_BLOCKS", "11");
+    let query = query.replace("$NUMBER_OF_BLOCKS", "41");
 
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);

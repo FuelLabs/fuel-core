@@ -134,7 +134,7 @@ impl Config {
                     0,
                 ),
                 max_queries_depth: 16,
-                max_queries_complexity: 20000,
+                max_queries_complexity: 80000,
                 max_queries_recursive_depth: 16,
                 request_body_bytes_limit: 16 * 1024 * 1024,
                 query_log_threshold_time: Duration::from_secs(2),

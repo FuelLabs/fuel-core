@@ -51,17 +51,17 @@ pub struct Costs {
 
 pub const QUERY_COSTS: Costs = Costs {
     // balance_query: 4000,
-    balance_query: 10001,
-    coins_to_spend: 10001,
+    balance_query: 40001,
+    coins_to_spend: 40001,
     // get_peers: 2000,
-    get_peers: 10001,
+    get_peers: 40001,
     // estimate_predicates: 3000,
-    estimate_predicates: 10001,
-    dry_run: 3000,
+    estimate_predicates: 40001,
+    dry_run: 12000,
     // submit: 5000,
-    submit: 10001,
-    submit_and_await: 10001,
-    status_change: 10001,
+    submit: 40001,
+    submit_and_await: 40001,
+    status_change: 40001,
     raw_payload: 10,
     storage_read: 10,
     tx_get: 50,
@@ -71,8 +71,8 @@ pub const QUERY_COSTS: Costs = Costs {
     block_transactions: 1500,
     block_transactions_ids: 50,
     storage_iterator: 100,
-    bytecode_read: 2000,
-    state_transition_bytecode_read: 19_000,
+    bytecode_read: 8000,
+    state_transition_bytecode_read: 76_000,
 };
 
 #[derive(Clone, Debug)]
