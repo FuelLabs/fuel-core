@@ -28,7 +28,8 @@ use crate::client::{
     },
 };
 use anyhow::Context;
-use base64::prelude::*;
+#[cfg(feature = "subscriptions")]
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
