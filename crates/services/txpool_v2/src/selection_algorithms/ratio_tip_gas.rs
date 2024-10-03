@@ -25,7 +25,7 @@ use super::{
 };
 
 pub trait RatioTipGasSelectionAlgorithmStorage {
-    type StorageIndex: Copy + Debug;
+    type StorageIndex: Debug;
 
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
 
