@@ -38,6 +38,8 @@ pub enum Error {
     NotInsertedLimitHit,
     #[display(fmt = "Transaction is removed: {_0}")]
     Removed(RemovedReason),
+    #[display(fmt = "Transaction has been skipped during block insertion: {_0}")]
+    SkippedTransaction(String),
     #[display(fmt = "Too much transactions are in queue to be inserted. Can't add more")]
     TooManyQueuedTransactions,
     #[display(fmt = "Request failed to be sent to the service")]

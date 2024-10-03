@@ -161,4 +161,14 @@ impl SharedState {
             TxStatusMessage::Status(status),
         )
     }
+
+    pub fn broadcast_txs_skipped_reason(
+        &self,
+        tx_ids_and_reason: Vec<(Bytes32, String)>,
+    ) {
+        for (tx_id, reason) in tx_ids_and_reason {
+            self.tx_status_sender
+                .send_squeezed_out(tx_id, Error::SkippedTransaction(reason));
+        }
+    }
 }
