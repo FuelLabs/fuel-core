@@ -55,7 +55,7 @@ mod tests {
             blob_cost_wei: 1,
         };
         let da_block_costs_source = DummyDaBlockCosts::new(Ok(expected_da_cost.clone()));
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
+        let service = new_service(da_block_costs_source, Some(Duration::from_millis(8)));
         let mut shared_state = &mut service.shared.subscribe();
 
         // when
