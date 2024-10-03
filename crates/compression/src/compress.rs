@@ -175,10 +175,12 @@ macro_rules! compression {
                         return Ok(RegistryKey::ZERO);
                     }
                     if let Some(found) = ctx.db.registry_index_lookup(self)? {
-                        let key_timestamp = ctx.db.read_timestamp(&found)
-                            .context("Database invariant violated: no timestamp stored but key found")?;
-                        if ctx.config.is_timestamp_accessible(ctx.timestamp, key_timestamp)? {
-                            ctx.accessed_keys.$ident.insert(found);
+                        if !ctx.accessed_keys.$ident.contains(&found) {
+                            let key_timestamp = ctx.db.read_timestamp(&found)
+                                .context("Database invariant violated: no timestamp stored but key found")?;
+                            if ctx.config.is_timestamp_accessible(ctx.timestamp, key_timestamp)? {
+                                ctx.accessed_keys.$ident.insert(found);
+                            }
                         }
                     }
                     Ok(RegistryKey::ZERO)
