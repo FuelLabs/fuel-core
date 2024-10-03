@@ -1222,15 +1222,14 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
         .verify_and_insert_with_consensus_params_wasm_checker(
             tx,
             params,
-            MockWasmChecker::new(Err(WasmValidityError::NotEnabled)),
+            MockWasmChecker::new(Err(WasmValidityError::Validity)),
         )
         .await
         .unwrap_err();
 
     // Then
-    dbg!(&result);
     assert!(matches!(
         result,
-        Error::WasmValidity(WasmValidityError::NotEnabled)
+        Error::WasmValidity(WasmValidityError::Validity)
     ));
 }
