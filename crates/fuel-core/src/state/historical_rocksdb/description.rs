@@ -2,6 +2,9 @@ use crate::database::database_description::DatabaseDescription;
 use fuel_core_storage::kv_store::StorageColumn;
 
 pub const HISTORY_COLUMN_ID: u32 = u32::MAX / 2;
+// Avoid conflicts with HistoricalDuplicateColumn indexes, which are
+// in decreasing order starting from HISTORY_COLUMN_ID - 1.
+pub const HISTORY_V2_COLUMN_ID: u32 = HISTORY_COLUMN_ID + 1;
 
 #[derive(Debug, Copy, Clone, enum_iterator::Sequence)]
 pub enum Column<Description>
@@ -10,7 +13,10 @@ where
 {
     OriginalColumn(Description::Column),
     HistoricalDuplicateColumn(Description::Column),
+    /// Original history column
     HistoryColumn,
+    /// Migrated history column
+    HistoryV2Column,
 }
 
 impl<Description> strum::EnumCount for Column<Description>
@@ -19,7 +25,7 @@ where
 {
     const COUNT: usize = Description::Column::COUNT /* original columns */
         + Description::Column::COUNT /* duplicated columns */
-        + 1 /* history column */;
+        + 2 /* history column, history V2 column */;
 }
 
 impl<Description> StorageColumn for Column<Description>
@@ -33,6 +39,7 @@ where
                 format!("history_{}", c.name())
             }
             Column::HistoryColumn => "modifications_history".to_string(),
+            Column::HistoryV2Column => "modifications_history_v2".to_string(),
         }
     }
 
@@ -43,6 +50,7 @@ where
                 historical_duplicate_column_id(c.id())
             }
             Column::HistoryColumn => HISTORY_COLUMN_ID,
+            Column::HistoryV2Column => HISTORY_V2_COLUMN_ID,
         }
     }
 }
@@ -82,6 +90,7 @@ where
                 Some(Description::prefix(c).unwrap_or(0).saturating_add(8)) // `u64::to_be_bytes`
             }
             Column::HistoryColumn => Some(8),
+            Column::HistoryV2Column => Some(8),
         }
     }
 }
@@ -102,8 +111,8 @@ mod tests {
         let variants = enum_iterator::all::<Column<OnChain>>().collect::<Vec<_>>();
         let original = <OnChain as DatabaseDescription>::Column::COUNT;
         let duplicated = <OnChain as DatabaseDescription>::Column::COUNT;
-        let history_modification = 1;
-        let expected_count = original + duplicated + history_modification;
+        let history_modification_versions = 2;
+        let expected_count = original + duplicated + history_modification_versions;
         assert_eq!(variants.len(), expected_count);
         assert_eq!(<Column<OnChain> as EnumCount>::COUNT, expected_count);
     }
@@ -113,8 +122,8 @@ mod tests {
         let variants = enum_iterator::all::<Column<OffChain>>().collect::<Vec<_>>();
         let original = <OffChain as DatabaseDescription>::Column::COUNT;
         let duplicated = <OffChain as DatabaseDescription>::Column::COUNT;
-        let history_modification = 1;
-        let expected_count = original + duplicated + history_modification;
+        let history_modification_versions = 2;
+        let expected_count = original + duplicated + history_modification_versions;
         assert_eq!(variants.len(), expected_count);
         assert_eq!(<Column<OffChain> as EnumCount>::COUNT, expected_count);
     }
@@ -124,8 +133,8 @@ mod tests {
         let variants = enum_iterator::all::<Column<Relayer>>().collect::<Vec<_>>();
         let original = <Relayer as DatabaseDescription>::Column::COUNT;
         let duplicated = <Relayer as DatabaseDescription>::Column::COUNT;
-        let history_modification = 1;
-        let expected_count = original + duplicated + history_modification;
+        let history_modification_versions = 2;
+        let expected_count = original + duplicated + history_modification_versions;
         assert_eq!(variants.len(), expected_count);
         assert_eq!(<Column<Relayer> as EnumCount>::COUNT, expected_count);
     }
