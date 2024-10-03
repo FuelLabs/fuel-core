@@ -48,7 +48,7 @@ use crate::{
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
-pub struct Pool<PSProvider, S: Storage, CM, SA> {
+pub struct Pool<PSProvider, S, SI, CM, SA> {
     /// Configuration of the pool.
     pub(crate) config: Config,
     /// The storage of the pool.
@@ -60,14 +60,14 @@ pub struct Pool<PSProvider, S: Storage, CM, SA> {
     /// The persistent storage of the pool.
     pub(crate) persistent_storage_provider: PSProvider,
     /// Mapping from tx_id to storage_id.
-    pub(crate) tx_id_to_storage_id: HashMap<TxId, S::StorageIndex>,
+    pub(crate) tx_id_to_storage_id: HashMap<TxId, SI>,
     /// Current pool gas stored.
     pub(crate) current_gas: u64,
     /// Current pool size in bytes.
     pub(crate) current_bytes_size: usize,
 }
 
-impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
+impl<PSProvider, S, SI, CM, SA> Pool<PSProvider, S, SI, CM, SA> {
     /// Create a new pool.
     pub fn new(
         persistent_storage_provider: PSProvider,
@@ -89,7 +89,7 @@ impl<PSProvider, S: Storage, CM, SA> Pool<PSProvider, S, CM, SA> {
     }
 }
 
-impl<PS, View, S, CM, SA> Pool<PS, S, CM, SA>
+impl<PS, View, S: Storage, CM, SA> Pool<PS, S, S::StorageIndex, CM, SA>
 where
     PS: AtomicView<LatestView = View>,
     View: TxPoolPersistentStorage,

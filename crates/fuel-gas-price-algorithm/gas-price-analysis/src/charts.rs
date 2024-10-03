@@ -307,10 +307,10 @@ pub fn draw_profit(
         .x_label_area_size(40)
         .y_label_area_size(100)
         .right_y_label_area_size(100)
-        .build_cartesian_2d(0..actual_profit_gwei.len(), min..max)
+        .build_cartesian_2d(0..projected_profit.len(), min..max)
         .unwrap()
         .set_secondary_coord(
-            0..actual_profit_gwei.len(),
+            0..projected_profit.len(),
             0..*pessimistic_block_costs_gwei.iter().max().unwrap(),
         );
 
