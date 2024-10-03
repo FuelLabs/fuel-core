@@ -72,6 +72,3 @@ where
         Column::HistoryV2Column
     }
 }
-
-/// Type alias. To be removed once the HistoricalRocksDB starts using ModificationsHistoryV2.
-pub type ModificationsHistory<Description> = ModificationsHistoryV1<Description>;

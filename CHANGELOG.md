@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
 ### Changed
+- [2233]((https://github.com/FuelLabs/fuel-core/pull/2233): New changes to HistoricalRocksDB are written to ModificationsHistoryV2
 
 #### Breaking
 - [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
