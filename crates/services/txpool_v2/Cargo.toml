@@ -1,0 +1,39 @@
+[package]
+name = "fuel-core-txpool-v2"
+version = { workspace = true }
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Transaction pool v2"
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+derive_more = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["test-helpers"] }
+futures = { workspace = true }
+mockall = { workspace = true, optional = true }
+num-rational = { workspace = true }
+parking_lot = { workspace = true }
+petgraph = "0.6.5"
+rayon = { workspace = true }
+tokio = { workspace = true, default-features = false, features = ["sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+fuel-core-trace = { workspace = true }
+rand = { workspace = true }
+
+[features]
+test-helpers = [
+  "dep:mockall",
+  "fuel-core-types/test-helpers",
+  "fuel-core-storage/test-helpers",
+]
