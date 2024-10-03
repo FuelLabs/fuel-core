@@ -278,7 +278,7 @@ impl FuelClient {
         if let Some(password) = url.password() {
             let username = url.username();
             let credentials = format!("{}:{}", username, password);
-            let authorization = format!("Basic {}", BASE64_STANDARD.encode(&credentials));
+            let authorization = format!("Basic {}", BASE64_STANDARD.encode(credentials));
             client_builder = client_builder
                 .header("Authorization", &authorization)
                 .map_err(|e| {
