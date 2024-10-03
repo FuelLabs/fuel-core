@@ -40,7 +40,6 @@ where
     poll_interval: Interval,
     source: Source,
     shared_state: DaBlockCostsSharedState,
-    cache: HashSet<DaBlockCosts>,
 }
 
 const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 10;
@@ -59,7 +58,6 @@ where
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
             source,
-            cache: Default::default(),
         }
     }
 }
@@ -115,10 +113,7 @@ where
             }
             _ = self.poll_interval.tick() => {
                 let da_block_costs = self.source.request_da_block_cost().await?;
-                if !self.cache.contains(&da_block_costs) {
-                    self.cache.insert(da_block_costs.clone());
-                    self.shared_state.0.send(da_block_costs)?;
-                }
+                self.shared_state.0.send(da_block_costs)?;
                 continue_running = true;
             }
         }
