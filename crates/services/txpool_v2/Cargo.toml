@@ -34,8 +34,8 @@ mockall = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 test-strategy = { workspace = true }
-tracing = { workspace = true }
 tokio = { workspace = true, features = ["sync", "test-util"] }
+tracing = { workspace = true }
 
 [features]
 test-helpers = [
