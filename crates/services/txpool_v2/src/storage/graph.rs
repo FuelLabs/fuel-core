@@ -91,6 +91,7 @@ impl GraphStorage {
     ) {
         let Some(root) = self.graph.node_weight_mut(root_id) else {
             debug_assert!(false, "Node with id {:?} not found", root_id);
+            tracing::warn!("Node with id {:?} not found", root_id);
             return;
         };
         root.dependents_cumulative_gas = root

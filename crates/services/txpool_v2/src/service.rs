@@ -46,6 +46,7 @@ pub type TxPool<PSProvider> = Arc<
         Pool<
             PSProvider,
             GraphStorage,
+            <GraphStorage as Storage>::StorageIndex,
             BasicCollisionManager<<GraphStorage as Storage>::StorageIndex>,
             RatioTipGasSelection<GraphStorage>,
         >,
