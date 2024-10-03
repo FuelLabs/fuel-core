@@ -66,12 +66,6 @@ pub struct AlgorithmUpdaterV0 {
     pub l2_block_fullness_threshold_percent: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct BlockBytes {
-    pub height: u32,
-    pub block_bytes: u64,
-}
-
 impl AlgorithmUpdaterV0 {
     pub fn new(
         new_exec_price: u64,
