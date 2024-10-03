@@ -7,6 +7,7 @@ use crate::{
         UtxoIdToPointer,
     },
     registry::{
+        EvictorDbAll,
         PerRegistryKeyspace,
         RegistrationsPerTable,
         TemporalRegistryAll,
@@ -41,8 +42,8 @@ use std::collections::{
     HashSet,
 };
 
-pub trait CompressDb: TemporalRegistryAll + UtxoIdToPointer {}
-impl<T> CompressDb for T where T: TemporalRegistryAll + UtxoIdToPointer {}
+pub trait CompressDb: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
+impl<T> CompressDb for T where T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
 
 /// This must be called for all new blocks in sequence, otherwise the result will be garbage, since
 /// the registry is valid for only the current block height. On any other height you could be

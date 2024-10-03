@@ -58,12 +58,22 @@ macro_rules! tables {
 
         pub trait TemporalRegistryAll
         where
-            $(Self: TemporalRegistry<$type> + EvictorDb<$type>,)*
+            $(Self: TemporalRegistry<$type>,)*
         {}
 
         impl<T> TemporalRegistryAll for T
         where
-            $(T: TemporalRegistry<$type> + EvictorDb<$type>,)*
+            $(T: TemporalRegistry<$type>,)*
+        {}
+
+        pub trait EvictorDbAll
+        where
+            $(Self: EvictorDb<$type>,)*
+        {}
+
+        impl<T> EvictorDbAll for T
+        where
+            $(T: EvictorDb<$type>,)*
         {}
 
 

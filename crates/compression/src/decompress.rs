@@ -266,11 +266,11 @@ mod tests {
         ($type:ty) => {
             impl TemporalRegistry<$type> for MockDb {
                 fn read_registry(&self, _key: &RegistryKey) -> anyhow::Result<$type> {
-                    todo!()
+                    unimplemented!()
                 }
 
                 fn read_timestamp(&self, _key: &RegistryKey) -> anyhow::Result<Tai64> {
-                    todo!()
+                    unimplemented!()
                 }
 
                 fn write_registry(
@@ -279,14 +279,14 @@ mod tests {
                     _value: &$type,
                     _timestamp: Tai64,
                 ) -> anyhow::Result<()> {
-                    todo!()
+                    unimplemented!()
                 }
 
                 fn registry_index_lookup(
                     &self,
                     _value: &$type,
                 ) -> anyhow::Result<Option<RegistryKey>> {
-                    todo!()
+                    unimplemented!()
                 }
             }
 
@@ -295,11 +295,11 @@ mod tests {
                     &mut self,
                     _key: RegistryKey,
                 ) -> anyhow::Result<()> {
-                    todo!()
+                    unimplemented!()
                 }
 
                 fn get_latest_assigned_key(&self) -> anyhow::Result<Option<RegistryKey>> {
-                    todo!()
+                    unimplemented!()
                 }
             }
         };
