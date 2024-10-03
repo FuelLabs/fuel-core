@@ -1,13 +1,21 @@
 #![allow(non_snake_case)]
 
 use super::*;
+use crate::common::utils::{
+    Error as GasPriceError,
+    Result as GasPriceResult,
+};
 use fuel_core_services::stream::{
     BoxStream,
     IntoBoxStream,
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
+        header::ConsensusParametersVersion,
         SealedBlock,
     },
     fuel_tx::{
@@ -16,8 +24,13 @@ use fuel_core_types::{
             FeeParameters,
             FeeParametersV1,
         },
+        field::{
+            MintAmount,
+            MintGasPrice,
+        },
         ConsensusParameters,
         Mint,
+        Transaction,
         UniqueIdentifier,
     },
     fuel_types::ChainId,
@@ -53,7 +66,7 @@ impl GasPriceSettingsProvider for FakeSettings {
     fn settings(
         &self,
         _param_version: &ConsensusParametersVersion,
-    ) -> Result<GasPriceSettings> {
+    ) -> GasPriceResult<GasPriceSettings> {
         Ok(GasPriceSettings {
             gas_price_factor: self.gas_price_factor,
             block_gas_limit: self.block_gas_limit,
@@ -103,7 +116,6 @@ async fn get_l2_block__gets_expected_value() {
     let params = params();
     let height = 1u32.into();
     let (block, _mint) = build_block(&params.chain_id(), height);
-    let block_height = 1u32.into();
     let genesis_block_height = 0u32.into();
     let gas_price_factor = 100;
     let block_gas_limit = 1000;
@@ -117,7 +129,7 @@ async fn get_l2_block__gets_expected_value() {
     let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
-    let actual = source.get_l2_block(block_height).await.unwrap();
+    let actual = source.get_l2_block().await.unwrap();
 
     // then
     assert_eq!(expected, actual);
@@ -140,7 +152,7 @@ async fn get_l2_block__waits_for_block() {
     let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
-    let mut fut_l2_block = source.get_l2_block(block_height);
+    let mut fut_l2_block = source.get_l2_block();
     for _ in 0..10 {
         fut_l2_block = match maybe_done(fut_l2_block) {
             MaybeDone::Future(fut) => {
@@ -195,7 +207,7 @@ async fn get_l2_block__calculates_gas_used_correctly() {
     let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
-    let result = source.get_l2_block(block_height).await.unwrap();
+    let result = source.get_l2_block().await.unwrap();
 
     // then
     let BlockInfo::Block {
@@ -236,7 +248,7 @@ async fn get_l2_block__calculates_block_gas_capacity_correctly() {
     let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
-    let result = source.get_l2_block(block_height).await.unwrap();
+    let result = source.get_l2_block().await.unwrap();
 
     // then
     let BlockInfo::Block {
@@ -270,7 +282,7 @@ async fn get_l2_block__if_block_precedes_genesis_block_throw_an_error() {
     let mut source = l2_source(genesis_block_height, settings, block_stream);
 
     // when
-    let error = source.get_l2_block(block_height).await.unwrap_err();
+    let error = source.get_l2_block().await.unwrap_err();
 
     // then
     assert!(matches!(error, GasPriceError::CouldNotFetchL2Block { .. }));

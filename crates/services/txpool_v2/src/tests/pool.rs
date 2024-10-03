@@ -6,17 +6,12 @@ use crate::{
         PoolLimits,
     },
     error::{
-        BlacklistedError,
         CollisionReason,
-        DependencyError,
         Error,
-        InputValidationError,
     },
     ports::WasmValidityError,
-    selection_algorithms::Constraints,
     tests::{
-        mocks::MockWasmChecker,
-        universe::{
+        context::{
             create_contract_input,
             create_contract_output,
             create_message_predicate_from_message,
@@ -25,6 +20,7 @@ use crate::{
             GAS_LIMIT,
             TEST_COIN_AMOUNT,
         },
+        mocks::MockWasmChecker,
     },
 };
 use fuel_core_types::{
@@ -64,6 +60,7 @@ use fuel_core_types::{
         PredicateVerificationFailed,
     },
 };
+use std::vec;
 
 #[tokio::test]
 async fn insert_one_tx_succeeds() {
@@ -95,9 +92,7 @@ async fn insert__tx_with_blacklisted_utxo_id() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(
-        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedUTXO(id)) if id == utxo_id)
-    );
+    assert!(matches!(err, Error::BlacklistedUTXO(id) if id == utxo_id));
 }
 
 #[tokio::test]
@@ -115,9 +110,7 @@ async fn insert__tx_with_blacklisted_owner() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(
-        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedOwner(id)) if id == owner_addr)
-    );
+    assert!(matches!(err, Error::BlacklistedOwner(id) if id == owner_addr));
 }
 
 #[tokio::test]
@@ -146,9 +139,7 @@ async fn insert__tx_with_blacklisted_contract() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(
-        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedContract(id)) if id == contract_id)
-    );
+    assert!(matches!(err, Error::BlacklistedContract(id) if id == contract_id));
 }
 
 #[tokio::test]
@@ -166,9 +157,7 @@ async fn insert__tx_with_blacklisted_message() {
     let err = universe.verify_and_insert(tx).await.unwrap_err();
 
     // Then
-    assert!(
-        matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedMessage(id)) if id == nonce)
-    );
+    assert!(matches!(err, Error::BlacklistedMessage(id) if id == nonce));
 }
 
 #[tokio::test]
@@ -271,9 +260,7 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
     // Then
     let err = result2.unwrap_err();
 
-    assert!(
-        matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
-    );
+    assert!(matches!(err, Error::UtxoNotFound(id) if id == utxo_id));
 }
 
 #[tokio::test]
@@ -289,13 +276,11 @@ async fn insert__already_known_tx_returns_error() {
     universe.verify_and_insert(tx.clone()).await.unwrap();
 
     // When
-    let result2 = universe.verify_and_insert(tx.clone()).await;
+    let result2 = universe.verify_and_insert(tx).await;
 
     // Then
     let err = result2.unwrap_err();
-    assert!(
-        matches!(err, Error::InputValidation(InputValidationError::DuplicateTxId(id)) if id == tx.id(&ChainId::default()))
-    );
+    assert!(matches!(err, Error::DuplicateTxId(_)));
 }
 
 #[tokio::test]
@@ -313,9 +298,7 @@ async fn insert__unknown_utxo_returns_error() {
 
     // Then
     let err = result.unwrap_err();
-    assert!(
-        matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
-    );
+    assert!(matches!(err, Error::UtxoNotFound(id) if id == utxo_id));
 }
 
 #[tokio::test]
@@ -592,10 +575,7 @@ async fn insert__dependency_chain_length_hit() {
 
     // Then
     let err = result3.unwrap_err();
-    assert!(matches!(
-        err,
-        Error::Dependency(DependencyError::NotInsertedChainDependencyTooBig)
-    ));
+    assert!(matches!(err, Error::NotInsertedChainDependencyTooBig));
 }
 
 #[tokio::test]
@@ -620,7 +600,7 @@ async fn get_sorted_out_tx1_2_3() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
+        .extract_transactions_for_block()
         .unwrap();
 
     // Then
@@ -672,7 +652,7 @@ async fn get_sorted_out_tx_same_tips() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
+        .extract_transactions_for_block()
         .unwrap();
 
     // Then
@@ -724,7 +704,7 @@ async fn get_sorted_out_tx_profitable_ratios() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
+        .extract_transactions_for_block()
         .unwrap();
 
     // Then
@@ -758,7 +738,7 @@ async fn get_sorted_out_tx_by_creation_instant() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(u64::MAX, u16::MAX, u32::MAX)
+        .extract_transactions_for_block()
         .unwrap();
 
     // Then
@@ -847,7 +827,7 @@ async fn insert__tx_when_input_message_id_do_not_exists_in_db() {
     // Then
     assert!(matches!(
         err,
-        Error::InputValidation(InputValidationError::NotInsertedInputMessageUnknown(msg_id)) if msg_id == *message.id()
+        Error::NotInsertedInputMessageUnknown(msg_id) if msg_id == *message.id()
     ));
 }
 
@@ -1182,7 +1162,7 @@ async fn insert__tx_blob_already_in_db() {
     // Then
     assert!(matches!(
         err,
-        Error::InputValidation(InputValidationError::NotInsertedBlobIdAlreadyTaken(b)) if b == blob_id
+        Error::NotInsertedBlobIdAlreadyTaken(b) if b == blob_id
     ));
 }
 
@@ -1214,10 +1194,7 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     let err = universe.verify_and_insert(tx3).await.unwrap_err();
 
     // Then
-    assert!(matches!(
-        err,
-        Error::Dependency(DependencyError::DependentTransactionIsADiamondDeath)
-    ));
+    assert!(matches!(err, Error::DependentTransactionIsADiamondDeath));
 }
 
 #[tokio::test]
@@ -1245,7 +1222,7 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
         .verify_and_insert_with_consensus_params_wasm_checker(
             tx,
             params,
-            MockWasmChecker::new(Err(WasmValidityError::NotEnabled)),
+            MockWasmChecker::new(Err(WasmValidityError::Validity)),
         )
         .await
         .unwrap_err();
@@ -1253,6 +1230,6 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
     // Then
     assert!(matches!(
         result,
-        Error::WasmValidity(WasmValidityError::NotEnabled)
+        Error::WasmValidity(WasmValidityError::Validity)
     ));
 }

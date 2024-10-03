@@ -56,6 +56,7 @@ async fn test_new_subscription_p2p() {
             if state == 0 {
                 Some((PeerId::from(vec![1, 2]), state + 1))
             } else {
+                tokio::time::sleep(Duration::from_millis(10000)).await;
                 None
             }
         }))
@@ -92,10 +93,14 @@ async fn test_new_subscription_p2p() {
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
     // When
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx2.id(&Default::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+        ])
+        .await
+        .unwrap();
 
     // Then
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
@@ -128,6 +133,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
             if state == 0 {
                 Some((PeerId::from(vec![1, 2]), state + 1))
             } else {
+                tokio::time::sleep(Duration::from_millis(10000)).await;
                 None
             }
         }))
@@ -156,6 +162,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     service
         .shared
         .insert(vec![Arc::new(tx1.clone())], None)
+        .await
         .unwrap();
 
     universe
@@ -167,10 +174,14 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
 
     wait_notification.notified().await;
     tokio::time::sleep(Duration::from_millis(1000)).await;
-    let out = service.shared.find(vec![
-        tx1.id(&Default::default()),
-        tx2.id(&Default::default()),
-    ]);
+    let out = service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+        ])
+        .await
+        .unwrap();
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     for (tx_pool, tx_expected) in out.into_iter().zip(&[tx1, tx2]) {
         assert!(tx_pool.is_some(), "Tx should be some:{tx_pool:?}");
@@ -204,7 +215,11 @@ async fn can_insert_from_p2p() {
     ));
 
     // fetch tx from pool
-    let out = service.shared.find(vec![tx1.id(&Default::default())]);
+    let out = service
+        .shared
+        .find(vec![tx1.id(&Default::default())])
+        .await
+        .unwrap();
 
     let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
@@ -236,6 +251,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
     service
         .shared
         .insert(vec![Arc::new(tx1.clone())], None)
+        .await
         .unwrap();
 
     // verify status updates

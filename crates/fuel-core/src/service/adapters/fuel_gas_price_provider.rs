@@ -1,8 +1,9 @@
 use crate::fuel_core_graphql_api::ports::GasPriceEstimate as GraphqlGasPriceEstimate;
-use fuel_core_gas_price_service::{
+use fuel_core_gas_price_service::common::gas_price_algorithm::{
     GasPriceAlgorithm,
     SharedGasPriceAlgo,
 };
+
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_txpool::{
     error::Error as TxPoolError,
