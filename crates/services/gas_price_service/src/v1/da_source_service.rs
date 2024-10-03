@@ -1,4 +1,4 @@
-use crate::v1::da_source_adapter::service::DaBlockCostsSource;
+use crate::v1::da_source_service::service::DaBlockCostsSource;
 use std::time::Duration;
 
 pub mod block_committer_costs;
@@ -16,7 +16,7 @@ pub struct DaBlockCosts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::da_source_adapter::{
+    use crate::v1::da_source_service::{
         dummy_costs::DummyDaBlockCosts,
         service::new_service,
     };

@@ -4,10 +4,7 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use std::{
-    collections::HashSet,
-    time::Duration,
-};
+use std::time::Duration;
 use tokio::{
     sync::broadcast::Sender,
     time::{
@@ -16,13 +13,13 @@ use tokio::{
     },
 };
 
-use crate::v1::da_source_adapter::DaBlockCosts;
+use crate::v1::da_source_service::DaBlockCosts;
 pub use anyhow::Result;
 
 #[derive(Clone)]
-pub struct DaBlockCostsSharedState(Sender<DaBlockCosts>);
+pub struct SharedState(Sender<DaBlockCosts>);
 
-impl DaBlockCostsSharedState {
+impl SharedState {
     fn new(sender: Sender<DaBlockCosts>) -> Self {
         Self(sender)
     }
@@ -33,19 +30,19 @@ impl DaBlockCostsSharedState {
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
-pub struct DaBlockCostsService<Source>
+pub struct DaSourceService<Source>
 where
     Source: DaBlockCostsSource,
 {
     poll_interval: Interval,
     source: Source,
-    shared_state: DaBlockCostsSharedState,
+    shared_state: SharedState,
 }
 
 const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 10;
 const POLLING_INTERVAL_MS: u64 = 10_000;
 
-impl<Source> DaBlockCostsService<Source>
+impl<Source> DaSourceService<Source>
 where
     Source: DaBlockCostsSource,
 {
@@ -53,7 +50,7 @@ where
         let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
         #[allow(clippy::arithmetic_side_effects)]
         Self {
-            shared_state: DaBlockCostsSharedState::new(sender),
+            shared_state: SharedState::new(sender),
             poll_interval: interval(
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
@@ -70,13 +67,13 @@ pub trait DaBlockCostsSource: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl<Source> RunnableService for DaBlockCostsService<Source>
+impl<Source> RunnableService for DaSourceService<Source>
 where
     Source: DaBlockCostsSource,
 {
-    const NAME: &'static str = "DaBlockCostsService";
+    const NAME: &'static str = "DaSourceService";
 
-    type SharedData = DaBlockCostsSharedState;
+    type SharedData = SharedState;
 
     type Task = Self;
 
@@ -97,7 +94,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<Source> RunnableTask for DaBlockCostsService<Source>
+impl<Source> RunnableTask for DaSourceService<Source>
 where
     Source: DaBlockCostsSource,
 {
@@ -130,6 +127,6 @@ where
 pub fn new_service<S: DaBlockCostsSource>(
     da_source: S,
     poll_interval: Option<Duration>,
-) -> ServiceRunner<DaBlockCostsService<S>> {
-    ServiceRunner::new(DaBlockCostsService::new(da_source, poll_interval))
+) -> ServiceRunner<DaSourceService<S>> {
+    ServiceRunner::new(DaSourceService::new(da_source, poll_interval))
 }
