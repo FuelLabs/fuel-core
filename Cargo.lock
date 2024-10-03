@@ -3716,6 +3716,7 @@ dependencies = [
  "insta",
  "itertools 0.12.1",
  "k256",
+ "postcard",
  "pretty_assertions",
  "primitive-types",
  "proptest",

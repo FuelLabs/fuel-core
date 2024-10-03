@@ -57,6 +57,7 @@ hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
 k256 = { version = "0.13.3", features = ["ecdsa-core"] }
+postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
