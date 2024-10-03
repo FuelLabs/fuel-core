@@ -3770,6 +3770,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-txpool-v2"
+version = "0.36.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "derive_more",
+ "fuel-core-services",
+ "fuel-core-storage",
+ "fuel-core-trace",
+ "fuel-core-types 0.36.0",
+ "futures",
+ "mockall",
+ "num-rational",
+ "parking_lot",
+ "petgraph",
+ "rand",
+ "rayon",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-types"
 version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

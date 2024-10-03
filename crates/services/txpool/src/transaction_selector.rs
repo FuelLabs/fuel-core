@@ -72,7 +72,10 @@ mod tests {
             checked_transaction::builder::TransactionBuilderExt,
             SecretKey,
         },
-        services::txpool::PoolTransaction,
+        services::txpool::{
+            Metadata,
+            PoolTransaction,
+        },
     };
     use itertools::Itertools;
     use std::sync::Arc;
@@ -157,7 +160,7 @@ mod tests {
                 // so it doesn't need to compute valid sigs for tests
                 PoolTransaction::Script(
                     script.finalize_checked_basic(Default::default()),
-                    ConsensusParametersVersion::MIN,
+                    Metadata::new(ConsensusParametersVersion::MIN),
                 )
             })
             .map(Arc::new)

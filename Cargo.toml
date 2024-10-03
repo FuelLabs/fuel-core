@@ -26,6 +26,7 @@ members = [
   "crates/services/relayer",
   "crates/services/sync",
   "crates/services/txpool",
+  "crates/services/txpool_v2",
   "crates/services/upgradable-executor",
   "crates/services/upgradable-executor/wasm-executor",
   "crates/storage",
@@ -77,6 +78,7 @@ fuel-core-producer = { version = "0.36.0", path = "./crates/services/producer" }
 fuel-core-relayer = { version = "0.36.0", path = "./crates/services/relayer" }
 fuel-core-sync = { version = "0.36.0", path = "./crates/services/sync" }
 fuel-core-txpool = { version = "0.36.0", path = "./crates/services/txpool" }
+fuel-core-txpool-v2 = { version = "0.36.0", path = "./crates/services/txpool_v2" }
 fuel-core-storage = { version = "0.36.0", path = "./crates/storage", default-features = false }
 fuel-core-trace = { version = "0.36.0", path = "./crates/trace" }
 fuel-core-types = { version = "0.36.0", path = "./crates/types", default-features = false }
