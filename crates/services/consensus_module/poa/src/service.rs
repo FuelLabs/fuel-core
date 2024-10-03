@@ -347,8 +347,9 @@ where
                 tx_id,
                 err
             );
-            tx_ids_to_remove.push((tx_id, err));
+            tx_ids_to_remove.push((tx_id, err.to_string()));
         }
+        self.txpool.broadcast_txs_skipped_reason(tx_ids_to_remove);
 
         // Sign the block and seal it
         let seal = self.signer.seal_block(&block).await?;
@@ -436,14 +437,7 @@ where
 
     pub(crate) async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
         match self.trigger {
-            Trigger::Instant => {
-                let pending_number = self.txpool.pending_number();
-                // skip production if there are no pending transactions
-                if pending_number > 0 {
-                    self.produce_next_block().await?;
-                }
-                Ok(())
-            }
+            Trigger::Instant => self.produce_next_block().await,
             Trigger::Never | Trigger::Interval { .. } => Ok(()),
         }
     }

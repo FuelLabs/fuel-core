@@ -26,7 +26,10 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::{ArcPoolTx, TransactionStatus},
+        txpool::{
+            ArcPoolTx,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -110,7 +113,6 @@ impl From<TxInfo> for TransactionStatus {
     }
 }
 
-
 pub type TxPool<PSProvider> = Arc<
     RwLock<
         Pool<
@@ -159,7 +161,7 @@ pub enum ReadPoolRequest {
     },
     GetTxs {
         tx_ids: Vec<TxId>,
-        response_channel: oneshot::Sender<Vec<Option<ArcPoolTx>>>,
+        response_channel: oneshot::Sender<Vec<Option<TxInfo>>>,
     },
 }
 
@@ -680,7 +682,12 @@ where
                     let pool = self.pool.read();
                     tx_ids
                         .into_iter()
-                        .map(|tx_id| pool.find_one(&tx_id))
+                        .map(|tx_id| {
+                            pool.find_one(&tx_id).map(|stored_data| TxInfo {
+                                tx: stored_data.transaction.clone(),
+                                creation_instant: stored_data.creation_instant.clone(),
+                            })
+                        })
                         .collect()
                 };
                 response_channel

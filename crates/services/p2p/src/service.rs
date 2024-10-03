@@ -610,7 +610,7 @@ where
     where
         ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
-        TxPoolFn: FnOnce() -> R + Send + 'static,
+        TxPoolFn: FnOnce() -> anyhow::Result<R> + Send + 'static,
         R: Send + 'static,
     {
         let instant = Instant::now();
@@ -622,7 +622,10 @@ where
                 return;
             }
 
-            let response = txpool_function();
+            let Ok(response) = txpool_function() else {
+                warn!("Failed to get txpool data");
+                return;
+            };
 
             // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
             let _ = response_channel
@@ -1309,15 +1312,18 @@ pub mod tests {
     struct FakeTxPool;
 
     impl TxPool for FakeTxPool {
-        fn get_tx_ids(&self, _max_txs: usize) -> Vec<fuel_core_types::fuel_tx::TxId> {
-            vec![]
+        fn get_tx_ids(
+            &self,
+            _max_txs: usize,
+        ) -> anyhow::Result<Vec<fuel_core_types::fuel_tx::TxId>> {
+            Ok(vec![])
         }
 
         fn get_full_txs(
             &self,
             tx_ids: Vec<TxId>,
-        ) -> Vec<Option<NetworkableTransactionPool>> {
-            tx_ids.iter().map(|_| None).collect()
+        ) -> anyhow::Result<Vec<Option<NetworkableTransactionPool>>> {
+            Ok(tx_ids.iter().map(|_| None).collect())
         }
     }
 

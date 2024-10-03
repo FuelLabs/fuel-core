@@ -65,14 +65,7 @@ pub type PoAService = fuel_core_poa::Service<
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
-pub type TxPoolSharedState = fuel_core_txpool::SharedState<
-    P2PAdapter,
-    Database,
-    ConsensusParametersProvider,
-    FuelGasPriceProvider<AlgorithmV0>,
-    ExecutorAdapter,
-    SharedMemoryPool,
->;
+pub type TxPoolSharedState = fuel_core_txpool::SharedState;
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,

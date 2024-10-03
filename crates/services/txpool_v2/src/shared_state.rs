@@ -30,6 +30,7 @@ use crate::{
         InsertionRequest,
         ReadPoolRequest,
         SelectTransactionsRequest,
+        TxInfo,
     },
     tx_status_stream::{
         TxStatusMessage,
@@ -87,12 +88,18 @@ impl SharedState {
     pub async fn select_transactions(
         &self,
         max_gas: u64,
+        maximum_txs: u16,
+        maximum_block_size: u32,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
             .send(SelectTransactionsRequest {
-                constraints: Constraints { max_gas },
+                constraints: Constraints {
+                    max_gas,
+                    maximum_txs,
+                    maximum_block_size,
+                },
                 response_channel: select_transactions_sender,
             })
             .await
@@ -120,11 +127,11 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
-    pub async fn find_one(&self, tx_id: TxId) -> Result<Option<ArcPoolTx>, Error> {
+    pub async fn find_one(&self, tx_id: TxId) -> Result<Option<TxInfo>, Error> {
         Ok(self.find(vec![tx_id]).await?.pop().flatten())
     }
 
-    pub async fn find(&self, tx_ids: Vec<TxId>) -> Result<Vec<Option<ArcPoolTx>>, Error> {
+    pub async fn find(&self, tx_ids: Vec<TxId>) -> Result<Vec<Option<TxInfo>>, Error> {
         let (result_sender, result_receiver) = oneshot::channel();
         self.read_pool_requests_sender
             .send(ReadPoolRequest::GetTxs {

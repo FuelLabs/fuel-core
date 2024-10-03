@@ -32,10 +32,9 @@ use tokio::sync::Notify;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
-    /// Returns the number of pending transactions in the `TxPool`.
-    fn pending_number(&self) -> usize;
-
     fn new_txs_notifier(&self) -> Arc<Notify>;
+
+    fn broadcast_txs_skipped_reason(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
 }
 
 /// The source of transactions for the block.

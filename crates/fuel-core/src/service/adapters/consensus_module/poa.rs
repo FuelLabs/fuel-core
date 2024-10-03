@@ -26,6 +26,7 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
+    fuel_tx::Bytes32,
     fuel_types::BlockHeight,
     services::{
         block_importer::{
@@ -80,12 +81,13 @@ impl ConsensusModulePort for PoAAdapter {
 }
 
 impl TransactionPool for TxPoolAdapter {
-    fn pending_number(&self) -> usize {
-        self.service.count()
-    }
-
     fn new_txs_notifier(&self) -> Arc<Notify> {
         self.service.get_new_txs_notifier()
+    }
+
+    fn broadcast_txs_skipped_reason(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
+        self.service
+            .broadcast_txs_skipped_reason(tx_ids_and_reasons)
     }
 }
 

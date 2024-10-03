@@ -997,12 +997,17 @@ pub(crate) fn get_tx_status(
             let status = TransactionStatus::new(id, status);
             Ok(Some(status))
         }
-        None => match txpool.submission_time(id) {
-            Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
-                SubmittedStatus(submitted_time),
-            ))),
-            _ => Ok(None),
-        },
+        None => {
+            let submitted_time =
+                futures::executor::block_on(async { txpool.submission_time(id).await })
+                    .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
+            match submitted_time {
+                Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
+                    SubmittedStatus(submitted_time),
+                ))),
+                _ => Ok(None),
+            }
+        }
     }
 }
 

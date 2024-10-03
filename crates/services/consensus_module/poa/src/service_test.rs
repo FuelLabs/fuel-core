@@ -250,11 +250,6 @@ impl MockTransactionPool {
             move || new_txs_notifier.clone()
         });
 
-        let pending = txs.clone();
-        txpool
-            .expect_pending_number()
-            .returning(move || pending.lock().unwrap().len());
-
         TxPoolContext {
             txpool,
             txs,
@@ -292,8 +287,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
 
-    let mut txpool = MockTransactionPool::no_tx_updates();
-    txpool.expect_pending_number().returning(|| 0);
+    let txpool = MockTransactionPool::no_tx_updates();
 
     let signer = SignMode::Key(Secret::new(secret_key.into()));
 

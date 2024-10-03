@@ -254,10 +254,6 @@ where
         Ok(extracted_transactions)
     }
 
-    pub fn count(&self) -> usize {
-        self.tx_id_to_storage_id.len()
-    }
-
     pub fn find_one(&self, tx_id: &TxId) -> Option<&StorageData> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
     }

@@ -59,19 +59,32 @@ impl BlockHeightImporter for BlockImporterAdapter {
 }
 
 impl TxPool for TxPoolAdapter {
-    fn get_tx_ids(&self, max_txs: usize) -> Vec<TxId> {
-        self.service.get_tx_ids(max_txs)
+    fn get_tx_ids(&self, max_txs: usize) -> anyhow::Result<Vec<TxId>> {
+        futures::executor::block_on(async {
+            self.service
+                .get_tx_ids(max_txs)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))
+        })
     }
 
-    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<NetworkableTransactionPool>> {
-        self.service
-            .find(tx_ids)
-            .into_iter()
-            .map(|tx_info| {
-                tx_info.map(|tx| {
-                    NetworkableTransactionPool::PoolTransaction(tx.tx().clone())
+    fn get_full_txs(
+        &self,
+        tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<NetworkableTransactionPool>>> {
+        futures::executor::block_on(async {
+            Ok(self
+                .service
+                .find(tx_ids)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?
+                .into_iter()
+                .map(|tx_info| {
+                    tx_info.map(|tx| {
+                        NetworkableTransactionPool::PoolTransaction(tx.tx().clone())
+                    })
                 })
-            })
-            .collect()
+                .collect())
+        })
     }
 }

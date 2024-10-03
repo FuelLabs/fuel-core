@@ -15,22 +15,28 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         transactions_limit: u16,
         block_transaction_size_limit: u32,
     ) -> Vec<MaybeCheckedTransaction> {
-        match self.txpool.select_transactions(
-            gas_limit,
-            transactions_limit,
-            block_transaction_size_limit,
-        ) {
-            Ok(transactions) => transactions
-                .into_iter()
-                .map(|tx| {
-                    MaybeCheckedTransaction::CheckedTransaction(
-                        tx.as_ref().into(),
-                        tx.used_consensus_parameters_version(),
-                    )
-                })
-                .collect(),
-            Err(_) => vec![],
-        }
+        futures::executor::block_on(async {
+            match self
+                .txpool
+                .select_transactions(
+                    gas_limit,
+                    transactions_limit,
+                    block_transaction_size_limit,
+                )
+                .await
+            {
+                Ok(transactions) => transactions
+                    .into_iter()
+                    .map(|tx| {
+                        MaybeCheckedTransaction::CheckedTransaction(
+                            tx.as_ref().into(),
+                            tx.used_consensus_parameters_version(),
+                        )
+                    })
+                    .collect(),
+                Err(_) => vec![],
+            }
+        })
     }
 }
 

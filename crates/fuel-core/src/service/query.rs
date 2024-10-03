@@ -26,6 +26,7 @@ impl FuelService {
         self.shared
             .txpool_shared_state
             .insert(vec![Arc::new(tx)], None)
+            .await
             .map_err(|e| anyhow::anyhow!(e))
     }
 
@@ -80,7 +81,13 @@ impl FuelService {
         Ok(transaction_status_change(
             move |id| match db.get_tx_status(&id)? {
                 Some(status) => Ok(Some(status)),
-                None => Ok(txpool.find_one(&id).map(Into::into)),
+                None => futures::executor::block_on(async {
+                    Ok(txpool
+                        .find_one(id)
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e))?
+                        .map(Into::into))
+                }),
             },
             rx,
             id,

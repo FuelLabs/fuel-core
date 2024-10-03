@@ -185,11 +185,11 @@ pub trait DatabaseChain {
 
 #[async_trait]
 pub trait TxPoolPort: Send + Sync {
-    fn transaction(&self, id: TxId) -> Option<Transaction>;
+    async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>>;
 
-    fn submission_time(&self, id: TxId) -> Option<Tai64>;
+    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>>;
 
-    fn insert(&self, txs: Vec<Arc<Transaction>>) -> anyhow::Result<()>;
+    async fn insert(&self, txs: Vec<Arc<Transaction>>) -> anyhow::Result<()>;
 
     fn tx_update_subscribe(
         &self,

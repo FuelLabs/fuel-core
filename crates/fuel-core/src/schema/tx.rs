@@ -101,7 +101,7 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        if let Some(transaction) = txpool.transaction(id) {
+        if let Some(transaction) = txpool.transaction(id).await? {
             Ok(Some(Transaction(transaction, id)))
         } else {
             query
@@ -330,6 +330,7 @@ impl TxMutation {
 
         txpool
             .insert(vec![Arc::new(tx.clone())])
+            .await
             .map_err(|e| anyhow::anyhow!(e))?;
         let id = tx.id(&params.chain_id());
 
@@ -369,9 +370,13 @@ impl TxStatusSubscription {
         Ok(transaction_status_change(
             move |id| match query.tx_status(&id) {
                 Ok(status) => Ok(Some(status)),
-                Err(StorageError::NotFound(_, _)) => Ok(txpool
-                    .submission_time(id)
-                    .map(|time| txpool::TransactionStatus::Submitted { time })),
+                Err(StorageError::NotFound(_, _)) => futures::executor::block_on(async {
+                    Ok(txpool
+                        .submission_time(id)
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e))?
+                        .map(|time| txpool::TransactionStatus::Submitted { time }))
+                }),
                 Err(err) => Err(err),
             },
             rx,
@@ -425,7 +430,7 @@ async fn submit_and_await_status<'a>(
     let tx_id = tx.id(&params.chain_id());
     let subscription = txpool.tx_update_subscribe(tx_id)?;
 
-    txpool.insert(vec![Arc::new(tx)])?;
+    txpool.insert(vec![Arc::new(tx)]).await?;
 
     Ok(subscription
         .map(move |event| match event {

@@ -60,7 +60,11 @@ async fn txs_max_script_gas_limit() {
         .into_iter()
         .map(|script| Arc::new(fuel_tx::Transaction::from(script)))
         .collect::<Vec<_>>();
-    srv.shared.txpool_shared_state.insert(txs, None).unwrap();
+    srv.shared
+        .txpool_shared_state
+        .insert(txs, None)
+        .await
+        .unwrap();
 
     let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(

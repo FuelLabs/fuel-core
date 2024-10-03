@@ -537,6 +537,7 @@ impl Node {
                 .shared
                 .txpool_shared_state
                 .insert(vec![Arc::new(tx.clone())], None)
+                .await
                 .unwrap();
 
             let mut subscriber = self
