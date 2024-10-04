@@ -231,15 +231,7 @@ where
         .get_metadata(&l2_block_height.into())
         .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
     {
-        algorithm_updater = match old_metadata {
-            UpdaterMetadata::V0(old) => AlgorithmUpdaterV0::new(
-                old.new_exec_price,
-                min_exec_gas_price,
-                exec_gas_price_change_percent,
-                old.l2_block_height,
-                l2_block_fullness_threshold_percent,
-            ),
-        };
+        algorithm_updater = old_metadata.try_into()?;
     } else {
         algorithm_updater = AlgorithmUpdaterV0::new(
             new_exec_price,
@@ -274,13 +266,13 @@ where
     GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
     SettingsProvider: GasPriceSettingsProvider,
 {
-    let UpdaterMetadata::V0(metadata) = metadata_storage
+    let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
         .ok_or(anyhow::anyhow!(
             "Expected metadata to exist for height: {metadata_height}"
         ))?;
 
-    let mut algo_updater = metadata.into();
+    let mut algo_updater = metadata.try_into()?;
 
     sync_v0_metadata(
         settings,
