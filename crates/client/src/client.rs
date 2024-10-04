@@ -29,6 +29,11 @@ use crate::client::{
 };
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
+use base64::prelude::{
+    Engine as _,
+    BASE64_STANDARD,
+};
+#[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
     http::ReqwestExt,
@@ -270,6 +275,19 @@ impl FuelClient {
                     format!("Failed to add header to client {e:?}"),
                 )
             })?;
+        if let Some(password) = url.password() {
+            let username = url.username();
+            let credentials = format!("{}:{}", username, password);
+            let authorization = format!("Basic {}", BASE64_STANDARD.encode(credentials));
+            client_builder = client_builder
+                .header("Authorization", &authorization)
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Failed to add header to client {e:?}"),
+                    )
+                })?;
+        }
 
         if let Some(value) = self.cookie.deref().cookies(&self.url) {
             let value = value.to_str().map_err(|e| {
