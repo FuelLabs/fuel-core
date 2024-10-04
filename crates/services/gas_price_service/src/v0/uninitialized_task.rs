@@ -22,7 +22,10 @@ use crate::{
         MetadataStorage,
     },
     v0::{
-        metadata::V0Metadata,
+        metadata::{
+            V0Metadata,
+            V0MetadataInitializer,
+        },
         service::GasPriceServiceV0,
     },
 };
@@ -52,7 +55,7 @@ pub use fuel_gas_price_algorithm::v0::AlgorithmV0;
 pub type SharedV0Algorithm = SharedGasPriceAlgo<AlgorithmV0>;
 
 pub struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
-    pub config: GasPriceServiceConfig,
+    pub config: V0MetadataInitializer,
     pub genesis_block_height: BlockHeight,
     pub settings: SettingsProvider,
     pub gas_price_db: GasPriceStore,
@@ -64,16 +67,10 @@ pub struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
 }
 
 fn get_default_metadata(
-    config: &GasPriceServiceConfig,
+    config: &V0MetadataInitializer,
     latest_block_height: u32,
 ) -> V0Metadata {
-    V0Metadata {
-        new_exec_price: config.starting_gas_price.max(config.min_gas_price),
-        min_exec_gas_price: config.min_gas_price,
-        exec_gas_price_change_percent: config.gas_price_change_percent,
-        l2_block_height: latest_block_height,
-        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
-    }
+    config.initialize(latest_block_height)
 }
 
 impl<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider>
@@ -86,7 +83,7 @@ where
     SettingsProvider: GasPriceSettingsProvider,
 {
     pub fn new(
-        config: GasPriceServiceConfig,
+        config: V0MetadataInitializer,
         genesis_block_height: BlockHeight,
         settings: SettingsProvider,
         block_stream: BoxStream<SharedImportResult>,
@@ -359,8 +356,9 @@ where
         GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
     SettingsProvider: GasPriceSettingsProvider,
 {
+    let v0_config = config.v0().ok_or(anyhow::anyhow!("Expected V0 config"))?;
     let gas_price_init = UninitializedTask::new(
-        config,
+        v0_config,
         genesis_block_height,
         settings,
         block_stream,

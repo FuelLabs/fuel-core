@@ -52,6 +52,55 @@ pub struct V1Metadata {
     pub latest_da_cost_per_byte: u128,
 }
 
+pub struct V1MetadataInitializer {
+    new_exec_gas_price: u64,
+    min_exec_gas_price: u64,
+    exec_gas_price_change_percent: u16,
+    l2_block_fullness_threshold_percent: u8,
+    gas_price_factor: u64,
+    min_da_gas_price: u64,
+    max_da_gas_price_change_percent: u16,
+    da_p_component: i64,
+    da_d_component: i64,
+}
+
+impl V1MetadataInitializer {
+    pub fn initialize(
+        &self,
+        l2_block_height: u32,
+        da_block_height: u32,
+    ) -> anyhow::Result<V1Metadata> {
+        let gas_price_factor = NonZeroU64::new(self.gas_price_factor)
+            .ok_or_else(|| anyhow::anyhow!("gas_price_factor must be non-zero"))?;
+        let metadata = V1Metadata {
+            #[allow(clippy::arithmetic_side_effects)]
+            new_scaled_exec_price: self.new_exec_gas_price * gas_price_factor.get(),
+            min_exec_gas_price: self.min_exec_gas_price,
+            exec_gas_price_change_percent: self.exec_gas_price_change_percent,
+            l2_block_height,
+            l2_block_fullness_threshold_percent: ClampedPercentage::new(
+                self.l2_block_fullness_threshold_percent,
+            ),
+            #[allow(clippy::arithmetic_side_effects)]
+            new_scaled_da_gas_price: self.min_da_gas_price * gas_price_factor.get(),
+            gas_price_factor,
+            min_da_gas_price: self.min_da_gas_price,
+            max_da_gas_price_change_percent: self.max_da_gas_price_change_percent,
+            total_da_rewards_excess: 0,
+            da_recorded_block_height: da_block_height,
+            latest_known_total_da_cost_excess: 0,
+            projected_total_da_cost: 0,
+            da_p_component: self.da_p_component,
+            da_d_component: self.da_d_component,
+            last_profit: 0,
+            second_to_last_profit: 0,
+            latest_da_cost_per_byte: 0,
+        };
+
+        Ok(metadata)
+    }
+}
+
 impl From<V1Metadata> for AlgorithmUpdaterV1 {
     fn from(metadata: V1Metadata) -> Self {
         Self {

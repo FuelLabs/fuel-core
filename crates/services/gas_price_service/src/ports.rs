@@ -1,6 +1,10 @@
-use crate::common::{
-    updater_metadata::UpdaterMetadata,
-    utils::Result,
+use crate::{
+    common::{
+        updater_metadata::UpdaterMetadata,
+        utils::Result,
+    },
+    v0::metadata::V0MetadataInitializer,
+    v1::metadata::V1MetadataInitializer,
 };
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -30,25 +34,65 @@ pub trait GasPriceData: Send + Sync {
     fn latest_height(&self) -> Option<BlockHeight>;
 }
 
-pub struct GasPriceServiceConfig {
-    pub min_gas_price: u64,
-    pub starting_gas_price: u64,
-    pub gas_price_change_percent: u64,
-    pub gas_price_threshold_percent: u64,
+pub enum VersionSpecificConfig {
+    V0(V0MetadataInitializer),
+    V1(V1MetadataInitializer),
 }
 
-impl GasPriceServiceConfig {
-    pub fn new(
-        min_gas_price: u64,
+impl VersionSpecificConfig {
+    pub fn new_v0(
         starting_gas_price: u64,
+        min_gas_price: u64,
         gas_price_change_percent: u64,
         gas_price_threshold_percent: u64,
     ) -> Self {
-        Self {
-            min_gas_price,
+        Self::V0(V0MetadataInitializer {
             starting_gas_price,
+            min_gas_price,
             gas_price_change_percent,
             gas_price_threshold_percent,
+        })
+    }
+
+    pub fn new_v1(metadata: V1MetadataInitializer) -> Self {
+        Self::V1(metadata)
+    }
+
+    /// Extract V0MetadataInitializer if it is of V0 version
+    pub fn v0(self) -> Option<V0MetadataInitializer> {
+        if let VersionSpecificConfig::V0(v0) = self {
+            Some(v0)
+        } else {
+            None
         }
+    }
+
+    /// Extract V1MetadataInitializer if it is of V1 version
+    pub fn v1(self) -> Option<V1MetadataInitializer> {
+        if let VersionSpecificConfig::V1(v1) = self {
+            Some(v1)
+        } else {
+            None
+        }
+    }
+}
+
+pub struct GasPriceServiceConfig {
+    version_specific_config: VersionSpecificConfig,
+}
+
+impl GasPriceServiceConfig {
+    pub fn new(version_specific_config: VersionSpecificConfig) -> Self {
+        Self {
+            version_specific_config,
+        }
+    }
+
+    pub fn v0(self) -> Option<V0MetadataInitializer> {
+        self.version_specific_config.v0()
+    }
+
+    pub fn v1(self) -> Option<V1MetadataInitializer> {
+        self.version_specific_config.v1()
     }
 }
