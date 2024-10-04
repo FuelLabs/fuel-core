@@ -94,9 +94,9 @@ mod tests {
         ].iter().map(|s| s.parse().unwrap()).collect();
 
         // when
-        // run a `dig +short txt _dnsaddr.mainnet.fuel.network` to get the TXT records
+        // run a `dig +short txt _dnsaddr.core-test.fuellabs.net.` to get the TXT records
         let multiaddrs = resolver
-            .lookup_dnsaddr("mainnet.fuel.network")
+            .lookup_dnsaddr("core-test.fuellabs.net.")
             .await
             .unwrap();
         // then

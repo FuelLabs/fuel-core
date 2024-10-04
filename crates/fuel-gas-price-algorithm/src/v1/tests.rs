@@ -2,10 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::v1::{
-    AlgorithmUpdaterV1,
-    BlockBytes,
-};
+use crate::v1::AlgorithmUpdaterV1;
 
 #[cfg(test)]
 mod algorithm_v1_tests;
@@ -13,6 +10,12 @@ mod algorithm_v1_tests;
 mod update_da_record_data_tests;
 #[cfg(test)]
 mod update_l2_block_data_tests;
+
+#[derive(Debug, Clone)]
+pub struct BlockBytes {
+    pub height: u32,
+    pub block_bytes: u64,
+}
 
 pub struct UpdaterBuilder {
     min_exec_gas_price: u64,
@@ -44,8 +47,8 @@ impl UpdaterBuilder {
         Self {
             min_exec_gas_price: 0,
             min_da_gas_price: 0,
-            starting_exec_gas_price: 0,
-            starting_da_gas_price: 0,
+            starting_exec_gas_price: 1,
+            starting_da_gas_price: 1,
             exec_gas_price_change_percent: 0,
             max_change_percent: u16::MAX,
 
@@ -175,7 +178,11 @@ impl UpdaterBuilder {
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost_excess: self.latest_known_total_cost,
-            unrecorded_blocks: self.unrecorded_blocks,
+            unrecorded_blocks: self
+                .unrecorded_blocks
+                .iter()
+                .map(|b| (b.height, b.block_bytes))
+                .collect(),
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
