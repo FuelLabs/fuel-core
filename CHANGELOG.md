@@ -6,8 +6,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-## [Version 0.36.0]
-
 ### Added
 - [2195](https://github.com/FuelLabs/fuel-core/pull/2195): Added enforcement of the limit on the size of the L2 transactions per block according to the `block_transaction_size_limit` parameter.
 - [2131](https://github.com/FuelLabs/fuel-core/pull/2131): Add flow in TxPool in order to ask to newly connected peers to share their transaction pool
@@ -20,6 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 #### Breaking
+- [2276](https://github.com/FuelLabs/fuel-core/pull/2276): Changed how complexity for blocks is calculated. The default complexity now is 80_000. All queries that somehow touch the block header now are more expensive.
 - [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
 - [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
 
@@ -33,7 +32,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2204](https://github.com/FuelLabs/fuel-core/pull/2204): Added `dnsaddr` resolution for TLD without suffixes.
 
 ### Changed
-- [2276](https://github.com/FuelLabs/fuel-core/pull/2276): Change complexity block query to allow fetching of 10 blocks
 
 #### Breaking
 - [2199](https://github.com/FuelLabs/fuel-core/pull/2199): Applying several breaking changes to the WASM interface from backlog:
