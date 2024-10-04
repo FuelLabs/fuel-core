@@ -12,6 +12,7 @@ use crate::{
     },
     fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
+    schema::tx::types::TransactionStatus,
     service::{
         Config,
         FuelService,
@@ -505,12 +506,19 @@ impl Node {
             let mut wait_transaction =
                 self.node.transaction_status_change(tx_id).unwrap();
 
-            tokio::select! {
-                result = wait_transaction.next() => {
-                    let _ = result.unwrap();
-                }
-                _ = self.node.await_shutdown() => {
-                    panic!("Got a stop signal")
+            loop {
+                tokio::select! {
+                    result = wait_transaction.next() => {
+                        let status = result.unwrap().unwrap();
+
+                        if matches!(status, TransactionStatus::Failed { .. })
+                            || matches!(status, TransactionStatus::Success { .. }) {
+                            break
+                        }
+                    }
+                    _ = self.node.await_shutdown() => {
+                        panic!("Got a stop signal")
+                    }
                 }
             }
         }
