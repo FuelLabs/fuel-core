@@ -1,5 +1,5 @@
 {
-  "chain_name": "Local testnet",
+  "chain_name": "V36",
   "consensus_parameters": {
     "V2": {
       "tx_params": {
