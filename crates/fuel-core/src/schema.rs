@@ -79,7 +79,8 @@ pub fn build_schema() -> CoreSchemaBuilder {
         Mutation::default(),
         Subscription::default(),
         ["TransactionConnection", "MessageConnection"],
-    ).limit_directives(10_000)
+    )
+    .limit_directives(10_000)
 }
 
 async fn query_pagination<F, Entries, SchemaKey, SchemaValue>(
