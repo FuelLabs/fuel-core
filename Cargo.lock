@@ -3140,8 +3140,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "711b83807968cd62babe6cd70c94b76c86f302c8573da18b3c69135688eceecd"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types 0.57.1",
@@ -3843,8 +3842,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5a4ca62d0a8a361b66a6eab3456285883d0aa92c407e249fc76f195c332fbb2"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3876,8 +3874,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ca99d9c264fec231a01e55bbdb6adb3080266dc44c4cc88de870b089ee2a015"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3913,8 +3910,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f3c08f22f7c24170a4ac255e7dfe52d52ae2e85c4a8e26ed6df4f1bd380210"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3934,8 +3930,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d676ea5d926bf90c8ea442e5f6fc23c0e86c2e4d663f303842b4afe5b7928084"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 
 [[package]]
 name = "fuel-tx"
@@ -3962,8 +3957,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86158d08fe2a936ac765a1e2cb9bf60be704203b3085882e7cc6cd4c48de38ef"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -3977,7 +3971,6 @@ dependencies = [
  "postcard",
  "rand",
  "serde",
- "serde_json",
  "strum 0.24.1",
  "strum_macros 0.24.3",
 ]
@@ -3996,8 +3989,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42b4430c6a20669fffd8f2c17d2be6809a356f623243a78b5eedf8ba7897c036"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 dependencies = [
  "fuel-derive 0.57.1",
  "hex",
@@ -4039,8 +4031,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1b04a4e971d58b3662ff8b84b3176094e25f4b372728a13ea903fdf79c7e426"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
 dependencies = [
  "anyhow",
  "async-trait",

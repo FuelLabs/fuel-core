@@ -142,3 +142,13 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
+
+
+[patch.crates-io]
+fuel-asm = { package = "fuel-asm", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
+fuel-crypto = { package = "fuel-crypto", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
+fuel-merkle = { package = "fuel-merkle", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
+fuel-storage = { package = "fuel-storage", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
+fuel-tx = { package = "fuel-tx", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
+fuel-types = { package = "fuel-types", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
+fuel-vm-private = { package = "fuel-vm", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
