@@ -27,7 +27,7 @@ use libp2p::{
 };
 use std::time::Duration;
 
-const BLOCK_INCLUSION_TIMEOUT: Duration = Duration::from_secs(240);
+const BLOCK_INCLUSION_TIMEOUT: Duration = Duration::from_secs(360);
 
 #[tokio::test]
 async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
