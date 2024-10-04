@@ -1148,6 +1148,35 @@ mod tests {
     }
 
     #[test]
+    fn rollback_last_block_works_with_v2() {
+        // Given
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
+
+        let historical_rocks_db =
+            HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
+
+        // Commit 1000 blocks
+        for i in 1..=1000u32 {
+            let mut transaction = historical_rocks_db.read_transaction();
+            transaction
+                .storage_as_mut::<ContractsAssets>()
+                .insert(&key(), &(123 + i as u64))
+                .unwrap();
+            historical_rocks_db
+                .commit_changes(Some(i.into()), transaction.into_changes())
+                .unwrap();
+        }
+
+        // We can now rollback the last block 1000 times.
+        // If the rollback fails at some point, then we have unintentionally rollbacked to
+        // a block that was not the last.
+        for i in 0..1000u32 {
+            let result = historical_rocks_db.rollback_last_block();
+            assert_eq!(result, Ok(1000 - i as u64));
+        }
+    }
+
+    #[test]
     fn migrate_modifications_history_works() {
         // Given
         let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
