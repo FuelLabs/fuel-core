@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.36.1]
+
+### Fixed
+- [2276](https://github.com/FuelLabs/fuel-core/pull/2276): Changed complexity `blocks` API and all queries that return a block header.
+- [2285](https://github.com/FuelLabs/fuel-core/pull/2285): Manually encode Authorization header for `eventsource_client` to support "username:password" format.
+
 ## [Version 0.36.0]
 
 ### Added
