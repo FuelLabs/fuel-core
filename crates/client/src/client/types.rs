@@ -49,8 +49,14 @@ use crate::client::schema::{
 };
 use fuel_core_types::{
     fuel_tx::{
+        Blob as BlobTx,
+        Create,
+        Mint,
         Receipt,
+        Script,
         Transaction,
+        Upgrade,
+        Upload,
     },
     fuel_types::{
         canonical::Deserialize,
@@ -90,8 +96,51 @@ pub mod primitives {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransactionResponse {
-    pub transaction: Transaction,
+    pub transaction: TransactionType,
     pub status: TransactionStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum TransactionType {
+    Script(Script),
+    Create(Create),
+    Mint(Mint),
+    Upgrade(Upgrade),
+    Upload(Upload),
+    Blob(BlobTx),
+    Unknown,
+}
+
+impl From<Transaction> for TransactionType {
+    fn from(value: Transaction) -> Self {
+        match value {
+            Transaction::Script(tx) => Self::Script(tx),
+            Transaction::Create(tx) => Self::Create(tx),
+            Transaction::Mint(tx) => Self::Mint(tx),
+            Transaction::Upgrade(tx) => Self::Upgrade(tx),
+            Transaction::Upload(tx) => Self::Upload(tx),
+            Transaction::Blob(tx) => Self::Blob(tx),
+        }
+    }
+}
+
+impl TryFrom<TransactionType> for Transaction {
+    type Error = ConversionError;
+
+    fn try_from(value: TransactionType) -> Result<Self, ConversionError> {
+        match value {
+            TransactionType::Script(tx) => Ok(Self::Script(tx)),
+            TransactionType::Create(tx) => Ok(Self::Create(tx)),
+            TransactionType::Mint(tx) => Ok(Self::Mint(tx)),
+            TransactionType::Upgrade(tx) => Ok(Self::Upgrade(tx)),
+            TransactionType::Upload(tx) => Ok(Self::Upload(tx)),
+            TransactionType::Blob(tx) => Ok(Self::Blob(tx)),
+            TransactionType::Unknown => {
+                Err(ConversionError::UnknownVariant("Transaction"))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -177,8 +226,9 @@ impl TryFrom<OpaqueTransactionWithStatus> for TransactionResponse {
 
     fn try_from(value: OpaqueTransactionWithStatus) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        let tx: Transaction = Transaction::from_bytes(bytes.as_slice())
-            .map_err(ConversionError::TransactionFromBytesError)?;
+        let tx: TransactionType = Transaction::from_bytes(bytes.as_slice())
+            .map(Into::into)
+            .unwrap_or(TransactionType::Unknown);
         let status = value
             .status
             .ok_or_else(|| ConversionError::MissingField("status".to_string()))?

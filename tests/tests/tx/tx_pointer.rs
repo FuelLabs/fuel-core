@@ -17,6 +17,7 @@ use fuel_core_types::{
         Input,
         Output,
         Script,
+        Transaction,
         TransactionBuilder,
         TxPointer,
         UniqueIdentifier,
@@ -80,12 +81,14 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     // verify that the tx returned from the api has tx pointers set matching the genesis config
-    let ret_tx = client
+    let ret_tx: Transaction = client
         .transaction(&tx.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()
-        .transaction;
+        .transaction
+        .try_into()
+        .unwrap();
     let ret_script = ret_tx.as_script().unwrap();
 
     let coin_input = &ret_script.inputs()[0];
@@ -136,12 +139,14 @@ async fn tx_pointer_set_from_previous_block() {
     let tx1 = tx1.into();
     client.submit_and_await_commit(&tx1).await.unwrap();
     let next_block_height_after_genesis = new_genesis_block_height + 1;
-    let ret_tx1 = client
+    let ret_tx1: Transaction = client
         .transaction(&tx1.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()
-        .transaction;
+        .transaction
+        .try_into()
+        .unwrap();
     let ret_tx1 = ret_tx1.as_script().unwrap();
 
     // setup a second transaction that uses UTXOs from tx1
@@ -155,12 +160,14 @@ async fn tx_pointer_set_from_previous_block() {
     let tx2 = tx2.into();
     client.submit_and_await_commit(&tx2).await.unwrap();
 
-    let ret_tx2 = client
+    let ret_tx2: Transaction = client
         .transaction(&tx2.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()
-        .transaction;
+        .transaction
+        .try_into()
+        .unwrap();
 
     let ret_tx2 = ret_tx2.as_script().unwrap();
 
@@ -204,12 +211,15 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     let tx = script.into();
     client.submit_and_await_commit(&tx).await.unwrap();
 
-    let ret_tx = client
+    let ret_tx: Transaction = client
         .transaction(&tx.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()
-        .transaction;
+        .transaction
+        .try_into()
+        .unwrap();
+
     let ret_tx = ret_tx.as_script().unwrap();
     // verify coin input tx_pointer is null
     assert_eq!(

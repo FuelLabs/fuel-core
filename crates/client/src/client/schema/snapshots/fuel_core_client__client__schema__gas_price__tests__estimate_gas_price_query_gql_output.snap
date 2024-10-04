@@ -2,10 +2,8 @@
 source: crates/client/src/client/schema/gas_price.rs
 expression: operation.query
 ---
-query($blockHorizon: U32) {
+query QueryEstimateGasPrice($blockHorizon: U32) {
   estimateGasPrice(blockHorizon: $blockHorizon) {
     gasPrice
   }
 }
-
-

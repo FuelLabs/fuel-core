@@ -30,6 +30,8 @@ pub struct ConsensusParameters {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum ConsensusParametersVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -48,6 +50,8 @@ pub struct TxParameters {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum TxParametersVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl TryFrom<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
@@ -66,6 +70,7 @@ impl TryFrom<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
                 }
                 .into(),
             ),
+            _ => Err(ConversionError::UnknownVariant("TxParametersVersion")),
         }
     }
 }
@@ -84,6 +89,8 @@ pub struct PredicateParameters {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum PredicateParametersVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl TryFrom<PredicateParameters> for fuel_core_types::fuel_tx::PredicateParameters {
@@ -100,6 +107,9 @@ impl TryFrom<PredicateParameters> for fuel_core_types::fuel_tx::PredicateParamet
                 }
                 .into(),
             ),
+            _ => Err(ConversionError::UnknownVariant(
+                "PredicateParametersVersion",
+            )),
         }
     }
 }
@@ -116,6 +126,8 @@ pub struct ScriptParameters {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum ScriptParametersVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl TryFrom<ScriptParameters> for fuel_core_types::fuel_tx::ScriptParameters {
@@ -130,6 +142,7 @@ impl TryFrom<ScriptParameters> for fuel_core_types::fuel_tx::ScriptParameters {
                 }
                 .into(),
             ),
+            _ => Err(ConversionError::UnknownVariant("ScriptParametersVersion")),
         }
     }
 }
@@ -146,6 +159,8 @@ pub struct ContractParameters {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum ContractParametersVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl TryFrom<ContractParameters> for fuel_core_types::fuel_tx::ContractParameters {
@@ -160,6 +175,7 @@ impl TryFrom<ContractParameters> for fuel_core_types::fuel_tx::ContractParameter
                 }
                 .into(),
             ),
+            _ => Err(ConversionError::UnknownVariant("ContractParametersVersion")),
         }
     }
 }
@@ -176,6 +192,8 @@ pub struct FeeParameters {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum FeeParametersVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl TryFrom<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
@@ -190,6 +208,7 @@ impl TryFrom<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
                 }
                 .into(),
             ),
+            _ => Err(ConversionError::UnknownVariant("FeeParametersVersion")),
         }
     }
 }
@@ -321,6 +340,8 @@ pub struct GasCosts {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum GasCostsVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
@@ -447,6 +468,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                 }
                 .into(),
             )),
+            _ => Err(ConversionError::UnknownVariant("GasCostsVersion")),
         }
     }
 }
@@ -497,6 +519,9 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
                 }
                 .into(),
             ),
+            _ => Err(ConversionError::UnknownVariant(
+                "ConsensusParametersVersion",
+            )),
         }
     }
 }

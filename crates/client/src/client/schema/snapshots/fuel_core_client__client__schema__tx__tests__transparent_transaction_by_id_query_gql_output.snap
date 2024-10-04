@@ -2,7 +2,7 @@
 source: crates/client/src/client/schema/tx.rs
 expression: operation.query
 ---
-query($id: TransactionId!) {
+query TransactionQuery($id: TransactionId!) {
   transaction(id: $id) {
     scriptGasLimit
     id

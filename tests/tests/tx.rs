@@ -357,12 +357,14 @@ async fn submit() {
 
     client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
-    let ret_tx = client
+    let ret_tx: Transaction = client
         .transaction(&tx.id(&ChainId::default()))
         .await
         .unwrap()
         .unwrap()
-        .transaction;
+        .transaction
+        .try_into()
+        .unwrap();
     assert_eq!(tx.id(&ChainId::default()), ret_tx.id(&ChainId::default()));
 }
 
@@ -629,8 +631,12 @@ async fn get_transactions() {
         .unwrap();
     let transactions = &response
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
     assert_eq!(transactions[0], tx1);
     // coinbase_tx1
@@ -666,8 +672,12 @@ async fn get_transactions() {
     let response = client.transactions(page_request_middle_page).await.unwrap();
     let transactions = &response
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
     // coinbase_tx4
     assert_eq!(transactions[0], tx4);
@@ -681,8 +691,12 @@ async fn get_transactions() {
     let response = client.transactions(page_request_backwards).await.unwrap();
     let transactions = &response
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
     assert_eq!(transactions[0], tx3);
     // transactions[1] - coinbase_tx2
@@ -696,8 +710,12 @@ async fn get_transactions() {
     let response = client.transactions(page_request_forwards).await.unwrap();
     let transactions = &response
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
     assert_eq!(transactions[0], tx4);
     // coinbase_tx4
@@ -871,8 +889,12 @@ async fn get_transactions_from_manual_blocks() {
         .unwrap();
     let transactions = &response
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
     assert_eq!(transactions[0], txs[0].id(&ChainId::default()));
     assert_eq!(transactions[1], txs[1].id(&ChainId::default()));
@@ -892,8 +914,12 @@ async fn get_transactions_from_manual_blocks() {
         .unwrap();
     let transactions = &response
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
     assert_eq!(transactions[0], txs[4].id(&ChainId::default()));
     // coinbase_tx1
@@ -914,8 +940,12 @@ async fn get_transactions_from_manual_blocks() {
         .unwrap();
     let transactions = &response
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
     assert_eq!(transactions[0], txs[6].id(&ChainId::default()));
     assert_eq!(transactions[1], txs[5].id(&ChainId::default()));
@@ -950,8 +980,12 @@ async fn get_owned_transactions() {
         .await
         .unwrap()
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
 
     let bob_txs = client
@@ -959,8 +993,12 @@ async fn get_owned_transactions() {
         .await
         .unwrap()
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
 
     let charlie_txs = client
@@ -968,8 +1006,12 @@ async fn get_owned_transactions() {
         .await
         .unwrap()
         .results
-        .iter()
-        .map(|tx| tx.transaction.id(&ChainId::default()))
+        .into_iter()
+        .map(|tx| {
+            let tx: Transaction = tx.transaction.try_into().unwrap();
+
+            tx.id(&ChainId::default())
+        })
         .collect_vec();
 
     assert_eq!(&alice_txs, &[tx1]);

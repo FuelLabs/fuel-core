@@ -2,12 +2,10 @@
 source: crates/client/src/client/schema/contract.rs
 expression: operation.query
 ---
-query($id: ContractId!) {
+query ContractByIdQuery($id: ContractId!) {
   contract(id: $id) {
     id
     bytecode
     salt
   }
 }
-
-

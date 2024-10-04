@@ -2,7 +2,7 @@
 source: crates/client/src/client/schema/tx.rs
 expression: operation.query
 ---
-query($after: String, $before: String, $first: Int, $last: Int) {
+query TransactionsQuery($after: String, $before: String, $first: Int, $last: Int) {
   transactions(after: $after, before: $before, first: $first, last: $last) {
     edges {
       cursor

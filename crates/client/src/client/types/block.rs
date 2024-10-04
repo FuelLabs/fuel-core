@@ -95,6 +95,7 @@ impl TryFrom<schema::block::Header> for Header {
                 time: value.time.0,
                 application_hash: value.application_hash.into(),
             }),
+            _ => Err(ConversionError::UnknownVariant("HeaderVersion")),
         }
     }
 }
@@ -157,6 +158,7 @@ impl TryFrom<schema::block::Block> for Block {
                     block_producer,
                 })
             }
+            _ => Err(ConversionError::UnknownVariant("BlockVersion")),
         }
     }
 }

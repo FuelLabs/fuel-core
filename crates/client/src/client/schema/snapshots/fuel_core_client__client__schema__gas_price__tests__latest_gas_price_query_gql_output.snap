@@ -2,11 +2,9 @@
 source: crates/client/src/client/schema/gas_price.rs
 expression: operation.query
 ---
-query {
+query QueryLatestGasPrice {
   latestGasPrice {
     gasPrice
     blockHeight
   }
 }
-
-
