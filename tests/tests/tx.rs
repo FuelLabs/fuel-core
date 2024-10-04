@@ -1,5 +1,9 @@
 use crate::helpers::TestContext;
 use fuel_core::{
+    chain_config::{
+        ChainConfig,
+        StateConfig,
+    },
     schema::tx::receipt::all_receipts,
     service::{
         Config,
@@ -14,15 +18,25 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::service::Mode;
+use fuel_core_poa::{
+    service::Mode,
+    Trigger,
+};
 use fuel_core_types::{
-    fuel_asm::*,
+    fuel_asm::{
+        op,
+        RegId,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::{
         field::ReceiptsRoot,
+        Chargeable,
         *,
     },
     fuel_types::ChainId,
+    fuel_vm::ProgramState,
+    services::executor::TransactionExecutionResult,
+    tai64::Tai64,
 };
 use futures::StreamExt;
 use itertools::Itertools;
@@ -31,7 +45,10 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::io::ErrorKind::NotFound;
+use std::{
+    io::ErrorKind::NotFound,
+    time::Duration,
+};
 
 mod predicates;
 mod tx_pointer;
@@ -181,6 +198,138 @@ async fn dry_run_above_block_gas_limit() {
     }
 }
 
+fn arb_large_script_tx<R: Rng + rand::CryptoRng>(
+    max_fee_limit: Word,
+    size: usize,
+    rng: &mut R,
+) -> Transaction {
+    let mut script: Vec<_> = std::iter::repeat(op::noop()).take(size).collect();
+    script.push(op::ret(RegId::ONE));
+    let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
+    let asset_id = *builder.get_params().base_asset_id();
+    builder
+        .max_fee_limit(max_fee_limit)
+        .script_gas_limit(22430)
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            rng.gen(),
+            u32::MAX as u64,
+            asset_id,
+            Default::default(),
+        )
+        .finalize()
+        .into()
+}
+
+fn config_with_size_limit(block_transaction_size_limit: u32) -> Config {
+    let mut chain_config = ChainConfig::default();
+    chain_config
+        .consensus_parameters
+        .set_block_transaction_size_limit(block_transaction_size_limit as u64)
+        .expect("should be able to set the limit");
+    let state_config = StateConfig::default();
+
+    let mut config = Config::local_node_with_configs(chain_config, state_config);
+    config.block_production = Trigger::Never;
+    config
+}
+
+#[tokio::test]
+async fn transaction_selector_can_saturate_block_according_to_block_transaction_size_limit(
+) {
+    let mut rng = rand::rngs::StdRng::from_entropy();
+
+    // Create 5 transactions of increasing sizes.
+    let arb_tx_count = 5;
+    let transactions: Vec<(_, _)> = (0..arb_tx_count)
+        .map(|i| {
+            let script_bytes_count = 10_000 + (i * 100);
+            let tx =
+                arb_large_script_tx(189028 + i as Word, script_bytes_count, &mut rng);
+            let size = tx
+                .as_script()
+                .expect("script tx expected")
+                .metered_bytes_size() as u32;
+            (tx, size)
+        })
+        .collect();
+
+    // Run 5 cases. Each one will allow one more transaction to be included due to size.
+    for n in 1..=arb_tx_count {
+        // Calculate proper size limit for 'n' transactions
+        let block_transaction_size_limit: u32 =
+            transactions.iter().take(n).map(|(_, size)| size).sum();
+        let config = config_with_size_limit(block_transaction_size_limit);
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // Submit all transactions
+        for (tx, _) in &transactions {
+            let status = client.submit(tx).await;
+            assert!(status.is_ok())
+        }
+
+        // Produce a block.
+        let block_height = client.produce_blocks(1, None).await.unwrap();
+
+        // Assert that only 'n' first transactions (+1 for mint) were included.
+        let block = client.block_by_height(block_height).await.unwrap().unwrap();
+        assert_eq!(block.transactions.len(), n + 1);
+        let expected_ids: Vec<_> = transactions
+            .iter()
+            .take(n)
+            .map(|(tx, _)| tx.id(&ChainId::default()))
+            .collect();
+        let actual_ids: Vec<_> = block.transactions.into_iter().take(n).collect();
+        assert_eq!(expected_ids, actual_ids);
+    }
+}
+
+#[tokio::test]
+async fn transaction_selector_can_select_a_transaction_that_fits_the_block_size_limit() {
+    let mut rng = rand::rngs::StdRng::from_entropy();
+
+    // Create 5 transactions of decreasing sizes.
+    let arb_tx_count = 5;
+    let transactions: Vec<(_, _)> = (0..arb_tx_count)
+        .map(|i| {
+            let script_bytes_count = 10_000 + (i * 100);
+            let tx =
+                arb_large_script_tx(189028 + i as Word, script_bytes_count, &mut rng);
+            let size = tx
+                .as_script()
+                .expect("script tx expected")
+                .metered_bytes_size() as u32;
+            (tx, size)
+        })
+        .rev()
+        .collect();
+
+    let (smallest_tx, smallest_size) = transactions.last().unwrap();
+
+    // Allow only the smallest transaction to fit.
+    let config = config_with_size_limit(*smallest_size);
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Submit all transactions
+    for (tx, _) in &transactions {
+        let status = client.submit(tx).await;
+        assert!(status.is_ok())
+    }
+
+    // Produce a block.
+    let block_height = client.produce_blocks(1, None).await.unwrap();
+
+    // Assert that only the smallest transaction (+ mint) was included.
+    let block = client.block_by_height(block_height).await.unwrap().unwrap();
+    assert_eq!(block.transactions.len(), 2);
+    let expected_id = smallest_tx.id(&ChainId::default());
+    let actual_id = block.transactions.first().unwrap();
+    assert_eq!(&expected_id, actual_id);
+}
+
 #[tokio::test]
 async fn submit() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -250,6 +399,63 @@ async fn submit_and_await_status() {
     ));
     let final_status = status_stream.next().await.unwrap().unwrap();
     assert!(matches!(final_status, TransactionStatus::Success { .. }));
+}
+
+#[tokio::test]
+async fn dry_run_transaction_should_use_latest_block_time() {
+    // Given
+    let start_time = Tai64::from_unix(1337);
+    let block_production_interval_seconds = 10;
+    let number_of_blocks_to_produce_manually = 5;
+
+    let mut config = Config::local_node();
+    config.block_production = Trigger::Interval {
+        block_time: Duration::from_secs(block_production_interval_seconds),
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let gas_limit = 1_000_000;
+    let maturity = Default::default();
+
+    let get_block_timestamp_script =
+        [op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
+
+    let script: Vec<u8> = get_block_timestamp_script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(gas_limit)
+        .maturity(maturity)
+        .add_random_fee_input()
+        .finalize_as_transaction();
+
+    // When
+    client
+        .produce_blocks(number_of_blocks_to_produce_manually, Some(start_time.0))
+        .await
+        .expect("failed to produce blocks");
+
+    let TransactionExecutionResult::Success {
+        result: Some(ProgramState::Return(returned_timestamp)),
+        ..
+    } = client
+        .dry_run(&[tx.clone()])
+        .await
+        .expect("failed to dry run")[0]
+        .result
+    else {
+        panic!("unexpected execution result from dry run")
+    };
+
+    // Then
+    let expected_returned_timestamp = start_time.0
+        + block_production_interval_seconds
+            * number_of_blocks_to_produce_manually.saturating_sub(1) as u64;
+
+    assert_eq!(expected_returned_timestamp, returned_timestamp);
 }
 
 #[ignore]

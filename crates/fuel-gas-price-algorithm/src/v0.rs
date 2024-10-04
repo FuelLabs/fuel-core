@@ -3,6 +3,8 @@ use std::{
     num::NonZeroU64,
 };
 
+use crate::utils::cumulative_percentage_change;
+
 #[cfg(test)]
 mod tests;
 
@@ -27,22 +29,13 @@ impl AlgorithmV0 {
         self.new_exec_price
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     pub fn worst_case(&self, height: u32) -> u64 {
-        let price = self.new_exec_price as f64;
-        let blocks = height.saturating_sub(self.for_height) as f64;
-        let percentage = self.percentage as f64;
-        let percentage_as_decimal = percentage / 100.0;
-        let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
-        let mut approx = price * multiple;
-        // account for rounding errors and take a slightly higher value
-        const ARB_CUTOFF: f64 = 16948547188989277.0;
-        if approx > ARB_CUTOFF {
-            const ARB_ADDITION: f64 = 2000.0;
-            approx += ARB_ADDITION;
-        }
-        // `f64` over `u64::MAX` are cast to `u64::MAX`
-        approx.ceil() as u64
+        cumulative_percentage_change(
+            self.new_exec_price,
+            self.for_height,
+            self.percentage,
+            height,
+        )
     }
 }
 
@@ -71,12 +64,6 @@ pub struct AlgorithmUpdaterV0 {
     /// The threshold of gas usage above and below which the gas price will increase or decrease
     /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct BlockBytes {
-    pub height: u32,
-    pub block_bytes: u64,
 }
 
 impl AlgorithmUpdaterV0 {

@@ -266,6 +266,8 @@ pub enum Error {
     FeeOverflow,
     #[display(fmt = "The computed gas caused an integer overflow")]
     GasOverflow,
+    #[display(fmt = "The computed transaction size caused an integer overflow")]
+    TxSizeOverflow,
     #[display(fmt = "The block is missing `Mint` transaction.")]
     MintMissing,
     #[display(fmt = "Found the second entry of the `Mint` transaction in the block.")]

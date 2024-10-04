@@ -38,22 +38,13 @@ use crate::{
         SubServices,
     },
 };
-#[allow(unused_imports)]
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::FuelL2BlockSource,
-    Algorithm,
+use fuel_core_gas_price_service::v0::uninitialized_task::{
+    new_gas_price_service_v0,
     AlgorithmV0,
-    FuelGasPriceUpdater,
-    UpdaterMetadata,
-    V0Metadata,
 };
 use fuel_core_poa::{
     signer::SignMode,
     Trigger,
-};
-use fuel_core_services::{
-    RunnableService,
-    ServiceRunner,
 };
 use fuel_core_storage::{
     self,
@@ -64,8 +55,6 @@ use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-mod algorithm_updater;
-
 pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
@@ -75,12 +64,12 @@ pub type PoAService = fuel_core_poa::Service<
     SystemTime,
 >;
 #[cfg(feature = "p2p")]
-pub type P2PService = fuel_core_p2p::service::Service<Database>;
+pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
     ExecutorAdapter,
-    FuelGasPriceProvider<Algorithm>,
+    FuelGasPriceProvider<AlgorithmV0>,
     ConsensusParametersProvider,
     SharedMemoryPool,
 >;
@@ -88,7 +77,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    FuelGasPriceProvider<Algorithm>,
+    FuelGasPriceProvider<AlgorithmV0>,
     ConsensusParametersProvider,
 >;
 
@@ -169,14 +158,10 @@ pub fn init_sub_services(
     };
 
     #[cfg(feature = "p2p")]
-    let mut network = config.p2p.clone().map(|p2p_config| {
-        fuel_core_p2p::service::new_service(
-            chain_id,
-            p2p_config,
-            database.on_chain().clone(),
-            importer_adapter.clone(),
-        )
-    });
+    let p2p_externals = config
+        .p2p
+        .clone()
+        .map(fuel_core_p2p::service::build_shared_state);
 
     #[cfg(feature = "p2p")]
     let p2p_adapter = {
@@ -192,7 +177,7 @@ pub fn init_sub_services(
             invalid_transactions: -100.,
         };
         P2PAdapter::new(
-            network.as_ref().map(|network| network.shared.clone()),
+            p2p_externals.as_ref().map(|ext| ext.0.clone()),
             peer_report_config,
         )
     };
@@ -204,18 +189,17 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    let gas_price_init = algorithm_updater::InitializeTask::new(
-        config.clone(),
+    let gas_price_service_v0 = new_gas_price_service_v0(
+        config.clone().into(),
         genesis_block_height,
         settings,
         block_stream,
         database.gas_price().clone(),
         database.on_chain().clone(),
     )?;
-    let next_algo = gas_price_init.shared_data();
-    let gas_price_service = ServiceRunner::new(gas_price_init);
 
-    let gas_price_provider = FuelGasPriceProvider::new(next_algo);
+    let gas_price_provider =
+        FuelGasPriceProvider::new(gas_price_service_v0.shared.clone());
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
         database.on_chain().clone(),
@@ -228,6 +212,21 @@ pub fn init_sub_services(
         SharedMemoryPool::new(config.memory_pool_size),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
+
+    #[cfg(feature = "p2p")]
+    let mut network = config.p2p.clone().zip(p2p_externals).map(
+        |(p2p_config, (shared_state, request_receiver))| {
+            fuel_core_p2p::service::new_service(
+                chain_id,
+                p2p_config,
+                shared_state,
+                request_receiver,
+                database.on_chain().clone(),
+                importer_adapter.clone(),
+                tx_pool_adapter.clone(),
+            )
+        },
+    );
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
@@ -335,7 +334,7 @@ pub fn init_sub_services(
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
-        Box::new(gas_price_service),
+        Box::new(gas_price_service_v0),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),
     ];
