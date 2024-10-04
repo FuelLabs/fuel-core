@@ -74,6 +74,7 @@ impl StateTransitionBytecode {
         HexString(self.root.to_vec())
     }
 
+    #[graphql(complexity = "QUERY_COSTS.state_transition_bytecode_read")]
     async fn bytecode(
         &self,
         ctx: &Context<'_>,

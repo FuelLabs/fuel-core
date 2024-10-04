@@ -17,7 +17,7 @@ pub struct GraphQLArgs {
     pub graphql_max_depth: usize,
 
     /// The max complexity of GraphQL queries.
-    #[clap(long = "graphql-max-complexity", default_value = "20000", env)]
+    #[clap(long = "graphql-max-complexity", default_value = "80000", env)]
     pub graphql_max_complexity: usize,
 
     /// The max recursive depth of GraphQL queries.
