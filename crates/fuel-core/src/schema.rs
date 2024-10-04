@@ -74,14 +74,12 @@ pub type CoreSchema = Schema<Query, Mutation, Subscription>;
 pub type CoreSchemaBuilder = SchemaBuilder<Query, Mutation, Subscription>;
 
 pub fn build_schema() -> CoreSchemaBuilder {
-    const ARB_DIRECTIVES_LIMIT: usize = 100;
     Schema::build_with_ignore_name_conflicts(
         Query::default(),
         Mutation::default(),
         Subscription::default(),
         ["TransactionConnection", "MessageConnection"],
     )
-    .limit_directives(ARB_DIRECTIVES_LIMIT)
 }
 
 async fn query_pagination<F, Entries, SchemaKey, SchemaValue>(
