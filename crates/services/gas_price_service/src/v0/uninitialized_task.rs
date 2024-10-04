@@ -227,11 +227,18 @@ where
     } = starting_metadata;
 
     let algorithm_updater;
-    if let Some(old_metadata) = metadata_storage
+    if let Some(updater_metadata) = metadata_storage
         .get_metadata(&l2_block_height.into())
         .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
     {
-        algorithm_updater = old_metadata.try_into()?;
+        let previous_metadata: V0Metadata = updater_metadata.try_into()?;
+        algorithm_updater = AlgorithmUpdaterV0::new(
+            previous_metadata.new_exec_price,
+            min_exec_gas_price,
+            exec_gas_price_change_percent,
+            previous_metadata.l2_block_height,
+            l2_block_fullness_threshold_percent,
+        );
     } else {
         algorithm_updater = AlgorithmUpdaterV0::new(
             new_exec_price,
