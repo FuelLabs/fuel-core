@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2204](https://github.com/FuelLabs/fuel-core/pull/2204): Added `dnsaddr` resolution for TLD without suffixes.
 
 ### Changed
+- [2276](https://github.com/FuelLabs/fuel-core/pull/2276): Change complexity block query to allow fetching of 10 blocks
 
 #### Breaking
 - [2199](https://github.com/FuelLabs/fuel-core/pull/2199): Applying several breaking changes to the WASM interface from backlog:
