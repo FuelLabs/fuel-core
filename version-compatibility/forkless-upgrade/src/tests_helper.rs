@@ -112,6 +112,7 @@ define_core_driver!(
 );
 
 pub const IGNITION_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition";
+pub const V36_TESTNET_SNAPSHOT: &str = "./chain-configurations/v36";
 pub const POA_SECRET_KEY: &str =
     "e3d6eb39607650e22f0befa26d52e921d2e7924d0e165f38ffa8d9d0ac73de93";
 pub const PRIVILEGED_ADDRESS_KEY: &str =

@@ -5,6 +5,7 @@ use crate::tests_helper::{
     Version36FuelCoreDriver,
     IGNITION_TESTNET_SNAPSHOT,
     POA_SECRET_KEY,
+    V36_TESTNET_SNAPSHOT,
 };
 use latest_fuel_core_type::{
     fuel_tx::Transaction,
@@ -134,7 +135,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         "--consensus-key",
         POA_SECRET_KEY,
         "--snapshot",
-        IGNITION_TESTNET_SNAPSHOT,
+        V36_TESTNET_SNAPSHOT,
         "--enable-p2p",
         "--keypair",
         hexed_secret.as_str(),
@@ -158,7 +159,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         "--poa-instant",
         "false",
         "--snapshot",
-        IGNITION_TESTNET_SNAPSHOT,
+        V36_TESTNET_SNAPSHOT,
         "--enable-p2p",
         "--keypair",
         hexed_secret.as_str(),
