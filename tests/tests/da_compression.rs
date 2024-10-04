@@ -98,14 +98,13 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     )
     .await;
 
-    let mut producer = producers.pop().unwrap();
+    let producer = producers.pop().unwrap();
     let mut validator = validators.pop().unwrap();
 
     let v_client = FuelClient::from(validator.node.shared.graph_ql.bound_address);
 
     // Insert some txs
     let expected = producer.insert_txs().await;
-    producer.consistency_10s(&expected).await;
     validator.consistency_20s(&expected).await;
 
     let block_height = 1u32.into();

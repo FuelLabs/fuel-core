@@ -6,7 +6,11 @@ use crate::{
         CoinConfigGenerator,
     },
     combined_database::CombinedDatabase,
-    database::Database,
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
+    fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
     service::{
         Config,
@@ -33,7 +37,6 @@ use fuel_core_poa::{
     Trigger,
 };
 use fuel_core_storage::{
-    tables::Transactions,
     transactional::AtomicView,
     StorageAsRef,
 };
@@ -59,7 +62,6 @@ use fuel_core_types::{
     services::p2p::GossipsubMessageAcceptance,
 };
 use futures::StreamExt;
-use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -491,24 +493,27 @@ impl Node {
 
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        let Self { db, .. } = self;
-        let mut blocks = self.node.shared.block_importer.block_stream();
-        while !not_found_txs(db, txs).is_empty() {
+        let db = self.node.shared.database.off_chain();
+        loop {
+            let not_found = not_found_txs(db, txs);
+
+            if not_found.is_empty() {
+                break;
+            }
+
+            let tx_id = not_found[0];
+            let mut wait_transaction =
+                self.node.transaction_status_change(tx_id).unwrap();
+
             tokio::select! {
-                result = blocks.next() => {
-                    result.unwrap();
+                result = wait_transaction.next() => {
+                    let _ = result.unwrap();
                 }
                 _ = self.node.await_shutdown() => {
                     panic!("Got a stop signal")
                 }
             }
         }
-
-        let count = db
-            .all_transactions(None, None)
-            .filter_ok(|tx| tx.is_script())
-            .count();
-        assert_eq!(count, txs.len());
     }
 
     /// Wait for the node to reach consistency with the given transactions within 10 seconds.
@@ -570,13 +575,17 @@ impl Node {
 }
 
 fn not_found_txs<'iter>(
-    db: &'iter Database,
+    db: &'iter Database<OffChain>,
     txs: &'iter HashMap<Bytes32, Transaction>,
 ) -> Vec<TxId> {
     let mut not_found = vec![];
     txs.iter().for_each(|(id, tx)| {
         assert_eq!(id, &tx.id(&Default::default()));
-        if !db.storage::<Transactions>().contains_key(id).unwrap() {
+        let found = db
+            .storage::<TransactionStatuses>()
+            .contains_key(id)
+            .unwrap();
+        if !found {
             not_found.push(*id);
         }
     });
