@@ -76,14 +76,18 @@ use crate::{
     verifications::perform_all_verifications,
 };
 
-pub type TxPool<PSProvider> = Arc<
+pub type TxPool<PSProvider, GasPriceProvider, ConsensusParametersProvider> = Arc<
     RwLock<
         Pool<
             PSProvider,
             GraphStorage,
             <GraphStorage as Storage>::StorageIndex,
             BasicCollisionManager<<GraphStorage as Storage>::StorageIndex>,
-            RatioTipGasSelection<GraphStorage>,
+            RatioTipGasSelection<
+                GraphStorage,
+                GasPriceProvider,
+                ConsensusParametersProvider,
+            >,
         >,
     >,
 >;
@@ -143,7 +147,7 @@ pub struct Task<
     insert_transactions_requests_receiver: mpsc::Receiver<InsertionRequest>,
     select_transactions_requests_receiver: mpsc::Receiver<SelectTransactionsRequest>,
     read_pool_requests_receiver: mpsc::Receiver<ReadPoolRequest>,
-    pool: TxPool<PSProvider>,
+    pool: TxPool<PSProvider, GasPriceProvider, ConsensusParamsProvider>,
     current_height: Arc<RwLock<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusParamsProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
@@ -262,7 +266,7 @@ where
 
             select_transaction_request = self.select_transactions_requests_receiver.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
-                    self.manage_select_transactions(select_transaction_request)?;
+                    self.manage_select_transactions(select_transaction_request).await?;
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -365,7 +369,7 @@ where
         Ok(())
     }
 
-    fn manage_select_transactions(
+    async fn manage_select_transactions(
         &self,
         SelectTransactionsRequest {
             constraints,
@@ -714,6 +718,8 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
+    let gas_price_provider = Arc::new(gas_price_provider);
+    let consensus_parameters_provider = Arc::new(consensus_parameters_provider);
     Service::new(Task {
         new_peers_subscribed_stream,
         tx_from_p2p_stream,
@@ -723,8 +729,8 @@ where
         insert_transactions_requests_receiver,
         select_transactions_requests_receiver,
         read_pool_requests_receiver,
-        consensus_parameters_provider: Arc::new(consensus_parameters_provider),
-        gas_price_provider: Arc::new(gas_price_provider),
+        consensus_parameters_provider: consensus_parameters_provider.clone(),
+        gas_price_provider: gas_price_provider.clone(),
         wasm_checker: Arc::new(wasm_checker),
         memory: Arc::new(memory_pool),
         current_height: Arc::new(RwLock::new(current_height)),
@@ -748,7 +754,7 @@ where
                 max_txs_chain_count: config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(),
+            RatioTipGasSelection::new(gas_price_provider, consensus_parameters_provider),
             config,
         ))),
         p2p: Arc::new(p2p),

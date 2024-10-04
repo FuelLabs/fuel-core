@@ -30,6 +30,7 @@ use crate::{
     error::Error,
     ports::{
         AtomicView,
+        ConsensusParametersProvider,
         GasPriceProvider,
         TxPoolPersistentStorage,
         WasmChecker,
@@ -70,14 +71,21 @@ impl UnverifiedTx {
 }
 
 impl BasicVerifiedTx {
-    pub fn perform_inputs_verifications<PSView, PSProvider>(
+    pub fn perform_inputs_verifications<
+        PSView,
+        PSProvider,
+        GasPriceProviderT,
+        ConsensusParametersProviderT,
+    >(
         self,
-        pool: &TxPool<PSProvider>,
+        pool: &TxPool<PSProvider, GasPriceProviderT, ConsensusParametersProviderT>,
         version: ConsensusParametersVersion,
     ) -> Result<InputDependenciesVerifiedTx, Error>
     where
         PSProvider: AtomicView<LatestView = PSView>,
         PSView: TxPoolPersistentStorage,
+        GasPriceProviderT: GasPriceProvider,
+        ConsensusParametersProviderT: ConsensusParametersProvider,
     {
         let pool_tx = checked_tx_into_pool(self.0, version)?;
 
@@ -131,9 +139,15 @@ impl FullyVerifiedTx {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn perform_all_verifications<M, PSView, PSProvider>(
+pub async fn perform_all_verifications<
+    M,
+    PSView,
+    PSProvider,
+    GasPriceProviderT,
+    ConsensusParametersProviderT,
+>(
     tx: Transaction,
-    pool: &TxPool<PSProvider>,
+    pool: &TxPool<PSProvider, GasPriceProviderT, ConsensusParametersProviderT>,
     current_height: BlockHeight,
     consensus_params: &ConsensusParameters,
     consensus_params_version: ConsensusParametersVersion,
@@ -145,6 +159,8 @@ where
     M: Memory + Send + Sync + 'static,
     PSProvider: AtomicView<LatestView = PSView>,
     PSView: TxPoolPersistentStorage,
+    GasPriceProviderT: GasPriceProvider,
+    ConsensusParametersProviderT: ConsensusParametersProvider,
 {
     let unverified = UnverifiedTx(tx);
     let basically_verified_tx = unverified

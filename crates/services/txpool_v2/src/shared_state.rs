@@ -102,10 +102,6 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub fn get_new_txs_notifier(&self) -> Arc<Notify> {
-        self.new_txs_notifier.clone()
-    }
-
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {
         let (result_sender, result_receiver) = oneshot::channel();
         self.read_pool_requests_sender
@@ -138,10 +134,17 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
+    /// Get a notifier that is notified when new transactions are added to the pool.
+    pub fn get_new_txs_notifier(&self) -> Arc<Notify> {
+        self.new_txs_notifier.clone()
+    }
+
+    /// Subscribe to new transaction notifications.
     pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
         self.tx_status_sender.new_tx_notification_sender.subscribe()
     }
 
+    /// Subscribe to status updates for a transaction.
     pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
         self.tx_status_sender
             .update_sender
@@ -149,7 +152,8 @@ impl SharedState {
             .ok_or(anyhow!("Maximum number of subscriptions reached"))
     }
 
-    pub fn send_complete(
+    /// Notify the txpool that a transaction was executed and committed to a block.
+    pub fn notify_complete_tx(
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
@@ -162,10 +166,9 @@ impl SharedState {
         )
     }
 
-    pub fn broadcast_txs_skipped_reason(
-        &self,
-        tx_ids_and_reason: Vec<(Bytes32, String)>,
-    ) {
+    /// Notify the txpool that some transactions were skipped during block production.
+    /// This is used to update the status of the skipped transactions internally and in subscriptions
+    pub async fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
         for (tx_id, reason) in tx_ids_and_reason {
             self.tx_status_sender
                 .send_squeezed_out(tx_id, Error::SkippedTransaction(reason));
