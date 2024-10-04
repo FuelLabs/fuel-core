@@ -420,10 +420,9 @@ impl AlgorithmUpdaterV1 {
         let projection_portion: u128 = self
             .unrecorded_blocks
             .iter()
-            .map(|(_, &bytes)| {
-                (bytes as u128).saturating_mul(self.latest_da_cost_per_byte)
-            })
-            .sum();
+            .map(|(_, &bytes)| (bytes as u128))
+            .sum::<u128>()
+            .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
             .latest_known_total_da_cost_excess
             .saturating_add(projection_portion);
