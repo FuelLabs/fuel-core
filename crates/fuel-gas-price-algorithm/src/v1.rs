@@ -421,7 +421,7 @@ impl AlgorithmUpdaterV1 {
             .unrecorded_blocks
             .iter()
             .map(|(_, &bytes)| (bytes as u128))
-            .sum::<u128>()
+            .fold(0_u128, |acc, n| acc.saturating_add(n))
             .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
             .latest_known_total_da_cost_excess
