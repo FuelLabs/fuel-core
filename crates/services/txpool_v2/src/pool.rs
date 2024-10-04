@@ -447,6 +447,22 @@ where
         Ok(removed_transactions)
     }
 
+    pub fn remove_coin_dependents(
+        &mut self,
+        tx_id: TxId,
+    ) -> Result<Vec<ArcPoolTx>, Error> {
+        let mut txs_removed = vec![];
+        let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
+        for dependent in coin_dependents {
+            let removed = self
+                .storage
+                .remove_transaction_and_dependents_subtree(dependent);
+            self.update_components_and_caches_on_removal(removed.iter());
+            txs_removed.extend(removed.iter().map(|data| data.transaction.clone()));
+        }
+        Ok(txs_removed)
+    }
+
     fn check_blob_does_not_exist(
         tx: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
