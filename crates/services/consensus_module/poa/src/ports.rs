@@ -31,10 +31,11 @@ use std::{
 use tokio::sync::Notify;
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait TransactionPool: Send + Sync {
     fn new_txs_notifier(&self) -> Arc<Notify>;
 
-    fn broadcast_txs_skipped_reason(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
+    async fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
 }
 
 /// The source of transactions for the block.

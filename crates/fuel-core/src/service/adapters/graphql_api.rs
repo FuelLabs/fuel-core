@@ -164,7 +164,7 @@ impl worker::TxPool for TxPoolAdapter {
         block_height: &BlockHeight,
         status: TransactionStatus,
     ) {
-        self.service.send_complete(id, block_height, status)
+        self.service.notify_complete_tx(id, block_height, status)
     }
 }
 

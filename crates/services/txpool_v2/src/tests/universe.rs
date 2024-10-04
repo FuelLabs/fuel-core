@@ -32,6 +32,7 @@ use fuel_core_types::{
         Contract,
         ContractId,
         Finalizable,
+        GasCosts,
         Output,
         Transaction,
         TransactionBuilder,
@@ -90,7 +91,9 @@ pub struct TestPoolUniverse {
     mock_db: MockDb,
     rng: StdRng,
     pub config: Config,
-    pool: Option<TxPool<MockDBProvider>>,
+    pool: Option<
+        TxPool<MockDBProvider, MockTxPoolGasPrice, MockConsensusParametersProvider>,
+    >,
 }
 
 impl Default for TestPoolUniverse {
@@ -117,13 +120,25 @@ impl TestPoolUniverse {
     }
 
     pub fn build_pool(&mut self) {
+        let mut mock_consensus_params_provider =
+            MockConsensusParametersProvider::default();
+        mock_consensus_params_provider
+            .expect_latest_consensus_parameters()
+            .returning(|| {
+                let mut params = ConsensusParameters::standard();
+                params.set_gas_costs(GasCosts::free());
+                (0, Arc::new(params))
+            });
         let pool = Arc::new(RwLock::new(Pool::new(
             MockDBProvider(self.mock_db.clone()),
             GraphStorage::new(GraphConfig {
                 max_txs_chain_count: self.config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(),
+            RatioTipGasSelection::new(
+                Arc::new(MockTxPoolGasPrice::new(0)),
+                Arc::new(mock_consensus_params_provider),
+            ),
             self.config.clone(),
         )));
         self.pool = Some(pool.clone());
@@ -265,7 +280,9 @@ impl TestPoolUniverse {
         }
     }
 
-    pub fn get_pool(&self) -> TxPool<MockDBProvider> {
+    pub fn get_pool(
+        &self,
+    ) -> TxPool<MockDBProvider, MockTxPoolGasPrice, MockConsensusParametersProvider> {
         self.pool.clone().unwrap()
     }
 

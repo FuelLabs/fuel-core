@@ -113,14 +113,18 @@ impl From<TxInfo> for TransactionStatus {
     }
 }
 
-pub type TxPool<PSProvider> = Arc<
+pub type TxPool<PSProvider, GasPriceProvider, ConsensusParametersProvider> = Arc<
     RwLock<
         Pool<
             PSProvider,
             GraphStorage,
             <GraphStorage as Storage>::StorageIndex,
             BasicCollisionManager<<GraphStorage as Storage>::StorageIndex>,
-            RatioTipGasSelection<GraphStorage>,
+            RatioTipGasSelection<
+                GraphStorage,
+                GasPriceProvider,
+                ConsensusParametersProvider,
+            >,
         >,
     >,
 >;
@@ -143,15 +147,21 @@ pub type Service<
     >,
 >;
 
-pub struct InsertionRequest {
-    pub transactions: Vec<Arc<Transaction>>,
-    pub from_peer_info: Option<GossipsubMessageInfo>,
-    pub response_channel: Option<oneshot::Sender<Result<(), Error>>>,
-}
-
 pub struct SelectTransactionsRequest {
     pub constraints: Constraints,
     pub response_channel: oneshot::Sender<Result<Vec<ArcPoolTx>, Error>>,
+}
+
+pub enum WritePoolRequest {
+    InsertTxs {
+        transactions: Vec<Arc<Transaction>>,
+        from_peer_info: Option<GossipsubMessageInfo>,
+        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
+    },
+    RemoveCoinDependents {
+        tx_id: TxId,
+        response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
+    },
 }
 
 pub enum ReadPoolRequest {
@@ -176,11 +186,11 @@ pub struct Task<
     tx_from_p2p_stream: BoxStream<TransactionGossipData>,
     new_peers_subscribed_stream: BoxStream<PeerId>,
     imported_block_results_stream: BoxStream<SharedImportResult>,
-    insert_transactions_requests_sender: mpsc::Sender<InsertionRequest>,
-    insert_transactions_requests_receiver: mpsc::Receiver<InsertionRequest>,
     select_transactions_requests_receiver: mpsc::Receiver<SelectTransactionsRequest>,
+    write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
+    write_pool_requests_receiver: mpsc::Receiver<WritePoolRequest>,
     read_pool_requests_receiver: mpsc::Receiver<ReadPoolRequest>,
-    pool: TxPool<PSProvider>,
+    pool: TxPool<PSProvider, GasPriceProvider, ConsensusParamsProvider>,
     current_height: Arc<RwLock<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusParamsProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
@@ -299,16 +309,31 @@ where
 
             select_transaction_request = self.select_transactions_requests_receiver.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
-                    self.manage_select_transactions(select_transaction_request)?;
+                    self.manage_select_transactions(select_transaction_request).await?;
                     should_continue = true;
                 } else {
                     should_continue = false;
                 }
             }
 
-            insert_transactions_request = self.insert_transactions_requests_receiver.recv() => {
-                if let Some(insert_transactions_request) = insert_transactions_request {
-                    self.manage_tx_insertions(insert_transactions_request)?;
+            write_pool_request = self.write_pool_requests_receiver.recv() => {
+                if let Some(write_pool_request) = write_pool_request {
+                    match write_pool_request {
+                        WritePoolRequest::InsertTxs {
+                            transactions,
+                            from_peer_info,
+                            response_channel,
+                        } => {
+                            self.manage_tx_insertions(transactions, from_peer_info, response_channel)?;
+                        }
+                        WritePoolRequest::RemoveCoinDependents {
+                            tx_id,
+                            response_channel,
+                        } => {
+                            self.manage_remove_coin_dependents(tx_id, response_channel)?;
+                        }
+                    }
+
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -402,7 +427,7 @@ where
         Ok(())
     }
 
-    fn manage_select_transactions(
+    async fn manage_select_transactions(
         &self,
         SelectTransactionsRequest {
             constraints,
@@ -420,11 +445,9 @@ where
 
     fn manage_tx_insertions(
         &self,
-        InsertionRequest {
-            transactions,
-            from_peer_info,
-            response_channel,
-        }: InsertionRequest,
+        transactions: Vec<Arc<Transaction>>,
+        from_peer_info: Option<GossipsubMessageInfo>,
+        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     ) -> anyhow::Result<()> {
         let current_height = *self.current_height.read();
         let (version, params) = self
@@ -549,14 +572,32 @@ where
         Ok(())
     }
 
+    fn manage_remove_coin_dependents(
+        &self,
+        tx_id: TxId,
+        response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
+    ) -> anyhow::Result<()> {
+        let dependents =
+            self.pool
+                .write()
+                .remove_coin_dependents(tx_id)
+                .map_err(|e| {
+                    tracing::error!("Failed to remove coin dependents: {}", e);
+                    anyhow::anyhow!(e)
+                })?;
+        response_channel
+            .send(dependents)
+            .map_err(|_| anyhow::anyhow!("Failed to send the result"))
+    }
+
     async fn manage_tx_from_p2p(
         &mut self,
         tx: Transaction,
         message_id: Vec<u8>,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
-        self.insert_transactions_requests_sender
-            .send(InsertionRequest {
+        self.write_pool_requests_sender
+            .send(WritePoolRequest::InsertTxs {
                 transactions: vec![Arc::new(tx)],
                 from_peer_info: Some(GossipsubMessageInfo {
                     message_id,
@@ -574,7 +615,7 @@ where
         let _ = self.heavy_p2p_sync_processor.spawn({
             let p2p = self.p2p.clone();
             let pool = self.pool.clone();
-            let txs_insert_sender = self.insert_transactions_requests_sender.clone();
+            let txs_insert_sender = self.write_pool_requests_sender.clone();
             async move {
                 let peer_tx_ids = p2p
                     .request_tx_ids(peer_id.clone())
@@ -620,7 +661,7 @@ where
                 }
                 // Verifying and insert them, not a big deal if we fail to insert them
                 let _ = txs_insert_sender
-                    .send(InsertionRequest {
+                    .send(WritePoolRequest::InsertTxs {
                         transactions: txs,
                         from_peer_info: None,
                         response_channel: None,
@@ -685,7 +726,7 @@ where
                         .map(|tx_id| {
                             pool.find_one(&tx_id).map(|stored_data| TxInfo {
                                 tx: stored_data.transaction.clone(),
-                                creation_instant: stored_data.creation_instant.clone(),
+                                creation_instant: stored_data.creation_instant,
                             })
                         })
                         .collect()
@@ -743,8 +784,7 @@ where
     let new_peers_subscribed_stream = p2p.subscribe_new_peers();
     let new_txs_notifier = Arc::new(Notify::new());
     // TODO: Config the size
-    let (insert_transactions_requests_sender, insert_transactions_requests_receiver) =
-        mpsc::channel(10);
+    let (write_pool_requests_sender, write_pool_requests_receiver) = mpsc::channel(10);
     let (select_transactions_requests_sender, select_transactions_requests_receiver) =
         mpsc::channel(10);
     let (read_pool_requests_sender, read_pool_requests_receiver) = mpsc::channel(10);
@@ -756,17 +796,19 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
+    let gas_price_provider = Arc::new(gas_price_provider);
+    let consensus_parameters_provider = Arc::new(consensus_parameters_provider);
     Service::new(Task {
         new_peers_subscribed_stream,
         tx_from_p2p_stream,
         imported_block_results_stream: block_importer.block_events(),
         txs_ttl: config.max_txs_ttl,
-        insert_transactions_requests_sender: insert_transactions_requests_sender.clone(),
-        insert_transactions_requests_receiver,
+        write_pool_requests_sender: write_pool_requests_sender.clone(),
+        write_pool_requests_receiver,
         select_transactions_requests_receiver,
         read_pool_requests_receiver,
-        consensus_parameters_provider: Arc::new(consensus_parameters_provider),
-        gas_price_provider: Arc::new(gas_price_provider),
+        consensus_parameters_provider: consensus_parameters_provider.clone(),
+        gas_price_provider: gas_price_provider.clone(),
         wasm_checker: Arc::new(wasm_checker),
         memory: Arc::new(memory_pool),
         current_height: Arc::new(RwLock::new(current_height)),
@@ -790,7 +832,7 @@ where
                 max_txs_chain_count: config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(),
+            RatioTipGasSelection::new(gas_price_provider, consensus_parameters_provider),
             config,
         ))),
         p2p: Arc::new(p2p),
@@ -798,7 +840,7 @@ where
         time_txs_submitted: Arc::new(RwLock::new(VecDeque::new())),
         tx_status_sender: tx_status_sender.clone(),
         shared_state: SharedState {
-            txs_insert_sender: insert_transactions_requests_sender.clone(),
+            write_pool_requests_sender,
             tx_status_sender,
             select_transactions_requests_sender,
             read_pool_requests_sender,

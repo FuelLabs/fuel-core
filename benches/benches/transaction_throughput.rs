@@ -115,6 +115,7 @@ where
                             srv.shared
                                 .txpool_shared_state
                                 .insert(transactions, None)
+                                .await
                                 .unwrap();
                             let _ = client.produce_blocks(1, None).await;
 

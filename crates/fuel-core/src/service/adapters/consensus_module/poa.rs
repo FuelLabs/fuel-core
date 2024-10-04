@@ -80,14 +80,14 @@ impl ConsensusModulePort for PoAAdapter {
     }
 }
 
+#[async_trait::async_trait]
 impl TransactionPool for TxPoolAdapter {
     fn new_txs_notifier(&self) -> Arc<Notify> {
         self.service.get_new_txs_notifier()
     }
 
-    fn broadcast_txs_skipped_reason(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
-        self.service
-            .broadcast_txs_skipped_reason(tx_ids_and_reasons)
+    async fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
+        self.service.notify_skipped_txs(tx_ids_and_reasons).await
     }
 }
 

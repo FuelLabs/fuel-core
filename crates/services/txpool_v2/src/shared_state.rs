@@ -27,10 +27,10 @@ use crate::{
     error::Error,
     selection_algorithms::Constraints,
     service::{
-        InsertionRequest,
         ReadPoolRequest,
         SelectTransactionsRequest,
         TxInfo,
+        WritePoolRequest,
     },
     tx_status_stream::{
         TxStatusMessage,
@@ -43,7 +43,7 @@ use crate::{
 };
 
 pub struct SharedState {
-    pub(crate) txs_insert_sender: mpsc::Sender<InsertionRequest>,
+    pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<SelectTransactionsRequest>,
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
@@ -58,7 +58,7 @@ impl Clone for SharedState {
             select_transactions_requests_sender: self
                 .select_transactions_requests_sender
                 .clone(),
-            txs_insert_sender: self.txs_insert_sender.clone(),
+            write_pool_requests_sender: self.write_pool_requests_sender.clone(),
             tx_status_sender: self.tx_status_sender.clone(),
             read_pool_requests_sender: self.read_pool_requests_sender.clone(),
         }
@@ -71,12 +71,12 @@ impl SharedState {
         transactions: Vec<Arc<Transaction>>,
         from_peer_info: Option<GossipsubMessageInfo>,
     ) -> Result<(), Error> {
-        let (txs_insert_sender, txs_insert_receiver) = oneshot::channel();
-        self.txs_insert_sender
-            .send(InsertionRequest {
+        let (write_pool_requests_sender, txs_insert_receiver) = oneshot::channel();
+        self.write_pool_requests_sender
+            .send(WritePoolRequest::InsertTxs {
                 transactions,
                 from_peer_info,
-                response_channel: Some(txs_insert_sender),
+                response_channel: Some(write_pool_requests_sender),
             })
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?;
@@ -107,10 +107,6 @@ impl SharedState {
         select_transactions_receiver
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?
-    }
-
-    pub fn get_new_txs_notifier(&self) -> Arc<Notify> {
-        self.new_txs_notifier.clone()
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {
@@ -145,10 +141,17 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
+    /// Get a notifier that is notified when new transactions are added to the pool.
+    pub fn get_new_txs_notifier(&self) -> Arc<Notify> {
+        self.new_txs_notifier.clone()
+    }
+
+    /// Subscribe to new transaction notifications.
     pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
         self.tx_status_sender.new_tx_notification_sender.subscribe()
     }
 
+    /// Subscribe to status updates for a transaction.
     pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
         self.tx_status_sender
             .update_sender
@@ -156,7 +159,8 @@ impl SharedState {
             .ok_or(anyhow!("Maximum number of subscriptions reached"))
     }
 
-    pub fn send_complete(
+    /// Notify the txpool that a transaction was executed and committed to a block.
+    pub fn notify_complete_tx(
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
@@ -169,13 +173,35 @@ impl SharedState {
         )
     }
 
-    pub fn broadcast_txs_skipped_reason(
-        &self,
-        tx_ids_and_reason: Vec<(Bytes32, String)>,
-    ) {
+    /// Notify the txpool that some transactions were skipped during block production.
+    /// This is used to update the status of the skipped transactions internally and in subscriptions
+    pub async fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
         for (tx_id, reason) in tx_ids_and_reason {
             self.tx_status_sender
-                .send_squeezed_out(tx_id, Error::SkippedTransaction(reason));
+                .send_squeezed_out(tx_id, Error::SkippedTransaction(reason.clone()));
+            let (sender, receiver) = oneshot::channel();
+            if self
+                .write_pool_requests_sender
+                .send(WritePoolRequest::RemoveCoinDependents {
+                    tx_id,
+                    response_channel: sender,
+                })
+                .await
+                .is_err()
+            {
+                return;
+            }
+            let Ok(removed_txs) = receiver.await else {
+                return;
+            };
+            for removed_tx in removed_txs {
+                self.tx_status_sender.send_squeezed_out(
+                    removed_tx.id(),
+                    Error::SkippedTransaction(
+                        format!("Parent transaction with {tx_id}, was removed because of the {reason}")
+                    )
+                );
+            }
         }
     }
 }

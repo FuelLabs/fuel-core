@@ -427,6 +427,7 @@ fn run_with_service_with_extra_inputs(
                 shared
                     .txpool_shared_state
                     .insert(vec![std::sync::Arc::new(tx)], None)
+                    .await
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);

@@ -1,5 +1,8 @@
 use std::{
-    collections::HashMap,
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
     fmt::Debug,
     hash::Hash,
 };
@@ -23,6 +26,7 @@ use fuel_core_types::{
         ContractId,
         Input,
         Output,
+        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
@@ -47,7 +51,7 @@ pub struct BasicCollisionManager<StorageIndex> {
     /// Message -> Transaction that currently use the Message
     messages_spenders: HashMap<Nonce, StorageIndex>,
     /// Coins -> Transaction that currently use the UTXO
-    coins_spenders: HashMap<UtxoId, StorageIndex>,
+    coins_spenders: BTreeMap<UtxoId, StorageIndex>,
     /// Contract -> Transaction that currently create the contract
     contracts_creators: HashMap<ContractId, StorageIndex>,
     /// Blob -> Transaction that currently create the blob
@@ -58,7 +62,7 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
     pub fn new() -> Self {
         Self {
             messages_spenders: HashMap::new(),
-            coins_spenders: HashMap::new(),
+            coins_spenders: BTreeMap::new(),
             contracts_creators: HashMap::new(),
             blobs_users: HashMap::new(),
         }
@@ -84,6 +88,13 @@ where
     StorageIndex: Copy + Debug + Hash + PartialEq + Eq,
 {
     type StorageIndex = StorageIndex;
+
+    fn get_coins_spenders(&self, tx_creator_id: &TxId) -> Vec<Self::StorageIndex> {
+        self.coins_spenders
+            .range(UtxoId::new(*tx_creator_id, 0)..UtxoId::new(*tx_creator_id, u16::MAX))
+            .map(|(_, storage_id)| *storage_id)
+            .collect()
+    }
 
     fn find_collisions(
         &self,

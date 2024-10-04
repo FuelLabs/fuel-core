@@ -19,7 +19,10 @@ use crate::{
 };
 use fuel_core_types::{
     fuel_tx::{
-        field::Tip,
+        field::{
+            MaxFeeLimit,
+            Tip,
+        },
         ConsensusParameters,
         Finalizable,
         GasCosts,
@@ -111,7 +114,7 @@ fn transaction_with_random_inputs_and_outputs(
         builder.add_input(Input::coin_signed(
             utxo_id,
             owner,
-            AMOUNT,
+            AMOUNT * 2,
             AssetId::BASE,
             Default::default(),
             Default::default(),
@@ -132,6 +135,7 @@ fn transaction_with_random_inputs_and_outputs(
 
     let mut tx = builder.finalize();
     tx.set_tip(tip);
+    tx.set_max_fee_limit(tip);
 
     let checked = tx
         .into_checked_basic(0u32.into(), &consensus_parameters)

@@ -1,10 +1,5 @@
 #![allow(non_snake_case)]
 
-use std::{
-    u16,
-    u64,
-};
-
 use crate::{
     config::{
         Config,

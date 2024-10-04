@@ -1,4 +1,4 @@
-use crate::v1::da_source_adapter::{
+use crate::v1::da_source_service::{
     service::{
         DaBlockCostsSource,
         Result as DaBlockCostsResult,
