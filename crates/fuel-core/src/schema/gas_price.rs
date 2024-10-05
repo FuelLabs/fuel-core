@@ -46,7 +46,7 @@ pub struct LatestGasPriceQuery {}
 
 #[Object]
 impl LatestGasPriceQuery {
-    #[graphql(complexity = "2 * QUERY_COSTS.storage_read")]
+    #[graphql(complexity = "QUERY_COSTS.block_header")]
     async fn latest_gas_price(
         &self,
         ctx: &Context<'_>,
