@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.37.0]
+
 ### Added
 - [1609](https://github.com/FuelLabs/fuel-core/pull/1609): Add DA compression support. Compressed blocks are stored in the offchain database when blocks are produced, and can be fetched using the GraphQL API.
 - [2290](https://github.com/FuelLabs/fuel-core/pull/2290): Added a new CLI argument `--graphql-max-directives`. The default value is `10`.
