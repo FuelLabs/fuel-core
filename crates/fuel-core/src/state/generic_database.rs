@@ -1,5 +1,4 @@
 use fuel_core_storage::{
-    column::Column,
     iter::{
         BoxedIter,
         IterDirection,
