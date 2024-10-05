@@ -482,17 +482,20 @@ where
     }
 }
 
-pub async fn check_transactions<Provider, MP>(
+pub async fn check_transactions<Provider, MP, ViewProvider, View>(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
     utxp_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &Provider,
     memory_pool: Arc<MP>,
+    provider: Arc<ViewProvider>,
 ) -> Vec<Result<Checked<Transaction>, Error>>
 where
     Provider: GasPriceProvider,
     MP: MemoryPool,
+    ViewProvider: AtomicView<LatestView = View> + 'static,
+    View: TxPoolDb,
 {
     let mut checked_txs = Vec::with_capacity(txs.len());
 
@@ -505,6 +508,7 @@ where
                 consensus_params,
                 gas_price_provider,
                 memory_pool.get_memory().await,
+                provider.clone(),
             )
             .await,
         );
@@ -513,17 +517,20 @@ where
     checked_txs
 }
 
-pub async fn check_single_tx<GasPrice, M>(
+pub async fn check_single_tx<GasPrice, M, ViewProvider, View>(
     tx: Transaction,
     current_height: BlockHeight,
     utxo_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &GasPrice,
     memory: M,
+    provider: Arc<ViewProvider>,
 ) -> Result<Checked<Transaction>, Error>
 where
     GasPrice: GasPriceProvider,
     M: Memory + Send + Sync + 'static,
+    ViewProvider: AtomicView<LatestView = View> + 'static,
+    View: TxPoolDb,
 {
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType)
@@ -535,9 +542,11 @@ where
             .check_signatures(&consensus_params.chain_id())?;
 
         let parameters = CheckPredicateParams::from(consensus_params);
-        let tx =
-            tokio_rayon::spawn_fifo(move || tx.check_predicates(&parameters, memory))
-                .await?;
+        let tx = tokio_rayon::spawn_fifo(move || {
+            let view = provider.latest_view().unwrap();
+            tx.check_predicates(&parameters, memory, view)
+        })
+        .await?;
 
         debug_assert!(tx.checks().contains(Checks::all()));
 

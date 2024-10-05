@@ -1,10 +1,9 @@
+use anyhow::anyhow;
+use parking_lot::Mutex as ParkingMutex;
 use std::{
     sync::Arc,
     time::Duration,
 };
-
-use anyhow::anyhow;
-use parking_lot::Mutex as ParkingMutex;
 use tokio::{
     sync::broadcast,
     time::MissedTickBehavior,
@@ -135,6 +134,7 @@ pub struct SharedState<
 > {
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool<ViewProvider, WasmChecker>>>,
+    provider: Arc<ViewProvider>,
     p2p: Arc<P2P>,
     utxo_validation: bool,
     current_height: Arc<ParkingMutex<BlockHeight>>,
@@ -157,6 +157,7 @@ impl<P2P, ViewProvider, GasPriceProvider, WasmChecker, ConsensusProvider, MP> Cl
         Self {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
+            provider: self.provider.clone(),
             p2p: self.p2p.clone(),
             utxo_validation: self.utxo_validation,
             current_height: self.current_height.clone(),
@@ -296,6 +297,7 @@ where
                         .consensus_parameters_provider
                         .latest_consensus_parameters();
 
+                    let view = self.tx_pool_shared_state.provider.clone();
                     // verify tx
                     let checked_tx = check_single_tx(
                         tx,
@@ -304,6 +306,7 @@ where
                         params.as_ref(),
                         &self.tx_pool_shared_state.gas_price_provider,
                         self.tx_pool_shared_state.memory_pool.get_memory().await,
+                        view,
                     ).await;
 
                     let acceptance = match checked_tx {
@@ -453,7 +456,7 @@ impl<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, View, 
     SharedState<P2P, ViewProvider, WasmChecker, GasPriceProvider, ConsensusProvider, MP>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    ViewProvider: AtomicView<LatestView = View>,
+    ViewProvider: AtomicView<LatestView = View> + 'static,
     View: TxPoolDb,
     WasmChecker: WasmCheckerConstraint + Send + Sync,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
@@ -514,6 +517,7 @@ where
             params.as_ref(),
             &self.gas_price_provider,
             self.memory_pool.clone(),
+            self.provider.clone(),
         )
         .await;
 
@@ -618,7 +622,7 @@ pub fn new_service<
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
-    ViewProvider: AtomicView,
+    ViewProvider: AtomicView + Clone,
     ViewProvider::LatestView: TxPoolDb,
     WasmChecker: WasmCheckerConstraint + Send + Sync,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
@@ -634,7 +638,7 @@ where
     let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(
         config.clone(),
-        provider,
+        provider.clone(),
         wasm_checker,
     )));
     let task = Task {
@@ -651,6 +655,7 @@ where
                 config.transaction_ttl.saturating_mul(2),
             ),
             txpool,
+            provider: Arc::new(provider),
             p2p,
             utxo_validation: config.utxo_validation,
             current_height: Arc::new(ParkingMutex::new(current_height)),

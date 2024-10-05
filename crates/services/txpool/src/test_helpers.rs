@@ -233,7 +233,11 @@ impl IntoEstimated for Input {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(self)
             .finalize();
-        let _ = tx.estimate_predicates(&params.into(), MemoryInstance::new());
+        let _ = tx.estimate_predicates(
+            &params.into(),
+            MemoryInstance::new(),
+            MockDb::default(),
+        );
         tx.inputs()[0].clone()
     }
 }

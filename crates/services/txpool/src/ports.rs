@@ -3,7 +3,10 @@ use crate::{
     Result as TxPoolResult,
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    Result as StorageResult,
+    StorageRead,
+};
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     entities::{
@@ -22,7 +25,10 @@ use fuel_core_types::{
         ContractId,
         Nonce,
     },
-    fuel_vm::interpreter::Memory,
+    fuel_vm::{
+        interpreter::Memory,
+        BlobData,
+    },
     services::{
         block_importer::SharedImportResult,
         p2p::{
@@ -75,7 +81,7 @@ pub trait BlockImporter: Send + Sync {
     fn block_events(&self) -> BoxStream<SharedImportResult>;
 }
 
-pub trait TxPoolDb: Send + Sync {
+pub trait TxPoolDb: StorageRead<BlobData> + Sync {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
