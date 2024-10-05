@@ -12,3 +12,6 @@ fuel-core-types = { path = "../../crates/types", features = [
 ] }
 
 [workspace]
+
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feature/ldc-mode-2" }
