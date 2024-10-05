@@ -29,6 +29,11 @@ use crate::client::{
 };
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
+use base64::prelude::{
+    Engine as _,
+    BASE64_STANDARD,
+};
+#[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
     http::ReqwestExt,
@@ -76,6 +81,7 @@ use schema::{
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
+    da_compressed::DaCompressedBlockByHeightArgs,
     tx::{
         TxArg,
         TxIdArgs,
@@ -270,6 +276,19 @@ impl FuelClient {
                     format!("Failed to add header to client {e:?}"),
                 )
             })?;
+        if let Some(password) = url.password() {
+            let username = url.username();
+            let credentials = format!("{}:{}", username, password);
+            let authorization = format!("Basic {}", BASE64_STANDARD.encode(credentials));
+            client_builder = client_builder
+                .header("Authorization", &authorization)
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Failed to add header to client {e:?}"),
+                    )
+                })?;
+        }
 
         if let Some(value) = self.cookie.deref().cookies(&self.url) {
             let value = value.to_str().map_err(|e| {
@@ -860,6 +879,23 @@ impl FuelClient {
             .transpose()?;
 
         Ok(block)
+    }
+
+    pub async fn da_compressed_block(
+        &self,
+        height: BlockHeight,
+    ) -> io::Result<Option<Vec<u8>>> {
+        let query = schema::da_compressed::DaCompressedBlockByHeightQuery::build(
+            DaCompressedBlockByHeightArgs {
+                height: U32(height.into()),
+            },
+        );
+
+        Ok(self
+            .query(query)
+            .await?
+            .da_compressed_block
+            .map(|b| b.bytes.into()))
     }
 
     /// Retrieve a blob by its ID

@@ -32,6 +32,7 @@ pub mod block;
 pub mod chain;
 pub mod coins;
 pub mod contract;
+pub mod da_compressed;
 pub mod dap;
 pub mod health;
 pub mod message;
@@ -54,6 +55,7 @@ pub struct Query(
     tx::TxQuery,
     health::HealthQuery,
     coins::CoinQuery,
+    da_compressed::DaCompressedBlockQuery,
     contract::ContractQuery,
     contract::ContractBalanceQuery,
     node_info::NodeQuery,

@@ -8,6 +8,7 @@ use std::{
 };
 
 pub mod api_service;
+mod da_compression;
 pub mod database;
 pub(crate) mod metrics_extension;
 pub mod ports;
@@ -21,6 +22,7 @@ pub struct ServiceConfig {
     pub max_queries_depth: usize,
     pub max_queries_complexity: usize,
     pub max_queries_recursive_depth: usize,
+    pub max_queries_directives: usize,
     pub request_body_bytes_limit: usize,
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
@@ -47,6 +49,7 @@ pub struct Costs {
     pub storage_iterator: usize,
     pub bytecode_read: usize,
     pub state_transition_bytecode_read: usize,
+    pub da_compressed_block_read: usize,
 }
 
 pub const QUERY_COSTS: Costs = Costs {
@@ -73,6 +76,7 @@ pub const QUERY_COSTS: Costs = Costs {
     storage_iterator: 100,
     bytecode_read: 8000,
     state_transition_bytecode_read: 76_000,
+    da_compressed_block_read: 4000,
 };
 
 #[derive(Clone, Debug)]

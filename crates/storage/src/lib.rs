@@ -70,7 +70,7 @@ pub enum Error {
     #[display(fmt = "error occurred in the underlying datastore `{_0:?}`")]
     DatabaseError(Box<dyn core::fmt::Debug + Send + Sync>),
     /// This error should be created with `not_found` macro.
-    #[display(fmt = "resource of type `{_0}` was not found at the: {_1}")]
+    #[display(fmt = "resource was not found in table `{_0}` at the: {_1}")]
     NotFound(&'static str, &'static str),
     // TODO: Do we need this type at all?
     /// Unknown or not expected(by architecture) error.
@@ -194,7 +194,7 @@ macro_rules! not_found {
     };
     ($ty: path) => {
         $crate::Error::NotFound(
-            ::core::any::type_name::<<$ty as $crate::Mappable>::OwnedValue>(),
+            ::core::any::type_name::<$ty>(),
             concat!(file!(), ":", line!()),
         )
     };
@@ -209,12 +209,12 @@ mod test {
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!("BlockId")),
-            format!("resource of type `BlockId` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource was not found in table `BlockId` at the: {}:{}", file!(), line!() - 1)
         );
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_types::entities::coins::coin::CompressedCoin` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource was not found in table `fuel_core_storage::tables::Coins` at the: {}:{}", file!(), line!() - 1)
         );
     }
 }
