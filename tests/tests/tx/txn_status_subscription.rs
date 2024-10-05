@@ -9,7 +9,6 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_txpool::MockDb;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
@@ -26,6 +25,7 @@ use fuel_core_types::{
             EstimatePredicates,
         },
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 use futures::StreamExt;
@@ -67,7 +67,7 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
     tx.estimate_predicates(
         &CheckPredicateParams::default(),
         MemoryInstance::new(),
-        &MockDb::default(),
+        &EmptyStorage,
     )
     .expect("Predicate check failed");
     tx.into()
@@ -124,7 +124,7 @@ async fn subscribe_txn_status() {
         tx.estimate_predicates(
             &CheckPredicateParams::default(),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .expect("should estimate predicate");
 

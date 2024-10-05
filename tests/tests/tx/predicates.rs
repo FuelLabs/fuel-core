@@ -1,7 +1,6 @@
 // Tests related to the predicate execution feature
 
 use crate::helpers::TestSetupBuilder;
-use fuel_core_txpool::MockDb;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
@@ -18,6 +17,7 @@ use fuel_core_types::{
             EstimatePredicates,
         },
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 use rand::{
@@ -73,7 +73,7 @@ async fn transaction_with_valid_predicate_is_executed() {
                     .consensus_parameters,
             ),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .expect("Predicate check failed");
 

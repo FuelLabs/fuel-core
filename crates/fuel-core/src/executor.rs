@@ -3,9 +3,6 @@
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-
-    use std::sync::Mutex;
-
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
@@ -35,7 +32,6 @@ mod tests {
         StorageAsMut,
         StorageAsRef,
     };
-    use fuel_core_txpool::MockDb;
     use fuel_core_types::{
         blockchain::{
             block::{
@@ -128,6 +124,7 @@ mod tests {
                 ExecutableTransaction,
                 MemoryInstance,
             },
+            predicate::EmptyStorage,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
             Call,
@@ -154,6 +151,7 @@ mod tests {
         Rng,
         SeedableRng,
     };
+    use std::sync::Mutex;
 
     #[derive(Clone, Debug, Default)]
     struct Config {
@@ -2887,7 +2885,7 @@ mod tests {
         tx.estimate_predicates(
             &consensus_parameters.clone().into(),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .unwrap();
         let db = &mut Database::default();
@@ -2956,7 +2954,7 @@ mod tests {
         tx.estimate_predicates(
             &cheap_consensus_parameters.clone().into(),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .unwrap();
 
