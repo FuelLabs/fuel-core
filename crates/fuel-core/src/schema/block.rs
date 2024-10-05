@@ -125,6 +125,7 @@ impl Block {
         Ok(query.consensus(height)?.try_into()?)
     }
 
+    #[graphql(complexity = "QUERY_COSTS.block_transactions_ids")]
     async fn transaction_ids(&self) -> Vec<TransactionId> {
         self.0
             .transactions()
@@ -134,8 +135,7 @@ impl Block {
     }
 
     // Assume that in average we have 32 transactions per block.
-    #[graphql(complexity = "QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + child_complexity) * 32")]
+    #[graphql(complexity = "QUERY_COSTS.block_transactions + child_complexity")]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -246,7 +246,7 @@ pub struct BlockQuery;
 
 #[Object]
 impl BlockQuery {
-    #[graphql(complexity = "2 * QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "QUERY_COSTS.block_header + child_complexity")]
     async fn block(
         &self,
         ctx: &Context<'_>,
@@ -276,9 +276,8 @@ impl BlockQuery {
     }
 
     #[graphql(complexity = "{\
-        QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        (QUERY_COSTS.block_header + child_complexity) \
+        * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize) \
     }")]
     async fn blocks(
         &self,
@@ -305,7 +304,7 @@ pub struct HeaderQuery;
 
 #[Object]
 impl HeaderQuery {
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "QUERY_COSTS.block_header + child_complexity")]
     async fn header(
         &self,
         ctx: &Context<'_>,
@@ -319,9 +318,8 @@ impl HeaderQuery {
     }
 
     #[graphql(complexity = "{\
-        QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        (QUERY_COSTS.block_header + child_complexity) \
+        * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize) \
     }")]
     async fn headers(
         &self,
@@ -374,12 +372,13 @@ impl BlockMutation {
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
-        let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.debug {
             return Err(anyhow!("`debug` must be enabled to use this endpoint").into())
         }
+
+        let consensus_module = ctx.data_unchecked::<ConsensusModule>();
 
         let start_time = start_timestamp.map(|timestamp| timestamp.0);
         let blocks_to_produce: u32 = blocks_to_produce.into();

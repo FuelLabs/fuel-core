@@ -110,10 +110,10 @@ impl TxQuery {
         }
     }
 
+    // We assume that each block has 100 transactions.
     #[graphql(complexity = "{\
-        QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        (QUERY_COSTS.tx_get + child_complexity) \
+        * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize)
     }")]
     async fn transactions(
         &self,
