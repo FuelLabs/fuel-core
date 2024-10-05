@@ -289,6 +289,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.off_chain().clone(),
         chain_id,
+        config.da_compression.clone(),
         config.continue_on_error,
     );
 

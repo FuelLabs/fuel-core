@@ -31,7 +31,10 @@ use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
-    graphql_api::ServiceConfig as GraphQLConfig,
+    graphql_api::{
+        worker_service::DaCompressionConfig,
+        ServiceConfig as GraphQLConfig,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -57,6 +60,7 @@ pub struct Config {
     pub gas_price_change_percent: u64,
     pub min_gas_price: u64,
     pub gas_price_threshold_percent: u64,
+    pub da_compression: DaCompressionConfig,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -158,6 +162,7 @@ impl Config {
             block_producer: fuel_core_producer::Config {
                 ..Default::default()
             },
+            da_compression: DaCompressionConfig::Disabled,
             starting_gas_price,
             gas_price_change_percent,
             min_gas_price,
