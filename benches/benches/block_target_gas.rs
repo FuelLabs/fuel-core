@@ -27,7 +27,10 @@ use fuel_core::{
         Config,
         FuelService,
     },
-    txpool::types::Word,
+    txpool::{
+        types::Word,
+        MockDb,
+    },
 };
 use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
@@ -418,6 +421,7 @@ fn run_with_service_with_extra_inputs(
             tx.estimate_predicates(
                 &chain_config.consensus_parameters.clone().into(),
                 MemoryInstance::new(),
+                &MockDb::default(),
             )
             .unwrap();
             async move {

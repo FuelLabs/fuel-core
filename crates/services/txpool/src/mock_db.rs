@@ -182,6 +182,7 @@ impl TxPoolDb for MockDb {
     }
 }
 
+#[derive(Clone)]
 pub struct MockDBProvider(pub MockDb);
 
 impl AtomicView for MockDBProvider {
