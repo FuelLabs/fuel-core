@@ -78,7 +78,7 @@ impl From<CoinConfig> for TableEntry<Coins> {
 /// Generates a new coin config with a unique utxo id for testing
 #[derive(Default, Debug)]
 pub struct CoinConfigGenerator {
-    count: usize,
+    count: u16,
 }
 
 impl CoinConfigGenerator {
@@ -88,10 +88,12 @@ impl CoinConfigGenerator {
 
     pub fn generate(&mut self) -> CoinConfig {
         let mut bytes = [0u8; 32];
-        bytes[..std::mem::size_of::<usize>()].copy_from_slice(&self.count.to_be_bytes());
+        bytes[..std::mem::size_of_val(&self.count)]
+            .copy_from_slice(&self.count.to_be_bytes());
 
         let config = CoinConfig {
             tx_id: Bytes32::from(bytes),
+            tx_pointer_tx_idx: self.count,
             ..Default::default()
         };
         self.count = self.count.checked_add(1).expect("Max coin count reached");
