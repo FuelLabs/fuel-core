@@ -87,8 +87,8 @@ fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.36.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc", package = "fuel-vm", default-features = false }
-#fuel-vm-private = { path = "../fuel-vm/fuel-vm", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.57.1", package = "fuel-vm", default-features = false }
+
 # Common dependencies
 anyhow = "1.0"
 async-trait = "0.1"
@@ -144,10 +144,4 @@ tempfile = "3.4"
 tikv-jemallocator = "0.5"
 
 [patch.crates-io]
-#fuel-asm = { package = "fuel-asm", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
-#fuel-crypto = { package = "fuel-crypto", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
-#fuel-merkle = { package = "fuel-merkle", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
-#fuel-storage = { package = "fuel-storage", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
-#fuel-tx = { package = "fuel-tx", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
-#fuel-types = { package = "fuel-types", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
-#fuel-vm-private = { package = "fuel-vm", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feature/ldc-mode-2" }
