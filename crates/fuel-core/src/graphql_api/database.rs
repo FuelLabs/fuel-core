@@ -23,6 +23,7 @@ use fuel_core_storage::{
     Error as StorageError,
     IsNotFound,
     Mappable,
+    PredicateStorageRequirements,
     Result as StorageResult,
     StorageInspect,
     StorageRead,
@@ -243,6 +244,12 @@ impl StorageRead<BlobData> for ReadView {
 
     fn read_alloc(&self, key: &BlobId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.on_chain.read_alloc(key)
+    }
+}
+
+impl PredicateStorageRequirements for ReadView {
+    fn storage_error_to_string(error: Self::Error) -> String {
+        error.to_string()
     }
 }
 

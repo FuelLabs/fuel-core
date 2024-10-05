@@ -239,7 +239,7 @@ impl TxQuery {
 
         let parameters = CheckPredicateParams::from(params.as_ref());
         let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates(&parameters, memory, query);
+            let result = tx.estimate_predicates(&parameters, memory, &query);
             result.map(|_| tx)
         })
         .await

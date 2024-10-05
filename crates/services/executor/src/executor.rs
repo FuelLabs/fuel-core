@@ -1552,7 +1552,7 @@ where
             .check_predicates(
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
-                &storage_tx,
+                storage_tx,
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(

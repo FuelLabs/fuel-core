@@ -544,7 +544,7 @@ where
         let parameters = CheckPredicateParams::from(consensus_params);
         let tx = tokio_rayon::spawn_fifo(move || {
             let view = provider.latest_view().unwrap();
-            tx.check_predicates(&parameters, memory, view)
+            tx.check_predicates(&parameters, memory, &view.storage())
         })
         .await?;
 

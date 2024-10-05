@@ -236,7 +236,7 @@ impl IntoEstimated for Input {
         let _ = tx.estimate_predicates(
             &params.into(),
             MemoryInstance::new(),
-            MockDb::default(),
+            &MockDb::default(),
         );
         tx.inputs()[0].clone()
     }

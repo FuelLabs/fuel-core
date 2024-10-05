@@ -1,4 +1,5 @@
 use fuel_core_storage::{
+    column::Column,
     iter::{
         BoxedIter,
         IterDirection,
@@ -14,6 +15,7 @@ use fuel_core_storage::{
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    PredicateStorageProvider,
     Result as StorageResult,
     StorageAsRef,
     StorageInspect,
@@ -174,5 +176,16 @@ impl<Storage> core::ops::Deref for GenericDatabase<Storage> {
 impl<Storage> core::ops::DerefMut for GenericDatabase<Storage> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.as_mut()
+    }
+}
+
+impl<Storage> PredicateStorageProvider for GenericDatabase<Storage>
+where
+    Storage: KeyValueInspect<Column = Column> + Clone + Sync + Send + 'static,
+{
+    type Storage = StructuredStorage<Storage>;
+
+    fn storage(&self) -> Self::Storage {
+        self.storage.clone()
     }
 }

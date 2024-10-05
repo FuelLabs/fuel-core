@@ -52,9 +52,9 @@ use fuel_vm_private::{
     fuel_storage::StorageWrite,
     storage::{
         // predicate::PredicateBlobStorage,
+        predicate::PredicateStorageRequirements,
         BlobData,
         ContractsStateData,
-        // PredicateStorage,
         UploadedBytecodes,
     },
 };
@@ -62,10 +62,16 @@ use itertools::Itertools;
 use primitive_types::U256;
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::Debug,
+};
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::Cow,
+    fmt::Debug,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -83,7 +89,16 @@ pub struct VmStorage<D> {
     coinbase: ContractId,
     database: D,
 }
-// impl<D> PredicateBlobStorage for VmStorage<D> {}
+
+impl<D> PredicateStorageRequirements for VmStorage<D>
+where
+    Self: StorageRead<BlobData>,
+    Self::Error: Debug,
+{
+    fn storage_error_to_string(error: Self::Error) -> alloc::string::String {
+        alloc::format!("{:?}", error)
+    }
+}
 
 /// The trait around the `U256` type allows increasing the key by one.
 pub trait IncreaseStorageKey {

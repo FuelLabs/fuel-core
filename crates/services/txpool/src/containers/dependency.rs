@@ -201,10 +201,10 @@ impl Dependency {
     /// Id doesn't change any dependency it just checks if it has possibility to be included.
     /// Returns: (max_depth, db_coins, db_contracts, collided_transactions);
     #[allow(clippy::type_complexity)]
-    fn check_for_collision<'a, E>(
+    fn check_for_collision<'a>(
         &'a self,
         txs: &'a HashMap<TxId, TxInfo>,
-        db: &dyn TxPoolDb<Error = E>,
+        db: &impl TxPoolDb,
         tx: &'a ArcPoolTx,
     ) -> Result<
         (

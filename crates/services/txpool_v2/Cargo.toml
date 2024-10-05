@@ -37,3 +37,4 @@ test-helpers = [
   "fuel-core-types/test-helpers",
   "fuel-core-storage/test-helpers",
 ]
+compil = []
