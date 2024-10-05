@@ -143,7 +143,6 @@ insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 
-
 [patch.crates-io]
 #fuel-asm = { package = "fuel-asm", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
 #fuel-crypto = { package = "fuel-crypto", git = "https://github.com/FuelLabs/fuel-vm.git", branch = "feature/predicate-ldc" }
