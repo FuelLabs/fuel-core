@@ -3151,8 +3151,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.57.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83d62c1ba6352f7bbcf1f2abcdd1c1092c7f5155653d75243b915c4e9ae500b4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/ldc-mode-2#6acc4ca29f13acc7ea5cbb425f7a084cdfabcd76"
 dependencies = [
  "fuel-derive 0.57.1",
  "fuel-types 0.57.1",

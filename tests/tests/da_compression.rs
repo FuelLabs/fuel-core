@@ -54,7 +54,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
             .max_fee_limit(0)
             .script_gas_limit(1_000_000)
             .with_gas_costs(GasCosts::free())
-            .add_random_fee_input()
+            .add_fee_input()
             .finalize_as_transaction();
 
     let status = client.submit_and_await_commit(&tx).await.unwrap();
