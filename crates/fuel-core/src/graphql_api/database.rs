@@ -25,6 +25,8 @@ use fuel_core_storage::{
     Mappable,
     Result as StorageResult,
     StorageInspect,
+    StorageRead,
+    StorageSize,
 };
 use fuel_core_txpool::types::{
     ContractId,
@@ -56,9 +58,11 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        BlobId,
         BlockHeight,
         Nonce,
     },
+    fuel_vm::BlobData,
     services::{
         graphql_api::ContractBalance,
         txpool::TransactionStatus,
@@ -223,6 +227,22 @@ where
 
     fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {
         self.on_chain.contains_key(key)
+    }
+}
+
+impl StorageSize<BlobData> for ReadView {
+    fn size_of_value(&self, key: &BlobId) -> Result<Option<usize>, Self::Error> {
+        self.on_chain.size_of_value(key)
+    }
+}
+
+impl StorageRead<BlobData> for ReadView {
+    fn read(&self, key: &BlobId, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
+        self.on_chain.read(key, buf)
+    }
+
+    fn read_alloc(&self, key: &BlobId) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.on_chain.read_alloc(key)
     }
 }
 

@@ -17,6 +17,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageInspect,
+    StorageRead,
 };
 use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
@@ -121,7 +122,7 @@ pub trait OnChainDatabase:
     + DatabaseBlocks
     + DatabaseMessages
     + StorageInspect<Coins, Error = StorageError>
-    + StorageInspect<BlobData, Error = StorageError>
+    + StorageRead<BlobData, Error = StorageError>
     + StorageInspect<StateTransitionBytecodeVersions, Error = StorageError>
     + StorageInspect<UploadedBytecodes, Error = StorageError>
     + DatabaseContracts
