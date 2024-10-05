@@ -99,25 +99,21 @@ impl BasicVerifiedTx {
 }
 
 impl InputDependenciesVerifiedTx {
-    pub fn perform_input_computation_verifications<M, PSProvider, PSView>(
+    pub fn perform_input_computation_verifications<M, View>(
         self,
         consensus_params: &ConsensusParameters,
         wasm_checker: &impl WasmChecker,
         memory: M,
-        persistent_storage: Arc<PSProvider>,
+        view: View,
     ) -> Result<FullyVerifiedTx, Error>
     where
         M: Memory + Send + Sync + 'static,
-        PSProvider: AtomicView<LatestView = PSView>,
-        PSView: TxPoolPersistentStorage,
+        View: TxPoolPersistentStorage,
     {
         let tx = self.0.check_signatures(&consensus_params.chain_id())?;
 
         let parameters = CheckPredicateParams::from(consensus_params);
-        let db_view = persistent_storage
-            .latest_view()
-            .map_err(|e| Error::Database(e.to_string()))?;
-        let tx = tx.check_predicates(&parameters, memory, &db_view.storage())?;
+        let tx = tx.check_predicates(&parameters, memory, &view)?;
 
         if let Transaction::Upgrade(upgrade) = tx.transaction() {
             if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
@@ -143,7 +139,7 @@ impl FullyVerifiedTx {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn perform_all_verifications<M, PSView, PSProvider>(
+pub async fn perform_all_verifications<M, PSProvider, View>(
     tx: Transaction,
     pool: TxPool<PSProvider>,
     current_height: BlockHeight,
@@ -152,12 +148,12 @@ pub async fn perform_all_verifications<M, PSView, PSProvider>(
     gas_price_provider: &impl GasPriceProvider,
     wasm_checker: &impl WasmChecker,
     memory: M,
-    persistent_storage: Arc<PSProvider>,
+    view: View,
 ) -> Result<PoolTransaction, Error>
 where
     M: Memory + Send + Sync + 'static,
-    PSProvider: AtomicView<LatestView = PSView>,
-    PSView: TxPoolPersistentStorage,
+    PSProvider: AtomicView<LatestView = View>,
+    View: TxPoolPersistentStorage,
 {
     let unverified = UnverifiedTx(tx);
     let basically_verified_tx = unverified
@@ -165,11 +161,12 @@ where
         .await?;
     let inputs_verified_tx = basically_verified_tx
         .perform_inputs_verifications(pool, consensus_params_version)?;
+
     let fully_verified_tx = inputs_verified_tx.perform_input_computation_verifications(
         consensus_params,
         wasm_checker,
         memory,
-        persistent_storage,
+        view,
     )?;
     fully_verified_tx.into_pool_transaction(consensus_params_version)
 }

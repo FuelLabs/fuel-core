@@ -297,7 +297,7 @@ where
                         .consensus_parameters_provider
                         .latest_consensus_parameters();
 
-                    let view = self.tx_pool_shared_state.provider.clone();
+                    let view = self.tx_pool_shared_state.provider.latest_view()?;
                     // verify tx
                     let checked_tx = check_single_tx(
                         tx,
@@ -510,16 +510,21 @@ where
             .consensus_parameters_provider
             .latest_consensus_parameters();
 
-        let checked_txs = check_transactions(
+        let result = check_transactions(
             &txs,
             current_height,
             self.utxo_validation,
             params.as_ref(),
             &self.gas_price_provider,
             self.memory_pool.clone(),
-            self.provider.clone(),
+            &self.provider,
         )
         .await;
+
+        let checked_txs = match result {
+            Ok(checked_txs) => checked_txs,
+            Err(err) => return vec![Err(TxPoolError::Other(err.to_string()))],
+        };
 
         let mut valid_txs = vec![];
 
@@ -622,7 +627,7 @@ pub fn new_service<
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
-    ViewProvider: AtomicView + Clone,
+    ViewProvider: AtomicView,
     ViewProvider::LatestView: TxPoolDb,
     WasmChecker: WasmCheckerConstraint + Send + Sync,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
@@ -636,6 +641,7 @@ where
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let number_of_active_subscription = config.number_of_active_subscription;
+    let provider = Arc::new(provider);
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(
         config.clone(),
         provider.clone(),
@@ -655,7 +661,7 @@ where
                 config.transaction_ttl.saturating_mul(2),
             ),
             txpool,
-            provider: Arc::new(provider),
+            provider,
             p2p,
             utxo_validation: config.utxo_validation,
             current_height: Arc::new(ParkingMutex::new(current_height)),

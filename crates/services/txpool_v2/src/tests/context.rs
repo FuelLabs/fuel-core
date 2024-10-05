@@ -162,7 +162,7 @@ impl TestPoolUniverse {
                 &MockTxPoolGasPrice::new(0),
                 &MockWasmChecker::new(Ok(())),
                 MemoryInstance::new(),
-                Arc::new(MockDBProvider(MockDb::default())),
+                MockDb::default(),
             )
             .await?;
             pool.write().insert(tx)
@@ -186,7 +186,7 @@ impl TestPoolUniverse {
                 &MockTxPoolGasPrice::new(gas_price),
                 &MockWasmChecker::new(Ok(())),
                 MemoryInstance::new(),
-                Arc::new(MockDBProvider(MockDb::default())),
+                MockDb::default(),
             )
             .await?;
             pool.write().insert(tx)
@@ -211,7 +211,7 @@ impl TestPoolUniverse {
                 &MockTxPoolGasPrice::new(0),
                 &wasm_checker,
                 MemoryInstance::new(),
-                Arc::new(MockDBProvider(MockDb::default())),
+                MockDb::default(),
             )
             .await?;
             pool.write().insert(tx)

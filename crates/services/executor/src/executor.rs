@@ -955,7 +955,7 @@ where
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
         memory: &mut MemoryInstance,
-        block_storage_tx: &mut BlockStorageTransaction<D>,
+        block_storage_tx: &BlockStorageTransaction<D>,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure>
     where
         D: KeyValueInspect<Column = Column>,
@@ -991,7 +991,7 @@ where
         height: BlockHeight,
         consensus_params: &ConsensusParameters,
         memory: &mut MemoryInstance,
-        block_storage_tx: &mut BlockStorageTransaction<D>,
+        block_storage_tx: &BlockStorageTransaction<D>,
     ) -> Result<Checked<Transaction>, ForcedTransactionFailure>
     where
         D: KeyValueInspect<Column = Column>,
@@ -1540,7 +1540,7 @@ where
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
-        storage_tx: &mut TxStorageTransaction<T>,
+        storage_tx: &TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<Checked<Tx>>
     where

@@ -27,10 +27,7 @@ use alloc::{
 pub use fuel_vm_private::{
     fuel_storage::*,
     storage::{
-        predicate::{
-            PredicateStorageProvider,
-            PredicateStorageRequirements,
-        },
+        predicate::PredicateStorageRequirements,
         ContractsAssetsStorage,
         InterpreterStorage,
     },

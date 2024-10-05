@@ -3,7 +3,6 @@ use fuel_core_storage::{
     tables::BlobData,
     transactional::AtomicView,
     Mappable,
-    PredicateStorageProvider,
     PredicateStorageRequirements,
     Result as StorageResult,
     StorageInspect,
@@ -148,14 +147,6 @@ impl StorageSize<BlobData> for MockDb {
 impl PredicateStorageRequirements for MockDb {
     fn storage_error_to_string(error: Self::Error) -> String {
         format!("{:?}", error)
-    }
-}
-
-impl PredicateStorageProvider for MockDb {
-    type Storage = Self;
-
-    fn storage(&self) -> Self::Storage {
-        self.clone()
     }
 }
 

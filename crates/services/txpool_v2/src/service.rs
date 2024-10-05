@@ -123,10 +123,17 @@ where
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
+
+        let view = self
+            .persistent_storage_provider
+            .latest_view()
+            .map_err(|e| Error::Database(e.to_string()))?;
+
         for transaction in transactions {
             self.heavy_async_processor.spawn({
                 let shared_state = self.clone();
                 let params = params.clone();
+                let view = view.clone();
                 async move {
                     // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
                     let checked_tx = perform_all_verifications(
@@ -138,7 +145,7 @@ where
                         shared_state.gas_price_provider.as_ref(),
                         shared_state.wasm_checker.as_ref(),
                         shared_state.memory.get_memory().await,
-                        shared_state.persistent_storage_provider.clone(),
+                        view,
                     )
                     .await
                     .unwrap();

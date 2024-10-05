@@ -51,7 +51,6 @@ use fuel_core_types::{
 use fuel_vm_private::{
     fuel_storage::StorageWrite,
     storage::{
-        // predicate::PredicateBlobStorage,
         predicate::PredicateStorageRequirements,
         BlobData,
         ContractsStateData,

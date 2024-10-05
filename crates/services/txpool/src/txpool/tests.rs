@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    mock_db::MockDBProvider,
     ports::WasmValidityError,
     service::test_helpers::MockTxPoolGasPrice,
     test_helpers::{
@@ -57,10 +56,7 @@ use fuel_core_types::{
         interpreter::MemoryInstance,
     },
 };
-use std::{
-    sync::Arc,
-    vec,
-};
+use std::vec;
 
 use super::check_single_tx;
 
@@ -84,7 +80,7 @@ async fn check_unwrap_tx_with_gas_price(
         &ConsensusParameters::default(),
         &gas_price_provider,
         MemoryInstance::new(),
-        Arc::new(MockDBProvider(MockDb::default())),
+        MockDb::default(),
     )
     .await
     .expect("Transaction should be checked")
@@ -111,7 +107,7 @@ async fn check_tx_with_gas_price(
         &ConsensusParameters::default(),
         &gas_price_provider,
         MemoryInstance::new(),
-        Arc::new(MockDBProvider(MockDb::default())),
+        MockDb::default(),
     )
     .await
 }
@@ -1548,7 +1544,7 @@ async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
         &params,
         &gas_price_provider,
         MemoryInstance::new(),
-        Arc::new(MockDBProvider(MockDb::default())),
+        MockDb::default(),
     )
     .await
     .expect("Transaction should be checked");

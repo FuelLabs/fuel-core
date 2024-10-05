@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fuel_core_storage::{
-    PredicateStorageProvider,
+    PredicateStorageRequirements,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -37,7 +37,9 @@ pub trait ConsensusParametersProvider {
     ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>);
 }
 
-pub trait TxPoolPersistentStorage: PredicateStorageProvider + Sync {
+pub trait TxPoolPersistentStorage:
+    Clone + PredicateStorageRequirements + Send + Sync + 'static
+{
     /// Get the UTXO by its ID.
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
