@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2265](https://github.com/FuelLabs/fuel-core/pull/2265): Integrate Block Committer API for DA Block Costs.
 - [2280](https://github.com/FuelLabs/fuel-core/pull/2280): Allow comma separated relayer addresses in cli
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support LDC for blob data in predicates
+- [2300](https://github.com/FuelLabs/fuel-core/pull/2300): Support for checking whether a blob exists.
 
 ### Changed
 
