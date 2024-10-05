@@ -125,7 +125,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
     // Given
     let v36_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
-    let v36_port = "30333";
+    let v36_port = "30334";
     let v36_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
         "V36Producer",
@@ -195,7 +195,7 @@ async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_ge
     // Given
     let genesis_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = "30333";
+    let genesis_port = "30335";
     let node_with_genesis_transition = LatestFuelCoreDriver::spawn(&[
         "--service-name",
         "GenesisProducer",
