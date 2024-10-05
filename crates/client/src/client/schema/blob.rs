@@ -1,8 +1,4 @@
-use crate::client::schema::{
-    schema,
-    BlobId,
-    HexString,
-};
+use crate::client::schema::{schema, BlobId, HexString};
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct BlobByIdArgs {
@@ -40,7 +36,7 @@ pub struct BlobExistsArgs {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl", // Ensure this path is correct
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     variables = "BlobExistsArgs"
 )]
