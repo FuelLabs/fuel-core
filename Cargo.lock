@@ -3150,6 +3150,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-compression"
+version = "0.57.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83d62c1ba6352f7bbcf1f2abcdd1c1092c7f5155653d75243b915c4e9ae500b4"
+dependencies = [
+ "fuel-derive 0.57.1",
+ "fuel-types 0.57.1",
+ "serde",
+]
+
+[[package]]
 name = "fuel-core"
 version = "0.36.0"
 dependencies = [
@@ -3163,6 +3174,7 @@ dependencies = [
  "enum-iterator",
  "fuel-core",
  "fuel-core-chain-config",
+ "fuel-core-compression",
  "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
@@ -3187,6 +3199,7 @@ dependencies = [
  "itertools 0.12.1",
  "mockall",
  "num_cpus",
+ "paste",
  "postcard",
  "proptest",
  "rand",
@@ -3262,6 +3275,7 @@ dependencies = [
  "dotenvy",
  "fuel-core",
  "fuel-core-chain-config",
+ "fuel-core-compression",
  "fuel-core-poa",
  "fuel-core-storage",
  "fuel-core-types 0.36.0",
@@ -3341,6 +3355,23 @@ dependencies = [
  "fuel-core-client",
  "fuel-core-types 0.36.0",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "fuel-core-compression"
+version = "0.36.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-compression",
+ "fuel-core-types 0.36.0",
+ "paste",
+ "postcard",
+ "proptest",
+ "rand",
+ "serde",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "tokio",
 ]
 
@@ -3669,6 +3700,7 @@ dependencies = [
  "fuel-core-benches",
  "fuel-core-bin",
  "fuel-core-client",
+ "fuel-core-compression",
  "fuel-core-executor",
  "fuel-core-gas-price-service",
  "fuel-core-p2p",
@@ -3685,6 +3717,7 @@ dependencies = [
  "insta",
  "itertools 0.12.1",
  "k256",
+ "postcard",
  "pretty_assertions",
  "primitive-types",
  "proptest",
@@ -3969,6 +4002,7 @@ dependencies = [
  "derivative",
  "derive_more",
  "fuel-asm 0.57.1",
+ "fuel-compression",
  "fuel-crypto 0.57.1",
  "fuel-merkle 0.57.1",
  "fuel-types 0.57.1",
@@ -4050,6 +4084,7 @@ dependencies = [
  "derive_more",
  "ethnum",
  "fuel-asm 0.57.1",
+ "fuel-compression",
  "fuel-crypto 0.57.1",
  "fuel-merkle 0.57.1",
  "fuel-storage 0.57.1",

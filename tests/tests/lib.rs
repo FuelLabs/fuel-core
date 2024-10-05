@@ -8,6 +8,7 @@ mod chain;
 mod coin;
 mod coins;
 mod contract;
+mod da_compression;
 mod dap;
 mod debugger;
 mod dos;

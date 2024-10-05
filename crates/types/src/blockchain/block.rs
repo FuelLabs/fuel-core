@@ -59,7 +59,8 @@ pub struct BlockV1<TransactionRepresentation = Transaction> {
     transactions: Vec<TransactionRepresentation>,
 }
 
-/// Compressed version of the fuel `Block`.
+/// Fuel `Block` with transactions represented by their id only.
+/// Note that this is different from the DA compressed blocks.
 pub type CompressedBlock = Block<TxId>;
 
 /// Fuel block with all transaction data included
@@ -68,7 +69,7 @@ pub type CompressedBlock = Block<TxId>;
 /// transactions to produce a [`Block`] or
 /// it can be created with pre-executed transactions in
 /// order to validate they were constructed correctly.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PartialFuelBlock {
     /// The partial header.
     pub header: PartialBlockHeader,
@@ -121,6 +122,7 @@ impl Block<Transaction> {
     }
 
     /// Compresses the fuel block and replaces transactions with hashes.
+    /// Note that this is different from the DA compression process.
     pub fn compress(&self, chain_id: &ChainId) -> CompressedBlock {
         match self {
             Block::V1(inner) => {
@@ -179,6 +181,13 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
 
     /// Get the executed transactions.
     pub fn transactions(&self) -> &[TransactionRepresentation] {
+        match self {
+            Block::V1(inner) => &inner.transactions,
+        }
+    }
+
+    /// Get the executed transactions as a `Vec` type.
+    pub fn transactions_vec(&self) -> &Vec<TransactionRepresentation> {
         match self {
             Block::V1(inner) => &inner.transactions,
         }
