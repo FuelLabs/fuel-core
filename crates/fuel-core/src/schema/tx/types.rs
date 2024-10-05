@@ -182,7 +182,7 @@ impl SuccessStatus {
         self.block_height.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "QUERY_COSTS.block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
@@ -238,7 +238,7 @@ impl FailureStatus {
         self.block_height.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "QUERY_COSTS.block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
@@ -693,7 +693,7 @@ impl Transaction {
         }
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "QUERY_COSTS.tx_status_read + child_complexity")]
     async fn status(
         &self,
         ctx: &Context<'_>,
