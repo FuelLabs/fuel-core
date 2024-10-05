@@ -846,7 +846,7 @@ impl Transaction {
         }
     }
 
-    #[graphql(complexity = "QUERY_COSTS.raw_payload")]
+    #[graphql(complexity = "QUERY_COSTS.tx_raw_payload")]
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
