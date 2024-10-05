@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use fuel_core_storage::PredicateStorageRequirements;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_tx::{
@@ -96,19 +99,25 @@ impl BasicVerifiedTx {
 }
 
 impl InputDependenciesVerifiedTx {
-    pub fn perform_input_computation_verifications<M>(
+    pub fn perform_input_computation_verifications<M, PSProvider, PSView>(
         self,
         consensus_params: &ConsensusParameters,
         wasm_checker: &impl WasmChecker,
         memory: M,
+        persistent_storage: Arc<PSProvider>,
     ) -> Result<FullyVerifiedTx, Error>
     where
         M: Memory + Send + Sync + 'static,
+        PSProvider: AtomicView<LatestView = PSView>,
+        PSView: TxPoolPersistentStorage,
     {
         let tx = self.0.check_signatures(&consensus_params.chain_id())?;
 
         let parameters = CheckPredicateParams::from(consensus_params);
-        let tx = tx.check_predicates(&parameters, memory)?;
+        let db_view = persistent_storage
+            .latest_view()
+            .map_err(|e| Error::Database(e.to_string()))?;
+        let tx = tx.check_predicates(&parameters, memory, &db_view.storage())?;
 
         if let Transaction::Upgrade(upgrade) = tx.transaction() {
             if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
@@ -143,6 +152,7 @@ pub async fn perform_all_verifications<M, PSView, PSProvider>(
     gas_price_provider: &impl GasPriceProvider,
     wasm_checker: &impl WasmChecker,
     memory: M,
+    persistent_storage: Arc<PSProvider>,
 ) -> Result<PoolTransaction, Error>
 where
     M: Memory + Send + Sync + 'static,
@@ -159,6 +169,7 @@ where
         consensus_params,
         wasm_checker,
         memory,
+        persistent_storage,
     )?;
     fully_verified_tx.into_pool_transaction(consensus_params_version)
 }
