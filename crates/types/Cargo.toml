@@ -22,7 +22,7 @@ bs58 = { version = "0.5", optional = true }
 derivative = { version = "2" }
 derive_more = { version = "0.99" }
 fuel-vm-private = { workspace = true, default-features = false, features = [
-  "serde"
+  "serde",
 ] }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
