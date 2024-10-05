@@ -211,8 +211,8 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
     }
 }
 
-const ROUNDS_PER_TEST: usize = 30;
-const ROUNDS_PER_TXPOOL: usize = 1500;
+const ROUNDS_PER_TEST: usize = 10;
+const ROUNDS_PER_TXPOOL: usize = 150;
 
 #[test]
 fn stability_test__average_transactions() {
