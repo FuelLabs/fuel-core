@@ -9,10 +9,7 @@ use criterion::{
     SamplingMode,
 };
 use ed25519_dalek::Signer;
-use fuel_core::{
-    service::config::Trigger,
-    txpool::MockDb,
-};
+use fuel_core::service::config::Trigger;
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -42,6 +39,7 @@ use fuel_core_types::{
             EstimatePredicates,
         },
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 use rand::{
@@ -200,7 +198,7 @@ fn signed_transfers(c: &mut Criterion) {
         tx.estimate_predicates(
             &checked_parameters(),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .expect("Predicate check failed");
         tx
@@ -230,7 +228,7 @@ fn predicate_transfers(c: &mut Criterion) {
         tx.estimate_predicates(
             &checked_parameters(),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .expect("Predicate check failed");
         tx
@@ -302,7 +300,7 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
         tx.estimate_predicates(
             &checked_parameters(),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .expect("Predicate check failed");
         tx
@@ -376,7 +374,7 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
         tx.estimate_predicates(
             &checked_parameters(),
             MemoryInstance::new(),
-            &MockDb::default(),
+            &EmptyStorage,
         )
         .expect("Predicate check failed");
         tx

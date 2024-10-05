@@ -46,6 +46,7 @@ use fuel_core_types::{
     fuel_vm::{
         checked_transaction::EstimatePredicates,
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 
@@ -233,11 +234,8 @@ impl IntoEstimated for Input {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(self)
             .finalize();
-        let _ = tx.estimate_predicates(
-            &params.into(),
-            MemoryInstance::new(),
-            &MockDb::default(),
-        );
+        let _ =
+            tx.estimate_predicates(&params.into(), MemoryInstance::new(), &EmptyStorage);
         tx.inputs()[0].clone()
     }
 }
