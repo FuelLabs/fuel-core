@@ -958,7 +958,7 @@ where
         block_storage_tx: &mut BlockStorageTransaction<D>,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure>
     where
-        D: KeyValueInspect<Column = Column> + Clone,
+        D: KeyValueInspect<Column = Column>,
     {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
         Self::tx_is_valid_variant(&parsed_tx)?;
@@ -994,14 +994,14 @@ where
         block_storage_tx: &mut BlockStorageTransaction<D>,
     ) -> Result<Checked<Transaction>, ForcedTransactionFailure>
     where
-        D: KeyValueInspect<Column = Column> + Clone,
+        D: KeyValueInspect<Column = Column>,
     {
         let checked_tx = tx
             .into_checked_reusable_memory(
                 height,
                 consensus_params,
                 memory,
-                block_storage_tx.clone(),
+                block_storage_tx,
             )
             .map_err(ForcedTransactionFailure::CheckError)?;
         Ok(checked_tx)
@@ -1552,7 +1552,7 @@ where
             .check_predicates(
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
-                storage_tx,
+                &storage_tx,
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
