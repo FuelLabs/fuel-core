@@ -16,11 +16,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module. Also adds insertion/verification process in PoolV2 and tests refactoring
 - [2265](https://github.com/FuelLabs/fuel-core/pull/2265): Integrate Block Committer API for DA Block Costs.
 - [2280](https://github.com/FuelLabs/fuel-core/pull/2280): Allow comma separated relayer addresses in cli
-- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support LDC for blob data in predicates
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support blobs in the predicates.
 
 ### Changed
 
 #### Breaking
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Anyone who wants to participate in the transaction broadcasting via p2p must upgrade to support new predicates on the TxPool level.
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Upgraded `fuel-vm` to `0.58.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.58.0).
 - [2290](https://github.com/FuelLabs/fuel-core/pull/2290): Added a new GraphQL limit on number of `directives`. The default value is `10`.
 - [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
 - [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
