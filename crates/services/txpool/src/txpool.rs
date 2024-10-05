@@ -87,14 +87,14 @@ pub struct TxPool<ViewProvider, WasmChecker> {
     by_time: TimeSort,
     by_dependency: Dependency,
     config: Config,
-    database: ViewProvider,
+    database: Arc<ViewProvider>,
     wasm_checker: WasmChecker,
 }
 
 impl<ViewProvider, WasmChecker> TxPool<ViewProvider, WasmChecker> {
     pub fn new(
         config: Config,
-        database: ViewProvider,
+        database: Arc<ViewProvider>,
         wasm_checker: WasmChecker,
     ) -> Self {
         let max_depth = config.max_depth;
@@ -489,16 +489,17 @@ pub async fn check_transactions<Provider, MP, ViewProvider, View>(
     consensus_params: &ConsensusParameters,
     gas_price_provider: &Provider,
     memory_pool: Arc<MP>,
-    provider: Arc<ViewProvider>,
-) -> Vec<Result<Checked<Transaction>, Error>>
+    provider: &Arc<ViewProvider>,
+) -> anyhow::Result<Vec<Result<Checked<Transaction>, Error>>>
 where
     Provider: GasPriceProvider,
     MP: MemoryPool,
-    ViewProvider: AtomicView<LatestView = View> + 'static,
+    ViewProvider: AtomicView<LatestView = View>,
     View: TxPoolDb,
 {
     let mut checked_txs = Vec::with_capacity(txs.len());
 
+    let view = provider.latest_view()?;
     for tx in txs.iter() {
         checked_txs.push(
             check_single_tx(
@@ -508,28 +509,27 @@ where
                 consensus_params,
                 gas_price_provider,
                 memory_pool.get_memory().await,
-                provider.clone(),
+                view.clone(),
             )
             .await,
         );
     }
 
-    checked_txs
+    Ok(checked_txs)
 }
 
-pub async fn check_single_tx<GasPrice, M, ViewProvider, View>(
+pub async fn check_single_tx<GasPrice, M, View>(
     tx: Transaction,
     current_height: BlockHeight,
     utxo_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &GasPrice,
     memory: M,
-    provider: Arc<ViewProvider>,
+    view: View,
 ) -> Result<Checked<Transaction>, Error>
 where
     GasPrice: GasPriceProvider,
     M: Memory + Send + Sync + 'static,
-    ViewProvider: AtomicView<LatestView = View> + 'static,
     View: TxPoolDb,
 {
     if tx.is_mint() {
@@ -543,8 +543,7 @@ where
 
         let parameters = CheckPredicateParams::from(consensus_params);
         let tx = tokio_rayon::spawn_fifo(move || {
-            let view = provider.latest_view().unwrap();
-            tx.check_predicates(&parameters, memory, &view.storage())
+            tx.check_predicates(&parameters, memory, &view)
         })
         .await?;
 

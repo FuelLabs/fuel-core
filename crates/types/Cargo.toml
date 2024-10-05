@@ -22,7 +22,7 @@ bs58 = { version = "0.5", optional = true }
 derivative = { version = "2" }
 derive_more = { version = "0.99" }
 fuel-vm-private = { workspace = true, default-features = false, features = [
-  "serde",
+  "alloc",
 ] }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
@@ -34,6 +34,7 @@ zeroize = "1.5"
 default = ["std"]
 alloc = ["fuel-vm-private/alloc"]
 serde = ["dep:serde", "fuel-vm-private/serde"]
+da-compression = ["fuel-vm-private/da-compression"]
 std = ["alloc", "fuel-vm-private/std", "bs58"]
 random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]

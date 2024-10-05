@@ -20,7 +20,10 @@ use fuel_core::{
         CombinedDatabase,
         CombinedDatabaseConfig,
     },
-    fuel_core_graphql_api::ServiceConfig as GraphQLConfig,
+    fuel_core_graphql_api::{
+        worker_service::DaCompressionConfig,
+        ServiceConfig as GraphQLConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -190,6 +193,11 @@ pub struct Command {
     #[cfg(feature = "aws-kms")]
     pub consensus_aws_kms: Option<String>,
 
+    /// If given, the node will produce and store da-compressed blocks
+    /// with the given retention time.
+    #[arg(long = "da-compression", env)]
+    pub da_compression: Option<humantime::Duration>,
+
     /// A new block is produced instantly when transactions are available.
     #[clap(flatten)]
     pub poa_trigger: PoATriggerArgs,
@@ -272,6 +280,7 @@ impl Command {
             consensus_key,
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
+            da_compression,
             poa_trigger,
             predefined_blocks_path,
             coinbase_recipient,
@@ -418,6 +427,15 @@ impl Command {
         let block_importer =
             fuel_core::service::config::fuel_core_importer::Config::new();
 
+        let da_compression = match da_compression {
+            Some(retention) => {
+                DaCompressionConfig::Enabled(fuel_core_compression::Config {
+                    temporal_registry_retention: retention.into(),
+                })
+            }
+            None => DaCompressionConfig::Disabled,
+        };
+
         let TxPoolArgs {
             tx_pool_ttl,
             tx_max_number,
@@ -476,6 +494,7 @@ impl Command {
             min_gas_price,
             gas_price_threshold_percent,
             block_importer,
+            da_compression,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,
             #[cfg(feature = "p2p")]

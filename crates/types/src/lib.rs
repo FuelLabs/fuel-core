@@ -13,6 +13,9 @@
 extern crate alloc;
 
 #[doc(no_inline)]
+#[cfg(feature = "da-compression")]
+pub use fuel_vm_private::fuel_compression;
+#[doc(no_inline)]
 pub use fuel_vm_private::{
     fuel_asm,
     fuel_crypto,

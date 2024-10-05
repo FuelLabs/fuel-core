@@ -49,6 +49,7 @@ use fuel_core_types::{
         predicate::EmptyStorage,
     },
 };
+use std::sync::Arc;
 
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
 // the byte and gas price fees.
@@ -94,7 +95,7 @@ impl TextContext {
     pub(crate) fn build(self) -> TxPool<MockDBProvider, MockWasmChecker> {
         TxPool::new(
             self.config.unwrap_or_default(),
-            MockDBProvider(self.mock_db),
+            Arc::new(MockDBProvider(self.mock_db)),
             self.wasm_checker,
         )
     }

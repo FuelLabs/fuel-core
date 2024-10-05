@@ -4,7 +4,7 @@ use crate::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    PredicateStorageProvider,
+    PredicateStorageRequirements,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -78,7 +78,7 @@ pub trait BlockImporter: Send + Sync {
     fn block_events(&self) -> BoxStream<SharedImportResult>;
 }
 
-pub trait TxPoolDb: PredicateStorageProvider + Sync {
+pub trait TxPoolDb: Clone + PredicateStorageRequirements + Send + Sync + 'static {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
