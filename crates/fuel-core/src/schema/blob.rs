@@ -66,4 +66,22 @@ impl BlobQuery {
             })
             .into_api_result()
     }
+
+    async fn blob_exists(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "ID of the Blob")] id: BlobId,
+    ) -> async_graphql::Result<bool> {
+        let query = ctx.read_view()?;
+        query
+            .blob_exists(id.0)
+            .and_then(|blob_exists| {
+                if blob_exists {
+                    Ok(true)
+                } else {
+                    Err(not_found!(BlobData))
+                }
+            })
+            .map_err(|e| e.into())
+    }
 }
