@@ -234,6 +234,41 @@ async fn blob__can_be_queried_if_uploaded() {
 }
 
 #[tokio::test]
+async fn blob__exists_if_uploaded() {
+    // Given
+    let mut ctx = TestContext::new().await;
+    let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
+    let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
+    assert!(matches!(status, TransactionStatus::Success { .. }));
+
+    // When
+    let blob_exists = ctx
+        .client
+        .blob_exists(blob_id)
+        .await
+        .expect("blob query failed");
+
+    // Then
+    assert!(blob_exists);
+}
+
+#[tokio::test]
+async fn blob__ask_whether_a_nonexisting_blob_exists() {
+    // Given
+    let ctx = TestContext::new().await;
+
+    // When
+    let blob_exists = ctx
+        .client
+        .blob_exists(Default::default())
+        .await
+        .expect("blob query failed");
+
+    // Then
+    assert!(!blob_exists);
+}
+
+#[tokio::test]
 async fn predicate_can_load_blob() {
     let blob_predicate = vec![op::ret(RegId::ONE)].into_iter().collect::<Vec<u8>>();
 
