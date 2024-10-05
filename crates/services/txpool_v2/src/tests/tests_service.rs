@@ -37,6 +37,7 @@ async fn test_find() {
     let tx3 = Arc::new(universe.build_script_transaction(None, None, 30));
 
     let service = universe.build_service(None, None);
+    service.start_and_await().await.unwrap();
 
     // Given
     let ids = vec![tx1.id(&Default::default()), tx2.id(&Default::default())];
