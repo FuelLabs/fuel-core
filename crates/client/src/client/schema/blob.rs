@@ -33,16 +33,11 @@ pub struct BlobIdFragment {
     pub id: BlobId,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
-pub struct BlobExistsArgs {
-    pub id: BlobId,
-}
-
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    variables = "BlobExistsArgs"
+    variables = "BlobByIdArgs"
 )]
 pub struct BlobExistsQuery {
     #[arguments(id: $id)]

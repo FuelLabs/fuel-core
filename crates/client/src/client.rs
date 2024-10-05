@@ -77,10 +77,7 @@ use pagination::{
 };
 use schema::{
     balance::BalanceArgs,
-    blob::{
-        BlobByIdArgs,
-        BlobExistsArgs,
-    },
+    blob::BlobByIdArgs,
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
@@ -910,8 +907,7 @@ impl FuelClient {
 
     /// Check whether a blob with ID exists
     pub async fn blob_exists(&self, id: BlobId) -> io::Result<bool> {
-        let query =
-            schema::blob::BlobExistsQuery::build(BlobExistsArgs { id: id.into() });
+        let query = schema::blob::BlobExistsQuery::build(BlobByIdArgs { id: id.into() });
         Ok(self.query(query).await?.blob.is_some())
     }
 
