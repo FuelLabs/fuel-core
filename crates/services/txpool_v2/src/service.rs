@@ -61,6 +61,7 @@ pub struct SharedState<
     MemoryPool,
 > {
     pool: TxPool<PSProvider>,
+    persistent_storage_provider: Arc<PSProvider>,
     current_height: Arc<RwLock<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusParamsProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
@@ -82,6 +83,7 @@ impl<PSProvider, ConsensusParamsProvider, GasPriceProvider, WasmChecker, MemoryP
     fn clone(&self) -> Self {
         SharedState {
             pool: self.pool.clone(),
+            persistent_storage_provider: self.persistent_storage_provider.clone(),
             current_height: self.current_height.clone(),
             consensus_parameters_provider: self.consensus_parameters_provider.clone(),
             gas_price_provider: self.gas_price_provider.clone(),
@@ -109,7 +111,7 @@ impl<
         MemoryPool,
     >
 where
-    PSProvider: AtomicView<LatestView = PSView> + 'static,
+    PSProvider: AtomicView<LatestView = PSView> + Send + Sync + 'static,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider + 'static,
     GasPriceProvider: GasPriceProviderTrait + Send + Sync + 'static,
@@ -121,10 +123,17 @@ where
         let (version, params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
+
+        let view = self
+            .persistent_storage_provider
+            .latest_view()
+            .map_err(|e| Error::Database(e.to_string()))?;
+
         for transaction in transactions {
             self.heavy_async_processor.spawn({
                 let shared_state = self.clone();
                 let params = params.clone();
+                let view = view.clone();
                 async move {
                     // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
                     let checked_tx = perform_all_verifications(
@@ -136,6 +145,7 @@ where
                         shared_state.gas_price_provider.as_ref(),
                         shared_state.wasm_checker.as_ref(),
                         shared_state.memory.get_memory().await,
+                        view,
                     )
                     .await
                     .unwrap();
@@ -291,7 +301,7 @@ pub fn new_service<
     memory_pool: MemoryPool,
 ) -> Service<PSProvider, ConsensusParamsProvider, GasPriceProvider, WasmChecker, MemoryPool>
 where
-    PSProvider: AtomicView<LatestView = PSView>,
+    PSProvider: AtomicView<LatestView = PSView> + Clone + Send + Sync,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider + Send + Sync,
     GasPriceProvider: GasPriceProviderTrait + Send + Sync,
@@ -300,6 +310,7 @@ where
 {
     Service::new(Task {
         shared_state: SharedState {
+            persistent_storage_provider: Arc::new(ps_provider.clone()),
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
             gas_price_provider: Arc::new(gas_price_provider),
             wasm_checker: Arc::new(wasm_checker),

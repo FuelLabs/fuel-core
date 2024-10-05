@@ -10,17 +10,22 @@ use fuel_core_storage::{
         Value,
     },
     structured_storage::StructuredStorage,
+    tables::BlobData,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    PredicateStorageRequirements,
     Result as StorageResult,
     StorageAsRef,
     StorageInspect,
     StorageRead,
     StorageSize,
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::Debug,
+};
 
 #[derive(Debug, Clone)]
 pub struct GenericDatabase<Storage> {
@@ -174,5 +179,15 @@ impl<Storage> core::ops::Deref for GenericDatabase<Storage> {
 impl<Storage> core::ops::DerefMut for GenericDatabase<Storage> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.as_mut()
+    }
+}
+
+impl<Storage, Error> PredicateStorageRequirements for GenericDatabase<Storage>
+where
+    Self: StorageRead<BlobData, Error = Error>,
+    Error: Debug,
+{
+    fn storage_error_to_string(error: Error) -> String {
+        format!("{:?}", error)
     }
 }

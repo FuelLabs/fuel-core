@@ -291,7 +291,7 @@ async fn can_get_message_proof() {
 
     // Create the contract deploy transaction.
     let mut contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
-        .add_random_fee_input()
+        .add_fee_input()
         .add_output(output)
         .finalize_as_transaction();
 

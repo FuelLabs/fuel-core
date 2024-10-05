@@ -18,6 +18,7 @@ use crate::{
     types::GasPrice,
     Config,
     Error,
+    MockDb,
 };
 use fuel_core_types::{
     fuel_asm::{
@@ -79,6 +80,7 @@ async fn check_unwrap_tx_with_gas_price(
         &ConsensusParameters::default(),
         &gas_price_provider,
         MemoryInstance::new(),
+        MockDb::default(),
     )
     .await
     .expect("Transaction should be checked")
@@ -105,6 +107,7 @@ async fn check_tx_with_gas_price(
         &ConsensusParameters::default(),
         &gas_price_provider,
         MemoryInstance::new(),
+        MockDb::default(),
     )
     .await
 }
@@ -392,7 +395,7 @@ async fn not_inserted_known_tx() {
     let mut txpool = context.build();
 
     let tx = TransactionBuilder::script(vec![], vec![])
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize()
         .into();
     let tx = check_unwrap_tx(tx, &txpool.config).await;
@@ -1370,7 +1373,7 @@ async fn insert_single__blob_tx_works() {
         witness_index: 0,
     })
     .add_witness(program.into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     let config = Config {
@@ -1401,7 +1404,7 @@ async fn insert_single__blob_tx_fails_if_blob_already_inserted_and_lower_tip() {
         witness_index: 0,
     })
     .add_witness(program.clone().into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     let config = Config {
@@ -1418,7 +1421,7 @@ async fn insert_single__blob_tx_fails_if_blob_already_inserted_and_lower_tip() {
         id: blob_id,
         witness_index: 1,
     })
-    .add_random_fee_input()
+    .add_fee_input()
     .add_witness(program.into())
     .finalize_as_transaction();
     let same_blob_tx = check_unwrap_tx(same_blob_tx, &txpool.config).await;
@@ -1439,7 +1442,7 @@ async fn insert_single__blob_tx_succeeds_if_blob_already_inserted_but_higher_tip
         witness_index: 0,
     })
     .add_witness(program.clone().into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     let config = Config {
@@ -1456,7 +1459,7 @@ async fn insert_single__blob_tx_succeeds_if_blob_already_inserted_but_higher_tip
         id: blob_id,
         witness_index: 1,
     })
-    .add_random_fee_input()
+    .add_fee_input()
     .add_witness(program.into())
     .tip(100)
     .max_fee_limit(100)
@@ -1479,7 +1482,7 @@ async fn insert_single__blob_tx_fails_if_blob_already_exists_in_database() {
         witness_index: 0,
     })
     .add_witness(program.clone().into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     let config = Config {
@@ -1541,6 +1544,7 @@ async fn insert_inner__rejects_upgrade_tx_with_invalid_wasm() {
         &params,
         &gas_price_provider,
         MemoryInstance::new(),
+        MockDb::default(),
     )
     .await
     .expect("Transaction should be checked");

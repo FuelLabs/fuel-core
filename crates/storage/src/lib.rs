@@ -27,6 +27,7 @@ use alloc::{
 pub use fuel_vm_private::{
     fuel_storage::*,
     storage::{
+        predicate::PredicateStorageRequirements,
         ContractsAssetsStorage,
         InterpreterStorage,
     },

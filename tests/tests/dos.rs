@@ -121,9 +121,7 @@ const FULL_BLOCK_QUERY: &str = r#"
                 }
                 ... on SuccessStatus {
                   transactionId
-                  block {
-                    height
-                  }
+                  blockHeight
                   time
                   programState {
                     returnType
