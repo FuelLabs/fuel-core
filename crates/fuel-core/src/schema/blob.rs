@@ -3,21 +3,12 @@ use crate::{
     graphql_api::IntoApiResult,
     query::BlobQueryData,
     schema::{
-        scalars::{
-            BlobId,
-            HexString,
-        },
+        scalars::{BlobId, HexString},
         ReadViewProvider,
     },
 };
-use async_graphql::{
-    Context,
-    Object,
-};
-use fuel_core_storage::{
-    not_found,
-    tables::BlobData,
-};
+use async_graphql::{Context, Object};
+use fuel_core_storage::{not_found, tables::BlobData};
 use fuel_core_types::fuel_types;
 
 pub struct Blob(fuel_types::BlobId);
@@ -65,14 +56,5 @@ impl BlobQuery {
                 }
             })
             .into_api_result()
-    }
-
-    async fn blob_exists(
-        &self,
-        ctx: &Context<'_>,
-        #[graphql(desc = "ID of the Blob")] id: BlobId,
-    ) -> async_graphql::Result<bool> {
-        let query = ctx.read_view()?;
-        query.blob_exists(id.0).map_err(|e| e.into())
     }
 }

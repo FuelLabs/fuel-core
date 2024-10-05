@@ -871,12 +871,6 @@ type Query {
 		"""
 		id: BlobId!
 	): Blob
-	blobExists(
-		"""
-		ID of the Blob
-		"""
-		id: BlobId!
-	): Boolean!
 	block(
 		"""
 		ID of the block

@@ -1,8 +1,4 @@
-use crate::client::schema::{
-    schema,
-    BlobId,
-    HexString,
-};
+use crate::client::schema::{schema, BlobId, HexString};
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct BlobByIdArgs {
@@ -27,19 +23,24 @@ pub struct Blob {
     pub bytecode: HexString,
 }
 
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Blob")]
+pub struct BlobIdFragment {
+    pub id: BlobId,
+}
+
 #[derive(cynic::QueryVariables, Debug)]
 pub struct BlobExistsArgs {
     pub id: BlobId,
 }
 
-/// GraphQL query to check if a Blob exists by its ID
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "./assets/schema.sdl", // Ensure this path is correct
     graphql_type = "Query",
     variables = "BlobExistsArgs"
 )]
 pub struct BlobExistsQuery {
     #[arguments(id: $id)]
-    pub blob_exists: bool,
+    pub blob: Option<BlobIdFragment>,
 }
