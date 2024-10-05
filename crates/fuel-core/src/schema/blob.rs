@@ -3,12 +3,21 @@ use crate::{
     graphql_api::IntoApiResult,
     query::BlobQueryData,
     schema::{
-        scalars::{BlobId, HexString},
+        scalars::{
+            BlobId,
+            HexString,
+        },
         ReadViewProvider,
     },
 };
-use async_graphql::{Context, Object};
-use fuel_core_storage::{not_found, tables::BlobData};
+use async_graphql::{
+    Context,
+    Object,
+};
+use fuel_core_storage::{
+    not_found,
+    tables::BlobData,
+};
 use fuel_core_types::fuel_types;
 
 pub struct Blob(fuel_types::BlobId);
