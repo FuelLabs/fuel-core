@@ -51,8 +51,10 @@ use fuel_core_types::{
 use fuel_vm_private::{
     fuel_storage::StorageWrite,
     storage::{
+        // predicate::PredicateBlobStorage,
         BlobData,
         ContractsStateData,
+        // PredicateStorage,
         UploadedBytecodes,
     },
 };
@@ -81,6 +83,7 @@ pub struct VmStorage<D> {
     coinbase: ContractId,
     database: D,
 }
+// impl<D> PredicateBlobStorage for VmStorage<D> {}
 
 /// The trait around the `U256` type allows increasing the key by one.
 pub trait IncreaseStorageKey {

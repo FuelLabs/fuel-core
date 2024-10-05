@@ -3140,7 +3140,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types 0.57.1",
@@ -3842,7 +3842,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3874,7 +3874,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3910,7 +3910,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3930,7 +3930,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 
 [[package]]
 name = "fuel-tx"
@@ -3957,7 +3957,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -3989,7 +3989,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 dependencies = [
  "fuel-derive 0.57.1",
  "hex",
@@ -4031,7 +4031,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.57.1"
-source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#b4c4da38df20981da9f6d52a1c0faa2c6a133479"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=feature/predicate-ldc#2da51b1cbdbae959766753248916515507ff610e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4740,7 +4740,7 @@ dependencies = [
  "iana-time-zone-haiku",
  "js-sys",
  "wasm-bindgen",
- "windows-core 0.52.0",
+ "windows-core",
 ]
 
 [[package]]
@@ -9866,7 +9866,7 @@ version = "0.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca229916c5ee38c2f2bc1e9d8f04df975b4bd93f9955dc69fabb5d91270045c9"
 dependencies = [
- "windows-core 0.51.1",
+ "windows-core",
  "windows-targets 0.48.5",
 ]
 
@@ -9877,15 +9877,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1f8cf84f35d2db49a46868f947758c7a1138116f7fac3bc844f43ade1292e64"
 dependencies = [
  "windows-targets 0.48.5",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
-dependencies = [
- "windows-targets 0.52.6",
 ]
 
 [[package]]

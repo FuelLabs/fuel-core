@@ -153,9 +153,7 @@ impl rand::distributions::Distribution<DaBlockHeight> for rand::distributions::S
 }
 
 /// Wrapper around [`fuel_crypto::SecretKey`] to implement [`secrecy`] marker traits
-#[derive(
-    Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroize, Deref, From,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroize, Deref, From)]
 #[repr(transparent)]
 pub struct SecretKeyWrapper(SecretKey);
 
