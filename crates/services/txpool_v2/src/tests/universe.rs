@@ -46,6 +46,7 @@ use fuel_core_types::{
     fuel_vm::{
         checked_transaction::EstimatePredicates,
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
     services::txpool::ArcPoolTx,
 };
@@ -225,6 +226,7 @@ impl TestPoolUniverse {
                 &MockTxPoolGasPrice::new(0),
                 &MockWasmChecker::new(Ok(())),
                 MemoryInstance::new(),
+                MockDb::default(),
             )
             .await?;
             pool.write().insert(Arc::new(tx))
@@ -248,6 +250,7 @@ impl TestPoolUniverse {
                 &MockTxPoolGasPrice::new(gas_price),
                 &MockWasmChecker::new(Ok(())),
                 MemoryInstance::new(),
+                MockDb::default(),
             )
             .await?;
             pool.write().insert(Arc::new(tx))
@@ -272,6 +275,7 @@ impl TestPoolUniverse {
                 &MockTxPoolGasPrice::new(0),
                 &wasm_checker,
                 MemoryInstance::new(),
+                MockDb::default(),
             )
             .await?;
             pool.write().insert(Arc::new(tx))
@@ -447,7 +451,8 @@ impl IntoEstimated for Input {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(self)
             .finalize();
-        let _ = tx.estimate_predicates(&params.into(), MemoryInstance::new());
+        let _ =
+            tx.estimate_predicates(&params.into(), MemoryInstance::new(), &EmptyStorage);
         tx.inputs()[0].clone()
     }
 }
