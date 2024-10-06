@@ -19,17 +19,18 @@ use crate::{
         },
         generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
-        ChangesIterator,
         ColumnType,
         IterableKeyValueView,
         KeyValueView,
     },
 };
 use fuel_core_chain_config::TableEntry;
+use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
     iter::{
+        changes_iterator::ChangesIterator,
         IterDirection,
         IterableTable,
         IteratorOverTable,
@@ -75,7 +76,6 @@ use crate::state::{
     },
     rocks_db::RocksDb,
 };
-use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 
@@ -401,7 +401,7 @@ fn commit_changes_with_height_update<Description>(
     database: &mut Database<Description>,
     changes: Changes,
     heights_lookup: impl Fn(
-        &ChangesIterator<Description>,
+        &ChangesIterator<Description::Column>,
     ) -> StorageResult<Vec<Description::Height>>,
 ) -> StorageResult<()>
 where
@@ -411,7 +411,7 @@ where
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
     // Gets the all new heights from the `changes`
-    let iterator = ChangesIterator::<Description>::new(&changes);
+    let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
 
     // Changes for each block should be committed separately.
