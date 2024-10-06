@@ -96,7 +96,7 @@ async fn dry_run_script() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
@@ -139,7 +139,7 @@ async fn dry_run_create() {
     let contract_id = contract.id(&salt, &root, &state_root);
 
     let tx = TransactionBuilder::create(contract_code.into(), salt, vec![])
-        .add_random_fee_input()
+        .add_fee_input()
         .add_output(Output::contract_created(contract_id, state_root))
         .finalize_as_transaction();
 
@@ -188,7 +188,7 @@ async fn dry_run_above_block_gas_limit() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     // When
@@ -352,7 +352,7 @@ async fn submit() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     client.submit_and_await_commit(&tx).await.unwrap();
@@ -388,7 +388,7 @@ async fn submit_and_await_status() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     let mut status_stream = client.submit_and_await_status(&tx).await.unwrap();
@@ -429,7 +429,7 @@ async fn dry_run_transaction_should_use_latest_block_time() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize_as_transaction();
 
     // When

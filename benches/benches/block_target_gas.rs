@@ -83,6 +83,7 @@ use fuel_core_types::{
         checked_transaction::EstimatePredicates,
         consts::WORD_SIZE,
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
     services::executor::TransactionExecutionResult,
 };
@@ -418,6 +419,7 @@ fn run_with_service_with_extra_inputs(
             tx.estimate_predicates(
                 &chain_config.consensus_parameters.clone().into(),
                 MemoryInstance::new(),
+                &EmptyStorage,
             )
             .unwrap();
             async move {

@@ -101,19 +101,21 @@ impl BasicVerifiedTx {
 }
 
 impl InputDependenciesVerifiedTx {
-    pub fn perform_input_computation_verifications<M>(
+    pub fn perform_input_computation_verifications<M, View>(
         self,
         consensus_params: &ConsensusParameters,
         wasm_checker: &impl WasmChecker,
         memory: M,
+        view: View,
     ) -> Result<FullyVerifiedTx, Error>
     where
         M: Memory + Send + Sync + 'static,
+        View: TxPoolPersistentStorage,
     {
         let tx = self.0.check_signatures(&consensus_params.chain_id())?;
 
         let parameters = CheckPredicateParams::from(consensus_params);
-        let tx = tx.check_predicates(&parameters, memory)?;
+        let tx = tx.check_predicates(&parameters, memory, &view)?;
 
         if let Transaction::Upgrade(upgrade) = tx.transaction() {
             if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
@@ -154,6 +156,7 @@ pub async fn perform_all_verifications<
     gas_price_provider: &impl GasPriceProvider,
     wasm_checker: &impl WasmChecker,
     memory: M,
+    view: PSView,
 ) -> Result<PoolTransaction, Error>
 where
     M: Memory + Send + Sync + 'static,
@@ -168,10 +171,12 @@ where
         .await?;
     let inputs_verified_tx = basically_verified_tx
         .perform_inputs_verifications(pool, consensus_params_version)?;
+
     let fully_verified_tx = inputs_verified_tx.perform_input_computation_verifications(
         consensus_params,
         wasm_checker,
         memory,
+        view,
     )?;
     fully_verified_tx.into_pool_transaction(consensus_params_version)
 }

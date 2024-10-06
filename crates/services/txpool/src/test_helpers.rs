@@ -46,8 +46,10 @@ use fuel_core_types::{
     fuel_vm::{
         checked_transaction::EstimatePredicates,
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
+use std::sync::Arc;
 
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
 // the byte and gas price fees.
@@ -93,7 +95,7 @@ impl TextContext {
     pub(crate) fn build(self) -> TxPool<MockDBProvider, MockWasmChecker> {
         TxPool::new(
             self.config.unwrap_or_default(),
-            MockDBProvider(self.mock_db),
+            Arc::new(MockDBProvider(self.mock_db)),
             self.wasm_checker,
         )
     }
@@ -233,7 +235,8 @@ impl IntoEstimated for Input {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(self)
             .finalize();
-        let _ = tx.estimate_predicates(&params.into(), MemoryInstance::new());
+        let _ =
+            tx.estimate_predicates(&params.into(), MemoryInstance::new(), &EmptyStorage);
         tx.inputs()[0].clone()
     }
 }

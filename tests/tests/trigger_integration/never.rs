@@ -43,7 +43,7 @@ async fn poa_never_trigger_doesnt_produce_blocks() {
     for i in 0..10 {
         let tx =
             TransactionBuilder::script([op::movi(0x10, i)].into_iter().collect(), vec![])
-                .add_random_fee_input()
+                .add_fee_input()
                 .finalize_as_transaction();
         let _tx_id = client.submit(&tx).await.unwrap();
         tokio::time::advance(tokio::time::Duration::new(10, 0)).await;

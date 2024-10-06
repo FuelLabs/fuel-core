@@ -93,8 +93,8 @@
           "ori": 2,
           "poph": 2,
           "popl": 2,
-          "pshh": 3073,
-          "pshl": 3016,
+          "pshh": 5,
+          "pshl": 5,
           "ret_contract": 43,
           "rvrt_contract": 39,
           "sb": 2,
@@ -297,7 +297,7 @@
       "privileged_address": "9f0e19d6c2a6283a3222426ab2630d35516b1799b503f37b02105bebe1b8a3e9"
     }
   },
-  "genesis_state_transition_version": 11,
+  "genesis_state_transition_version": 12,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "e0a9fcde1b73f545252e01b30b50819eb9547d07531fa3df0385c5695736634d",

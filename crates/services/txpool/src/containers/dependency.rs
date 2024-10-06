@@ -204,7 +204,7 @@ impl Dependency {
     fn check_for_collision<'a>(
         &'a self,
         txs: &'a HashMap<TxId, TxInfo>,
-        db: &dyn TxPoolDb,
+        db: &impl TxPoolDb,
         tx: &'a ArcPoolTx,
     ) -> Result<
         (

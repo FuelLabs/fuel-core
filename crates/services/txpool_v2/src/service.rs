@@ -155,6 +155,7 @@ pub struct Task<
     read_pool_requests_receiver: mpsc::Receiver<ReadPoolRequest>,
     pool: TxPool<PSProvider, GasPriceProvider, ConsensusParamsProvider>,
     current_height: Arc<RwLock<BlockHeight>>,
+    persistent_storage_provider: Arc<PSProvider>,
     consensus_parameters_provider: Arc<ConsensusParamsProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
     wasm_checker: Arc<WasmChecker>,
@@ -428,7 +429,14 @@ where
                 let new_txs_notifier = self.new_txs_notifier.clone();
                 let time_txs_submitted = self.time_txs_submitted.clone();
                 let tx_status_sender = self.tx_status_sender.clone();
+                let persistent_storage_provider =
+                    self.persistent_storage_provider.clone();
                 async move {
+                    let view = persistent_storage_provider
+                        .latest_view()
+                        .map_err(|e| Error::Database(e.to_string()))
+                        .unwrap();
+
                     let tx_clone = Arc::clone(&transaction);
                     // TODO: Return the error in the status update channel (see: https://github.com/FuelLabs/fuel-core/issues/2185)
                     let checked_tx = match perform_all_verifications(
@@ -441,6 +449,7 @@ where
                         gas_price_provider.as_ref(),
                         wasm_checker.as_ref(),
                         memory.get_memory().await,
+                        view,
                     )
                     .await
                     {
@@ -727,7 +736,7 @@ pub fn new_service<
 >
 where
     P2P: P2PTrait<GossipedTransaction = TransactionGossipData> + Send + Sync + 'static,
-    PSProvider: AtomicView<LatestView = PSView>,
+    PSProvider: AtomicView<LatestView = PSView> + Clone + Send + Sync,
     PSView: TxPoolPersistentStorage,
     ConsensusParamsProvider: ConsensusParametersProvider + Send + Sync,
     GasPriceProvider: GasPriceProviderTrait + Send + Sync,
@@ -765,6 +774,7 @@ where
         write_pool_requests_receiver,
         select_transactions_requests_receiver,
         read_pool_requests_receiver,
+        persistent_storage_provider: Arc::new(ps_provider.clone()),
         consensus_parameters_provider: consensus_parameters_provider.clone(),
         gas_price_provider: gas_price_provider.clone(),
         wasm_checker: Arc::new(wasm_checker),

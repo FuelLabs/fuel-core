@@ -1,3 +1,4 @@
+use super::scalars::U64;
 use crate::{
     fuel_core_graphql_api::{
         api_service::{
@@ -78,8 +79,6 @@ use types::{
     Transaction,
 };
 
-use super::scalars::U64;
-
 pub mod input;
 pub mod output;
 pub mod receipt;
@@ -111,10 +110,10 @@ impl TxQuery {
         }
     }
 
+    // We assume that each block has 100 transactions.
     #[graphql(complexity = "{\
-        QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        (QUERY_COSTS.tx_get + child_complexity) \
+        * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize)
     }")]
     async fn transactions(
         &self,
@@ -227,6 +226,8 @@ impl TxQuery {
         ctx: &Context<'_>,
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
+        let query = ctx.read_view()?.into_owned();
+
         let mut tx = FuelTx::from_bytes(&tx.0)?;
 
         let params = ctx
@@ -238,7 +239,7 @@ impl TxQuery {
 
         let parameters = CheckPredicateParams::from(params.as_ref());
         let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates(&parameters, memory);
+            let result = tx.estimate_predicates(&parameters, memory, &query);
             result.map(|_| tx)
         })
         .await

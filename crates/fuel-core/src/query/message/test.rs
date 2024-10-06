@@ -1,6 +1,5 @@
 use std::ops::Deref;
 
-use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
     blockchain::header::{
         ApplicationHeader,
@@ -9,11 +8,14 @@ use fuel_core_types::{
     },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
-        AssetId,
         Script,
         Transaction,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        AssetId,
+        BlockHeight,
+        ContractId,
+    },
     tai64::Tai64,
 };
 

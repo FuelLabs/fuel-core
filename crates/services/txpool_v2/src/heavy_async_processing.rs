@@ -36,7 +36,8 @@ impl HeavyAsyncProcessor {
 
         if let Ok(permit) = permit {
             self.rayon_thread_pool.spawn_fifo(move || {
-                let _drop = permit;
+                // When task started its works we can free the space.
+                drop(permit);
                 futures::executor::block_on(future);
             });
             Ok(())

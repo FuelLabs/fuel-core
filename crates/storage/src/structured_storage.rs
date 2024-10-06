@@ -47,13 +47,23 @@ use crate::{
 use core::ops::Deref;
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::Debug,
+};
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::Cow,
+    fmt::Debug,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+use fuel_vm_private::storage::{
+    predicate::PredicateStorageRequirements,
+    BlobData,
+};
 
 pub mod balances;
 pub mod blobs;
@@ -141,6 +151,16 @@ where
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         self.inner.read(key, column, buf)
+    }
+}
+
+impl<S> PredicateStorageRequirements for StructuredStorage<S>
+where
+    Self: StorageRead<BlobData>,
+    Self::Error: Debug,
+{
+    fn storage_error_to_string(error: Self::Error) -> alloc::string::String {
+        alloc::format!("{:?}", error)
     }
 }
 
