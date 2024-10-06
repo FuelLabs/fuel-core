@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- [2304](https://github.com/FuelLabs/fuel-core/pull/2304): Add initialization for the genesis base asset contract.
+
 ## [Version 0.37.0]
 
 ### Added
