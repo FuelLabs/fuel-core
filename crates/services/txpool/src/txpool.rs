@@ -346,7 +346,11 @@ where
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {
         let view = self.database.latest_view().unwrap();
-        self.insert_inner(tx, Metadata::new(ConsensusParametersVersion::MIN), &view)
+        self.insert_inner(
+            tx,
+            Metadata::new(ConsensusParametersVersion::MIN, 0, 0),
+            &view,
+        )
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions

@@ -160,7 +160,7 @@ mod tests {
                 // so it doesn't need to compute valid sigs for tests
                 PoolTransaction::Script(
                     script.finalize_checked_basic(Default::default()),
-                    Metadata::new(ConsensusParametersVersion::MIN),
+                    Metadata::new(ConsensusParametersVersion::MIN, 0, 0),
                 )
             })
             .map(Arc::new)
