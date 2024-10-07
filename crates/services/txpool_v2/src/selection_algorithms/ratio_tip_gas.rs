@@ -162,7 +162,8 @@ where
                 }
 
                 if stored_transaction.transaction.max_gas() > gas_left
-                    || stored_transaction.transaction.metered_bytes_size() > space_left {
+                    || stored_transaction.transaction.metered_bytes_size() > space_left
+                {
                     continue;
                 }
 
