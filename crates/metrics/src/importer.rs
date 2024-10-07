@@ -1,4 +1,5 @@
 use crate::{
+    fee_used_buckets,
     gas_used_buckets,
     global_registry,
     timing_buckets,
@@ -18,6 +19,7 @@ pub struct ImporterMetrics {
     pub latest_block_import_timestamp: Gauge<f64, AtomicU64>,
     pub execute_and_commit_duration: Histogram,
     pub gas_per_block: Histogram,
+    pub fee_per_block: Histogram,
     pub transactions_per_block: Histogram,
 }
 
@@ -28,6 +30,7 @@ impl Default for ImporterMetrics {
         let execute_and_commit_duration =
             Histogram::new(timing_buckets().iter().cloned());
         let gas_per_block = Histogram::new(gas_used_buckets().iter().cloned());
+        let fee_per_block = Histogram::new(fee_used_buckets().iter().cloned());
         let transactions_per_block =
             Histogram::new(transactions_used_buckets().iter().cloned());
 
@@ -57,6 +60,12 @@ impl Default for ImporterMetrics {
         );
 
         registry.register(
+            "fee_per_block",
+            "The total fee paid by transactions in a block",
+            fee_per_block.clone(),
+        );
+
+        registry.register(
             "transactions_per_block",
             "The total number of transactions in a block",
             transactions_per_block.clone(),
@@ -67,6 +76,7 @@ impl Default for ImporterMetrics {
             latest_block_import_timestamp: latest_block_import_ms,
             execute_and_commit_duration,
             gas_per_block,
+            fee_per_block,
             transactions_per_block,
         }
     }
