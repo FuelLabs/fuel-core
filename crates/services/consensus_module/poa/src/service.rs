@@ -340,16 +340,18 @@ where
             .await?
             .into();
 
-        let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
-        for (tx_id, err) in skipped_transactions {
-            tracing::error!(
+        if !skipped_transactions.is_empty() {
+            let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
+            for (tx_id, err) in skipped_transactions {
+                tracing::error!(
                 "During block production got invalid transaction {:?} with error {:?}",
                 tx_id,
                 err
             );
-            tx_ids_to_remove.push((tx_id, err.to_string()));
+                tx_ids_to_remove.push((tx_id, err.to_string()));
+            }
+            self.txpool.notify_skipped_txs(tx_ids_to_remove);
         }
-        self.txpool.notify_skipped_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
         let seal = self.signer.seal_block(&block).await?;
@@ -435,7 +437,7 @@ where
         Ok(())
     }
 
-    pub(crate) async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
+    async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
         match self.trigger {
             Trigger::Instant => self.produce_next_block().await,
             Trigger::Never | Trigger::Interval { .. } => Ok(()),

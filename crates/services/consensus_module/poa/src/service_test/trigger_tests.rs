@@ -22,7 +22,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             metrics: false,
             ..Default::default()
         });
-        let ctx = ctx_builder.build();
+        let ctx = ctx_builder.build().await;
 
         assert_eq!(ctx.stop().await, State::Stopped);
     }
@@ -59,7 +59,7 @@ async fn never_trigger_never_produces_blocks() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
-    let ctx = ctx_builder.build();
+    let ctx = ctx_builder.build().await;
     new_txs_notifier.notify_waiters();
 
     // Make sure enough time passes for the block to be produced
@@ -78,7 +78,7 @@ struct DefaultContext {
 }
 
 impl DefaultContext {
-    fn new(config: Config) -> Self {
+    async fn new(config: Config) -> Self {
         let mut rng = StdRng::seed_from_u64(1234u64);
         let mut ctx_builder = TestContextBuilder::new();
         ctx_builder.with_config(config);
@@ -122,7 +122,7 @@ impl DefaultContext {
         ctx_builder.with_importer(importer);
         ctx_builder.with_producer(block_producer);
 
-        let test_ctx = ctx_builder.build();
+        let test_ctx = ctx_builder.build().await;
 
         Self {
             rng,
@@ -157,10 +157,9 @@ async fn instant_trigger_produces_block_instantly() {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
+    })
+    .await;
 
-    // Let some time pass to make sure the service is initialized
-    time::sleep(Duration::from_millis(100)).await;
     ctx.new_txs_notifier.notify_waiters();
 
     // Make sure it's produced
@@ -179,7 +178,8 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
+    })
+    .await;
     ctx.new_txs_notifier.notify_waiters();
 
     // Make sure no blocks are produced yet
@@ -276,7 +276,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
-    let test_ctx = ctx_builder.build();
+    let test_ctx = ctx_builder.build().await;
 
     let before_retry = Instant::now();
 
@@ -299,7 +299,8 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
+    })
+    .await;
 
     // Brackets to release the lock.
     {
@@ -345,7 +346,8 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
+    })
+    .await;
     ctx.new_txs_notifier.notify_waiters();
     let start_time = ctx.now();
 
@@ -386,7 +388,8 @@ async fn interval_trigger_produces_blocks_with_current_time_when_block_productio
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
+    })
+    .await;
     ctx.new_txs_notifier.notify_waiters();
     let start_time = ctx.now();
 
@@ -443,7 +446,8 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
+    })
+    .await;
     ctx.new_txs_notifier.notify_waiters();
     let start_time = ctx.now();
 

@@ -69,13 +69,12 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<A> TxPoolGasPriceProvider for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync + 'static,
 {
-    fn next_gas_price(&self) -> Result<u64, TxPoolError> {
-        Ok(self.next_gas_price())
+    fn next_gas_price(&self) -> u64 {
+        self.next_gas_price()
     }
 }
 

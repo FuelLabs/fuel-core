@@ -154,7 +154,7 @@ impl BasicVerifiedTx {
         metadata: Metadata,
         gas_price_provider: &dyn GasPriceProvider,
     ) -> Result<GasPriceVerifiedTx, Error> {
-        let minimal_gas_price = gas_price_provider.next_gas_price()?;
+        let minimal_gas_price = gas_price_provider.next_gas_price();
         let max_gas_price = metadata.max_gas_price();
 
         if max_gas_price < minimal_gas_price {

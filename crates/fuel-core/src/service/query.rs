@@ -15,7 +15,10 @@ use futures::{
 
 use crate::{
     database::OffChainIterableKeyValueView,
-    query::transaction_status_change,
+    query::{
+        transaction_status_change,
+        TxnStatusChangeState,
+    },
     schema::tx::types::TransactionStatus,
 };
 
@@ -35,7 +38,7 @@ impl FuelService {
     pub async fn submit_and_status_change(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
         let id = tx.id(&self
             .shared
             .config
@@ -75,28 +78,18 @@ impl FuelService {
     pub async fn transaction_status_change(
         &self,
         id: Bytes32,
-    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
-        let txpool = self.shared.txpool_shared_state.clone();
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
+        let txpool = &self.shared.txpool_shared_state;
         let db = self.shared.database.off_chain().latest_view()?;
         let rx = txpool.tx_update_subscribe(id)?;
-        Ok(transaction_status_change(
-            move |id| {
-                Box::pin({
-                    let txpool = txpool.clone();
-                    let db = db.clone();
-                    get_tx_status(db, txpool, id)
-                }) as _
-            },
-            rx,
-            id,
-        )
-        .await)
+        let state = StatusChangeState { db, txpool };
+        Ok(transaction_status_change(state, rx, id).await)
     }
 }
 
 async fn get_tx_status(
-    db: OffChainIterableKeyValueView,
-    txpool: TxPoolSharedState,
+    db: &OffChainIterableKeyValueView,
+    txpool: &TxPoolSharedState,
     id: Bytes32,
 ) -> StorageResult<Option<TxPoolTxStatus>> {
     match db.get_tx_status(&id)? {
@@ -106,5 +99,16 @@ async fn get_tx_status(
             .await
             .map_err(|e| anyhow::anyhow!(e))?
             .map(Into::into)),
+    }
+}
+
+struct StatusChangeState<'a> {
+    db: OffChainIterableKeyValueView,
+    txpool: &'a TxPoolSharedState,
+}
+
+impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
+    async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>> {
+        get_tx_status(&self.db, self.txpool, id).await
     }
 }

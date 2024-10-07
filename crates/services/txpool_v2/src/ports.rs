@@ -71,7 +71,7 @@ pub trait TxPoolPersistentStorage:
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider: Send + Sync + 'static {
     /// Calculate gas price for the next block.
-    fn next_gas_price(&self) -> Result<GasPrice, Error>;
+    fn next_gas_price(&self) -> GasPrice;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -81,7 +81,7 @@ pub enum WasmValidityError {
     /// The supposedly-uploaded wasm was not found.
     NotFound,
     /// The uploaded bytecode was found but it's is not valid wasm.
-    Validity,
+    NotValid,
 }
 
 pub trait WasmChecker: Send + Sync + 'static {

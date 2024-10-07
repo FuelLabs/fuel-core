@@ -6,7 +6,6 @@ use fuel_core_types::{
     services::txpool::TransactionStatus as TxPoolTxStatus,
 };
 use futures::{
-    future::BoxFuture,
     stream::BoxStream,
     Stream,
     StreamExt,
@@ -19,15 +18,6 @@ mod test;
 pub(crate) trait TxnStatusChangeState {
     /// Return the transaction status from the tx pool and database.
     async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>>;
-}
-
-impl<F> TxnStatusChangeState for F
-where
-    F: Fn(Bytes32) -> BoxFuture<'static, StorageResult<Option<TxPoolTxStatus>>>,
-{
-    async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>> {
-        self(id).await
-    }
 }
 
 #[tracing::instrument(skip(state, stream), fields(transaction_id = %transaction_id))]

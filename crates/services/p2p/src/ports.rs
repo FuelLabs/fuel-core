@@ -38,7 +38,7 @@ pub trait TxPool: Send + Sync + Clone {
     fn get_tx_ids(
         &self,
         max_ids: usize,
-    ) -> impl std::future::Future<Output = anyhow::Result<Vec<TxId>>> + std::marker::Send;
+    ) -> impl std::future::Future<Output = anyhow::Result<Vec<TxId>>> + Send;
 
     /// Get full txs from the pool
     fn get_full_txs(
@@ -46,5 +46,5 @@ pub trait TxPool: Send + Sync + Clone {
         tx_ids: Vec<TxId>,
     ) -> impl std::future::Future<
         Output = anyhow::Result<Vec<Option<NetworkableTransactionPool>>>,
-    > + std::marker::Send;
+    > + Send;
 }

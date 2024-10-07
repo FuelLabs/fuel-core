@@ -96,7 +96,7 @@ async fn can_manually_produce_block(
         });
     ctx_builder.with_importer(importer);
     ctx_builder.with_producer(producer);
-    let ctx = ctx_builder.build();
+    let ctx = ctx_builder.build().await;
 
     ctx.service
         .shared

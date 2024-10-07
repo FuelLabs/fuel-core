@@ -80,7 +80,6 @@ impl ConsensusModulePort for PoAAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl TransactionPool for TxPoolAdapter {
     fn new_txs_notifier(&self) -> Arc<Notify> {
         self.service.get_new_txs_notifier()

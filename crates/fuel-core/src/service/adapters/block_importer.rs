@@ -122,7 +122,7 @@ impl WasmChecker for ExecutorAdapter {
             .validate_uploaded_wasm(wasm_root)
             .map_err(|err| match err {
                 fuel_core_upgradable_executor::error::UpgradableError::InvalidWasm(_) => {
-                    WasmValidityError::Validity
+                    WasmValidityError::NotValid
                 }
                 _ => WasmValidityError::NotFound,
             })

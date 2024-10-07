@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+// TODO: Rename the folder from `txpool_v2` to `txpool` after the migration is complete.
+
 mod collision_manager;
 pub mod config;
 pub mod error;

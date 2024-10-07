@@ -31,7 +31,6 @@ use std::{
 use tokio::sync::Notify;
 
 #[cfg_attr(test, mockall::automock)]
-#[async_trait::async_trait]
 pub trait TransactionPool: Send + Sync {
     fn new_txs_notifier(&self) -> Arc<Notify>;
 
