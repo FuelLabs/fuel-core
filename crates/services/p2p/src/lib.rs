@@ -14,6 +14,7 @@ pub mod peer_report;
 pub mod ports;
 pub mod request_response;
 pub mod service;
+mod utils;
 
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;
