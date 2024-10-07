@@ -158,8 +158,6 @@ pub struct ServiceChannelLimits {
     pub max_pending_write_pool_requests: usize,
     /// Maximum number of pending requests waiting in the read pool channel.
     pub max_pending_read_pool_requests: usize,
-    /// Maximum number of pending requests waiting in the select transactions channel.
-    pub max_pending_select_transactions_requests: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -200,7 +198,6 @@ impl Default for Config {
             service_channel_limits: ServiceChannelLimits {
                 max_pending_write_pool_requests: 1000,
                 max_pending_read_pool_requests: 1000,
-                max_pending_select_transactions_requests: 1000,
             },
         }
     }

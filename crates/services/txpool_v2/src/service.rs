@@ -673,11 +673,7 @@ where
             .max_pending_write_pool_requests,
     );
     let (select_transactions_requests_sender, select_transactions_requests_receiver) =
-        mpsc::channel(
-            config
-                .service_channel_limits
-                .max_pending_select_transactions_requests,
-        );
+        mpsc::channel(1);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
     let tx_status_sender = TxStatusChange::new(

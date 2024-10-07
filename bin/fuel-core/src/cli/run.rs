@@ -456,7 +456,6 @@ impl Command {
             tx_number_threads_p2p_sync,
             tx_size_of_p2p_sync_queue,
             tx_max_pending_read_requests,
-            tx_max_pending_select_transactions_requests,
             tx_max_pending_write_requests,
         } = tx_pool;
 
@@ -483,8 +482,6 @@ impl Command {
 
         let service_channel_limits = ServiceChannelLimits {
             max_pending_read_pool_requests: tx_max_pending_read_requests,
-            max_pending_select_transactions_requests:
-                tx_max_pending_select_transactions_requests,
             max_pending_write_pool_requests: tx_max_pending_write_requests,
         };
 

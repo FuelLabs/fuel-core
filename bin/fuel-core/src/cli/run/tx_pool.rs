@@ -24,15 +24,15 @@ pub struct TxPoolArgs {
     pub tx_max_number: usize,
 
     /// The max number of gas the `TxPool` can simultaneously store.
-    #[clap(long = "tx-max-total-gas", default_value = "3000000000", env)]
+    #[clap(long = "tx-max-total-gas", default_value = "30000000000", env)]
     pub tx_max_total_gas: u64,
 
     /// The max number of bytes that the `TxPool` can simultaneously store.
-    #[clap(long = "tx-max-total-bytes", default_value = "10000000", env)]
+    #[clap(long = "tx-max-total-bytes", default_value = "131072000", env)]
     pub tx_max_total_bytes: usize,
 
     /// The max number of tx in a chain of dependent transactions that supported by the `TxPool`.
-    #[clap(long = "tx-max-chain-count", default_value = "10", env)]
+    #[clap(long = "tx-max-depth", default_value = "32", env)]
     pub tx_max_chain_count: usize,
 
     /// The maximum number of active subscriptions that supported by the `TxPool`.
@@ -64,7 +64,7 @@ pub struct TxPoolArgs {
     pub tx_number_threads_to_verify_transactions: usize,
 
     /// Maximum number of tasks in the verifications/insertions queue.
-    #[clap(long = "tx-size-of-verification-queue", default_value = "200", env)]
+    #[clap(long = "tx-size-of-verification-queue", default_value = "2000", env)]
     pub tx_size_of_verification_queue: usize,
 
     /// Number of threads for managing the p2p synchronisation.
@@ -76,20 +76,12 @@ pub struct TxPoolArgs {
     pub tx_size_of_p2p_sync_queue: usize,
 
     /// Maximum number of pending write requests in the service.
-    #[clap(long = "tx-max-pending-write-requests", default_value = "1000", env)]
+    #[clap(long = "tx-max-pending-write-requests", default_value = "500", env)]
     pub tx_max_pending_write_requests: usize,
 
     /// Maximum number of pending read requests in the service.
     #[clap(long = "tx-max-pending-read-requests", default_value = "1000", env)]
     pub tx_max_pending_read_requests: usize,
-
-    /// Maximum number of pending select transactions requests in the service.
-    #[clap(
-        long = "tx-max-pending-select-transactions-requests",
-        default_value = "1000",
-        env
-    )]
-    pub tx_max_pending_select_transactions_requests: usize,
 }
 
 #[cfg(test)]

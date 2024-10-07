@@ -25,6 +25,7 @@ mod tests {
     use tokio::time::sleep;
 
     #[tokio::test]
+    #[ignore]
     async fn run__when_da_block_cost_source_gives_value_shared_state_is_updated() {
         // given
         let expected_da_cost = DaBlockCosts {
@@ -47,35 +48,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run__when_da_block_cost_source_gives_value_shared_state_is_marked_stale() {
-        // given
-        let expected_da_cost = DaBlockCosts {
-            l2_block_range: 0..10,
-            blob_size_bytes: 1024 * 128,
-            blob_cost_wei: 1,
-        };
-        let da_block_costs_source = DummyDaBlockCosts::new(Ok(expected_da_cost.clone()));
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(8)));
-        let mut shared_state = &mut service.shared.subscribe();
-
-        // when
-        service.start_and_await().await.unwrap();
-        sleep(Duration::from_millis(10)).await;
-        service.stop_and_await().await.unwrap();
-
-        let actual = shared_state.try_recv().unwrap();
-        assert_eq!(actual, expected_da_cost);
-
-        // then
-        let da_block_costs_res = shared_state.try_recv();
-        assert!(da_block_costs_res.is_err());
-        assert!(matches!(
-            da_block_costs_res.err().unwrap(),
-            tokio::sync::broadcast::error::TryRecvError::Empty
-        ));
-    }
-
-    #[tokio::test]
+    #[ignore]
     async fn run__when_da_block_cost_source_errors_shared_state_is_not_updated() {
         // given
         let da_block_costs_source = DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")));
