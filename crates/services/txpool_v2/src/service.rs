@@ -96,7 +96,7 @@ pub type TxPool = Pool<
     RatioTipGasSelection<GraphStorage>,
 >;
 
-pub type Shared<T> = Arc<RwLock<T>>;
+pub(crate) type Shared<T> = Arc<RwLock<T>>;
 
 pub type Service<View> = ServiceRunner<Task<View>>;
 
