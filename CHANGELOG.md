@@ -14,9 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Version 0.37.1]
 
-### Changed
-
-#### Breaking
+### Added
 - [2309](https://github.com/FuelLabs/fuel-core/pull/2309): Limit number of concurrent queries to the graphql service.
 
 ### Fixed
