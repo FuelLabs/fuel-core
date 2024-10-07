@@ -17,12 +17,16 @@ pub struct GraphQLArgs {
     pub graphql_max_depth: usize,
 
     /// The max complexity of GraphQL queries.
-    #[clap(long = "graphql-max-complexity", default_value = "20000", env)]
+    #[clap(long = "graphql-max-complexity", default_value = "80000", env)]
     pub graphql_max_complexity: usize,
 
     /// The max recursive depth of GraphQL queries.
     #[clap(long = "graphql-max-recursive-depth", default_value = "16", env)]
     pub graphql_max_recursive_depth: usize,
+
+    /// The max number of directives in the query.
+    #[clap(long = "graphql-max-directives", default_value = "10", env)]
+    pub max_queries_directives: usize,
 
     /// The max body limit of the GraphQL query.
     #[clap(

@@ -20,7 +20,10 @@ use fuel_core::{
         CombinedDatabase,
         CombinedDatabaseConfig,
     },
-    fuel_core_graphql_api::ServiceConfig as GraphQLConfig,
+    fuel_core_graphql_api::{
+        worker_service::DaCompressionConfig,
+        ServiceConfig as GraphQLConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -35,6 +38,7 @@ use fuel_core::{
         Config as TxPoolConfig,
         HeavyWorkConfig,
         PoolLimits,
+        ServiceChannelLimits,
     },
     types::{
         fuel_tx::ContractId,
@@ -192,6 +196,11 @@ pub struct Command {
     #[cfg(feature = "aws-kms")]
     pub consensus_aws_kms: Option<String>,
 
+    /// If given, the node will produce and store da-compressed blocks
+    /// with the given retention time.
+    #[arg(long = "da-compression", env)]
+    pub da_compression: Option<humantime::Duration>,
+
     /// A new block is produced instantly when transactions are available.
     #[clap(flatten)]
     pub poa_trigger: PoATriggerArgs,
@@ -274,6 +283,7 @@ impl Command {
             consensus_key,
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
+            da_compression,
             poa_trigger,
             predefined_blocks_path,
             coinbase_recipient,
@@ -420,6 +430,15 @@ impl Command {
         let block_importer =
             fuel_core::service::config::fuel_core_importer::Config::new();
 
+        let da_compression = match da_compression {
+            Some(retention) => {
+                DaCompressionConfig::Enabled(fuel_core_compression::Config {
+                    temporal_registry_retention: retention.into(),
+                })
+            }
+            None => DaCompressionConfig::Disabled,
+        };
+
         let TxPoolArgs {
             tx_pool_ttl,
             tx_ttl_check_interval,
@@ -436,6 +455,9 @@ impl Command {
             tx_size_of_verification_queue,
             tx_number_threads_p2p_sync,
             tx_size_of_p2p_sync_queue,
+            tx_max_pending_read_requests,
+            tx_max_pending_select_transactions_requests,
+            tx_max_pending_write_requests,
         } = tx_pool;
 
         let black_list = BlackList::new(
@@ -459,12 +481,20 @@ impl Command {
             size_of_p2p_sync_queue: tx_size_of_p2p_sync_queue,
         };
 
+        let service_channel_limits = ServiceChannelLimits {
+            max_pending_read_pool_requests: tx_max_pending_read_requests,
+            max_pending_select_transactions_requests:
+                tx_max_pending_select_transactions_requests,
+            max_pending_write_pool_requests: tx_max_pending_write_requests,
+        };
+
         let config = Config {
             graphql_config: GraphQLConfig {
                 addr,
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
+                max_queries_directives: graphql.max_queries_directives,
                 request_body_bytes_limit: graphql.graphql_request_body_bytes_limit,
                 api_request_timeout: graphql.api_request_timeout.into(),
                 query_log_threshold_time: graphql.query_log_threshold_time.into(),
@@ -489,6 +519,7 @@ impl Command {
                 black_list,
                 pool_limits,
                 heavy_work: pool_heavy_work_config,
+                service_channel_limits,
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
@@ -499,6 +530,7 @@ impl Command {
             min_gas_price,
             gas_price_threshold_percent,
             block_importer,
+            da_compression,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,
             #[cfg(feature = "p2p")]

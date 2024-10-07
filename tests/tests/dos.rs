@@ -5,6 +5,7 @@ use fuel_core::service::{
     FuelService,
     ServiceTrait,
 };
+use fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION;
 use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
@@ -78,36 +79,219 @@ async fn complex_queries__recursion() {
     assert!(result.contains("The recursion depth of the query cannot be greater than"));
 }
 
-#[tokio::test]
-async fn complex_queries__10_blocks__works() {
-    let query = r#"
-        query {
-          blocks(first: 10) {
-            nodes {
-              transactions {
-                id
+const FULL_BLOCK_QUERY: &str = r#"
+    query {
+      blocks(first: $NUMBER_OF_BLOCKS) {
+        edges {
+          cursor
+          node {
+            id
+            header {
+              id
+              daHeight
+              consensusParametersVersion
+              stateTransitionBytecodeVersion
+              transactionsCount
+              messageReceiptCount
+              transactionsRoot
+              messageOutboxRoot
+              eventInboxRoot
+              height
+              prevRoot
+              time
+              applicationHash
+            }
+            consensus {
+              ... on Genesis {
+                chainConfigHash
+                coinsRoot
+                contractsRoot
+                messagesRoot
+                transactionsRoot
+              }
+              ... on PoAConsensus {
+                signature
+              }
+            }
+            transactions {
+              rawPayload
+              status {
+                ... on SubmittedStatus {
+                  time
+                }
+                ... on SuccessStatus {
+                  transactionId
+                  blockHeight
+                  time
+                  programState {
+                    returnType
+                    data
+                  }
+                  receipts {
+                    param1
+                    param2
+                    amount
+                    assetId
+                    gas
+                    digest
+                    id
+                    is
+                    pc
+                    ptr
+                    ra
+                    rb
+                    rc
+                    rd
+                    reason
+                    receiptType
+                    to
+                    toAddress
+                    val
+                    len
+                    result
+                    gasUsed
+                    data
+                    sender
+                    recipient
+                    nonce
+                    contractId
+                    subId
+                  }
+                  totalGas
+                  totalFee
+                }
+                ... on SqueezedOutStatus {
+                  reason
+                }
+                ... on FailureStatus {
+                  transactionId
+                  blockHeight
+                  time
+                  reason
+                  programState {
+                    returnType
+                    data
+                  }
+                  receipts {
+                    param1
+                    param2
+                    amount
+                    assetId
+                    gas
+                    digest
+                    id
+                    is
+                    pc
+                    ptr
+                    ra
+                    rb
+                    rc
+                    rd
+                    reason
+                    receiptType
+                    to
+                    toAddress
+                    val
+                    len
+                    result
+                    gasUsed
+                    data
+                    sender
+                    recipient
+                    nonce
+                    contractId
+                    subId
+                  }
+                  totalGas
+                  totalFee
+                }
               }
             }
           }
         }
-    "#;
+        pageInfo {
+          endCursor
+          hasNextPage
+          hasPreviousPage
+          startCursor
+        }
+      }
+    }
+"#;
+
+#[tokio::test]
+async fn complex_queries__40_full_blocks__works() {
+    let query = FULL_BLOCK_QUERY.to_string();
+    let query = query.replace("$NUMBER_OF_BLOCKS", "40");
 
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
-    let result = send_graph_ql_query(&url, query).await;
+    let result = send_graph_ql_query(&url, query.as_str()).await;
     assert!(result.contains("transactions"));
 }
 
 #[tokio::test]
-async fn complex_queries__50_block__query_to_complex() {
+async fn complex_queries__41_full_block__query_to_complex() {
+    let query = FULL_BLOCK_QUERY.to_string();
+    let query = query.replace("$NUMBER_OF_BLOCKS", "41");
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, query.as_str()).await;
+    assert!(result.contains("Query is too complex."));
+}
+
+#[tokio::test]
+async fn complex_queries__100_block_headers__works() {
     let query = r#"
         query {
-          blocks(first: 50) {
-            nodes {
-              transactions {
+          blocks(first: 100) {
+            edges {
+              cursor
+              node {
                 id
+                header {
+                  id
+                  daHeight
+                  consensusParametersVersion
+                  stateTransitionBytecodeVersion
+                  transactionsCount
+                  messageReceiptCount
+                  transactionsRoot
+                  messageOutboxRoot
+                  eventInboxRoot
+                  height
+                  prevRoot
+                  time
+                  applicationHash
+                }
+                consensus {
+                  ... on Genesis {
+                    chainConfigHash
+                    coinsRoot
+                    contractsRoot
+                    messagesRoot
+                    transactionsRoot
+                  }
+                  ... on PoAConsensus {
+                    signature
+                  }
+                }
               }
+            }
+            pageInfo {
+              endCursor
+              hasNextPage
+              hasPreviousPage
+              startCursor
+            }
+            pageInfo {
+              endCursor
+              hasNextPage
+              hasPreviousPage
+              startCursor
             }
           }
         }
@@ -117,7 +301,8 @@ async fn complex_queries__50_block__query_to_complex() {
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
     let result = send_graph_ql_query(&url, query).await;
-    assert!(result.contains("Query is too complex."));
+    dbg!(&result);
+    assert!(result.contains("transactions"));
 }
 
 #[tokio::test]
@@ -139,4 +324,57 @@ async fn body_limit_prevents_from_huge_queries() {
     // Then
     let result = response.unwrap();
     assert_eq!(result.status(), 413);
+}
+
+#[tokio::test]
+async fn complex_queries__1_state_transition_bytecode__works() {
+    let version = LATEST_STATE_TRANSITION_VERSION;
+    let query = r#"
+    query {
+      stateTransitionBytecodeByVersion(version: $VERSION) {
+        bytecode {
+          uploadedSubsectionsNumber
+          bytecode
+          completed
+        }
+      }
+    }"#
+    .to_string();
+    let query = query.replace("$VERSION", version.to_string().as_str());
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, query.as_str()).await;
+    assert!(result.contains("bytecode"), "{}", result);
+}
+
+#[tokio::test]
+async fn complex_queries__2_state_transition_bytecode__query_to_complex() {
+    let version = LATEST_STATE_TRANSITION_VERSION;
+    let query = r#"
+    query {
+      stateTransitionBytecodeByVersion(version: $VERSION) {
+        bytecode {
+          uploadedSubsectionsNumber
+          bytecode
+          completed
+        }
+      }
+      stateTransitionBytecodeByVersion(version: $VERSION) {
+        bytecode {
+          uploadedSubsectionsNumber
+          bytecode
+          completed
+        }
+      }
+    }"#
+    .to_string();
+    let query = query.replace("$VERSION", version.to_string().as_str());
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, query.as_str()).await;
+    assert!(result.contains("Query is too complex."));
 }

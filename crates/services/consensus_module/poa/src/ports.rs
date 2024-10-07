@@ -35,7 +35,7 @@ use tokio::sync::Notify;
 pub trait TransactionPool: Send + Sync {
     fn new_txs_notifier(&self) -> Arc<Notify>;
 
-    async fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
 }
 
 /// The source of transactions for the block.

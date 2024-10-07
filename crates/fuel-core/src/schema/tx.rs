@@ -1,3 +1,4 @@
+use super::scalars::U64;
 use crate::{
     fuel_core_graphql_api::{
         api_service::{
@@ -9,6 +10,7 @@ use crate::{
         IntoApiResult,
         QUERY_COSTS,
     },
+    graphql_api::ports::MemoryPool,
     query::{
         transaction_status_change,
         BlockQueryData,
@@ -43,10 +45,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_txpool::{
-    ports::MemoryPool,
-    TxStatusMessage,
-};
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
@@ -68,17 +67,12 @@ use futures::{
     TryStreamExt,
 };
 use itertools::Itertools;
-use std::{
-    iter,
-    sync::Arc,
-};
+use std::iter;
 use tokio_stream::StreamExt;
 use types::{
     DryRunTransactionExecutionStatus,
     Transaction,
 };
-
-use super::scalars::U64;
 
 pub mod input;
 pub mod output;
@@ -111,10 +105,10 @@ impl TxQuery {
         }
     }
 
+    // We assume that each block has 100 transactions.
     #[graphql(complexity = "{\
-        QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        (QUERY_COSTS.tx_get + child_complexity) \
+        * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize)
     }")]
     async fn transactions(
         &self,
@@ -227,6 +221,8 @@ impl TxQuery {
         ctx: &Context<'_>,
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
+        let query = ctx.read_view()?.into_owned();
+
         let mut tx = FuelTx::from_bytes(&tx.0)?;
 
         let params = ctx
@@ -238,7 +234,7 @@ impl TxQuery {
 
         let parameters = CheckPredicateParams::from(params.as_ref());
         let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates(&parameters, memory);
+            let result = tx.estimate_predicates(&parameters, memory, &query);
             result.map(|_| tx)
         })
         .await
@@ -329,7 +325,7 @@ impl TxMutation {
         let tx = FuelTx::from_bytes(&tx.0)?;
 
         txpool
-            .insert(vec![Arc::new(tx.clone())])
+            .insert(tx.clone())
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
         let id = tx.id(&params.chain_id());
@@ -430,7 +426,7 @@ async fn submit_and_await_status<'a>(
     let tx_id = tx.id(&params.chain_id());
     let subscription = txpool.tx_update_subscribe(tx_id)?;
 
-    txpool.insert(vec![Arc::new(tx)]).await?;
+    txpool.insert(tx).await?;
 
     Ok(subscription
         .map(move |event| match event {

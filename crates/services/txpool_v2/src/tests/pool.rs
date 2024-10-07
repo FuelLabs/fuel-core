@@ -1053,7 +1053,7 @@ async fn insert_tx_with_blob() {
         witness_index: 0,
     })
     .add_witness(program.into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     // When
@@ -1078,7 +1078,7 @@ async fn insert__tx_with_blob_already_inserted_at_higher_tip() {
         witness_index: 0,
     })
     .add_witness(program.clone().into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     universe.verify_and_insert(tx).await.unwrap();
@@ -1087,7 +1087,7 @@ async fn insert__tx_with_blob_already_inserted_at_higher_tip() {
         id: blob_id,
         witness_index: 1,
     })
-    .add_random_fee_input()
+    .add_fee_input()
     .add_witness(program.into())
     .finalize_as_transaction();
 
@@ -1114,7 +1114,7 @@ async fn insert_tx_with_blob_already_insert_at_lower_tip() {
         witness_index: 0,
     })
     .add_witness(program.clone().into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     universe.verify_and_insert(tx).await.unwrap();
@@ -1123,7 +1123,7 @@ async fn insert_tx_with_blob_already_insert_at_lower_tip() {
         id: blob_id,
         witness_index: 1,
     })
-    .add_random_fee_input()
+    .add_fee_input()
     .add_witness(program.into())
     .tip(100)
     .max_fee_limit(100)
@@ -1150,7 +1150,7 @@ async fn insert__tx_blob_already_in_db() {
         witness_index: 0,
     })
     .add_witness(program.clone().into())
-    .add_random_fee_input()
+    .add_fee_input()
     .finalize_as_transaction();
 
     // Given

@@ -349,7 +349,7 @@ where
             );
             tx_ids_to_remove.push((tx_id, err.to_string()));
         }
-        self.txpool.notify_skipped_txs(tx_ids_to_remove).await;
+        self.txpool.notify_skipped_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
         let seal = self.signer.seal_block(&block).await?;

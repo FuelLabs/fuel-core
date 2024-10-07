@@ -1,6 +1,4 @@
 //! Queries we can run directly on `FuelService`.
-use std::sync::Arc;
-
 use fuel_core_types::{
     fuel_tx::{
         Transaction,
@@ -25,7 +23,7 @@ impl FuelService {
     pub async fn submit(&self, tx: Transaction) -> anyhow::Result<()> {
         self.shared
             .txpool_shared_state
-            .insert(vec![Arc::new(tx)], None)
+            .insert(tx)
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }

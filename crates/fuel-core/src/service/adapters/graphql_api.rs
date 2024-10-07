@@ -2,6 +2,7 @@ use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
     ConsensusParametersProvider,
+    SharedMemoryPool,
     StaticGasPrice,
 };
 use crate::{
@@ -15,10 +16,14 @@ use crate::{
         P2pPort,
         TxPoolPort,
     },
-    service::adapters::{
-        import_result_provider::ImportResultProvider,
-        P2PAdapter,
-        TxPoolAdapter,
+    graphql_api::ports::MemoryPool,
+    service::{
+        adapters::{
+            import_result_provider::ImportResultProvider,
+            P2PAdapter,
+            TxPoolAdapter,
+        },
+        vm_pool::MemoryFromPool,
     },
 };
 use async_trait::async_trait;
@@ -78,9 +83,9 @@ impl TxPoolPort for TxPoolAdapter {
             }))
     }
 
-    async fn insert(&self, txs: Vec<Arc<Transaction>>) -> anyhow::Result<()> {
+    async fn insert(&self, tx: Transaction) -> anyhow::Result<()> {
         self.service
-            .insert(txs, None)
+            .insert(tx)
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }
@@ -216,5 +221,14 @@ impl worker::BlockImporter for GraphQLBlockImporter {
         height: Option<BlockHeight>,
     ) -> anyhow::Result<SharedImportResult> {
         self.import_result_provider_adapter.result_at_height(height)
+    }
+}
+
+#[async_trait::async_trait]
+impl MemoryPool for SharedMemoryPool {
+    type Memory = MemoryFromPool;
+
+    async fn get_memory(&self) -> Self::Memory {
+        self.memory_pool.take_raw().await
     }
 }

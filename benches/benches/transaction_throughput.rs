@@ -39,6 +39,7 @@ use fuel_core_types::{
             EstimatePredicates,
         },
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 use rand::{
@@ -103,20 +104,16 @@ where
                     for _ in 0..iters {
                         let mut test_builder = test_builder.clone();
                         let sealed_block = {
-                            let transactions = transactions
-                                .iter()
-                                .map(|tx| Arc::new(tx.clone()))
-                                .collect();
+                            let transactions: Vec<Transaction> =
+                                transactions.iter().cloned().collect();
                             // start the producer node
                             let TestContext { srv, client, .. } =
                                 test_builder.finalize().await;
 
                             // insert all transactions
-                            srv.shared
-                                .txpool_shared_state
-                                .insert(transactions, None)
-                                .await
-                                .unwrap();
+                            for tx in transactions {
+                                srv.shared.txpool_shared_state.insert(tx).await.unwrap();
+                            }
                             let _ = client.produce_blocks(1, None).await;
 
                             // sanity check block to ensure the transactions were actually processed
@@ -193,8 +190,12 @@ fn signed_transfers(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
-            .expect("Predicate check failed");
+        tx.estimate_predicates(
+            &checked_parameters(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
         tx
     };
     bench_txs("signed transfers", c, generator);
@@ -219,8 +220,12 @@ fn predicate_transfers(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
-            .expect("Predicate check failed");
+        tx.estimate_predicates(
+            &checked_parameters(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
         tx
     };
     bench_txs("predicate transfers", c, generator);
@@ -287,8 +292,12 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
-            .expect("Predicate check failed");
+        tx.estimate_predicates(
+            &checked_parameters(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
         tx
     };
     bench_txs("predicate transfers eck1", c, generator);
@@ -357,8 +366,12 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
             .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
-        tx.estimate_predicates(&checked_parameters(), MemoryInstance::new())
-            .expect("Predicate check failed");
+        tx.estimate_predicates(
+            &checked_parameters(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
         tx
     };
     bench_txs("predicate transfers ed19", c, generator);

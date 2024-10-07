@@ -74,6 +74,22 @@ pub struct TxPoolArgs {
     /// Maximum number of tasks in the p2p synchronisation queue.
     #[clap(long = "tx-size-of-p2p-sync-queue", default_value = "20", env)]
     pub tx_size_of_p2p_sync_queue: usize,
+
+    /// Maximum number of pending write requests in the service.
+    #[clap(long = "tx-max-pending-write-requests", default_value = "1000", env)]
+    pub tx_max_pending_write_requests: usize,
+
+    /// Maximum number of pending read requests in the service.
+    #[clap(long = "tx-max-pending-read-requests", default_value = "1000", env)]
+    pub tx_max_pending_read_requests: usize,
+
+    /// Maximum number of pending select transactions requests in the service.
+    #[clap(
+        long = "tx-max-pending-select-transactions-requests",
+        default_value = "1000",
+        env
+    )]
+    pub tx_max_pending_select_transactions_requests: usize,
 }
 
 #[cfg(test)]

@@ -59,6 +59,7 @@ pub enum GossipsubMessageAcceptance {
 }
 
 /// A gossipped message from the network containing all relevant data.
+// TODO: `T` should be inside of the `Arc` since vi broadcast it via the channel.
 #[derive(Debug, Clone)]
 pub struct GossipData<T> {
     /// The gossipped message payload

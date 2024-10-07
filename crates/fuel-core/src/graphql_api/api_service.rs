@@ -202,6 +202,7 @@ where
         .limit_complexity(config.config.max_queries_complexity)
         .limit_depth(config.config.max_queries_depth)
         .limit_recursive_depth(config.config.max_queries_recursive_depth)
+        .limit_directives(config.config.max_queries_directives)
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))

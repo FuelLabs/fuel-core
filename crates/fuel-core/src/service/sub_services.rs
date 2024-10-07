@@ -202,7 +202,6 @@ pub fn init_sub_services(
         last_height,
         gas_price_provider.clone(),
         executor.clone(),
-        SharedMemoryPool::new(config.memory_pool_size),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -282,6 +281,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.off_chain().clone(),
         chain_id,
+        config.da_compression.clone(),
         config.continue_on_error,
     );
 

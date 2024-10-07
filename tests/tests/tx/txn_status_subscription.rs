@@ -25,6 +25,7 @@ use fuel_core_types::{
             EstimatePredicates,
         },
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 use futures::StreamExt;
@@ -63,8 +64,12 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
         .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
         .add_output(Output::change(rng.gen(), 0, AssetId::default()))
         .finalize();
-    tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
-        .expect("Predicate check failed");
+    tx.estimate_predicates(
+        &CheckPredicateParams::default(),
+        MemoryInstance::new(),
+        &EmptyStorage,
+    )
+    .expect("Predicate check failed");
     tx.into()
 }
 
@@ -116,8 +121,12 @@ async fn subscribe_txn_status() {
         )
         .into();
         // estimate predicate gas for coin_input predicate
-        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
-            .expect("should estimate predicate");
+        tx.estimate_predicates(
+            &CheckPredicateParams::default(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("should estimate predicate");
 
         tx
     };

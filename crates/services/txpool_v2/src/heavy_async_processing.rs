@@ -2,12 +2,17 @@ use std::{
     future::Future,
     sync::Arc,
 };
-use tokio::sync::Semaphore;
+use tokio::sync::{
+    OwnedSemaphorePermit,
+    Semaphore,
+};
 
 pub struct HeavyAsyncProcessor {
     rayon_thread_pool: rayon::ThreadPool,
     semaphore: Arc<Semaphore>,
 }
+
+pub struct Reservation(OwnedSemaphorePermit);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct OutOfCapacity;
@@ -28,21 +33,34 @@ impl HeavyAsyncProcessor {
         })
     }
 
+    pub fn reserve(&self) -> Result<Reservation, OutOfCapacity> {
+        let permit = self.semaphore.clone().try_acquire_owned();
+        if let Ok(permit) = permit {
+            Ok(Reservation(permit))
+        } else {
+            Err(OutOfCapacity)
+        }
+    }
+
+    pub fn spawn_reserved<F>(&self, reservation: Reservation, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let permit = reservation.0;
+        self.rayon_thread_pool.spawn_fifo(move || {
+            // When task started its works we can free the space.
+            drop(permit);
+            futures::executor::block_on(future);
+        });
+    }
+
     pub fn spawn<F>(&self, future: F) -> Result<(), OutOfCapacity>
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        let permit = self.semaphore.clone().try_acquire_owned();
-
-        if let Ok(permit) = permit {
-            self.rayon_thread_pool.spawn_fifo(move || {
-                let _drop = permit;
-                futures::executor::block_on(future);
-            });
-            Ok(())
-        } else {
-            Err(OutOfCapacity)
-        }
+        let reservation = self.reserve()?;
+        self.spawn_reserved(reservation, future);
+        Ok(())
     }
 }
 

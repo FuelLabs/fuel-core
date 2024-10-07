@@ -86,8 +86,8 @@ impl TransactionPool for TxPoolAdapter {
         self.service.get_new_txs_notifier()
     }
 
-    async fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
-        self.service.notify_skipped_txs(tx_ids_and_reasons).await
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
+        self.service.notify_skipped_txs(tx_ids_and_reasons)
     }
 }
 

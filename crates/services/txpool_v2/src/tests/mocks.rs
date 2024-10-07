@@ -5,16 +5,24 @@ use crate::{
         BlockImporter as BlockImporterTrait,
         ConsensusParametersProvider,
         GasPriceProvider,
-        MemoryPool as MemoryPoolTrait,
+        NotifyP2P,
+        P2PRequests,
+        P2PSubscriptions,
         TxPoolPersistentStorage,
         WasmChecker,
         WasmValidityError,
-        P2P as P2PTrait,
     },
     GasPrice,
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    Mappable,
+    PredicateStorageRequirements,
+    Result as StorageResult,
+    StorageInspect,
+    StorageRead,
+    StorageSize,
+};
 use fuel_core_types::{
     blockchain::{
         header::ConsensusParametersVersion,
@@ -36,8 +44,8 @@ use fuel_core_types::{
     },
     fuel_types::Nonce,
     fuel_vm::{
-        interpreter::MemoryInstance,
         BlobBytes,
+        BlobData,
     },
     services::{
         block_importer::{
@@ -53,6 +61,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    borrow::Cow,
     collections::HashMap,
     sync::{
         Arc,
@@ -114,6 +123,75 @@ impl TxPoolPersistentStorage for MockDb {
     }
 }
 
+impl StorageRead<BlobData> for MockDb {
+    fn read(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        let table = self.data.lock().unwrap();
+        let bytes = table.blobs.get(key);
+
+        let len = bytes.map(|bytes| {
+            buf.copy_from_slice(bytes.0.as_slice());
+            bytes.0.len()
+        });
+        Ok(len)
+    }
+
+    fn read_alloc(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        let table = self.data.lock().unwrap();
+        let bytes = table.blobs.get(key);
+        let bytes = bytes.map(|bytes| bytes.clone().0);
+        Ok(bytes)
+    }
+}
+
+impl StorageInspect<BlobData> for MockDb {
+    type Error = ();
+
+    fn get(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<Option<Cow<<BlobData as Mappable>::OwnedValue>>, Self::Error> {
+        let table = self.data.lock().unwrap();
+        let bytes = table.blobs.get(key);
+        Ok(bytes.map(|b| Cow::Owned(b.clone())))
+    }
+
+    fn contains_key(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        Ok(self.data.lock().unwrap().blobs.contains_key(key))
+    }
+}
+
+impl StorageSize<BlobData> for MockDb {
+    fn size_of_value(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<Option<usize>, Self::Error> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .blobs
+            .get(key)
+            .map(|blob| blob.0.len()))
+    }
+}
+
+impl PredicateStorageRequirements for MockDb {
+    fn storage_error_to_string(error: Self::Error) -> String {
+        format!("{:?}", error)
+    }
+}
+
+#[derive(Clone)]
 pub struct MockDBProvider(pub MockDb);
 
 impl AtomicView for MockDBProvider {
@@ -164,17 +242,6 @@ impl WasmChecker for MockWasmChecker {
     }
 }
 
-pub struct MockMemoryPool;
-
-#[async_trait::async_trait]
-impl MemoryPoolTrait for MockMemoryPool {
-    type Memory = MemoryInstance;
-
-    async fn get_memory(&self) -> Self::Memory {
-        MemoryInstance::new()
-    }
-}
-
 mockall::mock! {
     pub ConsensusParametersProvider {}
 
@@ -188,22 +255,26 @@ type GossipedTransaction = GossipData<Transaction>;
 mockall::mock! {
     pub P2P {}
 
-    #[async_trait::async_trait]
-    impl P2PTrait for P2P {
+    impl P2PSubscriptions for P2P {
         type GossipedTransaction = GossipedTransaction;
-
-        fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
         fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
 
+        fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
+    }
+
+    impl NotifyP2P for P2P {
         fn notify_gossip_transaction_validity(
             &self,
             message_info: GossipsubMessageInfo,
             validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()>;
 
-        fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
+        fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
+    }
 
+    #[async_trait::async_trait]
+    impl P2PRequests for P2P {
         async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
 
         async fn request_txs(
