@@ -621,6 +621,7 @@ async fn get_sorted_out_tx1_2_3() {
         .get_pool()
         .write()
         .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
@@ -676,6 +677,7 @@ async fn get_sorted_out_tx_same_tips() {
         .get_pool()
         .write()
         .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
@@ -731,6 +733,7 @@ async fn get_sorted_out_tx_profitable_ratios() {
         .get_pool()
         .write()
         .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
@@ -768,6 +771,7 @@ async fn get_sorted_out_tx_by_creation_instant() {
         .get_pool()
         .write()
         .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
@@ -803,7 +807,7 @@ async fn insert_tx_at_least_min_gas_price() {
 #[tokio::test]
 async fn insert__tx_below_min_gas_price() {
     // Given
-    let gas_price = 11;
+    let gas_price = 1_000_000_000;
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -822,10 +826,7 @@ async fn insert__tx_below_min_gas_price() {
         .unwrap_err();
 
     // Then
-    assert!(matches!(
-        err,
-        Error::ConsensusValidity(CheckError::InsufficientMaxFee { .. })
-    ));
+    assert!(matches!(err, Error::InsufficientMaxFee { .. }));
 }
 
 #[tokio::test]

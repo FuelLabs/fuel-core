@@ -91,6 +91,7 @@ impl SharedState {
 
     pub async fn select_transactions(
         &self,
+        minimal_gas_price: u64,
         max_gas: u64,
         maximum_txs: u16,
         maximum_block_size: u32,
@@ -103,6 +104,7 @@ impl SharedState {
                     max_gas,
                     maximum_txs,
                     maximum_block_size,
+                    minimal_gas_price,
                 },
                 response_channel: select_transactions_sender,
             })

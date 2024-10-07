@@ -155,10 +155,14 @@ where
                     continue
                 };
 
-                // TODO: Gas price
-                if stored_transaction.transaction.max_gas() > gas_left
-                    || stored_transaction.transaction.metered_bytes_size() > space_left
+                if stored_transaction.transaction.max_gas_price()
+                    < constraints.minimal_gas_price
                 {
+                    continue;
+                }
+
+                if stored_transaction.transaction.max_gas() > gas_left
+                    || stored_transaction.transaction.metered_bytes_size() > space_left {
                     continue;
                 }
 
@@ -232,8 +236,3 @@ where
         self.on_removed_transaction_inner(key)
     }
 }
-
-// fn tx_is_gas_price_valid(
-//     tx: &ArcPoolTx,
-// ) -> bool {
-// }

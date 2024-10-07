@@ -438,6 +438,10 @@ where
                         Tai64::from_unix(duration.as_secs() as i64),
                     );
 
+                    if let Some(channel) = response_channel {
+                        let _ = channel.send(Ok(()));
+                    }
+
                     removed_txs
                 }
                 Err(err) => {
@@ -455,9 +459,6 @@ where
                     tx.id(),
                     Error::Removed(RemovedReason::LessWorth(tx.id())),
                 );
-            }
-            if let Some(channel) = response_channel {
-                let _ = channel.send(Ok(()));
             }
         }
     }

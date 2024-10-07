@@ -5,6 +5,7 @@ use fuel_core_types::{
         ContractId,
         TxId,
         UtxoId,
+        Word,
     },
     fuel_types::Nonce,
     fuel_vm::checked_transaction::CheckError,
@@ -46,6 +47,15 @@ pub enum Error {
     ServiceCommunicationFailed,
     #[display(fmt = "Request failed to be sent because service queue is full")]
     ServiceQueueFull,
+    #[display(fmt = "The provided max fee can't cover the transaction cost. \
+        The minimal gas price should be {minimal_gas_price:?}, \
+        while it is {max_gas_price_from_fee:?}")]
+    InsufficientMaxFee {
+        /// The max gas price from the fee.
+        max_gas_price_from_fee: Word,
+        /// The minimum gas price required by TxPool.
+        minimal_gas_price: Word,
+    },
 }
 
 #[derive(Clone, Debug, derive_more::Display)]

@@ -51,43 +51,43 @@ homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.37.0"
+version = "0.37.1"
 
 [workspace.dependencies]
 # Workspace members
-fuel-core = { version = "0.37.0", path = "./crates/fuel-core", default-features = false }
-fuel-core-client-bin = { version = "0.37.0", path = "./bin/fuel-core-client" }
-fuel-core-bin = { version = "0.37.0", path = "./bin/fuel-core" }
-fuel-core-keygen = { version = "0.37.0", path = "./crates/keygen" }
-fuel-core-keygen-bin = { version = "0.37.0", path = "./bin/keygen" }
-fuel-core-chain-config = { version = "0.37.0", path = "./crates/chain-config", default-features = false }
-fuel-core-client = { version = "0.37.0", path = "./crates/client" }
-fuel-core-compression = { version = "0.37.0", path = "./crates/compression" }
-fuel-core-database = { version = "0.37.0", path = "./crates/database" }
-fuel-core-metrics = { version = "0.37.0", path = "./crates/metrics" }
-fuel-core-services = { version = "0.37.0", path = "./crates/services" }
-fuel-core-consensus-module = { version = "0.37.0", path = "./crates/services/consensus_module" }
-fuel-core-bft = { version = "0.37.0", path = "./crates/services/consensus_module/bft" }
-fuel-core-poa = { version = "0.37.0", path = "./crates/services/consensus_module/poa" }
-fuel-core-executor = { version = "0.37.0", path = "./crates/services/executor", default-features = false }
-fuel-core-importer = { version = "0.37.0", path = "./crates/services/importer" }
-fuel-core-gas-price-service = { version = "0.37.0", path = "crates/services/gas_price_service" }
-fuel-core-p2p = { version = "0.37.0", path = "./crates/services/p2p" }
-fuel-core-producer = { version = "0.37.0", path = "./crates/services/producer" }
-fuel-core-relayer = { version = "0.37.0", path = "./crates/services/relayer" }
-fuel-core-sync = { version = "0.37.0", path = "./crates/services/sync" }
-fuel-core-txpool = { version = "0.37.0", path = "./crates/services/txpool_v2" }
-fuel-core-storage = { version = "0.37.0", path = "./crates/storage", default-features = false }
-fuel-core-trace = { version = "0.37.0", path = "./crates/trace" }
-fuel-core-types = { version = "0.37.0", path = "./crates/types", default-features = false }
+fuel-core = { version = "0.37.1", path = "./crates/fuel-core", default-features = false }
+fuel-core-client-bin = { version = "0.37.1", path = "./bin/fuel-core-client" }
+fuel-core-bin = { version = "0.37.1", path = "./bin/fuel-core" }
+fuel-core-keygen = { version = "0.37.1", path = "./crates/keygen" }
+fuel-core-keygen-bin = { version = "0.37.1", path = "./bin/keygen" }
+fuel-core-chain-config = { version = "0.37.1", path = "./crates/chain-config", default-features = false }
+fuel-core-client = { version = "0.37.1", path = "./crates/client" }
+fuel-core-compression = { version = "0.37.1", path = "./crates/compression" }
+fuel-core-database = { version = "0.37.1", path = "./crates/database" }
+fuel-core-metrics = { version = "0.37.1", path = "./crates/metrics" }
+fuel-core-services = { version = "0.37.1", path = "./crates/services" }
+fuel-core-consensus-module = { version = "0.37.1", path = "./crates/services/consensus_module" }
+fuel-core-bft = { version = "0.37.1", path = "./crates/services/consensus_module/bft" }
+fuel-core-poa = { version = "0.37.1", path = "./crates/services/consensus_module/poa" }
+fuel-core-executor = { version = "0.37.1", path = "./crates/services/executor", default-features = false }
+fuel-core-importer = { version = "0.37.1", path = "./crates/services/importer" }
+fuel-core-gas-price-service = { version = "0.37.1", path = "crates/services/gas_price_service" }
+fuel-core-p2p = { version = "0.37.1", path = "./crates/services/p2p" }
+fuel-core-producer = { version = "0.37.1", path = "./crates/services/producer" }
+fuel-core-relayer = { version = "0.37.1", path = "./crates/services/relayer" }
+fuel-core-sync = { version = "0.37.1", path = "./crates/services/sync" }
+fuel-core-txpool = { version = "0.37.1", path = "./crates/services/txpool_v2" }
+fuel-core-storage = { version = "0.37.1", path = "./crates/storage", default-features = false }
+fuel-core-trace = { version = "0.37.1", path = "./crates/trace" }
+fuel-core-types = { version = "0.37.1", path = "./crates/types", default-features = false }
 fuel-core-tests = { version = "0.0.0", path = "./tests" }
-fuel-core-upgradable-executor = { version = "0.37.0", path = "./crates/services/upgradable-executor" }
-fuel-core-wasm-executor = { version = "0.37.0", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
+fuel-core-upgradable-executor = { version = "0.37.1", path = "./crates/services/upgradable-executor" }
+fuel-core-wasm-executor = { version = "0.37.1", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
-fuel-gas-price-algorithm = { version = "0.37.0", path = "crates/fuel-gas-price-algorithm" }
+fuel-gas-price-algorithm = { version = "0.37.1", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.58.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.58.1", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
