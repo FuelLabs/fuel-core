@@ -428,7 +428,6 @@ where
             let removed_txs = match result {
                 Ok(removed_txs) => {
                     let submitted_time = SystemTime::now();
-                    shared_state.new_txs_notifier.notify_waiters();
                     time_txs_submitted
                         .write()
                         .push_front((submitted_time, tx_id));
@@ -445,6 +444,7 @@ where
                     if let Some(channel) = response_channel {
                         let _ = channel.send(Ok(()));
                     }
+                    shared_state.new_txs_notifier.notify_waiters();
 
                     removed_txs
                 }
