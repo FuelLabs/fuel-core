@@ -32,10 +32,7 @@ use fuel_core_types::{
     },
 };
 
-use crate::{
-    error::Error,
-    GasPrice,
-};
+use crate::GasPrice;
 
 pub use fuel_core_storage::transactional::AtomicView;
 

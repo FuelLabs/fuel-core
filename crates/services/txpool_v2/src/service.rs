@@ -643,13 +643,13 @@ pub fn new_service<
 ) -> Service<PSView>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
-    P2P: P2PRequests + Send + Sync + 'static,
-    PSProvider: AtomicView<LatestView = PSView> + Send + Sync + 'static,
+    P2P: P2PRequests,
+    PSProvider: AtomicView<LatestView = PSView> + 'static,
     PSView: TxPoolPersistentStorage,
-    ConsensusParamsProvider: ConsensusParametersProvider + Send + Sync,
-    GasPriceProvider: GasPriceProviderTrait + Send + Sync,
-    WasmChecker: WasmCheckerTrait + Send + Sync,
-    BlockImporter: BlockImporterTrait + Send + Sync,
+    ConsensusParamsProvider: ConsensusParametersProvider,
+    GasPriceProvider: GasPriceProviderTrait,
+    WasmChecker: WasmCheckerTrait,
+    BlockImporter: BlockImporterTrait,
 {
     let chain_id = consensus_parameters_provider
         .latest_consensus_parameters()
