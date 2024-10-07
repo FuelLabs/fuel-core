@@ -228,8 +228,7 @@ where
         &mut self,
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
-        let extracted_transactions = self
-            .selection_algorithm
+        self.selection_algorithm
             .gather_best_txs(constraints, &mut self.storage)
             .into_iter()
             .map(|storage_entry| {
@@ -237,9 +236,7 @@ where
 
                 storage_entry.transaction
             })
-            .collect::<Vec<_>>();
-
-        extracted_transactions
+            .collect::<Vec<_>>()
     }
 
     pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {

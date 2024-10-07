@@ -41,7 +41,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub(super) struct Verification<View> {
+pub struct Verification<View> {
     pub persistent_storage_provider: Arc<dyn AtomicView<LatestView = View>>,
     pub consensus_parameters_provider: Arc<dyn ConsensusParametersProvider>,
     pub gas_price_provider: Arc<dyn GasPriceProvider>,

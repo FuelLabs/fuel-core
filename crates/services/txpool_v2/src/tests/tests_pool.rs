@@ -620,8 +620,7 @@ async fn get_sorted_out_tx1_2_3() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX });
 
     // Then
     assert_eq!(txs.len(), 3, "Should have 3 txs");
@@ -672,8 +671,7 @@ async fn get_sorted_out_tx_same_tips() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX });
 
     // Then
     assert_eq!(txs.len(), 3, "Should have 3 txs");
@@ -724,8 +722,7 @@ async fn get_sorted_out_tx_profitable_ratios() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX });
 
     // Then
     assert_eq!(txs.len(), 3, "Should have 3 txs");
@@ -758,8 +755,7 @@ async fn get_sorted_out_tx_by_creation_instant() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints { max_gas: u64::MAX });
 
     // Then
     // This order doesn't match the lexicographical order of the tx ids

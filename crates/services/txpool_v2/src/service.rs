@@ -83,7 +83,7 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
-mod memory;
+pub(crate) mod memory;
 mod p2p;
 mod pruner;
 mod subscriptions;
@@ -110,7 +110,7 @@ pub enum WritePoolRequest {
         transactions: Vec<Arc<Transaction>>,
     },
     InsertTx {
-        transactions: Arc<Transaction>,
+        transaction: Arc<Transaction>,
         response_channel: oneshot::Sender<Result<(), Error>>,
     },
     RemoveCoinDependents {
@@ -299,12 +299,12 @@ where
                 self.manage_remove_coin_dependents(transactions);
             }
             WritePoolRequest::InsertTx {
-                transactions,
+                transaction,
                 response_channel,
             } => {
                 if let Ok(reservation) = self.transaction_verifier_process.reserve() {
                     let future = self.insert_transaction(
-                        transactions,
+                        transaction,
                         None,
                         Some(response_channel),
                     );
@@ -555,7 +555,7 @@ where
                     let pool = self.pool.read();
                     pool.iter_tx_ids().take(max_txs).copied().collect()
                 };
-                if let Err(_) = response_channel.send(tx_ids) {
+                if response_channel.send(tx_ids).is_err() {
                     tracing::error!(
                         "Failed to send the result back for `GetTxIds` request"
                     );
@@ -572,7 +572,7 @@ where
                         .map(|tx_id| pool.find_one(&tx_id))
                         .collect()
                 };
-                if let Err(_) = response_channel.send(txs) {
+                if response_channel.send(txs).is_err() {
                     tracing::error!(
                         "Failed to send the result back for `GetTxs` request"
                     );

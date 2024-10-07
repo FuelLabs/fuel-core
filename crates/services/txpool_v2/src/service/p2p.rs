@@ -46,12 +46,10 @@ impl P2PExt for Arc<dyn P2PRequests> {
                     );
                 }
             };
-        } else {
-            if let Ok(transaction) = &result {
-                let tx_clone = Arc::new(transaction.into());
-                if let Err(e) = self.broadcast_transaction(tx_clone) {
-                    tracing::error!("Failed to broadcast transaction: {}", e);
-                }
+        } else if let Ok(transaction) = &result {
+            let tx_clone = Arc::new(transaction.into());
+            if let Err(e) = self.broadcast_transaction(tx_clone) {
+                tracing::error!("Failed to broadcast transaction: {}", e);
             }
         }
     }

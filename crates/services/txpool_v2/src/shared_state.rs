@@ -71,18 +71,18 @@ impl SharedState {
         Ok(())
     }
 
-    pub async fn insert(&self, transactions: Transaction) -> Result<(), Error> {
-        let transactions = Arc::new(transactions);
+    pub async fn insert(&self, transaction: Transaction) -> Result<(), Error> {
+        let transaction = Arc::new(transaction);
         let (sender, receiver) = oneshot::channel();
 
         self.write_pool_requests_sender
             .send(WritePoolRequest::InsertTx {
-                transactions,
+                transaction,
                 response_channel: sender,
             })
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?;
-
+        dbg!("send success");
         receiver
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?

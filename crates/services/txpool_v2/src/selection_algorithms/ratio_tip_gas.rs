@@ -5,31 +5,15 @@ use std::{
     },
     collections::BTreeMap,
     fmt::Debug,
-    ops::Deref,
     time::Instant,
 };
 
-use fuel_core_types::{
-    fuel_tx::{
-        field::MaxFeeLimit,
-        FeeParameters,
-        GasCosts,
-        TransactionFee,
-        TxId,
-    },
-    services::txpool::{
-        ArcPoolTx,
-        PoolTransaction,
-    },
-};
+use fuel_core_types::fuel_tx::TxId;
 use num_rational::Ratio;
 
-use crate::{
-    storage::{
-        RemovedTransactions,
-        StorageData,
-    },
-    GasPrice,
+use crate::storage::{
+    RemovedTransactions,
+    StorageData,
 };
 
 use super::{
@@ -248,77 +232,7 @@ where
     }
 }
 
-fn tx_is_gas_price_valid(
-    tx: &ArcPoolTx,
-    gas_costs: &GasCosts,
-    fee_params: &FeeParameters,
-    gas_price: GasPrice,
-) -> bool {
-    match tx.deref() {
-        PoolTransaction::Upgrade(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Create(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Script(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Upload(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Blob(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-    }
-}
+// fn tx_is_gas_price_valid(
+//     tx: &ArcPoolTx,
+// ) -> bool {
+// }

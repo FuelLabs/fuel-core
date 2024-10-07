@@ -172,7 +172,9 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
             transaction_with_random_inputs_and_outputs(limits, tip as u64, &mut rng);
         let pool_tx = PoolTransaction::Script(checked, metadata);
 
-        let result = txpool.write().insert(Arc::new(pool_tx));
+        let result = txpool
+            .write()
+            .insert(Arc::new(pool_tx), universe.database());
         errors += result.is_err() as usize;
 
         if tip % 10 == 0 {
@@ -183,12 +185,11 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
     assert_ne!(ROUNDS_PER_TXPOOL, errors);
 
     loop {
-        let result = txpool
-            .write()
-            .extract_transactions_for_block(crate::selection_algorithms::Constraints {
+        let result = txpool.write().extract_transactions_for_block(
+            crate::selection_algorithms::Constraints {
                 max_gas: limits.max_block_gas,
-            })
-            .unwrap();
+            },
+        );
 
         if result.is_empty() {
             break
