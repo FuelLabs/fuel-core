@@ -620,8 +620,10 @@ async fn get_sorted_out_tx1_2_3() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+        });
 
     // Then
     assert_eq!(txs.len(), 3, "Should have 3 txs");
@@ -672,8 +674,10 @@ async fn get_sorted_out_tx_same_tips() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+        });
 
     // Then
     assert_eq!(txs.len(), 3, "Should have 3 txs");
@@ -724,8 +728,10 @@ async fn get_sorted_out_tx_profitable_ratios() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+        });
 
     // Then
     assert_eq!(txs.len(), 3, "Should have 3 txs");
@@ -758,8 +764,10 @@ async fn get_sorted_out_tx_by_creation_instant() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints { max_gas: u64::MAX })
-        .unwrap();
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+        });
 
     // Then
     // This order doesn't match the lexicographical order of the tx ids
@@ -791,7 +799,7 @@ async fn insert_tx_at_least_min_gas_price() {
 #[tokio::test]
 async fn insert__tx_below_min_gas_price() {
     // Given
-    let gas_price = 11;
+    let gas_price = 1_000_000_000;
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -810,10 +818,7 @@ async fn insert__tx_below_min_gas_price() {
         .unwrap_err();
 
     // Then
-    assert!(matches!(
-        err,
-        Error::ConsensusValidity(CheckError::InsufficientMaxFee { .. })
-    ));
+    assert!(matches!(err, Error::InsufficientMaxFee { .. }));
 }
 
 #[tokio::test]

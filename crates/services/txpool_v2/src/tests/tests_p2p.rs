@@ -159,11 +159,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     let service = universe.build_service(Some(p2p), None);
 
     service.start_and_await().await.unwrap();
-    service
-        .shared
-        .insert(vec![Arc::new(tx1.clone())], None)
-        .await
-        .unwrap();
+    service.shared.try_insert(vec![tx1.clone()]).unwrap();
 
     universe
         .waiting_txs_insertion(
@@ -248,11 +244,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
         .tx_update_subscribe(tx1.cached_id().unwrap())
         .unwrap();
 
-    service
-        .shared
-        .insert(vec![Arc::new(tx1.clone())], None)
-        .await
-        .unwrap();
+    service.shared.insert(tx1.clone()).await.unwrap();
 
     // verify status updates
     assert_eq!(

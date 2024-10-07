@@ -32,7 +32,6 @@ use fuel_core_types::{
         Contract,
         ContractId,
         Finalizable,
-        GasCosts,
         Output,
         Transaction,
         TransactionBuilder,
@@ -60,7 +59,12 @@ use crate::{
     new_service,
     pool::Pool,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    service::TxPool,
+    service::{
+        memory::MemoryPool,
+        verifications::Verification,
+        Shared,
+        TxPool,
+    },
     storage::graph::{
         GraphConfig,
         GraphStorage,
@@ -69,7 +73,6 @@ use crate::{
         MockDBProvider,
         MockDb,
     },
-    verifications::perform_all_verifications,
     GasPrice,
     Service,
 };
@@ -77,7 +80,6 @@ use crate::{
 use super::mocks::{
     MockConsensusParametersProvider,
     MockImporter,
-    MockMemoryPool,
     MockP2P,
     MockTxPoolGasPrice,
     MockWasmChecker,
@@ -92,9 +94,7 @@ pub struct TestPoolUniverse {
     mock_db: MockDb,
     rng: StdRng,
     pub config: Config,
-    pool: Option<
-        TxPool<MockDBProvider, MockTxPoolGasPrice, MockConsensusParametersProvider>,
-    >,
+    pool: Option<Shared<TxPool>>,
 }
 
 impl Default for TestPoolUniverse {
@@ -113,6 +113,10 @@ impl TestPoolUniverse {
         &mut self.mock_db
     }
 
+    pub fn database(&self) -> &MockDb {
+        &self.mock_db
+    }
+
     pub fn config(self, config: Config) -> Self {
         if self.pool.is_some() {
             panic!("Pool already built");
@@ -121,25 +125,12 @@ impl TestPoolUniverse {
     }
 
     pub fn build_pool(&mut self) {
-        let mut mock_consensus_params_provider =
-            MockConsensusParametersProvider::default();
-        mock_consensus_params_provider
-            .expect_latest_consensus_parameters()
-            .returning(|| {
-                let mut params = ConsensusParameters::standard();
-                params.set_gas_costs(GasCosts::free());
-                (0, Arc::new(params))
-            });
         let pool = Arc::new(RwLock::new(Pool::new(
-            MockDBProvider(self.mock_db.clone()),
             GraphStorage::new(GraphConfig {
                 max_txs_chain_count: self.config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(
-                Arc::new(MockTxPoolGasPrice::new(0)),
-                Arc::new(mock_consensus_params_provider),
-            ),
+            RatioTipGasSelection::new(),
             self.config.clone(),
         )));
         self.pool = Some(pool.clone());
@@ -149,14 +140,7 @@ impl TestPoolUniverse {
         &self,
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
-    ) -> Service<
-        MockP2P,
-        MockDBProvider,
-        MockConsensusParametersProvider,
-        MockTxPoolGasPrice,
-        MockWasmChecker,
-        MockMemoryPool,
-    > {
+    ) -> Service<MockDb> {
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
@@ -185,7 +169,6 @@ impl TestPoolUniverse {
             Default::default(),
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
-            MockMemoryPool,
         )
     }
 
@@ -217,19 +200,24 @@ impl TestPoolUniverse {
         tx: Transaction,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
-            let tx = perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                &ConsensusParameters::default(),
-                0,
-                &MockTxPoolGasPrice::new(0),
-                &MockWasmChecker::new(Ok(())),
-                MemoryInstance::new(),
-                MockDb::default(),
-            )
-            .await?;
-            pool.write().insert(Arc::new(tx))
+            let mut mock_consensus_params_provider =
+                MockConsensusParametersProvider::default();
+            mock_consensus_params_provider
+                .expect_latest_consensus_parameters()
+                .returning(|| (0, Arc::new(ConsensusParameters::standard())));
+            let verification = Verification {
+                persistent_storage_provider: Arc::new(MockDBProvider(
+                    self.mock_db.clone(),
+                )),
+                gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
+                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
+                memory_pool: MemoryPool::new(),
+            };
+            let tx = verification
+                .perform_all_verifications(tx, &pool.clone(), Default::default())
+                .await?;
+            pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
         }
@@ -241,19 +229,24 @@ impl TestPoolUniverse {
         gas_price: GasPrice,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
-            let tx = perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                &ConsensusParameters::default(),
-                0,
-                &MockTxPoolGasPrice::new(gas_price),
-                &MockWasmChecker::new(Ok(())),
-                MemoryInstance::new(),
-                MockDb::default(),
-            )
-            .await?;
-            pool.write().insert(Arc::new(tx))
+            let mut mock_consensus_params_provider =
+                MockConsensusParametersProvider::default();
+            mock_consensus_params_provider
+                .expect_latest_consensus_parameters()
+                .returning(|| (0, Arc::new(ConsensusParameters::standard())));
+            let verification = Verification {
+                persistent_storage_provider: Arc::new(MockDBProvider(
+                    self.mock_db.clone(),
+                )),
+                gas_price_provider: Arc::new(MockTxPoolGasPrice::new(gas_price)),
+                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
+                memory_pool: MemoryPool::new(),
+            };
+            let tx = verification
+                .perform_all_verifications(tx, &pool.clone(), Default::default())
+                .await?;
+            pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
         }
@@ -266,27 +259,30 @@ impl TestPoolUniverse {
         wasm_checker: MockWasmChecker,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
-            let tx = perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                &consensus_params,
-                0,
-                &MockTxPoolGasPrice::new(0),
-                &wasm_checker,
-                MemoryInstance::new(),
-                MockDb::default(),
-            )
-            .await?;
-            pool.write().insert(Arc::new(tx))
+            let mut mock_consensus_params_provider =
+                MockConsensusParametersProvider::default();
+            mock_consensus_params_provider
+                .expect_latest_consensus_parameters()
+                .returning(move || (0, Arc::new(consensus_params.clone())));
+            let verification = Verification {
+                persistent_storage_provider: Arc::new(MockDBProvider(
+                    self.mock_db.clone(),
+                )),
+                gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
+                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                wasm_checker: Arc::new(wasm_checker),
+                memory_pool: MemoryPool::new(),
+            };
+            let tx = verification
+                .perform_all_verifications(tx, &pool.clone(), Default::default())
+                .await?;
+            pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
         }
     }
 
-    pub fn get_pool(
-        &self,
-    ) -> TxPool<MockDBProvider, MockTxPoolGasPrice, MockConsensusParametersProvider> {
+    pub fn get_pool(&self) -> Shared<TxPool> {
         self.pool.clone().unwrap()
     }
 

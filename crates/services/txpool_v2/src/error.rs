@@ -5,6 +5,7 @@ use fuel_core_types::{
         ContractId,
         TxId,
         UtxoId,
+        Word,
     },
     fuel_types::Nonce,
     fuel_vm::checked_transaction::CheckError,
@@ -12,7 +13,7 @@ use fuel_core_types::{
 
 use crate::ports::WasmValidityError;
 
-#[derive(Debug, derive_more::Display)]
+#[derive(Clone, Debug, derive_more::Display)]
 pub enum Error {
     #[display(fmt = "Gas price not found for block height {_0}")]
     GasPriceNotFound(String),
@@ -42,11 +43,22 @@ pub enum Error {
     SkippedTransaction(String),
     #[display(fmt = "Too much transactions are in queue to be inserted. Can't add more")]
     TooManyQueuedTransactions,
-    #[display(fmt = "Request failed to be sent to the service")]
+    #[display(fmt = "Unable send a request because service is closed")]
     ServiceCommunicationFailed,
+    #[display(fmt = "Request failed to be sent because service queue is full")]
+    ServiceQueueFull,
+    #[display(fmt = "The provided max fee can't cover the transaction cost. \
+        The minimal gas price should be {minimal_gas_price:?}, \
+        while it is {max_gas_price_from_fee:?}")]
+    InsufficientMaxFee {
+        /// The max gas price from the fee.
+        max_gas_price_from_fee: Word,
+        /// The minimum gas price required by TxPool.
+        minimal_gas_price: Word,
+    },
 }
 
-#[derive(Debug, derive_more::Display)]
+#[derive(Clone, Debug, derive_more::Display)]
 pub enum RemovedReason {
     #[display(
         fmt = "Transaction was removed because it was less worth than a new one (id: {_0}) that has been inserted"
@@ -58,7 +70,7 @@ pub enum RemovedReason {
     Ttl,
 }
 
-#[derive(Debug, derive_more::Display)]
+#[derive(Clone, Debug, derive_more::Display)]
 pub enum BlacklistedError {
     #[display(fmt = "The UTXO `{_0}` is blacklisted")]
     BlacklistedUTXO(UtxoId),
@@ -70,7 +82,7 @@ pub enum BlacklistedError {
     BlacklistedMessage(Nonce),
 }
 
-#[derive(Debug, derive_more::Display)]
+#[derive(Clone, Debug, derive_more::Display)]
 pub enum DependencyError {
     #[display(fmt = "Collision is also a dependency")]
     NotInsertedCollisionIsDependency,
@@ -81,7 +93,7 @@ pub enum DependencyError {
     DependentTransactionIsADiamondDeath,
 }
 
-#[derive(Debug, derive_more::Display)]
+#[derive(Clone, Debug, derive_more::Display)]
 pub enum InputValidationError {
     #[display(
         fmt = "Input output mismatch. Coin owner is different from expected input"

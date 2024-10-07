@@ -4,10 +4,7 @@ use fuel_core_types::{
     fuel_types::ChainId,
     services::txpool::TransactionStatus,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::time::Duration;
 use tokio_stream::StreamExt;
 
 use crate::{
@@ -32,9 +29,9 @@ async fn test_start_stop() {
 async fn test_find() {
     let mut universe = TestPoolUniverse::default();
 
-    let tx1 = Arc::new(universe.build_script_transaction(None, None, 10));
-    let tx2 = Arc::new(universe.build_script_transaction(None, None, 20));
-    let tx3 = Arc::new(universe.build_script_transaction(None, None, 30));
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    let tx3 = universe.build_script_transaction(None, None, 30);
 
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
@@ -43,8 +40,7 @@ async fn test_find() {
     let ids = vec![tx1.id(&Default::default()), tx2.id(&Default::default())];
     service
         .shared
-        .insert(vec![tx1.clone(), tx2.clone()], None)
-        .await
+        .try_insert(vec![tx1.clone(), tx2.clone()])
         .unwrap();
 
     universe
@@ -80,9 +76,9 @@ async fn test_prune_transactions() {
     });
 
     // Given
-    let tx1 = Arc::new(universe.build_script_transaction(None, None, 10));
-    let tx2 = Arc::new(universe.build_script_transaction(None, None, 20));
-    let tx3 = Arc::new(universe.build_script_transaction(None, None, 30));
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    let tx3 = universe.build_script_transaction(None, None, 30);
     let ids = vec![
         tx1.id(&Default::default()),
         tx2.id(&Default::default()),
@@ -94,8 +90,7 @@ async fn test_prune_transactions() {
 
     service
         .shared
-        .insert(vec![tx1.clone(), tx2.clone(), tx3.clone()], None)
-        .await
+        .try_insert(vec![tx1.clone(), tx2.clone(), tx3.clone()])
         .unwrap();
 
     universe
@@ -148,30 +143,22 @@ async fn test_prune_transactions_the_oldest() {
         ..Default::default()
     });
 
-    let tx1 = Arc::new(universe.build_script_transaction(None, None, 10));
-    let tx2 = Arc::new(universe.build_script_transaction(None, None, 20));
-    let tx3 = Arc::new(universe.build_script_transaction(None, None, 30));
-    let tx4 = Arc::new(universe.build_script_transaction(None, None, 40));
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    let tx3 = universe.build_script_transaction(None, None, 30);
+    let tx4 = universe.build_script_transaction(None, None, 40);
 
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
 
     // Given
     // insert tx1 at time `0`
-    service
-        .shared
-        .insert(vec![tx1.clone()], None)
-        .await
-        .unwrap();
+    service.shared.try_insert(vec![tx1.clone()]).unwrap();
 
     // sleep for `4` seconds
     tokio::time::sleep(Duration::from_secs(4)).await;
     // insert tx2 at time `4`
-    service
-        .shared
-        .insert(vec![tx2.clone()], None)
-        .await
-        .unwrap();
+    service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
     universe
         .waiting_txs_insertion(
@@ -195,21 +182,13 @@ async fn test_prune_transactions_the_oldest() {
     // sleep for another `4` seconds
     tokio::time::sleep(Duration::from_secs(4)).await;
     // insert tx3 at time `8`
-    service
-        .shared
-        .insert(vec![tx3.clone()], None)
-        .await
-        .unwrap();
+    service.shared.try_insert(vec![tx3.clone()]).unwrap();
 
     // sleep for `3` seconds
     tokio::time::sleep(Duration::from_secs(3)).await;
 
     // insert tx4 at time `11`
-    service
-        .shared
-        .insert(vec![tx4.clone()], None)
-        .await
-        .unwrap();
+    service.shared.try_insert(vec![tx4.clone()]).unwrap();
 
     universe
         .waiting_txs_insertion(
@@ -266,8 +245,8 @@ async fn simple_insert_removal_subscription() {
         ..Default::default()
     });
 
-    let tx1 = Arc::new(universe.build_script_transaction(None, None, 10));
-    let tx2 = Arc::new(universe.build_script_transaction(None, None, 20));
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
 
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
@@ -284,8 +263,7 @@ async fn simple_insert_removal_subscription() {
 
     service
         .shared
-        .insert(vec![tx1.clone(), tx2.clone()], None)
-        .await
+        .try_insert(vec![tx1.clone(), tx2.clone()])
         .unwrap();
 
     assert_eq!(

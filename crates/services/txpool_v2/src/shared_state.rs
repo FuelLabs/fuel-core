@@ -8,12 +8,9 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::{
-        p2p::GossipsubMessageInfo,
-        txpool::{
-            ArcPoolTx,
-            TransactionStatus,
-        },
+    services::txpool::{
+        ArcPoolTx,
+        TransactionStatus,
     },
 };
 use tokio::sync::{
@@ -65,41 +62,53 @@ impl Clone for SharedState {
 }
 
 impl SharedState {
-    pub async fn insert(
-        &self,
-        transactions: Vec<Arc<Transaction>>,
-        from_peer_info: Option<GossipsubMessageInfo>,
-    ) -> Result<(), Error> {
-        let (write_pool_requests_sender, txs_insert_receiver) = oneshot::channel();
+    pub fn try_insert(&self, transactions: Vec<Transaction>) -> Result<(), Error> {
+        let transactions = transactions.into_iter().map(Arc::new).collect();
         self.write_pool_requests_sender
-            .send(WritePoolRequest::InsertTxs {
-                transactions,
-                from_peer_info,
-                response_channel: Some(write_pool_requests_sender),
+            .try_send(WritePoolRequest::InsertTxs { transactions })
+            .map_err(|_| Error::ServiceQueueFull)?;
+
+        Ok(())
+    }
+
+    pub async fn insert(&self, transaction: Transaction) -> Result<(), Error> {
+        let transaction = Arc::new(transaction);
+        let (sender, receiver) = oneshot::channel();
+
+        self.write_pool_requests_sender
+            .send(WritePoolRequest::InsertTx {
+                transaction,
+                response_channel: sender,
             })
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?;
-        txs_insert_receiver
+
+        receiver
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
     pub async fn select_transactions(
         &self,
+        minimal_gas_price: u64,
         max_gas: u64,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
             .send(SelectTransactionsRequest {
-                constraints: Constraints { max_gas },
+                constraints: Constraints {
+                    minimal_gas_price,
+                    max_gas,
+                },
                 response_channel: select_transactions_sender,
             })
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?;
+
         select_transactions_receiver
             .await
-            .map_err(|_| Error::ServiceCommunicationFailed)?
+            .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {
@@ -168,33 +177,18 @@ impl SharedState {
 
     /// Notify the txpool that some transactions were skipped during block production.
     /// This is used to update the status of the skipped transactions internally and in subscriptions
-    pub async fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
-        for (tx_id, reason) in tx_ids_and_reason {
-            self.tx_status_sender
-                .send_squeezed_out(tx_id, Error::SkippedTransaction(reason.clone()));
-            let (sender, receiver) = oneshot::channel();
-            if self
-                .write_pool_requests_sender
-                .send(WritePoolRequest::RemoveCoinDependents {
-                    tx_id,
-                    response_channel: sender,
-                })
-                .await
-                .is_err()
-            {
-                return;
-            }
-            let Ok(removed_txs) = receiver.await else {
-                return;
-            };
-            for removed_tx in removed_txs {
-                self.tx_status_sender.send_squeezed_out(
-                    removed_tx.id(),
-                    Error::SkippedTransaction(
-                        format!("Parent transaction with {tx_id}, was removed because of the {reason}")
-                    )
-                );
-            }
-        }
+    pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
+        let transactions = tx_ids_and_reason
+            .into_iter()
+            .map(|(tx_id, reason)| {
+                self.tx_status_sender
+                    .send_squeezed_out(tx_id, Error::SkippedTransaction(reason.clone()));
+                (tx_id, reason)
+            })
+            .collect();
+
+        let _ = self
+            .write_pool_requests_sender
+            .try_send(WritePoolRequest::RemoveCoinDependents { transactions });
     }
 }

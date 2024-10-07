@@ -452,7 +452,8 @@ where
         };
 
         for tx in txs.into_iter() {
-            res.push(self.insert_inner(tx, Metadata::new(version), &view));
+            // Not used in this module
+            res.push(self.insert_inner(tx, Metadata::new(version, 0, 0), &view));
         }
 
         // announce to subscribers

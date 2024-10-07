@@ -5,37 +5,15 @@ use std::{
     },
     collections::BTreeMap,
     fmt::Debug,
-    ops::Deref,
-    sync::Arc,
     time::Instant,
 };
 
-use fuel_core_types::{
-    fuel_tx::{
-        field::MaxFeeLimit,
-        FeeParameters,
-        GasCosts,
-        TransactionFee,
-        TxId,
-    },
-    services::txpool::{
-        ArcPoolTx,
-        PoolTransaction,
-    },
-};
+use fuel_core_types::fuel_tx::TxId;
 use num_rational::Ratio;
 
-use crate::{
-    error::Error,
-    ports::{
-        ConsensusParametersProvider,
-        GasPriceProvider,
-    },
-    storage::{
-        RemovedTransactions,
-        StorageData,
-    },
-    GasPrice,
+use crate::storage::{
+    RemovedTransactions,
+    StorageData,
 };
 
 use super::{
@@ -92,18 +70,20 @@ impl PartialOrd for Key {
 }
 
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
-pub struct RatioTipGasSelection<S: RatioTipGasSelectionAlgorithmStorage, G, C> {
+pub struct RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
-    gas_price_provider: Arc<G>,
-    consensus_params_provider: Arc<C>,
 }
 
-impl<S: RatioTipGasSelectionAlgorithmStorage, G, C> RatioTipGasSelection<S, G, C> {
-    pub fn new(gas_price_provider: Arc<G>, consensus_params_provider: Arc<C>) -> Self {
+impl<S> RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
+    pub fn new() -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
-            gas_price_provider,
-            consensus_params_provider,
         }
     }
 
@@ -129,11 +109,9 @@ impl<S: RatioTipGasSelectionAlgorithmStorage, G, C> RatioTipGasSelection<S, G, C
     }
 }
 
-impl<
-        S: RatioTipGasSelectionAlgorithmStorage,
-        G: GasPriceProvider,
-        C: ConsensusParametersProvider,
-    > SelectionAlgorithm for RatioTipGasSelection<S, G, C>
+impl<S> SelectionAlgorithm for RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
 {
     type Storage = S;
     type StorageIndex = S::StorageIndex;
@@ -142,16 +120,8 @@ impl<
         &mut self,
         constraints: Constraints,
         storage: &mut S,
-    ) -> Result<RemovedTransactions, Error> {
+    ) -> RemovedTransactions {
         let mut gas_left = constraints.max_gas;
-        let gas_price =
-            { futures::executor::block_on(self.gas_price_provider.next_gas_price()) }?;
-        let consensus_params = self
-            .consensus_params_provider
-            .latest_consensus_parameters()
-            .1;
-        let gas_costs = consensus_params.gas_costs();
-        let fee_params = consensus_params.fee_params();
         let mut result = Vec::new();
 
         // Take iterate over all transactions with the highest tip/gas ratio. If transaction
@@ -181,14 +151,12 @@ impl<
                     continue
                 };
 
-                if !tx_is_gas_price_valid(
-                    &stored_transaction.transaction,
-                    gas_costs,
-                    fee_params,
-                    gas_price,
-                ) {
+                if stored_transaction.transaction.max_gas_price()
+                    < constraints.minimal_gas_price
+                {
                     continue;
                 }
+
                 if stored_transaction.transaction.max_gas() > gas_left {
                     continue;
                 }
@@ -236,7 +204,7 @@ impl<
             }
         }
 
-        Ok(result)
+        result
     }
 
     fn new_executable_transaction(
@@ -258,80 +226,5 @@ impl<
     fn on_removed_transaction(&mut self, storage_entry: &StorageData) {
         let key = Self::key(storage_entry);
         self.on_removed_transaction_inner(key)
-    }
-}
-
-fn tx_is_gas_price_valid(
-    tx: &ArcPoolTx,
-    gas_costs: &GasCosts,
-    fee_params: &FeeParameters,
-    gas_price: GasPrice,
-) -> bool {
-    match tx.deref() {
-        PoolTransaction::Upgrade(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Create(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Script(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Upload(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
-        PoolTransaction::Blob(tx, _) => {
-            let Some(tx_fees) = TransactionFee::checked_from_tx(
-                gas_costs,
-                fee_params,
-                tx.transaction(),
-                gas_price,
-            ) else {
-                return false;
-            };
-            let max_fee_from_policies = tx.transaction().max_fee_limit();
-            let max_fee_from_gas_price = tx_fees.max_fee();
-            max_fee_from_gas_price <= max_fee_from_policies
-        }
     }
 }
