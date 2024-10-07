@@ -17,13 +17,10 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::{
-    error::Error,
-    ports::{
-        BlockImporter,
-        ConsensusParametersProvider as ConsensusParametersProviderTrait,
-        GasPriceProvider,
-    },
+use fuel_core_txpool::ports::{
+    BlockImporter,
+    ConsensusParametersProvider as ConsensusParametersProviderTrait,
+    GasPriceProvider,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -218,8 +215,8 @@ impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValu
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    fn next_gas_price(&self) -> Result<u64, Error> {
-        Ok(self.gas_price)
+    fn next_gas_price(&self) -> u64 {
+        self.gas_price
     }
 }
 

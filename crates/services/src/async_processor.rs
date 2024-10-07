@@ -14,7 +14,15 @@ use tokio::{
 /// executed concurrently.
 pub struct AsyncProcessor {
     semaphore: Arc<Semaphore>,
-    thread_pool: runtime::Runtime,
+    thread_pool: Option<runtime::Runtime>,
+}
+
+impl Drop for AsyncProcessor {
+    fn drop(&mut self) {
+        if let Some(runtime) = self.thread_pool.take() {
+            runtime.shutdown_background();
+        }
+    }
 }
 
 /// A reservation for a task to be executed by the `AsyncProcessor`.
@@ -38,7 +46,7 @@ impl AsyncProcessor {
             .map_err(|e| anyhow::anyhow!("Failed to create a tokio pool: {}", e))?;
         let semaphore = Arc::new(Semaphore::new(number_of_pending_tasks));
         Ok(Self {
-            thread_pool,
+            thread_pool: Some(thread_pool),
             semaphore,
         })
     }
@@ -59,10 +67,13 @@ impl AsyncProcessor {
         F: Future<Output = ()> + Send + 'static,
     {
         let permit = reservation.0;
-        self.thread_pool.spawn(async move {
-            let _drop = permit;
-            future.await
-        });
+        self.thread_pool
+            .as_ref()
+            .expect("We only remove it on `Drop`")
+            .spawn(async move {
+                let _drop = permit;
+                future.await
+            });
     }
 
     /// Tries to spawn a task. If the task cannot be spawned, returns an error.

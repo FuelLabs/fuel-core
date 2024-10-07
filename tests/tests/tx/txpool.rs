@@ -4,6 +4,7 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
@@ -49,6 +50,7 @@ async fn txs_max_script_gas_limit() {
 
     // setup genesis block with coins that transactions can spend
     test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
+    test_builder.trigger = Trigger::Never;
 
     // spin up node
     let TestContext { client, srv, .. } = test_builder.finalize().await;
@@ -63,6 +65,7 @@ async fn txs_max_script_gas_limit() {
         srv.shared.txpool_shared_state.insert(tx).await.unwrap();
     }
 
+    client.produce_blocks(1, None).await.unwrap();
     let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(
         block.transactions.len(),

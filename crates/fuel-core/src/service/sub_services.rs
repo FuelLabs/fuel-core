@@ -194,6 +194,7 @@ pub fn init_sub_services(
     let gas_price_provider =
         FuelGasPriceProvider::new(gas_price_service_v0.shared.clone());
     let txpool = fuel_core_txpool::new_service(
+        chain_id,
         config.txpool.clone(),
         p2p_adapter.clone(),
         importer_adapter.clone(),

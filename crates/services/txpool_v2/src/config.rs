@@ -174,7 +174,7 @@ pub struct HeavyWorkConfig {
     pub size_of_p2p_sync_queue: usize,
 }
 
-// TODO: Find real values
+#[cfg(feature = "test-helpers")]
 impl Default for Config {
     fn default() -> Self {
         Self {

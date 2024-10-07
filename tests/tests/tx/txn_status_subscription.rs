@@ -86,6 +86,7 @@ async fn subscribe_txn_status() {
     let maturity = Default::default();
 
     let create_script = |i: u8| {
+        const AMOUNT: u64 = 1000;
         // The first two scripts will run and the rest will fail.
         let script = [op::addi(0x11 - i, 0x10, 1), op::ret(RegId::ONE)];
         let script: Vec<u8> = script
@@ -101,7 +102,7 @@ async fn subscribe_txn_status() {
         let coin_input = Input::coin_predicate(
             utxo_id,
             owner,
-            1000,
+            AMOUNT,
             AssetId::zeroed(),
             TxPointer::default(),
             Default::default(),
@@ -114,7 +115,8 @@ async fn subscribe_txn_status() {
             vec![],
             policies::Policies::new()
                 .with_maturity(maturity)
-                .with_max_fee(0),
+                .with_max_fee(AMOUNT)
+                .with_tip(i as u64),
             vec![coin_input],
             vec![],
             vec![],

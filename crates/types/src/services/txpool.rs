@@ -97,7 +97,7 @@ impl Metadata {
 
 /// Transaction type used by the transaction pool.
 /// Not all `fuel_tx::Transaction` variants are supported by the txpool.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PoolTransaction {
     /// Script
     Script(Checked<Script>, Metadata),

@@ -12,6 +12,7 @@ use futures::{
     Stream,
     StreamExt,
 };
+use std::time::SystemTimeError;
 
 use crate::{
     database::OffChainIterableKeyValueView,
@@ -87,21 +88,6 @@ impl FuelService {
     }
 }
 
-async fn get_tx_status(
-    db: &OffChainIterableKeyValueView,
-    txpool: &TxPoolSharedState,
-    id: Bytes32,
-) -> StorageResult<Option<TxPoolTxStatus>> {
-    match db.get_tx_status(&id)? {
-        Some(status) => Ok(Some(status)),
-        None => Ok(txpool
-            .find_one(id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?
-            .map(Into::into)),
-    }
-}
-
 struct StatusChangeState<'a> {
     db: OffChainIterableKeyValueView,
     txpool: &'a TxPoolSharedState,
@@ -109,6 +95,20 @@ struct StatusChangeState<'a> {
 
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>> {
-        get_tx_status(&self.db, self.txpool, id).await
+        match self.db.get_tx_status(&id)? {
+            Some(status) => Ok(Some(status)),
+            None => {
+                let result = self
+                    .txpool
+                    .find_one(id)
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                let status = result
+                    .map(|status| status.try_into())
+                    .transpose()
+                    .map_err(|e: SystemTimeError| anyhow::anyhow!(e))?;
+                Ok(status)
+            }
+        }
     }
 }

@@ -7,13 +7,13 @@ pub mod ratio_tip_gas;
 
 /// Constraints that the selection algorithm has to respect.
 pub struct Constraints {
-    /// Minimum gas price that all transaction must have
+    /// Minimum gas price that all transaction must support.
     pub minimal_gas_price: u64,
-    /// Maximum gas that all transaction must consume
+    /// Maximum limit of gas that all selected transaction shouldn't exceed.
     pub max_gas: u64,
-    /// Maximum transactions that can be selected
+    /// Maximum number of transactions that can be selected.
     pub maximum_txs: u16,
-    /// Maximum size of the block
+    /// Maximum size of the block.
     pub maximum_block_size: u32,
 }
 

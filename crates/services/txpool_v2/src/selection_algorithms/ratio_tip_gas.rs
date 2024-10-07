@@ -77,6 +77,15 @@ where
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
 }
 
+impl<S> Default for RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<S> RatioTipGasSelection<S>
 where
     S: RatioTipGasSelectionAlgorithmStorage,
@@ -143,6 +152,10 @@ where
             let mut transactions_to_promote = Vec::new();
 
             for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
+                if nb_left == 0 || gas_left == 0 || space_left == 0 {
+                    break;
+                }
+
                 let Some(stored_transaction) = storage.get(storage_id) else {
                     debug_assert!(
                         false,
@@ -155,15 +168,18 @@ where
                     continue
                 };
 
-                if stored_transaction.transaction.max_gas_price()
-                    < constraints.minimal_gas_price
-                {
+                let less_price = stored_transaction.transaction.max_gas_price()
+                    < constraints.minimal_gas_price;
+
+                if less_price {
                     continue;
                 }
 
-                if stored_transaction.transaction.max_gas() > gas_left
-                    || stored_transaction.transaction.metered_bytes_size() > space_left
-                {
+                let not_enough_gas = stored_transaction.transaction.max_gas() > gas_left;
+                let too_big_tx =
+                    stored_transaction.transaction.metered_bytes_size() > space_left;
+
+                if not_enough_gas || too_big_tx {
                     continue;
                 }
 

@@ -1,4 +1,14 @@
-use crate::{
+use crate as fuel_core_txpool;
+
+use fuel_core_services::{
+    AsyncProcessor,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    SyncProcessor,
+};
+use fuel_core_txpool::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
     error::{
@@ -37,14 +47,6 @@ use crate::{
     },
     update_sender::TxStatusChange,
 };
-use fuel_core_services::{
-    AsyncProcessor,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
-    SyncProcessor,
-};
 use fuel_core_types::{
     fuel_tx::{
         Transaction,
@@ -75,7 +77,10 @@ use parking_lot::RwLock;
 use std::{
     collections::VecDeque,
     sync::Arc,
-    time::SystemTime,
+    time::{
+        SystemTime,
+        SystemTimeError,
+    },
 };
 use tokio::{
     sync::{
@@ -99,7 +104,7 @@ pub type TxPool = Pool<
     RatioTipGasSelection<GraphStorage>,
 >;
 
-pub type Shared<T> = Arc<RwLock<T>>;
+pub(crate) type Shared<T> = Arc<RwLock<T>>;
 
 pub type Service<View> = ServiceRunner<Task<View>>;
 
@@ -123,17 +128,18 @@ impl TxInfo {
     }
 }
 
-impl From<TxInfo> for TransactionStatus {
-    fn from(tx_info: TxInfo) -> Self {
-        TransactionStatus::Submitted {
-            time: Tai64::from_unix(
-                tx_info
-                    .creation_instant
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time can't be less than UNIX EPOCH")
-                    .as_secs() as i64,
-            ),
-        }
+impl TryFrom<TxInfo> for TransactionStatus {
+    type Error = SystemTimeError;
+
+    fn try_from(value: TxInfo) -> Result<Self, Self::Error> {
+        let unit_time = value
+            .creation_instant
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs() as i64;
+
+        Ok(TransactionStatus::Submitted {
+            time: Tai64::from_unix(unit_time),
+        })
     }
 }
 
@@ -167,6 +173,7 @@ pub enum ReadPoolRequest {
 
 pub struct Task<View> {
     chain_id: ChainId,
+    utxo_validation: bool,
     subscriptions: Subscriptions,
     verification: Verification<View>,
     p2p: Arc<dyn P2PRequests>,
@@ -371,6 +378,7 @@ where
         let current_height = self.current_height.clone();
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
+        let utxo_validation = self.utxo_validation;
 
         move || {
             let current_height = *current_height.read();
@@ -384,6 +392,7 @@ where
                 transaction,
                 &pool,
                 current_height,
+                utxo_validation,
             );
 
             p2p.process_insertion_result(from_peer_info, &result);
@@ -632,6 +641,7 @@ pub fn new_service<
     GasPriceProvider,
     WasmChecker,
 >(
+    chain_id: ChainId,
     config: Config,
     p2p: P2P,
     block_importer: BlockImporter,
@@ -651,11 +661,6 @@ where
     WasmChecker: WasmCheckerTrait,
     BlockImporter: BlockImporterTrait,
 {
-    let chain_id = consensus_parameters_provider
-        .latest_consensus_parameters()
-        .1
-        .chain_id();
-
     let mut ttl_timer = tokio::time::interval(config.ttl_check_interval);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -728,6 +733,7 @@ where
     )
     .unwrap();
 
+    let utxo_validation = config.utxo_validation;
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
             max_txs_chain_count: config.max_txs_chain_count,
@@ -739,6 +745,7 @@ where
 
     Service::new(Task {
         chain_id,
+        utxo_validation,
         subscriptions,
         verification,
         transaction_verifier_process,

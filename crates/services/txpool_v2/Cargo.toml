@@ -19,7 +19,7 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
 num-rational = { workspace = true }
-parking_lot = { workspace = true, features = ["arc_lock"] }
+parking_lot = { workspace = true }
 petgraph = "0.6.5"
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-stream = { workspace = true }
@@ -28,6 +28,7 @@ tracing = { workspace = true }
 [dev-dependencies]
 fuel-core-storage = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
+fuel-core-txpool = { path = ".", features = ["test-helpers"] }
 mockall = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }

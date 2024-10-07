@@ -70,7 +70,10 @@ use futures::{
     StreamExt,
 };
 use libp2p::{
-    gossipsub::MessageAcceptance,
+    gossipsub::{
+        MessageAcceptance,
+        PublishError,
+    },
     request_response::InboundRequestId,
     PeerId,
 };
@@ -267,8 +270,18 @@ impl TaskP2PService for FuelP2PService {
         &mut self,
         message: GossipsubBroadcastRequest,
     ) -> anyhow::Result<()> {
-        self.publish_message(message)?;
-        Ok(())
+        let result = self.publish_message(message);
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if matches!(&e, PublishError::InsufficientPeers) {
+                    Ok(())
+                } else {
+                    Err(anyhow!(e))
+                }
+            }
+        }
     }
 
     fn send_request_msg(
@@ -603,17 +616,17 @@ where
         )
     }
 
-    fn handle_txpool_request<TxPoolFn, ResponseSenderFn, TaskRequestFn, R>(
+    fn handle_txpool_request<F, ResponseSenderFn, TaskRequestFn, R>(
         &mut self,
         request_id: InboundRequestId,
-        txpool_function: TxPoolFn,
+        txpool_function: F,
         response_sender: ResponseSenderFn,
         task_request: TaskRequestFn,
     ) -> anyhow::Result<()>
     where
         ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
-        TxPoolFn: Future<Output = anyhow::Result<R>> + Send + 'static,
+        F: Future<Output = anyhow::Result<R>> + Send + 'static,
     {
         let instant = Instant::now();
         let timeout = self.response_timeout;
@@ -759,8 +772,7 @@ where
             );
         let number_of_threads = 2;
         let db_heavy_task_processor = SyncProcessor::new(number_of_threads, 1024 * 10)?;
-        let tx_pool_heavy_task_processor =
-            AsyncProcessor::new(number_of_threads, 1024 * 10)?;
+        let tx_pool_heavy_task_processor = AsyncProcessor::new(number_of_threads, 32)?;
         let request_sender = broadcast.request_sender.clone();
 
         let task = Task {

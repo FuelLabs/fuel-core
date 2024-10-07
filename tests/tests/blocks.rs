@@ -366,7 +366,10 @@ mod full_block {
         FuelClient,
     };
     use fuel_core_executor::executor;
-    use fuel_core_txpool::config::PoolLimits;
+    use fuel_core_txpool::config::{
+        HeavyWorkConfig,
+        PoolLimits,
+    };
     use fuel_core_types::fuel_types::BlockHeight;
 
     #[derive(cynic::QueryFragment, Debug)]
@@ -444,6 +447,12 @@ mod full_block {
                 max_txs: usize::MAX,
                 max_gas: u64::MAX,
                 max_bytes_size: usize::MAX,
+            },
+            heavy_work: HeavyWorkConfig {
+                number_threads_to_verify_transactions: 16,
+                size_of_verification_queue: u16::MAX as usize,
+                number_threads_p2p_sync: 1,
+                size_of_p2p_sync_queue: 1,
             },
             ..local_node_config.txpool
         };

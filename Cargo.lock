@@ -3763,6 +3763,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-trace",
+ "fuel-core-txpool",
  "fuel-core-types 0.37.1",
  "futures",
  "mockall",
