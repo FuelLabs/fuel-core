@@ -5,14 +5,12 @@ use std::time::{
     Instant,
 };
 
-use ethers::abi::Tokenizable;
 use fuel_core::service::{
     Config,
     FuelService,
     ServiceTrait,
 };
 use fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION;
-use spki::der::asn1::PrintableStringRef;
 use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
