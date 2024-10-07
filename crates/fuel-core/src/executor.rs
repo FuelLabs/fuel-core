@@ -1523,7 +1523,7 @@ mod tests {
         assert_eq!(
             skipped_transactions[0].1,
             ExecutorError::GasOverflow(
-                "Transaction cannot fit in remaining gas limit.".into(),
+                "Transaction cannot fit in remaining gas limit: (0).".into(),
                 *tx_gas_usage,
                 0
             )
