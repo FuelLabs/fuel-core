@@ -5,9 +5,12 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+mod async_processor;
 mod service;
 mod state;
 mod sync;
+#[cfg(feature = "sync-processor")]
+mod sync_processor;
 
 /// Re-exports for streaming utilities
 pub mod stream {
@@ -58,6 +61,7 @@ where
     }
 }
 
+pub use async_processor::AsyncProcessor;
 pub use service::{
     EmptyShared,
     RunnableService,
@@ -74,3 +78,10 @@ pub use sync::{
     Shared,
     SharedMutex,
 };
+#[cfg(feature = "sync-processor")]
+pub use sync_processor::SyncProcessor;
+
+// For tests
+use crate as fuel_core_services;
+#[allow(unused_imports)]
+use fuel_core_services as _;

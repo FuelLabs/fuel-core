@@ -5,7 +5,6 @@ use crate::{
         Error,
         RemovedReason,
     },
-    heavy_async_processing::HeavyAsyncProcessor,
     pool::Pool,
     ports::{
         AtomicView,
@@ -39,10 +38,12 @@ use crate::{
     update_sender::TxStatusChange,
 };
 use fuel_core_services::{
+    AsyncProcessor,
     RunnableService,
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    SyncProcessor,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -70,7 +71,6 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 use std::{
     collections::VecDeque,
-    future::Future,
     sync::Arc,
     time::SystemTime,
 };
@@ -134,8 +134,8 @@ pub struct Task<View> {
     subscriptions: Subscriptions,
     verification: Verification<View>,
     p2p: Arc<dyn P2PRequests>,
-    transaction_verifier_process: HeavyAsyncProcessor,
-    p2p_sync_process: HeavyAsyncProcessor,
+    transaction_verifier_process: SyncProcessor,
+    p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
     current_height: Arc<RwLock<BlockHeight>>,
@@ -301,14 +301,14 @@ where
                 response_channel,
             } => {
                 if let Ok(reservation) = self.transaction_verifier_process.reserve() {
-                    let future = self.insert_transaction(
+                    let op = self.insert_transaction(
                         transaction,
                         None,
                         Some(response_channel),
                     );
 
                     self.transaction_verifier_process
-                        .spawn_reserved(reservation, future);
+                        .spawn_reserved(reservation, op);
                 } else {
                     tracing::error!("Failed to insert transaction: Out of capacity");
                     let _ = response_channel.send(Err(Error::ServiceQueueFull));
@@ -326,10 +326,10 @@ where
                 tracing::error!("Failed to insert transactions: Out of capacity");
                 continue
             };
-            let future = self.insert_transaction(transaction, None, None);
+            let op = self.insert_transaction(transaction, None, None);
 
             self.transaction_verifier_process
-                .spawn_reserved(reservation, future);
+                .spawn_reserved(reservation, op);
         }
     }
 
@@ -338,7 +338,7 @@ where
         transaction: Arc<Transaction>,
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    ) -> impl FnOnce() + Send + 'static {
         let verification = self.verification.clone();
         let pool = self.pool.clone();
         let p2p = self.p2p.clone();
@@ -347,7 +347,7 @@ where
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
 
-        async move {
+        move || {
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -459,14 +459,14 @@ where
             message_id,
             peer_id,
         });
-        let future = self.insert_transaction(Arc::new(tx), info, None);
+        let op = self.insert_transaction(Arc::new(tx), info, None);
         self.transaction_verifier_process
-            .spawn_reserved(reservation, future);
+            .spawn_reserved(reservation, op);
     }
 
     fn manage_new_peer_subscribed(&mut self, peer_id: PeerId) {
         // We are not affected if there is too many queued job and we don't manage this peer.
-        let _ = self.p2p_sync_process.spawn({
+        let _ = self.p2p_sync_process.try_spawn({
             let p2p = self.p2p.clone();
             let pool = self.pool.clone();
             let txs_insert_sender = self.shared_state.write_pool_requests_sender.clone();
@@ -686,13 +686,13 @@ where
         ttl_timer,
     };
 
-    let transaction_verifier_process = HeavyAsyncProcessor::new(
+    let transaction_verifier_process = SyncProcessor::new(
         config.heavy_work.number_threads_to_verify_transactions,
         config.heavy_work.size_of_verification_queue,
     )
     .unwrap();
 
-    let p2p_sync_process = HeavyAsyncProcessor::new(
+    let p2p_sync_process = AsyncProcessor::new(
         config.heavy_work.number_threads_p2p_sync,
         config.heavy_work.size_of_p2p_sync_queue,
     )

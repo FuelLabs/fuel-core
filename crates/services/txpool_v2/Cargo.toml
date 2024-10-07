@@ -15,14 +15,13 @@ publish = false
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
-fuel-core-services = { workspace = true }
+fuel-core-services = { workspace = true, features = ["sync-processor"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
 num-rational = { workspace = true }
 parking_lot = { workspace = true }
 petgraph = "0.6.5"
-rayon = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
