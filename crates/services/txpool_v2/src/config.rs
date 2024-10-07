@@ -130,6 +130,8 @@ pub struct Config {
     pub max_txs_chain_count: usize,
     /// Pool limits
     pub pool_limits: PoolLimits,
+    /// Service channel limits
+    pub service_channel_limits: ServiceChannelLimits,
     /// Interval for checking the time to live of transactions.
     pub ttl_check_interval: Duration,
     /// Maximum transaction time to live.
@@ -148,6 +150,16 @@ pub struct PoolLimits {
     pub max_gas: u64,
     /// Maximum number of bytes in the pool.
     pub max_bytes_size: usize,
+}
+
+#[derive(Clone)]
+pub struct ServiceChannelLimits {
+    /// Maximum number of pending requests waiting in the write pool channel.
+    pub max_pending_write_pool_requests: usize,
+    /// Maximum number of pending requests waiting in the read pool channel.
+    pub max_pending_read_pool_requests: usize,
+    /// Maximum number of pending requests waiting in the select transactions channel.
+    pub max_pending_select_transactions_requests: usize,
 }
 
 #[derive(Clone)]
@@ -184,6 +196,11 @@ impl Default for Config {
                 size_of_verification_queue: 100,
                 number_threads_p2p_sync: 1,
                 size_of_p2p_sync_queue: 100,
+            },
+            service_channel_limits: ServiceChannelLimits {
+                max_pending_write_pool_requests: 1000,
+                max_pending_read_pool_requests: 1000,
+                max_pending_select_transactions_requests: 1000,
             },
         }
     }

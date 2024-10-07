@@ -419,6 +419,9 @@ where
                     Error::Removed(RemovedReason::LessWorth(tx.id())),
                 );
             }
+            if let Some(channel) = response_channel {
+                let _ = channel.send(Ok(()));
+            }
         }
     }
 
@@ -623,10 +626,19 @@ where
     let new_peers_subscribed_stream = p2p.subscribe_new_peers();
 
     // TODO: Config the size
-    let (write_pool_requests_sender, write_pool_requests_receiver) = mpsc::channel(1000);
+    let (write_pool_requests_sender, write_pool_requests_receiver) = mpsc::channel(
+        config
+            .service_channel_limits
+            .max_pending_write_pool_requests,
+    );
     let (select_transactions_requests_sender, select_transactions_requests_receiver) =
-        mpsc::channel(10);
-    let (read_pool_requests_sender, read_pool_requests_receiver) = mpsc::channel(2000);
+        mpsc::channel(
+            config
+                .service_channel_limits
+                .max_pending_select_transactions_requests,
+        );
+    let (read_pool_requests_sender, read_pool_requests_receiver) =
+        mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
     let tx_status_sender = TxStatusChange::new(
         config.max_tx_update_subscriptions,
         // The connection should be closed automatically after the `SqueezedOut` event.

@@ -159,7 +159,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     let service = universe.build_service(Some(p2p), None);
 
     service.start_and_await().await.unwrap();
-    service.shared.insert(tx1.clone()).await.unwrap();
+    service.shared.try_insert(vec![tx1.clone()]).unwrap();
 
     universe
         .waiting_txs_insertion(

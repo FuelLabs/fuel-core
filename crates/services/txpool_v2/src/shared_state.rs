@@ -82,7 +82,7 @@ impl SharedState {
             })
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?;
-        dbg!("send success");
+
         receiver
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?
