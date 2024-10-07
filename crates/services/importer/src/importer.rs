@@ -347,6 +347,8 @@ where
             .map(|tx_result| *tx_result.result.total_gas())
             .fold(0_u64, |acc, n| acc.saturating_add(n));
 
+        let total_transactions = result.tx_status.len();
+
         // update the importer metrics after the block is successfully committed
         importer_metrics()
             .block_height
@@ -361,6 +363,9 @@ where
         importer_metrics()
             .gas_per_block
             .observe(total_gas_used as f64);
+        importer_metrics()
+            .transactions_per_block
+            .observe(total_transactions as f64);
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
 
