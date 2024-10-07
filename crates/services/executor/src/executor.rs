@@ -612,7 +612,7 @@ where
                     data.skipped_transactions.push((
                         tx_id,
                         ExecutorError::GasOverflow(
-                            format!("Transaction cannot fit in remaining gas limit: ({remaining_gas_limit}).").into(),
+                            format!("Transaction cannot fit in remaining gas limit: ({remaining_gas_limit})."),
                             tx_max_gas,
                             remaining_gas_limit,
                         ),
