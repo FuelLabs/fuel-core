@@ -287,6 +287,7 @@ where
         if let Err(e) = response_channel.send(result) {
             tracing::error!("Failed to send the result: {:?}", e);
             // TODO: We need to remove all dependencies of the transactions that we failed to send
+            //  Reworked in the next PR.
         }
     }
 
@@ -294,9 +295,6 @@ where
         match write_pool_request {
             WritePoolRequest::InsertTxs { transactions } => {
                 self.insert_transactions(transactions);
-            }
-            WritePoolRequest::RemoveCoinDependents { transactions } => {
-                self.manage_remove_coin_dependents(transactions);
             }
             WritePoolRequest::InsertTx {
                 transaction,
@@ -315,6 +313,9 @@ where
                     tracing::error!("Failed to insert transaction: Out of capacity");
                     let _ = response_channel.send(Err(Error::ServiceQueueFull));
                 }
+            }
+            WritePoolRequest::RemoveCoinDependents { transactions } => {
+                self.manage_remove_coin_dependents(transactions);
             }
         }
     }
@@ -354,9 +355,11 @@ where
             //  (see https://github.com/FuelLabs/fuel-vm/issues/831)
             let transaction = Arc::unwrap_or_clone(transaction);
 
-            let result = verification
-                .perform_all_verifications(transaction, &pool, current_height)
-                .await;
+            let result = verification.perform_all_verifications(
+                transaction,
+                &pool,
+                current_height,
+            );
 
             p2p.process_insertion_result(from_peer_info, &result);
 
@@ -522,25 +525,28 @@ where
     }
 
     fn try_prune_transactions(&mut self) {
-        let mut time_txs_submitted = self.pruner.time_txs_submitted.write();
-        let now = SystemTime::now();
         let mut txs_to_remove = vec![];
-        while let Some((time, _)) = time_txs_submitted.back() {
-            let Ok(duration) = now.duration_since(*time) else {
-                tracing::error!("Failed to calculate the duration since the transaction was submitted");
-                return;
-            };
-            if duration < self.pruner.txs_ttl {
-                break;
+        {
+            let mut time_txs_submitted = self.pruner.time_txs_submitted.write();
+            let now = SystemTime::now();
+            while let Some((time, _)) = time_txs_submitted.back() {
+                let Ok(duration) = now.duration_since(*time) else {
+                    tracing::error!("Failed to calculate the duration since the transaction was submitted");
+                    return;
+                };
+                if duration < self.pruner.txs_ttl {
+                    break;
+                }
+                // SAFETY: We are removing the last element that we just checked
+                txs_to_remove.push(time_txs_submitted.pop_back().expect("qed").1);
             }
-            // SAFETY: We are removing the last element that we just checked
-            txs_to_remove.push(time_txs_submitted.pop_back().expect("qed").1);
         }
-        drop(time_txs_submitted);
 
-        let mut pool = self.pool.write();
-        let removed = pool.remove_transaction_and_dependents(txs_to_remove);
-        drop(pool);
+        let removed;
+        {
+            let mut pool = self.pool.write();
+            removed = pool.remove_transaction_and_dependents(txs_to_remove);
+        }
 
         for tx in removed {
             self.shared_state
@@ -626,7 +632,6 @@ where
     let tx_from_p2p_stream = p2p.gossiped_transaction_events();
     let new_peers_subscribed_stream = p2p.subscribe_new_peers();
 
-    // TODO: Config the size
     let (write_pool_requests_sender, write_pool_requests_receiver) = mpsc::channel(
         config
             .service_channel_limits
