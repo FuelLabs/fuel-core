@@ -63,6 +63,7 @@ mod tests {
             Rng,
         },
         fuel_tx::{
+            Chargeable,
             FeeParameters,
             GasCosts,
             Output,
@@ -158,9 +159,11 @@ mod tests {
 
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
+                let tx = script.finalize_checked_basic(Default::default());
+                let size = tx.transaction().metered_bytes_size();
                 PoolTransaction::Script(
-                    script.finalize_checked_basic(Default::default()),
-                    Metadata::new(ConsensusParametersVersion::MIN),
+                    tx,
+                    Metadata::new(ConsensusParametersVersion::MIN, size, 0),
                 )
             })
             .map(Arc::new)

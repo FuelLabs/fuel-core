@@ -6,15 +6,18 @@ use std::{
     time::Instant,
 };
 
+use collisions::CollisionsExt;
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId,
         TxId,
     },
-    services::txpool::PoolTransaction,
+    services::txpool::{
+        ArcPoolTx,
+        PoolTransaction,
+    },
 };
 use num_rational::Ratio;
-use tracing::instrument;
 
 use crate::{
     collision_manager::{
@@ -22,12 +25,12 @@ use crate::{
         Collisions,
     },
     config::Config,
-    error::Error,
-    pool::collisions::CollisionsExt,
-    ports::{
-        AtomicView,
-        TxPoolPersistentStorage,
+    error::{
+        DependencyError,
+        Error,
+        InputValidationError,
     },
+    ports::TxPoolPersistentStorage,
     selection_algorithms::{
         Constraints,
         SelectionAlgorithm,
@@ -41,7 +44,7 @@ use crate::{
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
-pub struct Pool<PSProvider, S, SI, CM, SA> {
+pub struct Pool<S, SI, CM, SA> {
     /// Configuration of the pool.
     pub(crate) config: Config,
     /// The storage of the pool.
@@ -50,8 +53,6 @@ pub struct Pool<PSProvider, S, SI, CM, SA> {
     pub(crate) collision_manager: CM,
     /// The selection algorithm of the pool.
     pub(crate) selection_algorithm: SA,
-    /// The persistent storage of the pool.
-    pub(crate) persistent_storage_provider: PSProvider,
     /// Mapping from tx_id to storage_id.
     pub(crate) tx_id_to_storage_id: HashMap<TxId, SI>,
     /// Current pool gas stored.
@@ -60,10 +61,9 @@ pub struct Pool<PSProvider, S, SI, CM, SA> {
     pub(crate) current_bytes_size: usize,
 }
 
-impl<PSProvider, S, SI, CM, SA> Pool<PSProvider, S, SI, CM, SA> {
+impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
     /// Create a new pool.
     pub fn new(
-        persistent_storage_provider: PSProvider,
         storage: S,
         collision_manager: CM,
         selection_algorithm: SA,
@@ -73,7 +73,6 @@ impl<PSProvider, S, SI, CM, SA> Pool<PSProvider, S, SI, CM, SA> {
             storage,
             collision_manager,
             selection_algorithm,
-            persistent_storage_provider,
             config,
             tx_id_to_storage_id: HashMap::new(),
             current_gas: 0,
@@ -82,10 +81,8 @@ impl<PSProvider, S, SI, CM, SA> Pool<PSProvider, S, SI, CM, SA> {
     }
 }
 
-impl<PS, View, S: Storage, CM, SA> Pool<PS, S, S::StorageIndex, CM, SA>
+impl<S: Storage, CM, SA> Pool<S, S::StorageIndex, CM, SA>
 where
-    PS: AtomicView<LatestView = View>,
-    View: TxPoolPersistentStorage,
     S: Storage,
     CM: CollisionManager<StorageIndex = S::StorageIndex>,
     SA: SelectionAlgorithm<Storage = S, StorageIndex = S::StorageIndex>,
@@ -94,14 +91,17 @@ where
     /// Returns a list of results for each transaction.
     /// Each result is a list of transactions that were removed from the pool
     /// because of the insertion of the new transaction.
-    #[instrument(skip(self))]
-    pub fn insert(&mut self, tx: PoolTransaction) -> Result<Vec<PoolTransaction>, Error> {
+    pub fn insert(
+        &mut self,
+        tx: ArcPoolTx,
+        persistent_storage: &impl TxPoolPersistentStorage,
+    ) -> Result<Vec<ArcPoolTx>, Error> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
             collisions,
             _guard,
-        } = self.can_insert_transaction(tx)?;
+        } = self.can_insert_transaction(tx, persistent_storage)?;
 
         let has_dependencies = !checked_transaction.all_dependencies().is_empty();
 
@@ -133,6 +133,7 @@ where
 
         self.current_gas = self.current_gas.saturating_add(gas);
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
+        debug_assert!(!self.tx_id_to_storage_id.contains_key(&tx_id));
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
 
         let tx =
@@ -154,31 +155,31 @@ where
     }
 
     /// Check if a transaction can be inserted into the pool.
-    #[allow(clippy::type_complexity)]
     pub fn can_insert_transaction(
         &self,
-        tx: PoolTransaction,
+        tx: ArcPoolTx,
+        persistent_storage: &impl TxPoolPersistentStorage,
     ) -> Result<CanStoreTransaction<S>, Error> {
-        let persistent_storage = self
-            .persistent_storage_provider
-            .latest_view()
-            .map_err(|e| Error::Database(format!("{:?}", e)))?;
-
         if tx.max_gas() == 0 {
-            return Err(Error::ZeroMaxGas)
+            return Err(Error::InputValidation(InputValidationError::MaxGasZero))
         }
 
         let tx_id = tx.id();
         if self.tx_id_to_storage_id.contains_key(&tx_id) {
-            return Err(Error::DuplicateTxId(tx_id))
+            return Err(Error::InputValidation(InputValidationError::DuplicateTxId(
+                tx_id,
+            )))
         }
 
-        self.config.black_list.check_blacklisting(&tx)?;
+        self.config
+            .black_list
+            .check_blacklisting(&tx)
+            .map_err(Error::Blacklisted)?;
 
-        Self::check_blob_does_not_exist(&tx, &persistent_storage)?;
+        Self::check_blob_does_not_exist(&tx, persistent_storage)?;
         self.storage.validate_inputs(
             &tx,
-            &persistent_storage,
+            persistent_storage,
             self.config.utxo_validation,
         )?;
 
@@ -187,7 +188,9 @@ where
 
         for collision in collisions.keys() {
             if checked_transaction.all_dependencies().contains(collision) {
-                return Err(Error::NotInsertedCollisionIsDependency);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedCollisionIsDependency,
+                ));
             }
         }
 
@@ -224,30 +227,65 @@ where
     /// based on the constraints given in the configuration and the selection algorithm used.
     pub fn extract_transactions_for_block(
         &mut self,
-    ) -> Result<Vec<PoolTransaction>, Error> {
-        let extracted_transactions = self
-            .selection_algorithm
-            .gather_best_txs(
-                Constraints {
-                    max_gas: self.config.max_block_gas,
-                },
-                &mut self.storage,
-            )?
+        constraints: Constraints,
+    ) -> Vec<ArcPoolTx> {
+        self.selection_algorithm
+            .gather_best_txs(constraints, &mut self.storage)
             .into_iter()
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
 
                 storage_entry.transaction
             })
-            .collect::<Vec<_>>();
-
-        Ok(extracted_transactions)
+            .collect::<Vec<_>>()
     }
 
-    #[allow(dead_code)]
-    pub fn find_one(&self, tx_id: &TxId) -> Option<&PoolTransaction> {
+    pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
-            .map(|data| &data.transaction)
+            .map(|data| data.transaction.clone())
+    }
+
+    pub fn contains(&self, tx_id: &TxId) -> bool {
+        self.tx_id_to_storage_id.contains_key(tx_id)
+    }
+
+    pub fn iter_tx_ids(&self) -> impl Iterator<Item = &TxId> {
+        self.tx_id_to_storage_id.keys()
+    }
+
+    /// Remove transaction but keep its dependents.
+    /// The dependents become executables.
+    pub fn remove_transaction(&mut self, tx_ids: Vec<TxId>) {
+        for tx_id in tx_ids {
+            if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
+                let dependents: Vec<S::StorageIndex> =
+                    self.storage.get_direct_dependents(storage_id).collect();
+                let Some(transaction) = self.storage.remove_transaction(storage_id)
+                else {
+                    debug_assert!(false, "Storage data not found for the transaction");
+                    tracing::warn!(
+                        "Storage data not found for the transaction during `remove_transaction`."
+                    );
+                    continue
+                };
+                for dependent in dependents {
+                    let Some(storage_data) = self.storage.get(&dependent) else {
+                        debug_assert!(
+                            false,
+                            "Dependent storage data not found for the transaction"
+                        );
+                        tracing::warn!(
+                            "Dependent storage data not found for \
+                            the transaction during `remove_transaction`."
+                        );
+                        continue
+                    };
+                    self.selection_algorithm
+                        .new_executable_transaction(dependent, storage_data);
+                }
+                self.update_components_and_caches_on_removal(iter::once(&transaction));
+            }
+        }
     }
 
     /// Check if the pool has enough space to store a transaction.
@@ -383,6 +421,38 @@ where
         Ok(transactions_to_remove)
     }
 
+    /// Remove transaction and its dependents.
+    pub fn remove_transaction_and_dependents(
+        &mut self,
+        tx_ids: Vec<TxId>,
+    ) -> Vec<ArcPoolTx> {
+        let mut removed_transactions = vec![];
+        for tx_id in tx_ids {
+            if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
+                let removed = self
+                    .storage
+                    .remove_transaction_and_dependents_subtree(storage_id);
+                self.update_components_and_caches_on_removal(removed.iter());
+                removed_transactions
+                    .extend(removed.into_iter().map(|data| data.transaction));
+            }
+        }
+        removed_transactions
+    }
+
+    pub fn remove_coin_dependents(&mut self, tx_id: TxId) -> Vec<ArcPoolTx> {
+        let mut txs_removed = vec![];
+        let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
+        for dependent in coin_dependents {
+            let removed = self
+                .storage
+                .remove_transaction_and_dependents_subtree(dependent);
+            self.update_components_and_caches_on_removal(removed.iter());
+            txs_removed.extend(removed.into_iter().map(|data| data.transaction));
+        }
+        txs_removed
+    }
+
     fn check_blob_does_not_exist(
         tx: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
@@ -393,7 +463,9 @@ where
                 .blob_exist(blob_id)
                 .map_err(|e| Error::Database(format!("{:?}", e)))?
             {
-                return Err(Error::NotInsertedBlobIdAlreadyTaken(*blob_id))
+                return Err(Error::InputValidation(
+                    InputValidationError::NotInsertedBlobIdAlreadyTaken(*blob_id),
+                ));
             }
         }
         Ok(())
@@ -447,7 +519,7 @@ impl<'a, S> CanStoreTransaction<'a, S>
 where
     S: Storage,
 {
-    pub fn into_transaction(self) -> PoolTransaction {
+    pub fn into_transaction(self) -> ArcPoolTx {
         self.checked_transaction.into_tx()
     }
 }
