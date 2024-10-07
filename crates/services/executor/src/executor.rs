@@ -923,6 +923,7 @@ where
                             block_height,
                             &self.consensus_params,
                             memory,
+                            block_storage_tx,
                         );
                         match checked_tx_res {
                             Ok(checked_tx) => {
@@ -949,12 +950,16 @@ where
     }
 
     /// Parse forced transaction payloads and perform basic checks
-    fn validate_forced_tx(
+    fn validate_forced_tx<D>(
         relayed_tx: RelayedTransaction,
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
         memory: &mut MemoryInstance,
-    ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
+        block_storage_tx: &BlockStorageTransaction<D>,
+    ) -> Result<CheckedTransaction, ForcedTransactionFailure>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
         Self::tx_is_valid_variant(&parsed_tx)?;
         Self::relayed_tx_claimed_enough_max_gas(
@@ -962,8 +967,13 @@ where
             &relayed_tx,
             consensus_params,
         )?;
-        let checked_tx =
-            Self::get_checked_tx(parsed_tx, block_height, consensus_params, memory)?;
+        let checked_tx = Self::get_checked_tx(
+            parsed_tx,
+            block_height,
+            consensus_params,
+            memory,
+            block_storage_tx,
+        )?;
         Ok(CheckedTransaction::from(checked_tx))
     }
 
@@ -976,14 +986,23 @@ where
         Ok(tx)
     }
 
-    fn get_checked_tx(
+    fn get_checked_tx<D>(
         tx: Transaction,
         height: BlockHeight,
         consensus_params: &ConsensusParameters,
         memory: &mut MemoryInstance,
-    ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
+        block_storage_tx: &BlockStorageTransaction<D>,
+    ) -> Result<Checked<Transaction>, ForcedTransactionFailure>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let checked_tx = tx
-            .into_checked_reusable_memory(height, consensus_params, memory)
+            .into_checked_reusable_memory(
+                height,
+                consensus_params,
+                memory,
+                block_storage_tx,
+            )
             .map_err(ForcedTransactionFailure::CheckError)?;
         Ok(checked_tx)
     }
@@ -1521,7 +1540,7 @@ where
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
-        storage_tx: &mut TxStorageTransaction<T>,
+        storage_tx: &TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<Checked<Tx>>
     where
@@ -1530,7 +1549,11 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         checked_tx = checked_tx
-            .check_predicates(&CheckPredicateParams::from(&self.consensus_params), memory)
+            .check_predicates(
+                &CheckPredicateParams::from(&self.consensus_params),
+                memory,
+                storage_tx,
+            )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
                     e,
@@ -1569,6 +1592,9 @@ where
         let mut sub_block_db_commit = storage_tx
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
+
+        let inputs = checked_tx.transaction().inputs();
+        crate::hacks::maybe_fix_storage(inputs, &mut sub_block_db_commit)?;
 
         let vm_db = VmStorage::new(
             &mut sub_block_db_commit,

@@ -9,7 +9,14 @@ use crate::{
     },
     GasPrice,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    Mappable,
+    PredicateStorageRequirements,
+    Result as StorageResult,
+    StorageInspect,
+    StorageRead,
+    StorageSize,
+};
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -26,9 +33,13 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::Nonce,
-    fuel_vm::BlobBytes,
+    fuel_vm::{
+        BlobBytes,
+        BlobData,
+    },
 };
 use std::{
+    borrow::Cow,
     collections::{
         HashMap,
         HashSet,
@@ -106,6 +117,75 @@ impl TxPoolPersistentStorage for MockDb {
     }
 }
 
+impl StorageRead<BlobData> for MockDb {
+    fn read(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        let table = self.data.lock().unwrap();
+        let bytes = table.blobs.get(key);
+
+        let len = bytes.map(|bytes| {
+            buf.copy_from_slice(bytes.0.as_slice());
+            bytes.0.len()
+        });
+        Ok(len)
+    }
+
+    fn read_alloc(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        let table = self.data.lock().unwrap();
+        let bytes = table.blobs.get(key);
+        let bytes = bytes.map(|bytes| bytes.clone().0);
+        Ok(bytes)
+    }
+}
+
+impl StorageInspect<BlobData> for MockDb {
+    type Error = ();
+
+    fn get(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<Option<Cow<<BlobData as Mappable>::OwnedValue>>, Self::Error> {
+        let table = self.data.lock().unwrap();
+        let bytes = table.blobs.get(key);
+        Ok(bytes.map(|b| Cow::Owned(b.clone())))
+    }
+
+    fn contains_key(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        Ok(self.data.lock().unwrap().blobs.contains_key(key))
+    }
+}
+
+impl StorageSize<BlobData> for MockDb {
+    fn size_of_value(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> Result<Option<usize>, Self::Error> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .blobs
+            .get(key)
+            .map(|blob| blob.0.len()))
+    }
+}
+
+impl PredicateStorageRequirements for MockDb {
+    fn storage_error_to_string(error: Self::Error) -> String {
+        format!("{:?}", error)
+    }
+}
+
+#[derive(Clone)]
 pub struct MockDBProvider(pub MockDb);
 
 impl AtomicView for MockDBProvider {

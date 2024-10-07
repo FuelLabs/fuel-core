@@ -87,14 +87,14 @@ pub struct TxPool<ViewProvider, WasmChecker> {
     by_time: TimeSort,
     by_dependency: Dependency,
     config: Config,
-    database: ViewProvider,
+    database: Arc<ViewProvider>,
     wasm_checker: WasmChecker,
 }
 
 impl<ViewProvider, WasmChecker> TxPool<ViewProvider, WasmChecker> {
     pub fn new(
         config: Config,
-        database: ViewProvider,
+        database: Arc<ViewProvider>,
         wasm_checker: WasmChecker,
     ) -> Self {
         let max_depth = config.max_depth;
@@ -482,20 +482,24 @@ where
     }
 }
 
-pub async fn check_transactions<Provider, MP>(
+pub async fn check_transactions<Provider, MP, ViewProvider, View>(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
     utxp_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &Provider,
     memory_pool: Arc<MP>,
-) -> Vec<Result<Checked<Transaction>, Error>>
+    provider: &Arc<ViewProvider>,
+) -> anyhow::Result<Vec<Result<Checked<Transaction>, Error>>>
 where
     Provider: GasPriceProvider,
     MP: MemoryPool,
+    ViewProvider: AtomicView<LatestView = View>,
+    View: TxPoolDb,
 {
     let mut checked_txs = Vec::with_capacity(txs.len());
 
+    let view = provider.latest_view()?;
     for tx in txs.iter() {
         checked_txs.push(
             check_single_tx(
@@ -505,25 +509,28 @@ where
                 consensus_params,
                 gas_price_provider,
                 memory_pool.get_memory().await,
+                view.clone(),
             )
             .await,
         );
     }
 
-    checked_txs
+    Ok(checked_txs)
 }
 
-pub async fn check_single_tx<GasPrice, M>(
+pub async fn check_single_tx<GasPrice, M, View>(
     tx: Transaction,
     current_height: BlockHeight,
     utxo_validation: bool,
     consensus_params: &ConsensusParameters,
     gas_price_provider: &GasPrice,
     memory: M,
+    view: View,
 ) -> Result<Checked<Transaction>, Error>
 where
     GasPrice: GasPriceProvider,
     M: Memory + Send + Sync + 'static,
+    View: TxPoolDb,
 {
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType)
@@ -535,9 +542,10 @@ where
             .check_signatures(&consensus_params.chain_id())?;
 
         let parameters = CheckPredicateParams::from(consensus_params);
-        let tx =
-            tokio_rayon::spawn_fifo(move || tx.check_predicates(&parameters, memory))
-                .await?;
+        let tx = tokio_rayon::spawn_fifo(move || {
+            tx.check_predicates(&parameters, memory, &view)
+        })
+        .await?;
 
         debug_assert!(tx.checks().contains(Checks::all()));
 

@@ -3,9 +3,6 @@
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-
-    use std::sync::Mutex;
-
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
@@ -127,6 +124,7 @@ mod tests {
                 ExecutableTransaction,
                 MemoryInstance,
             },
+            predicate::EmptyStorage,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
             Call,
@@ -153,6 +151,7 @@ mod tests {
         Rng,
         SeedableRng,
     };
+    use std::sync::Mutex;
 
     #[derive(Clone, Debug, Default)]
     struct Config {
@@ -355,7 +354,7 @@ mod tests {
 
         let tx =
             TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_random_fee_input()
+                .add_fee_input()
                 .add_output(Output::contract_created(contract_id, state_root))
                 .finalize();
         (tx, contract_id)
@@ -1478,7 +1477,7 @@ mod tests {
             header: Default::default(),
             transactions: vec![TransactionBuilder::script(vec![], vec![])
                 .max_fee_limit(100_000_000)
-                .add_random_fee_input()
+                .add_fee_input()
                 .script_gas_limit(0)
                 .tip(123)
                 .finalize_as_transaction()],
@@ -1494,7 +1493,7 @@ mod tests {
         for i in 0..10 {
             let tx = TransactionBuilder::script(vec![], vec![])
                 .max_fee_limit(100_000_000)
-                .add_random_fee_input()
+                .add_fee_input()
                 .script_gas_limit(0)
                 .tip(i * 100)
                 .finalize_as_transaction();
@@ -1533,7 +1532,7 @@ mod tests {
         // The test checks that execution for the block with transactions [tx1, tx2, tx3] skips
         // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
         let tx1 = TransactionBuilder::script(vec![], vec![])
-            .add_random_fee_input()
+            .add_fee_input()
             .script_gas_limit(1000000)
             .tip(1000000)
             .finalize_as_transaction();
@@ -2633,7 +2632,7 @@ mod tests {
             .collect(),
             vec![],
         )
-        .add_random_fee_input()
+        .add_fee_input()
         .script_gas_limit(1000000)
         .finalize_as_transaction();
 
@@ -2697,7 +2696,7 @@ mod tests {
             .collect(),
             vec![],
         )
-        .add_random_fee_input()
+        .add_fee_input()
         .script_gas_limit(1000000)
         .finalize_as_transaction();
 
@@ -2886,6 +2885,7 @@ mod tests {
         tx.estimate_predicates(
             &consensus_parameters.clone().into(),
             MemoryInstance::new(),
+            &EmptyStorage,
         )
         .unwrap();
         let db = &mut Database::default();
@@ -2954,6 +2954,7 @@ mod tests {
         tx.estimate_predicates(
             &cheap_consensus_parameters.clone().into(),
             MemoryInstance::new(),
+            &EmptyStorage,
         )
         .unwrap();
 
@@ -3100,16 +3101,17 @@ mod tests {
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
-        use crate::{
-            database::database_description::{
-                on_chain::OnChain,
-                relayer::Relayer,
-            },
-            state::ChangesIterator,
+        use crate::database::database_description::{
+            on_chain::OnChain,
+            relayer::Relayer,
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
-            iter::IteratorOverTable,
+            column::Column,
+            iter::{
+                changes_iterator::ChangesIterator,
+                IteratorOverTable,
+            },
             tables::FuelBlocks,
             StorageAsMut,
         };
@@ -3254,7 +3256,7 @@ mod tests {
             let (result, changes) = producer.produce_without_commit(block.into())?.into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert_eq!(
                 view.iter_all::<Messages>(None).count() as u64,
                 block_da_height - genesis_da_height
@@ -3863,7 +3865,7 @@ mod tests {
                 .into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
         }
@@ -3905,7 +3907,7 @@ mod tests {
                 .into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
             assert_eq!(result.events.len(), 2);
