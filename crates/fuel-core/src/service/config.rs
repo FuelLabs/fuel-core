@@ -103,6 +103,8 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
+        use tokio::sync::Semaphore;
+
         let block_importer = fuel_core_importer::Config::new();
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
@@ -141,7 +143,7 @@ impl Config {
                 max_queries_complexity: 80000,
                 max_queries_recursive_depth: 16,
                 max_queries_directives: 10,
-                max_concurrent_queries: usize::MAX,
+                max_concurrent_queries: Semaphore::MAX_PERMITS,
                 request_body_bytes_limit: 16 * 1024 * 1024,
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
