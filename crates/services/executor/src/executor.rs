@@ -1593,9 +1593,6 @@ where
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
-        let inputs = checked_tx.transaction().inputs();
-        crate::hacks::maybe_fix_storage(inputs, &mut sub_block_db_commit)?;
-
         let vm_db = VmStorage::new(
             &mut sub_block_db_commit,
             &header.consensus,
