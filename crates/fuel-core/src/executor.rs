@@ -3101,16 +3101,17 @@ mod tests {
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
-        use crate::{
-            database::database_description::{
-                on_chain::OnChain,
-                relayer::Relayer,
-            },
-            state::ChangesIterator,
+        use crate::database::database_description::{
+            on_chain::OnChain,
+            relayer::Relayer,
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
-            iter::IteratorOverTable,
+            column::Column,
+            iter::{
+                changes_iterator::ChangesIterator,
+                IteratorOverTable,
+            },
             tables::FuelBlocks,
             StorageAsMut,
         };
@@ -3255,7 +3256,7 @@ mod tests {
             let (result, changes) = producer.produce_without_commit(block.into())?.into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert_eq!(
                 view.iter_all::<Messages>(None).count() as u64,
                 block_da_height - genesis_da_height
@@ -3864,7 +3865,7 @@ mod tests {
                 .into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
         }
@@ -3906,7 +3907,7 @@ mod tests {
                 .into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
             assert_eq!(result.events.len(), 2);

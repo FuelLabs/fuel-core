@@ -217,11 +217,11 @@ impl AlgorithmUpdaterV1 {
             self.l2_block_height = height;
 
             // rewards
-            self.update_rewards(fee_wei);
+            self.update_da_rewards(fee_wei);
             let rewards = self.clamped_rewards_as_i128();
 
             // costs
-            self.update_projected_cost(block_bytes);
+            self.update_projected_da_cost(block_bytes);
             let projected_total_da_cost = self.clamped_projected_cost_as_i128();
 
             // profit
@@ -238,13 +238,13 @@ impl AlgorithmUpdaterV1 {
         }
     }
 
-    fn update_rewards(&mut self, fee_wei: u128) {
+    fn update_da_rewards(&mut self, fee_wei: u128) {
         let block_da_reward = self.da_portion_of_fee(fee_wei);
         self.total_da_rewards_excess =
             self.total_da_rewards_excess.saturating_add(block_da_reward);
     }
 
-    fn update_projected_cost(&mut self, block_bytes: u64) {
+    fn update_projected_da_cost(&mut self, block_bytes: u64) {
         let block_projected_da_cost =
             (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
@@ -388,10 +388,10 @@ impl AlgorithmUpdaterV1 {
                 },
             )?;
             self.da_recorded_block_height = last;
-            let new_block_cost = self
+            let new_da_block_cost = self
                 .latest_known_total_da_cost_excess
                 .saturating_add(range_cost);
-            self.latest_known_total_da_cost_excess = new_block_cost;
+            self.latest_known_total_da_cost_excess = new_da_block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
         }
@@ -420,10 +420,9 @@ impl AlgorithmUpdaterV1 {
         let projection_portion: u128 = self
             .unrecorded_blocks
             .iter()
-            .map(|(_, &bytes)| {
-                (bytes as u128).saturating_mul(self.latest_da_cost_per_byte)
-            })
-            .sum();
+            .map(|(_, &bytes)| (bytes as u128))
+            .fold(0_u128, |acc, n| acc.saturating_add(n))
+            .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
             .latest_known_total_da_cost_excess
             .saturating_add(projection_portion);
