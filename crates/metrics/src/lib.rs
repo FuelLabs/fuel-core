@@ -28,9 +28,18 @@ pub mod services;
 pub mod txpool_metrics;
 
 // recommended bucket defaults for logging response times
-static BUCKETS: OnceLock<Vec<f64>> = OnceLock::new();
+static TIMING_BUCKETS: OnceLock<Vec<f64>> = OnceLock::new();
 pub fn timing_buckets() -> &'static Vec<f64> {
-    BUCKETS.get_or_init(|| {
+    TIMING_BUCKETS.get_or_init(|| {
+        vec![
+            0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+        ]
+    })
+}
+static GAS_USED_BUCKETS: OnceLock<Vec<f64>> = OnceLock::new();
+pub fn gas_used_buckets() -> &'static Vec<f64> {
+    GAS_USED_BUCKETS.get_or_init(|| {
+        // TODO[RC]: Figure out proper values.
         vec![
             0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
         ]

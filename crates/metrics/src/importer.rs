@@ -1,4 +1,5 @@
 use crate::{
+    gas_used_buckets,
     global_registry,
     timing_buckets,
 };
@@ -15,6 +16,7 @@ pub struct ImporterMetrics {
     pub block_height: Gauge,
     pub latest_block_import_timestamp: Gauge<f64, AtomicU64>,
     pub execute_and_commit_duration: Histogram,
+    pub gas_per_block: Histogram,
 }
 
 impl Default for ImporterMetrics {
@@ -23,6 +25,7 @@ impl Default for ImporterMetrics {
         let latest_block_import_ms = Gauge::default();
         let execute_and_commit_duration =
             Histogram::new(timing_buckets().iter().cloned());
+        let gas_per_block = Histogram::new(gas_used_buckets().iter().cloned());
 
         let mut registry = global_registry().registry.lock();
         registry.register(
@@ -43,10 +46,17 @@ impl Default for ImporterMetrics {
             execute_and_commit_duration.clone(),
         );
 
+        registry.register(
+            "gas_per_block",
+            "The total gas used in a block",
+            gas_per_block.clone(),
+        );
+
         Self {
             block_height: block_height_gauge,
             latest_block_import_timestamp: latest_block_import_ms,
             execute_and_commit_duration,
+            gas_per_block,
         }
     }
 }
