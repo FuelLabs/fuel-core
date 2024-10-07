@@ -145,9 +145,3 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
-
-# Add caching of the RocksDB for local development
-librocksdb-sys = "0.11.0+8.1.1"
-
-[patch.crates-io]
-librocksdb-sys = { git = "https://github.com/FuelLabs/rust-rocksdb/", branch = "release/v0.21.0" }
