@@ -9,7 +9,6 @@ use crate::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
     },
-    heavy_task_processor::HeavyTaskProcessor,
     p2p_service::{
         FuelP2PEvent,
         FuelP2PService,
@@ -31,10 +30,12 @@ use anyhow::anyhow;
 use fuel_core_metrics::p2p_metrics::set_blocks_requested;
 use fuel_core_services::{
     stream::BoxStream,
+    AsyncProcessor,
     RunnableService,
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    SyncProcessor,
     TraceErr,
 };
 use fuel_core_storage::transactional::AtomicView;
@@ -75,6 +76,7 @@ use libp2p::{
 };
 use std::{
     fmt::Debug,
+    future::Future,
     ops::Range,
     sync::Arc,
 };
@@ -383,7 +385,8 @@ pub struct Task<P, V, B, T> {
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     request_sender: mpsc::Sender<TaskRequest>,
-    heavy_task_processor: HeavyTaskProcessor,
+    db_heavy_task_processor: SyncProcessor,
+    tx_pool_heavy_task_processor: AsyncProcessor,
     broadcast: B,
     tx_pool: T,
     max_headers_per_request: usize,
@@ -542,7 +545,7 @@ where
         }
 
         let view = self.view_provider.latest_view()?;
-        let result = self.heavy_task_processor.spawn(move || {
+        let result = self.db_heavy_task_processor.try_spawn(move || {
             if instant.elapsed() > timeout {
                 tracing::warn!("Request timed out");
                 return;
@@ -610,19 +613,18 @@ where
     where
         ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
-        TxPoolFn: FnOnce() -> anyhow::Result<R> + Send + 'static,
-        R: Send + 'static,
+        TxPoolFn: Future<Output = anyhow::Result<R>> + Send + 'static,
     {
         let instant = Instant::now();
         let timeout = self.response_timeout;
         let response_channel = self.request_sender.clone();
-        let result = self.heavy_task_processor.spawn(move || {
+        let result = self.tx_pool_heavy_task_processor.try_spawn(async move {
             if instant.elapsed() > timeout {
                 tracing::warn!("Request timed out");
                 return;
             }
 
-            let Ok(response) = txpool_function() else {
+            let Ok(response) = txpool_function.await else {
                 warn!("Failed to get txpool data");
                 return;
             };
@@ -646,11 +648,11 @@ where
         &mut self,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        let tx_pool = self.tx_pool.clone();
         let max_txs = self.max_txs_per_request;
+        let tx_pool = self.tx_pool.clone();
         self.handle_txpool_request(
             request_id,
-            move || tx_pool.get_tx_ids(max_txs),
+            async move { tx_pool.get_tx_ids(max_txs).await },
             ResponseMessage::TxPoolAllTransactionsIds,
             |response, request_id| TaskRequest::TxPoolAllTransactionsIds {
                 response,
@@ -675,7 +677,7 @@ where
         let tx_pool = self.tx_pool.clone();
         self.handle_txpool_request(
             request_id,
-            move || tx_pool.get_full_txs(tx_ids),
+            async move { tx_pool.get_full_txs(tx_ids).await },
             ResponseMessage::TxPoolFullTransactions,
             |response, request_id| TaskRequest::TxPoolFullTransactions {
                 response,
@@ -756,7 +758,9 @@ where
                 "The heartbeat check interval should be small enough to do frequently",
             );
         let number_of_threads = 2;
-        let heavy_task_processor = HeavyTaskProcessor::new(number_of_threads, 1024 * 10)?;
+        let db_heavy_task_processor = SyncProcessor::new(number_of_threads, 1024 * 10)?;
+        let tx_pool_heavy_task_processor =
+            AsyncProcessor::new(number_of_threads, 1024 * 10)?;
         let request_sender = broadcast.request_sender.clone();
 
         let task = Task {
@@ -769,7 +773,8 @@ where
             next_block_height,
             broadcast,
             tx_pool,
-            heavy_task_processor,
+            db_heavy_task_processor,
+            tx_pool_heavy_task_processor,
             max_headers_per_request,
             max_txs_per_request,
             heartbeat_check_interval,
@@ -1312,14 +1317,14 @@ pub mod tests {
     struct FakeTxPool;
 
     impl TxPool for FakeTxPool {
-        fn get_tx_ids(
+        async fn get_tx_ids(
             &self,
             _max_txs: usize,
         ) -> anyhow::Result<Vec<fuel_core_types::fuel_tx::TxId>> {
             Ok(vec![])
         }
 
-        fn get_full_txs(
+        async fn get_full_txs(
             &self,
             tx_ids: Vec<TxId>,
         ) -> anyhow::Result<Vec<Option<NetworkableTransactionPool>>> {
@@ -1544,7 +1549,8 @@ pub mod tests {
             tx_pool: FakeTxPool,
             request_receiver,
             request_sender,
-            heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
+            db_heavy_task_processor: SyncProcessor::new(1, 1).unwrap(),
+            tx_pool_heavy_task_processor: AsyncProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             max_txs_per_request: 100,
@@ -1633,7 +1639,8 @@ pub mod tests {
             next_block_height: FakeBlockImporter.next_block_height(),
             request_receiver,
             request_sender,
-            heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
+            db_heavy_task_processor: SyncProcessor::new(1, 1).unwrap(),
+            tx_pool_heavy_task_processor: AsyncProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             max_txs_per_request: 100,
@@ -1694,7 +1701,8 @@ pub mod tests {
             next_block_height,
             request_receiver,
             request_sender,
-            heavy_task_processor: HeavyTaskProcessor::new(1, 1).unwrap(),
+            db_heavy_task_processor: SyncProcessor::new(1, 1).unwrap(),
+            tx_pool_heavy_task_processor: AsyncProcessor::new(1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             max_txs_per_request: 100,
