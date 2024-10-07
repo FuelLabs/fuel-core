@@ -8,7 +8,6 @@
 extern crate alloc;
 
 pub mod executor;
-mod hacks;
 pub mod ports;
 pub mod refs;
 
