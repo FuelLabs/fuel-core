@@ -60,6 +60,7 @@ use fuel_core_types::{
         ConsensusParameters,
         Input,
     },
+    fuel_types::canonical::Serialize,
     fuel_vm::{
         checked_transaction::CheckPredicateParams,
         interpreter::Memory,
@@ -346,7 +347,12 @@ where
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {
         let view = self.database.latest_view().unwrap();
-        self.insert_inner(tx, Metadata::new(ConsensusParametersVersion::MIN), &view)
+        let size = tx.transaction().size();
+        self.insert_inner(
+            tx,
+            Metadata::new(ConsensusParametersVersion::MIN, size, 0),
+            &view,
+        )
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions
@@ -452,7 +458,9 @@ where
         };
 
         for tx in txs.into_iter() {
-            res.push(self.insert_inner(tx, Metadata::new(version), &view));
+            // The gas price not used in this module, so we can set gas price to zero.
+            let size = tx.transaction().size();
+            res.push(self.insert_inner(tx, Metadata::new(version, size, 0), &view));
         }
 
         // announce to subscribers

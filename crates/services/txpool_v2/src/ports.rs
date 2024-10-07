@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     PredicateStorageRequirements,
     Result as StorageResult,
@@ -15,10 +16,20 @@ use fuel_core_types::{
         Bytes32,
         ConsensusParameters,
         ContractId,
+        Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
-    fuel_vm::interpreter::Memory,
+    services::{
+        block_importer::SharedImportResult,
+        p2p::{
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            NetworkData,
+            PeerId,
+        },
+    },
 };
 
 use crate::{
@@ -28,9 +39,13 @@ use crate::{
 
 pub use fuel_core_storage::transactional::AtomicView;
 
+pub trait BlockImporter {
+    /// Wait until the next block is available
+    fn block_events(&self) -> BoxStream<SharedImportResult>;
+}
+
 /// Trait for getting the latest consensus parameters.
-#[cfg_attr(feature = "test-helpers", mockall::automock)]
-pub trait ConsensusParametersProvider {
+pub trait ConsensusParametersProvider: Send + Sync + 'static {
     /// Get latest consensus parameters.
     fn latest_consensus_parameters(
         &self,
@@ -53,20 +68,10 @@ pub trait TxPoolPersistentStorage:
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 }
 
-#[async_trait::async_trait]
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
-pub trait GasPriceProvider {
+pub trait GasPriceProvider: Send + Sync + 'static {
     /// Calculate gas price for the next block.
-    async fn next_gas_price(&self) -> Result<GasPrice, Error>;
-}
-
-/// Trait for getting VM memory.
-#[async_trait::async_trait]
-pub trait MemoryPool {
-    type Memory: Memory + Send + Sync + 'static;
-
-    /// Get the memory instance.
-    async fn get_memory(&self) -> Self::Memory;
+    fn next_gas_price(&self) -> Result<GasPrice, Error>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -79,9 +84,45 @@ pub enum WasmValidityError {
     Validity,
 }
 
-pub trait WasmChecker {
+pub trait WasmChecker: Send + Sync + 'static {
     fn validate_uploaded_wasm(
         &self,
         wasm_root: &Bytes32,
     ) -> Result<(), WasmValidityError>;
+}
+
+pub trait P2PSubscriptions {
+    type GossipedTransaction: NetworkData<Transaction>;
+
+    /// Creates a stream that is filled with the peer_id when they subscribe to
+    /// our transactions gossip.
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
+
+    /// Creates a stream of next transactions gossiped from the network.
+    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
+}
+
+pub trait NotifyP2P {
+    /// Gossip broadcast a transaction inserted via API.
+    fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
+
+    /// Report the validity of a transaction received from the network.
+    fn notify_gossip_transaction_validity(
+        &self,
+        message_info: GossipsubMessageInfo,
+        validity: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()>;
+}
+
+#[async_trait::async_trait]
+pub trait P2PRequests: NotifyP2P + Send + Sync + 'static {
+    /// Asks the network to gather all tx ids of a specific peer
+    async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
+
+    /// Asks the network to gather specific transactions from a specific peer
+    async fn request_txs(
+        &self,
+        peer_id: PeerId,
+        tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>>;
 }

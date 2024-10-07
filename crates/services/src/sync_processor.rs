@@ -1,18 +1,26 @@
-use std::{
-    future::Future,
-    sync::Arc,
+use std::sync::Arc;
+use tokio::sync::{
+    OwnedSemaphorePermit,
+    Semaphore,
 };
-use tokio::sync::Semaphore;
 
-pub struct HeavyAsyncProcessor {
+/// A processor that can execute sync tasks with a limit on the number of tasks that can
+/// wait in the queue. The number of threads defines how many tasks can be executed in parallel.
+pub struct SyncProcessor {
     rayon_thread_pool: rayon::ThreadPool,
     semaphore: Arc<Semaphore>,
 }
 
+/// A reservation for a task to be executed by the `SyncProcessor`.
+pub struct SyncReservation(OwnedSemaphorePermit);
+
+/// Out of capacity error.
 #[derive(Debug, PartialEq, Eq)]
 pub struct OutOfCapacity;
 
-impl HeavyAsyncProcessor {
+impl SyncProcessor {
+    /// Create a new `SyncProcessor` with the given number of threads and the number of pending
+    /// tasks.
     pub fn new(
         number_of_threads: usize,
         number_of_pending_tasks: usize,
@@ -28,22 +36,37 @@ impl HeavyAsyncProcessor {
         })
     }
 
-    pub fn spawn<F>(&self, future: F) -> Result<(), OutOfCapacity>
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
+    /// Reserve a slot for a task to be executed.
+    pub fn reserve(&self) -> Result<SyncReservation, OutOfCapacity> {
         let permit = self.semaphore.clone().try_acquire_owned();
-
         if let Ok(permit) = permit {
-            self.rayon_thread_pool.spawn_fifo(move || {
-                // When task started its works we can free the space.
-                drop(permit);
-                futures::executor::block_on(future);
-            });
-            Ok(())
+            Ok(SyncReservation(permit))
         } else {
             Err(OutOfCapacity)
         }
+    }
+
+    /// Spawn a task with a reservation.
+    pub fn spawn_reserved<F>(&self, reservation: SyncReservation, op: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let permit = reservation.0;
+        self.rayon_thread_pool.spawn_fifo(move || {
+            // When task started its works we can free the space.
+            drop(permit);
+            op()
+        });
+    }
+
+    /// Try to spawn a task.
+    pub fn try_spawn<F>(&self, future: F) -> Result<(), OutOfCapacity>
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let reservation = self.reserve()?;
+        self.spawn_reserved(reservation, future);
+        Ok(())
     }
 }
 
@@ -62,11 +85,11 @@ mod tests {
         // Given
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            HeavyAsyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
 
         // When
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        let result = heavy_task_processor.spawn(async move {
+        let result = heavy_task_processor.try_spawn(move || {
             sender.send(()).unwrap();
         });
 
@@ -83,14 +106,14 @@ mod tests {
         // Given
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            HeavyAsyncProcessor::new(1, number_of_pending_tasks).unwrap();
-        let first_spawn_result = heavy_task_processor.spawn(async move {
+            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
+        let first_spawn_result = heavy_task_processor.try_spawn(move || {
             sleep(Duration::from_secs(1));
         });
         assert_eq!(first_spawn_result, Ok(()));
 
         // When
-        let second_spawn_result = heavy_task_processor.spawn(async move {
+        let second_spawn_result = heavy_task_processor.try_spawn(move || {
             sleep(Duration::from_secs(1));
         });
 
@@ -102,11 +125,11 @@ mod tests {
     async fn second_spawn_works_when_first_is_finished() {
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            HeavyAsyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
 
         // Given
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        let first_spawn = heavy_task_processor.spawn(async move {
+        let first_spawn = heavy_task_processor.try_spawn(move || {
             sleep(Duration::from_secs(1));
             sender.send(()).unwrap();
         });
@@ -114,7 +137,7 @@ mod tests {
         receiver.await.unwrap();
 
         // When
-        let second_spawn = heavy_task_processor.spawn(async move {
+        let second_spawn = heavy_task_processor.try_spawn(move || {
             sleep(Duration::from_secs(1));
         });
 
@@ -127,11 +150,11 @@ mod tests {
         // Given
         let number_of_pending_tasks = 10;
         let heavy_task_processor =
-            HeavyAsyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
 
         for _ in 0..number_of_pending_tasks {
             // When
-            let result = heavy_task_processor.spawn(async move {
+            let result = heavy_task_processor.try_spawn(move || {
                 sleep(Duration::from_secs(1));
             });
 
@@ -146,7 +169,7 @@ mod tests {
         let number_of_pending_tasks = 10;
         let number_of_threads = 1;
         let heavy_task_processor =
-            HeavyAsyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            SyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -154,7 +177,7 @@ mod tests {
         let instant = Instant::now();
         for _ in 0..number_of_pending_tasks {
             let broadcast_sender = broadcast_sender.clone();
-            let result = heavy_task_processor.spawn(async move {
+            let result = heavy_task_processor.try_spawn(move || {
                 sleep(Duration::from_secs(1));
                 broadcast_sender.send(()).unwrap();
             });
@@ -168,12 +191,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn executes_10_tasks_for_10_seconds_with_one_thread_check_ordering() {
+        // Given
+        let number_of_pending_tasks = 10;
+        let number_of_threads = 1;
+        let heavy_task_processor =
+            SyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+
+        // When
+        let (broadcast_sender, mut broadcast_receiver) =
+            tokio::sync::broadcast::channel(1024);
+        let instant = Instant::now();
+        for i in 0..number_of_pending_tasks {
+            let broadcast_sender = broadcast_sender.clone();
+            let result = heavy_task_processor.try_spawn(move || {
+                sleep(Duration::from_secs(1));
+                broadcast_sender.send(i).unwrap();
+            });
+            assert_eq!(result, Ok(()));
+        }
+        drop(broadcast_sender);
+
+        // Then
+        let mut i = 0;
+        loop {
+            let Ok(result) = broadcast_receiver.recv().await else {
+                break;
+            };
+            assert_eq!(result, i);
+            i += 1;
+        }
+        assert_eq!(i, number_of_pending_tasks);
+        assert!(instant.elapsed() >= Duration::from_secs(10));
+    }
+
+    #[tokio::test]
     async fn executes_10_tasks_for_2_seconds_with_10_thread() {
         // Given
         let number_of_pending_tasks = 10;
         let number_of_threads = 10;
         let heavy_task_processor =
-            HeavyAsyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            SyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -181,7 +239,7 @@ mod tests {
         let instant = Instant::now();
         for _ in 0..number_of_pending_tasks {
             let broadcast_sender = broadcast_sender.clone();
-            let result = heavy_task_processor.spawn(async move {
+            let result = heavy_task_processor.try_spawn(move || {
                 sleep(Duration::from_secs(1));
                 broadcast_sender.send(()).unwrap();
             });

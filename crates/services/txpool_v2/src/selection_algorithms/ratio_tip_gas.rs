@@ -11,12 +11,9 @@ use std::{
 use fuel_core_types::fuel_tx::TxId;
 use num_rational::Ratio;
 
-use crate::{
-    error::Error,
-    storage::{
-        RemovedTransactions,
-        StorageData,
-    },
+use crate::storage::{
+    RemovedTransactions,
+    StorageData,
 };
 
 use super::{
@@ -73,17 +70,24 @@ impl PartialOrd for Key {
 }
 
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
-pub struct RatioTipGasSelection<S: RatioTipGasSelectionAlgorithmStorage> {
+pub struct RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
 }
 
-impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
+impl<S> RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
     pub fn new() -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
         }
     }
 
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.executable_transactions_sorted_tip_gas_ratio.is_empty()
     }
@@ -105,14 +109,9 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> RatioTipGasSelection<S> {
     }
 }
 
-impl<S: RatioTipGasSelectionAlgorithmStorage> Default for RatioTipGasSelection<S> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
-    for RatioTipGasSelection<S>
+impl<S> SelectionAlgorithm for RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
 {
     type Storage = S;
     type StorageIndex = S::StorageIndex;
@@ -121,7 +120,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
         &mut self,
         constraints: Constraints,
         storage: &mut S,
-    ) -> Result<RemovedTransactions, Error> {
+    ) -> RemovedTransactions {
         let mut gas_left = constraints.max_gas;
         let mut result = Vec::new();
 
@@ -151,6 +150,12 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
                     transactions_to_remove.push(*key);
                     continue
                 };
+
+                if stored_transaction.transaction.max_gas_price()
+                    < constraints.minimal_gas_price
+                {
+                    continue;
+                }
 
                 if stored_transaction.transaction.max_gas() > gas_left {
                     continue;
@@ -199,7 +204,7 @@ impl<S: RatioTipGasSelectionAlgorithmStorage> SelectionAlgorithm
             }
         }
 
-        Ok(result)
+        result
     }
 
     fn new_executable_transaction(

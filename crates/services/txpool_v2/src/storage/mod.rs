@@ -9,7 +9,10 @@ use crate::{
     error::Error,
     ports::TxPoolPersistentStorage,
 };
-use fuel_core_types::services::txpool::PoolTransaction;
+use fuel_core_types::services::txpool::{
+    ArcPoolTx,
+    PoolTransaction,
+};
 
 pub mod checked_collision;
 pub mod graph;
@@ -17,7 +20,8 @@ pub mod graph;
 #[derive(Debug)]
 pub struct StorageData {
     /// The transaction.
-    pub transaction: PoolTransaction,
+    /// We are forced to take an arc here as we need to be able to send a transaction that still exists here to p2p and API.
+    pub transaction: ArcPoolTx,
     /// The cumulative tip of a transaction and all of its children.
     pub dependents_cumulative_tip: u64,
     /// The cumulative gas of a transaction and all of its children.
@@ -34,10 +38,10 @@ pub type RemovedTransactions = Vec<StorageData>;
 
 pub trait CheckedTransaction<StorageIndex> {
     /// Returns the underlying transaction.
-    fn tx(&self) -> &PoolTransaction;
+    fn tx(&self) -> &ArcPoolTx;
 
     /// Unwraps the transaction.
-    fn into_tx(self) -> PoolTransaction;
+    fn into_tx(self) -> ArcPoolTx;
 
     /// Returns the list of all dependencies of the transaction.
     fn all_dependencies(&self) -> &HashSet<StorageIndex>;
@@ -67,11 +71,17 @@ pub trait Storage {
     /// [`Self::CheckedTransaction`] is required to call [`Self::store_transaction`].
     fn can_store_transaction(
         &self,
-        transaction: PoolTransaction,
+        transaction: ArcPoolTx,
     ) -> Result<Self::CheckedTransaction, Error>;
 
     /// Get the storage data by its index.
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
+
+    /// Get direct dependents of a transaction.
+    fn get_direct_dependents(
+        &self,
+        index: Self::StorageIndex,
+    ) -> impl Iterator<Item = Self::StorageIndex>;
 
     /// Returns `true` if the transaction has dependencies.
     fn has_dependencies(&self, index: &Self::StorageIndex) -> bool;
@@ -89,4 +99,7 @@ pub trait Storage {
         &mut self,
         index: Self::StorageIndex,
     ) -> RemovedTransactions;
+
+    /// Remove a transaction from the storage.
+    fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData>;
 }

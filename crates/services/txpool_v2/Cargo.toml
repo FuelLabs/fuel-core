@@ -15,25 +15,29 @@ publish = false
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
-fuel-core-services = { workspace = true }
+fuel-core-services = { workspace = true, features = ["sync-processor"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
-mockall = { workspace = true, optional = true }
 num-rational = { workspace = true }
 parking_lot = { workspace = true }
 petgraph = "0.6.5"
-rayon = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+fuel-core-storage = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-trace = { workspace = true }
+mockall = { workspace = true }
+proptest = { workspace = true }
 rand = { workspace = true }
+test-strategy = { workspace = true }
+tokio = { workspace = true, features = ["sync", "test-util"] }
+tracing = { workspace = true }
 
 [features]
 test-helpers = [
-  "dep:mockall",
   "fuel-core-types/test-helpers",
   "fuel-core-storage/test-helpers",
 ]
