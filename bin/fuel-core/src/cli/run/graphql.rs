@@ -28,6 +28,10 @@ pub struct GraphQLArgs {
     #[clap(long = "graphql-max-directives", default_value = "10", env)]
     pub max_queries_directives: usize,
 
+    /// The max number of concurrent queries.
+    #[clap(long = "graphql-max-concurrent-queries", default_value = "1024", env)]
+    pub graphql_max_concurrent_queries: usize,
+
     /// The max body limit of the GraphQL query.
     #[clap(
         long = "graphql-request-body-bytes-limit",
