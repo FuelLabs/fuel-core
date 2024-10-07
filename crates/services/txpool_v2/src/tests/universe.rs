@@ -195,7 +195,7 @@ impl TestPoolUniverse {
         tx_builder.finalize().into()
     }
 
-    pub async fn verify_and_insert(
+    pub fn verify_and_insert(
         &mut self,
         tx: Transaction,
     ) -> Result<Vec<ArcPoolTx>, Error> {
@@ -214,16 +214,18 @@ impl TestPoolUniverse {
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
             };
-            let tx = verification
-                .perform_all_verifications(tx, &pool.clone(), Default::default())
-                .await?;
+            let tx = verification.perform_all_verifications(
+                tx,
+                &pool.clone(),
+                Default::default(),
+            )?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
         }
     }
 
-    pub async fn verify_and_insert_with_gas_price(
+    pub fn verify_and_insert_with_gas_price(
         &mut self,
         tx: Transaction,
         gas_price: GasPrice,
@@ -243,16 +245,18 @@ impl TestPoolUniverse {
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
             };
-            let tx = verification
-                .perform_all_verifications(tx, &pool.clone(), Default::default())
-                .await?;
+            let tx = verification.perform_all_verifications(
+                tx,
+                &pool.clone(),
+                Default::default(),
+            )?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
         }
     }
 
-    pub async fn verify_and_insert_with_consensus_params_wasm_checker(
+    pub fn verify_and_insert_with_consensus_params_wasm_checker(
         &mut self,
         tx: Transaction,
         consensus_params: ConsensusParameters,
@@ -273,9 +277,11 @@ impl TestPoolUniverse {
                 wasm_checker: Arc::new(wasm_checker),
                 memory_pool: MemoryPool::new(),
             };
-            let tx = verification
-                .perform_all_verifications(tx, &pool.clone(), Default::default())
-                .await?;
+            let tx = verification.perform_all_verifications(
+                tx,
+                &pool.clone(),
+                Default::default(),
+            )?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");

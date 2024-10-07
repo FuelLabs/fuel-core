@@ -65,8 +65,8 @@ use fuel_core_types::{
     },
 };
 
-#[tokio::test]
-async fn insert_one_tx_succeeds() {
+#[test]
+fn insert_one_tx_succeeds() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -74,14 +74,14 @@ async fn insert_one_tx_succeeds() {
     let tx = universe.build_script_transaction(None, None, 0);
 
     // When
-    let result = universe.verify_and_insert(tx).await;
+    let result = universe.verify_and_insert(tx);
 
     // Then
     assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn insert__tx_with_blacklisted_utxo_id() {
+#[test]
+fn insert__tx_with_blacklisted_utxo_id() {
     let mut universe = TestPoolUniverse::default();
 
     // Given
@@ -92,7 +92,7 @@ async fn insert__tx_with_blacklisted_utxo_id() {
     let tx = universe.build_script_transaction(Some(vec![coin]), None, 0);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(
@@ -100,8 +100,8 @@ async fn insert__tx_with_blacklisted_utxo_id() {
     );
 }
 
-#[tokio::test]
-async fn insert__tx_with_blacklisted_owner() {
+#[test]
+fn insert__tx_with_blacklisted_owner() {
     let mut universe = TestPoolUniverse::default();
 
     // Given
@@ -112,7 +112,7 @@ async fn insert__tx_with_blacklisted_owner() {
     let tx = universe.build_script_transaction(Some(vec![coin]), None, 0);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(
@@ -120,8 +120,8 @@ async fn insert__tx_with_blacklisted_owner() {
     );
 }
 
-#[tokio::test]
-async fn insert__tx_with_blacklisted_contract() {
+#[test]
+fn insert__tx_with_blacklisted_contract() {
     let mut universe = TestPoolUniverse::default();
     let contract_id = Contract::EMPTY_CONTRACT_ID;
 
@@ -143,7 +143,7 @@ async fn insert__tx_with_blacklisted_contract() {
     );
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(
@@ -151,8 +151,8 @@ async fn insert__tx_with_blacklisted_contract() {
     );
 }
 
-#[tokio::test]
-async fn insert__tx_with_blacklisted_message() {
+#[test]
+fn insert__tx_with_blacklisted_message() {
     let mut universe = TestPoolUniverse::default();
 
     // Given
@@ -163,7 +163,7 @@ async fn insert__tx_with_blacklisted_message() {
     let tx = universe.build_script_transaction(Some(vec![input]), None, 0);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(
@@ -171,8 +171,8 @@ async fn insert__tx_with_blacklisted_message() {
     );
 }
 
-#[tokio::test]
-async fn insert__tx2_succeeds_after_dependent_tx1() {
+#[test]
+fn insert__tx2_succeeds_after_dependent_tx1() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -184,16 +184,16 @@ async fn insert__tx2_succeeds_after_dependent_tx1() {
     let tx2 = universe.build_script_transaction(Some(vec![input]), None, 0);
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
-    let result2 = universe.verify_and_insert(tx2).await;
+    let result1 = universe.verify_and_insert(tx1);
+    let result2 = universe.verify_and_insert(tx2);
 
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
 }
 
-#[tokio::test]
-async fn insert__tx2_collided_on_contract_id() {
+#[test]
+fn insert__tx2_collided_on_contract_id() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -227,10 +227,10 @@ async fn insert__tx2_collided_on_contract_id() {
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();
-    universe.verify_and_insert(tx).await.unwrap();
+    universe.verify_and_insert(tx).unwrap();
 
     // When
-    let result2 = universe.verify_and_insert(tx_faulty).await;
+    let result2 = universe.verify_and_insert(tx_faulty);
 
     // Then
     let err = result2.unwrap_err();
@@ -239,8 +239,8 @@ async fn insert__tx2_collided_on_contract_id() {
     );
 }
 
-#[tokio::test]
-async fn insert__tx_with_dependency_on_invalid_utxo_type() {
+#[test]
+fn insert__tx_with_dependency_on_invalid_utxo_type() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
     let contract_id = Contract::EMPTY_CONTRACT_ID;
@@ -263,10 +263,10 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
         universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, Some(utxo_id));
     let tx_faulty =
         universe.build_script_transaction(Some(vec![random_predicate]), None, 0);
-    universe.verify_and_insert(tx).await.unwrap();
+    universe.verify_and_insert(tx).unwrap();
 
     // When
-    let result2 = universe.verify_and_insert(tx_faulty).await;
+    let result2 = universe.verify_and_insert(tx_faulty);
 
     // Then
     let err = result2.unwrap_err();
@@ -276,8 +276,8 @@ async fn insert__tx_with_dependency_on_invalid_utxo_type() {
     );
 }
 
-#[tokio::test]
-async fn insert__already_known_tx_returns_error() {
+#[test]
+fn insert__already_known_tx_returns_error() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -286,10 +286,10 @@ async fn insert__already_known_tx_returns_error() {
 
     // Given
     let tx = universe.build_script_transaction(None, None, 0);
-    universe.verify_and_insert(tx.clone()).await.unwrap();
+    universe.verify_and_insert(tx.clone()).unwrap();
 
     // When
-    let result2 = universe.verify_and_insert(tx.clone()).await;
+    let result2 = universe.verify_and_insert(tx.clone());
 
     // Then
     let err = result2.unwrap_err();
@@ -298,8 +298,8 @@ async fn insert__already_known_tx_returns_error() {
     );
 }
 
-#[tokio::test]
-async fn insert__unknown_utxo_returns_error() {
+#[test]
+fn insert__unknown_utxo_returns_error() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -309,7 +309,7 @@ async fn insert__unknown_utxo_returns_error() {
     let tx = universe.build_script_transaction(Some(vec![input]), None, 0);
 
     // When
-    let result = universe.verify_and_insert(tx).await;
+    let result = universe.verify_and_insert(tx);
 
     // Then
     let err = result.unwrap_err();
@@ -318,8 +318,8 @@ async fn insert__unknown_utxo_returns_error() {
     );
 }
 
-#[tokio::test]
-async fn insert__higher_priced_tx_removes_lower_priced_tx() {
+#[test]
+fn insert__higher_priced_tx_removes_lower_priced_tx() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -331,15 +331,15 @@ async fn insert__higher_priced_tx_removes_lower_priced_tx() {
     let tx2 = universe.build_script_transaction(Some(vec![common_coin]), None, 20);
 
     // When
-    universe.verify_and_insert(tx1).await.unwrap();
-    let result = universe.verify_and_insert(tx2).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    let result = universe.verify_and_insert(tx2).unwrap();
 
     // Then
     assert_eq!(result[0].id(), tx_id);
 }
 
-#[tokio::test]
-async fn insert__colliding_dependent_and_underpriced_returns_error() {
+#[test]
+fn insert__colliding_dependent_and_underpriced_returns_error() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -351,19 +351,19 @@ async fn insert__colliding_dependent_and_underpriced_returns_error() {
     // Given
     let tx2 = universe.build_script_transaction(Some(vec![input.clone()]), None, 20);
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 10);
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
 
     // When
-    let result3 = universe.verify_and_insert(tx3).await;
+    let result3 = universe.verify_and_insert(tx3);
 
     // Then
     let err = result3.unwrap_err();
     assert!(matches!(err, Error::Collided(CollisionReason::Utxo(id)) if id == utxo_id));
 }
 
-#[tokio::test]
-async fn insert_dependent_contract_creation() {
+#[test]
+fn insert_dependent_contract_creation() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
     let contract_id = Contract::EMPTY_CONTRACT_ID;
@@ -396,16 +396,16 @@ async fn insert_dependent_contract_creation() {
     );
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
-    let result2 = universe.verify_and_insert(tx2).await;
+    let result1 = universe.verify_and_insert(tx1);
+    let result2 = universe.verify_and_insert(tx2);
 
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
 }
 
-#[tokio::test]
-async fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
+#[test]
+fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -423,13 +423,13 @@ async fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
 
     let tx2 = universe.build_script_transaction(Some(vec![input.clone()]), None, 10);
     let tx2_id = tx2.id(&ChainId::default());
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
 
     let tx3 = universe.build_script_transaction(Some(vec![common_coin]), None, 20);
 
     // When
-    let result3 = universe.verify_and_insert(tx3).await;
+    let result3 = universe.verify_and_insert(tx3);
 
     // Then
     let removed_txs = result3.unwrap();
@@ -438,8 +438,8 @@ async fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
     assert_eq!(removed_txs[1].id(), tx2_id);
 }
 
-#[tokio::test]
-async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
+#[test]
+fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -450,7 +450,7 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
         universe.build_script_transaction(Some(vec![common_coin.clone()]), None, 10);
     let tx1_id = tx1.id(&ChainId::default());
 
-    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
 
     let tx2 =
         universe.build_script_transaction(Some(vec![common_coin.clone()]), None, 11);
@@ -459,8 +459,8 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let tx3 = universe.build_script_transaction(Some(vec![common_coin]), None, 12);
 
     // When
-    let result2 = universe.verify_and_insert(tx2).await;
-    let result3 = universe.verify_and_insert(tx3).await;
+    let result2 = universe.verify_and_insert(tx2);
+    let result3 = universe.verify_and_insert(tx3);
 
     // Then
     assert!(result2.is_ok());
@@ -473,8 +473,8 @@ async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     assert_eq!(removed_txs[0].id(), tx2_id);
 }
 
-#[tokio::test]
-async fn insert__tx_limit_hit() {
+#[test]
+fn insert__tx_limit_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
         pool_limits: PoolLimits {
             max_txs: 1,
@@ -488,18 +488,18 @@ async fn insert__tx_limit_hit() {
     // Given
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx2 = universe.build_script_transaction(None, None, 0);
-    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
 
     // When
-    let result2 = universe.verify_and_insert(tx2).await;
+    let result2 = universe.verify_and_insert(tx2);
 
     // Then
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
 }
 
-#[tokio::test]
-async fn insert__tx_gas_limit() {
+#[test]
+fn insert__tx_gas_limit() {
     // Given
     let mut universe = TestPoolUniverse::default();
     let tx1 = universe.build_script_transaction(None, None, 10);
@@ -522,18 +522,18 @@ async fn insert__tx_gas_limit() {
         ..Default::default()
     });
     universe.build_pool();
-    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
 
     // When
-    let result2 = universe.verify_and_insert(tx2).await;
+    let result2 = universe.verify_and_insert(tx2);
 
     // Then
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
 }
 
-#[tokio::test]
-async fn insert__tx_bytes_limit() {
+#[test]
+fn insert__tx_bytes_limit() {
     // Given
     let mut universe = TestPoolUniverse::default();
     let tx1 = universe.build_script_transaction(None, None, 10);
@@ -556,18 +556,18 @@ async fn insert__tx_bytes_limit() {
         ..Default::default()
     });
     universe.build_pool();
-    universe.verify_and_insert(tx1).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
 
     // When
-    let result2 = universe.verify_and_insert(tx2).await;
+    let result2 = universe.verify_and_insert(tx2);
 
     // Then
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
 }
 
-#[tokio::test]
-async fn insert__dependency_chain_length_hit() {
+#[test]
+fn insert__dependency_chain_length_hit() {
     let mut universe = TestPoolUniverse::default().config(Config {
         max_txs_chain_count: 2,
         ..Default::default()
@@ -584,11 +584,11 @@ async fn insert__dependency_chain_length_hit() {
     let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
 
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 0);
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
 
     // When
-    let result3 = universe.verify_and_insert(tx3).await;
+    let result3 = universe.verify_and_insert(tx3);
 
     // Then
     let err = result3.unwrap_err();
@@ -598,8 +598,8 @@ async fn insert__dependency_chain_length_hit() {
     ));
 }
 
-#[tokio::test]
-async fn get_sorted_out_tx1_2_3() {
+#[test]
+fn get_sorted_out_tx1_2_3() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -612,9 +612,9 @@ async fn get_sorted_out_tx1_2_3() {
     let tx2_id = tx2.id(&ChainId::default());
     let tx3_id = tx3.id(&ChainId::default());
 
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
-    universe.verify_and_insert(tx3).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+    universe.verify_and_insert(tx3).unwrap();
 
     // When
     let txs = universe
@@ -634,8 +634,8 @@ async fn get_sorted_out_tx1_2_3() {
     assert_eq!(txs[2].id(), tx2_id, "Third should be tx2");
 }
 
-#[tokio::test]
-async fn get_sorted_out_tx_same_tips() {
+#[test]
+fn get_sorted_out_tx_same_tips() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -668,9 +668,9 @@ async fn get_sorted_out_tx_same_tips() {
     let tx2_id = tx2.id(&ChainId::default());
     let tx3_id = tx3.id(&ChainId::default());
 
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
-    universe.verify_and_insert(tx3).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+    universe.verify_and_insert(tx3).unwrap();
 
     // When
     let txs = universe
@@ -690,8 +690,8 @@ async fn get_sorted_out_tx_same_tips() {
     assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
 }
 
-#[tokio::test]
-async fn get_sorted_out_tx_profitable_ratios() {
+#[test]
+fn get_sorted_out_tx_profitable_ratios() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -724,9 +724,9 @@ async fn get_sorted_out_tx_profitable_ratios() {
     let tx2_id = tx2.id(&ChainId::default());
     let tx3_id = tx3.id(&ChainId::default());
 
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
-    universe.verify_and_insert(tx3).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+    universe.verify_and_insert(tx3).unwrap();
 
     // When
     let txs = universe
@@ -746,8 +746,8 @@ async fn get_sorted_out_tx_profitable_ratios() {
     assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
 }
 
-#[tokio::test]
-async fn get_sorted_out_tx_by_creation_instant() {
+#[test]
+fn get_sorted_out_tx_by_creation_instant() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -761,10 +761,10 @@ async fn get_sorted_out_tx_by_creation_instant() {
     let tx3_id = tx3.id(&ChainId::default());
     let tx4_id = tx4.id(&ChainId::default());
 
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
-    universe.verify_and_insert(tx3).await.unwrap();
-    universe.verify_and_insert(tx4).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+    universe.verify_and_insert(tx3).unwrap();
+    universe.verify_and_insert(tx4).unwrap();
 
     // When
     let txs = universe
@@ -788,8 +788,8 @@ async fn get_sorted_out_tx_by_creation_instant() {
     assert_eq!(txs[3].id(), tx4_id, "Fourth should be tx4");
 }
 
-#[tokio::test]
-async fn insert_tx_at_least_min_gas_price() {
+#[test]
+fn insert_tx_at_least_min_gas_price() {
     // Given
     let gas_price = 10;
     let mut universe = TestPoolUniverse::default().config(Config {
@@ -799,13 +799,13 @@ async fn insert_tx_at_least_min_gas_price() {
 
     let tx = universe.build_script_transaction(None, None, gas_price);
     // When
-    universe.verify_and_insert_with_gas_price(tx, gas_price).await
+    universe.verify_and_insert_with_gas_price(tx, gas_price)
     // Then
     .unwrap();
 }
 
-#[tokio::test]
-async fn insert__tx_below_min_gas_price() {
+#[test]
+fn insert__tx_below_min_gas_price() {
     // Given
     let gas_price = 1_000_000_000;
     let mut universe = TestPoolUniverse::default();
@@ -822,15 +822,14 @@ async fn insert__tx_below_min_gas_price() {
     // When
     let err = universe
         .verify_and_insert_with_gas_price(tx, gas_price)
-        .await
         .unwrap_err();
 
     // Then
     assert!(matches!(err, Error::InsufficientMaxFee { .. }));
 }
 
-#[tokio::test]
-async fn insert_tx_when_input_message_id_exists_in_db() {
+#[test]
+fn insert_tx_when_input_message_id_exists_in_db() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -840,13 +839,13 @@ async fn insert_tx_when_input_message_id_exists_in_db() {
     let tx = universe.build_script_transaction(Some(vec![input]), None, 0);
 
     // When
-    universe.verify_and_insert(tx).await
+    universe.verify_and_insert(tx)
     // Then
     .unwrap();
 }
 
-#[tokio::test]
-async fn insert__tx_when_input_message_id_do_not_exists_in_db() {
+#[test]
+fn insert__tx_when_input_message_id_do_not_exists_in_db() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -855,7 +854,7 @@ async fn insert__tx_when_input_message_id_do_not_exists_in_db() {
     let tx = universe.build_script_transaction(Some(vec![input]), None, 0);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(matches!(
@@ -864,8 +863,8 @@ async fn insert__tx_when_input_message_id_do_not_exists_in_db() {
     ));
 }
 
-#[tokio::test]
-async fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
+#[test]
+fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -888,8 +887,8 @@ async fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
     );
 
     // When
-    universe.verify_and_insert(tx_high).await.unwrap();
-    let err = universe.verify_and_insert(tx_low).await.unwrap_err();
+    universe.verify_and_insert(tx_high).unwrap();
+    let err = universe.verify_and_insert(tx_low).unwrap_err();
 
     // Then
     assert!(
@@ -897,8 +896,8 @@ async fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
     );
 }
 
-#[tokio::test]
-async fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
+#[test]
+fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -922,8 +921,8 @@ async fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     );
 
     // When
-    let result1 = universe.verify_and_insert(tx_high).await;
-    let result2 = universe.verify_and_insert(tx_low).await;
+    let result1 = universe.verify_and_insert(tx_high);
+    let result2 = universe.verify_and_insert(tx_low);
 
     // Then
     assert!(result1.is_ok());
@@ -933,8 +932,8 @@ async fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     assert_eq!(removed_txs[0].id(), tx_high_id);
 }
 
-#[tokio::test]
-async fn insert_again_message_after_squeeze_with_even_lower_tip() {
+#[test]
+fn insert_again_message_after_squeeze_with_even_lower_tip() {
     // tx1 (message 1, message 2) tip 2
     // tx2 (message 1) tip 3
     //   squeezes tx1 with higher tip
@@ -958,9 +957,9 @@ async fn insert_again_message_after_squeeze_with_even_lower_tip() {
     let tx3 = universe.build_script_transaction(Some(vec![message_input_2]), None, 1);
 
     // When
-    let result1 = universe.verify_and_insert(tx1).await;
-    let result2 = universe.verify_and_insert(tx2).await;
-    let result3 = universe.verify_and_insert(tx3).await;
+    let result1 = universe.verify_and_insert(tx1);
+    let result2 = universe.verify_and_insert(tx2);
+    let result3 = universe.verify_and_insert(tx3);
 
     // Then
     assert!(result1.is_ok());
@@ -968,8 +967,8 @@ async fn insert_again_message_after_squeeze_with_even_lower_tip() {
     assert!(result3.is_ok());
 }
 
-#[tokio::test]
-async fn insert__tx_with_predicates_incorrect_owner() {
+#[test]
+fn insert__tx_with_predicates_incorrect_owner() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -985,7 +984,7 @@ async fn insert__tx_with_predicates_incorrect_owner() {
     let tx = universe.build_script_transaction(Some(vec![coin]), None, 0);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(matches!(
@@ -996,8 +995,8 @@ async fn insert__tx_with_predicates_incorrect_owner() {
     ));
 }
 
-#[tokio::test]
-async fn insert__tx_with_predicate_without_enough_gas() {
+#[test]
+fn insert__tx_with_predicate_without_enough_gas() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -1027,7 +1026,7 @@ async fn insert__tx_with_predicate_without_enough_gas() {
     let tx = universe.build_script_transaction(Some(vec![coin]), None, 0);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(matches!(
@@ -1038,8 +1037,8 @@ async fn insert__tx_with_predicate_without_enough_gas() {
     ));
 }
 
-#[tokio::test]
-async fn insert__tx_with_predicate_that_returns_false() {
+#[test]
+fn insert__tx_with_predicate_that_returns_false() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -1060,7 +1059,7 @@ async fn insert__tx_with_predicate_that_returns_false() {
     let tx = universe.build_script_transaction(Some(vec![coin]), None, 0);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(matches!(
@@ -1071,8 +1070,8 @@ async fn insert__tx_with_predicate_that_returns_false() {
     ));
 }
 
-#[tokio::test]
-async fn insert_tx_with_blob() {
+#[test]
+fn insert_tx_with_blob() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -1090,13 +1089,13 @@ async fn insert_tx_with_blob() {
     .finalize_as_transaction();
 
     // When
-    universe.verify_and_insert(tx).await
+    universe.verify_and_insert(tx)
     // Then
     .unwrap();
 }
 
-#[tokio::test]
-async fn insert__tx_with_blob_already_inserted_at_higher_tip() {
+#[test]
+fn insert__tx_with_blob_already_inserted_at_higher_tip() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -1114,7 +1113,7 @@ async fn insert__tx_with_blob_already_inserted_at_higher_tip() {
     .add_fee_input()
     .finalize_as_transaction();
 
-    universe.verify_and_insert(tx).await.unwrap();
+    universe.verify_and_insert(tx).unwrap();
 
     let same_blob_tx = TransactionBuilder::blob(BlobBody {
         id: blob_id,
@@ -1125,14 +1124,14 @@ async fn insert__tx_with_blob_already_inserted_at_higher_tip() {
     .finalize_as_transaction();
 
     // When
-    let err = universe.verify_and_insert(same_blob_tx).await.unwrap_err();
+    let err = universe.verify_and_insert(same_blob_tx).unwrap_err();
 
     // Then
     assert!(matches!(err, Error::Collided(CollisionReason::Blob(b)) if b == blob_id));
 }
 
-#[tokio::test]
-async fn insert_tx_with_blob_already_insert_at_lower_tip() {
+#[test]
+fn insert_tx_with_blob_already_insert_at_lower_tip() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -1150,7 +1149,7 @@ async fn insert_tx_with_blob_already_insert_at_lower_tip() {
     .add_fee_input()
     .finalize_as_transaction();
 
-    universe.verify_and_insert(tx).await.unwrap();
+    universe.verify_and_insert(tx).unwrap();
 
     let same_blob_tx = TransactionBuilder::blob(BlobBody {
         id: blob_id,
@@ -1163,14 +1162,14 @@ async fn insert_tx_with_blob_already_insert_at_lower_tip() {
     .finalize_as_transaction();
 
     // When
-    let result = universe.verify_and_insert(same_blob_tx).await;
+    let result = universe.verify_and_insert(same_blob_tx);
 
     // Then
     assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn insert__tx_blob_already_in_db() {
+#[test]
+fn insert__tx_blob_already_in_db() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -1190,7 +1189,7 @@ async fn insert__tx_blob_already_in_db() {
     universe.database_mut().insert_dummy_blob(blob_id);
 
     // When
-    let err = universe.verify_and_insert(tx).await.unwrap_err();
+    let err = universe.verify_and_insert(tx).unwrap_err();
 
     // Then
     assert!(matches!(
@@ -1199,8 +1198,8 @@ async fn insert__tx_blob_already_in_db() {
     ));
 }
 
-#[tokio::test]
-async fn insert__if_tx3_depends_and_collides_with_tx2() {
+#[test]
+fn insert__if_tx3_depends_and_collides_with_tx2() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -1218,13 +1217,13 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     // Given
     // tx3 {inputs: {coinA, coinB}, outputs:{}, tip: 20}
     let input_b = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
-    universe.verify_and_insert(tx1).await.unwrap();
-    universe.verify_and_insert(tx2).await.unwrap();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
 
     let tx3 = universe.build_script_transaction(Some(vec![input_a, input_b]), None, 20);
 
     // When
-    let err = universe.verify_and_insert(tx3).await.unwrap_err();
+    let err = universe.verify_and_insert(tx3).unwrap_err();
 
     // Then
     assert!(matches!(
@@ -1233,8 +1232,8 @@ async fn insert__if_tx3_depends_and_collides_with_tx2() {
     ));
 }
 
-#[tokio::test]
-async fn insert__tx_upgrade_with_invalid_wasm() {
+#[test]
+fn insert__tx_upgrade_with_invalid_wasm() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
         ..Default::default()
@@ -1260,7 +1259,6 @@ async fn insert__tx_upgrade_with_invalid_wasm() {
             params,
             MockWasmChecker::new(Err(WasmValidityError::NotEnabled)),
         )
-        .await
         .unwrap_err();
 
     // Then

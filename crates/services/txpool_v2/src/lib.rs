@@ -6,7 +6,6 @@
 mod collision_manager;
 pub mod config;
 pub mod error;
-mod heavy_async_processing;
 mod pool;
 pub mod ports;
 mod selection_algorithms;

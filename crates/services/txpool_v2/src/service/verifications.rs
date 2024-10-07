@@ -47,7 +47,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub struct Verification<View> {
+pub(crate) struct Verification<View> {
     pub persistent_storage_provider: Arc<dyn AtomicView<LatestView = View>>,
     pub consensus_parameters_provider: Arc<dyn ConsensusParametersProvider>,
     pub gas_price_provider: Arc<dyn GasPriceProvider>,
@@ -71,7 +71,7 @@ impl<View> Verification<View>
 where
     View: TxPoolPersistentStorage,
 {
-    pub async fn perform_all_verifications(
+    pub fn perform_all_verifications(
         &self,
         tx: Transaction,
         pool: &Shared<TxPool>,
@@ -90,8 +90,10 @@ where
             calculate_metadata(&basically_verified_tx.0, &consensus_params, version)?;
 
         let gas_price_verified_tx = basically_verified_tx
-            .perform_gas_price_verifications(metadata, self.gas_price_provider.as_ref())
-            .await?;
+            .perform_gas_price_verifications(
+                metadata,
+                self.gas_price_provider.as_ref(),
+            )?;
 
         let view = self
             .persistent_storage_provider
@@ -147,12 +149,12 @@ impl UnverifiedTx {
 }
 
 impl BasicVerifiedTx {
-    pub async fn perform_gas_price_verifications(
+    pub fn perform_gas_price_verifications(
         self,
         metadata: Metadata,
         gas_price_provider: &dyn GasPriceProvider,
     ) -> Result<GasPriceVerifiedTx, Error> {
-        let minimal_gas_price = gas_price_provider.next_gas_price().await?;
+        let minimal_gas_price = gas_price_provider.next_gas_price()?;
         let max_gas_price = metadata.max_gas_price();
 
         if max_gas_price < minimal_gas_price {
@@ -265,11 +267,18 @@ where
     let max_gas = tx.transaction().max_gas(gas_costs, fee_parameters) as u128;
     let gas_price_factor = fee_parameters.gas_price_factor() as u128;
 
+    #[cfg(debug_assertions)]
+    {
+        use fuel_core_types::fuel_tx::policies::PolicyType;
+        let policy = tx.transaction().policies().get(PolicyType::MaxFee);
+        assert!(policy.is_some(), "MaxFee policy is not set");
+    }
+
     let max_fee = tx.transaction().max_fee_limit() as u128;
 
     let max_gas_price = max_fee
         .saturating_mul(gas_price_factor)
-        .saturating_div(max_gas.saturating_add(1));
+        .div_ceil(max_gas.min(1));
     let metered_bytes_size = tx.transaction().metered_bytes_size();
 
     Metadata::new(

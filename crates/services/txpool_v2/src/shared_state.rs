@@ -39,6 +39,7 @@ use crate::{
     },
 };
 
+#[derive(Clone)]
 pub struct SharedState {
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
@@ -46,20 +47,6 @@ pub struct SharedState {
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: Arc<Notify>,
-}
-
-impl Clone for SharedState {
-    fn clone(&self) -> Self {
-        SharedState {
-            new_txs_notifier: self.new_txs_notifier.clone(),
-            select_transactions_requests_sender: self
-                .select_transactions_requests_sender
-                .clone(),
-            write_pool_requests_sender: self.write_pool_requests_sender.clone(),
-            tx_status_sender: self.tx_status_sender.clone(),
-            read_pool_requests_sender: self.read_pool_requests_sender.clone(),
-        }
-    }
 }
 
 impl SharedState {

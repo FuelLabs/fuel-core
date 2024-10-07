@@ -133,6 +133,7 @@ where
 
         self.current_gas = self.current_gas.saturating_add(gas);
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
+        debug_assert!(!self.tx_id_to_storage_id.contains_key(&tx_id));
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
 
         let tx =
@@ -446,7 +447,7 @@ where
                 .storage
                 .remove_transaction_and_dependents_subtree(dependent);
             self.update_components_and_caches_on_removal(removed.iter());
-            txs_removed.extend(removed.iter().map(|data| data.transaction.clone()));
+            txs_removed.extend(removed.into_iter().map(|data| data.transaction));
         }
         txs_removed
     }
