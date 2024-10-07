@@ -5,7 +5,7 @@ use crate::{
         utils::BlockInfo,
     },
     ports::MetadataStorage,
-    v0::uninitialized_task::SharedV0Algorithm,
+    v0::algorithm::SharedV0Algorithm,
 };
 use anyhow::anyhow;
 use async_trait::async_trait;

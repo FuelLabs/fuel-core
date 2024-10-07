@@ -22,6 +22,7 @@ use crate::{
         MetadataStorage,
     },
     v0::{
+        algorithm::SharedV0Algorithm,
         metadata::{
             V0Metadata,
             V0MetadataInitializer,
@@ -51,8 +52,6 @@ use fuel_core_types::{
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 
 pub use fuel_gas_price_algorithm::v0::AlgorithmV0;
-
-pub type SharedV0Algorithm = SharedGasPriceAlgo<AlgorithmV0>;
 
 pub struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
     pub config: V0MetadataInitializer,
