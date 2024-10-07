@@ -1,9 +1,9 @@
 use crate::{
-    fee_used_buckets,
+    fee_buckets,
     gas_used_buckets,
     global_registry,
     timing_buckets,
-    transactions_used_buckets,
+    transactions_count_buckets,
 };
 use prometheus_client::metrics::{
     gauge::Gauge,
@@ -30,9 +30,9 @@ impl Default for ImporterMetrics {
         let execute_and_commit_duration =
             Histogram::new(timing_buckets().iter().cloned());
         let gas_per_block = Histogram::new(gas_used_buckets().iter().cloned());
-        let fee_per_block = Histogram::new(fee_used_buckets().iter().cloned());
+        let fee_per_block = Histogram::new(fee_buckets().iter().cloned());
         let transactions_per_block =
-            Histogram::new(transactions_used_buckets().iter().cloned());
+            Histogram::new(transactions_count_buckets().iter().cloned());
 
         let mut registry = global_registry().registry.lock();
         registry.register(
