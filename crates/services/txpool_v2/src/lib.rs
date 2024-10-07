@@ -23,9 +23,13 @@ mod tests;
 fuel_core_trace::enable_tracing!();
 
 use fuel_core_types::fuel_asm::Word;
+pub use selection_algorithms::Constraints;
 pub use service::{
     new_service,
     Service,
 };
-pub use shared_state::SharedState;
+pub use shared_state::{
+    BorrowedTxPool,
+    SharedState,
+};
 pub use tx_status_stream::TxStatusMessage;

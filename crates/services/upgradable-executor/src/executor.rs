@@ -233,11 +233,11 @@ where
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
-    pub async fn produce_and_commit(
+    pub fn produce_and_commit(
         &mut self,
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
-        let (result, changes) = self.produce_without_commit(block).await?.into();
+        let (result, changes) = self.produce_without_commit(block)?.into();
 
         self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
@@ -265,17 +265,16 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Executes the block and returns the result of the execution with storage changes.
-    pub async fn produce_without_commit(
+    pub fn produce_without_commit(
         &self,
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
         self.produce_without_commit_with_coinbase(block, Default::default(), 0)
-            .await
     }
 
     /// The analog of the [`Self::produce_without_commit`] method,
     /// but with the ability to specify the coinbase recipient and the gas price.
-    pub async fn produce_without_commit_with_coinbase(
+    pub fn produce_without_commit_with_coinbase(
         &self,
         block: PartialFuelBlock,
         coinbase_recipient: fuel_core_types::fuel_types::ContractId,
@@ -293,7 +292,7 @@ where
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
-    pub async fn dry_run_without_commit_with_source<TxSource>(
+    pub fn dry_run_without_commit_with_source<TxSource>(
         &self,
         block: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>

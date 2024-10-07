@@ -86,7 +86,6 @@ impl fuel_core_txpool::ports::NotifyP2P for P2PAdapter {
 }
 
 #[cfg(feature = "p2p")]
-#[async_trait::async_trait]
 impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -148,45 +147,52 @@ impl fuel_core_txpool::ports::P2PRequests for P2PAdapter {
 }
 
 #[cfg(not(feature = "p2p"))]
-#[async_trait::async_trait]
-impl fuel_core_txpool::ports::P2P for P2PAdapter {
-    type GossipedTransaction = TransactionGossipData;
+const _: () = {
+    #[async_trait::async_trait]
+    impl fuel_core_txpool::ports::NotifyP2P for P2PAdapter {
+        fn broadcast_transaction(
+            &self,
+            _transaction: Arc<Transaction>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
 
-    fn broadcast_transaction(
-        &self,
-        _transaction: Arc<Transaction>,
-    ) -> anyhow::Result<()> {
-        Ok(())
+        fn notify_gossip_transaction_validity(
+            &self,
+            _message_info: GossipsubMessageInfo,
+            _validity: GossipsubMessageAcceptance,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
-    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
-        Box::pin(fuel_core_services::stream::pending())
+    impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
+        type GossipedTransaction = TransactionGossipData;
+
+        fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
+            Box::pin(fuel_core_services::stream::pending())
+        }
+
+        fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
+            Box::pin(fuel_core_services::stream::pending())
+        }
     }
 
-    fn notify_gossip_transaction_validity(
-        &self,
-        _message_info: GossipsubMessageInfo,
-        _validity: GossipsubMessageAcceptance,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
+    #[async_trait::async_trait]
+    impl fuel_core_txpool::ports::P2PRequests for P2PAdapter {
+        async fn request_tx_ids(&self, _peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
+            Ok(vec![])
+        }
 
-    fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
-        Box::pin(fuel_core_services::stream::pending())
+        async fn request_txs(
+            &self,
+            _peer_id: PeerId,
+            _tx_ids: Vec<TxId>,
+        ) -> anyhow::Result<Vec<Option<Transaction>>> {
+            Ok(vec![])
+        }
     }
-
-    async fn request_tx_ids(&self, _peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
-        Ok(vec![])
-    }
-
-    async fn request_txs(
-        &self,
-        _peer_id: PeerId,
-        _tx_ids: Vec<TxId>,
-    ) -> anyhow::Result<Vec<Option<Transaction>>> {
-        Ok(vec![])
-    }
-}
+};
 
 impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValueView {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
@@ -212,7 +218,7 @@ impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValu
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn next_gas_price(&self) -> Result<u64, Error> {
+    fn next_gas_price(&self) -> Result<u64, Error> {
         Ok(self.gas_price)
     }
 }

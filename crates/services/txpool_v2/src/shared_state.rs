@@ -8,11 +8,9 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::txpool::{
-        ArcPoolTx,
-        TransactionStatus,
-    },
+    services::txpool::TransactionStatus,
 };
+use parking_lot::RwLockWriteGuard;
 use tokio::sync::{
     broadcast,
     mpsc,
@@ -22,11 +20,12 @@ use tokio::sync::{
 
 use crate::{
     error::Error,
-    selection_algorithms::Constraints,
     service::{
+        BorrowTxPoolRequest,
         ReadPoolRequest,
-        SelectTransactionsRequest,
+        Shared,
         TxInfo,
+        TxPool,
         WritePoolRequest,
     },
     tx_status_stream::{
@@ -39,11 +38,19 @@ use crate::{
     },
 };
 
+pub struct BorrowedTxPool(pub(crate) Shared<TxPool>);
+
+impl BorrowedTxPool {
+    /// Get a write lock on the TxPool.
+    pub fn exclusive_lock(&self) -> RwLockWriteGuard<TxPool> {
+        self.0.write()
+    }
+}
+
 #[derive(Clone)]
 pub struct SharedState {
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
-    pub(crate) select_transactions_requests_sender:
-        mpsc::Sender<SelectTransactionsRequest>,
+    pub(crate) select_transactions_requests_sender: mpsc::Sender<BorrowTxPoolRequest>,
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: Arc<Notify>,
@@ -76,23 +83,11 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub async fn select_transactions(
-        &self,
-        minimal_gas_price: u64,
-        max_gas: u64,
-        maximum_txs: u16,
-        maximum_block_size: u32,
-    ) -> Result<Vec<ArcPoolTx>, Error> {
+    pub async fn borrow_txpool(&self) -> Result<BorrowedTxPool, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
-            .send(SelectTransactionsRequest {
-                constraints: Constraints {
-                    max_gas,
-                    maximum_txs,
-                    maximum_block_size,
-                    minimal_gas_price,
-                },
+            .send(BorrowTxPoolRequest {
                 response_channel: select_transactions_sender,
             })
             .await

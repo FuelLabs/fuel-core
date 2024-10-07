@@ -195,7 +195,6 @@ impl TransactionsSource for OnceTransactionsSource {
         _: u64,
         transactions_limit: u16,
         _: u32,
-        _: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
@@ -601,7 +600,6 @@ where
                 remaining_gas_limit,
                 remaining_tx_count,
                 remaining_block_transaction_size_limit,
-                *gas_price,
             )
             .into_iter()
             .take(remaining_tx_count as usize)
@@ -639,7 +637,6 @@ where
                     remaining_gas_limit,
                     remaining_tx_count,
                     remaining_block_transaction_size_limit,
-                    *gas_price,
                 )
                 .into_iter()
                 .take(remaining_tx_count as usize)

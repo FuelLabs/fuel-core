@@ -10,6 +10,7 @@ use fuel_core_poa::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
+use fuel_core_txpool::BorrowedTxPool;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -18,7 +19,6 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     fuel_tx::Transaction,
-    fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
         block_producer::Components,
@@ -101,17 +101,16 @@ impl TxPoolAdapter {
     }
 }
 
-#[derive(Clone)]
 pub struct TransactionsSource {
-    txpool: TxPoolSharedState,
-    _block_height: BlockHeight,
+    tx_pool: BorrowedTxPool,
+    minimum_gas_price: u64,
 }
 
 impl TransactionsSource {
-    pub fn new(txpool: TxPoolSharedState, block_height: BlockHeight) -> Self {
+    pub fn new(minimum_gas_price: u64, tx_pool: BorrowedTxPool) -> Self {
         Self {
-            txpool,
-            _block_height: block_height,
+            tx_pool,
+            minimum_gas_price,
         }
     }
 }

@@ -16,10 +16,7 @@ use crate::{
         TxPoolPersistentStorage,
         WasmChecker as WasmCheckerTrait,
     },
-    selection_algorithms::{
-        ratio_tip_gas::RatioTipGasSelection,
-        Constraints,
-    },
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
         memory::MemoryPool,
         p2p::P2PExt,
@@ -27,7 +24,10 @@ use crate::{
         subscriptions::Subscriptions,
         verifications::Verification,
     },
-    shared_state::SharedState,
+    shared_state::{
+        BorrowedTxPool,
+        SharedState,
+    },
     storage::{
         graph::{
             GraphConfig,
@@ -137,9 +137,8 @@ impl From<TxInfo> for TransactionStatus {
     }
 }
 
-pub struct SelectTransactionsRequest {
-    pub constraints: Constraints,
-    pub response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
+pub struct BorrowTxPoolRequest {
+    pub response_channel: oneshot::Sender<BorrowedTxPool>,
 }
 
 pub enum WritePoolRequest {
@@ -229,9 +228,9 @@ where
                 }
             }
 
-            select_transaction_request = self.subscriptions.extract_transactions.recv() => {
+            select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
-                    self.extract_transaction(select_transaction_request).await;
+                    self.borrow_txpool(select_transaction_request);
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -311,22 +310,10 @@ where
         }
     }
 
-    async fn extract_transaction(&self, request: SelectTransactionsRequest) {
-        let SelectTransactionsRequest {
-            constraints,
-            response_channel,
-        } = request;
+    fn borrow_txpool(&self, request: BorrowTxPoolRequest) {
+        let BorrowTxPoolRequest { response_channel } = request;
 
-        let txs = {
-            let mut pool = self.pool.write();
-            pool.extract_transactions_for_block(constraints)
-        };
-
-        if response_channel.send(txs).is_err() {
-            tracing::error!("Failed to send the result:");
-            // TODO: We need to remove all dependencies of the transactions that we failed to send
-            //  Reworked in the next PR.
-        }
+        let _ = response_channel.send(BorrowedTxPool(self.pool.clone()));
     }
 
     fn process_write(&self, write_pool_request: WritePoolRequest) {
@@ -711,7 +698,7 @@ where
         new_tx: tx_from_p2p_stream,
         imported_blocks: block_importer.block_events(),
         write_pool: write_pool_requests_receiver,
-        extract_transactions: select_transactions_requests_receiver,
+        borrow_txpool: select_transactions_requests_receiver,
         read_pool: read_pool_requests_receiver,
     };
 

@@ -92,12 +92,7 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
         Source: TransactionsSource,
     {
         let txs: Vec<_> = source
-            .next(
-                gas_limit,
-                tx_number_limit,
-                block_transaction_size_limit,
-                minimum_gas_price,
-            )
+            .next(gas_limit, tx_number_limit, block_transaction_size_limit)
             .into_iter()
             .map(|tx| match tx {
                 MaybeCheckedTransaction::CheckedTransaction(checked, _) => {

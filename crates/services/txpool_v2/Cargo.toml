@@ -19,7 +19,7 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
 num-rational = { workspace = true }
-parking_lot = { workspace = true }
+parking_lot = { workspace = true, features = ["arc_lock"] }
 petgraph = "0.6.5"
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-stream = { workspace = true }
