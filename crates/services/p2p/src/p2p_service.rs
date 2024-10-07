@@ -229,7 +229,8 @@ impl FuelP2PService {
                 transport_function,
                 libp2p::yamux::Config::default,
             )
-            .map_err(|_| anyhow::anyhow!("Failed to build Swarm"))?;
+            .map_err(|_| anyhow::anyhow!("Failed to build Swarm"))?
+            .with_dns()?;
 
         let mut swarm = if metrics {
             // we use the global registry to store the metrics without needing to create a new one
