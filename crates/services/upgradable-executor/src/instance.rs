@@ -65,6 +65,7 @@ trait CallerHelper {
         gas_limit: u64,
         tx_number_limit: u16,
         block_transaction_size_limit: u32,
+        minimum_gas_price: u64,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource;
@@ -85,12 +86,18 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
         gas_limit: u64,
         tx_number_limit: u16,
         block_transaction_size_limit: u32,
+        minimum_gas_price: u64,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource,
     {
         let txs: Vec<_> = source
-            .next(gas_limit, tx_number_limit, block_transaction_size_limit)
+            .next(
+                gas_limit,
+                tx_number_limit,
+                block_transaction_size_limit,
+                minimum_gas_price,
+            )
             .into_iter()
             .map(|tx| match tx {
                 MaybeCheckedTransaction::CheckedTransaction(checked, _) => {
@@ -241,7 +248,7 @@ impl Instance<Created> {
                 return Ok(0);
             };
 
-            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
+            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX, u64::MIN)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -254,7 +261,8 @@ impl Instance<Created> {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             gas_limit: u64,
                             tx_number_limit: u32,
-                            block_transaction_size_limit: u32|
+                            block_transaction_size_limit: u32,
+                            minimum_gas_price: u64|
               -> anyhow::Result<u32> {
             let Some(source) = source.clone() else {
                 return Ok(0);
@@ -269,6 +277,7 @@ impl Instance<Created> {
                 gas_limit,
                 tx_number_limit,
                 block_transaction_size_limit,
+                minimum_gas_price,
             )
         };
 

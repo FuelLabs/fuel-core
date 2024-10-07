@@ -10,12 +10,16 @@ use crate::{
         IntoApiResult,
         QUERY_COSTS,
     },
-    graphql_api::ports::MemoryPool,
+    graphql_api::{
+        database::ReadView,
+        ports::MemoryPool,
+    },
     query::{
         transaction_status_change,
         BlockQueryData,
         SimpleTransactionData,
         TransactionQueryData,
+        TxnStatusChangeState,
     },
     schema::{
         scalars::{
@@ -48,6 +52,7 @@ use fuel_core_storage::{
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     fuel_tx::{
+        Bytes32,
         Cacheable,
         Transaction as FuelTx,
         UniqueIdentifier,
@@ -67,7 +72,10 @@ use futures::{
     TryStreamExt,
 };
 use itertools::Itertools;
-use std::iter;
+use std::{
+    borrow::Cow,
+    iter,
+};
 use tokio_stream::StreamExt;
 use types::{
     DryRunTransactionExecutionStatus,
@@ -363,20 +371,12 @@ impl TxStatusSubscription {
         let rx = txpool.tx_update_subscribe(id.into())?;
         let query = ctx.read_view()?;
 
-        Ok(transaction_status_change(
-            move |id| match query.tx_status(&id) {
-                Ok(status) => Ok(Some(status)),
-                Err(StorageError::NotFound(_, _)) => Ok(txpool
-                        .submission_time(id)
-                        .await
-                        .map_err(|e| anyhow::anyhow!(e))?
-                        .map(|time| txpool::TransactionStatus::Submitted { time })),
-                Err(err) => Err(err),
-            },
-            rx,
-            id.into(),
+        let status_change_state = StatusChangeState { txpool, query };
+        Ok(
+            transaction_status_change(status_change_state, rx, id.into())
+                .await
+                .map_err(async_graphql::Error::from),
         )
-        .map_err(async_graphql::Error::from))
     }
 
     /// Submits transaction to the `TxPool` and await either confirmation or failure.
@@ -437,4 +437,27 @@ async fn submit_and_await_status<'a>(
             }
         })
         .take(2))
+}
+
+struct StatusChangeState<'a> {
+    query: Cow<'a, ReadView>,
+    txpool: &'a TxPool,
+}
+
+impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
+    async fn get_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<txpool::TransactionStatus>> {
+        match self.query.tx_status(&id) {
+            Ok(status) => Ok(Some(status)),
+            Err(StorageError::NotFound(_, _)) => Ok(self
+                .txpool
+                .submission_time(id)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?
+                .map(|time| txpool::TransactionStatus::Submitted { time })),
+            Err(err) => Err(err),
+        }
+    }
 }

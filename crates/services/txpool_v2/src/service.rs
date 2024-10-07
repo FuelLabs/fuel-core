@@ -39,7 +39,10 @@ use crate::{
     update_sender::TxStatusChange,
 };
 use fuel_core_services::{
-    RunnableService, RunnableTask, ServiceRunner, StateWatcher
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -54,7 +57,10 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         p2p::{
-            GossipData, GossipsubMessageInfo, PeerId, TransactionGossipData
+            GossipData,
+            GossipsubMessageInfo,
+            PeerId,
+            TransactionGossipData,
         },
         txpool::{
             ArcPoolTx,
@@ -75,7 +81,7 @@ use tokio::{
     sync::{
         mpsc,
         oneshot,
-        Notify, OwnedSemaphorePermit, Semaphore,
+        Notify,
     },
     time::MissedTickBehavior,
 };
@@ -96,8 +102,6 @@ pub type TxPool = Pool<
 pub type Shared<T> = Arc<RwLock<T>>;
 
 pub type Service<View> = ServiceRunner<Task<View>>;
-
-pub struct BlockTransactionSelector(OwnedSemaphorePermit);
 
 /// Structure returned to others modules containing the transaction and
 /// some useful infos
@@ -135,7 +139,7 @@ impl From<TxInfo> for TransactionStatus {
 
 pub struct SelectTransactionsRequest {
     pub constraints: Constraints,
-    pub response_channel: oneshot::Sender<BlockTransactionSelector>,
+    pub response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
 }
 
 pub enum WritePoolRequest {
@@ -172,7 +176,6 @@ pub struct Task<View> {
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
     current_height: Arc<RwLock<BlockHeight>>,
-    block_transactions_selector: Arc<Semaphore>,
     shared_state: SharedState,
 }
 
@@ -310,17 +313,16 @@ where
 
     async fn extract_transaction(&self, request: SelectTransactionsRequest) {
         let SelectTransactionsRequest {
-            constraints: _,
+            constraints,
             response_channel,
         } = request;
 
-        let Ok(permit) = self.block_transactions_selector.clone().acquire_owned().await
-        else {
-            tracing::error!("Failed to acquire a permit to select transactions");
-            return;
+        let txs = {
+            let mut pool = self.pool.write();
+            pool.extract_transactions_for_block(constraints)
         };
 
-        if response_channel.send(BlockTransactionSelector(permit)).is_err() {
+        if response_channel.send(txs).is_err() {
             tracing::error!("Failed to send the result:");
             // TODO: We need to remove all dependencies of the transactions that we failed to send
         }

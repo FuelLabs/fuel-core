@@ -601,7 +601,7 @@ where
                 remaining_gas_limit,
                 remaining_tx_count,
                 remaining_block_transaction_size_limit,
-                *gas_price
+                *gas_price,
             )
             .into_iter()
             .take(remaining_tx_count as usize)
@@ -639,7 +639,7 @@ where
                     remaining_gas_limit,
                     remaining_tx_count,
                     remaining_block_transaction_size_limit,
-                    *gas_price
+                    *gas_price,
                 )
                 .into_iter()
                 .take(remaining_tx_count as usize)

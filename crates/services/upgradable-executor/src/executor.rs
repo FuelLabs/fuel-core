@@ -269,7 +269,8 @@ where
         &self,
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        self.produce_without_commit_with_coinbase(block, Default::default(), 0).await
+        self.produce_without_commit_with_coinbase(block, Default::default(), 0)
+            .await
     }
 
     /// The analog of the [`Self::produce_without_commit`] method,
@@ -288,7 +289,7 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(component, options, false).await
+        self.produce_inner(component, options, false)
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -300,7 +301,7 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(block, options, true).await
+        self.produce_inner(block, options, true)
     }
 }
 
@@ -313,7 +314,7 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub async fn produce_without_commit_with_source<TxSource>(
+    pub fn produce_without_commit_with_source<TxSource>(
         &self,
         components: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
@@ -321,12 +322,12 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(components, options, false).await
+        self.produce_inner(components, options, false)
     }
 
     /// Executes the block and returns the result of the execution without committing
     /// the changes in the dry run mode.
-    pub async fn dry_run(
+    pub fn dry_run(
         &self,
         component: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
@@ -353,7 +354,7 @@ where
             skipped_transactions,
             tx_status,
             ..
-        } = self.produce_inner(component, options, true).await?.into_result();
+        } = self.produce_inner(component, options, true)?.into_result();
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
@@ -372,7 +373,7 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
-    async fn produce_inner<TxSource>(
+    fn produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
@@ -386,7 +387,7 @@ where
         if block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
-                    self.native_produce_inner(block, options, dry_run).await
+                    self.native_produce_inner(block, options, dry_run)
                 }
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
@@ -404,7 +405,7 @@ where
     }
 
     #[cfg(not(feature = "wasm-executor"))]
-    async fn produce_inner<TxSource>(
+    fn produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
@@ -416,7 +417,7 @@ where
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
-            self.native_produce_inner(block, options, dry_run).await
+            self.native_produce_inner(block, options, dry_run)
         } else {
             Err(ExecutorError::Other(format!(
                 "Not supported version `{block_version}`. Expected version is `{}`",
@@ -597,7 +598,7 @@ where
         }
     }
 
-    async fn native_produce_inner<TxSource>(
+    fn native_produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
@@ -617,11 +618,11 @@ where
         if let Some(previous_block_height) = previous_block_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run).await
+                .produce_without_commit(block, dry_run)
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run).await
+                .produce_without_commit(block, dry_run)
         }
     }
 

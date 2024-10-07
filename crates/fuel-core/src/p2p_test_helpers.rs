@@ -503,7 +503,7 @@ impl Node {
 
             let tx_id = not_found[0];
             let mut wait_transaction =
-                self.node.transaction_status_change(tx_id).unwrap();
+                self.node.transaction_status_change(tx_id).await.unwrap();
 
             loop {
                 tokio::select! {
