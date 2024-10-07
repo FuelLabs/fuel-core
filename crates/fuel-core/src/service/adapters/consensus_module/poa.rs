@@ -22,6 +22,7 @@ use fuel_core_poa::{
         SharedState,
     },
 };
+use fuel_core_producer::block_producer::gas_price::GasPriceProvider;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
@@ -113,6 +114,15 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         block_time: Tai64,
         source: TransactionsSource,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
+        let gas_price = self
+            .block_producer
+            .gas_price_provider
+            .next_gas_price()
+            .await?;
+        fuel_core_metrics::producer::producer_metrics()
+            .gas_price
+            .observe(gas_price as f64);
+
         match source {
             TransactionsSource::TxPool => {
                 self.block_producer

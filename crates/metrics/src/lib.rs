@@ -24,6 +24,7 @@ pub mod future_tracker;
 pub mod graphql_metrics;
 pub mod importer;
 pub mod p2p_metrics;
+pub mod producer;
 pub mod services;
 pub mod txpool_metrics;
 
@@ -57,6 +58,16 @@ pub fn transactions_count_buckets() -> &'static Vec<f64> {
 static FEE_BUCKETS: OnceLock<Vec<f64>> = OnceLock::new();
 pub fn fee_buckets() -> &'static Vec<f64> {
     FEE_BUCKETS.get_or_init(|| {
+        // TODO[RC]: Figure out proper values.
+        vec![
+            0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+        ]
+    })
+}
+
+static GAS_PRICE_BUCKETS: OnceLock<Vec<f64>> = OnceLock::new();
+pub fn gas_price_buckets() -> &'static Vec<f64> {
+    GAS_PRICE_BUCKETS.get_or_init(|| {
         // TODO[RC]: Figure out proper values.
         vec![
             0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
