@@ -215,9 +215,8 @@ impl MockTxPoolGasPrice {
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceProvider for MockTxPoolGasPrice {
-    async fn next_gas_price(&self) -> Result<GasPrice, Error> {
+    fn next_gas_price(&self) -> Result<GasPrice, Error> {
         self.gas_price
             .ok_or(Error::GasPriceNotFound("Gas price not found".to_string()))
     }

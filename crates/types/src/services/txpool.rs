@@ -15,6 +15,7 @@ use crate::{
         },
         Blob,
         Cacheable,
+        Chargeable,
         Create,
         Input,
         Output,
@@ -46,7 +47,7 @@ pub type ArcPoolTx = Arc<PoolTransaction>;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Metadata {
     version: ConsensusParametersVersion,
-    size: usize,
+    size: Option<usize>,
     max_gas_price: Word,
     #[cfg(feature = "test-helpers")]
     max_gas: Option<Word>,
@@ -63,7 +64,7 @@ impl Metadata {
     ) -> Self {
         Self {
             version,
-            size,
+            size: Some(size),
             max_gas_price,
             #[cfg(feature = "test-helpers")]
             max_gas: None,
@@ -81,7 +82,7 @@ impl Metadata {
     ) -> Self {
         Self {
             version,
-            size: 0,
+            size: None,
             max_gas_price: 0,
             max_gas,
             tx_id,
@@ -118,12 +119,16 @@ impl PoolTransaction {
 
     /// Used for accounting purposes when charging byte based fees.
     pub fn metered_bytes_size(&self) -> usize {
-        match self {
-            PoolTransaction::Script(_, metadata) => metadata.size,
-            PoolTransaction::Create(_, metadata) => metadata.size,
-            PoolTransaction::Upgrade(_, metadata) => metadata.size,
-            PoolTransaction::Upload(_, metadata) => metadata.size,
-            PoolTransaction::Blob(_, metadata) => metadata.size,
+        if let Some(size) = self.metadata_inner().size {
+            size
+        } else {
+            match self {
+                PoolTransaction::Script(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Create(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Blob(tx, _) => tx.transaction().metered_bytes_size(),
+            }
         }
     }
 

@@ -17,6 +17,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    future::pending,
     ops::Deref,
     sync::Arc,
     time::Duration,
@@ -56,8 +57,7 @@ async fn test_new_subscription_p2p() {
             if state == 0 {
                 Some((PeerId::from(vec![1, 2]), state + 1))
             } else {
-                tokio::time::sleep(Duration::from_millis(10000)).await;
-                None
+                pending().await
             }
         }))
     });
@@ -133,8 +133,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
             if state == 0 {
                 Some((PeerId::from(vec![1, 2]), state + 1))
             } else {
-                tokio::time::sleep(Duration::from_millis(10000)).await;
-                None
+                pending().await
             }
         }))
     });

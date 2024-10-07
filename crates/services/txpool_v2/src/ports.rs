@@ -68,11 +68,10 @@ pub trait TxPoolPersistentStorage:
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 }
 
-#[async_trait::async_trait]
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider: Send + Sync + 'static {
     /// Calculate gas price for the next block.
-    async fn next_gas_price(&self) -> Result<GasPrice, Error>;
+    fn next_gas_price(&self) -> Result<GasPrice, Error>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
