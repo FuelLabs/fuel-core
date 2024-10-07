@@ -278,7 +278,7 @@ where
 
     let max_gas_price = max_fee
         .saturating_mul(gas_price_factor)
-        .saturating_div(max_gas.saturating_add(1));
+        .div_ceil(max_gas.min(1));
     let metered_bytes_size = tx.transaction().metered_bytes_size();
 
     Metadata::new(

@@ -15,14 +15,14 @@ async-trait = { workspace = true }
 fuel-core-metrics = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
+rayon = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
 fuel-core-services = { path = ".", features = ["sync-processor"] }
-mockall = { workspace = true }
 futures = { workspace = true }
+mockall = { workspace = true }
 
 [features]
 test-helpers = []
