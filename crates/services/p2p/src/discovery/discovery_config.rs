@@ -128,6 +128,8 @@ impl Config {
         // reserved nodes need to have their peer_id defined in the Multiaddr
         let reserved_nodes = reserved_nodes
             .into_iter()
+            // skip the multiaddrs that can't be dialed
+            .filter(|node| node.protocol_stack().next() != Some("p2p".into()))
             .filter_map(|node| node.try_to_peer_id().map(|peer_id| (peer_id, node)))
             .collect::<Vec<_>>();
 

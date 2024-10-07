@@ -206,6 +206,8 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> gossipsub::Behav
     let reserved_nodes = p2p_config.reserved_nodes.clone();
     let explicit_peers = reserved_nodes
         .iter()
+        // we filter out the multiaddrs that can't actually be dialed
+        .filter(|multiaddr| multiaddr.protocol_stack().next() != Some("p2p".into()))
         .filter_map(|address| address.try_to_peer_id());
     for peer_id in explicit_peers {
         gossipsub.add_explicit_peer(&peer_id);
