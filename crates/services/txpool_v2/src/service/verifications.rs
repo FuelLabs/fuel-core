@@ -88,15 +88,10 @@ where
 
         let metadata =
             calculate_metadata(&basically_verified_tx.0, &consensus_params, version)?;
-        let minimal_gas_price = self.gas_price_provider.next_gas_price().await?;
-        let max_gas_price = metadata.max_gas_price();
 
-        if max_gas_price < minimal_gas_price {
-            return Err(Error::InsufficientMaxFee {
-                max_gas_price_from_fee: max_gas_price,
-                minimal_gas_price,
-            });
-        }
+        let gas_price_verified_tx = basically_verified_tx
+            .perform_gas_price_verifications(metadata, self.gas_price_provider.as_ref())
+            .await?;
 
         let view = self
             .persistent_storage_provider
@@ -104,7 +99,7 @@ where
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
 
         let inputs_verified_tx =
-            basically_verified_tx.perform_inputs_verifications(pool, &view, metadata)?;
+            gas_price_verified_tx.perform_inputs_verifications(pool, &view, metadata)?;
 
         let fully_verified_tx = inputs_verified_tx
             .perform_input_computation_verifications(
@@ -123,6 +118,9 @@ pub(super) struct UnverifiedTx(Transaction);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub(super) struct BasicVerifiedTx(CheckedTransaction);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub(super) struct GasPriceVerifiedTx(CheckedTransaction);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub(super) struct InputDependenciesVerifiedTx(Checked<Transaction>);
@@ -149,6 +147,25 @@ impl UnverifiedTx {
 }
 
 impl BasicVerifiedTx {
+    pub async fn perform_gas_price_verifications(
+        self,
+        metadata: Metadata,
+        gas_price_provider: &dyn GasPriceProvider,
+    ) -> Result<GasPriceVerifiedTx, Error> {
+        let minimal_gas_price = gas_price_provider.next_gas_price().await?;
+        let max_gas_price = metadata.max_gas_price();
+
+        if max_gas_price < minimal_gas_price {
+            return Err(Error::InsufficientMaxFee {
+                max_gas_price_from_fee: max_gas_price,
+                minimal_gas_price,
+            });
+        }
+        Ok(GasPriceVerifiedTx(self.0))
+    }
+}
+
+impl GasPriceVerifiedTx {
     pub fn perform_inputs_verifications<View>(
         self,
         pool: &Shared<TxPool>,
