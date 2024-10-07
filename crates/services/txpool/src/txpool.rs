@@ -347,9 +347,10 @@ where
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {
         let view = self.database.latest_view().unwrap();
+        let size = tx.transaction().size();
         self.insert_inner(
             tx,
-            Metadata::new(ConsensusParametersVersion::MIN, 0, 0),
+            Metadata::new(ConsensusParametersVersion::MIN, size, 0),
             &view,
         )
     }
