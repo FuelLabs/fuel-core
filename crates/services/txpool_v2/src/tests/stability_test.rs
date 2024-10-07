@@ -14,6 +14,7 @@ use crate::{
         Config,
         PoolLimits,
     },
+    selection_algorithms::Constraints,
     tests::universe::TestPoolUniverse,
 };
 use fuel_core_types::{
@@ -185,11 +186,10 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
     assert_ne!(ROUNDS_PER_TXPOOL, errors);
 
     loop {
-        let result = txpool.write().extract_transactions_for_block(
-            crate::selection_algorithms::Constraints {
-                max_gas: limits.max_block_gas,
-            },
-        );
+        let result = txpool.write().extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: limits.max_block_gas,
+        });
 
         if result.is_empty() {
             break

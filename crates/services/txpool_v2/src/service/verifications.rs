@@ -11,13 +11,16 @@ use crate::{
         Shared,
         TxPool,
     },
-    GasPrice,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
+    fuel_asm::Word,
     fuel_tx::{
-        field::UpgradePurpose as _,
+        field::{
+            MaxFeeLimit,
+            UpgradePurpose as _,
+        },
         ConsensusParameters,
         Transaction,
         UpgradePurpose,
@@ -32,7 +35,10 @@ use fuel_core_types::{
             Checks,
             IntoChecked,
         },
-        interpreter::Memory,
+        interpreter::{
+            ExecutableTransaction,
+            Memory,
+        },
     },
     services::txpool::{
         Metadata,
@@ -71,19 +77,26 @@ where
         pool: &Shared<TxPool>,
         current_height: BlockHeight,
     ) -> Result<PoolTransaction, Error> {
-        let unverified = UnverifiedTx(tx);
-
         let (version, consensus_params) = self
             .consensus_parameters_provider
             .latest_consensus_parameters();
 
-        let basically_verified_tx = unverified
-            .perform_basic_verifications(
-                current_height,
-                &consensus_params,
-                self.gas_price_provider.as_ref(),
-            )
-            .await?;
+        let unverified = UnverifiedTx(tx);
+
+        let basically_verified_tx =
+            unverified.perform_basic_verifications(current_height, &consensus_params)?;
+
+        let metadata =
+            calculate_metadata(&basically_verified_tx.0, &consensus_params, version)?;
+        let minimal_gas_price = self.gas_price_provider.next_gas_price().await?;
+        let max_gas_price = metadata.max_gas_price();
+
+        if max_gas_price < minimal_gas_price {
+            return Err(Error::InsufficientMaxFee {
+                max_gas_price_from_fee: max_gas_price,
+                minimal_gas_price,
+            });
+        }
 
         let view = self
             .persistent_storage_provider
@@ -91,7 +104,7 @@ where
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
 
         let inputs_verified_tx =
-            basically_verified_tx.perform_inputs_verifications(pool, version, &view)?;
+            basically_verified_tx.perform_inputs_verifications(pool, &view, metadata)?;
 
         let fully_verified_tx = inputs_verified_tx
             .perform_input_computation_verifications(
@@ -101,7 +114,7 @@ where
                 &view,
             )?;
 
-        fully_verified_tx.into_pool_transaction(version)
+        fully_verified_tx.into_pool_transaction(metadata)
     }
 }
 
@@ -118,11 +131,10 @@ pub(super) struct InputDependenciesVerifiedTx(Checked<Transaction>);
 pub(super) struct FullyVerifiedTx(Checked<Transaction>);
 
 impl UnverifiedTx {
-    pub async fn perform_basic_verifications(
+    pub fn perform_basic_verifications(
         self,
         current_height: BlockHeight,
         consensus_params: &ConsensusParameters,
-        gas_price_provider: &dyn GasPriceProvider,
     ) -> Result<BasicVerifiedTx, Error> {
         if self.0.is_mint() {
             return Err(Error::MintIsDisallowed);
@@ -132,11 +144,7 @@ impl UnverifiedTx {
             .0
             .into_checked_basic(current_height, consensus_params)?;
 
-        let gas_price = gas_price_provider.next_gas_price().await?;
-
-        let tx = verify_tx_min_gas_price(tx, consensus_params, gas_price)?;
-
-        Ok(BasicVerifiedTx(tx))
+        Ok(BasicVerifiedTx(tx.into()))
     }
 }
 
@@ -144,13 +152,13 @@ impl BasicVerifiedTx {
     pub fn perform_inputs_verifications<View>(
         self,
         pool: &Shared<TxPool>,
-        version: ConsensusParametersVersion,
         view: &View,
+        metadata: Metadata,
     ) -> Result<InputDependenciesVerifiedTx, Error>
     where
         View: TxPoolPersistentStorage,
     {
-        let pool_tx = checked_tx_into_pool(self.0, version)?;
+        let pool_tx = checked_tx_into_pool(self.0, metadata)?;
 
         let transaction = pool
             .read()
@@ -197,56 +205,67 @@ impl InputDependenciesVerifiedTx {
 impl FullyVerifiedTx {
     pub fn into_pool_transaction(
         self,
-        version: ConsensusParametersVersion,
+        metadata: Metadata,
     ) -> Result<PoolTransaction, Error> {
-        checked_tx_into_pool(self.0.into(), version)
+        checked_tx_into_pool(self.0.into(), metadata)
     }
 }
 
-fn verify_tx_min_gas_price(
-    tx: Checked<Transaction>,
+fn calculate_metadata(
+    tx: &CheckedTransaction,
     consensus_params: &ConsensusParameters,
-    gas_price: GasPrice,
-) -> Result<CheckedTransaction, Error> {
-    let tx: CheckedTransaction = tx.into();
+    version: ConsensusParametersVersion,
+) -> Result<Metadata, Error> {
+    let metadata = match tx {
+        CheckedTransaction::Script(tx) => metadata_for_tx(tx, consensus_params, version),
+        CheckedTransaction::Create(tx) => metadata_for_tx(tx, consensus_params, version),
+        CheckedTransaction::Mint(_) => {
+            return Err(Error::MintIsDisallowed);
+        }
+        CheckedTransaction::Upgrade(tx) => metadata_for_tx(tx, consensus_params, version),
+        CheckedTransaction::Upload(tx) => metadata_for_tx(tx, consensus_params, version),
+        CheckedTransaction::Blob(tx) => metadata_for_tx(tx, consensus_params, version),
+    };
+
+    Ok(metadata)
+}
+
+fn metadata_for_tx<Tx>(
+    tx: &Checked<Tx>,
+    consensus_params: &ConsensusParameters,
+    version: ConsensusParametersVersion,
+) -> Metadata
+where
+    Tx: ExecutableTransaction,
+{
+    // `max_fee_limit` is always set for `Checked<Tx>`
+    //
+    // gas * gas_price / gas_price_factor = fee
+    // gas_price = fee * gas_price_factor / gas
+    // max_gas_price = max_fee * gas_price_factor / max_gas
     let gas_costs = consensus_params.gas_costs();
     let fee_parameters = consensus_params.fee_params();
-    let read = match tx {
-        CheckedTransaction::Script(script) => {
-            let ready = script.into_ready(gas_price, gas_costs, fee_parameters)?;
-            let (_, checked) = ready.decompose();
-            CheckedTransaction::Script(checked)
-        }
-        CheckedTransaction::Create(create) => {
-            let ready = create.into_ready(gas_price, gas_costs, fee_parameters)?;
-            let (_, checked) = ready.decompose();
-            CheckedTransaction::Create(checked)
-        }
-        CheckedTransaction::Upgrade(tx) => {
-            let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
-            let (_, checked) = ready.decompose();
-            CheckedTransaction::Upgrade(checked)
-        }
-        CheckedTransaction::Upload(tx) => {
-            let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
-            let (_, checked) = ready.decompose();
-            CheckedTransaction::Upload(checked)
-        }
-        CheckedTransaction::Blob(tx) => {
-            let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
-            let (_, checked) = ready.decompose();
-            CheckedTransaction::Blob(checked)
-        }
-        CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
-    };
-    Ok(read)
+    let max_gas = tx.transaction().max_gas(gas_costs, fee_parameters) as u128;
+    let gas_price_factor = fee_parameters.gas_price_factor() as u128;
+
+    let max_fee = tx.transaction().max_fee_limit() as u128;
+
+    let max_gas_price = max_fee
+        .saturating_mul(gas_price_factor)
+        .saturating_div(max_gas.saturating_add(1));
+    let metered_bytes_size = tx.transaction().metered_bytes_size();
+
+    Metadata::new(
+        version,
+        metered_bytes_size,
+        Word::try_from(max_gas_price).unwrap_or(Word::MAX),
+    )
 }
 
 pub fn checked_tx_into_pool(
     tx: CheckedTransaction,
-    version: ConsensusParametersVersion,
+    metadata: Metadata,
 ) -> Result<PoolTransaction, Error> {
-    let metadata = Metadata::new(version);
     match tx {
         CheckedTransaction::Script(tx) => Ok(PoolTransaction::Script(tx, metadata)),
         CheckedTransaction::Create(tx) => Ok(PoolTransaction::Create(tx, metadata)),

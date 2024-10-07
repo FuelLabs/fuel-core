@@ -7,6 +7,7 @@ pub mod ratio_tip_gas;
 
 /// Constraints that the selection algorithm has to respect.
 pub struct Constraints {
+    pub minimal_gas_price: u64,
     pub max_gas: u64,
 }
 

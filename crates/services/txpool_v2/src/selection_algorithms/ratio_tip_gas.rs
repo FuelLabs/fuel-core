@@ -151,15 +151,12 @@ where
                     continue
                 };
 
-                // TODO: Add handling of the gas price
-                // if !tx_is_gas_price_valid(
-                //     &stored_transaction.transaction,
-                //     gas_costs,
-                //     fee_params,
-                //     gas_price,
-                // ) {
-                //     continue;
-                // }
+                if stored_transaction.transaction.max_gas_price()
+                    < constraints.minimal_gas_price
+                {
+                    continue;
+                }
+
                 if stored_transaction.transaction.max_gas() > gas_left {
                     continue;
                 }
@@ -231,8 +228,3 @@ where
         self.on_removed_transaction_inner(key)
     }
 }
-
-// fn tx_is_gas_price_valid(
-//     tx: &ArcPoolTx,
-// ) -> bool {
-// }

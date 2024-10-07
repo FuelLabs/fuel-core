@@ -90,13 +90,17 @@ impl SharedState {
 
     pub async fn select_transactions(
         &self,
+        minimal_gas_price: u64,
         max_gas: u64,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
             .send(SelectTransactionsRequest {
-                constraints: Constraints { max_gas },
+                constraints: Constraints {
+                    minimal_gas_price,
+                    max_gas,
+                },
                 response_channel: select_transactions_sender,
             })
             .await

@@ -15,7 +15,6 @@ use crate::{
         },
         Blob,
         Cacheable,
-        Chargeable,
         Create,
         Input,
         Output,
@@ -44,9 +43,11 @@ use tai64::Tai64;
 pub type ArcPoolTx = Arc<PoolTransaction>;
 
 /// Metadata for the transaction pool.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Metadata {
     version: ConsensusParametersVersion,
+    size: usize,
+    max_gas_price: Word,
     #[cfg(feature = "test-helpers")]
     max_gas: Option<Word>,
     #[cfg(feature = "test-helpers")]
@@ -55,9 +56,15 @@ pub struct Metadata {
 
 impl Metadata {
     /// Create a new metadata for the transaction from the pool.
-    pub fn new(version: ConsensusParametersVersion) -> Self {
+    pub fn new(
+        version: ConsensusParametersVersion,
+        size: usize,
+        max_gas_price: Word,
+    ) -> Self {
         Self {
             version,
+            size,
+            max_gas_price,
             #[cfg(feature = "test-helpers")]
             max_gas: None,
             #[cfg(feature = "test-helpers")]
@@ -74,9 +81,16 @@ impl Metadata {
     ) -> Self {
         Self {
             version,
+            size: 0,
+            max_gas_price: 0,
             max_gas,
             tx_id,
         }
+    }
+
+    /// Returns the max gas price for the transaction.
+    pub fn max_gas_price(&self) -> Word {
+        self.max_gas_price
     }
 }
 
@@ -103,14 +117,24 @@ impl PoolTransaction {
     }
 
     /// Used for accounting purposes when charging byte based fees.
-    // TODO: Cache the `metered_bytes_size` value in metadata.
     pub fn metered_bytes_size(&self) -> usize {
         match self {
-            PoolTransaction::Script(tx, _) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Create(tx, _) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Blob(tx, _) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Script(_, metadata) => metadata.size,
+            PoolTransaction::Create(_, metadata) => metadata.size,
+            PoolTransaction::Upgrade(_, metadata) => metadata.size,
+            PoolTransaction::Upload(_, metadata) => metadata.size,
+            PoolTransaction::Blob(_, metadata) => metadata.size,
+        }
+    }
+
+    /// Returns the maximum gas price for the transaction.
+    pub fn max_gas_price(&self) -> Word {
+        match self {
+            PoolTransaction::Script(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Create(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Upgrade(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Upload(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Blob(_, metadata) => metadata.max_gas_price,
         }
     }
 
