@@ -545,7 +545,7 @@ impl Node {
     pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
-            let tx_id = tx.id(&ChainId::default();
+            let tx_id = tx.id(&ChainId::default());
             self.node
                 .shared
                 .txpool_shared_state
