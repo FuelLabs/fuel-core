@@ -29,11 +29,7 @@ pub struct GraphQLArgs {
     pub max_queries_directives: usize,
 
     /// The max number of directives in the query.
-    #[clap(
-        long = "graphql-max-concurrent-queries",
-        default_value = tokio::sync::Semaphore::MAX_PERMITS.to_string(),
-        env
-    )]
+    #[clap(long = "graphql-max-concurrent-queries", default_value = "1024", env)]
     pub graphql_max_concurrent_queries: usize,
 
     /// The max body limit of the GraphQL query.
