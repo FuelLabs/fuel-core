@@ -5,11 +5,12 @@ use crate::{
         BlockImporter as BlockImporterTrait,
         ConsensusParametersProvider,
         GasPriceProvider,
-        MemoryPool as MemoryPoolTrait,
+        NotifyP2P,
+        P2PRequests,
+        P2PSubscriptions,
         TxPoolPersistentStorage,
         WasmChecker,
         WasmValidityError,
-        P2P as P2PTrait,
     },
     GasPrice,
 };
@@ -43,7 +44,6 @@ use fuel_core_types::{
     },
     fuel_types::Nonce,
     fuel_vm::{
-        interpreter::MemoryInstance,
         BlobBytes,
         BlobData,
     },
@@ -242,17 +242,6 @@ impl WasmChecker for MockWasmChecker {
     }
 }
 
-pub struct MockMemoryPool;
-
-#[async_trait::async_trait]
-impl MemoryPoolTrait for MockMemoryPool {
-    type Memory = MemoryInstance;
-
-    async fn get_memory(&self) -> Self::Memory {
-        MemoryInstance::new()
-    }
-}
-
 mockall::mock! {
     pub ConsensusParametersProvider {}
 
@@ -266,22 +255,26 @@ type GossipedTransaction = GossipData<Transaction>;
 mockall::mock! {
     pub P2P {}
 
-    #[async_trait::async_trait]
-    impl P2PTrait for P2P {
+    impl P2PSubscriptions for P2P {
         type GossipedTransaction = GossipedTransaction;
-
-        fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
         fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
 
+        fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
+    }
+
+    impl NotifyP2P for P2P {
         fn notify_gossip_transaction_validity(
             &self,
             message_info: GossipsubMessageInfo,
             validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()>;
 
-        fn subscribe_new_peers(&self) -> BoxStream<PeerId>;
+        fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
+    }
 
+    #[async_trait::async_trait]
+    impl P2PRequests for P2P {
         async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>>;
 
         async fn request_txs(

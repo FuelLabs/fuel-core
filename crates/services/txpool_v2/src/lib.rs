@@ -15,7 +15,6 @@ mod shared_state;
 mod storage;
 mod tx_status_stream;
 mod update_sender;
-mod verifications;
 
 type GasPrice = Word;
 

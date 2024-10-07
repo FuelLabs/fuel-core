@@ -69,7 +69,6 @@ use crate::{
         MockDBProvider,
         MockDb,
     },
-    verifications::perform_all_verifications,
     GasPrice,
     Service,
 };
@@ -77,7 +76,6 @@ use crate::{
 use super::mocks::{
     MockConsensusParametersProvider,
     MockImporter,
-    MockMemoryPool,
     MockP2P,
     MockTxPoolGasPrice,
     MockWasmChecker,
@@ -92,9 +90,7 @@ pub struct TestPoolUniverse {
     mock_db: MockDb,
     rng: StdRng,
     pub config: Config,
-    pool: Option<
-        TxPool<MockDBProvider, MockTxPoolGasPrice, MockConsensusParametersProvider>,
-    >,
+    pool: Option<TxPool>,
 }
 
 impl Default for TestPoolUniverse {
@@ -149,14 +145,7 @@ impl TestPoolUniverse {
         &self,
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
-    ) -> Service<
-        MockP2P,
-        MockDBProvider,
-        MockConsensusParametersProvider,
-        MockTxPoolGasPrice,
-        MockWasmChecker,
-        MockMemoryPool,
-    > {
+    ) -> Service<MockDb> {
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
@@ -185,7 +174,6 @@ impl TestPoolUniverse {
             Default::default(),
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
-            MockMemoryPool,
         )
     }
 
@@ -284,9 +272,7 @@ impl TestPoolUniverse {
         }
     }
 
-    pub fn get_pool(
-        &self,
-    ) -> TxPool<MockDBProvider, MockTxPoolGasPrice, MockConsensusParametersProvider> {
+    pub fn get_pool(&self) -> TxPool {
         self.pool.clone().unwrap()
     }
 

@@ -168,19 +168,21 @@ impl Default for Config {
         Self {
             utxo_validation: true,
             max_tx_update_subscriptions: 1000,
-            max_txs_chain_count: 1000,
+            max_txs_chain_count: 50,
             ttl_check_interval: Duration::from_secs(60),
             max_txs_ttl: Duration::from_secs(60 * 10),
             black_list: BlackList::default(),
             pool_limits: PoolLimits {
                 max_txs: 10000,
                 max_gas: 100_000_000_000,
-                max_bytes_size: 10_000_000_000,
+                max_bytes_size: 1_000_000_000,
             },
             heavy_work: HeavyWorkConfig {
+                // It is important for tests to have only one thread for verification
+                // because some of them rely on the ordering of insertion.
                 number_threads_to_verify_transactions: 1,
                 size_of_verification_queue: 100,
-                number_threads_p2p_sync: 2,
+                number_threads_p2p_sync: 1,
                 size_of_p2p_sync_queue: 100,
             },
         }

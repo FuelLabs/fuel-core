@@ -1,5 +1,19 @@
-use std::sync::Arc;
-
+use crate::{
+    error::Error,
+    ports::{
+        ConsensusParametersProvider,
+        GasPriceProvider,
+        TxPoolPersistentStorage,
+        WasmChecker,
+    },
+    service::{
+        memory::MemoryPool,
+        Shared,
+        TxPool,
+    },
+    GasPrice,
+};
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_tx::{
@@ -25,97 +39,146 @@ use fuel_core_types::{
         PoolTransaction,
     },
 };
+use std::sync::Arc;
 
-use crate::{
-    error::Error,
-    ports::{
-        AtomicView,
-        ConsensusParametersProvider,
-        GasPriceProvider,
-        TxPoolPersistentStorage,
-        WasmChecker,
-    },
-    service::TxPool,
-    GasPrice,
-};
+pub(super) struct Verification<View> {
+    pub persistent_storage_provider: Arc<dyn AtomicView<LatestView = View>>,
+    pub consensus_parameters_provider: Arc<dyn ConsensusParametersProvider>,
+    pub gas_price_provider: Arc<dyn GasPriceProvider>,
+    pub wasm_checker: Arc<dyn WasmChecker>,
+    pub memory_pool: MemoryPool,
+}
+
+impl<V> Clone for Verification<V> {
+    fn clone(&self) -> Self {
+        Self {
+            persistent_storage_provider: self.persistent_storage_provider.clone(),
+            consensus_parameters_provider: self.consensus_parameters_provider.clone(),
+            gas_price_provider: self.gas_price_provider.clone(),
+            wasm_checker: self.wasm_checker.clone(),
+            memory_pool: self.memory_pool.clone(),
+        }
+    }
+}
+
+impl<View> Verification<View>
+where
+    View: TxPoolPersistentStorage,
+{
+    pub async fn perform_all_verifications(
+        &self,
+        tx: Transaction,
+        pool: &Shared<TxPool>,
+        current_height: BlockHeight,
+    ) -> Result<PoolTransaction, Error> {
+        let unverified = UnverifiedTx(tx);
+
+        let (version, consensus_params) = self
+            .consensus_parameters_provider
+            .latest_consensus_parameters();
+
+        let basically_verified_tx = unverified
+            .perform_basic_verifications(
+                current_height,
+                &consensus_params,
+                self.gas_price_provider.as_ref(),
+            )
+            .await?;
+
+        let view = self
+            .persistent_storage_provider
+            .latest_view()
+            .map_err(|e| Error::Database(format!("{:?}", e)))?;
+
+        let inputs_verified_tx =
+            basically_verified_tx.perform_inputs_verifications(pool, version, &view)?;
+
+        let fully_verified_tx = inputs_verified_tx
+            .perform_input_computation_verifications(
+                &consensus_params,
+                self.wasm_checker.as_ref(),
+                self.memory_pool.take_raw(),
+                &view,
+            )?;
+
+        fully_verified_tx.into_pool_transaction(version)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct UnverifiedTx(Transaction);
+pub(super) struct UnverifiedTx(Transaction);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct BasicVerifiedTx(CheckedTransaction);
+pub(super) struct BasicVerifiedTx(CheckedTransaction);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct InputDependenciesVerifiedTx(Checked<Transaction>);
+pub(super) struct InputDependenciesVerifiedTx(Checked<Transaction>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct FullyVerifiedTx(Checked<Transaction>);
+pub(super) struct FullyVerifiedTx(Checked<Transaction>);
 
 impl UnverifiedTx {
     pub async fn perform_basic_verifications(
         self,
         current_height: BlockHeight,
         consensus_params: &ConsensusParameters,
-        gas_price_provider: &impl GasPriceProvider,
+        gas_price_provider: &dyn GasPriceProvider,
     ) -> Result<BasicVerifiedTx, Error> {
         if self.0.is_mint() {
             return Err(Error::MintIsDisallowed);
         }
+
         let tx = self
             .0
             .into_checked_basic(current_height, consensus_params)?;
+
         let gas_price = gas_price_provider.next_gas_price().await?;
+
         let tx = verify_tx_min_gas_price(tx, consensus_params, gas_price)?;
+
         Ok(BasicVerifiedTx(tx))
     }
 }
 
 impl BasicVerifiedTx {
-    pub fn perform_inputs_verifications<
-        PSView,
-        PSProvider,
-        GasPriceProviderT,
-        ConsensusParametersProviderT,
-    >(
+    pub fn perform_inputs_verifications<View>(
         self,
-        pool: &TxPool<PSProvider, GasPriceProviderT, ConsensusParametersProviderT>,
+        pool: &Shared<TxPool>,
         version: ConsensusParametersVersion,
+        view: &View,
     ) -> Result<InputDependenciesVerifiedTx, Error>
     where
-        PSProvider: AtomicView<LatestView = PSView>,
-        PSView: TxPoolPersistentStorage,
-        GasPriceProviderT: GasPriceProvider,
-        ConsensusParametersProviderT: ConsensusParametersProvider,
+        View: TxPoolPersistentStorage,
     {
         let pool_tx = checked_tx_into_pool(self.0, version)?;
 
         let transaction = pool
             .read()
-            .can_insert_transaction(Arc::new(pool_tx))?
+            .can_insert_transaction(Arc::new(pool_tx), view)?
             .into_transaction();
         // SAFETY: We created the arc just above and it's not shared.
-        let transaction = Arc::try_unwrap(transaction).unwrap();
+        let transaction =
+            Arc::try_unwrap(transaction).expect("We only the owner of the `Arc`; qed");
         let checked_transaction: CheckedTransaction = transaction.into();
         Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
     }
 }
 
 impl InputDependenciesVerifiedTx {
-    pub fn perform_input_computation_verifications<M, View>(
+    pub fn perform_input_computation_verifications<View>(
         self,
         consensus_params: &ConsensusParameters,
-        wasm_checker: &impl WasmChecker,
-        memory: M,
-        view: View,
+        wasm_checker: &dyn WasmChecker,
+        memory: impl Memory,
+        view: &View,
     ) -> Result<FullyVerifiedTx, Error>
     where
-        M: Memory + Send + Sync + 'static,
         View: TxPoolPersistentStorage,
     {
         let tx = self.0.check_signatures(&consensus_params.chain_id())?;
 
         let parameters = CheckPredicateParams::from(consensus_params);
-        let tx = tx.check_predicates(&parameters, memory, &view)?;
+        let tx = tx.check_predicates(&parameters, memory, view)?;
 
         if let Transaction::Upgrade(upgrade) = tx.transaction() {
             if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
@@ -138,47 +201,6 @@ impl FullyVerifiedTx {
     ) -> Result<PoolTransaction, Error> {
         checked_tx_into_pool(self.0.into(), version)
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn perform_all_verifications<
-    M,
-    PSView,
-    PSProvider,
-    GasPriceProviderT,
-    ConsensusParametersProviderT,
->(
-    tx: Transaction,
-    pool: &TxPool<PSProvider, GasPriceProviderT, ConsensusParametersProviderT>,
-    current_height: BlockHeight,
-    consensus_params: &ConsensusParameters,
-    consensus_params_version: ConsensusParametersVersion,
-    gas_price_provider: &impl GasPriceProvider,
-    wasm_checker: &impl WasmChecker,
-    memory: M,
-    view: PSView,
-) -> Result<PoolTransaction, Error>
-where
-    M: Memory + Send + Sync + 'static,
-    PSProvider: AtomicView<LatestView = PSView>,
-    PSView: TxPoolPersistentStorage,
-    GasPriceProviderT: GasPriceProvider,
-    ConsensusParametersProviderT: ConsensusParametersProvider,
-{
-    let unverified = UnverifiedTx(tx);
-    let basically_verified_tx = unverified
-        .perform_basic_verifications(current_height, consensus_params, gas_price_provider)
-        .await?;
-    let inputs_verified_tx = basically_verified_tx
-        .perform_inputs_verifications(pool, consensus_params_version)?;
-
-    let fully_verified_tx = inputs_verified_tx.perform_input_computation_verifications(
-        consensus_params,
-        wasm_checker,
-        memory,
-        view,
-    )?;
-    fully_verified_tx.into_pool_transaction(consensus_params_version)
 }
 
 fn verify_tx_min_gas_price(

@@ -1,9 +1,6 @@
-use crate::{
-    error::Error,
-    storage::{
-        RemovedTransactions,
-        StorageData,
-    },
+use crate::storage::{
+    RemovedTransactions,
+    StorageData,
 };
 
 pub mod ratio_tip_gas;
@@ -24,7 +21,7 @@ pub trait SelectionAlgorithm {
         &mut self,
         constraints: Constraints,
         storage: &mut Self::Storage,
-    ) -> Result<RemovedTransactions, Error>;
+    ) -> RemovedTransactions;
 
     /// Update the selection algorithm with the new transaction that are executable.
     fn new_executable_transaction(

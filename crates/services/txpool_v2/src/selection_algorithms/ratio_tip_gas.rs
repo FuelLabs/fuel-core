@@ -6,7 +6,6 @@ use std::{
     collections::BTreeMap,
     fmt::Debug,
     ops::Deref,
-    sync::Arc,
     time::Instant,
 };
 
@@ -26,11 +25,6 @@ use fuel_core_types::{
 use num_rational::Ratio;
 
 use crate::{
-    error::Error,
-    ports::{
-        ConsensusParametersProvider,
-        GasPriceProvider,
-    },
     storage::{
         RemovedTransactions,
         StorageData,
@@ -92,18 +86,20 @@ impl PartialOrd for Key {
 }
 
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
-pub struct RatioTipGasSelection<S: RatioTipGasSelectionAlgorithmStorage, G, C> {
+pub struct RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
-    gas_price_provider: Arc<G>,
-    consensus_params_provider: Arc<C>,
 }
 
-impl<S: RatioTipGasSelectionAlgorithmStorage, G, C> RatioTipGasSelection<S, G, C> {
-    pub fn new(gas_price_provider: Arc<G>, consensus_params_provider: Arc<C>) -> Self {
+impl<S> RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
+    pub fn new() -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
-            gas_price_provider,
-            consensus_params_provider,
         }
     }
 
@@ -129,11 +125,9 @@ impl<S: RatioTipGasSelectionAlgorithmStorage, G, C> RatioTipGasSelection<S, G, C
     }
 }
 
-impl<
-        S: RatioTipGasSelectionAlgorithmStorage,
-        G: GasPriceProvider,
-        C: ConsensusParametersProvider,
-    > SelectionAlgorithm for RatioTipGasSelection<S, G, C>
+impl<S> SelectionAlgorithm for RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
 {
     type Storage = S;
     type StorageIndex = S::StorageIndex;
@@ -142,16 +136,8 @@ impl<
         &mut self,
         constraints: Constraints,
         storage: &mut S,
-    ) -> Result<RemovedTransactions, Error> {
+    ) -> RemovedTransactions {
         let mut gas_left = constraints.max_gas;
-        let gas_price =
-            { futures::executor::block_on(self.gas_price_provider.next_gas_price()) }?;
-        let consensus_params = self
-            .consensus_params_provider
-            .latest_consensus_parameters()
-            .1;
-        let gas_costs = consensus_params.gas_costs();
-        let fee_params = consensus_params.fee_params();
         let mut result = Vec::new();
 
         // Take iterate over all transactions with the highest tip/gas ratio. If transaction
@@ -181,14 +167,15 @@ impl<
                     continue
                 };
 
-                if !tx_is_gas_price_valid(
-                    &stored_transaction.transaction,
-                    gas_costs,
-                    fee_params,
-                    gas_price,
-                ) {
-                    continue;
-                }
+                // TODO: Add handling of the gas price
+                // if !tx_is_gas_price_valid(
+                //     &stored_transaction.transaction,
+                //     gas_costs,
+                //     fee_params,
+                //     gas_price,
+                // ) {
+                //     continue;
+                // }
                 if stored_transaction.transaction.max_gas() > gas_left {
                     continue;
                 }
@@ -236,7 +223,7 @@ impl<
             }
         }
 
-        Ok(result)
+        result
     }
 
     fn new_executable_transaction(
