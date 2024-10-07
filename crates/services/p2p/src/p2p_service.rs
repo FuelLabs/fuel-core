@@ -36,7 +36,10 @@ use crate::{
     },
     TryPeerId,
 };
-use fuel_core_metrics::p2p_metrics::increment_unique_peers;
+use fuel_core_metrics::{
+    global_registry,
+    p2p_metrics::increment_unique_peers,
+};
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::AppScore,
@@ -203,6 +206,8 @@ impl FuelP2PService {
         config: Config,
         codec: PostcardCodec,
     ) -> anyhow::Result<Self> {
+        let metrics = config.metrics;
+
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
@@ -217,28 +222,45 @@ impl FuelP2PService {
         let tcp_config = tcp::Config::new().port_reuse(true);
         let behaviour = FuelBehaviour::new(&config, codec.clone())?;
 
-        let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
+        let swarm_builder = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
             .with_tcp(
                 tcp_config,
                 transport_function,
                 libp2p::yamux::Config::default,
             )
-            .map_err(|_| anyhow::anyhow!("Failed to build Swarm"))?
-            .with_dns()?
-            .with_behaviour(|_| behaviour)?
-            .with_swarm_config(|cfg| {
-                if let Some(timeout) = config.connection_idle_timeout {
-                    cfg.with_idle_connection_timeout(timeout)
-                } else {
-                    cfg
-                }
-            })
-            .build();
+            .map_err(|_| anyhow::anyhow!("Failed to build Swarm"))?;
+
+        let mut swarm = if metrics {
+            // we use the global registry to store the metrics without needing to create a new one
+            // since libp2p already creates sub-registries
+            let mut registry = global_registry().registry.lock();
+
+            swarm_builder
+                .with_bandwidth_metrics(&mut registry)
+                .with_behaviour(|_| behaviour)?
+                .with_swarm_config(|cfg| {
+                    if let Some(timeout) = config.connection_idle_timeout {
+                        cfg.with_idle_connection_timeout(timeout)
+                    } else {
+                        cfg
+                    }
+                })
+                .build()
+        } else {
+            swarm_builder
+                .with_behaviour(|_| behaviour)?
+                .with_swarm_config(|cfg| {
+                    if let Some(timeout) = config.connection_idle_timeout {
+                        cfg.with_idle_connection_timeout(timeout)
+                    } else {
+                        cfg
+                    }
+                })
+                .build()
+        };
 
         let local_peer_id = swarm.local_peer_id().to_owned();
-
-        let metrics = config.metrics;
 
         if let Some(public_address) = config.public_address.clone() {
             swarm.add_external_address(public_address);
