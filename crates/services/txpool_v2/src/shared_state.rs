@@ -89,7 +89,7 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub async fn select_transactions(
+    pub async fn lock_transaction_fetcher(
         &self,
         minimal_gas_price: u64,
         max_gas: u64,

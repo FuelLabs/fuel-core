@@ -701,7 +701,7 @@ impl Transaction {
         let id = self.1;
         let query = ctx.read_view()?;
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query.as_ref(), txpool).map_err(Into::into)
+        get_tx_status(id, query.as_ref(), txpool).map_err(Into::into).await
     }
 
     async fn script(&self) -> Option<HexString> {
@@ -984,7 +984,7 @@ impl DryRunTransactionExecutionStatus {
 }
 
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
-pub(crate) fn get_tx_status(
+pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &ReadView,
     txpool: &TxPool,
@@ -999,8 +999,7 @@ pub(crate) fn get_tx_status(
         }
         None => {
             let submitted_time =
-                futures::executor::block_on(async { txpool.submission_time(id).await })
-                    .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
+                txpool.submission_time(id).await.map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
             match submitted_time {
                 Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
                     SubmittedStatus(submitted_time),

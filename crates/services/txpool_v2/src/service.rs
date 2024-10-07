@@ -39,10 +39,7 @@ use crate::{
     update_sender::TxStatusChange,
 };
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
+    RunnableService, RunnableTask, ServiceRunner, StateWatcher
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -57,10 +54,7 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         p2p::{
-            GossipData,
-            GossipsubMessageInfo,
-            PeerId,
-            TransactionGossipData,
+            GossipData, GossipsubMessageInfo, PeerId, TransactionGossipData
         },
         txpool::{
             ArcPoolTx,
@@ -81,7 +75,7 @@ use tokio::{
     sync::{
         mpsc,
         oneshot,
-        Notify,
+        Notify, OwnedSemaphorePermit, Semaphore,
     },
     time::MissedTickBehavior,
 };
@@ -102,6 +96,8 @@ pub type TxPool = Pool<
 pub type Shared<T> = Arc<RwLock<T>>;
 
 pub type Service<View> = ServiceRunner<Task<View>>;
+
+pub struct BlockTransactionSelector(OwnedSemaphorePermit);
 
 /// Structure returned to others modules containing the transaction and
 /// some useful infos
@@ -139,7 +135,7 @@ impl From<TxInfo> for TransactionStatus {
 
 pub struct SelectTransactionsRequest {
     pub constraints: Constraints,
-    pub response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
+    pub response_channel: oneshot::Sender<BlockTransactionSelector>,
 }
 
 pub enum WritePoolRequest {
@@ -176,6 +172,7 @@ pub struct Task<View> {
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
     current_height: Arc<RwLock<BlockHeight>>,
+    block_transactions_selector: Arc<Semaphore>,
     shared_state: SharedState,
 }
 
@@ -212,6 +209,7 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+
         tokio::select! {
             biased;
 
@@ -230,7 +228,7 @@ where
 
             select_transaction_request = self.subscriptions.extract_transactions.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
-                    self.extract_transaction(select_transaction_request);
+                    self.extract_transaction(select_transaction_request).await;
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -310,19 +308,20 @@ where
         }
     }
 
-    fn extract_transaction(&self, request: SelectTransactionsRequest) {
+    async fn extract_transaction(&self, request: SelectTransactionsRequest) {
         let SelectTransactionsRequest {
-            constraints,
+            constraints: _,
             response_channel,
         } = request;
 
-        let result = self
-            .pool
-            .write()
-            .extract_transactions_for_block(constraints);
+        let Ok(permit) = self.block_transactions_selector.clone().acquire_owned().await
+        else {
+            tracing::error!("Failed to acquire a permit to select transactions");
+            return;
+        };
 
-        if let Err(e) = response_channel.send(result) {
-            tracing::error!("Failed to send the result: {:?}", e);
+        if response_channel.send(BlockTransactionSelector(permit)).is_err() {
+            tracing::error!("Failed to send the result:");
             // TODO: We need to remove all dependencies of the transactions that we failed to send
         }
     }

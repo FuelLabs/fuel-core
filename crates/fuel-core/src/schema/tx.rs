@@ -366,13 +366,11 @@ impl TxStatusSubscription {
         Ok(transaction_status_change(
             move |id| match query.tx_status(&id) {
                 Ok(status) => Ok(Some(status)),
-                Err(StorageError::NotFound(_, _)) => futures::executor::block_on(async {
-                    Ok(txpool
+                Err(StorageError::NotFound(_, _)) => Ok(txpool
                         .submission_time(id)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?
-                        .map(|time| txpool::TransactionStatus::Submitted { time }))
-                }),
+                        .map(|time| txpool::TransactionStatus::Submitted { time })),
                 Err(err) => Err(err),
             },
             rx,

@@ -233,11 +233,11 @@ where
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
-    pub fn produce_and_commit(
+    pub async fn produce_and_commit(
         &mut self,
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
-        let (result, changes) = self.produce_without_commit(block)?.into();
+        let (result, changes) = self.produce_without_commit(block).await?.into();
 
         self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
@@ -265,16 +265,16 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Executes the block and returns the result of the execution with storage changes.
-    pub fn produce_without_commit(
+    pub async fn produce_without_commit(
         &self,
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        self.produce_without_commit_with_coinbase(block, Default::default(), 0)
+        self.produce_without_commit_with_coinbase(block, Default::default(), 0).await
     }
 
     /// The analog of the [`Self::produce_without_commit`] method,
     /// but with the ability to specify the coinbase recipient and the gas price.
-    pub fn produce_without_commit_with_coinbase(
+    pub async fn produce_without_commit_with_coinbase(
         &self,
         block: PartialFuelBlock,
         coinbase_recipient: fuel_core_types::fuel_types::ContractId,
@@ -288,11 +288,11 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(component, options, false)
+        self.produce_inner(component, options, false).await
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
-    pub fn dry_run_without_commit_with_source<TxSource>(
+    pub async fn dry_run_without_commit_with_source<TxSource>(
         &self,
         block: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
@@ -300,7 +300,7 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(block, options, true)
+        self.produce_inner(block, options, true).await
     }
 }
 
@@ -313,7 +313,7 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub fn produce_without_commit_with_source<TxSource>(
+    pub async fn produce_without_commit_with_source<TxSource>(
         &self,
         components: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
@@ -321,12 +321,12 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(components, options, false)
+        self.produce_inner(components, options, false).await
     }
 
     /// Executes the block and returns the result of the execution without committing
     /// the changes in the dry run mode.
-    pub fn dry_run(
+    pub async fn dry_run(
         &self,
         component: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
@@ -353,7 +353,7 @@ where
             skipped_transactions,
             tx_status,
             ..
-        } = self.produce_inner(component, options, true)?.into_result();
+        } = self.produce_inner(component, options, true).await?.into_result();
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
@@ -372,7 +372,7 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn produce_inner<TxSource>(
+    async fn produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
@@ -386,7 +386,7 @@ where
         if block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
-                    self.native_produce_inner(block, options, dry_run)
+                    self.native_produce_inner(block, options, dry_run).await
                 }
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
@@ -404,7 +404,7 @@ where
     }
 
     #[cfg(not(feature = "wasm-executor"))]
-    fn produce_inner<TxSource>(
+    async fn produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
@@ -416,7 +416,7 @@ where
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
-            self.native_produce_inner(block, options, dry_run)
+            self.native_produce_inner(block, options, dry_run).await
         } else {
             Err(ExecutorError::Other(format!(
                 "Not supported version `{block_version}`. Expected version is `{}`",
@@ -597,7 +597,7 @@ where
         }
     }
 
-    fn native_produce_inner<TxSource>(
+    async fn native_produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
@@ -617,11 +617,11 @@ where
         if let Some(previous_block_height) = previous_block_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run)
+                .produce_without_commit(block, dry_run).await
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run)
+                .produce_without_commit(block, dry_run).await
         }
     }
 

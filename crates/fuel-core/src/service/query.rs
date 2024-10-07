@@ -79,13 +79,12 @@ impl FuelService {
         Ok(transaction_status_change(
             move |id| match db.get_tx_status(&id)? {
                 Some(status) => Ok(Some(status)),
-                None => futures::executor::block_on(async {
+                None => 
                     Ok(txpool
                         .find_one(id)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?
-                        .map(Into::into))
-                }),
+                        .map(Into::into)),
             },
             rx,
             id,
