@@ -1,4 +1,14 @@
-use crate::{
+use crate as fuel_core_txpool;
+
+use fuel_core_services::{
+    AsyncProcessor,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    SyncProcessor,
+};
+use fuel_core_txpool::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
     error::{
@@ -16,10 +26,7 @@ use crate::{
         TxPoolPersistentStorage,
         WasmChecker as WasmCheckerTrait,
     },
-    selection_algorithms::{
-        ratio_tip_gas::RatioTipGasSelection,
-        Constraints,
-    },
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
         memory::MemoryPool,
         p2p::P2PExt,
@@ -27,7 +34,10 @@ use crate::{
         subscriptions::Subscriptions,
         verifications::Verification,
     },
-    shared_state::SharedState,
+    shared_state::{
+        BorrowedTxPool,
+        SharedState,
+    },
     storage::{
         graph::{
             GraphConfig,
@@ -36,14 +46,6 @@ use crate::{
         Storage,
     },
     update_sender::TxStatusChange,
-};
-use fuel_core_services::{
-    AsyncProcessor,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
-    SyncProcessor,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -63,7 +65,10 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::ArcPoolTx,
+        txpool::{
+            ArcPoolTx,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -72,13 +77,16 @@ use parking_lot::RwLock;
 use std::{
     collections::VecDeque,
     sync::Arc,
-    time::SystemTime,
+    time::{
+        SystemTime,
+        SystemTimeError,
+    },
 };
 use tokio::{
     sync::{
         mpsc,
         oneshot,
-        Notify,
+        watch,
     },
     time::MissedTickBehavior,
 };
@@ -100,9 +108,43 @@ pub(crate) type Shared<T> = Arc<RwLock<T>>;
 
 pub type Service<View> = ServiceRunner<Task<View>>;
 
-pub struct SelectTransactionsRequest {
-    pub constraints: Constraints,
-    pub response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
+/// Structure returned to others modules containing the transaction and
+/// some useful infos
+#[derive(Debug)]
+pub struct TxInfo {
+    /// The transaction
+    tx: ArcPoolTx,
+    /// The creation instant of the transaction
+    creation_instant: SystemTime,
+}
+
+impl TxInfo {
+    pub fn tx(&self) -> &ArcPoolTx {
+        &self.tx
+    }
+
+    pub fn creation_instant(&self) -> &SystemTime {
+        &self.creation_instant
+    }
+}
+
+impl TryFrom<TxInfo> for TransactionStatus {
+    type Error = SystemTimeError;
+
+    fn try_from(value: TxInfo) -> Result<Self, Self::Error> {
+        let unit_time = value
+            .creation_instant
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs() as i64;
+
+        Ok(TransactionStatus::Submitted {
+            time: Tai64::from_unix(unit_time),
+        })
+    }
+}
+
+pub struct BorrowTxPoolRequest {
+    pub response_channel: oneshot::Sender<BorrowedTxPool>,
 }
 
 pub enum WritePoolRequest {
@@ -125,12 +167,13 @@ pub enum ReadPoolRequest {
     },
     GetTxs {
         tx_ids: Vec<TxId>,
-        response_channel: oneshot::Sender<Vec<Option<ArcPoolTx>>>,
+        response_channel: oneshot::Sender<Vec<Option<TxInfo>>>,
     },
 }
 
 pub struct Task<View> {
     chain_id: ChainId,
+    utxo_validation: bool,
     subscriptions: Subscriptions,
     verification: Verification<View>,
     p2p: Arc<dyn P2PRequests>,
@@ -175,6 +218,7 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+
         tokio::select! {
             biased;
 
@@ -191,9 +235,9 @@ where
                 }
             }
 
-            select_transaction_request = self.subscriptions.extract_transactions.recv() => {
+            select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
-                    self.extract_transaction(select_transaction_request);
+                    self.borrow_txpool(select_transaction_request);
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -265,6 +309,9 @@ where
         {
             let mut tx_pool = self.pool.write();
             tx_pool.remove_transaction(executed_transaction);
+            if !tx_pool.is_empty() {
+                self.shared_state.new_txs_notifier.send_replace(());
+            }
         }
 
         {
@@ -273,22 +320,10 @@ where
         }
     }
 
-    fn extract_transaction(&self, request: SelectTransactionsRequest) {
-        let SelectTransactionsRequest {
-            constraints,
-            response_channel,
-        } = request;
+    fn borrow_txpool(&self, request: BorrowTxPoolRequest) {
+        let BorrowTxPoolRequest { response_channel } = request;
 
-        let result = self
-            .pool
-            .write()
-            .extract_transactions_for_block(constraints);
-
-        if let Err(e) = response_channel.send(result) {
-            tracing::error!("Failed to send the result: {:?}", e);
-            // TODO: We need to remove all dependencies of the transactions that we failed to send
-            //  Reworked in the next PR.
-        }
+        let _ = response_channel.send(BorrowedTxPool(self.pool.clone()));
     }
 
     fn process_write(&self, write_pool_request: WritePoolRequest) {
@@ -346,6 +381,7 @@ where
         let current_height = self.current_height.clone();
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
+        let utxo_validation = self.utxo_validation;
 
         move || {
             let current_height = *current_height.read();
@@ -359,6 +395,7 @@ where
                 transaction,
                 &pool,
                 current_height,
+                utxo_validation,
             );
 
             p2p.process_insertion_result(from_peer_info, &result);
@@ -406,7 +443,7 @@ where
                     if let Some(channel) = response_channel {
                         let _ = channel.send(Ok(()));
                     }
-                    shared_state.new_txs_notifier.notify_waiters();
+                    shared_state.new_txs_notifier.send_replace(());
 
                     removed_txs
                 }
@@ -579,7 +616,12 @@ where
                     let pool = self.pool.read();
                     tx_ids
                         .into_iter()
-                        .map(|tx_id| pool.find_one(&tx_id))
+                        .map(|tx_id| {
+                            pool.find_one(&tx_id).map(|stored_data| TxInfo {
+                                tx: stored_data.transaction.clone(),
+                                creation_instant: stored_data.creation_instant,
+                            })
+                        })
                         .collect()
                 };
                 if response_channel.send(txs).is_err() {
@@ -602,6 +644,7 @@ pub fn new_service<
     GasPriceProvider,
     WasmChecker,
 >(
+    chain_id: ChainId,
     config: Config,
     p2p: P2P,
     block_importer: BlockImporter,
@@ -613,19 +656,14 @@ pub fn new_service<
 ) -> Service<PSView>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
-    P2P: P2PRequests + Send + Sync + 'static,
-    PSProvider: AtomicView<LatestView = PSView> + Send + Sync + 'static,
+    P2P: P2PRequests,
+    PSProvider: AtomicView<LatestView = PSView> + 'static,
     PSView: TxPoolPersistentStorage,
-    ConsensusParamsProvider: ConsensusParametersProvider + Send + Sync,
-    GasPriceProvider: GasPriceProviderTrait + Send + Sync,
-    WasmChecker: WasmCheckerTrait + Send + Sync,
-    BlockImporter: BlockImporterTrait + Send + Sync,
+    ConsensusParamsProvider: ConsensusParametersProvider,
+    GasPriceProvider: GasPriceProviderTrait,
+    WasmChecker: WasmCheckerTrait,
+    BlockImporter: BlockImporterTrait,
 {
-    let chain_id = consensus_parameters_provider
-        .latest_consensus_parameters()
-        .1
-        .chain_id();
-
     let mut ttl_timer = tokio::time::interval(config.ttl_check_interval);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -638,11 +676,7 @@ where
             .max_pending_write_pool_requests,
     );
     let (select_transactions_requests_sender, select_transactions_requests_receiver) =
-        mpsc::channel(
-            config
-                .service_channel_limits
-                .max_pending_select_transactions_requests,
-        );
+        mpsc::channel(1);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
     let tx_status_sender = TxStatusChange::new(
@@ -653,7 +687,7 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
-    let new_txs_notifier = Arc::new(Notify::new());
+    let (new_txs_notifier, _) = watch::channel(());
 
     let shared_state = SharedState {
         write_pool_requests_sender,
@@ -668,7 +702,7 @@ where
         new_tx: tx_from_p2p_stream,
         imported_blocks: block_importer.block_events(),
         write_pool: write_pool_requests_receiver,
-        extract_transactions: select_transactions_requests_receiver,
+        borrow_txpool: select_transactions_requests_receiver,
         read_pool: read_pool_requests_receiver,
     };
 
@@ -698,6 +732,7 @@ where
     )
     .unwrap();
 
+    let utxo_validation = config.utxo_validation;
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
             max_txs_chain_count: config.max_txs_chain_count,
@@ -709,6 +744,7 @@ where
 
     Service::new(Task {
         chain_id,
+        utxo_validation,
         subscriptions,
         verification,
         transaction_verifier_process,

@@ -73,7 +73,6 @@ use std::{
         Index,
         IndexMut,
     },
-    sync::Arc,
     time::Duration,
 };
 use tokio::sync::broadcast;
@@ -504,7 +503,7 @@ impl Node {
 
             let tx_id = not_found[0];
             let mut wait_transaction =
-                self.node.transaction_status_change(tx_id).unwrap();
+                self.node.transaction_status_change(tx_id).await.unwrap();
 
             loop {
                 tokio::select! {
@@ -546,20 +545,15 @@ impl Node {
     pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
-            let tx_result = self
-                .node
+            let tx_id = tx.id(&ChainId::default());
+            self.node
                 .shared
                 .txpool_shared_state
-                .insert(vec![Arc::new(tx.clone())])
+                .insert(tx.clone())
                 .await
-                .pop()
-                .unwrap()
                 .unwrap();
 
-            let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(&ChainId::default()), tx);
-
-            assert!(tx_result.removed.is_empty());
+            expected.insert(tx_id, tx.clone());
         }
         expected
     }

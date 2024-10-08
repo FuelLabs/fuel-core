@@ -1,5 +1,4 @@
 use crate::{
-    error::Error,
     ports::{
         AtomicView,
         BlockImporter as BlockImporterTrait,
@@ -204,21 +203,18 @@ impl AtomicView for MockDBProvider {
 
 #[derive(Debug, Clone)]
 pub struct MockTxPoolGasPrice {
-    pub gas_price: Option<GasPrice>,
+    pub gas_price: GasPrice,
 }
 
 impl MockTxPoolGasPrice {
     pub fn new(gas_price: GasPrice) -> Self {
-        Self {
-            gas_price: Some(gas_price),
-        }
+        Self { gas_price }
     }
 }
 
 impl GasPriceProvider for MockTxPoolGasPrice {
-    fn next_gas_price(&self) -> Result<GasPrice, Error> {
+    fn next_gas_price(&self) -> GasPrice {
         self.gas_price
-            .ok_or(Error::GasPriceNotFound("Gas price not found".to_string()))
     }
 }
 

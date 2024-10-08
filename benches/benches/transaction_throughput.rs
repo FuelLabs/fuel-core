@@ -104,20 +104,15 @@ where
                     for _ in 0..iters {
                         let mut test_builder = test_builder.clone();
                         let sealed_block = {
-                            let transactions = transactions
-                                .iter()
-                                .map(|tx| Arc::new(tx.clone()))
-                                .collect();
+                            let transactions: Vec<Transaction> =
+                                transactions.iter().cloned().collect();
                             // start the producer node
                             let TestContext { srv, client, .. } =
                                 test_builder.finalize().await;
 
                             // insert all transactions
-                            let results =
-                                srv.shared.txpool_shared_state.insert(transactions).await;
-                            for result in results {
-                                let result = result.expect("Should insert transaction");
-                                assert_eq!(result.removed.len(), 0);
+                            for tx in transactions {
+                                srv.shared.txpool_shared_state.insert(tx).await.unwrap();
                             }
                             let _ = client.produce_blocks(1, None).await;
 

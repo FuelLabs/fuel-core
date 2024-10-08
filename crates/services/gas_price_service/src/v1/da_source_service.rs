@@ -45,8 +45,8 @@ mod tests {
         notifier.notified().await;
 
         // then
-        let shared_state_value = shared_state.recv().await.unwrap();
-        assert_eq!(shared_state_value, expected_da_cost);
+        let actual_da_cost = shared_state.try_recv().unwrap();
+        assert_eq!(actual_da_cost, expected_da_cost);
         service.stop_and_await().await.unwrap();
     }
 
@@ -64,8 +64,8 @@ mod tests {
         notifier.notified().await;
 
         // then
-        let shared_state_value = shared_state.try_recv();
-        assert!(shared_state_value.is_err());
+        let da_block_costs_res = shared_state.try_recv();
+        assert!(da_block_costs_res.is_err());
         service.stop_and_await().await.unwrap();
     }
 }

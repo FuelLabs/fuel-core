@@ -14,7 +14,15 @@ use tokio::{
 /// executed concurrently.
 pub struct AsyncProcessor {
     semaphore: Arc<Semaphore>,
-    thread_pool: runtime::Runtime,
+    thread_pool: Option<runtime::Runtime>,
+}
+
+impl Drop for AsyncProcessor {
+    fn drop(&mut self) {
+        if let Some(runtime) = self.thread_pool.take() {
+            runtime.shutdown_background();
+        }
+    }
 }
 
 /// A reservation for a task to be executed by the `AsyncProcessor`.
@@ -31,11 +39,17 @@ impl AsyncProcessor {
         number_of_threads: usize,
         number_of_pending_tasks: usize,
     ) -> anyhow::Result<Self> {
-        let thread_pool = runtime::Builder::new_multi_thread()
-            .worker_threads(number_of_threads)
-            .enable_all()
-            .build()
-            .map_err(|e| anyhow::anyhow!("Failed to create a tokio pool: {}", e))?;
+        let thread_pool = if number_of_threads != 0 {
+            let runtime = runtime::Builder::new_multi_thread()
+                .worker_threads(number_of_threads)
+                .enable_all()
+                .build()
+                .map_err(|e| anyhow::anyhow!("Failed to create a tokio pool: {}", e))?;
+
+            Some(runtime)
+        } else {
+            None
+        };
         let semaphore = Arc::new(Semaphore::new(number_of_pending_tasks));
         Ok(Self {
             thread_pool,
@@ -59,10 +73,15 @@ impl AsyncProcessor {
         F: Future<Output = ()> + Send + 'static,
     {
         let permit = reservation.0;
-        self.thread_pool.spawn(async move {
+        let future = async move {
             let _drop = permit;
             future.await
-        });
+        };
+        if let Some(runtime) = &self.thread_pool {
+            runtime.spawn(future);
+        } else {
+            tokio::spawn(future);
+        }
     }
 
     /// Tries to spawn a task. If the task cannot be spawned, returns an error.

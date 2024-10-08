@@ -225,7 +225,7 @@ impl TestSetupBuilder {
 
         let config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::Config::default(),
+            txpool: fuel_core_txpool::config::Config::default(),
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
