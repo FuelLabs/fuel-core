@@ -17,9 +17,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     - Reading operations on the pool is now asynchronous and it’s the less prioritized operation on the Pool, API has been updated accordingly.
     - GasPrice is no more using async to allow the transactions verifications to not use async anymore 
 
-We also added a lot of new configuration cli parameters to fine-tune TxPool configuration.
-This PR also changes the way we are making the heavy work processor and a sync and asynchronous version is available in services folder (usable by anyone)
-P2P now use separate heavy work processor for DB and TxPool interactions.
+    We also added a lot of new configuration cli parameters to fine-tune TxPool configuration.
+    This PR also changes the way we are making the heavy work processor and a sync and asynchronous version is available in services folder (usable by anyone)
+    P2P now use separate heavy work processor for DB and TxPool interactions.
 
 ### Removed
 - [2306](https://github.com/FuelLabs/fuel-core/pull/2306): Removed hack for genesis asset contract from the code.
