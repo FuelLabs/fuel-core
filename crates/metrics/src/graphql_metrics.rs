@@ -1,7 +1,9 @@
 use crate::{
-    buckets,
+    buckets::{
+        buckets,
+        Buckets,
+    },
     global_registry,
-    Buckets,
 };
 use prometheus_client::{
     encoding::EncodeLabelSet,
