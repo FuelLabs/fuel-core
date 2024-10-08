@@ -3764,6 +3764,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "derive_more",
+ "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-trace",

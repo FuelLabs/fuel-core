@@ -14,6 +14,7 @@ description = "Transaction pool that manages transactions and their dependencies
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
+fuel-core-metrics = {workspace = true}
 fuel-core-services = { workspace = true, features = ["sync-processor"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }

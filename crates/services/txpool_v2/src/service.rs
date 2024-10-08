@@ -218,6 +218,13 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+        // TODO: move this to the Task struct
+        let txpool_metrics = fuel_core_metrics::txpool_metrics::txpool_metrics();
+
+        let num_transactions = self.pool.read().storage.tx_count();
+        txpool_metrics
+            .number_of_transactions_gauge
+            .set(num_transactions as i64);
 
         tokio::select! {
             biased;
@@ -232,7 +239,7 @@ where
                     should_continue = true;
                 } else {
                     should_continue = false;
-                }
+                };
             }
 
             select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
