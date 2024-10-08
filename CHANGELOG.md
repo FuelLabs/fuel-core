@@ -6,10 +6,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.38.0]
+
 ### Added
 - [2309](https://github.com/FuelLabs/fuel-core/pull/2309): Limit number of concurrent queries to the graphql service.
-- [2216](https://github.com/FuelLabs/fuel-core/pull/2216): Add more function to the state and task of TxPoolV2 to handle the future interactions with others modules (PoA, BlockProducer, BlockImporter and P2P)
-- [2263](https://github.com/FuelLabs/fuel-core/pull/2263): Use the Txpool v2 in the whole codebase
+- [2216](https://github.com/FuelLabs/fuel-core/pull/2216): Add more function to the state and task of TxPoolV2 to handle the future interactions with others modules (PoA, BlockProducer, BlockImporter and P2P).
+- [2263](https://github.com/FuelLabs/fuel-core/pull/2263): Transaction pool is now included in all modules of the code it has requires modifications on different modules : 
+    - The PoA is now notify only when there is new transaction and not using the `tx_update_sender` anymore.
+    - The Pool transaction source for the executor is now locking the pool until the block production is finished.
+    - Reading operations on the pool is now asynchronous and it’s the less prioritized operation on the Pool, API has been updated accordingly.
+    - GasPrice is no more using async to allow the transactions verifications to not use async anymore 
+
+    We also added a lot of new configuration cli parameters to fine-tune TxPool configuration.
+    This PR also changes the way we are making the heavy work processor and a sync and asynchronous version is available in services folder (usable by anyone)
+    P2P now use separate heavy work processor for DB and TxPool interactions.
 
 ### Removed
 - [2306](https://github.com/FuelLabs/fuel-core/pull/2306): Removed hack for genesis asset contract from the code.
