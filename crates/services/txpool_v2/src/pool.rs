@@ -3,7 +3,7 @@ mod collisions;
 use std::{
     collections::HashMap,
     iter,
-    time::Instant,
+    time::SystemTime,
 };
 
 use collisions::CollisionsExt;
@@ -79,6 +79,13 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             current_bytes_size: 0,
         }
     }
+
+    /// Returns `true` if the pool is empty.
+    pub fn is_empty(&self) -> bool {
+        self.tx_id_to_storage_id.is_empty()
+            && self.current_gas == 0
+            && self.current_bytes_size == 0
+    }
 }
 
 impl<S: Storage, CM, SA> Pool<S, S::StorageIndex, CM, SA>
@@ -124,7 +131,7 @@ where
         let tx = checked_transaction.tx();
         let tx_id = tx.id();
         let gas = tx.max_gas();
-        let creation_instant = Instant::now();
+        let creation_instant = SystemTime::now();
         let bytes_size = tx.metered_bytes_size();
 
         let storage_id = self
@@ -240,9 +247,8 @@ where
             .collect::<Vec<_>>()
     }
 
-    pub fn find_one(&self, tx_id: &TxId) -> Option<ArcPoolTx> {
+    pub fn find_one(&self, tx_id: &TxId) -> Option<&StorageData> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
-            .map(|data| data.transaction.clone())
     }
 
     pub fn contains(&self, tx_id: &TxId) -> bool {

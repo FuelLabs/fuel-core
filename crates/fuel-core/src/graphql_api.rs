@@ -85,7 +85,7 @@ pub struct Config {
     pub debug: bool,
     pub vm_backtrace: bool,
     pub max_tx: usize,
-    pub max_txpool_depth: usize,
+    pub max_txpool_dependency_chain_length: usize,
     pub chain_name: String,
 }
 

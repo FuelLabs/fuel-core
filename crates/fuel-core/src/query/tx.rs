@@ -14,11 +14,11 @@ use fuel_core_storage::{
     tables::Transactions,
     Result as StorageResult,
 };
-use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     fuel_tx::{
         Receipt,
         Transaction,
+        TxId,
         TxPointer,
     },
     fuel_types::Address,

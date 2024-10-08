@@ -8,7 +8,6 @@ pub mod discovery;
 mod dnsaddr_resolution;
 pub mod gossipsub;
 pub mod heartbeat;
-pub mod heavy_task_processor;
 pub mod p2p_service;
 pub mod peer_manager;
 pub mod peer_report;

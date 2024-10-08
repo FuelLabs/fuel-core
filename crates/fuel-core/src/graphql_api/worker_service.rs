@@ -42,7 +42,6 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
 };
-use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -67,6 +66,7 @@ use fuel_core_types::{
         Input,
         Output,
         Transaction,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::{

@@ -31,6 +31,15 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
+impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
+    fn from(result: Result<TransactionStatus, E>) -> Self {
+        match result {
+            Ok(status) => TxStatusMessage::Status(status),
+            _ => TxStatusMessage::FailedStatus,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
     Empty,

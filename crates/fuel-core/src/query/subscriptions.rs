@@ -1,6 +1,6 @@
 use crate::schema::tx::types::TransactionStatus as ApiTxStatus;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
     services::txpool::TransactionStatus as TxPoolTxStatus,
@@ -17,20 +17,11 @@ mod test;
 #[cfg_attr(test, mockall::automock)]
 pub(crate) trait TxnStatusChangeState {
     /// Return the transaction status from the tx pool and database.
-    fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>>;
-}
-
-impl<F> TxnStatusChangeState for F
-where
-    F: Fn(Bytes32) -> StorageResult<Option<TxPoolTxStatus>> + Send + Sync,
-{
-    fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>> {
-        self(id)
-    }
+    async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>>;
 }
 
 #[tracing::instrument(skip(state, stream), fields(transaction_id = %transaction_id))]
-pub(crate) fn transaction_status_change<'a, State>(
+pub(crate) async fn transaction_status_change<'a, State>(
     state: State,
     stream: BoxStream<'a, TxStatusMessage>,
     transaction_id: Bytes32,
@@ -42,6 +33,7 @@ where
     // has a status.
     let check_db_first = state
         .get_tx_status(transaction_id)
+        .await
         .transpose()
         .map(TxStatusMessage::from);
 

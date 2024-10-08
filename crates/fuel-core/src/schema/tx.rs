@@ -10,11 +10,16 @@ use crate::{
         IntoApiResult,
         QUERY_COSTS,
     },
+    graphql_api::{
+        database::ReadView,
+        ports::MemoryPool,
+    },
     query::{
         transaction_status_change,
         BlockQueryData,
         SimpleTransactionData,
         TransactionQueryData,
+        TxnStatusChangeState,
     },
     schema::{
         scalars::{
@@ -44,12 +49,10 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_txpool::{
-    ports::MemoryPool,
-    service::TxStatusMessage,
-};
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     fuel_tx::{
+        Bytes32,
         Cacheable,
         Transaction as FuelTx,
         UniqueIdentifier,
@@ -70,8 +73,8 @@ use futures::{
 };
 use itertools::Itertools;
 use std::{
+    borrow::Cow,
     iter,
-    sync::Arc,
 };
 use tokio_stream::StreamExt;
 use types::{
@@ -100,7 +103,7 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        if let Some(transaction) = txpool.transaction(id) {
+        if let Some(transaction) = txpool.transaction(id).await? {
             Ok(Some(Transaction(transaction, id)))
         } else {
             query
@@ -329,11 +332,10 @@ impl TxMutation {
             .latest_consensus_params();
         let tx = FuelTx::from_bytes(&tx.0)?;
 
-        let _: Vec<_> = txpool
-            .insert(vec![Arc::new(tx.clone())])
+        txpool
+            .insert(tx.clone())
             .await
-            .into_iter()
-            .try_collect()?;
+            .map_err(|e| anyhow::anyhow!(e))?;
         let id = tx.id(&params.chain_id());
 
         let tx = Transaction(tx, id);
@@ -369,18 +371,12 @@ impl TxStatusSubscription {
         let rx = txpool.tx_update_subscribe(id.into())?;
         let query = ctx.read_view()?;
 
-        Ok(transaction_status_change(
-            move |id| match query.tx_status(&id) {
-                Ok(status) => Ok(Some(status)),
-                Err(StorageError::NotFound(_, _)) => Ok(txpool
-                    .submission_time(id)
-                    .map(|time| txpool::TransactionStatus::Submitted { time })),
-                Err(err) => Err(err),
-            },
-            rx,
-            id.into(),
+        let status_change_state = StatusChangeState { txpool, query };
+        Ok(
+            transaction_status_change(status_change_state, rx, id.into())
+                .await
+                .map_err(async_graphql::Error::from),
         )
-        .map_err(async_graphql::Error::from))
     }
 
     /// Submits transaction to the `TxPool` and await either confirmation or failure.
@@ -428,11 +424,7 @@ async fn submit_and_await_status<'a>(
     let tx_id = tx.id(&params.chain_id());
     let subscription = txpool.tx_update_subscribe(tx_id)?;
 
-    let _: Vec<_> = txpool
-        .insert(vec![Arc::new(tx)])
-        .await
-        .into_iter()
-        .try_collect()?;
+    txpool.insert(tx).await?;
 
     Ok(subscription
         .map(move |event| match event {
@@ -445,4 +437,27 @@ async fn submit_and_await_status<'a>(
             }
         })
         .take(2))
+}
+
+struct StatusChangeState<'a> {
+    query: Cow<'a, ReadView>,
+    txpool: &'a TxPool,
+}
+
+impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
+    async fn get_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<txpool::TransactionStatus>> {
+        match self.query.tx_status(&id) {
+            Ok(status) => Ok(Some(status)),
+            Err(StorageError::NotFound(_, _)) => Ok(self
+                .txpool
+                .submission_time(id)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?
+                .map(|time| txpool::TransactionStatus::Submitted { time })),
+            Err(err) => Err(err),
+        }
+    }
 }

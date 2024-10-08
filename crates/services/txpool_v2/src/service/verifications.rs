@@ -76,6 +76,7 @@ where
         tx: Transaction,
         pool: &Shared<TxPool>,
         current_height: BlockHeight,
+        utxo_validation: bool,
     ) -> Result<PoolTransaction, Error> {
         let (version, consensus_params) = self
             .consensus_parameters_provider
@@ -109,6 +110,7 @@ where
                 self.wasm_checker.as_ref(),
                 self.memory_pool.take_raw(),
                 &view,
+                utxo_validation,
             )?;
 
         fully_verified_tx.into_pool_transaction(metadata)
@@ -154,7 +156,7 @@ impl BasicVerifiedTx {
         metadata: Metadata,
         gas_price_provider: &dyn GasPriceProvider,
     ) -> Result<GasPriceVerifiedTx, Error> {
-        let minimal_gas_price = gas_price_provider.next_gas_price()?;
+        let minimal_gas_price = gas_price_provider.next_gas_price();
         let max_gas_price = metadata.max_gas_price();
 
         if max_gas_price < minimal_gas_price {
@@ -198,14 +200,21 @@ impl InputDependenciesVerifiedTx {
         wasm_checker: &dyn WasmChecker,
         memory: impl Memory,
         view: &View,
+        utxo_validation: bool,
     ) -> Result<FullyVerifiedTx, Error>
     where
         View: TxPoolPersistentStorage,
     {
-        let tx = self.0.check_signatures(&consensus_params.chain_id())?;
+        let mut tx = self.0;
 
-        let parameters = CheckPredicateParams::from(consensus_params);
-        let tx = tx.check_predicates(&parameters, memory, view)?;
+        if utxo_validation {
+            tx = tx.check_signatures(&consensus_params.chain_id())?;
+
+            let parameters = CheckPredicateParams::from(consensus_params);
+            tx = tx.check_predicates(&parameters, memory, view)?;
+
+            debug_assert!(tx.checks().contains(Checks::all()));
+        }
 
         if let Transaction::Upgrade(upgrade) = tx.transaction() {
             if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
@@ -214,8 +223,6 @@ impl InputDependenciesVerifiedTx {
                     .map_err(Error::WasmValidity)?;
             }
         }
-
-        debug_assert!(tx.checks().contains(Checks::all()));
 
         Ok(FullyVerifiedTx(tx))
     }

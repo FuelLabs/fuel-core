@@ -76,7 +76,7 @@ impl NodeQuery {
             utxo_validation: config.utxo_validation,
             vm_backtrace: config.vm_backtrace,
             max_tx: (config.max_tx as u64).into(),
-            max_depth: (config.max_txpool_depth as u64).into(),
+            max_depth: (config.max_txpool_dependency_chain_length as u64).into(),
             node_version: VERSION.to_owned(),
         })
     }
