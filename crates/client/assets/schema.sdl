@@ -284,6 +284,10 @@ enum ContractParametersVersion {
 	V1
 }
 
+type DaCompressedBlock {
+	bytes: HexString!
+}
+
 union DependentCost = LightOperation | HeavyOperation
 
 type DryRunFailureStatus {
@@ -942,6 +946,12 @@ type Query {
 		"""
 		excludedIds: ExcludeInput
 	): [[CoinType!]!]!
+	daCompressedBlock(
+		"""
+		Height of the block
+		"""
+		height: U32!
+	): DaCompressedBlock
 	contract(
 		"""
 		ID of the Contract

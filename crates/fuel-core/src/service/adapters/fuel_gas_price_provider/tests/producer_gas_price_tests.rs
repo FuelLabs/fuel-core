@@ -1,7 +1,7 @@
 use crate::service::adapters::fuel_gas_price_provider::tests::build_provider;
 use fuel_core_gas_price_service::{
+    common::gas_price_algorithm::GasPriceAlgorithm,
     static_updater::StaticAlgorithm,
-    GasPriceAlgorithm,
 };
 
 #[tokio::test]
@@ -13,7 +13,7 @@ async fn gas_price__if_requested_block_height_is_latest_return_gas_price() {
 
     // when
     let expected_price = algo.next_gas_price();
-    let actual_price = gas_price_provider.next_gas_price().await;
+    let actual_price = gas_price_provider.next_gas_price();
 
     // then
     assert_eq!(expected_price, actual_price);

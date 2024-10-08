@@ -24,6 +24,8 @@ use alloc::{
     vec::Vec,
 };
 
+pub mod changes_iterator;
+
 // TODO: BoxedIter to be used until RPITIT lands in stable rust.
 /// A boxed variant of the iterator that can be used as a return type of the traits.
 pub struct BoxedIter<'a, T> {

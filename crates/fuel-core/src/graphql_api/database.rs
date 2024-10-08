@@ -23,12 +23,11 @@ use fuel_core_storage::{
     Error as StorageError,
     IsNotFound,
     Mappable,
+    PredicateStorageRequirements,
     Result as StorageResult,
     StorageInspect,
-};
-use fuel_core_txpool::types::{
-    ContractId,
-    TxId,
+    StorageRead,
+    StorageSize,
 };
 use fuel_core_types::{
     blockchain::{
@@ -50,15 +49,19 @@ use fuel_core_types::{
         Address,
         AssetId,
         Bytes32,
+        ContractId,
         Salt,
         Transaction,
+        TxId,
         TxPointer,
         UtxoId,
     },
     fuel_types::{
+        BlobId,
         BlockHeight,
         Nonce,
     },
+    fuel_vm::BlobData,
     services::{
         graphql_api::ContractBalance,
         txpool::TransactionStatus,
@@ -68,6 +71,8 @@ use std::{
     borrow::Cow,
     sync::Arc,
 };
+
+use super::ports::DatabaseDaCompressedBlocks;
 
 mod arc_wrapper;
 
@@ -210,6 +215,16 @@ impl DatabaseBlocks for ReadView {
     }
 }
 
+impl DatabaseDaCompressedBlocks for ReadView {
+    fn da_compressed_block(&self, id: &BlockHeight) -> StorageResult<Vec<u8>> {
+        self.off_chain.da_compressed_block(id)
+    }
+
+    fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.on_chain.latest_height()
+    }
+}
+
 impl<M> StorageInspect<M> for ReadView
 where
     M: Mappable,
@@ -223,6 +238,28 @@ where
 
     fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {
         self.on_chain.contains_key(key)
+    }
+}
+
+impl StorageSize<BlobData> for ReadView {
+    fn size_of_value(&self, key: &BlobId) -> Result<Option<usize>, Self::Error> {
+        self.on_chain.size_of_value(key)
+    }
+}
+
+impl StorageRead<BlobData> for ReadView {
+    fn read(&self, key: &BlobId, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
+        self.on_chain.read(key, buf)
+    }
+
+    fn read_alloc(&self, key: &BlobId) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.on_chain.read_alloc(key)
+    }
+}
+
+impl PredicateStorageRequirements for ReadView {
+    fn storage_error_to_string(error: Self::Error) -> String {
+        error.to_string()
     }
 }
 
@@ -284,6 +321,10 @@ impl OnChainDatabase for ReadView {}
 impl OffChainDatabase for ReadView {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
         self.off_chain.block_height(block_id)
+    }
+
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
+        self.off_chain.da_compressed_block(height)
     }
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {

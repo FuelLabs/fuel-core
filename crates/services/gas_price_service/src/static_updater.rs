@@ -1,8 +1,4 @@
-use crate::{
-    GasPriceAlgorithm,
-    UpdateAlgorithm,
-};
-use async_trait::async_trait;
+use crate::common::gas_price_algorithm::GasPriceAlgorithm;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub struct StaticAlgorithmUpdater {
@@ -37,17 +33,5 @@ impl GasPriceAlgorithm for StaticAlgorithm {
 
     fn worst_case_gas_price(&self, _block_height: BlockHeight) -> u64 {
         self.price()
-    }
-}
-#[async_trait]
-impl UpdateAlgorithm for StaticAlgorithmUpdater {
-    type Algorithm = StaticAlgorithm;
-
-    fn start(&self, _for_block: BlockHeight) -> Self::Algorithm {
-        StaticAlgorithm::new(self.static_price)
-    }
-
-    async fn next(&mut self) -> anyhow::Result<Self::Algorithm> {
-        futures::future::pending().await
     }
 }

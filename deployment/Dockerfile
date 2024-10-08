@@ -36,17 +36,28 @@ COPY --from=planner /build/recipe.json recipe.json
 RUN echo $CARGO_PROFILE_RELEASE_DEBUG
 RUN echo $BUILD_FEATURES
 # Build our project dependencies, not our application!
-RUN xx-cargo chef cook --release --no-default-features --features "${BUILD_FEATURES}" -p fuel-core-bin --recipe-path recipe.json
+RUN \
+  --mount=type=cache,target=/usr/local/cargo/registry/index \
+  --mount=type=cache,target=/usr/local/cargo/registry/cache \
+  --mount=type=cache,target=/usr/local/cargo/git/db \
+  --mount=type=cache,target=/build/target \
+  xx-cargo chef cook --release --no-default-features --features "${BUILD_FEATURES}" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
 # download latest chain-configuration repo after cache to ensure most recent version
 RUN git clone --depth=1 https://github.com/FuelLabs/chain-configuration.git /chain-config
 # build application
-RUN xx-cargo build --release --no-default-features --features "$BUILD_FEATURES" -p fuel-core-bin \
+# note this puts the builds outside of the cache dirs so the run image can copy them
+RUN \
+  --mount=type=cache,target=/usr/local/cargo/registry/index \
+  --mount=type=cache,target=/usr/local/cargo/registry/cache \
+  --mount=type=cache,target=/usr/local/cargo/git/db \
+  --mount=type=cache,target=/build/target \
+  xx-cargo build --release --no-default-features --features "$BUILD_FEATURES" -p fuel-core-bin \
     && xx-verify ./target/$(xx-cargo --print-target-triple)/release/fuel-core \
-    && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core ./target/release/fuel-core \
-    && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d ./target/release/fuel-core.d
+    && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core /root/fuel-core \
+    && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d /root/fuel-core.d
 
 # Stage 2: Run
 FROM ubuntu:22.04 AS run
@@ -69,8 +80,8 @@ RUN apt-get update -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/target/release/fuel-core .
-COPY --from=builder /build/target/release/fuel-core.d .
+COPY --from=builder /root/fuel-core .
+COPY --from=builder /root/fuel-core.d .
 COPY --from=builder /chain-config ./config
 
 EXPOSE ${PORT}

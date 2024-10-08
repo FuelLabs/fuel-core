@@ -1,6 +1,5 @@
 use std::ops::Deref;
 
-use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -13,6 +12,7 @@ use fuel_core_types::{
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         AssetId,
+        ContractId,
         Script,
         Transaction,
     },

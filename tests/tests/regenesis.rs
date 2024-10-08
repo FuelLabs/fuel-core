@@ -66,6 +66,7 @@ async fn take_snapshot(db_dir: &TempDir, snapshot_dir: &TempDir) -> anyhow::Resu
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
+    const BLOCKS_QUERY: i32 = 50;
     let mut rng = StdRng::seed_from_u64(1234);
 
     let core =
@@ -77,7 +78,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
         .client
         .blocks(PaginationRequest {
             cursor: None,
-            results: 100,
+            results: BLOCKS_QUERY,
             direction: PageDirection::Forward,
         })
         .await
@@ -112,7 +113,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
         .client
         .blocks(PaginationRequest {
             cursor: None,
-            results: 100,
+            results: BLOCKS_QUERY,
             direction: PageDirection::Forward,
         })
         .await
@@ -150,7 +151,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
         .client
         .blocks(PaginationRequest {
             cursor: None,
-            results: 100,
+            results: BLOCKS_QUERY,
             direction: PageDirection::Forward,
         })
         .await
