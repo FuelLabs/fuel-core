@@ -18,6 +18,7 @@ pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
     BUCKETS.get_or_init(initialize_buckets)[&b].iter().copied()
 }
 
+#[rustfmt::skip]
 fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
     [
         (
@@ -27,26 +28,54 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
             ],
         ),
         (
+            // Gas limit is 30_000_000.
             Buckets::GasUsed,
             vec![
-                10000.0, 25000.0, 50000.0, 100000.0, 500000.0, 1000000.0, 1875000.0,
-                3750000.0, 7500000.0, 15000000.0, 30000000.0,
+                    10_000.0,
+                    25_000.0,
+                    50_000.0,
+                   100_000.0,
+                   250_000.0,
+                   500_000.0,
+                 1_000_000.0,
+                 3_000_000.0,
+                 7_500_000.0,
+                15_000_000.0,
+                25_000_000.0,
             ],
         ),
         (
+            // Transaction count is fixed at 65_535.
             Buckets::TransactionsCount,
             vec![
-                5.0, 10.0, 25.0, 50.0, 100.0, 1000.0, 5000.0, 10000.0, 15000.0, 30000.0,
-                65535.0,
+                     5.0,
+                    10.0,
+                    25.0,
+                    50.0,
+                   100.0,
+                 1_000.0,
+                 5_000.0,
+                10_000.0,
+                20_000.0,
+                40_000.0,
+                60_000.0,
             ],
         ),
         (
-            // TODO[RC]: Uses the same values as gas_used_buckets for now. We should probably change this.
+            // 50 ETH is expected to be the realistic maximum fee for the time being.
             Buckets::Fee,
             vec![
-                10000.0, 25000.0, 50000.0, 100000.0, 500000.0, 1000000.0, 1875000.0,
-                3750000.0, 7500000.0, 15000000.0, 30000000.0,
-            ],
+                    50_000_000.0,
+                   400_000_000.0,
+                 1_350_000_000.0,
+                 3_200_000_000.0,
+                 6_250_000_000.0,
+                10_800_000_000.0,
+                17_150_000_000.0,
+                25_600_000_000.0,
+                36_450_000_000.0,
+                50_000_000_000.0,
+            ]
         ),
     ]
     .into_iter()
