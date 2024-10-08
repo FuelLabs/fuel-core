@@ -1,5 +1,9 @@
 use crate as fuel_core_txpool;
 
+use fuel_core_metrics::txpool_metrics::{
+    txpool_metrics,
+    TxPoolMetrics,
+};
 use fuel_core_services::{
     AsyncProcessor,
     RunnableService,
@@ -219,10 +223,9 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         // TODO: move this to the Task struct
-        let txpool_metrics = fuel_core_metrics::txpool_metrics::txpool_metrics();
 
         let num_transactions = self.pool.read().storage.tx_count();
-        txpool_metrics
+        txpool_metrics()
             .number_of_transactions_gauge
             .set(num_transactions as i64);
 
@@ -391,6 +394,11 @@ where
         let utxo_validation = self.utxo_validation;
 
         move || {
+            let txpool_metrics = txpool_metrics();
+            txpool_metrics
+                .number_of_transactions_pending_verification
+                .inc();
+
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -404,6 +412,10 @@ where
                 current_height,
                 utxo_validation,
             );
+
+            txpool_metrics
+                .number_of_transactions_pending_verification
+                .dec();
 
             p2p.process_insertion_result(from_peer_info, &result);
 
