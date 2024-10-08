@@ -341,17 +341,18 @@ where
 
         db_after_execution.commit()?;
 
-        let total_gas_used: u64 = result
+        let (total_gas_used, total_fee): (u64, u64) = result
             .tx_status
             .iter()
-            .map(|tx_result| *tx_result.result.total_gas())
-            .fold(0_u64, |acc, n| acc.saturating_add(n));
-
-        let total_fee: u64 = result
-            .tx_status
-            .iter()
-            .map(|tx_result| *tx_result.result.total_fee())
-            .fold(0_u64, |acc, n| acc.saturating_add(n));
+            .map(|tx_result| {
+                (*tx_result.result.total_gas(), *tx_result.result.total_fee())
+            })
+            .fold((0_u64, 0_u64), |(acc_gas, acc_fee), (used_gas, fee)| {
+                (
+                    acc_gas.saturating_add(used_gas),
+                    acc_fee.saturating_add(fee),
+                )
+            });
 
         let total_transactions = result.tx_status.len();
 
