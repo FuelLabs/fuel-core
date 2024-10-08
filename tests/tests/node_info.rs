@@ -23,8 +23,8 @@ async fn node_info() {
 
     assert_eq!(utxo_validation, node_config.utxo_validation);
     assert_eq!(vm_backtrace, node_config.vm.backtrace);
-    assert_eq!(max_depth, node_config.txpool.max_depth as u64);
-    assert_eq!(max_tx, node_config.txpool.max_tx as u64);
+    assert_eq!(max_depth, node_config.txpool.max_txs_chain_count as u64);
+    assert_eq!(max_tx, node_config.txpool.pool_limits.max_txs as u64);
 }
 
 #[cfg(feature = "p2p")]
@@ -92,8 +92,18 @@ async fn test_peer_info() {
     // This is just a mock of what we should be able to do with GQL API.
     let client = producer.node.bound_address;
     let client = FuelClient::from(client);
-    let peers = client.connected_peers_info().await.unwrap();
-    assert_eq!(peers.len(), 2);
+    let mut peers;
+
+    // It takes some time before all validators are connected.
+    loop {
+        peers = client.connected_peers_info().await.unwrap();
+
+        if peers.len() == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
     let info = peers
         .iter()
         .find(|info| info.id.to_string() == validator_peer_id.to_base58())

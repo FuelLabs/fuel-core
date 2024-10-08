@@ -6,18 +6,51 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.38.0]
+
 ### Added
+- [2309](https://github.com/FuelLabs/fuel-core/pull/2309): Limit number of concurrent queries to the graphql service.
+- [2216](https://github.com/FuelLabs/fuel-core/pull/2216): Add more function to the state and task of TxPoolV2 to handle the future interactions with others modules (PoA, BlockProducer, BlockImporter and P2P).
+- [2263](https://github.com/FuelLabs/fuel-core/pull/2263): Transaction pool is now included in all modules of the code it has requires modifications on different modules : 
+    - The PoA is now notify only when there is new transaction and not using the `tx_update_sender` anymore.
+    - The Pool transaction source for the executor is now locking the pool until the block production is finished.
+    - Reading operations on the pool is now asynchronous and it’s the less prioritized operation on the Pool, API has been updated accordingly.
+    - GasPrice is no more using async to allow the transactions verifications to not use async anymore 
+
+    We also added a lot of new configuration cli parameters to fine-tune TxPool configuration.
+    This PR also changes the way we are making the heavy work processor and a sync and asynchronous version is available in services folder (usable by anyone)
+    P2P now use separate heavy work processor for DB and TxPool interactions.
+
+### Removed
+- [2306](https://github.com/FuelLabs/fuel-core/pull/2306): Removed hack for genesis asset contract from the code.
+
+## [Version 0.37.1]
+
+### Fixed
+- [2304](https://github.com/FuelLabs/fuel-core/pull/2304): Add initialization for the genesis base asset contract.
+
+## [Version 0.37.0]
+
+### Added
+- [1609](https://github.com/FuelLabs/fuel-core/pull/1609): Add DA compression support. Compressed blocks are stored in the offchain database when blocks are produced, and can be fetched using the GraphQL API.
+- [2290](https://github.com/FuelLabs/fuel-core/pull/2290): Added a new CLI argument `--graphql-max-directives`. The default value is `10`.
 - [2195](https://github.com/FuelLabs/fuel-core/pull/2195): Added enforcement of the limit on the size of the L2 transactions per block according to the `block_transaction_size_limit` parameter.
 - [2131](https://github.com/FuelLabs/fuel-core/pull/2131): Add flow in TxPool in order to ask to newly connected peers to share their transaction pool
 - [2182](https://github.com/FuelLabs/fuel-core/pull/2151): Limit number of transactions that can be fetched via TxSource::next
 - [2189](https://github.com/FuelLabs/fuel-core/pull/2151): Select next DA height to never include more than u16::MAX -1 transactions from L1.
-- [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module. Also adds insertion/verification process in PoolV2 and tests refactoring
 - [2265](https://github.com/FuelLabs/fuel-core/pull/2265): Integrate Block Committer API for DA Block Costs.
+- [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module. Also adds insertion/verification process in PoolV2 and tests refactoring
 - [2280](https://github.com/FuelLabs/fuel-core/pull/2280): Allow comma separated relayer addresses in cli
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support blobs in the predicates.
+- [2300](https://github.com/FuelLabs/fuel-core/pull/2300): Added new function to `fuel-core-client` for checking whether a blob exists.
 
 ### Changed
 
 #### Breaking
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Anyone who wants to participate in the transaction broadcasting via p2p must upgrade to support new predicates on the TxPool level.
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Upgraded `fuel-vm` to `0.58.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.58.0).
+- [2276](https://github.com/FuelLabs/fuel-core/pull/2276): Changed how complexity for blocks is calculated. The default complexity now is 80_000. All queries that somehow touch the block header now are more expensive.
+- [2290](https://github.com/FuelLabs/fuel-core/pull/2290): Added a new GraphQL limit on number of `directives`. The default value is `10`.
 - [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
 - [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
 

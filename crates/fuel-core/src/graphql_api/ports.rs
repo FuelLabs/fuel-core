@@ -17,8 +17,9 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageInspect,
+    StorageRead,
 };
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -57,10 +58,7 @@ use fuel_core_types::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -68,6 +66,8 @@ use std::sync::Arc;
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
+
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
@@ -121,7 +121,7 @@ pub trait OnChainDatabase:
     + DatabaseBlocks
     + DatabaseMessages
     + StorageInspect<Coins, Error = StorageError>
-    + StorageInspect<BlobData, Error = StorageError>
+    + StorageRead<BlobData, Error = StorageError>
     + StorageInspect<StateTransitionBytecodeVersions, Error = StorageError>
     + StorageInspect<UploadedBytecodes, Error = StorageError>
     + DatabaseContracts
@@ -148,6 +148,14 @@ pub trait DatabaseBlocks {
 
     /// Get the consensus for a block.
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
+}
+
+/// Trait that specifies all the getters required for DA compressed blocks.
+pub trait DatabaseDaCompressedBlocks {
+    /// Get a DA compressed block by its height.
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
+
+    fn latest_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.
@@ -188,14 +196,11 @@ pub trait DatabaseChain {
 
 #[async_trait]
 pub trait TxPoolPort: Send + Sync {
-    fn transaction(&self, id: TxId) -> Option<Transaction>;
+    async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>>;
 
-    fn submission_time(&self, id: TxId) -> Option<Tai64>;
+    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>>;
 
-    async fn insert(
-        &self,
-        txs: Vec<Arc<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>>;
+    async fn insert(&self, txs: Transaction) -> anyhow::Result<()>;
 
     fn tx_update_subscribe(
         &self,
@@ -268,6 +273,7 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
+            da_compression::*,
             old::{
                 OldFuelBlockConsensus,
                 OldFuelBlocks,
@@ -321,6 +327,15 @@ pub mod worker {
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
+        + StorageMutate<DaCompressedBlocks, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryContractId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryScriptCode, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryPredicateCode, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryTimestamps, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryEvictorCache, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,

@@ -2,19 +2,20 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
-#![allow(dead_code)]
-#![allow(unused)]
+
+// TODO: Rename the folder from `txpool_v2` to `txpool` after the migration is complete.
 
 mod collision_manager;
-mod config;
-mod error;
-mod heavy_async_processing;
+pub mod config;
+pub mod error;
 mod pool;
-mod ports;
+pub mod ports;
 mod selection_algorithms;
 mod service;
+mod shared_state;
 mod storage;
-mod verifications;
+mod tx_status_stream;
+mod update_sender;
 
 type GasPrice = Word;
 
@@ -24,8 +25,13 @@ mod tests;
 fuel_core_trace::enable_tracing!();
 
 use fuel_core_types::fuel_asm::Word;
+pub use selection_algorithms::Constraints;
 pub use service::{
     new_service,
     Service,
+};
+pub use shared_state::{
+    BorrowedTxPool,
     SharedState,
 };
+pub use tx_status_stream::TxStatusMessage;

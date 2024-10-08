@@ -49,6 +49,7 @@ pub struct BlobQuery;
 
 #[Object]
 impl BlobQuery {
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn blob(
         &self,
         ctx: &Context<'_>,

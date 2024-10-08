@@ -276,7 +276,7 @@ mod tests {
         );
         let read_algo = service.next_block_algorithm();
         let service = ServiceRunner::new(service);
-        let prev = read_algo.next_gas_price().await;
+        let prev = read_algo.next_gas_price();
 
         // when
         service.start_and_await().await.unwrap();
@@ -284,7 +284,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.next_gas_price().await;
+        let actual_price = read_algo.next_gas_price();
         assert_ne!(prev, actual_price);
         service.stop_and_await().await.unwrap();
     }

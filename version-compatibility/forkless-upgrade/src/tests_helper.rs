@@ -26,6 +26,9 @@ use rand::{
     Rng,
 };
 use std::str::FromStr;
+use version_36_fuel_core_bin::FuelService as Version36FuelService;
+use version_36_fuel_core_client::client::FuelClient as Version36Client;
+use version_36_fuel_core_services as _;
 
 // Awful version compatibility hack.
 // `$bin_crate::cli::run::get_service` is async in the later versions of fuel-core-bin.
@@ -93,6 +96,14 @@ define_core_driver!(
 );
 
 define_core_driver!(
+    version_36_fuel_core_bin,
+    Version36FuelService,
+    Version36Client,
+    Version36FuelCoreDriver,
+    true
+);
+
+define_core_driver!(
     latest_fuel_core_bin,
     LatestFuelService,
     LatestClient,
@@ -101,6 +112,7 @@ define_core_driver!(
 );
 
 pub const IGNITION_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition";
+pub const V36_TESTNET_SNAPSHOT: &str = "./chain-configurations/v36";
 pub const POA_SECRET_KEY: &str =
     "e3d6eb39607650e22f0befa26d52e921d2e7924d0e165f38ffa8d9d0ac73de93";
 pub const PRIVILEGED_ADDRESS_KEY: &str =

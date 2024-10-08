@@ -173,7 +173,7 @@ impl Simulator {
         let bytes_and_costs: Vec<_> = bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
-            .map(|(bytes, cost_per_byte)| (*bytes, (*bytes * cost_per_byte) as u64))
+            .map(|(bytes, da_cost_per_byte)| (*bytes, (*bytes * da_cost_per_byte) as u64))
             .collect();
 
         let actual_profit: Vec<i128> = actual_costs

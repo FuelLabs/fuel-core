@@ -75,6 +75,7 @@ use std::{
     pin::Pin,
 };
 use tokio_stream::StreamExt;
+use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{
     set_header::SetResponseHeaderLayer,
     timeout::TimeoutLayer,
@@ -196,12 +197,14 @@ where
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
     let request_timeout = config.config.api_request_timeout;
+    let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
         .limit_depth(config.config.max_queries_depth)
         .limit_recursive_depth(config.config.max_queries_recursive_depth)
+        .limit_directives(config.config.max_queries_directives)
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
@@ -228,6 +231,7 @@ where
         .route("/v1/metrics", get(metrics))
         .route("/v1/health", get(health))
         .route("/health", get(health))
+        .layer(ConcurrencyLimitLayer::new(concurrency_limit))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))
