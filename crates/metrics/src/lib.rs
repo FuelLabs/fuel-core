@@ -25,7 +25,6 @@ pub mod future_tracker;
 pub mod graphql_metrics;
 pub mod importer;
 pub mod p2p_metrics;
-pub mod producer;
 pub mod services;
 pub mod txpool_metrics;
 

@@ -12,7 +12,6 @@ pub(crate) enum Buckets {
     GasUsed,
     TransactionsCount,
     Fee,
-    GasPrice,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
 pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
@@ -44,14 +43,6 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
         (
             // TODO[RC]: Uses the same values as gas_used_buckets for now. We should probably change this.
             Buckets::Fee,
-            vec![
-                10000.0, 25000.0, 50000.0, 100000.0, 500000.0, 1000000.0, 1875000.0,
-                3750000.0, 7500000.0, 15000000.0, 30000000.0,
-            ],
-        ),
-        (
-            // TODO[RC]: Uses the same values as gas_used_buckets for now. We should probably change this.
-            Buckets::GasPrice,
             vec![
                 10000.0, 25000.0, 50000.0, 100000.0, 500000.0, 1000000.0, 1875000.0,
                 3750000.0, 7500000.0, 15000000.0, 30000000.0,
