@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The total gas used in a block" (`gas_per_block`), "The total fee paid by transactions in a block" (`fee_per_block`), "The total number of transactions in a block" (`transactions_per_block`), "The gas price of a block" (`gas_price_per_block`)
+            
 ## [Version 0.37.1]
 
 ### Fixed
