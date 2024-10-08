@@ -3518,6 +3518,8 @@ dependencies = [
  "pin-project-lite",
  "prometheus-client",
  "regex",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "tokio",
  "tracing",
 ]
