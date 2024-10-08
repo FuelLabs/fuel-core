@@ -22,7 +22,6 @@ mod tests {
     };
     use fuel_core_services::Service;
     use std::time::Duration;
-    use tokio::time::sleep;
 
     #[tokio::test]
     async fn run__when_da_block_cost_source_gives_value_shared_state_is_updated() {
@@ -32,67 +31,40 @@ mod tests {
             blob_size_bytes: 1024 * 128,
             blob_cost_wei: 2,
         };
-        let da_block_costs_source = DummyDaBlockCosts::new(Ok(expected_da_cost.clone()));
+        let (notifier_sender, mut notifier_receiver) = tokio::sync::mpsc::channel(1);
+        let da_block_costs_source =
+            DummyDaBlockCosts::new(Ok(expected_da_cost.clone()), notifier_sender);
         let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
         let mut shared_state = &mut service.shared.subscribe();
 
         // when
         service.start_and_await().await.unwrap();
-        sleep(Duration::from_millis(10)).await;
-        service.stop_and_await().await.unwrap();
 
         // then
-        let da_block_costs = shared_state.try_recv().unwrap();
-        assert_eq!(da_block_costs, expected_da_cost);
-    }
-
-    #[tokio::test]
-    async fn run__when_da_block_cost_source_gives_value_shared_state_is_marked_stale() {
-        // given
-        let expected_da_cost = DaBlockCosts {
-            l2_block_range: 0..10,
-            blob_size_bytes: 1024 * 128,
-            blob_cost_wei: 1,
-        };
-        let da_block_costs_source = DummyDaBlockCosts::new(Ok(expected_da_cost.clone()));
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(8)));
-        let mut shared_state = &mut service.shared.subscribe();
-
-        // when
-        service.start_and_await().await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        let result = notifier_receiver.recv().await.unwrap();
+        assert!(result);
+        let shared_state_value = shared_state.recv().await.unwrap();
+        assert_eq!(shared_state_value, expected_da_cost);
         service.stop_and_await().await.unwrap();
-
-        let actual = shared_state.try_recv().unwrap();
-        assert_eq!(actual, expected_da_cost);
-
-        // then
-        let da_block_costs_res = shared_state.try_recv();
-        assert!(da_block_costs_res.is_err());
-        assert!(matches!(
-            da_block_costs_res.err().unwrap(),
-            tokio::sync::broadcast::error::TryRecvError::Empty
-        ));
     }
 
     #[tokio::test]
     async fn run__when_da_block_cost_source_errors_shared_state_is_not_updated() {
         // given
-        let da_block_costs_source = DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")));
+        let (notifier_sender, mut notifier_receiver) = tokio::sync::mpsc::channel(1);
+        let da_block_costs_source =
+            DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")), notifier_sender);
         let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
         let mut shared_state = &mut service.shared.subscribe();
 
         // when
         service.start_and_await().await.unwrap();
-        sleep(Duration::from_millis(10)).await;
-        service.stop_and_await().await.unwrap();
 
         // then
-        let da_block_costs_res = shared_state.try_recv();
-        assert!(da_block_costs_res.is_err());
-        assert!(matches!(
-            da_block_costs_res.err().unwrap(),
-            tokio::sync::broadcast::error::TryRecvError::Empty
-        ));
+        let result = notifier_receiver.recv().await.unwrap();
+        assert!(!result);
+        let shared_state_value = shared_state.try_recv();
+        assert!(shared_state_value.is_err());
+        service.stop_and_await().await.unwrap();
     }
 }
