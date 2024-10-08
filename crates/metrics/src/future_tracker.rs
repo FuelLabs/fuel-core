@@ -133,7 +133,9 @@ impl<T: Future> Future for FutureTracker<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::time::Duration;
+
+    use crate::future_tracker::FutureTracker;
 
     #[tokio::test]
     async fn empty_future() {
