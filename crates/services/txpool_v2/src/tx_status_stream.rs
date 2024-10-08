@@ -1,5 +1,44 @@
-use crate::service::TxStatusMessage;
-use fuel_core_types::services::txpool::TransactionStatus;
+use fuel_core_types::{
+    fuel_tx::Bytes32,
+    services::txpool::TransactionStatus,
+};
+use std::pin::Pin;
+use tokio_stream::Stream;
+
+#[derive(Debug, Clone)]
+pub struct TxUpdate {
+    pub(crate) tx_id: Bytes32,
+    pub(crate) message: TxStatusMessage,
+}
+
+impl TxUpdate {
+    pub fn new(tx_id: Bytes32, message: TxStatusMessage) -> Self {
+        Self { tx_id, message }
+    }
+
+    pub fn tx_id(&self) -> &Bytes32 {
+        &self.tx_id
+    }
+
+    pub fn into_msg(self) -> TxStatusMessage {
+        self.message
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TxStatusMessage {
+    Status(TransactionStatus),
+    FailedStatus,
+}
+
+impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
+    fn from(result: Result<TransactionStatus, E>) -> Self {
+        match result {
+            Ok(status) => TxStatusMessage::Status(status),
+            _ => TxStatusMessage::FailedStatus,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
@@ -101,3 +140,5 @@ impl TxUpdateStream {
         matches!(self.state, State::Closed)
     }
 }
+
+pub type TxStatusStream = Pin<Box<dyn Stream<Item = TxStatusMessage> + Send + Sync>>;

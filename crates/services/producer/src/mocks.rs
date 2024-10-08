@@ -90,12 +90,11 @@ impl Relayer for MockRelayer {
 #[derive(Default)]
 pub struct MockTxPool(pub Vec<ArcPoolTx>);
 
-#[async_trait::async_trait]
 impl TxPool for MockTxPool {
     type TxSource = Vec<ArcPoolTx>;
 
-    fn get_source(&self, _: BlockHeight) -> Self::TxSource {
-        self.0.clone()
+    async fn get_source(&self, _: u64, _: BlockHeight) -> anyhow::Result<Self::TxSource> {
+        Ok(self.0.clone())
     }
 }
 

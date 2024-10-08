@@ -23,6 +23,7 @@ pub struct ServiceConfig {
     pub max_queries_complexity: usize,
     pub max_queries_recursive_depth: usize,
     pub max_queries_directives: usize,
+    pub max_concurrent_queries: usize,
     pub request_body_bytes_limit: usize,
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
@@ -84,7 +85,7 @@ pub struct Config {
     pub debug: bool,
     pub vm_backtrace: bool,
     pub max_tx: usize,
-    pub max_txpool_depth: usize,
+    pub max_txpool_dependency_chain_length: usize,
     pub chain_name: String,
 }
 

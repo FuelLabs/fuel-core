@@ -1,15 +1,31 @@
-use crate::service::update_sender::tests::utils::{
-    box_senders,
-    MockCreateChannel,
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::Duration,
 };
 
-use super::{
-    utils::{
+use fuel_core_types::fuel_tx::Bytes32;
+use parking_lot::lock_api::Mutex;
+use test_strategy::proptest;
+use tokio::time::Instant;
+
+use crate::{
+    tests::utils::{
+        box_senders,
         construct_senders,
         senders_strategy_all_ok,
+        MockCreateChannel,
         SenderData,
     },
-    *,
+    update_sender::{
+        MockSendStatus,
+        Permit,
+        PermitTrait,
+        Permits,
+        SendStatus,
+        Sender,
+        UpdateSender,
+    },
 };
 
 impl PermitTrait for Arc<usize> {}

@@ -27,6 +27,7 @@ use fuel_core_p2p::config::{
 pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
+use fuel_core_txpool::config::Config as TxPoolConfig;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 use crate::{
@@ -54,7 +55,7 @@ pub struct Config {
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
     pub vm: VMConfig,
-    pub txpool: fuel_core_txpool::Config,
+    pub txpool: TxPoolConfig,
     pub block_producer: fuel_core_producer::Config,
     pub starting_gas_price: u64,
     pub gas_price_change_percent: u64,
@@ -141,6 +142,7 @@ impl Config {
                 max_queries_complexity: 80000,
                 max_queries_recursive_depth: 16,
                 max_queries_directives: 10,
+                max_concurrent_queries: 1024,
                 request_body_bytes_limit: 16 * 1024 * 1024,
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
@@ -154,10 +156,10 @@ impl Config {
             block_production: Trigger::Instant,
             predefined_blocks_path: None,
             vm: Default::default(),
-            txpool: fuel_core_txpool::Config {
+            txpool: TxPoolConfig {
                 utxo_validation,
-                transaction_ttl: Duration::from_secs(60 * 100000000),
-                ..fuel_core_txpool::Config::default()
+                max_txs_ttl: Duration::from_secs(60 * 100000000),
+                ..Default::default()
             },
             block_producer: fuel_core_producer::Config {
                 ..Default::default()

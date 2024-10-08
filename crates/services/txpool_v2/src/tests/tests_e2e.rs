@@ -4,9 +4,37 @@
 //! The test functions use arbitrary operations to perform
 //! actions such as send, receive, subscribe and drop.
 
+use fuel_core_types::{
+    fuel_tx::Bytes32,
+    services::txpool::TransactionStatus,
+    tai64::Tai64,
+};
+use proptest::prelude::*;
+use test_strategy::{
+    proptest,
+    Arbitrary,
+};
+use tests_sending::validate_send;
+use tokio_stream::StreamExt;
+
 use super::*;
-use crate::service::update_sender::tests::test_sending::validate_send;
-use std::time::Duration;
+use crate::{
+    tx_status_stream::{
+        State,
+        TxStatusMessage,
+        TxStatusStream,
+        TxUpdate,
+    },
+    update_sender::{
+        MpscChannel,
+        SendError,
+        UpdateSender,
+    },
+};
+use std::{
+    collections::HashMap,
+    time::Duration,
+};
 
 const MAX_CHANNELS: usize = 2;
 const MAX_IDS: u8 = 2;
@@ -186,7 +214,7 @@ fn model_subscribe(
         // Add a new receiver to the model.
         model_receivers.push((id, *sender_id, [None, None]));
         // Increment the sender id.
-        *sender_id += 1;
+        *sender_id = sender_id.saturating_add(1);
     }
 }
 

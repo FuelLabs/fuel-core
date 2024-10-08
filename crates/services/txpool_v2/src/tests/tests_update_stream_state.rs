@@ -2,26 +2,24 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 
+use fuel_core_types::services::txpool::TransactionStatus;
 use test_strategy::{
     proptest,
     Arbitrary,
 };
 
-use super::{
-    tx_status_stream::State,
-    *,
+use crate::{
+    tests::utils,
+    tx_status_stream::{
+        State,
+        TxStatusMessage,
+        TxUpdateStream,
+    },
 };
-use proptest::prelude::*;
-
-mod test_e2e;
-mod test_permits;
-mod test_sending;
-mod test_subscribe;
-mod utils;
 
 /// Represents the possible state transitions in TxUpdateStream.
 #[derive(Debug, PartialEq, Eq, Clone, Arbitrary)]
-enum StateTransitions {
+pub(crate) enum StateTransitions {
     AddMsg(#[strategy(utils::tx_status_message_strategy())] TxStatusMessage),
     AddFailure,
     CloseRecv,
@@ -29,7 +27,10 @@ enum StateTransitions {
 }
 
 /// Returns the new state after applying the given `transition` to the current `state`.
-fn validate_tx_update_stream_state(state: State, transition: StateTransitions) -> State {
+pub(crate) fn validate_tx_update_stream_state(
+    state: State,
+    transition: StateTransitions,
+) -> State {
     use State::*;
     use StateTransitions::*;
     match (state, transition) {

@@ -78,12 +78,21 @@ impl BlockProducerAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl TxPool for TxPoolAdapter {
     type TxSource = TransactionsSource;
 
-    fn get_source(&self, block_height: BlockHeight) -> Self::TxSource {
-        TransactionsSource::new(self.service.clone(), block_height)
+    async fn get_source(
+        &self,
+        gas_price: u64,
+        _: BlockHeight,
+    ) -> anyhow::Result<Self::TxSource> {
+        let tx_pool = self
+            .service
+            .borrow_txpool()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        Ok(TransactionsSource::new(gas_price, tx_pool))
     }
 }
 

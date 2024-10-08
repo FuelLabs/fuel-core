@@ -1,13 +1,22 @@
 use std::{
     collections::HashMap,
-    pin::Pin,
+    sync::Arc,
     time::Duration,
 };
 
-use super::*;
+use fuel_core_types::{
+    fuel_tx::{
+        Bytes32,
+        TxId,
+    },
+    fuel_types::BlockHeight,
+    services::txpool::TransactionStatus,
+    tai64::Tai64,
+};
 use parking_lot::Mutex;
 use tokio::{
     sync::{
+        broadcast,
         mpsc::{
             self,
             error::TrySendError,
@@ -17,21 +26,68 @@ use tokio::{
     },
     time::Instant,
 };
-use tokio_stream::{
-    wrappers::ReceiverStream,
-    Stream,
+use tokio_stream::wrappers::ReceiverStream;
+
+use crate::{
+    error::Error,
+    tx_status_stream::{
+        TxStatusMessage,
+        TxStatusStream,
+        TxUpdate,
+        TxUpdateStream,
+    },
 };
-
-use tx_status_stream::TxUpdateStream;
-
-#[cfg(test)]
-mod tests;
-mod tx_status_stream;
 
 /// Subscriber channel buffer size.
 /// Subscribers will only ever get at most a submitted
 /// and final transaction status update.
 const BUFFER_SIZE: usize = 2;
+
+#[derive(Clone)]
+pub struct TxStatusChange {
+    pub new_tx_notification_sender: broadcast::Sender<TxId>,
+    pub update_sender: UpdateSender,
+}
+
+impl TxStatusChange {
+    pub fn new(capacity: usize, ttl: Duration) -> Self {
+        let (new_tx_notification_sender, _) = broadcast::channel(capacity);
+        let update_sender = UpdateSender::new(capacity, ttl);
+        Self {
+            new_tx_notification_sender,
+            update_sender,
+        }
+    }
+
+    pub fn send_complete(
+        &self,
+        id: Bytes32,
+        block_height: &BlockHeight,
+        message: TxStatusMessage,
+    ) {
+        tracing::info!("Transaction {id} successfully included in block {block_height}");
+        self.update_sender.send(TxUpdate::new(id, message));
+    }
+
+    pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
+        tracing::info!("Transaction {id} successfully submitted to the tx pool");
+        let _ = self.new_tx_notification_sender.send(id);
+        self.update_sender.send(TxUpdate::new(
+            id,
+            TxStatusMessage::Status(TransactionStatus::Submitted { time }),
+        ));
+    }
+
+    pub fn send_squeezed_out(&self, id: Bytes32, reason: Error) {
+        tracing::info!("Transaction {id} squeezed out because {reason}");
+        self.update_sender.send(TxUpdate::new(
+            id,
+            TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+                reason: reason.to_string(),
+            }),
+        ));
+    }
+}
 
 /// UpdateSender is responsible for managing subscribers
 /// and sending transaction status updates to them.
@@ -40,11 +96,11 @@ const BUFFER_SIZE: usize = 2;
 #[derive(Debug)]
 pub struct UpdateSender {
     /// Map of senders, indexed by transaction hash.
-    senders: Arc<Mutex<SenderMap<Permit, Tx>>>,
+    pub(crate) senders: Arc<Mutex<SenderMap<Permit, Tx>>>,
     /// Semaphore used to limit the number of concurrent subscribers.
-    permits: GetPermit,
+    pub(crate) permits: GetPermit,
     /// TTL for senders
-    ttl: Duration,
+    pub(crate) ttl: Duration,
 }
 
 /// Error returned when a transaction status update cannot be sent.
@@ -68,23 +124,20 @@ pub type Tx = Box<dyn SendStatus + Send + Sync + 'static>;
 /// A map of senders, indexed by transaction hash.
 type SenderMap<P, Tx> = HashMap<Bytes32, Vec<Sender<P, Tx>>>;
 
-/// A stream of transaction status updates.
-pub type TxStatusStream = Pin<Box<dyn Stream<Item = TxStatusMessage> + Send + Sync>>;
-
 /// Gives permits to subscribe once they are available.
 type GetPermit = Arc<dyn PermitsDebug + Send + Sync>;
 
 /// A sender that is subscribed to transaction status updates
 /// for a specific transaction hash.
-struct Sender<P = OwnedSemaphorePermit, Tx = mpsc::Sender<TxStatusMessage>> {
+pub(crate) struct Sender<P = OwnedSemaphorePermit, Tx = mpsc::Sender<TxStatusMessage>> {
     /// The permit used to subscribe to transaction status updates.
-    _permit: P,
+    pub(crate) _permit: P,
     /// The stream of transaction status updates.
-    stream: TxUpdateStream,
+    pub(crate) stream: TxUpdateStream,
     /// The sending end of the subscriber channel.
-    tx: Tx,
+    pub(crate) tx: Tx,
     /// time that this sender was created
-    created: Instant,
+    pub(crate) created: Instant,
 }
 
 /// A trait for sending transaction status updates.
@@ -110,13 +163,13 @@ pub trait CreateChannel {
 
 /// A trait for getting a new permit.
 #[cfg_attr(test, mockall::automock(type P = ();))]
-trait Permits {
+pub(crate) trait Permits {
     /// Try to acquire a permit.
     fn try_acquire(self: Arc<Self>) -> Option<Permit>;
 }
 
 /// Combines `Permits` and `std::fmt::Debug`.
-trait PermitsDebug: Permits + std::fmt::Debug {}
+pub(crate) trait PermitsDebug: Permits + std::fmt::Debug {}
 
 impl<T: Permits + std::fmt::Debug> PermitsDebug for T {}
 
@@ -266,7 +319,7 @@ impl UpdateSender {
 }
 
 // Create and subscribe a new channel to the senders map
-fn subscribe<P, C>(
+pub(crate) fn subscribe<P, C>(
     tx_id: Bytes32,                 // transaction ID
     senders: &mut SenderMap<P, Tx>, // mutable senders map reference
     permit: P,                      // permit of type P

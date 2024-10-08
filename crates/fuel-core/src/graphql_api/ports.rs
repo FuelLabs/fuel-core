@@ -19,7 +19,7 @@ use fuel_core_storage::{
     StorageInspect,
     StorageRead,
 };
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -58,10 +58,7 @@ use fuel_core_types::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -199,14 +196,11 @@ pub trait DatabaseChain {
 
 #[async_trait]
 pub trait TxPoolPort: Send + Sync {
-    fn transaction(&self, id: TxId) -> Option<Transaction>;
+    async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>>;
 
-    fn submission_time(&self, id: TxId) -> Option<Tai64>;
+    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>>;
 
-    async fn insert(
-        &self,
-        txs: Vec<Arc<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>>;
+    async fn insert(&self, txs: Transaction) -> anyhow::Result<()>;
 
     fn tx_update_subscribe(
         &self,

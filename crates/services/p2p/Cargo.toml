@@ -15,7 +15,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true } # TODO make this a feature
-fuel-core-services = { workspace = true }
+fuel-core-services = { workspace = true, features = ["sync-processor"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }

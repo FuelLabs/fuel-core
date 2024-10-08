@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The total gas used in a block" (`gas_per_block`), "The total fee paid by transactions in a block" (`fee_per_block`), "The total number of transactions in a block" (`transactions_per_block`), "The gas price of a block" (`gas_price_per_block`)
             
+## [Version 0.38.0]
+
+### Added
+- [2309](https://github.com/FuelLabs/fuel-core/pull/2309): Limit number of concurrent queries to the graphql service.
+- [2216](https://github.com/FuelLabs/fuel-core/pull/2216): Add more function to the state and task of TxPoolV2 to handle the future interactions with others modules (PoA, BlockProducer, BlockImporter and P2P).
+- [2263](https://github.com/FuelLabs/fuel-core/pull/2263): Transaction pool is now included in all modules of the code it has requires modifications on different modules : 
+    - The PoA is now notify only when there is new transaction and not using the `tx_update_sender` anymore.
+    - The Pool transaction source for the executor is now locking the pool until the block production is finished.
+    - Reading operations on the pool is now asynchronous and it’s the less prioritized operation on the Pool, API has been updated accordingly.
+    - GasPrice is no more using async to allow the transactions verifications to not use async anymore 
+
+    We also added a lot of new configuration cli parameters to fine-tune TxPool configuration.
+    This PR also changes the way we are making the heavy work processor and a sync and asynchronous version is available in services folder (usable by anyone)
+    P2P now use separate heavy work processor for DB and TxPool interactions.
+
+### Removed
+- [2306](https://github.com/FuelLabs/fuel-core/pull/2306): Removed hack for genesis asset contract from the code.
+
 ## [Version 0.37.1]
 
 ### Fixed
@@ -23,8 +41,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2131](https://github.com/FuelLabs/fuel-core/pull/2131): Add flow in TxPool in order to ask to newly connected peers to share their transaction pool
 - [2182](https://github.com/FuelLabs/fuel-core/pull/2151): Limit number of transactions that can be fetched via TxSource::next
 - [2189](https://github.com/FuelLabs/fuel-core/pull/2151): Select next DA height to never include more than u16::MAX -1 transactions from L1.
-- [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module. Also adds insertion/verification process in PoolV2 and tests refactoring
 - [2265](https://github.com/FuelLabs/fuel-core/pull/2265): Integrate Block Committer API for DA Block Costs.
+- [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module. Also adds insertion/verification process in PoolV2 and tests refactoring
 - [2280](https://github.com/FuelLabs/fuel-core/pull/2280): Allow comma separated relayer addresses in cli
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support blobs in the predicates.
 - [2300](https://github.com/FuelLabs/fuel-core/pull/2300): Added new function to `fuel-core-client` for checking whether a blob exists.

@@ -1,11 +1,22 @@
-use crate::service::update_sender::tests::utils::{
-    box_senders,
-    MockCreateChannel,
+use std::collections::HashMap;
+
+use fuel_core_types::fuel_tx::Bytes32;
+use test_strategy::{
+    proptest,
+    Arbitrary,
 };
 
-use super::{
-    utils::senders_strategy_all_ok,
-    *,
+use crate::{
+    tests::utils::{
+        box_senders,
+        senders_strategy_all_ok,
+        MockCreateChannel,
+    },
+    update_sender::{
+        subscribe,
+        MockSendStatus,
+        Sender,
+    },
 };
 
 #[derive(Debug, Arbitrary)]
@@ -29,5 +40,5 @@ fn test_subscriber(input: Input) {
         Box::new(()),
     );
     let len_after = senders.values().map(|v| v.len()).sum::<usize>();
-    assert_eq!(len_before + 1, len_after);
+    assert_eq!(len_before.saturating_add(1), len_after);
 }

@@ -1,17 +1,42 @@
-use std::sync::Arc;
-
-use crate::service::update_sender::tests::utils::{
-    construct_senders,
-    SenderData,
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::Duration,
 };
 
-use super::{
-    utils::{
+use fuel_core_types::{
+    fuel_tx::Bytes32,
+    services::txpool::TransactionStatus,
+    tai64::Tai64,
+};
+use parking_lot::lock_api::Mutex;
+use test_strategy::proptest;
+
+use crate::{
+    tests::utils::{
         box_senders,
+        construct_senders,
         senders_strategy_any,
         tx_update_strategy,
+        SenderData,
     },
-    *,
+    tx_status_stream::{
+        State,
+        TxStatusMessage,
+        TxUpdate,
+    },
+    update_sender::{
+        MockSendStatus,
+        SendError,
+        SendStatus,
+        Sender,
+        UpdateSender,
+    },
+};
+
+use super::tests_update_stream_state::{
+    validate_tx_update_stream_state,
+    StateTransitions,
 };
 
 /// Model the function that sends a message to the receiver.
@@ -138,7 +163,7 @@ fn test_send_inner(
 
                 // Verify the new state of the sender
                 assert_eq!(*senders[i].stream.state(), new_state);
-                i += 1;
+                i = i.saturating_add(1);
             }
         }
     }

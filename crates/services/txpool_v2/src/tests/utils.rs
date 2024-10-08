@@ -1,4 +1,40 @@
-use super::*;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
+
+use fuel_core_types::{
+    fuel_tx::Bytes32,
+    services::txpool::TransactionStatus,
+    tai64::Tai64,
+};
+use proptest::{
+    prelude::*,
+    prop_oneof,
+};
+use test_strategy::Arbitrary;
+use tokio::time::Instant;
+
+use crate::{
+    tx_status_stream::{
+        State,
+        TxStatusMessage,
+        TxStatusStream,
+        TxUpdate,
+        TxUpdateStream,
+    },
+    update_sender::{
+        CreateChannel,
+        MockSendStatus,
+        Permit,
+        PermitTrait,
+        Permits,
+        SendError,
+        SendStatus,
+        Sender,
+        Tx,
+    },
+};
 
 pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus> {
     prop_oneof![

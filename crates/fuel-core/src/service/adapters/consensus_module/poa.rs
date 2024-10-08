@@ -27,18 +27,14 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
-    fuel_tx::TxId,
+    fuel_tx::Bytes32,
     fuel_types::BlockHeight,
     services::{
         block_importer::{
             BlockImportInfo,
             UncommittedResult as UncommittedImporterResult,
         },
-        executor::{
-            Error as ExecutorError,
-            UncommittedResult,
-        },
-        txpool::ArcPoolTx,
+        executor::UncommittedResult,
     },
     tai64::Tai64,
 };
@@ -46,6 +42,7 @@ use std::path::{
     Path,
     PathBuf,
 };
+use tokio::sync::watch;
 use tokio_stream::{
     wrappers::BroadcastStream,
     StreamExt,
@@ -82,27 +79,12 @@ impl ConsensusModulePort for PoAAdapter {
 }
 
 impl TransactionPool for TxPoolAdapter {
-    fn pending_number(&self) -> usize {
-        self.service.pending_number()
+    fn new_txs_watcher(&self) -> watch::Receiver<()> {
+        self.service.get_new_txs_notifier()
     }
 
-    fn total_consumable_gas(&self) -> u64 {
-        self.service.total_consumable_gas()
-    }
-
-    fn remove_txs(&self, ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx> {
-        self.service.remove_txs(
-            ids.into_iter()
-                .map(|(tx_id, err)| (tx_id, err.to_string()))
-                .collect(),
-        )
-    }
-
-    fn transaction_status_events(&self) -> BoxStream<TxId> {
-        Box::pin(
-            BroadcastStream::new(self.service.new_tx_notification_subscribe())
-                .filter_map(|result| result.ok()),
-        )
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
+        self.service.notify_skipped_txs(tx_ids_and_reasons)
     }
 }
 
