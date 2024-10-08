@@ -35,8 +35,16 @@ pub trait BlockHeightImporter: Send + Sync {
 
 pub trait TxPool: Send + Sync + Clone {
     /// Get all tx ids in the pool
-    fn get_tx_ids(&self, max_ids: usize) -> Vec<TxId>;
+    fn get_tx_ids(
+        &self,
+        max_ids: usize,
+    ) -> impl std::future::Future<Output = anyhow::Result<Vec<TxId>>> + Send;
 
     /// Get full txs from the pool
-    fn get_full_txs(&self, tx_ids: Vec<TxId>) -> Vec<Option<NetworkableTransactionPool>>;
+    fn get_full_txs(
+        &self,
+        tx_ids: Vec<TxId>,
+    ) -> impl std::future::Future<
+        Output = anyhow::Result<Vec<Option<NetworkableTransactionPool>>>,
+    > + Send;
 }

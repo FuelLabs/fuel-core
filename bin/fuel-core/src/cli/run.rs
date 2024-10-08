@@ -33,9 +33,12 @@ use fuel_core::{
         RelayerConsensusConfig,
         VMConfig,
     },
-    txpool::{
-        config::BlackList,
+    txpool::config::{
+        BlackList,
         Config as TxPoolConfig,
+        HeavyWorkConfig,
+        PoolLimits,
+        ServiceChannelLimits,
     },
     types::{
         fuel_tx::ContractId,
@@ -438,21 +441,49 @@ impl Command {
 
         let TxPoolArgs {
             tx_pool_ttl,
+            tx_ttl_check_interval,
             tx_max_number,
-            tx_max_depth,
+            tx_max_total_bytes,
+            tx_max_total_gas,
+            tx_max_chain_count,
             tx_number_active_subscriptions,
             tx_blacklist_addresses,
             tx_blacklist_coins,
             tx_blacklist_messages,
             tx_blacklist_contracts,
+            tx_number_threads_to_verify_transactions,
+            tx_size_of_verification_queue,
+            tx_number_threads_p2p_sync,
+            tx_size_of_p2p_sync_queue,
+            tx_max_pending_read_requests,
+            tx_max_pending_write_requests,
         } = tx_pool;
 
-        let blacklist = BlackList::new(
+        let black_list = BlackList::new(
             tx_blacklist_addresses,
             tx_blacklist_coins,
             tx_blacklist_messages,
             tx_blacklist_contracts,
         );
+
+        let pool_limits = PoolLimits {
+            max_txs: tx_max_number,
+            max_gas: tx_max_total_gas,
+            max_bytes_size: tx_max_total_bytes,
+        };
+
+        let pool_heavy_work_config = HeavyWorkConfig {
+            number_threads_to_verify_transactions:
+                tx_number_threads_to_verify_transactions,
+            size_of_verification_queue: tx_size_of_verification_queue,
+            number_threads_p2p_sync: tx_number_threads_p2p_sync,
+            size_of_p2p_sync_queue: tx_size_of_p2p_sync_queue,
+        };
+
+        let service_channel_limits = ServiceChannelLimits {
+            max_pending_read_pool_requests: tx_max_pending_read_requests,
+            max_pending_write_pool_requests: tx_max_pending_write_requests,
+        };
 
         let config = Config {
             graphql_config: GraphQLConfig {
@@ -477,15 +508,17 @@ impl Command {
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            txpool: TxPoolConfig::new(
-                tx_max_number,
-                tx_max_depth,
+            txpool: TxPoolConfig {
+                max_txs_chain_count: tx_max_chain_count,
+                max_txs_ttl: tx_pool_ttl.into(),
+                ttl_check_interval: tx_ttl_check_interval.into(),
                 utxo_validation,
-                metrics,
-                tx_pool_ttl.into(),
-                tx_number_active_subscriptions,
-                blacklist,
-            ),
+                max_tx_update_subscriptions: tx_number_active_subscriptions,
+                black_list,
+                pool_limits,
+                heavy_work: pool_heavy_work_config,
+                service_channel_limits,
+            },
             block_producer: ProducerConfig {
                 coinbase_recipient,
                 metrics,

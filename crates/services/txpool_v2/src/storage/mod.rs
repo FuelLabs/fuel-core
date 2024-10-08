@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     fmt::Debug,
     hash::Hash,
-    time::Instant,
+    time::SystemTime,
 };
 
 use crate::{
@@ -17,7 +17,7 @@ use fuel_core_types::services::txpool::{
 pub mod checked_collision;
 pub mod graph;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StorageData {
     /// The transaction.
     /// We are forced to take an arc here as we need to be able to send a transaction that still exists here to p2p and API.
@@ -31,7 +31,7 @@ pub struct StorageData {
     /// Number of dependents
     pub number_dependents_in_chain: usize,
     /// The instant when the transaction was added to the pool.
-    pub creation_instant: Instant,
+    pub creation_instant: SystemTime,
 }
 
 pub type RemovedTransactions = Vec<StorageData>;
@@ -63,7 +63,7 @@ pub trait Storage {
     fn store_transaction(
         &mut self,
         checked_transaction: Self::CheckedTransaction,
-        creation_instant: Instant,
+        creation_instant: SystemTime,
     ) -> Self::StorageIndex;
 
     /// The function performs checks on the transaction and returns a checked transaction.

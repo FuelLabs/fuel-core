@@ -120,7 +120,7 @@ impl BlackList {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Config {
     /// Enable UTXO validation (will check if UTXO exists in the database and has correct data).
     pub utxo_validation: bool,
@@ -142,7 +142,7 @@ pub struct Config {
     pub black_list: BlackList,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoolLimits {
     /// Maximum number of transactions in the pool.
     pub max_txs: usize,
@@ -152,17 +152,15 @@ pub struct PoolLimits {
     pub max_bytes_size: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ServiceChannelLimits {
     /// Maximum number of pending requests waiting in the write pool channel.
     pub max_pending_write_pool_requests: usize,
     /// Maximum number of pending requests waiting in the read pool channel.
     pub max_pending_read_pool_requests: usize,
-    /// Maximum number of pending requests waiting in the select transactions channel.
-    pub max_pending_select_transactions_requests: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HeavyWorkConfig {
     /// Maximum of threads for managing verifications/insertions.
     pub number_threads_to_verify_transactions: usize,
@@ -174,7 +172,7 @@ pub struct HeavyWorkConfig {
     pub size_of_p2p_sync_queue: usize,
 }
 
-#[cfg(test)]
+#[cfg(feature = "test-helpers")]
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -192,15 +190,14 @@ impl Default for Config {
             heavy_work: HeavyWorkConfig {
                 // It is important for tests to have only one thread for verification
                 // because some of them rely on the ordering of insertion.
-                number_threads_to_verify_transactions: 1,
+                number_threads_to_verify_transactions: 0,
                 size_of_verification_queue: 100,
-                number_threads_p2p_sync: 1,
+                number_threads_p2p_sync: 0,
                 size_of_p2p_sync_queue: 100,
             },
             service_channel_limits: ServiceChannelLimits {
                 max_pending_write_pool_requests: 1000,
                 max_pending_read_pool_requests: 1000,
-                max_pending_select_transactions_requests: 1000,
             },
         }
     }

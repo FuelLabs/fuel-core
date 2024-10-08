@@ -40,6 +40,7 @@ use fuel_core_types::{
     },
     fuel_types::{
         AssetId,
+        ChainId,
         Word,
     },
     fuel_vm::{
@@ -161,6 +162,7 @@ impl TestPoolUniverse {
             .returning(|| (0, Arc::new(Default::default())));
 
         new_service(
+            ChainId::default(),
             self.config.clone(),
             p2p,
             importer,
@@ -218,6 +220,7 @@ impl TestPoolUniverse {
                 tx,
                 &pool.clone(),
                 Default::default(),
+                true,
             )?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
@@ -249,6 +252,7 @@ impl TestPoolUniverse {
                 tx,
                 &pool.clone(),
                 Default::default(),
+                true,
             )?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
@@ -281,6 +285,7 @@ impl TestPoolUniverse {
                 tx,
                 &pool.clone(),
                 Default::default(),
+                true,
             )?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {

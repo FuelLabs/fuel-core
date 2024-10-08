@@ -7,7 +7,7 @@ use tokio::sync::{
 /// A processor that can execute sync tasks with a limit on the number of tasks that can
 /// wait in the queue. The number of threads defines how many tasks can be executed in parallel.
 pub struct SyncProcessor {
-    rayon_thread_pool: rayon::ThreadPool,
+    rayon_thread_pool: Option<rayon::ThreadPool>,
     semaphore: Arc<Semaphore>,
 }
 
@@ -25,10 +25,15 @@ impl SyncProcessor {
         number_of_threads: usize,
         number_of_pending_tasks: usize,
     ) -> anyhow::Result<Self> {
-        let rayon_thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(number_of_threads)
-            .build()
-            .map_err(|e| anyhow::anyhow!("Failed to create a rayon pool: {}", e))?;
+        let rayon_thread_pool = if number_of_threads != 0 {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(number_of_threads)
+                .build()
+                .map_err(|e| anyhow::anyhow!("Failed to create a rayon pool: {}", e))?;
+            Some(pool)
+        } else {
+            None
+        };
         let semaphore = Arc::new(Semaphore::new(number_of_pending_tasks));
         Ok(Self {
             rayon_thread_pool,
@@ -52,11 +57,15 @@ impl SyncProcessor {
         F: FnOnce() + Send + 'static,
     {
         let permit = reservation.0;
-        self.rayon_thread_pool.spawn_fifo(move || {
-            // When task started its works we can free the space.
-            drop(permit);
+        if let Some(rayon_thread_pool) = &self.rayon_thread_pool {
+            rayon_thread_pool.spawn_fifo(move || {
+                // When task started its works we can free the space.
+                drop(permit);
+                op()
+            });
+        } else {
             op()
-        });
+        }
     }
 
     /// Try to spawn a task.

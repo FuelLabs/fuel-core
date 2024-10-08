@@ -60,7 +60,7 @@ async fn test_find() {
     // Then
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     assert!(out[0].is_some(), "Tx1 should be some:{out:?}");
-    let id = out[0].as_ref().unwrap().id();
+    let id = out[0].as_ref().unwrap().tx().id();
     assert_eq!(id, tx1.id(&Default::default()), "Found tx id match{out:?}");
     assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
     service.stop_and_await().await.unwrap();

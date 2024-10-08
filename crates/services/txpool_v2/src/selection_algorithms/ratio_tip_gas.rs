@@ -5,7 +5,7 @@ use std::{
     },
     collections::BTreeMap,
     fmt::Debug,
-    time::Instant,
+    time::SystemTime,
 };
 
 use fuel_core_types::fuel_tx::TxId;
@@ -43,7 +43,7 @@ pub type RatioTipGas = Ratio<u64>;
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub struct Key {
     ratio: RatioTipGas,
-    creation_instant: Instant,
+    creation_instant: SystemTime,
     tx_id: TxId,
 }
 
@@ -75,6 +75,15 @@ where
     S: RatioTipGasSelectionAlgorithmStorage,
 {
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
+}
+
+impl<S> Default for RatioTipGasSelection<S>
+where
+    S: RatioTipGasSelectionAlgorithmStorage,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<S> RatioTipGasSelection<S>
@@ -122,6 +131,8 @@ where
         storage: &mut S,
     ) -> RemovedTransactions {
         let mut gas_left = constraints.max_gas;
+        let mut space_left = constraints.maximum_block_size as usize;
+        let mut nb_left = constraints.maximum_txs;
         let mut result = Vec::new();
 
         // Take iterate over all transactions with the highest tip/gas ratio. If transaction
@@ -132,6 +143,8 @@ where
         // It is done in this way to minimize number of iteration of the list of executable
         // transactions.
         while gas_left > 0
+            && nb_left > 0
+            && space_left > 0
             && !self.executable_transactions_sorted_tip_gas_ratio.is_empty()
         {
             let mut clean_up_list = Vec::new();
@@ -139,6 +152,10 @@ where
             let mut transactions_to_promote = Vec::new();
 
             for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
+                if nb_left == 0 || gas_left == 0 || space_left == 0 {
+                    break;
+                }
+
                 let Some(stored_transaction) = storage.get(storage_id) else {
                     debug_assert!(
                         false,
@@ -151,18 +168,26 @@ where
                     continue
                 };
 
-                if stored_transaction.transaction.max_gas_price()
-                    < constraints.minimal_gas_price
-                {
+                let less_price = stored_transaction.transaction.max_gas_price()
+                    < constraints.minimal_gas_price;
+
+                if less_price {
                     continue;
                 }
 
-                if stored_transaction.transaction.max_gas() > gas_left {
+                let not_enough_gas = stored_transaction.transaction.max_gas() > gas_left;
+                let too_big_tx =
+                    stored_transaction.transaction.metered_bytes_size() > space_left;
+
+                if not_enough_gas || too_big_tx {
                     continue;
                 }
 
                 gas_left =
                     gas_left.saturating_sub(stored_transaction.transaction.max_gas());
+                space_left = space_left
+                    .saturating_sub(stored_transaction.transaction.metered_bytes_size());
+                nb_left = nb_left.saturating_sub(1);
 
                 let dependents = storage.get_dependents(storage_id).collect::<Vec<_>>();
                 debug_assert!(!storage.has_dependencies(storage_id));

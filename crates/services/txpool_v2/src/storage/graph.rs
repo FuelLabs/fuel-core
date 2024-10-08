@@ -4,7 +4,7 @@ use std::{
         HashSet,
         VecDeque,
     },
-    time::Instant,
+    time::SystemTime,
 };
 
 use fuel_core_types::{
@@ -377,7 +377,7 @@ impl Storage for GraphStorage {
     fn store_transaction(
         &mut self,
         checked_transaction: Self::CheckedTransaction,
-        creation_instant: Instant,
+        creation_instant: SystemTime,
     ) -> Self::StorageIndex {
         let (transaction, direct_dependencies, all_dependencies) =
             checked_transaction.unpack();
@@ -394,7 +394,6 @@ impl Storage for GraphStorage {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-
                 continue
             };
 
@@ -487,7 +486,6 @@ impl Storage for GraphStorage {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-
                 continue
             };
 

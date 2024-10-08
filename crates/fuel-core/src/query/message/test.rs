@@ -8,14 +8,12 @@ use fuel_core_types::{
     },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
+        AssetId,
+        ContractId,
         Script,
         Transaction,
     },
-    fuel_types::{
-        AssetId,
-        BlockHeight,
-        ContractId,
-    },
+    fuel_types::BlockHeight,
     tai64::Tai64,
 };
 
