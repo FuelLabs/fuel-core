@@ -222,12 +222,10 @@ where
         .finish();
 
     let unthrottled_routes = Router::new()
-        // we shouldn't throttle these requests
         .route("/v1/health", get(health))
         .route("/health", get(health));
 
     let throttled_routes =
-        // we should throttle these requests
         Router::new()
             .route("/v1/playground", get(graphql_playground))
             .route("/v1/graphql", post(graphql_handler).options(ok))
