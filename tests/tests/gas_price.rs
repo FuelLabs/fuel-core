@@ -20,10 +20,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_gas_price_service::{
-    common::{
-        fuel_core_storage_adapter::storage::GasPriceMetadata,
-        updater_metadata::UpdaterMetadata,
-    },
+    common::fuel_core_storage_adapter::storage::GasPriceMetadata,
     v0::metadata::V0Metadata,
 };
 use fuel_core_poa::Trigger;
@@ -412,13 +409,13 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
         .deref()
         .clone();
 
-    let UpdaterMetadata::V0(V0Metadata {
+    let V0Metadata {
         min_exec_gas_price,
         exec_gas_price_change_percent,
         l2_block_height,
         l2_block_fullness_threshold_percent,
         ..
-    }) = new_metadata;
+    } = new_metadata.try_into().unwrap();
     assert_eq!(exec_gas_price_change_percent, 11);
     assert_eq!(l2_block_fullness_threshold_percent, 22);
     assert_eq!(min_exec_gas_price, 33);

@@ -22,7 +22,11 @@ use crate::{
         MetadataStorage,
     },
     v0::{
-        metadata::V0Metadata,
+        algorithm::SharedV0Algorithm,
+        metadata::{
+            V0Metadata,
+            V0MetadataInitializer,
+        },
         service::GasPriceServiceV0,
     },
 };
@@ -49,10 +53,8 @@ use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 
 pub use fuel_gas_price_algorithm::v0::AlgorithmV0;
 
-pub type SharedV0Algorithm = SharedGasPriceAlgo<AlgorithmV0>;
-
 pub struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
-    pub config: GasPriceServiceConfig,
+    pub config: V0MetadataInitializer,
     pub genesis_block_height: BlockHeight,
     pub settings: SettingsProvider,
     pub gas_price_db: GasPriceStore,
@@ -64,16 +66,10 @@ pub struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
 }
 
 fn get_default_metadata(
-    config: &GasPriceServiceConfig,
+    config: &V0MetadataInitializer,
     latest_block_height: u32,
 ) -> V0Metadata {
-    V0Metadata {
-        new_exec_price: config.starting_gas_price.max(config.min_gas_price),
-        min_exec_gas_price: config.min_gas_price,
-        exec_gas_price_change_percent: config.gas_price_change_percent,
-        l2_block_height: latest_block_height,
-        l2_block_fullness_threshold_percent: config.gas_price_threshold_percent,
-    }
+    config.initialize(latest_block_height)
 }
 
 impl<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider>
@@ -86,7 +82,7 @@ where
     SettingsProvider: GasPriceSettingsProvider,
 {
     pub fn new(
-        config: GasPriceServiceConfig,
+        config: V0MetadataInitializer,
         genesis_block_height: BlockHeight,
         settings: SettingsProvider,
         block_stream: BoxStream<SharedImportResult>,
@@ -227,19 +223,18 @@ where
     } = starting_metadata;
 
     let algorithm_updater;
-    if let Some(old_metadata) = metadata_storage
+    if let Some(updater_metadata) = metadata_storage
         .get_metadata(&l2_block_height.into())
         .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
     {
-        algorithm_updater = match old_metadata {
-            UpdaterMetadata::V0(old) => AlgorithmUpdaterV0::new(
-                old.new_exec_price,
-                min_exec_gas_price,
-                exec_gas_price_change_percent,
-                old.l2_block_height,
-                l2_block_fullness_threshold_percent,
-            ),
-        };
+        let previous_metadata: V0Metadata = updater_metadata.try_into()?;
+        algorithm_updater = AlgorithmUpdaterV0::new(
+            previous_metadata.new_exec_price,
+            min_exec_gas_price,
+            exec_gas_price_change_percent,
+            previous_metadata.l2_block_height,
+            l2_block_fullness_threshold_percent,
+        );
     } else {
         algorithm_updater = AlgorithmUpdaterV0::new(
             new_exec_price,
@@ -274,13 +269,13 @@ where
     GasPriceStore: GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>,
     SettingsProvider: GasPriceSettingsProvider,
 {
-    let UpdaterMetadata::V0(metadata) = metadata_storage
+    let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
         .ok_or(anyhow::anyhow!(
             "Expected metadata to exist for height: {metadata_height}"
         ))?;
 
-    let mut algo_updater = metadata.into();
+    let mut algo_updater = metadata.try_into()?;
 
     sync_v0_metadata(
         settings,
@@ -360,8 +355,9 @@ where
         GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
     SettingsProvider: GasPriceSettingsProvider,
 {
+    let v0_config = config.v0().ok_or(anyhow::anyhow!("Expected V0 config"))?;
     let gas_price_init = UninitializedTask::new(
-        config,
+        v0_config,
         genesis_block_height,
         settings,
         block_stream,
