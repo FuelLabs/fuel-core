@@ -1,6 +1,7 @@
 use crate::{
-    gas_price_buckets,
+    buckets,
     global_registry,
+    Buckets,
 };
 use prometheus_client::metrics::histogram::Histogram;
 use std::sync::OnceLock;
@@ -11,7 +12,7 @@ pub struct ProducerMetrics {
 
 impl Default for ProducerMetrics {
     fn default() -> Self {
-        let gas_price = Histogram::new(gas_price_buckets().iter().cloned());
+        let gas_price = Histogram::new(buckets(Buckets::GasPrice).iter().cloned());
 
         let mut registry = global_registry().registry.lock();
 
