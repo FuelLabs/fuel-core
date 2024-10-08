@@ -77,6 +77,8 @@ mod tests {
 
         let required_buckets: Vec<_> = Buckets::iter().collect();
 
+        assert_eq!(required_buckets.len(), actual_buckets.len());
+
         let all_buckets_defined = required_buckets
             .iter()
             .all(|required_bucket| actual_buckets.contains(&required_bucket));
