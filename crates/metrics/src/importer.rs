@@ -25,12 +25,10 @@ impl Default for ImporterMetrics {
     fn default() -> Self {
         let block_height_gauge = Gauge::default();
         let latest_block_import_ms = Gauge::default();
-        let execute_and_commit_duration =
-            Histogram::new(buckets(Buckets::Timing).iter().cloned());
-        let gas_per_block = Histogram::new(buckets(Buckets::GasUsed).iter().cloned());
-        let fee_per_block = Histogram::new(buckets(Buckets::Fee).iter().cloned());
-        let transactions_per_block =
-            Histogram::new(buckets(Buckets::TransactionsCount).iter().cloned());
+        let execute_and_commit_duration = Histogram::new(buckets(Buckets::Timing));
+        let gas_per_block = Histogram::new(buckets(Buckets::GasUsed));
+        let fee_per_block = Histogram::new(buckets(Buckets::Fee));
+        let transactions_per_block = Histogram::new(buckets(Buckets::TransactionsCount));
 
         let mut registry = global_registry().registry.lock();
         registry.register(

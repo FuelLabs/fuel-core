@@ -12,7 +12,7 @@ pub struct ProducerMetrics {
 
 impl Default for ProducerMetrics {
     fn default() -> Self {
-        let gas_price = Histogram::new(buckets(Buckets::GasPrice).iter().cloned());
+        let gas_price = Histogram::new(buckets(Buckets::GasPrice));
 
         let mut registry = global_registry().registry.lock();
 

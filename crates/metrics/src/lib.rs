@@ -38,8 +38,8 @@ enum Buckets {
     GasPrice,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
-fn buckets(b: Buckets) -> &'static Vec<f64> {
-    BUCKETS.get_or_init(initialize_buckets)[&b].as_ref()
+fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
+    BUCKETS.get_or_init(initialize_buckets)[&b].iter().copied()
 }
 
 fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
