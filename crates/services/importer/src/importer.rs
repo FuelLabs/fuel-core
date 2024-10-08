@@ -341,21 +341,6 @@ where
 
         db_after_execution.commit()?;
 
-        let (total_gas_used, total_fee): (u64, u64) = result
-            .tx_status
-            .iter()
-            .map(|tx_result| {
-                (*tx_result.result.total_gas(), *tx_result.result.total_fee())
-            })
-            .fold((0_u64, 0_u64), |(acc_gas, acc_fee), (used_gas, fee)| {
-                (
-                    acc_gas.saturating_add(used_gas),
-                    acc_fee.saturating_add(fee),
-                )
-            });
-
-        let total_transactions = result.tx_status.len();
-
         // update the importer metrics after the block is successfully committed
         importer_metrics()
             .block_height
@@ -367,13 +352,6 @@ where
         importer_metrics()
             .latest_block_import_timestamp
             .set(current_time);
-        importer_metrics()
-            .gas_per_block
-            .observe(total_gas_used as f64);
-        importer_metrics().fee_per_block.observe(total_fee as f64);
-        importer_metrics()
-            .transactions_per_block
-            .observe(total_transactions as f64);
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
 

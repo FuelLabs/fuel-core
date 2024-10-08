@@ -11,6 +11,7 @@ description = "Fuel Block Executor"
 
 [dependencies]
 anyhow = { workspace = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-storage = { workspace = true, default-features = false, features = [
   "alloc",
 ] }

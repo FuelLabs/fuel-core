@@ -6,6 +6,7 @@ use crate::{
     },
     refs::ContractRef,
 };
+use fuel_core_metrics::executor::executor_metrics;
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -691,6 +692,16 @@ where
         execution_data.tx_count = tx_count
             .checked_add(1)
             .ok_or(ExecutorError::TooManyTransactions)?;
+
+        executor_metrics()
+            .gas_per_block
+            .observe(execution_data.used_gas as f64);
+        executor_metrics()
+            .fee_per_block
+            .observe(execution_data.coinbase as f64);
+        executor_metrics()
+            .transactions_per_block
+            .observe(execution_data.tx_count as f64);
 
         Ok(())
     }
