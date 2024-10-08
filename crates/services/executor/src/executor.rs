@@ -697,6 +697,9 @@ where
             .gas_per_block
             .observe(execution_data.used_gas as f64);
         executor_metrics()
+            .size_per_block_bytes
+            .observe(execution_data.used_size as f64);
+        executor_metrics()
             .fee_per_block
             .observe(execution_data.coinbase as f64);
         executor_metrics()

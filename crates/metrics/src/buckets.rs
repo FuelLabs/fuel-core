@@ -12,6 +12,7 @@ pub(crate) enum Buckets {
     GasUsed,
     TransactionsCount,
     Fee,
+    SizeUsed,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
 pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
@@ -85,6 +86,28 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                 25_600_000_000.0,
                 36_450_000_000.0,
                 50_000_000_000.0,
+            ]
+        ),
+        (
+            // Consider blocks up to 256kb in size, one bucket per 16kb.
+            Buckets::SizeUsed,
+            vec![
+                 16.0 * 1024.0,
+                 32.0 * 1024.0,
+                 48.0 * 1024.0,
+                 64.0 * 1024.0,
+                 80.0 * 1024.0,
+                 96.0 * 1024.0,
+                112.0 * 1024.0,
+                128.0 * 1024.0,
+                144.0 * 1024.0,
+                160.0 * 1024.0,
+                176.0 * 1024.0,
+                192.0 * 1024.0,
+                208.0 * 1024.0,
+                224.0 * 1024.0,
+                240.0 * 1024.0,
+                256.0 * 1024.0,
             ]
         ),
     ]
