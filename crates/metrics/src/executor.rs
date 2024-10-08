@@ -56,7 +56,7 @@ impl Default for ExecutorMetrics {
     }
 }
 
-// Setup a global static for accessing importer metrics
+// Setup a global static for accessing executor metrics
 static EXECUTOR_METRICS: OnceLock<ExecutorMetrics> = OnceLock::new();
 
 pub fn executor_metrics() -> &'static ExecutorMetrics {
