@@ -58,8 +58,8 @@ impl Default for ImporterMetrics {
         );
 
         registry.register(
-            "fee_per_block",
-            "The total fee paid by transactions in a block",
+            "fee_per_block_gwei",
+            "The total fee (gwei) paid by transactions in a block",
             fee_per_block.clone(),
         );
 
