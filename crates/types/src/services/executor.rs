@@ -272,8 +272,10 @@ pub enum Error {
     OutputAlreadyExists,
     #[display(fmt = "The computed fee caused an integer overflow")]
     FeeOverflow,
-    #[display(fmt = "The computed gas caused an integer overflow")]
-    GasOverflow,
+    #[display(
+        fmt = "The computed gas caused an integer overflow. reason: {_0}, Augend: {_1}, Addend: {_2}"
+    )]
+    GasOverflow(String, u64, u64),
     #[display(fmt = "The computed transaction size caused an integer overflow")]
     TxSizeOverflow,
     #[display(fmt = "The block is missing `Mint` transaction.")]
