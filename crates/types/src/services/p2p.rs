@@ -52,10 +52,10 @@ pub enum GossipsubMessageAcceptance {
     /// Report whether the gossiped message is valid and safe to rebroadcast
     Accept,
     /// Ignore the received message and prevent further gossiping
-    Reject,
+    Ignore,
     /// Punish the gossip sender for providing invalid
     /// (or malicious) data and prevent further gossiping
-    Ignore,
+    Reject,
 }
 
 /// A gossipped message from the network containing all relevant data.
