@@ -86,7 +86,7 @@ use tokio::{
     sync::{
         mpsc,
         oneshot,
-        Notify,
+        watch,
     },
     time::MissedTickBehavior,
 };
@@ -309,6 +309,9 @@ where
         {
             let mut tx_pool = self.pool.write();
             tx_pool.remove_transaction(executed_transaction);
+            if !tx_pool.is_empty() {
+                self.shared_state.new_txs_notifier.send_replace(());
+            }
         }
 
         {
@@ -440,7 +443,7 @@ where
                     if let Some(channel) = response_channel {
                         let _ = channel.send(Ok(()));
                     }
-                    shared_state.new_txs_notifier.notify_waiters();
+                    shared_state.new_txs_notifier.send_replace(());
 
                     removed_txs
                 }
@@ -684,7 +687,7 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
-    let new_txs_notifier = Arc::new(Notify::new());
+    let (new_txs_notifier, _) = watch::channel(());
 
     let shared_state = SharedState {
         write_pool_requests_sender,

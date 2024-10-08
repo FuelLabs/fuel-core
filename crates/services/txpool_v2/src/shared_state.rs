@@ -15,7 +15,7 @@ use tokio::sync::{
     broadcast,
     mpsc,
     oneshot,
-    Notify,
+    watch,
 };
 
 use crate::{
@@ -53,7 +53,7 @@ pub struct SharedState {
     pub(crate) select_transactions_requests_sender: mpsc::Sender<BorrowTxPoolRequest>,
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
-    pub(crate) new_txs_notifier: Arc<Notify>,
+    pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
 }
 
 impl SharedState {
@@ -131,8 +131,8 @@ impl SharedState {
     }
 
     /// Get a notifier that is notified when new transactions are added to the pool.
-    pub fn get_new_txs_notifier(&self) -> Arc<Notify> {
-        self.new_txs_notifier.clone()
+    pub fn get_new_txs_notifier(&self) -> watch::Receiver<()> {
+        self.new_txs_notifier.subscribe()
     }
 
     /// Subscribe to new transaction notifications.

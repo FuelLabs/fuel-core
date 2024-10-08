@@ -24,15 +24,11 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
-use tokio::sync::Notify;
+use std::collections::HashMap;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
-    fn new_txs_notifier(&self) -> Arc<Notify>;
+    fn new_txs_watcher(&self) -> tokio::sync::watch::Receiver<()>;
 
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
 }

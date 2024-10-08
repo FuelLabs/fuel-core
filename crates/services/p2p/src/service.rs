@@ -747,6 +747,8 @@ where
             heartbeat_check_interval,
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
+            database_read_threads,
+            tx_pool_threads,
             ..
         } = config;
 
@@ -770,9 +772,9 @@ where
             Instant::now().checked_add(heartbeat_check_interval).expect(
                 "The heartbeat check interval should be small enough to do frequently",
             );
-        let number_of_threads = 2;
-        let db_heavy_task_processor = SyncProcessor::new(number_of_threads, 1024 * 10)?;
-        let tx_pool_heavy_task_processor = AsyncProcessor::new(number_of_threads, 32)?;
+        let db_heavy_task_processor =
+            SyncProcessor::new(database_read_threads, 1024 * 10)?;
+        let tx_pool_heavy_task_processor = AsyncProcessor::new(tx_pool_threads, 32)?;
         let request_sender = broadcast.request_sender.clone();
 
         let task = Task {

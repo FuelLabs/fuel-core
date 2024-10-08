@@ -190,9 +190,9 @@ impl Default for Config {
             heavy_work: HeavyWorkConfig {
                 // It is important for tests to have only one thread for verification
                 // because some of them rely on the ordering of insertion.
-                number_threads_to_verify_transactions: 1,
+                number_threads_to_verify_transactions: 0,
                 size_of_verification_queue: 100,
-                number_threads_p2p_sync: 1,
+                number_threads_p2p_sync: 0,
                 size_of_p2p_sync_queue: 100,
             },
             service_channel_limits: ServiceChannelLimits {

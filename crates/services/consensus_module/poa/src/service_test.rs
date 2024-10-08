@@ -76,7 +76,7 @@ use std::{
 use tokio::{
     sync::{
         broadcast,
-        Notify,
+        watch,
     },
     time,
 };
@@ -235,15 +235,16 @@ impl TestContext {
 pub struct TxPoolContext {
     pub txpool: MockTransactionPool,
     pub txs: Arc<Mutex<Vec<Script>>>,
-    pub new_txs_notifier: Arc<Notify>,
+    pub new_txs_notifier: watch::Sender<()>,
 }
 
 impl MockTransactionPool {
     fn no_tx_updates() -> Self {
         let mut txpool = MockTransactionPool::default();
-        txpool
-            .expect_new_txs_notifier()
-            .returning(|| Arc::new(Notify::new()));
+        txpool.expect_new_txs_watcher().returning({
+            let (sender, _) = watch::channel(());
+            move || sender.subscribe()
+        });
         txpool.expect_notify_skipped_txs().returning(|_| {});
         txpool
     }
@@ -251,11 +252,11 @@ impl MockTransactionPool {
     pub fn new_with_txs(txs: Vec<Script>) -> TxPoolContext {
         let mut txpool = MockTransactionPool::default();
         let txs = Arc::new(StdMutex::new(txs));
-        let new_txs_notifier = Arc::new(Notify::new());
+        let (new_txs_notifier, _) = watch::channel(());
 
-        txpool.expect_new_txs_notifier().returning({
-            let new_txs_notifier = new_txs_notifier.clone();
-            move || new_txs_notifier.clone()
+        txpool.expect_new_txs_watcher().returning({
+            let sender = new_txs_notifier.clone();
+            move || sender.subscribe()
         });
         txpool.expect_notify_skipped_txs().returning(|_| {});
 

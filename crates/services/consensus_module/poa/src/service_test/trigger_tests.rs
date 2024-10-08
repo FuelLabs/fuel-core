@@ -60,7 +60,7 @@ async fn never_trigger_never_produces_blocks() {
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
     let ctx = ctx_builder.build().await;
-    new_txs_notifier.notify_waiters();
+    new_txs_notifier.send_replace(());
 
     // Make sure enough time passes for the block to be produced
     time::sleep(Duration::new(10, 0)).await;
@@ -73,7 +73,7 @@ struct DefaultContext {
     rng: StdRng,
     test_ctx: TestContext,
     block_import: broadcast::Receiver<SealedBlock>,
-    new_txs_notifier: Arc<Notify>,
+    new_txs_notifier: watch::Sender<()>,
     txs: Arc<StdMutex<Vec<Script>>>,
 }
 
@@ -160,7 +160,7 @@ async fn instant_trigger_produces_block_instantly() {
     })
     .await;
 
-    ctx.new_txs_notifier.notify_waiters();
+    ctx.new_txs_notifier.send_replace(());
 
     // Make sure it's produced
     assert!(ctx.block_import.recv().await.is_ok());
@@ -180,7 +180,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         ..Default::default()
     })
     .await;
-    ctx.new_txs_notifier.notify_waiters();
+    ctx.new_txs_notifier.send_replace(());
 
     // Make sure no blocks are produced yet
     assert!(matches!(
@@ -194,7 +194,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     // Make sure the empty block is actually produced
     assert!(ctx.block_import.try_recv().is_ok());
     // Emulate tx status update to trigger the execution
-    ctx.new_txs_notifier.notify_waiters();
+    ctx.new_txs_notifier.send_replace(());
 
     // Make sure no blocks are produced before next interval
     assert!(matches!(
@@ -209,7 +209,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     assert!(ctx.block_import.try_recv().is_ok());
 
     // Emulate tx status update to trigger the execution
-    ctx.new_txs_notifier.notify_waiters();
+    ctx.new_txs_notifier.send_replace(());
 
     time::sleep(Duration::from_millis(1)).await;
 
@@ -309,7 +309,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         for _ in 0..1_000 {
             guard.push(make_tx(&mut ctx.rng));
         }
-        ctx.new_txs_notifier.notify_waiters();
+        ctx.new_txs_notifier.send_replace(());
     }
 
     // Make sure blocks are not produced before the block time has elapsed
@@ -348,7 +348,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
         ..Default::default()
     })
     .await;
-    ctx.new_txs_notifier.notify_waiters();
+    ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
     // When
@@ -390,7 +390,7 @@ async fn interval_trigger_produces_blocks_with_current_time_when_block_productio
         ..Default::default()
     })
     .await;
-    ctx.new_txs_notifier.notify_waiters();
+    ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
     // When
@@ -448,7 +448,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
         ..Default::default()
     })
     .await;
-    ctx.new_txs_notifier.notify_waiters();
+    ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
     // When

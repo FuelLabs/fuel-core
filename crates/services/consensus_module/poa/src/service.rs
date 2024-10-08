@@ -10,7 +10,6 @@ use tokio::{
     sync::{
         mpsc,
         oneshot,
-        Notify,
     },
     time::{
         sleep_until,
@@ -129,7 +128,7 @@ pub struct MainTask<T, B, I, S, PB, C> {
     block_producer: B,
     block_importer: I,
     txpool: T,
-    new_txs_notifier: Arc<Notify>,
+    new_txs_watcher: tokio::sync::watch::Receiver<()>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
     last_height: BlockHeight,
@@ -161,7 +160,7 @@ where
         predefined_blocks: PB,
         clock: C,
     ) -> Self {
-        let new_txs_notifier = txpool.new_txs_notifier();
+        let new_txs_watcher = txpool.new_txs_watcher();
         let (request_sender, request_receiver) = mpsc::channel(1024);
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(clock.now(), last_block);
@@ -191,7 +190,7 @@ where
             txpool,
             block_producer,
             block_importer,
-            new_txs_notifier,
+            new_txs_watcher,
             request_receiver,
             shared_state: SharedState { request_sender },
             last_height,
@@ -523,19 +522,14 @@ where
         let should_continue;
         let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
-        while *sync_state.borrow_and_update() == SyncState::NotSynced {
+        if *sync_state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     should_continue = result?.started();
                     return Ok(should_continue);
                 }
-                _ = sync_state.changed() => {
-                    break;
-                }
-                _ = self.new_txs_notifier.notified() => {
-                    // ignore txpool events while syncing
-                }
+                _ = sync_state.changed() => {}
             }
         }
 
@@ -579,7 +573,7 @@ where
                     should_continue = false;
                 }
             }
-            _ = self.new_txs_notifier.notified() => {
+            _ = self.new_txs_watcher.changed() => {
                 self.on_txpool_event().await.context("While processing txpool event")?;
                 should_continue = true;
             }

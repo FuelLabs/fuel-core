@@ -103,7 +103,7 @@ async fn can_manually_produce_block(
         .manually_produce_block(Some(start_time), Mode::Blocks { number_of_blocks })
         .await
         .unwrap();
-    new_txs_notifier.notify_waiters();
+    new_txs_notifier.send_replace(());
 
     for t in times.into_iter() {
         let block_time = rx.recv().await.unwrap();

@@ -37,14 +37,11 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    path::{
-        Path,
-        PathBuf,
-    },
-    sync::Arc,
+use std::path::{
+    Path,
+    PathBuf,
 };
-use tokio::sync::Notify;
+use tokio::sync::watch;
 use tokio_stream::{
     wrappers::BroadcastStream,
     StreamExt,
@@ -81,7 +78,7 @@ impl ConsensusModulePort for PoAAdapter {
 }
 
 impl TransactionPool for TxPoolAdapter {
-    fn new_txs_notifier(&self) -> Arc<Notify> {
+    fn new_txs_watcher(&self) -> watch::Receiver<()> {
         self.service.get_new_txs_notifier()
     }
 

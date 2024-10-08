@@ -79,6 +79,13 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             current_bytes_size: 0,
         }
     }
+
+    /// Returns `true` if the pool is empty.
+    pub fn is_empty(&self) -> bool {
+        self.tx_id_to_storage_id.is_empty()
+            && self.current_gas == 0
+            && self.current_bytes_size == 0
+    }
 }
 
 impl<S: Storage, CM, SA> Pool<S, S::StorageIndex, CM, SA>

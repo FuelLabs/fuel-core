@@ -449,9 +449,9 @@ mod full_block {
                 max_bytes_size: usize::MAX,
             },
             heavy_work: HeavyWorkConfig {
-                number_threads_to_verify_transactions: 16,
+                number_threads_to_verify_transactions: 4,
+                number_threads_p2p_sync: 0,
                 size_of_verification_queue: u16::MAX as usize,
-                number_threads_p2p_sync: 1,
                 size_of_p2p_sync_queue: 1,
             },
             ..local_node_config.txpool
