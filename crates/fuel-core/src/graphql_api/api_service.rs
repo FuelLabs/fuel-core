@@ -225,16 +225,15 @@ where
         .route("/v1/health", get(health))
         .route("/health", get(health));
 
-    let throttled_routes =
-        Router::new()
-            .route("/v1/playground", get(graphql_playground))
-            .route("/v1/graphql", post(graphql_handler).options(ok))
-            .route(
-                "/v1/graphql-sub",
-                post(graphql_subscription_handler).options(ok),
-            )
-            .route("/v1/metrics", get(metrics))
-            .layer(ConcurrencyLimitLayer::new(concurrency_limit));
+    let throttled_routes = Router::new()
+        .route("/v1/playground", get(graphql_playground))
+        .route("/v1/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/v1/graphql-sub",
+            post(graphql_subscription_handler).options(ok),
+        )
+        .route("/v1/metrics", get(metrics))
+        .layer(ConcurrencyLimitLayer::new(concurrency_limit));
 
     let router = Router::new()
         .merge(unthrottled_routes)
