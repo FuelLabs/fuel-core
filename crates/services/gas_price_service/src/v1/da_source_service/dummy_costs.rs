@@ -5,16 +5,17 @@ use crate::v1::da_source_service::{
     },
     DaBlockCosts,
 };
-use tokio::sync::mpsc::Sender;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 pub struct DummyDaBlockCosts {
     value: DaBlockCostsResult<DaBlockCosts>,
-    // sends true if the request was successful, false otherwise
-    notifier: Sender<bool>,
+    // This is a workaround to notify the test when the value is ready/errored.
+    notifier: Arc<Notify>,
 }
 
 impl DummyDaBlockCosts {
-    pub fn new(value: DaBlockCostsResult<DaBlockCosts>, notifier: Sender<bool>) -> Self {
+    pub fn new(value: DaBlockCostsResult<DaBlockCosts>, notifier: Arc<Notify>) -> Self {
         Self { value, notifier }
     }
 }
@@ -24,11 +25,11 @@ impl DaBlockCostsSource for DummyDaBlockCosts {
     async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
         match &self.value {
             Ok(da_block_costs) => {
-                self.notifier.send(true).await?;
+                self.notifier.notify_waiters();
                 Ok(da_block_costs.clone())
             }
             Err(err) => {
-                self.notifier.send(false).await?;
+                self.notifier.notify_waiters();
                 Err(anyhow::anyhow!(err.to_string()))
             }
         }
