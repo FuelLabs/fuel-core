@@ -150,6 +150,23 @@ pub async fn execute_genesis_block(
     Ok(result)
 }
 
+pub async fn recover_missing_tables_from_genesis_state_config(
+    watcher: StateWatcher,
+    config: &Config,
+    db: &CombinedDatabase,
+) -> anyhow::Result<()> {
+    let genesis_block = create_genesis_block(config);
+    let db = db.clone().into_genesis();
+
+    SnapshotImporter::repopulate_maybe_missing_tables(
+        db.clone(),
+        genesis_block.clone(),
+        config.snapshot_reader.clone(),
+        watcher,
+    )
+    .await
+}
+
 #[cfg(feature = "test-helpers")]
 pub async fn execute_and_commit_genesis_block(
     config: &Config,

@@ -109,6 +109,21 @@ impl SnapshotImporter {
             .await
     }
 
+    pub async fn repopulate_maybe_missing_tables(
+        db: CombinedGenesisDatabase,
+        genesis_block: Block,
+        snapshot_reader: SnapshotReader,
+        watcher: StateWatcher,
+    ) -> anyhow::Result<()> {
+        let mut importer = Self::new(db, genesis_block, snapshot_reader, watcher);
+
+        // the below tables were not populated from the genesis snapshot on older versions
+        importer.spawn_worker_off_chain::<ContractsInfo, ContractsInfo>()?;
+
+        importer.task_manager.wait().await?;
+        Ok(())
+    }
+
     async fn run_workers(mut self) -> anyhow::Result<()> {
         tracing::info!("Running imports");
         self.spawn_worker_on_chain::<Coins>()?;
