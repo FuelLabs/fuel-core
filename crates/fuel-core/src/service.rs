@@ -330,16 +330,16 @@ impl FuelService {
                 .await?;
 
                 self.shared.block_importer.commit_result(result).await?;
-            } else {
-                // repopulate missing tables
-                genesis::recover_missing_tables_from_genesis_state_config(
-                    watcher.clone(),
-                    &self.shared.config,
-                    &self.shared.database,
-                )
-                .await?;
             }
         }
+
+        // repopulate missing tables
+        genesis::recover_missing_tables_from_genesis_state_config(
+            watcher.clone(),
+            &self.shared.config,
+            &self.shared.database,
+        )
+        .await?;
 
         self.override_chain_config_if_needed()
     }

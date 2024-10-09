@@ -58,10 +58,9 @@ mod importer;
 mod progress;
 mod task_manager;
 
+use self::importer::SnapshotImporter;
 pub use exporter::Exporter;
 pub use task_manager::NotifyCancel;
-
-use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
@@ -156,7 +155,7 @@ pub async fn recover_missing_tables_from_genesis_state_config(
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
     let genesis_block = create_genesis_block(config);
-    let db = db.clone().into_genesis();
+    let db = db.clone().unsafe_into_genesis();
 
     SnapshotImporter::repopulate_maybe_missing_tables(
         db.clone(),
