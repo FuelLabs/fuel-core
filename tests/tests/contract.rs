@@ -436,5 +436,5 @@ async fn can_get_genesis_contract_salt() {
     // then
     let ret = client.contract_info(&contract_id).await.unwrap().unwrap();
 
-    assert_eq!(ret.salt, Salt::zeroed().into());
+    assert_eq!(ret.salt, Salt::zeroed());
 }
