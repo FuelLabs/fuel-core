@@ -5,6 +5,8 @@ use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 pub struct Config {
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,
+    /// Enables prometheus metrics for execution.
+    pub metrics: bool,
     /// Default mode for utxo_validation
     pub utxo_validation_default: bool,
     /// The version of the native executor to determine usage of native vs WASM executor.
@@ -20,6 +22,7 @@ impl From<&Config> for ExecutionOptions {
         Self {
             extra_tx_checks: value.utxo_validation_default,
             backtrace: value.backtrace,
+            metrics: value.metrics,
         }
     }
 }

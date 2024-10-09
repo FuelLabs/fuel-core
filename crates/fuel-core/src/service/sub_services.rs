@@ -100,6 +100,7 @@ pub fn init_sub_services(
         database.relayer().clone(),
         fuel_core_upgradable_executor::config::Config {
             backtrace: config.vm.backtrace,
+            metrics: config.block_producer.metrics,
             utxo_validation_default: config.utxo_validation,
             native_executor_version: config.native_executor_version,
         },

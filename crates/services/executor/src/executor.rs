@@ -247,6 +247,8 @@ pub struct ExecutionOptions {
     pub extra_tx_checks: bool,
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,
+    /// Enables prometheus metrics for execution.
+    pub metrics: bool,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -442,21 +444,27 @@ where
         )?;
         debug_assert!(data.found_mint, "Mint transaction is not found");
 
-        executor_metrics()
-            .gas_per_block
-            .observe(data.used_gas as f64);
-        executor_metrics()
-            .size_per_block_bytes
-            .observe(data.used_size as f64);
-        executor_metrics()
-            .fee_per_block
-            .observe(data.coinbase as f64);
-        executor_metrics()
-            .transactions_per_block
-            .observe(data.tx_count as f64);
+        if self.options.metrics {
+            Self::update_metrics(&data);
+        }
 
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
+    }
+
+    fn update_metrics(execution_data: &ExecutionData) {
+        executor_metrics()
+            .gas_per_block
+            .observe(execution_data.used_gas as f64);
+        executor_metrics()
+            .size_per_block_bytes
+            .observe(execution_data.used_size as f64);
+        executor_metrics()
+            .fee_per_block
+            .observe(execution_data.coinbase as f64);
+        executor_metrics()
+            .transactions_per_block
+            .observe(execution_data.tx_count as f64);
     }
 
     fn produce_mint_tx<TxSource, T>(

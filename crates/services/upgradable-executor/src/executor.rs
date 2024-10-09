@@ -339,6 +339,7 @@ where
         let options = ExecutionOptions {
             extra_tx_checks: utxo_validation,
             backtrace: self.config.backtrace,
+            metrics: self.config.metrics,
         };
 
         let component = Components {

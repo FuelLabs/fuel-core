@@ -161,6 +161,8 @@ mod tests {
         pub consensus_parameters: ConsensusParameters,
         /// Print execution backtraces if transaction execution reverts.
         pub backtrace: bool,
+        /// Enables prometheus metrics for execution.
+        pub metrics: bool,
         /// Default mode for utxo_validation
         pub utxo_validation_default: bool,
     }
@@ -231,6 +233,7 @@ mod tests {
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
             backtrace: config.backtrace,
+            metrics: config.metrics,
             utxo_validation_default: config.utxo_validation_default,
             native_executor_version: None,
         };
