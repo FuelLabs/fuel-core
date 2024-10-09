@@ -228,6 +228,16 @@ where
         Ok(can_store_transaction)
     }
 
+    fn record_transaction_time_in_txpool(tx: &StorageData) {
+        if let Ok(elapsed) = tx.creation_instant.elapsed() {
+            fuel_core_metrics::txpool_metrics::txpool_metrics()
+                .transaction_time_in_txpool
+                .observe(elapsed.as_secs_f64());
+        } else {
+            tracing::warn!("Failed to calculate transaction time in txpool");
+        }
+    }
+
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
@@ -239,6 +249,7 @@ where
         self.selection_algorithm
             .gather_best_txs(constraints, &mut self.storage)
             .into_iter()
+            .inspect(Self::record_transaction_time_in_txpool)
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
 
