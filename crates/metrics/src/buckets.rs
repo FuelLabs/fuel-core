@@ -13,6 +13,8 @@ pub(crate) enum Buckets {
     TransactionsCount,
     Fee,
     SizeUsed,
+    TransactionTimeInTxPool,
+    SelectTransactionTime,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
 pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
@@ -130,6 +132,50 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                 240.0 * 1024.0,
                 256.0 * 1024.0,
             ]
+        ),
+        (
+            // Default TTL is 5m, but we want to cover a wider range.
+            Buckets::TransactionTimeInTxPool,
+            vec![
+                       1.0,
+                       2.0,
+                       3.0,
+                       4.0,
+                       5.0,
+                      10.0,
+                      20.0,
+                      30.0,
+                      40.0,
+                      50.0,
+                      60.0,
+                     120.0,
+                     240.0,
+                     480.0,
+                     960.0,
+                    1920.0,
+                    3840.0,            
+            ]
+        ),
+        (
+            // These are nanoseconds, because we assume that the selection algorithm is fast for most of the cases.
+            // If we start seeing higher values, we should analyze the performance of the selection algorithm.
+            Buckets::SelectTransactionTime,
+            vec![
+                    10.0,
+                    20.0,
+                    30.0,
+                    40.0,
+                    50.0,
+                   100.0,
+                   200.0,
+                   500.0,
+                  1000.0,
+                  2000.0,
+                  5000.0,
+                 10000.0,
+                 50000.0,
+                100000.0,
+                500000.0,            ]
         ),
     ]
     .into_iter()

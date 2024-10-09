@@ -1,4 +1,10 @@
-use crate::global_registry;
+use crate::{
+    buckets::{
+        buckets,
+        Buckets,
+    },
+    global_registry,
+};
 use prometheus_client::metrics::{
     gauge::Gauge,
     histogram::Histogram,
@@ -21,20 +27,10 @@ impl Default for TxPoolMetrics {
     fn default() -> Self {
         let tx_sizes = Vec::new(); // TODO: What values for tx_sizes?
         let tx_size = Histogram::new(tx_sizes.into_iter());
-        let transaction_time_in_txpool_secs = Histogram::new(
-            vec![
-                1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 120.0,
-                240.0, 480.0, 960.0, 1920.0, 3840.0,
-            ]
-            .into_iter(),
-        );
-        let select_transaction_time_nanoseconds = Histogram::new(
-            vec![
-                10.0, 20.0, 30.0, 40.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0,
-                5000.0, 10000.0, 50000.0, 100000.0, 500000.0,
-            ]
-            .into_iter(),
-        );
+        let transaction_time_in_txpool_secs =
+            Histogram::new(buckets(Buckets::TransactionTimeInTxPool));
+        let select_transaction_time_nanoseconds =
+            Histogram::new(buckets(Buckets::SelectTransactionTime));
 
         let number_of_transactions = Gauge::default();
         let number_of_transactions_pending_verification = Gauge::default();
