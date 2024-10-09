@@ -221,23 +221,21 @@ where
         .extension(ViewExtension::new())
         .finish();
 
-    let unthrottled_routes = Router::new()
-        .route("/v1/health", get(health))
-        .route("/health", get(health));
-
-    let throttled_routes = Router::new()
+    let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
-        .route("/v1/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/v1/graphql",
+            post(graphql_handler)
+                .layer(ConcurrencyLimitLayer::new(concurrency_limit))
+                .options(ok),
+        )
         .route(
             "/v1/graphql-sub",
             post(graphql_subscription_handler).options(ok),
         )
         .route("/v1/metrics", get(metrics))
-        .layer(ConcurrencyLimitLayer::new(concurrency_limit));
-
-    let router = Router::new()
-        .merge(unthrottled_routes)
-        .merge(throttled_routes)
+        .route("/v1/health", get(health))
+        .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))
