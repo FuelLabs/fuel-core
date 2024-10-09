@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
-- [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The total gas used in a block" (`executor_gas_per_block`), "The size of a block in bytes" (`executor_size_per_block_bytes`), "The total fee (gwei) paid by transactions in a block" (`executor_fee_per_block_gwei`), "The total number of transactions in a block" (`executor_transactions_per_block`), P2P metrics for swarm and protocol.
+- [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The total gas used in a block" (`importer_gas_per_block`), "The total fee (gwei) paid by transactions in a block" (`importer_fee_per_block_gwei`), "The total number of transactions in a block" (`importer_transactions_per_block`), P2P metrics for swarm and protocol.
             
 ## [Version 0.38.0]
 

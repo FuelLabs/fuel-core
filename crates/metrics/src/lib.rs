@@ -21,7 +21,6 @@ pub struct GlobalRegistry {
 
 mod buckets;
 pub mod core_metrics;
-pub mod executor;
 pub mod future_tracker;
 pub mod graphql_metrics;
 pub mod importer;
