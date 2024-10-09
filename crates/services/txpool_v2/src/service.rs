@@ -1,9 +1,6 @@
 use crate as fuel_core_txpool;
 
-use fuel_core_metrics::txpool_metrics::{
-    txpool_metrics,
-    TxPoolMetrics,
-};
+use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
     AsyncProcessor,
     RunnableService,
@@ -226,7 +223,7 @@ where
 
         let num_transactions = self.pool.read().storage.tx_count();
         txpool_metrics()
-            .number_of_transactions_gauge
+            .number_of_transactions
             .set(num_transactions as i64);
 
         tokio::select! {
