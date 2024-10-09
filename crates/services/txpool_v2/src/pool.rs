@@ -250,7 +250,7 @@ where
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
-        let elapsed = start.elapsed().as_secs_f64();
+        let elapsed = start.elapsed().as_nanos() as f64;
         fuel_core_metrics::txpool_metrics::txpool_metrics()
             .select_transaction_time_nanoseconds
             .observe(elapsed);
