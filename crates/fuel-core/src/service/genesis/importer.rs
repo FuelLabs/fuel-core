@@ -130,6 +130,7 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<FuelBlocks, OldFuelBlocks>()?;
         self.spawn_worker_off_chain::<Transactions, OldTransactions>()?;
         self.spawn_worker_off_chain::<SealedBlockConsensus, OldFuelBlockConsensus>()?;
+        self.spawn_worker_off_chain::<ContractsInfo, ContractsInfo>()?;
         self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
         self.spawn_worker_off_chain::<OldTransactions, ContractsInfo>()?;
         self.spawn_worker_off_chain::<OldFuelBlocks, OldFuelBlocks>()?;

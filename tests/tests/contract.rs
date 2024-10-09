@@ -34,6 +34,7 @@ use rand::SeedableRng;
 
 use fuel_core::chain_config::{
     CoinConfig,
+    ContractConfig,
     StateConfig,
 };
 use rstest::rstest;
@@ -413,4 +414,27 @@ async fn can_get_message_proof() {
     assert_eq!(log[1].ra().unwrap(), 0);
     assert_eq!(log[1].rb().unwrap(), 1);
     assert_eq!(logd.data().unwrap(), db_data);
+}
+
+#[tokio::test]
+async fn can_get_genesis_contract_salt() {
+    // given
+    let contract = ContractConfig::default();
+    let contract_id = contract.contract_id;
+    let service_config = Config::local_node_with_state_config(StateConfig {
+        contracts: vec![contract],
+        ..Default::default()
+    });
+
+    // when
+    let node =
+        FuelService::from_database(Database::<OnChain>::in_memory(), service_config)
+            .await
+            .unwrap();
+    let client = FuelClient::from(node.bound_address);
+
+    // then
+    let ret = client.contract_info(&contract_id).await.unwrap().unwrap();
+
+    assert_eq!(ret.salt, Salt::zeroed().into());
 }
