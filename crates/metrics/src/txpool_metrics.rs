@@ -13,6 +13,8 @@ pub struct TxPoolMetrics {
     pub number_of_executable_transactions: Gauge,
     /// Time of transactions in the txpool in seconds
     pub transaction_time_in_txpool_secs: Histogram,
+    /// How long it took for the selection algorithm to select transactions
+    pub select_transaction_time_nanoseconds: Histogram,
 }
 
 impl Default for TxPoolMetrics {
@@ -26,16 +28,25 @@ impl Default for TxPoolMetrics {
             ]
             .into_iter(),
         );
+        let select_transaction_time_nanoseconds = Histogram::new(
+            vec![
+                10.0, 20.0, 30.0, 40.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0,
+                5000.0, 10000.0, 50000.0, 100000.0, 500000.0,
+            ]
+            .into_iter(),
+        );
 
         let number_of_transactions = Gauge::default();
         let number_of_transactions_pending_verification = Gauge::default();
         let number_of_executable_transactions = Gauge::default();
+
         let metrics = TxPoolMetrics {
             tx_size,
             number_of_transactions,
             number_of_transactions_pending_verification,
             number_of_executable_transactions,
             transaction_time_in_txpool_secs,
+            select_transaction_time_nanoseconds,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -67,6 +78,12 @@ impl Default for TxPoolMetrics {
             "Number_Of_Transactions_Pending_Verification_Gaguge",
             "A Gauge keeping track of the number of transactions pending verification",
             metrics.number_of_transactions_pending_verification.clone(),
+        );
+
+        registry.register(
+            "Select_Transaction_Time_Nanoseconds",
+            "How long in nanoseconds it took for the selection algorithm to select transactions",
+            metrics.select_transaction_time_nanoseconds.clone(),
         );
 
         metrics
