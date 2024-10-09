@@ -1,4 +1,7 @@
-use crate as fuel_core_txpool;
+use crate::{
+    self as fuel_core_txpool,
+    selection_algorithms::SelectionAlgorithm,
+};
 
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
@@ -220,11 +223,22 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         // TODO: move this to the Task struct
+        {
+            let pool = self.pool.read();
+            let num_transactions = pool.storage.tx_count();
 
-        let num_transactions = self.pool.read().storage.tx_count();
-        txpool_metrics()
-            .number_of_transactions
-            .set(num_transactions as i64);
+            let executable_txs =
+                pool.selection_algorithm.number_of_executable_transactions();
+
+            let txpool_metrics = txpool_metrics();
+            txpool_metrics
+                .number_of_transactions
+                .set(num_transactions as i64);
+
+            txpool_metrics
+                .number_of_executable_transactions
+                .set(executable_txs as i64);
+        }
 
         tokio::select! {
             biased;

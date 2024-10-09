@@ -9,6 +9,7 @@ pub struct TxPoolMetrics {
     pub tx_size: Histogram,
     pub number_of_transactions: Gauge,
     pub number_of_transactions_pending_verification: Gauge,
+    pub number_of_executable_transactions: Gauge,
     pub transaction_time_in_txpool: Histogram,
 }
 
@@ -26,10 +27,12 @@ impl Default for TxPoolMetrics {
 
         let number_of_transactions = Gauge::default();
         let number_of_transactions_pending_verification = Gauge::default();
+        let number_of_executable_transactions = Gauge::default();
         let metrics = TxPoolMetrics {
             tx_size,
             number_of_transactions,
             number_of_transactions_pending_verification,
+            number_of_executable_transactions,
             transaction_time_in_txpool,
         };
 
@@ -40,7 +43,6 @@ impl Default for TxPoolMetrics {
             metrics.tx_size.clone(),
         );
 
-        let mut registry = global_registry().registry.lock();
         registry.register(
             "Tx_Time_in_Txpool_Histogram",
             "A Histogram keeping track of the time spent by transactions in the txpools",
@@ -48,9 +50,15 @@ impl Default for TxPoolMetrics {
         );
 
         registry.register(
-            "Number_Of_Transactions_Gaguge",
-            "A Gauge keeping track of the number of transactions in the mempool",
+            "Number_Of_Transactions_Gauge",
+            "A Gauge keeping track of the number of transactions in the txpool",
             metrics.number_of_transactions.clone(),
+        );
+
+        registry.register(
+            "Number_Of_Executable_Transactions_Gauge",
+            "A Gauge keeping track of the number of executable transactions",
+            metrics.number_of_executable_transactions.clone(),
         );
 
         registry.register(

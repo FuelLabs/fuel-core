@@ -37,6 +37,9 @@ pub trait SelectionAlgorithm {
         store_entry: &StorageData,
     );
 
+    /// Returns the number of executable transactions
+    fn number_of_executable_transactions(&self) -> usize;
+
     /// Get less worth transactions iterator
     fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex>;
 
