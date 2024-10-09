@@ -231,7 +231,7 @@ where
     fn record_transaction_time_in_txpool(tx: &StorageData) {
         if let Ok(elapsed) = tx.creation_instant.elapsed() {
             fuel_core_metrics::txpool_metrics::txpool_metrics()
-                .transaction_time_in_txpool
+                .transaction_time_in_txpool_secs
                 .observe(elapsed.as_secs_f64());
         } else {
             tracing::warn!("Failed to calculate transaction time in txpool");

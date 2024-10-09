@@ -71,6 +71,7 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
+            PoolTransaction,
             TransactionStatus,
         },
     },
@@ -442,6 +443,8 @@ where
                 }
             };
 
+            meter_tx_size(&checked_tx);
+
             let tx = Arc::new(checked_tx);
 
             let result = {
@@ -662,6 +665,12 @@ where
             }
         }
     }
+}
+
+fn meter_tx_size(tx: &PoolTransaction) {
+    let size = tx.metered_bytes_size();
+    let txpool_metrics = txpool_metrics();
+    txpool_metrics.tx_size.observe(size as f64);
 }
 
 #[allow(clippy::too_many_arguments)]
