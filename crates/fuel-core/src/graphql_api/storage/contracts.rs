@@ -1,5 +1,4 @@
 use fuel_core_chain_config::{
-    AddTable,
     AsTable,
     StateConfig,
     TableEntry,
@@ -49,12 +48,6 @@ impl AsTable<ContractsInfo> for StateConfig {
                 value: ContractsInfoType::V1(Salt::zeroed().into()),
             })
             .collect()
-    }
-}
-
-impl AddTable<ContractsInfo> for StateConfig {
-    fn add(&mut self, _entries: Vec<TableEntry<ContractsInfo>>) {
-        // Do not include these
     }
 }
 
