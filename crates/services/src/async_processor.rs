@@ -1,3 +1,7 @@
+use fuel_core_metrics::futures::{
+    metered_future::MeteredFuture,
+    FuturesMetrics,
+};
 use std::{
     future::Future,
     sync::Arc,
@@ -13,6 +17,7 @@ use tokio::{
 /// A processor that can execute async tasks with a limit on the number of tasks that can be
 /// executed concurrently.
 pub struct AsyncProcessor {
+    metric: FuturesMetrics,
     semaphore: Arc<Semaphore>,
     thread_pool: Option<runtime::Runtime>,
 }
@@ -36,6 +41,7 @@ impl AsyncProcessor {
     /// Create a new `AsyncProcessor` with the given number of threads and the number of pending
     /// tasks.
     pub fn new(
+        metric_name: &str,
         number_of_threads: usize,
         number_of_pending_tasks: usize,
     ) -> anyhow::Result<Self> {
@@ -51,7 +57,9 @@ impl AsyncProcessor {
             None
         };
         let semaphore = Arc::new(Semaphore::new(number_of_pending_tasks));
+        let metric = FuturesMetrics::obtain_futures_metrics(metric_name);
         Ok(Self {
+            metric,
             thread_pool,
             semaphore,
         })
@@ -77,10 +85,11 @@ impl AsyncProcessor {
             let _drop = permit;
             future.await
         };
+        let metered_future = MeteredFuture::new(future, self.metric.clone());
         if let Some(runtime) = &self.thread_pool {
-            runtime.spawn(future);
+            runtime.spawn(metered_future);
         } else {
-            tokio::spawn(future);
+            tokio::spawn(metered_future);
         }
     }
 
@@ -110,7 +119,7 @@ mod tests {
         // Given
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            AsyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
 
         // When
         let (sender, mut receiver) = tokio::sync::oneshot::channel();
@@ -129,7 +138,7 @@ mod tests {
         // Given
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            AsyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
         let first_spawn_result = heavy_task_processor.try_spawn(async move {
             sleep(Duration::from_secs(1));
         });
@@ -148,7 +157,7 @@ mod tests {
     fn second_spawn_works_when_first_is_finished() {
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            AsyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
 
         // Given
         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -175,7 +184,7 @@ mod tests {
         // Given
         let number_of_pending_tasks = 10;
         let heavy_task_processor =
-            AsyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
 
         for _ in 0..number_of_pending_tasks {
             // When
@@ -188,13 +197,14 @@ mod tests {
         }
     }
 
-    #[test]
-    fn executes_10_tasks_for_10_seconds_with_one_thread() {
+    #[tokio::test]
+    async fn executes_10_tasks_for_10_seconds_with_one_thread() {
         // Given
         let number_of_pending_tasks = 10;
         let number_of_threads = 1;
         let heavy_task_processor =
-            AsyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+                .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -211,19 +221,22 @@ mod tests {
         drop(broadcast_sender);
 
         // Then
-        futures::executor::block_on(async move {
-            while broadcast_receiver.recv().await.is_ok() {}
-            assert!(instant.elapsed() >= Duration::from_secs(10));
-        });
+        while broadcast_receiver.recv().await.is_ok() {}
+        assert!(instant.elapsed() >= Duration::from_secs(10));
+        let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
+        assert_eq!(duration.as_secs(), 10);
+        let duration = Duration::from_nanos(heavy_task_processor.metric.idle.get());
+        assert_eq!(duration.as_secs(), 0);
     }
 
-    #[test]
-    fn executes_10_tasks_for_2_seconds_with_10_thread() {
+    #[tokio::test]
+    async fn executes_10_tasks_for_2_seconds_with_10_thread() {
         // Given
         let number_of_pending_tasks = 10;
         let number_of_threads = 10;
         let heavy_task_processor =
-            AsyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+                .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -240,19 +253,22 @@ mod tests {
         drop(broadcast_sender);
 
         // Then
-        futures::executor::block_on(async move {
-            while broadcast_receiver.recv().await.is_ok() {}
-            assert!(instant.elapsed() <= Duration::from_secs(2));
-        });
+        while broadcast_receiver.recv().await.is_ok() {}
+        assert!(instant.elapsed() <= Duration::from_secs(2));
+        let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
+        assert_eq!(duration.as_secs(), 10);
+        let duration = Duration::from_nanos(heavy_task_processor.metric.idle.get());
+        assert_eq!(duration.as_secs(), 0);
     }
 
-    #[test]
-    fn executes_10_tasks_for_2_seconds_with_1_thread() {
+    #[tokio::test]
+    async fn executes_10_tasks_for_2_seconds_with_1_thread() {
         // Given
         let number_of_pending_tasks = 10;
         let number_of_threads = 10;
         let heavy_task_processor =
-            AsyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+                .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -269,9 +285,11 @@ mod tests {
         drop(broadcast_sender);
 
         // Then
-        futures::executor::block_on(async move {
-            while broadcast_receiver.recv().await.is_ok() {}
-            assert!(instant.elapsed() <= Duration::from_secs(2));
-        });
+        while broadcast_receiver.recv().await.is_ok() {}
+        assert!(instant.elapsed() <= Duration::from_secs(2));
+        let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
+        assert_eq!(duration.as_secs(), 0);
+        let duration = Duration::from_nanos(heavy_task_processor.metric.idle.get());
+        assert_eq!(duration.as_secs(), 10);
     }
 }

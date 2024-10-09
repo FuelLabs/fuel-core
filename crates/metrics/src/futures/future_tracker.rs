@@ -1,3 +1,4 @@
+use crate::futures::FuturesMetrics;
 use core::{
     future::Future,
     pin::Pin,
@@ -13,11 +14,27 @@ use std::time::Instant;
 #[derive(Debug)]
 pub struct ExecutionTime<Output> {
     /// The time spent for real action of the future.
-    pub busy: Duration,
+    busy: Duration,
     /// The idle time of the future.
-    pub idle: Duration,
+    idle: Duration,
     /// The output of the future.
-    pub output: Output,
+    output: Output,
+}
+
+impl<Output> ExecutionTime<Output> {
+    /// Unwraps the future output and returns the execution report.
+    pub fn unwrap(self, metric: &FuturesMetrics) -> Output {
+        // TODO: Use `u128` when `AtomicU128` is stable.
+        metric.busy.inc_by(
+            u64::try_from(self.busy.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
+        metric.idle.inc_by(
+            u64::try_from(self.idle.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
+        self.output
+    }
 }
 
 /// A guard representing a span which has been entered and is currently

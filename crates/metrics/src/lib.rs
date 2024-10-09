@@ -20,11 +20,10 @@ pub struct GlobalRegistry {
 }
 
 pub mod core_metrics;
-pub mod future_tracker;
+pub mod futures;
 pub mod graphql_metrics;
 pub mod importer;
 pub mod p2p_metrics;
-pub mod services;
 pub mod txpool_metrics;
 
 // recommended bucket defaults for logging response times
