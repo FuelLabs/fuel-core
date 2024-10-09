@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Added metrics for sync, async processor and for all GraphQL queries.
+
+### Fixed
+
+- [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Ignore peer if we already are syncing transactions from it.
+
 ## [Version 0.38.0]
 
 ### Added
