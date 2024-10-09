@@ -25,8 +25,7 @@ pub struct TxPoolMetrics {
 
 impl Default for TxPoolMetrics {
     fn default() -> Self {
-        let tx_sizes = Vec::new(); // TODO: What values for tx_sizes?
-        let tx_size = Histogram::new(tx_sizes.into_iter());
+        let tx_size = Histogram::new(buckets(Buckets::TransactionSize));
         let transaction_time_in_txpool_secs =
             Histogram::new(buckets(Buckets::TransactionTimeInTxPool));
         let select_transaction_time_nanoseconds =
