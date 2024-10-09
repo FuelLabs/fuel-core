@@ -6,7 +6,6 @@ use crate::{
     },
     refs::ContractRef,
 };
-use fuel_core_metrics::executor::executor_metrics;
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -441,19 +440,6 @@ where
             &mut memory,
         )?;
         debug_assert!(data.found_mint, "Mint transaction is not found");
-
-        executor_metrics()
-            .gas_per_block
-            .observe(data.used_gas as f64);
-        executor_metrics()
-            .size_per_block_bytes
-            .observe(data.used_size as f64);
-        executor_metrics()
-            .fee_per_block
-            .observe(data.coinbase as f64);
-        executor_metrics()
-            .transactions_per_block
-            .observe(data.tx_count as f64);
 
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))

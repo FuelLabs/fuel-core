@@ -3435,7 +3435,6 @@ name = "fuel-core-executor"
 version = "0.38.0"
 dependencies = [
  "anyhow",
- "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.38.0",

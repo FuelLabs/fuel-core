@@ -18,6 +18,9 @@ pub struct ImporterMetrics {
     pub block_height: Gauge,
     pub latest_block_import_timestamp: Gauge<f64, AtomicU64>,
     pub execute_and_commit_duration: Histogram,
+    pub gas_per_block: Histogram,
+    pub fee_per_block: Histogram,
+    pub transactions_per_block: Histogram,
 }
 
 impl Default for ImporterMetrics {
@@ -25,6 +28,9 @@ impl Default for ImporterMetrics {
         let block_height_gauge = Gauge::default();
         let latest_block_import_ms = Gauge::default();
         let execute_and_commit_duration = Histogram::new(buckets(Buckets::Timing));
+        let gas_per_block = Histogram::new(buckets(Buckets::GasUsed));
+        let fee_per_block = Histogram::new(buckets(Buckets::Fee));
+        let transactions_per_block = Histogram::new(buckets(Buckets::TransactionsCount));
 
         let mut registry = global_registry().registry.lock();
         registry.register(
@@ -45,10 +51,31 @@ impl Default for ImporterMetrics {
             execute_and_commit_duration.clone(),
         );
 
+        registry.register(
+            "importer_gas_per_block",
+            "The total gas used in a block",
+            gas_per_block.clone(),
+        );
+
+        registry.register(
+            "importer_fee_per_block_gwei",
+            "The total fee (gwei) paid by transactions in a block",
+            fee_per_block.clone(),
+        );
+
+        registry.register(
+            "importer_transactions_per_block",
+            "The total number of transactions in a block",
+            transactions_per_block.clone(),
+        );
+
         Self {
             block_height: block_height_gauge,
             latest_block_import_timestamp: latest_block_import_ms,
             execute_and_commit_duration,
+            gas_per_block,
+            fee_per_block,
+            transactions_per_block,
         }
     }
 }
