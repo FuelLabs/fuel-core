@@ -10,7 +10,11 @@ use fuel_core::service::{
     FuelService,
     ServiceTrait,
 };
-use fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION;
+use fuel_core_client::client::FuelClient;
+use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+    fuel_tx::Transaction,
+};
 use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
@@ -431,17 +435,19 @@ async fn concurrency_limit_0_allows_unthrottled_queries() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn concurrency_limit_1_prevents_concurrent_queries() {
     // Given
+    const NUM_OF_BLOCKS: u32 = 40;
     let num_samples = 100;
 
     let mut config = Config::local_node();
     config.graphql_config.max_concurrent_queries = 1;
 
     let query = FULL_BLOCK_QUERY.to_string();
-    let query = query.replace("$NUMBER_OF_BLOCKS", "40");
+    let query = query.replace("$NUMBER_OF_BLOCKS", NUM_OF_BLOCKS.to_string().as_str());
 
     let node = FuelService::new_node(config).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
-    let client = reqwest::Client::new();
+    let client = FuelClient::new(url.clone()).unwrap();
+    client.produce_blocks(NUM_OF_BLOCKS, None).await.unwrap();
 
     let (mut tx, mut rx) = tokio::sync::mpsc::channel(100);
 
@@ -451,12 +457,12 @@ async fn concurrency_limit_1_prevents_concurrent_queries() {
     let mut avg_request_time = 0;
     for _ in 0..num_samples {
         let now = Instant::now();
-        send_graph_ql_query(&url, &query).await;
+        let _ = send_graph_ql_query(&url, &query).await;
         avg_request_time += now.elapsed().as_nanos() / num_samples;
     }
 
     // Measure the average request time for concurrent queries
-    for idx in 0..num_samples {
+    for _ in 0..num_samples {
         let tx = tx.clone();
         let url = url.clone();
         let query = query.clone();
@@ -469,7 +475,7 @@ async fn concurrency_limit_1_prevents_concurrent_queries() {
     }
 
     let mut avg_concurrent_request_time = 0;
-    for idx in 0..num_samples {
+    for _ in 0..num_samples {
         let request_time = rx.recv().await.unwrap();
         avg_concurrent_request_time += request_time / num_samples;
     }
@@ -486,4 +492,50 @@ async fn concurrency_limit_1_prevents_concurrent_queries() {
     // However, since this is inherently flaky we divide by 4 instead of 2 to have some margin,
     // while still maintaining our ability to assert a large deviation between the two measurements.
     assert!(avg_concurrent_request_time > avg_request_time * num_samples / 4);
+}
+
+#[tokio::test]
+async fn recursion_in_queries_is_no_allowed() {
+    let query = r#"
+    query {
+      blocks(last: 1) {
+        edges {
+          cursor
+          node {
+            id
+            transactions {
+              status {
+                ... on SuccessStatus {
+                  block {
+                    height
+                    transactions {
+                      id
+                    }
+                  }
+                }
+                ... on FailureStatus {
+                  block {
+                    height
+                    transactions {
+                      id
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }"#;
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+    let client = FuelClient::new(url.clone()).unwrap();
+    client
+        .submit_and_await_commit(&Transaction::default_test_tx())
+        .await
+        .unwrap();
+
+    let result = send_graph_ql_query(&url, query).await;
+    assert!(result.contains("Recursion detected"), "{:?}", result);
 }

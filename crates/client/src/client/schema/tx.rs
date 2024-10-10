@@ -193,6 +193,21 @@ pub enum TransactionStatus {
     Unknown,
 }
 
+#[allow(clippy::enum_variant_names)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "TransactionStatus"
+)]
+pub enum StatusWithTransaction {
+    SubmittedStatus(SubmittedStatus),
+    SuccessStatus(SuccessStatusWithTransaction),
+    SqueezedOutStatus(SqueezedOutStatus),
+    FailureStatus(FailureStatusWithTransaction),
+    #[cynic(fallback)]
+    Unknown,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SubmittedStatus {
@@ -202,7 +217,17 @@ pub struct SubmittedStatus {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
-    #[cfg(feature = "test-helpers")]
+    pub block_height: U32,
+    pub time: Tai64Timestamp,
+    pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "SuccessStatus")]
+pub struct SuccessStatusWithTransaction {
     pub transaction: OpaqueTransaction,
     pub block_height: U32,
     pub time: Tai64Timestamp,
@@ -215,7 +240,18 @@ pub struct SuccessStatus {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
-    #[cfg(feature = "test-helpers")]
+    pub block_height: U32,
+    pub time: Tai64Timestamp,
+    pub reason: String,
+    pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "FailureStatus")]
+pub struct FailureStatusWithTransaction {
     pub transaction: OpaqueTransaction,
     pub block_height: U32,
     pub time: Tai64Timestamp,
@@ -430,6 +466,17 @@ pub struct Submit {
 pub struct SubmitAndAwaitSubscription {
     #[arguments(tx: $tx)]
     pub submit_and_await: TransactionStatus,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Subscription",
+    variables = "TxArg"
+)]
+pub struct SubmitAndAwaitSubscriptionWithTransaction {
+    #[arguments(tx: $tx)]
+    pub submit_and_await: StatusWithTransaction,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

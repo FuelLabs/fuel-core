@@ -6,8 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-## Fixed
-- [2320](https://github.com/FuelLabs/fuel-core/issues/2320): Prevent `/health` and `/v1/health` from being throttled by the concurrency limiter.
+### Added
+- [2320](https://github.com/FuelLabs/fuel-core/pull/2320): Added new CLI flag `graphql-max-resolver-recursive-depth` to limit recursion within resolver. The default value it "1".
+
+### Fixed
+- [2320](https://github.com/FuelLabs/fuel-core/pull/2320): Prevent `/health` and `/v1/health` from being throttled by the concurrency limiter.
+
+#### Breaking
+
+- [2320](https://github.com/FuelLabs/fuel-core/pull/2330): Reject queries that are recursive during the resolution of the query.
 
 ## [Version 0.38.0]
 

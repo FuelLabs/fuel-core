@@ -15,7 +15,10 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::TransactionStatus,
+    types::{
+        StatusWithTransaction,
+        TransactionStatus,
+    },
     FuelClient,
 };
 use fuel_core_poa::{
@@ -560,11 +563,11 @@ async fn get_executed_transaction_from_status() {
     assert_eq!(receipt_root_before_execution, Bytes32::zeroed());
 
     // When
-    let result = client.submit_and_await_commit(&transaction).await;
+    let result = client.submit_and_await_commit_with_tx(&transaction).await;
 
     // Then
     let status = result.expect("Expected executed transaction");
-    let TransactionStatus::Success { transaction, .. } = status else {
+    let StatusWithTransaction::Success { transaction, .. } = status else {
         panic!("Not successful transaction")
     };
     let receipt_root_after_execution = *transaction.as_script().unwrap().receipts_root();

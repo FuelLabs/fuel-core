@@ -24,6 +24,14 @@ pub struct GraphQLArgs {
     #[clap(long = "graphql-max-recursive-depth", default_value = "16", env)]
     pub graphql_max_recursive_depth: usize,
 
+    /// The max resolver recursive depth of GraphQL queries.
+    #[clap(
+        long = "graphql-max-resolver-recursive-depth",
+        default_value = "1",
+        env
+    )]
+    pub max_queries_resolver_recursive_depth: usize,
+
     /// The max number of directives in the query.
     #[clap(long = "graphql-max-directives", default_value = "10", env)]
     pub max_queries_directives: usize,
