@@ -223,7 +223,12 @@ where
 
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
-        .route("/v1/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/v1/graphql",
+            post(graphql_handler)
+                .layer(ConcurrencyLimitLayer::new(concurrency_limit))
+                .options(ok),
+        )
         .route(
             "/v1/graphql-sub",
             post(graphql_subscription_handler).options(ok),
@@ -231,7 +236,6 @@ where
         .route("/v1/metrics", get(metrics))
         .route("/v1/health", get(health))
         .route("/health", get(health))
-        .layer(ConcurrencyLimitLayer::new(concurrency_limit))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))
