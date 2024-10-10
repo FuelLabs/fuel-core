@@ -401,7 +401,8 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
         .client
         .message_proof(&tx_id, nonce, None, Some((message_block_height + 1).into()))
         .await
-        .expect("Unable to get message proof");
+        .expect("Unable to get message proof")
+        .expect("Message proof not found");
     let prev_root = proof.commit_block_header.prev_root;
     let block_proof_index = proof.block_proof.proof_index;
     let block_proof_set: Vec<_> = proof
@@ -459,7 +460,8 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
             .client
             .message_proof(&tx_id, nonce, None, Some(block_height.into()))
             .await
-            .expect("Unable to get message proof");
+            .expect("Unable to get message proof")
+            .expect("Message proof not found");
         let prev_root = proof.commit_block_header.prev_root;
         let block_proof_set: Vec<_> = proof
             .block_proof

@@ -1101,7 +1101,7 @@ impl FuelClient {
         nonce: &Nonce,
         commit_block_id: Option<&BlockId>,
         commit_block_height: Option<BlockHeight>,
-    ) -> io::Result<types::MessageProof> {
+    ) -> io::Result<Option<types::MessageProof>> {
         let transaction_id: TransactionId = (*transaction_id).into();
         let nonce: schema::Nonce = (*nonce).into();
         let commit_block_id: Option<schema::BlockId> =
@@ -1113,7 +1113,14 @@ impl FuelClient {
             commit_block_id,
             commit_block_height,
         });
-        let proof = self.query(query).await?.message_proof.try_into()?;
+
+        let proof = self
+            .query(query)
+            .await?
+            .message_proof
+            .map(TryInto::try_into)
+            .transpose()?;
+
         Ok(proof)
     }
 

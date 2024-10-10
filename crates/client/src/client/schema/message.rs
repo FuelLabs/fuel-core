@@ -114,7 +114,7 @@ pub struct MessageProofQuery {
         commitBlockId: $commit_block_id,
         commitBlockHeight: $commit_block_height
     )]
-    pub message_proof: MessageProof,
+    pub message_proof: Option<MessageProof>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
