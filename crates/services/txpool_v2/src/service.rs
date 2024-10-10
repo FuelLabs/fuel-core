@@ -188,6 +188,7 @@ pub struct Task<View> {
     pool: Shared<TxPool>,
     current_height: Arc<RwLock<BlockHeight>>,
     shared_state: SharedState,
+    metrics: bool,
 }
 
 #[async_trait::async_trait]
@@ -224,7 +225,7 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         // TODO: move this to the Task struct
-        {
+        if self.metrics {
             let pool = self.pool.read();
             let num_transactions = pool.storage.tx_count();
 
@@ -404,6 +405,7 @@ where
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
+        let metrics = self.metrics;
 
         let op_without_metrics = move || {
             let current_height = *current_height.read();
@@ -434,7 +436,9 @@ where
                 }
             };
 
-            meter_tx_size(&checked_tx);
+            if metrics {
+                meter_tx_size(&checked_tx)
+            };
 
             let tx = Arc::new(checked_tx);
 
@@ -489,19 +493,23 @@ where
             }
         };
         move || {
-            let txpool_metrics = txpool_metrics();
-            txpool_metrics
-                .number_of_transactions_pending_verification
-                .inc();
-            let start_time = tokio::time::Instant::now();
-            op_without_metrics();
-            let time_for_task_to_complete = start_time.elapsed().as_millis();
-            txpool_metrics
-                .transaction_insertion_time_in_thread_pool_milliseconds
-                .observe(time_for_task_to_complete as f64);
-            txpool_metrics
-                .number_of_transactions_pending_verification
-                .dec();
+            if metrics {
+                let txpool_metrics = txpool_metrics();
+                txpool_metrics
+                    .number_of_transactions_pending_verification
+                    .inc();
+                let start_time = tokio::time::Instant::now();
+                op_without_metrics();
+                let time_for_task_to_complete = start_time.elapsed().as_millis();
+                txpool_metrics
+                    .transaction_insertion_time_in_thread_pool_milliseconds
+                    .observe(time_for_task_to_complete as f64);
+                txpool_metrics
+                    .number_of_transactions_pending_verification
+                    .dec();
+            } else {
+                op_without_metrics();
+            }
         }
     }
 
@@ -777,6 +785,8 @@ where
     )
     .unwrap();
 
+    let metrics = config.metrics;
+
     let utxo_validation = config.utxo_validation;
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
@@ -799,5 +809,6 @@ where
         current_height: Arc::new(RwLock::new(current_height)),
         pool: Arc::new(RwLock::new(txpool)),
         shared_state,
+        metrics,
     })
 }

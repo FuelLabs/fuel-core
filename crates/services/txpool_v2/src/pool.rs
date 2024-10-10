@@ -251,13 +251,21 @@ where
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
         let elapsed = start.elapsed().as_nanos() as f64;
-        fuel_core_metrics::txpool_metrics::txpool_metrics()
-            .select_transaction_time_nanoseconds
-            .observe(elapsed);
+        let metrics: bool = self.config.metrics;
+
+        if metrics {
+            fuel_core_metrics::txpool_metrics::txpool_metrics()
+                .select_transaction_time_nanoseconds
+                .observe(elapsed);
+        };
 
         best_txs
             .into_iter()
-            .inspect(Self::record_transaction_time_in_txpool)
+            .inspect(|storage_data| {
+                if metrics {
+                    Self::record_transaction_time_in_txpool(storage_data)
+                }
+            })
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
 
