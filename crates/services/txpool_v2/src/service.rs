@@ -221,44 +221,42 @@ where
     View: TxPoolPersistentStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
-
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                should_continue = false;
+                return Ok(false)
             }
 
             block_result = self.subscriptions.imported_blocks.next() => {
                 if let Some(result) = block_result {
                     self.import_block(result);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
                     self.borrow_txpool(select_transaction_request);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             _ = self.pruner.ttl_timer.tick() => {
                 self.try_prune_transactions();
-                should_continue = true;
+                return Ok(true)
             }
 
             write_pool_request = self.subscriptions.write_pool.recv() => {
                 if let Some(write_pool_request) = write_pool_request {
                     self.process_write(write_pool_request);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
@@ -267,32 +265,30 @@ where
                     if let Some(tx) = data {
                         self.manage_tx_from_p2p(tx, message_id, peer_id);
                     }
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             new_peer_subscribed = self.subscriptions.new_tx_source.next() => {
                 if let Some(peer_id) = new_peer_subscribed {
                     self.manage_new_peer_subscribed(peer_id);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
                     self.process_read(read_pool_request);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
         }
-
-        Ok(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

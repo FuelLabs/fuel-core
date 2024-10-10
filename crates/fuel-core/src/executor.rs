@@ -1501,9 +1501,10 @@ mod tests {
         }
         let mut config: Config = Default::default();
         // Each TX consumes `tx_gas_usage` gas and so set the block gas limit to execute only 9 transactions.
+        let block_gas_limit = tx_gas_usage * 9;
         config
             .consensus_parameters
-            .set_block_gas_limit(tx_gas_usage * 9);
+            .set_block_gas_limit(block_gas_limit);
         let mut executor = create_executor(Default::default(), config);
 
         let block = PartialFuelBlock {
@@ -1519,7 +1520,14 @@ mod tests {
 
         // Then
         assert_eq!(skipped_transactions.len(), 1);
-        assert_eq!(skipped_transactions[0].1, ExecutorError::GasOverflow);
+        assert_eq!(
+            skipped_transactions[0].1,
+            ExecutorError::GasOverflow(
+                "Transaction cannot fit in remaining gas limit: (0).".into(),
+                *tx_gas_usage,
+                0
+            )
+        );
     }
 
     #[test]
