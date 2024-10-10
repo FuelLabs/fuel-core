@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2320](https://github.com/FuelLabs/fuel-core/issues/2320): Prevent `/health` and `/v1/health` from being throttled by the concurrency limiter.
 
 ### Changed
-- [2233]((https://github.com/FuelLabs/fuel-core/pull/2233): New changes to HistoricalRocksDB are written to ModificationsHistoryV2
+- [2233](https://github.com/FuelLabs/fuel-core/pull/2233): New changes to HistoricalRocksDB are written to ModificationsHistoryV2
 
 ## [Version 0.38.0]
 
