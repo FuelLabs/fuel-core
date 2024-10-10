@@ -231,6 +231,16 @@ impl CombinedDatabase {
         }
     }
 
+    /// Converts the combined database into a genesis combined database without
+    /// checking the height of the databases.
+    pub fn unsafe_into_genesis(self) -> CombinedGenesisDatabase {
+        CombinedGenesisDatabase {
+            on_chain: self.on_chain.unsafe_into_genesis(),
+            off_chain: self.off_chain.unsafe_into_genesis(),
+            relayer: self.relayer.unsafe_into_genesis(),
+        }
+    }
+
     /// Rollbacks the state of the blockchain to a specific block height.
     pub fn rollback_to<S>(
         &self,
