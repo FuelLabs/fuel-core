@@ -45,6 +45,7 @@ hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
+parking_lot = { workspace = true }
 paste = { workspace = true }
 postcard = { workspace = true, optional = true }
 rand = { workspace = true }
