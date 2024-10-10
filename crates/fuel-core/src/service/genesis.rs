@@ -149,6 +149,7 @@ pub async fn execute_genesis_block(
     Ok(result)
 }
 
+// todo: https://github.com/FuelLabs/fuel-core/issues/2329
 pub async fn recover_missing_tables_from_genesis_state_config(
     watcher: StateWatcher,
     config: &Config,
