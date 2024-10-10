@@ -405,7 +405,7 @@ where
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
-        move || {
+        let op_without_metrics = move || {
             let txpool_metrics = txpool_metrics();
             txpool_metrics
                 .number_of_transactions_pending_verification
@@ -496,6 +496,14 @@ where
                     Error::Removed(RemovedReason::LessWorth(tx.id())),
                 );
             }
+        };
+        move || {
+            let start_time = tokio::time::Instant::now();
+            op_without_metrics();
+            let time_for_task_to_complete = start_time.elapsed().as_millis();
+            txpool_metrics()
+                .transaction_insertion_time_in_thread_pool_milliseconds
+                .observe(time_for_task_to_complete as f64);
         }
     }
 

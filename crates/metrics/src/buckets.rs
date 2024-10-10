@@ -16,6 +16,7 @@ pub(crate) enum Buckets {
     TransactionTimeInTxPool,
     SelectTransactionTime,
     TransactionSize,
+    TransactionInsertionTimeInTxPool,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
 pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
@@ -204,6 +205,21 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                 100000.0,
                 500000.0,            ]
         ),
+        // These are milliseconds, the values of the buckets and unit of measure needs to be 
+        // validated, but starting measuring the time in milliseconds is a reasonable starting point.
+        ( Buckets::TransactionInsertionTimeInTxPool, vec![
+            0.005,
+            0.010,
+            0.025,
+            0.050,
+            0.100,
+            0.250,
+            0.500,
+            1.000,
+            2.500,
+            5.000,
+           10.000,
+        ]),
     ]
     .into_iter()
     .collect()

@@ -19,6 +19,8 @@ pub struct TxPoolMetrics {
     pub number_of_executable_transactions: Gauge,
     /// Time of transactions in the txpool in seconds
     pub transaction_time_in_txpool_secs: Histogram,
+    /// Time actively spent by transaction insertion in the thread pool
+    pub transaction_insertion_time_in_thread_pool_milliseconds: Histogram,
     /// How long it took for the selection algorithm to select transactions
     pub select_transaction_time_nanoseconds: Histogram,
 }
@@ -30,6 +32,8 @@ impl Default for TxPoolMetrics {
             Histogram::new(buckets(Buckets::TransactionTimeInTxPool));
         let select_transaction_time_nanoseconds =
             Histogram::new(buckets(Buckets::SelectTransactionTime));
+        let transaction_insertion_time_in_thread_pool_milliseconds =
+            Histogram::new(buckets(Buckets::TransactionInsertionTimeInTxPool));
 
         let number_of_transactions = Gauge::default();
         let number_of_transactions_pending_verification = Gauge::default();
@@ -41,6 +45,7 @@ impl Default for TxPoolMetrics {
             number_of_transactions_pending_verification,
             number_of_executable_transactions,
             transaction_time_in_txpool_secs,
+            transaction_insertion_time_in_thread_pool_milliseconds,
             select_transaction_time_nanoseconds,
         };
 
@@ -78,6 +83,12 @@ impl Default for TxPoolMetrics {
         registry.register(
             "Select_Transaction_Time_Nanoseconds",
             "How long in nanoseconds it took for the selection algorithm to select transactions",
+            metrics.select_transaction_time_nanoseconds.clone(),
+        );
+
+        registry.register(
+            "Insert_Transaction_Time_Milliseconds",
+            "Time spent by transaction insertion function in the rayon thread pool in milliseconds",
             metrics.select_transaction_time_nanoseconds.clone(),
         );
 
