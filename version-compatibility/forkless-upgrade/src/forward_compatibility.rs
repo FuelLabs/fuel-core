@@ -6,7 +6,7 @@ use crate::tests_helper::{
     default_multiaddr,
     transactions_from_subsections,
     upgrade_transaction,
-    GenesisFuelCoreDriver,
+    Version36FuelCoreDriver,
     IGNITION_TESTNET_SNAPSHOT,
     POA_SECRET_KEY,
     SUBSECTION_SIZE,
@@ -31,24 +31,24 @@ use rand::{
 use std::time::Duration;
 
 #[tokio::test]
-async fn latest_state_transition_function_is_forward_compatible_with_genesis_binary() {
-    // The test has a genesis block producer and one genesis validator.
-    // Genesis nodes execute several blocks by using the genesis state transition function.
+async fn latest_state_transition_function_is_forward_compatible_with_v36_binary() {
+    // The test has a v36 block producer and one v36 validator.
+    // v36 nodes execute several blocks by using the v36 state transition function.
     // At some point, we upgrade the network to use the latest state transition function.
     // The network should be able to generate several new blocks with a new version.
-    // Genesis block producer and validator should process all blocks.
+    // v36 block producer and validator should process all blocks.
     //
     // These actions test that old nodes could use a new state transition function,
     // and it is forward compatible.
     //
     // To simplify the upgrade of the network `utxo_validation` is `false`.
 
-    let genesis_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = "40333";
-    let genesis_node = GenesisFuelCoreDriver::spawn(&[
+    let v36_keypair = SecpKeypair::generate();
+    let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
+    let v36_port = "40333";
+    let v36_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
-        "GenesisProducer",
+        "V36Producer",
         "--debug",
         "--poa-instant",
         "true",
@@ -60,21 +60,21 @@ async fn latest_state_transition_function_is_forward_compatible_with_genesis_bin
         "--keypair",
         hexed_secret.as_str(),
         "--peering-port",
-        genesis_port,
+        v36_port,
     ])
     .await
     .unwrap();
-    let public_key = Keypair::from(genesis_keypair).public();
-    let genesis_peer_id = PeerId::from_public_key(&public_key);
-    let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
+    let public_key = Keypair::from(v36_keypair).public();
+    let v36_peer_id = PeerId::from_public_key(&public_key);
+    let v36_multiaddr = default_multiaddr(v36_port, v36_peer_id);
 
-    // Starting a genesis validator node.
-    // It will connect to the genesis node and sync blocks.
+    // Starting a v36 validator node.
+    // It will connect to the v36 node and sync blocks.
     let latest_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
-    let validator_node = GenesisFuelCoreDriver::spawn(&[
+    let validator_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
-        "GenesisValidator",
+        "V36Validator",
         "--debug",
         "--poa-instant",
         "false",
@@ -84,7 +84,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_genesis_bin
         "--keypair",
         hexed_secret.as_str(),
         "--reserved-nodes",
-        genesis_multiaddr.as_str(),
+        v36_multiaddr.as_str(),
         "--peering-port",
         "0",
     ])
@@ -94,7 +94,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_genesis_bin
     // Given
     let mut imported_blocks = validator_node.node.shared.block_importer.events();
     const BLOCKS_TO_PRODUCE: u32 = 10;
-    genesis_node
+    v36_node
         .client
         .produce_blocks(BLOCKS_TO_PRODUCE, None)
         .await
@@ -144,7 +144,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_genesis_bin
 
     // Then
     let mut imported_blocks = validator_node.node.shared.block_importer.events();
-    genesis_node
+    v36_node
         .client
         .produce_blocks(BLOCKS_TO_PRODUCE, None)
         .await

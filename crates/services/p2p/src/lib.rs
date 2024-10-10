@@ -8,13 +8,13 @@ pub mod discovery;
 mod dnsaddr_resolution;
 pub mod gossipsub;
 pub mod heartbeat;
-pub mod heavy_task_processor;
 pub mod p2p_service;
 pub mod peer_manager;
 pub mod peer_report;
 pub mod ports;
 pub mod request_response;
 pub mod service;
+mod utils;
 
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;

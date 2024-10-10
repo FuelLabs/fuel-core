@@ -312,17 +312,46 @@ impl CombinedDatabase {
         Ok(())
     }
 
+    /// This function is fundamentally different from `rollback_to` in that it
+    /// will rollback the off-chain/gas-price databases if they are ahead of the
+    /// on-chain database. If they don't have a height or are behind the on-chain
+    /// we leave it to the caller to decide how to bring them up to date.
+    /// We don't rollback the on-chain database as it is the source of truth.
+    /// The target height of the rollback is the latest height of the on-chain database.
     pub fn sync_aux_db_heights<S>(&self, shutdown_listener: &mut S) -> anyhow::Result<()>
     where
         S: ShutdownListener,
     {
-        if let Some(on_chain_height) = self.on_chain().latest_height_from_metadata()? {
-            // todo(https://github.com/FuelLabs/fuel-core/issues/2239): This is a temporary fix
-            let res = self.rollback_to(on_chain_height, shutdown_listener);
-            if res.is_err() {
-                tracing::warn!("Failed to rollback auxiliary databases to on-chain database height: {:?}", res);
+        while !shutdown_listener.is_cancelled() {
+            let on_chain_height = match self.on_chain().latest_height_from_metadata()? {
+                Some(height) => height,
+                None => break, // Exit loop if on-chain height is None
+            };
+
+            let off_chain_height = self.off_chain().latest_height_from_metadata()?;
+            let gas_price_height = self.gas_price().latest_height_from_metadata()?;
+
+            // Handle off-chain rollback if necessary
+            if let Some(off_height) = off_chain_height {
+                if off_height > on_chain_height {
+                    self.off_chain().rollback_last_block()?;
+                }
             }
-        };
+
+            // Handle gas price rollback if necessary
+            if let Some(gas_height) = gas_price_height {
+                if gas_height > on_chain_height {
+                    self.gas_price().rollback_last_block()?;
+                }
+            }
+
+            // If both off-chain and gas price heights are synced, break
+            if off_chain_height.map_or(true, |h| h <= on_chain_height)
+                && gas_price_height.map_or(true, |h| h <= on_chain_height)
+            {
+                break;
+            }
+        }
 
         Ok(())
     }

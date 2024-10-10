@@ -4,6 +4,7 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
@@ -16,7 +17,6 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::sync::Arc;
 
 #[tokio::test]
 async fn txs_max_script_gas_limit() {
@@ -50,6 +50,7 @@ async fn txs_max_script_gas_limit() {
 
     // setup genesis block with coins that transactions can spend
     test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
+    test_builder.trigger = Trigger::Never;
 
     // spin up node
     let TestContext { client, srv, .. } = test_builder.finalize().await;
@@ -58,10 +59,13 @@ async fn txs_max_script_gas_limit() {
     let txs = transactions
         .clone()
         .into_iter()
-        .map(|script| Arc::new(fuel_tx::Transaction::from(script)))
+        .map(fuel_tx::Transaction::from)
         .collect::<Vec<_>>();
-    srv.shared.txpool_shared_state.insert(txs).await;
+    for tx in txs {
+        srv.shared.txpool_shared_state.insert(tx).await.unwrap();
+    }
 
+    client.produce_blocks(1, None).await.unwrap();
     let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(
         block.transactions.len(),

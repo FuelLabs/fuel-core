@@ -19,7 +19,10 @@
 //! - `tx_status_message()`: Generates a TxStatusMessage
 //! - `transaction_status()`: Generates a TransactionStatus
 //! - `input_stream()`: Generates a Vec<TxStatusMessage> of length 0 to 5
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::{
+    error::RemovedReason,
+    TxStatusMessage,
+};
 use fuel_core_types::{
     fuel_types::Bytes32,
     services::txpool::TransactionStatus,
@@ -76,7 +79,7 @@ fn failed() -> TransactionStatus {
 /// Returns a TransactionStatus with SqueezedOut status and an empty error message
 fn squeezed() -> TransactionStatus {
     TransactionStatus::SqueezedOut {
-        reason: fuel_core_txpool::Error::SqueezedOut(String::new()).to_string(),
+        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
 
@@ -251,6 +254,7 @@ fn test_tsc_inner(
 
             let stream = futures::stream::iter(stream).boxed();
             super::transaction_status_change(mock_state, stream, txn_id(0))
+                .await
                 .collect::<Vec<_>>()
                 .await
         })

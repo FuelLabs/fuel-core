@@ -6,8 +6,13 @@ use crate::{
         CoinConfigGenerator,
     },
     combined_database::CombinedDatabase,
-    database::Database,
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
+    fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
+    schema::tx::types::TransactionStatus,
     service::{
         Config,
         FuelService,
@@ -33,7 +38,6 @@ use fuel_core_poa::{
     Trigger,
 };
 use fuel_core_storage::{
-    tables::Transactions,
     transactional::AtomicView,
     StorageAsRef,
 };
@@ -59,7 +63,6 @@ use fuel_core_types::{
     services::p2p::GossipsubMessageAcceptance,
 };
 use futures::StreamExt;
-use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -70,7 +73,6 @@ use std::{
         Index,
         IndexMut,
     },
-    sync::Arc,
     time::Duration,
 };
 use tokio::sync::broadcast;
@@ -491,24 +493,34 @@ impl Node {
 
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        let Self { db, .. } = self;
-        let mut blocks = self.node.shared.block_importer.block_stream();
-        while !not_found_txs(db, txs).is_empty() {
-            tokio::select! {
-                result = blocks.next() => {
-                    result.unwrap();
-                }
-                _ = self.node.await_shutdown() => {
-                    panic!("Got a stop signal")
+        let db = self.node.shared.database.off_chain();
+        loop {
+            let not_found = not_found_txs(db, txs);
+
+            if not_found.is_empty() {
+                break;
+            }
+
+            let tx_id = not_found[0];
+            let mut wait_transaction =
+                self.node.transaction_status_change(tx_id).await.unwrap();
+
+            loop {
+                tokio::select! {
+                    result = wait_transaction.next() => {
+                        let status = result.unwrap().unwrap();
+
+                        if matches!(status, TransactionStatus::Failed { .. })
+                            || matches!(status, TransactionStatus::Success { .. }) {
+                            break
+                        }
+                    }
+                    _ = self.node.await_shutdown() => {
+                        panic!("Got a stop signal")
+                    }
                 }
             }
         }
-
-        let count = db
-            .all_transactions(None, None)
-            .filter_ok(|tx| tx.is_script())
-            .count();
-        assert_eq!(count, txs.len());
     }
 
     /// Wait for the node to reach consistency with the given transactions within 10 seconds.
@@ -533,20 +545,15 @@ impl Node {
     pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
-            let tx_result = self
-                .node
+            let tx_id = tx.id(&ChainId::default());
+            self.node
                 .shared
                 .txpool_shared_state
-                .insert(vec![Arc::new(tx.clone())])
+                .insert(tx.clone())
                 .await
-                .pop()
-                .unwrap()
                 .unwrap();
 
-            let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(&ChainId::default()), tx);
-
-            assert!(tx_result.removed.is_empty());
+            expected.insert(tx_id, tx.clone());
         }
         expected
     }
@@ -570,13 +577,17 @@ impl Node {
 }
 
 fn not_found_txs<'iter>(
-    db: &'iter Database,
+    db: &'iter Database<OffChain>,
     txs: &'iter HashMap<Bytes32, Transaction>,
 ) -> Vec<TxId> {
     let mut not_found = vec![];
     txs.iter().for_each(|(id, tx)| {
         assert_eq!(id, &tx.id(&Default::default()));
-        if !db.storage::<Transactions>().contains_key(id).unwrap() {
+        let found = db
+            .storage::<TransactionStatuses>()
+            .contains_key(id)
+            .unwrap();
+        if !found {
             not_found.push(*id);
         }
     });

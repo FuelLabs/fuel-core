@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use fuel_core_storage::{
     transactional::Changes,
     Result as StorageResult,
@@ -49,17 +48,18 @@ pub trait BlockProducerDatabase: Send + Sync {
     ) -> StorageResult<StateTransitionBytecodeVersion>;
 }
 
-#[async_trait]
 pub trait TxPool: Send + Sync {
     /// The source of the transactions used by the executor.
     type TxSource;
 
     /// Returns the source of includable transactions.
-    fn get_source(
+    #[allow(async_fn_in_trait)]
+    async fn get_source(
         &self,
+        gas_price: u64,
         // could be used by the txpool to filter txs based on maturity
         block_height: BlockHeight,
-    ) -> Self::TxSource;
+    ) -> anyhow::Result<Self::TxSource>;
 }
 
 pub struct RelayerBlockInfo {

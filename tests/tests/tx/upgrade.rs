@@ -224,7 +224,7 @@ async fn upgrading_to_invalid_state_transition_fails() {
     let result_str = format!("{:?}", result); // io::Result forces string handling
     result.expect_err("Upgrading to an incorrect bytecode should fail");
     assert!(
-        result_str.contains("WASM bytecode contents are not valid"),
+        result_str.contains("Error with Wasm validity: NotValid"),
         "msg: {}",
         result_str
     );
@@ -273,7 +273,7 @@ async fn upgrading_to_missing_state_transition_fails() {
     let result_str = format!("{:?}", result); // io::Result forces string handling
     result.expect_err("Upgrading to missing bytecode should fail");
     assert!(
-        result_str.contains("WASM bytecode matching the given root was not found"),
+        result_str.contains("Error with Wasm validity: NotFound"),
         "msg: {}",
         result_str
     );
@@ -332,7 +332,7 @@ async fn upgrade_to_a_partially_uploaded_state_transition_fails() {
     let result_str = format!("{:?}", result); // io::Result forces string handling
     result.expect_err("Upgrading to missing bytecode should fail");
     assert!(
-        result_str.contains("WASM bytecode matching the given root was not found"),
+        result_str.contains("Response errors; Error with Wasm validity: NotFound"),
         "msg: {}",
         result_str
     );

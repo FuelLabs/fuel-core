@@ -75,6 +75,7 @@ use std::{
     pin::Pin,
 };
 use tokio_stream::StreamExt;
+use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{
     set_header::SetResponseHeaderLayer,
     timeout::TimeoutLayer,
@@ -196,12 +197,14 @@ where
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
     let request_timeout = config.config.api_request_timeout;
+    let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
         .limit_depth(config.config.max_queries_depth)
         .limit_recursive_depth(config.config.max_queries_recursive_depth)
+        .limit_directives(config.config.max_queries_directives)
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
@@ -220,7 +223,12 @@ where
 
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
-        .route("/v1/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/v1/graphql",
+            post(graphql_handler)
+                .layer(ConcurrencyLimitLayer::new(concurrency_limit))
+                .options(ok),
+        )
         .route(
             "/v1/graphql-sub",
             post(graphql_subscription_handler).options(ok),

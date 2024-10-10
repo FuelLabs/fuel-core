@@ -4,12 +4,12 @@ use fuel_core::service::{
 };
 
 // Add methods on commands
-use fuel_core::txpool::types::ContractId;
 use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
+use fuel_core_types::fuel_tx::ContractId;
 use std::{
     fs,
     str::FromStr,

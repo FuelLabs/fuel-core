@@ -140,7 +140,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     );
     let service = ServiceRunner::new(service);
     let shared = service.shared.clone();
-    let initial = shared.next_gas_price().await;
+    let initial = shared.next_gas_price();
 
     // when
     service.start_and_await().await.unwrap();
@@ -148,7 +148,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     // then
-    let new = shared.next_gas_price().await;
+    let new = shared.next_gas_price();
     assert_ne!(initial, new);
     service.stop_and_await().await.unwrap();
 }
@@ -184,14 +184,14 @@ async fn next__new_l2_block_saves_old_metadata() {
     // when
     let service = ServiceRunner::new(service);
     let shared = service.shared.clone();
-    let start = shared.next_gas_price().await;
+    let start = shared.next_gas_price();
 
     service.start_and_await().await.unwrap();
     l2_block_sender.send(l2_block).await.unwrap();
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     // then
-    let new = shared.next_gas_price().await;
+    let new = shared.next_gas_price();
     assert_ne!(start, new);
 }
 
