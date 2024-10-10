@@ -28,7 +28,7 @@ use alloc::{
     vec::Vec,
 };
 
-/// The wrapper around either `Transaction` or `CheckedTransaction`.
+/// Wrapper around either Transaction or CheckedTransaction.
 #[allow(clippy::large_enum_variant)]
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
@@ -38,30 +38,18 @@ pub enum MaybeCheckedTransaction {
 impl MaybeCheckedTransaction {
     pub fn id(&self, chain_id: &ChainId) -> TxId {
         match self {
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Script(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Create(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Mint(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Upgrade(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Upload(tx),
-                _,
-            ) => tx.id(),
-            MaybeCheckedTransaction::CheckedTransaction(
-                CheckedTransaction::Blob(tx),
-                _,
-            ) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(checked_tx, _) => {
+                match checked_tx {
+                    // For these variants, we need to pass `chain_id`
+                    CheckedTransaction::Script(tx) => tx.as_ref().id(chain_id),
+                    CheckedTransaction::Create(tx) => tx.as_ref().id(chain_id),
+                    CheckedTransaction::Upgrade(tx) => tx.as_ref().id(chain_id),
+                    CheckedTransaction::Upload(tx) => tx.as_ref().id(chain_id),
+                    CheckedTransaction::Blob(tx) => tx.as_ref().id(chain_id),
+                    // For `Mint`, `id()` does not take `chain_id`
+                    CheckedTransaction::Mint(tx) => tx.id(),
+                }
+            }
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
         }
     }
@@ -78,12 +66,12 @@ impl TransactionExt for Transaction {
         match self {
             Transaction::Script(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
             Transaction::Create(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
-            )),
             Transaction::Upgrade(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
             Transaction::Upload(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
             Transaction::Blob(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have max_gas".to_string(),
+            )),
         }
     }
 }
@@ -93,12 +81,12 @@ impl TransactionExt for CheckedTransaction {
         match self {
             CheckedTransaction::Script(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Create(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
-            )),
             CheckedTransaction::Upgrade(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Upload(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Blob(tx) => Ok(tx.metadata().max_gas),
+            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have max_gas".to_string(),
+            )),
         }
     }
 }
@@ -115,9 +103,9 @@ impl TransactionExt for MaybeCheckedTransaction {
 }
 
 pub trait TransactionsSource {
-    /// Returns the next batch of transactions to satisfy the `gas_limit` and `block_transaction_size_limit`.
-    /// The returned batch has at most `tx_count_limit` transactions, none
-    /// of which has a size in bytes greater than `size_limit`.
+    /// Returns the next batch of transactions to satisfy the gas_limit and block_transaction_size_limit.
+    /// The returned batch has at most tx_count_limit transactions, none
+    /// of which has a size in bytes greater than size_limit.
     fn next(
         &self,
         gas_limit: u64,
@@ -127,9 +115,9 @@ pub trait TransactionsSource {
 }
 
 pub trait RelayerPort {
-    /// Returns `true` if the relayer is enabled.
+    /// Returns true if the relayer is enabled.
     fn enabled(&self) -> bool;
 
-    /// Get events from the relayer at a given da height.
+    /// Get events from the relayer at a given DA height.
     fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>>;
 }

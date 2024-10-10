@@ -2,6 +2,8 @@ use crate::{
     config::SuiteConfig,
     test_context::TestContext,
 };
+use futures::future::BoxFuture;
+use futures::FutureExt; // For using the `.boxed()` method
 use libtest_mimic::{
     Arguments,
     Failed,
@@ -11,6 +13,7 @@ use std::{
     env,
     fs,
     future::Future,
+    sync::Arc,
     time::Duration,
 };
 
@@ -22,110 +25,72 @@ pub mod test_context;
 pub mod tests;
 
 pub fn main_body(config: SuiteConfig, mut args: Arguments) {
-    fn with_cloned(
-        config: &SuiteConfig,
-        f: impl FnOnce(SuiteConfig) -> anyhow::Result<(), Failed>,
-    ) -> impl FnOnce() -> anyhow::Result<(), Failed> {
-        let config = config.clone();
-        move || f(config)
-    }
-
-    // If we run tests in parallel they may fail because try to use the same state like UTXOs.
+    // If we run tests in parallel they may fail because they try to use the same state like UTXOs.
     args.test_threads = Some(1);
 
     let tests = vec![
-        Trial::test(
-            "can transfer from alice to bob",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::basic_transfer(&ctx).await
-                })
-            }),
-        ),
-        Trial::test(
+        create_test("can transfer from alice to bob", &config, tests::transfers::basic_transfer),
+        create_test(
             "can transfer from alice to bob and back",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
-                })
-            }),
+            &config,
+            tests::transfers::transfer_back,
         ),
-        Trial::test(
-            "can collect fee from alice",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::collect_fee::collect_fee(&ctx).await
-                })
-            }),
-        ),
-        Trial::test(
-            "can execute script and get receipts",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
-                })
-            }),
-        ),
-        Trial::test(
+        create_test("can collect fee from alice", &config, tests::collect_fee::collect_fee),
+        create_test("can execute script and get receipts", &config, tests::script::receipts),
+        create_test(
             "can dry run transfer script and get receipts",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::script::dry_run(&ctx).await
-                })?;
-                Ok(())
-            }),
+            &config,
+            tests::script::dry_run,
         ),
-        Trial::test(
+        create_test(
             "can dry run multiple transfer scripts and get receipts",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::script::dry_run_multiple_txs(&ctx).await
-                })?;
-                Ok(())
-            }),
+            &config,
+            tests::script::dry_run_multiple_txs,
         ),
-        Trial::test(
+        create_test(
             "dry run script that touches the contract with large state",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::script::run_contract_large_state(&ctx).await
-                })?;
-                Ok(())
-            }),
+            &config,
+            tests::script::run_contract_large_state,
         ),
-        Trial::test(
+        create_test(
             "dry run transaction from `arbitrary_tx.raw` file",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::script::arbitrary_transaction(&ctx).await
-                })?;
-                Ok(())
-            }),
+            &config,
+            tests::script::arbitrary_transaction,
         ),
-        Trial::test(
+        create_test(
             "can deploy a large contract",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
-                })
-            }),
+            &config,
+            tests::contracts::deploy_large_contract,
         ),
     ];
 
     libtest_mimic::run(&args, tests).exit();
 }
 
+// Helper function to reduce code duplication when creating tests
+fn create_test<F>(
+    name: &'static str,
+    config: &SuiteConfig,
+    test_fn: F,
+) -> Trial
+where
+    F: FnOnce(Arc<TestContext>) -> BoxFuture<'static, anyhow::Result<(), Failed>>
+        + Send
+        + Sync
+        + 'static,
+{
+    let cloned_config = config.clone();
+    Trial::test(
+        name,
+        move || async_execute(async move {
+            let ctx = Arc::new(TestContext::new(cloned_config).await);
+            test_fn(ctx).await
+        }),
+    )
+}
+
 pub fn load_config_env() -> SuiteConfig {
-    // load from env var
+    // Load from environment variable
     env::var_os(CONFIG_FILE_KEY)
         .map(|path| load_config(path.to_string_lossy().to_string()))
         .unwrap_or_default()
@@ -136,9 +101,7 @@ pub fn load_config(path: String) -> SuiteConfig {
     toml::from_slice(&file).unwrap()
 }
 
-fn async_execute<F: Future<Output = anyhow::Result<(), Failed>>>(
-    func: F,
-) -> Result<(), Failed> {
+fn async_execute<F: Future<Output = anyhow::Result<(), Failed>>>(func: F) -> Result<(), Failed> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
