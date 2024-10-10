@@ -193,8 +193,6 @@ impl AlgorithmUpdaterV1 {
         if !height_range.is_empty() {
             self.da_block_update(height_range, range_cost)?;
             self.recalculate_projected_cost();
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/2264
-            // self.normalize_rewards_and_costs();
         }
         Ok(())
     }
@@ -443,39 +441,6 @@ impl AlgorithmUpdaterV1 {
             new_da_gas_price: self.descaled_da_price(),
             da_gas_price_percentage: self.max_da_gas_price_change_percent as u64,
             for_height: self.l2_block_height,
-        }
-    }
-
-    // TODO: This breaks our simulation now that we are using an extended finalization period. We
-    //   can either keep this function and fix the simulation, or we might decide to remove it.
-    //   https://github.com/FuelLabs/fuel-core/issues/2264
-    // We only need to track the difference between the rewards and costs after we have true DA data
-    // Normalize, or zero out the lower value and subtract it from the higher value
-    fn _normalize_rewards_and_costs(&mut self) {
-        let (excess, projected_cost_excess) =
-            if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
-                (
-                    self.total_da_rewards_excess
-                        .saturating_sub(self.latest_known_total_da_cost_excess),
-                    self.projected_total_da_cost
-                        .saturating_sub(self.latest_known_total_da_cost_excess),
-                )
-            } else {
-                (
-                    self.latest_known_total_da_cost_excess
-                        .saturating_sub(self.total_da_rewards_excess),
-                    self.projected_total_da_cost
-                        .saturating_sub(self.total_da_rewards_excess),
-                )
-            };
-
-        self.projected_total_da_cost = projected_cost_excess;
-        if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
-            self.total_da_rewards_excess = excess;
-            self.latest_known_total_da_cost_excess = 0;
-        } else {
-            self.total_da_rewards_excess = 0;
-            self.latest_known_total_da_cost_excess = excess;
         }
     }
 }
