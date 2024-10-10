@@ -406,11 +406,6 @@ where
         let utxo_validation = self.utxo_validation;
 
         let op_without_metrics = move || {
-            let txpool_metrics = txpool_metrics();
-            txpool_metrics
-                .number_of_transactions_pending_verification
-                .inc();
-
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -424,10 +419,6 @@ where
                 current_height,
                 utxo_validation,
             );
-
-            txpool_metrics
-                .number_of_transactions_pending_verification
-                .dec();
 
             p2p.process_insertion_result(from_peer_info, &result);
 
@@ -498,12 +489,19 @@ where
             }
         };
         move || {
+            let txpool_metrics = txpool_metrics();
+            txpool_metrics
+                .number_of_transactions_pending_verification
+                .inc();
             let start_time = tokio::time::Instant::now();
             op_without_metrics();
             let time_for_task_to_complete = start_time.elapsed().as_millis();
-            txpool_metrics()
+            txpool_metrics
                 .transaction_insertion_time_in_thread_pool_milliseconds
                 .observe(time_for_task_to_complete as f64);
+            txpool_metrics
+                .number_of_transactions_pending_verification
+                .dec();
         }
     }
 
