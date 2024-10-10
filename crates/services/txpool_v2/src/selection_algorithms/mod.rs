@@ -3,6 +3,9 @@ use crate::storage::{
     StorageData,
 };
 
+#[cfg(test)]
+use fuel_core_types::services::txpool::ArcPoolTx;
+
 pub mod ratio_tip_gas;
 
 /// Constraints that the selection algorithm has to respect.
@@ -42,4 +45,8 @@ pub trait SelectionAlgorithm {
 
     /// Inform the selection algorithm that a transaction was removed from the pool.
     fn on_removed_transaction(&mut self, storage_entry: &StorageData);
+
+    #[cfg(test)]
+    /// Asserts the integrity of the selection algorithm.
+    fn assert_integrity(&self, expected_txs: &[ArcPoolTx]);
 }
