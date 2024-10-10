@@ -1,3 +1,5 @@
+#[cfg(feature = "subscriptions")]
+use crate::client::types::StatusWithTransaction;
 use crate::client::{
     schema::{
         block::BlockByHeightArgs,
@@ -25,7 +27,6 @@ use crate::client::{
         },
         upgrades::StateTransitionBytecode,
         RelayedTransactionStatus,
-        StatusWithTransaction,
     },
 };
 use anyhow::Context;
@@ -550,7 +551,7 @@ impl FuelClient {
         Ok(status)
     }
 
-    /// Similar to [`submit_and_await_commit`], but the status also contains transaction.
+    /// Similar to [`Self::submit_and_await_commit`], but the status also contains transaction.
     #[cfg(feature = "subscriptions")]
     pub async fn submit_and_await_commit_with_tx(
         &self,

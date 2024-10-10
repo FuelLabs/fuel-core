@@ -3205,6 +3205,7 @@ dependencies = [
  "itertools 0.12.1",
  "mockall",
  "num_cpus",
+ "parking_lot",
  "paste",
  "postcard",
  "proptest",
