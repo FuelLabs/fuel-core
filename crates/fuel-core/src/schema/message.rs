@@ -148,13 +148,14 @@ impl MessageQuery {
             ))?,
         };
 
-        Ok(crate::query::message_proof(
+        let proof = crate::query::message_proof(
             query.as_ref(),
             transaction_id.into(),
             nonce.into(),
             height,
-        )?
-        .map(MessageProof))
+        )?;
+
+        Ok(Some(MessageProof(proof)))
     }
 
     #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
