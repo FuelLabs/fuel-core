@@ -13,6 +13,10 @@ pub(crate) enum Buckets {
     TransactionsCount,
     Fee,
     SizeUsed,
+    TransactionTimeInTxPool,
+    SelectTransactionTime,
+    TransactionSize,
+    TransactionInsertionTimeInTxPool,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
 pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
@@ -133,6 +137,89 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                 256.0 * 1024.0,
             ]
         ),
+        (
+            // We consider blocks up to 256kb in size and single transaction can take any of this space.
+            Buckets::TransactionSize,
+            vec![
+                  1.0 * 1024.0,
+                  2.0 * 1024.0,
+                  3.0 * 1024.0,
+                  4.0 * 1024.0,
+                  5.0 * 1024.0,
+                  7.0 * 1024.0,
+                 10.0 * 1024.0,
+                 13.0 * 1024.0,
+                 18.0 * 1024.0,
+                 24.0 * 1024.0,
+                 33.0 * 1024.0,
+                 44.0 * 1024.0,
+                 59.0 * 1024.0,
+                 79.0 * 1024.0,
+                106.0 * 1024.0,
+                142.0 * 1024.0,
+                191.0 * 1024.0,
+                256.0 * 1024.0,
+            ]
+        ),
+        (
+            // Default TTL is 5m, but we want to cover a wider range.
+            Buckets::TransactionTimeInTxPool,
+            vec![
+                       1.0,
+                       2.0,
+                       3.0,
+                       4.0,
+                       5.0,
+                      10.0,
+                      20.0,
+                      30.0,
+                      40.0,
+                      50.0,
+                      60.0,
+                     120.0,
+                     240.0,
+                     480.0,
+                     960.0,
+                    1920.0,
+                    3840.0,            
+            ]
+        ),
+        (
+            // These are nanoseconds, because we assume that the selection algorithm is fast for most of the cases.
+            // If we start seeing higher values, we should analyze the performance of the selection algorithm.
+            Buckets::SelectTransactionTime,
+            vec![
+                    10.0,
+                    20.0,
+                    30.0,
+                    40.0,
+                    50.0,
+                   100.0,
+                   200.0,
+                   500.0,
+                  1000.0,
+                  2000.0,
+                  5000.0,
+                 10000.0,
+                 50000.0,
+                100000.0,
+                500000.0,            ]
+        ),
+        // These are milliseconds, the values of the buckets and unit of measure needs to be 
+        // validated, but starting measuring the time in milliseconds is a reasonable starting point.
+        ( Buckets::TransactionInsertionTimeInTxPool, vec![
+            0.005,
+            0.010,
+            0.025,
+            0.050,
+            0.100,
+            0.250,
+            0.500,
+            1.000,
+            2.500,
+            5.000,
+           10.000,
+        ]),
     ]
     .into_iter()
     .collect()

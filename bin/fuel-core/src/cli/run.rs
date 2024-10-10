@@ -518,6 +518,7 @@ impl Command {
                 pool_limits,
                 heavy_work: pool_heavy_work_config,
                 service_channel_limits,
+                metrics,
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
