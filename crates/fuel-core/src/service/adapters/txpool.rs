@@ -195,7 +195,7 @@ impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValu
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
+            .map(|t| t.map(|t| t.into_owned()))
     }
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
@@ -209,7 +209,7 @@ impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValu
     fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {
         self.storage::<Messages>()
             .get(id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
+            .map(|t| t.map(|t| t.into_owned()))
     }
 }
 

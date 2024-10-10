@@ -57,6 +57,10 @@ use axum::{
     Json,
     Router,
 };
+use fuel_core_metrics::futures::{
+    metered_future::MeteredFuture,
+    FuturesMetrics,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -65,6 +69,7 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
+use hyper::rt::Executor;
 use serde_json::json;
 use std::{
     future::Future,
@@ -116,6 +121,23 @@ pub struct Task {
     server: Pin<Box<dyn Future<Output = hyper::Result<()>> + Send + 'static>>,
 }
 
+#[derive(Clone)]
+struct ExecutorWithMetrics {
+    metric: FuturesMetrics,
+}
+
+impl<F> Executor<F> for ExecutorWithMetrics
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        let future = MeteredFuture::new(fut, self.metric.clone());
+
+        tokio::task::spawn(future);
+    }
+}
+
 #[async_trait::async_trait]
 impl RunnableService for GraphqlService {
     const NAME: &'static str = "GraphQL";
@@ -137,9 +159,13 @@ impl RunnableService for GraphqlService {
     ) -> anyhow::Result<Self::Task> {
         let mut state = state.clone();
         let ServerParams { router, listener } = params;
+        let metric = ExecutorWithMetrics {
+            metric: FuturesMetrics::obtain_futures_metrics("GraphQLFutures"),
+        };
 
         let server = axum::Server::from_tcp(listener)
             .unwrap()
+            .executor(metric)
             .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
                 state
