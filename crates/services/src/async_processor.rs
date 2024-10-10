@@ -82,8 +82,9 @@ impl AsyncProcessor {
     {
         let permit = reservation.0;
         let future = async move {
-            let _drop = permit;
-            future.await
+            let permit = permit;
+            future.await;
+            drop(permit)
         };
         let metered_future = MeteredFuture::new(future, self.metric.clone());
         if let Some(runtime) = &self.thread_pool {

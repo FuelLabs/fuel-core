@@ -513,11 +513,9 @@ where
                     let mut tx_sync_history = tx_sync_history.write();
 
                     // We already synced with this peer in the past.
-                    if tx_sync_history.contains(&peer_id) {
+                    if !tx_sync_history.insert(peer_id.clone()) {
                         return
                     }
-
-                    tx_sync_history.insert(peer_id.clone());
                 }
 
                 let peer_tx_ids = p2p

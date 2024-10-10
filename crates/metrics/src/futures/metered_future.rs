@@ -44,7 +44,7 @@ where
 
         match this.future.poll(cx) {
             Poll::Ready(output) => {
-                let output = output.unwrap(this.metrics);
+                let output = output.extract(this.metrics);
                 Poll::Ready(output)
             }
             Poll::Pending => Poll::Pending,

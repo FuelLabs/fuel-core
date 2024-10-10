@@ -358,7 +358,7 @@ async fn run_task<S: RunnableTask>(
         }
 
         let tracked_result = panic_result.expect("Checked the panic above");
-        let result = tracked_result.unwrap(metric);
+        let result = tracked_result.extract(metric);
 
         match result {
             Ok(should_continue) => {

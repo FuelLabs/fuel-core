@@ -22,8 +22,8 @@ pub struct ExecutionTime<Output> {
 }
 
 impl<Output> ExecutionTime<Output> {
-    /// Unwraps the future output and returns the execution report.
-    pub fn unwrap(self, metric: &FuturesMetrics) -> Output {
+    /// Extracts the future output and records the execution report into the metrics.
+    pub fn extract(self, metric: &FuturesMetrics) -> Output {
         // TODO: Use `u128` when `AtomicU128` is stable.
         metric.busy.inc_by(
             u64::try_from(self.busy.as_nanos())
