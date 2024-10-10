@@ -385,14 +385,11 @@ async fn complex_queries__2_state_transition_bytecode__query_to_complex() {
 }
 
 #[tokio::test]
-async fn concurrency_limit_0_prevents_any_queries() {
+async fn concurrency_limit_0_prevents_any_throttled_queries() {
     // Given
     let mut config = Config::local_node();
     config.graphql_config.max_concurrent_queries = 0;
     config.graphql_config.api_request_timeout = std::time::Duration::from_millis(100);
-
-    let query = FULL_BLOCK_QUERY.to_string();
-    let query = query.replace("$NUMBER_OF_BLOCKS", "40");
 
     let node = FuelService::new_node(config).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
@@ -410,6 +407,25 @@ async fn concurrency_limit_0_prevents_any_queries() {
     // Then
     let result = response.unwrap();
     assert_eq!(result.status(), 408);
+}
+
+#[tokio::test]
+async fn concurrency_limit_0_allows_unthrottled_queries() {
+    // Given
+    let mut config = Config::local_node();
+    // perhaps this shouldn't be called `graphql_config` but `api_config` or something
+    config.graphql_config.max_concurrent_queries = 0;
+
+    let node = FuelService::new_node(config).await.unwrap();
+    let url = format!("http://{}/v1/health", node.bound_address);
+    let client = reqwest::Client::new();
+
+    // When
+    let response = client.get(url).send().await;
+
+    // Then
+    let result = response.unwrap();
+    assert_eq!(result.status(), 200);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
