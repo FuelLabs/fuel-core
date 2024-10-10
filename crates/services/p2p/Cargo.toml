@@ -36,6 +36,7 @@ libp2p = { version = "0.53.2", default-features = false, features = [
   "tokio",
   "yamux",
   "websocket",
+  "metrics",
 ] }
 libp2p-mplex = "0.41.0"
 postcard = { workspace = true, features = ["use-std"] }

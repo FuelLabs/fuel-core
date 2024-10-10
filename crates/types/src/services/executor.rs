@@ -232,6 +232,14 @@ impl TransactionExecutionResult {
         }
     }
 
+    /// Get the total fee paid by the transaction.
+    pub fn total_fee(&self) -> &u64 {
+        match self {
+            TransactionExecutionResult::Success { total_fee, .. }
+            | TransactionExecutionResult::Failed { total_fee, .. } => total_fee,
+        }
+    }
+
     #[cfg(feature = "std")]
     /// Get the reason of the failed transaction execution.
     pub fn reason(receipts: &[Receipt], state: &Option<ProgramState>) -> String {

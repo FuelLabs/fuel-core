@@ -1,6 +1,9 @@
 use crate::{
+    buckets::{
+        buckets,
+        Buckets,
+    },
     global_registry,
-    timing_buckets,
 };
 use prometheus_client::{
     encoding::EncodeLabelSet,
@@ -28,7 +31,7 @@ impl GraphqlMetrics {
     fn new() -> Self {
         let tx_count_gauge = Gauge::default();
         let requests = Family::<Label, Histogram>::new_with_constructor(|| {
-            Histogram::new(timing_buckets().iter().cloned())
+            Histogram::new(buckets(Buckets::Timing))
         });
         let mut registry = global_registry().registry.lock();
         registry.register("graphql_request_duration_seconds", "", requests.clone());

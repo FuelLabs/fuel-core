@@ -104,7 +104,7 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
-        let block_importer = fuel_core_importer::Config::new();
+        let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
         let native_executor_version = latest_block

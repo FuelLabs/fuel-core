@@ -428,7 +428,7 @@ impl Command {
         };
 
         let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new();
+            fuel_core::service::config::fuel_core_importer::Config::new(metrics);
 
         let da_compression = match da_compression {
             Some(retention) => {
