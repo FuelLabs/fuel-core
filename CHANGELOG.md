@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - [2233](https://github.com/FuelLabs/fuel-core/pull/2233): New changes to HistoricalRocksDB are written to ModificationsHistoryV2
+- [2260](https://github.com/FuelLabs/fuel-core/pull/2260): Modification History is migrated from V1 to V2 on startup.
 
 ## [Version 0.38.0]
 
