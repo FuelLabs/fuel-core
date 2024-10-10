@@ -261,10 +261,16 @@ where
 
     #[cfg(test)]
     fn assert_integrity(&self, expected_txs: &[ArcPoolTx]) {
-        let mut expected_txs: HashMap<TxId, ArcPoolTx> = expected_txs.iter().map(|tx| (tx.id(), tx.clone())).collect();
+        let mut expected_txs: HashMap<TxId, ArcPoolTx> = expected_txs
+            .iter()
+            .map(|tx| (tx.id(), tx.clone()))
+            .collect();
         for key in self.executable_transactions_sorted_tip_gas_ratio.keys() {
             expected_txs.remove(&key.0.tx_id).expect("A transaction is present on the selection algorithm that shouldn't be there.");
         }
-        assert!(expected_txs.is_empty(), "Some transactions are missing from the selection algorithm.");
+        assert!(
+            expected_txs.is_empty(),
+            "Some transactions are missing from the selection algorithm."
+        );
     }
 }

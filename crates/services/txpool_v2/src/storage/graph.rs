@@ -621,7 +621,10 @@ impl Storage for GraphStorage {
     }
 
     #[cfg(test)]
-    fn assert_integrity(&self, expected_txs: &[ArcPoolTx]) {
+    fn assert_integrity(
+        &self,
+        expected_txs: &[ArcPoolTx],
+    ) -> Vec<(Self::StorageIndex, bool)> {
         use std::ops::Deref;
 
         let mut txs_map: HashMap<TxId, ArcPoolTx> = expected_txs
@@ -629,14 +632,26 @@ impl Storage for GraphStorage {
             .map(|tx| (tx.id(), tx.clone()))
             .collect();
         let mut tx_id_node_id = HashMap::new();
+        let mut txs_info = Vec::new();
+
         for node_id in self.graph.node_indices() {
-            let node = self.graph.node_weight(node_id).expect("A node not expected exists in storage");
+            let node = self
+                .graph
+                .node_weight(node_id)
+                .expect("A node not expected exists in storage");
+            let has_dependencies = Storage::has_dependencies(self, &node_id);
             let tx_id = node.transaction.id();
-            let tx = txs_map.remove(&tx_id).expect("A transaction not expected exists in storage");
+            let tx = txs_map
+                .remove(&tx_id)
+                .expect("A transaction not expected exists in storage");
             assert_eq!(tx.deref(), node.transaction.deref());
             tx_id_node_id.insert(tx_id, node_id);
+            txs_info.push((node_id, has_dependencies));
         }
-        assert!(txs_map.is_empty(), "Some transactions are missing in storage");
+        assert!(
+            txs_map.is_empty(),
+            "Some transactions are missing in storage"
+        );
 
         let mut coins_creators = HashMap::new();
         let mut contracts_creators = HashMap::new();
@@ -644,7 +659,8 @@ impl Storage for GraphStorage {
             for (i, output) in expected_tx.outputs().iter().enumerate() {
                 match output {
                     Output::Coin { .. } => {
-                        let utxo_id = UtxoId::new(expected_tx.id(), i.try_into().unwrap());
+                        let utxo_id =
+                            UtxoId::new(expected_tx.id(), i.try_into().unwrap());
                         coins_creators.insert(utxo_id, expected_tx.id());
                     }
                     Output::ContractCreated { contract_id, .. } => {
@@ -655,17 +671,40 @@ impl Storage for GraphStorage {
             }
         }
         for (utxo_id, node_id) in &self.coins_creators {
-            let tx_id = coins_creators.remove(utxo_id).expect("A coin creator is present in the storage that shouldn't be there");
-            let expected_node_id = tx_id_node_id.get(&tx_id).expect("A node id is missing for a transaction");
-            assert_eq!(expected_node_id, node_id, "The node id is different from the expected one");
+            let tx_id = coins_creators.remove(utxo_id).expect(
+                "A coin creator is present in the storage that shouldn't be there",
+            );
+            let expected_node_id = tx_id_node_id
+                .get(&tx_id)
+                .expect("A node id is missing for a transaction");
+            assert_eq!(
+                expected_node_id, node_id,
+                "The node id is different from the expected one"
+            );
         }
-        assert!(contracts_creators.is_empty(), "Some contract creators are missing in storage");
+        assert!(
+            coins_creators.is_empty(),
+            "Some contract creators are missing in storage"
+        );
 
         for (contract_id, node_id) in &self.contracts_creators {
-            let tx_id = contracts_creators.remove(contract_id).expect("A contract creator is present in the storage that shouldn't be there");
-            let expected_node_id = tx_id_node_id.get(&tx_id).expect("A node id is missing for a transaction");
-            assert_eq!(expected_node_id, node_id, "The node id is different from the expected one");
+            let tx_id = contracts_creators.remove(contract_id).expect(
+                "A contract creator is present in the storage that shouldn't be there",
+            );
+            let expected_node_id = tx_id_node_id
+                .get(&tx_id)
+                .expect("A node id is missing for a transaction");
+            assert_eq!(
+                expected_node_id, node_id,
+                "The node id is different from the expected one"
+            );
         }
+        assert!(
+            contracts_creators.is_empty(),
+            "Some contract creators are missing in storage"
+        );
+
+        txs_info
     }
 }
 

@@ -496,14 +496,33 @@ where
 
     #[cfg(test)]
     pub fn assert_integrity(&self, expected_txs: &[ArcPoolTx]) {
-        self.selection_algorithm.assert_integrity(expected_txs);
+        let storage_ids_dependencies = self.storage.assert_integrity(expected_txs);
+        let txs_without_dependencies = expected_txs
+            .iter()
+            .zip(storage_ids_dependencies)
+            .filter_map(|(tx, (_, has_dependencies))| {
+                if !has_dependencies {
+                    Some(tx.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        self.selection_algorithm
+            .assert_integrity(&txs_without_dependencies);
         self.collision_manager.assert_integrity(expected_txs);
-        self.storage.assert_integrity(expected_txs);
-        let mut txs: HashMap<TxId, ArcPoolTx> = expected_txs.iter().map(|tx| (tx.id(), tx.clone())).collect();
+        let mut txs: HashMap<TxId, ArcPoolTx> = expected_txs
+            .iter()
+            .map(|tx| (tx.id(), tx.clone()))
+            .collect();
         for tx in &self.tx_id_to_storage_id {
-            txs.remove(tx.0).expect("Transaction not found in the expected transactions");
+            txs.remove(tx.0)
+                .expect("Transaction not found in the expected transactions");
         }
-        assert!(txs.is_empty(), "Some transactions are not found in the pool");
+        assert!(
+            txs.is_empty(),
+            "Some transactions are not found in the pool"
+        );
     }
 }
 

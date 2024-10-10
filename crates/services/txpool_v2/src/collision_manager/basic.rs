@@ -260,9 +260,13 @@ where
                         coins_spenders.insert(*utxo_id, tx.id());
                     }
                     Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
-                    | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                    | Input::MessageCoinPredicate(MessageCoinPredicate {
+                        nonce, ..
+                    })
                     | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
-                    | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
+                    | Input::MessageDataPredicate(MessageDataPredicate {
+                        nonce, ..
+                    }) => {
                         message_spenders.insert(*nonce, tx.id());
                     }
                     _ => {}
@@ -283,14 +287,23 @@ where
         for nonce in self.messages_spenders.keys() {
             message_spenders.remove(nonce).expect("A message sender is present on the collision manager that shouldn't be there.");
         }
-        assert!(message_spenders.is_empty(), "Some message senders are missing from the collision manager.");
+        assert!(
+            message_spenders.is_empty(),
+            "Some message senders are missing from the collision manager."
+        );
         for utxo_id in self.coins_spenders.keys() {
             coins_spenders.remove(utxo_id).expect("A coin sender is present on the collision manager that shouldn't be there.");
         }
-        assert!(coins_spenders.is_empty(), "Some coin senders are missing from the collision manager.");
+        assert!(
+            coins_spenders.is_empty(),
+            "Some coin senders are missing from the collision manager."
+        );
         for contract_id in self.contracts_creators.keys() {
             contracts_creators.remove(contract_id).expect("A contract creator is present on the collision manager that shouldn't be there.");
         }
-        assert!(contracts_creators.is_empty(), "Some contract creators are missing from the collision manager.");
+        assert!(
+            contracts_creators.is_empty(),
+            "Some contract creators are missing from the collision manager."
+        );
     }
 }
