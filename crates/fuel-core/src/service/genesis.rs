@@ -160,7 +160,7 @@ pub async fn recover_missing_tables_from_genesis_state_config(
 
     // todo: https://github.com/FuelLabs/fuel-core/issues/2326
     SnapshotImporter::repopulate_maybe_missing_tables(
-        db.clone(),
+        db,
         genesis_block.clone(),
         config.snapshot_reader.clone(),
         watcher,
