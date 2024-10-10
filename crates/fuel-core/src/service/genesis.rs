@@ -157,6 +157,7 @@ pub async fn recover_missing_tables_from_genesis_state_config(
     let genesis_block = create_genesis_block(config);
     let db = db.clone().unsafe_into_genesis();
 
+    // todo: https://github.com/FuelLabs/fuel-core/issues/2326
     SnapshotImporter::repopulate_maybe_missing_tables(
         db.clone(),
         genesis_block.clone(),
