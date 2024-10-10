@@ -197,10 +197,11 @@ impl TestPoolUniverse {
         tx_builder.finalize().into()
     }
 
+    // Returns the added transaction and the list of transactions that were removed from the pool
     pub fn verify_and_insert(
         &mut self,
         tx: Transaction,
-    ) -> Result<Vec<ArcPoolTx>, Error> {
+    ) -> Result<(ArcPoolTx, Vec<ArcPoolTx>), Error> {
         if let Some(pool) = &self.pool {
             let mut mock_consensus_params_provider =
                 MockConsensusParametersProvider::default();
@@ -222,7 +223,8 @@ impl TestPoolUniverse {
                 Default::default(),
                 true,
             )?;
-            pool.write().insert(Arc::new(tx), &self.mock_db)
+            let tx = Arc::new(tx);
+            Ok((tx.clone(), pool.write().insert(tx, &self.mock_db)?))
         } else {
             panic!("Pool needs to be built first");
         }
@@ -291,6 +293,12 @@ impl TestPoolUniverse {
         } else {
             panic!("Pool needs to be built first");
         }
+    }
+
+    pub fn assert_pool_integrity(&self, expected_txs: &[ArcPoolTx]) {
+        let pool = self.pool.as_ref().unwrap();
+        let pool = pool.read();
+        pool.assert_integrity(expected_txs);
     }
 
     pub fn get_pool(&self) -> Shared<TxPool> {

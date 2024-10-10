@@ -10,6 +10,9 @@ use std::collections::HashMap;
 
 use crate::storage::StorageData;
 
+#[cfg(test)]
+use fuel_core_types::services::txpool::ArcPoolTx;
+
 pub mod basic;
 
 pub type Collisions<StorageIndex> = HashMap<StorageIndex, Vec<CollisionReason>>;
@@ -36,4 +39,8 @@ pub trait CollisionManager {
 
     /// Inform the collision manager that a transaction was removed.
     fn on_removed_transaction(&mut self, transaction: &PoolTransaction);
+
+    #[cfg(test)]
+    /// Asserts the integrity of the collision manager.
+    fn assert_integrity(&self, expected_txs: &[ArcPoolTx]);
 }

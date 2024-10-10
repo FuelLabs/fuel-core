@@ -102,4 +102,8 @@ pub trait Storage {
 
     /// Remove a transaction from the storage.
     fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData>;
+
+    #[cfg(test)]
+    /// Asserts the integrity of the storage.
+    fn assert_integrity(&self, expected_txs: &[ArcPoolTx]);
 }

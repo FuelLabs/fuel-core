@@ -74,10 +74,12 @@ fn insert_one_tx_succeeds() {
     let tx = universe.build_script_transaction(None, None, 0);
 
     // When
-    let result = universe.verify_and_insert(tx);
+    let result = universe.verify_and_insert(tx.clone());
 
     // Then
     assert!(result.is_ok());
+    let tx = result.unwrap().0;
+    universe.assert_pool_integrity(&vec![tx]);
 }
 
 #[test]
@@ -98,6 +100,7 @@ fn insert__tx_with_blacklisted_utxo_id() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedUTXO(id)) if id == utxo_id)
     );
+    universe.assert_pool_integrity(&vec![]);
 }
 
 #[test]
@@ -118,6 +121,7 @@ fn insert__tx_with_blacklisted_owner() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedOwner(id)) if id == owner_addr)
     );
+    universe.assert_pool_integrity(&vec![]);
 }
 
 #[test]
@@ -149,6 +153,7 @@ fn insert__tx_with_blacklisted_contract() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedContract(id)) if id == contract_id)
     );
+    universe.assert_pool_integrity(&vec![]);
 }
 
 #[test]
@@ -169,6 +174,7 @@ fn insert__tx_with_blacklisted_message() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedMessage(id)) if id == nonce)
     );
+    universe.assert_pool_integrity(&vec![]);
 }
 
 #[test]
@@ -190,6 +196,7 @@ fn insert__tx2_succeeds_after_dependent_tx1() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
+    universe.assert_pool_integrity(&vec![result1.unwrap().0, result2.unwrap().0]);
 }
 
 #[test]
@@ -335,7 +342,7 @@ fn insert__higher_priced_tx_removes_lower_priced_tx() {
     let result = universe.verify_and_insert(tx2).unwrap();
 
     // Then
-    assert_eq!(result[0].id(), tx_id);
+    assert_eq!(result.1[0].id(), tx_id);
 }
 
 #[test]
@@ -432,7 +439,7 @@ fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let result3 = universe.verify_and_insert(tx3);
 
     // Then
-    let removed_txs = result3.unwrap();
+    let removed_txs = result3.unwrap().1;
     assert_eq!(removed_txs.len(), 2);
     assert_eq!(removed_txs[0].id(), tx1_id);
     assert_eq!(removed_txs[1].id(), tx2_id);
@@ -464,11 +471,11 @@ fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
 
     // Then
     assert!(result2.is_ok());
-    let removed_txs = result2.unwrap();
+    let removed_txs = result2.unwrap().1;
     assert_eq!(removed_txs.len(), 1);
     assert_eq!(removed_txs[0].id(), tx1_id);
     assert!(result3.is_ok());
-    let removed_txs = result3.unwrap();
+    let removed_txs = result3.unwrap().1;
     assert_eq!(removed_txs.len(), 1);
     assert_eq!(removed_txs[0].id(), tx2_id);
 }
@@ -927,7 +934,7 @@ fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
-    let removed_txs = result2.unwrap();
+    let removed_txs = result2.unwrap().1;
     assert_eq!(removed_txs.len(), 1);
     assert_eq!(removed_txs[0].id(), tx_high_id);
 }
