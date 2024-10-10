@@ -190,7 +190,7 @@ where
         GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
     SettingsProvider: GasPriceSettingsProvider,
 {
-    const NAME: &'static str = "UninitializedGasPriceServiceV0";
+    const NAME: &'static str = "GasPriceServiceV0";
     type SharedData = SharedV0Algorithm;
     type Task = GasPriceServiceV0<
         FuelL2BlockSource<SettingsProvider>,
@@ -360,7 +360,8 @@ where
         GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
     SettingsProvider: GasPriceSettingsProvider,
 {
-    let gas_price_init = UninitializedTask::new(
+    // lazy initialization of gas price service, delegate to parent
+    let gas_price_uninit = UninitializedTask::new(
         config,
         genesis_block_height,
         settings,
@@ -368,5 +369,5 @@ where
         gas_price_db,
         on_chain_db,
     )?;
-    Ok(ServiceRunner::new(gas_price_init))
+    Ok(ServiceRunner::new(gas_price_uninit))
 }
