@@ -236,13 +236,6 @@ where
             Err(GenesisDatabase::new(self.into_inner().data))
         }
     }
-
-    /// !!!! WARNING !!!!
-    /// This method is unsafe because it doesn't check if the height is already set.
-    /// This allows overriding the genesis state with a new one.
-    pub fn unsafe_into_genesis(self) -> GenesisDatabase<Description> {
-        GenesisDatabase::new(self.into_inner().data)
-    }
 }
 
 impl<Description, Stage> Database<Description, Stage>
