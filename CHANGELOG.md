@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.39.0]
+
 ### Added
 - [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Added metrics for sync, async processor and for all GraphQL queries.
 - [2320](https://github.com/FuelLabs/fuel-core/pull/2320): Added new CLI flag `graphql-max-resolver-recursive-depth` to limit recursion within resolver. The default value it "1".
