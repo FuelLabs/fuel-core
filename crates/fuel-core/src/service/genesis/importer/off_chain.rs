@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::{
     database::{
         database_description::off_chain::OffChain,
@@ -38,6 +36,7 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::services::executor::Event;
+use std::borrow::Cow;
 
 use super::{
     import_task::ImportTable,
@@ -130,6 +129,24 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
         });
         worker_service::process_executor_events(events, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<ContractsInfo, ContractsInfo> {
+    type TableInSnapshot = ContractsInfo;
+    type TableBeingWritten = ContractsInfo;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage::<ContractsInfo>()
+                .insert(&entry.key, &entry.value)?;
+        }
         Ok(())
     }
 }
