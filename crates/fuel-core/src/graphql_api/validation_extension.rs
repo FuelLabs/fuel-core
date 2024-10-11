@@ -1,23 +1,32 @@
+use crate::{
+    fuel_core_graphql_api::validation_extension::visitor::{
+        visit,
+        RuleError,
+        VisitorContext,
+    },
+    graphql_api::validation_extension::recursion_finder::RecursionFinder,
+};
 use async_graphql::{
     extensions::{
         Extension,
         ExtensionContext,
         ExtensionFactory,
-        NextResolve,
-        ResolveInfo,
+        NextParseQuery,
+        NextValidation,
     },
-    Pos,
+    parser::types::ExecutableDocument,
     ServerError,
     ServerResult,
-    Value,
+    ValidationResult,
+    Variables,
 };
-use std::{
-    collections::{
-        hash_map::Entry,
-        HashMap,
-    },
-    sync::Arc,
+use std::sync::{
+    Arc,
+    Mutex,
 };
+
+mod recursion_finder;
+mod visitor;
 
 /// The extension validates the queries.
 pub(crate) struct ValidationExtension {
@@ -38,60 +47,63 @@ impl ExtensionFactory for ValidationExtension {
 
 struct ValidationInner {
     recursion_limit: usize,
-    visited: parking_lot::Mutex<HashMap<String, usize>>,
+    errors: Mutex<Option<Vec<RuleError>>>,
 }
 
 impl ValidationInner {
     fn new(recursion_limit: usize) -> Self {
         Self {
             recursion_limit,
-            visited: parking_lot::Mutex::new(HashMap::new()),
+            errors: Default::default(),
         }
     }
 }
 
 #[async_trait::async_trait]
 impl Extension for ValidationInner {
-    async fn resolve(
+    async fn parse_query(
         &self,
         ctx: &ExtensionContext<'_>,
-        info: ResolveInfo<'_>,
-        next: NextResolve<'_>,
-    ) -> ServerResult<Option<Value>> {
-        let name = info.return_type.to_string();
+        query: &str,
+        variables: &Variables,
+        next: NextParseQuery<'_>,
+    ) -> ServerResult<ExecutableDocument> {
+        let result = next.run(ctx, query, variables).await?;
+        let registry = &ctx.schema_env.registry;
+        let mut visitor = VisitorContext::new(registry, &result, Some(variables));
+        visit(
+            &mut RecursionFinder::new(self.recursion_limit),
+            &mut visitor,
+            &result,
+        );
+
+        let errors = visitor.errors;
+
+        if !errors.is_empty() {
+            let mut store = self
+                .errors
+                .lock()
+                .expect("Only one instance owns `ValidationInner`; qed");
+            *store = Some(errors);
+        }
+
+        Ok(result)
+    }
+
+    async fn validation(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        next: NextValidation<'_>,
+    ) -> async_graphql::Result<ValidationResult, Vec<ServerError>> {
+        if let Some(errors) = self
+            .errors
+            .lock()
+            .expect("Only one instance owns `ValidationInner`; qed")
+            .take()
         {
-            let mut lock = self.visited.lock();
-            let old = lock.entry(name.clone()).or_default();
-            *old = old.saturating_add(1);
-
-            if *old > self.recursion_limit {
-                let (line, column) = (line!(), column!());
-                return Err(ServerError::new(
-                    format!("Recursion detected for field `{}`", name),
-                    Some(Pos {
-                        line: line as usize,
-                        column: column as usize,
-                    }),
-                ));
-            }
-        }
-        let result = next.run(ctx, info).await;
-        let mut lock = self.visited.lock();
-        let old = lock.entry(name);
-        match old {
-            Entry::Occupied(entry) => {
-                if entry.get() == &1 {
-                    entry.remove();
-                } else {
-                    let value = entry.into_mut();
-                    *value = value.saturating_sub(1);
-                }
-            }
-            Entry::Vacant(_) => {
-                // Shouldn't be possible.
-            }
+            return Err(errors.into_iter().map(Into::into).collect())
         }
 
-        result
+        next.run(ctx).await
     }
 }

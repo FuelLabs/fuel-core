@@ -1,20 +1,13 @@
-#![allow(warnings)]
+#![allow(non_snake_case)]
 
-use std::time::{
-    Duration,
-    Instant,
-};
+use std::time::Instant;
 
 use fuel_core::service::{
     Config,
     FuelService,
-    ServiceTrait,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::{
-    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
-    fuel_tx::Transaction,
-};
+use fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION;
 use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
@@ -325,7 +318,7 @@ async fn body_limit_prevents_from_huge_queries() {
     let response = client
         .post(url)
         .header("Content-Type", "application/json")
-        .header("Content-Length", "18446744073709551613")
+        .header("Content-Length", "33554432")
         .body(vec![123; 32 * 1024 * 1024])
         .send()
         .await;
@@ -449,7 +442,7 @@ async fn concurrency_limit_1_prevents_concurrent_queries() {
     let client = FuelClient::new(url.clone()).unwrap();
     client.produce_blocks(NUM_OF_BLOCKS, None).await.unwrap();
 
-    let (mut tx, mut rx) = tokio::sync::mpsc::channel(100);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
     // When
 
@@ -495,7 +488,7 @@ async fn concurrency_limit_1_prevents_concurrent_queries() {
 }
 
 #[tokio::test]
-async fn recursion_in_queries_is_no_allowed() {
+async fn recursion_in_queries_is_no_allowed__blocks() {
     let query = r#"
     query {
       blocks(last: 1) {
@@ -530,12 +523,146 @@ async fn recursion_in_queries_is_no_allowed() {
 
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
-    let client = FuelClient::new(url.clone()).unwrap();
-    client
-        .submit_and_await_commit(&Transaction::default_test_tx())
-        .await
-        .unwrap();
 
     let result = send_graph_ql_query(&url, query).await;
     assert!(result.contains("Recursion detected"), "{:?}", result);
+}
+
+#[tokio::test]
+async fn recursion_in_queries_is_no_allowed__transactions() {
+    let query = r#"
+    query {
+      transactions {
+        edges {
+          cursor
+          node {
+            status {
+              ... on SuccessStatus {
+                block {
+                  transactions {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }"#;
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, query).await;
+    assert!(result.contains("Recursion detected"), "{:?}", result);
+}
+
+#[tokio::test]
+async fn schema_is_retrievable() {
+    let query = r#"
+    query IntrospectionQuery {
+      __schema {
+        queryType {
+          name
+        }
+        mutationType {
+          name
+        }
+        subscriptionType {
+          name
+        }
+        types {
+          ...FullType
+        }
+        directives {
+          name
+          description
+          locations
+          args {
+            ...InputValue
+          }
+        }
+      }
+    }
+
+    fragment FullType on __Type {
+      kind
+      name
+      description
+      fields(includeDeprecated: true) {
+        name
+        description
+        args {
+          ...InputValue
+        }
+        type {
+          ...TypeRef
+        }
+        isDeprecated
+        deprecationReason
+      }
+      inputFields {
+        ...InputValue
+      }
+      interfaces {
+        ...TypeRef
+      }
+      enumValues(includeDeprecated: true) {
+        name
+        description
+        isDeprecated
+        deprecationReason
+      }
+      possibleTypes {
+        ...TypeRef
+      }
+    }
+
+    fragment InputValue on __InputValue {
+      name
+      description
+      type {
+        ...TypeRef
+      }
+      defaultValue
+    }
+
+    fragment TypeRef on __Type {
+      kind
+      name
+      ofType {
+        kind
+        name
+        ofType {
+          kind
+          name
+          ofType {
+            kind
+            name
+            ofType {
+              kind
+              name
+              ofType {
+                kind
+                name
+                ofType {
+                  kind
+                  name
+                  ofType {
+                    kind
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }"#;
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, query).await;
+    assert!(result.contains("__schema"), "{:?}", result);
 }

@@ -16,6 +16,7 @@ async-graphql = { version = "7.0.11", features = [
   "playground",
   "tracing",
 ], default-features = false }
+async-graphql-value = "7.0.11"
 async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
@@ -45,7 +46,6 @@ hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
-parking_lot = { workspace = true }
 paste = { workspace = true }
 postcard = { workspace = true, optional = true }
 rand = { workspace = true }
