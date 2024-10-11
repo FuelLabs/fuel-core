@@ -13,11 +13,6 @@ use crate::{
         IntoApiResult,
         QUERY_COSTS,
     },
-    query::{
-        SimpleBlockData,
-        SimpleTransactionData,
-        TransactionQueryData,
-    },
     schema::{
         block::Block,
         scalars::{

@@ -4,7 +4,6 @@ use crate::{
         IntoApiResult,
         QUERY_COSTS,
     },
-    query::UpgradeQueryData,
     schema::{
         chain::ConsensusParameters,
         scalars::HexString,

@@ -1,7 +1,4 @@
-use crate::fuel_core_graphql_api::ports::{
-    OffChainDatabase,
-    OnChainDatabase,
-};
+use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -19,27 +16,11 @@ use fuel_core_types::{
     fuel_types::Address,
 };
 
-pub trait CoinQueryData: Send + Sync {
-    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
-
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<UtxoId>>;
-
-    fn owned_coins(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Coin>>;
-}
-
-impl<D: OnChainDatabase + OffChainDatabase + ?Sized> CoinQueryData for D {
-    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
+impl ReadView {
+    pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
+            .on_chain
+            .as_ref()
             .storage::<Coins>()
             .get(&utxo_id)?
             .ok_or(not_found!(Coins))?
@@ -48,16 +29,7 @@ impl<D: OnChainDatabase + OffChainDatabase + ?Sized> CoinQueryData for D {
         Ok(coin.uncompress(utxo_id))
     }
 
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<UtxoId>> {
-        self.owned_coins_ids(owner, start_coin, direction)
-    }
-
-    fn owned_coins(
+    pub fn owned_coins(
         &self,
         owner: &Address,
         start_coin: Option<UtxoId>,

@@ -7,15 +7,9 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusModule,
         database::ReadView,
-        ports::OffChainDatabase,
         Config as GraphQLConfig,
         IntoApiResult,
         QUERY_COSTS,
-    },
-    query::{
-        BlockQueryData,
-        SimpleBlockData,
-        SimpleTransactionData,
     },
     schema::{
         scalars::{

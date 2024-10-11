@@ -1,19 +1,6 @@
-use crate::{
-    fuel_core_graphql_api::{
-        ports::{
-            DatabaseBlocks,
-            DatabaseMessageProof,
-            DatabaseMessages,
-            OffChainDatabase,
-            OnChainDatabase,
-        },
-        IntoApiResult,
-    },
-    query::{
-        SimpleBlockData,
-        SimpleTransactionData,
-        TransactionQueryData,
-    },
+use crate::fuel_core_graphql_api::{
+    database::ReadView,
+    IntoApiResult,
 };
 use fuel_core_storage::{
     iter::{
@@ -39,6 +26,7 @@ use fuel_core_types::{
     fuel_tx::{
         input::message::compute_message_id,
         Receipt,
+        Transaction,
         TxId,
     },
     fuel_types::{
@@ -80,24 +68,17 @@ pub trait MessageQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Message>>;
 }
 
-impl<D: OnChainDatabase + OffChainDatabase + ?Sized> MessageQueryData for D {
-    fn message(&self, id: &Nonce) -> StorageResult<Message> {
-        self.storage::<Messages>()
+impl ReadView {
+    pub fn message(&self, id: &Nonce) -> StorageResult<Message> {
+        self.on_chain
+            .as_ref()
+            .storage::<Messages>()
             .get(id)?
             .ok_or(not_found!(Messages))
             .map(Cow::into_owned)
     }
 
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Nonce>> {
-        self.owned_message_ids(owner, start_message_id, direction)
-    }
-
-    fn owned_messages(
+    pub fn owned_messages(
         &self,
         owner: &Address,
         start_message_id: Option<Nonce>,
@@ -107,36 +88,60 @@ impl<D: OnChainDatabase + OffChainDatabase + ?Sized> MessageQueryData for D {
             .map(|result| result.and_then(|id| self.message(&id)))
             .into_boxed()
     }
-
-    fn all_messages(
-        &self,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Message>> {
-        self.all_messages(start_message_id, direction)
-    }
 }
 
 /// Trait that specifies all the data required by the output message query.
-pub trait MessageProofData:
-    Send + Sync + SimpleBlockData + SimpleTransactionData + DatabaseMessageProof
-{
+pub trait MessageProofData {
+    /// Get the block.
+    fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock>;
+
+    /// Get the transaction.
+    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
+
+    /// Return all receipts in the given transaction.
+    fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
+
     /// Get the status of a transaction.
     fn transaction_status(
         &self,
         transaction_id: &TxId,
     ) -> StorageResult<TransactionStatus>;
+
+    /// Gets the [`MerkleProof`] for the message block at `message_block_height` height
+    /// relatively to the commit block where message block <= commit block.
+    fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof>;
 }
 
-impl<D> MessageProofData for D
-where
-    D: OnChainDatabase + DatabaseBlocks + OffChainDatabase + ?Sized,
-{
+impl MessageProofData for ReadView {
+    fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock> {
+        self.block(id)
+    }
+
+    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction> {
+        self.transaction(transaction_id)
+    }
+
+    fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
+        self.receipts(transaction_id)
+    }
+
     fn transaction_status(
         &self,
         transaction_id: &TxId,
     ) -> StorageResult<TransactionStatus> {
         self.status(transaction_id)
+    }
+
+    fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        self.block_history_proof(message_block_height, commit_block_height)
     }
 }
 
@@ -282,13 +287,10 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     }
 }
 
-pub fn message_status<T>(
-    database: &T,
+pub fn message_status(
+    database: &ReadView,
     message_nonce: Nonce,
-) -> StorageResult<MessageStatus>
-where
-    T: OffChainDatabase + DatabaseMessages + ?Sized,
-{
+) -> StorageResult<MessageStatus> {
     if database.message_is_spent(&message_nonce)? {
         Ok(MessageStatus::spent())
     } else if database.message_exists(&message_nonce)? {

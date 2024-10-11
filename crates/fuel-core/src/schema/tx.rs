@@ -6,7 +6,6 @@ use crate::{
             ConsensusProvider,
             TxPool,
         },
-        ports::OffChainDatabase,
         IntoApiResult,
         QUERY_COSTS,
     },
@@ -16,9 +15,6 @@ use crate::{
     },
     query::{
         transaction_status_change,
-        BlockQueryData,
-        SimpleTransactionData,
-        TransactionQueryData,
         TxnStatusChangeState,
     },
     schema::{
