@@ -234,11 +234,28 @@ async fn complex_queries__40_full_blocks__works() {
 }
 
 #[tokio::test]
-async fn complex_queries__41_full_block__query_to_complex() {
+async fn complex_queries__41_full_block__query_too_complex() {
     let query = FULL_BLOCK_QUERY.to_string();
     let query = query.replace("$NUMBER_OF_BLOCKS", "41");
 
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, query.as_str()).await;
+    assert!(result.contains("Query is too complex."));
+}
+
+#[tokio::test]
+async fn complex_queries__increased_block_cost__query_too_complex() {
+    let query = FULL_BLOCK_QUERY.to_string();
+    let query = query.replace("$NUMBER_OF_BLOCKS", "1");
+
+    let mut config = Config::local_node();
+    config.graphql_config.costs.block_header *= 41;
+    config.graphql_config.costs.block_transactions *= 41;
+    config.graphql_config.costs.block_header *= 41;
+
+    let node = FuelService::new_node(config).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
     let result = send_graph_ql_query(&url, query.as_str()).await;

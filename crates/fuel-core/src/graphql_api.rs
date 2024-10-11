@@ -4,6 +4,7 @@ use fuel_core_storage::{
 };
 use std::{
     net::SocketAddr,
+    sync::OnceLock,
     time::Duration,
 };
 
@@ -30,8 +31,11 @@ pub struct ServiceConfig {
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,
+    /// Configurable cost parameters to limit graphql queries complexity
+    pub costs: Costs,
 }
 
+#[derive(Clone, Debug)]
 pub struct Costs {
     pub balance_query: usize,
     pub coins_to_spend: usize,
@@ -54,16 +58,18 @@ pub struct Costs {
     pub da_compressed_block_read: usize,
 }
 
-pub const QUERY_COSTS: Costs = Costs {
-    // balance_query: 4000,
+impl Default for Costs {
+    fn default() -> Self {
+        DEFAULT_QUERY_COSTS
+    }
+}
+
+pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     balance_query: 40001,
     coins_to_spend: 40001,
-    // get_peers: 2000,
     get_peers: 40001,
-    // estimate_predicates: 3000,
     estimate_predicates: 40001,
     dry_run: 12000,
-    // submit: 5000,
     submit: 40001,
     submit_and_await: 40001,
     status_change: 40001,
@@ -79,6 +85,12 @@ pub const QUERY_COSTS: Costs = Costs {
     state_transition_bytecode_read: 76_000,
     da_compressed_block_read: 4000,
 };
+
+pub fn query_costs() -> &'static Costs {
+    QUERY_COSTS.get().unwrap_or(&DEFAULT_QUERY_COSTS)
+}
+
+pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
 
 #[derive(Clone, Debug)]
 pub struct Config {

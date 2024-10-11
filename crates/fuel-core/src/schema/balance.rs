@@ -1,7 +1,7 @@
 use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusProvider,
-        QUERY_COSTS,
+        query_costs,
     },
     schema::{
         scalars::{
@@ -52,7 +52,7 @@ pub struct BalanceQuery;
 
 #[Object]
 impl BalanceQuery {
-    #[graphql(complexity = "QUERY_COSTS.balance_query")]
+    #[graphql(complexity = "query_costs().balance_query")]
     async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -70,7 +70,7 @@ impl BalanceQuery {
 
     // TODO: This API should be migrated to the indexer for better support and
     //  discontinued within fuel-core.
-    #[graphql(complexity = "QUERY_COSTS.balance_query")]
+    #[graphql(complexity = "query_costs().balance_query")]
     async fn balances(
         &self,
         ctx: &Context<'_>,
