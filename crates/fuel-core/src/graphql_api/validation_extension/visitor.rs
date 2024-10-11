@@ -1,4 +1,4 @@
-//! The code below is copy from `<https://github.com/async-graphql/async-graphql/blob/master/src/validation/visitor.rs>`.
+//! The code below is copy from `<https://github.com/async-graphql/async-graphql/blob/da5fea4023b8b043c5295f0a13ba76180d9e2c53/src/validation/visitor.rs>`.
 
 #![allow(dead_code)]
 #![allow(clippy::arithmetic_side_effects)]
