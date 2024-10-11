@@ -11,6 +11,7 @@ use crate::{
             P2pPort,
             TxPoolPort,
         },
+        validation_extension::ValidationExtension,
         view_extension::ViewExtension,
         Config,
     },
@@ -57,6 +58,10 @@ use axum::{
     Json,
     Router,
 };
+use fuel_core_metrics::futures::{
+    metered_future::MeteredFuture,
+    FuturesMetrics,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -65,6 +70,7 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
+use hyper::rt::Executor;
 use serde_json::json;
 use std::{
     future::Future,
@@ -116,6 +122,23 @@ pub struct Task {
     server: Pin<Box<dyn Future<Output = hyper::Result<()>> + Send + 'static>>,
 }
 
+#[derive(Clone)]
+struct ExecutorWithMetrics {
+    metric: FuturesMetrics,
+}
+
+impl<F> Executor<F> for ExecutorWithMetrics
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        let future = MeteredFuture::new(fut, self.metric.clone());
+
+        tokio::task::spawn(future);
+    }
+}
+
 #[async_trait::async_trait]
 impl RunnableService for GraphqlService {
     const NAME: &'static str = "GraphQL";
@@ -137,9 +160,13 @@ impl RunnableService for GraphqlService {
     ) -> anyhow::Result<Self::Task> {
         let mut state = state.clone();
         let ServerParams { router, listener } = params;
+        let metric = ExecutorWithMetrics {
+            metric: FuturesMetrics::obtain_futures_metrics("GraphQLFutures"),
+        };
 
         let server = axum::Server::from_tcp(listener)
             .unwrap()
+            .executor(metric)
             .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
                 state
@@ -199,6 +226,8 @@ where
     let request_timeout = config.config.api_request_timeout;
     let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
+    let max_queries_resolver_recursive_depth =
+        config.config.max_queries_resolver_recursive_depth;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -217,6 +246,9 @@ where
         .data(gas_price_provider)
         .data(consensus_parameters_provider)
         .data(memory_pool)
+        .extension(ValidationExtension::new(
+            max_queries_resolver_recursive_depth,
+        ))
         .extension(async_graphql::extensions::Tracing)
         .extension(ViewExtension::new())
         .finish();

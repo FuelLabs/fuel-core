@@ -772,9 +772,13 @@ where
             Instant::now().checked_add(heartbeat_check_interval).expect(
                 "The heartbeat check interval should be small enough to do frequently",
             );
-        let db_heavy_task_processor =
-            SyncProcessor::new(database_read_threads, 1024 * 10)?;
-        let tx_pool_heavy_task_processor = AsyncProcessor::new(tx_pool_threads, 32)?;
+        let db_heavy_task_processor = SyncProcessor::new(
+            "P2P_DatabaseProcessor",
+            database_read_threads,
+            1024 * 10,
+        )?;
+        let tx_pool_heavy_task_processor =
+            AsyncProcessor::new("P2P_TxPoolLookUpProcessor", tx_pool_threads, 32)?;
         let request_sender = broadcast.request_sender.clone();
 
         let task = Task {
@@ -1563,8 +1567,8 @@ pub mod tests {
             tx_pool: FakeTxPool,
             request_receiver,
             request_sender,
-            db_heavy_task_processor: SyncProcessor::new(1, 1).unwrap(),
-            tx_pool_heavy_task_processor: AsyncProcessor::new(1, 1).unwrap(),
+            db_heavy_task_processor: SyncProcessor::new("Test", 1, 1).unwrap(),
+            tx_pool_heavy_task_processor: AsyncProcessor::new("Test", 1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             max_txs_per_request: 100,
@@ -1653,8 +1657,8 @@ pub mod tests {
             next_block_height: FakeBlockImporter.next_block_height(),
             request_receiver,
             request_sender,
-            db_heavy_task_processor: SyncProcessor::new(1, 1).unwrap(),
-            tx_pool_heavy_task_processor: AsyncProcessor::new(1, 1).unwrap(),
+            db_heavy_task_processor: SyncProcessor::new("Test", 1, 1).unwrap(),
+            tx_pool_heavy_task_processor: AsyncProcessor::new("Test", 1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             max_txs_per_request: 100,
@@ -1715,8 +1719,8 @@ pub mod tests {
             next_block_height,
             request_receiver,
             request_sender,
-            db_heavy_task_processor: SyncProcessor::new(1, 1).unwrap(),
-            tx_pool_heavy_task_processor: AsyncProcessor::new(1, 1).unwrap(),
+            db_heavy_task_processor: SyncProcessor::new("Test", 1, 1).unwrap(),
+            tx_pool_heavy_task_processor: AsyncProcessor::new("Test", 1, 1).unwrap(),
             broadcast,
             max_headers_per_request: 0,
             max_txs_per_request: 100,

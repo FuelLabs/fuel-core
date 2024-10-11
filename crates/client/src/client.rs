@@ -1,3 +1,5 @@
+#[cfg(feature = "subscriptions")]
+use crate::client::types::StatusWithTransaction;
 use crate::client::{
     schema::{
         block::BlockByHeightArgs,
@@ -537,6 +539,33 @@ impl FuelClient {
         let mut stream = self.subscribe(s).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitSubscription>| {
                 let status: TransactionStatus = r?.submit_and_await.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        let status = stream.next().await.ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to get status from the submission",
+        ))??;
+
+        Ok(status)
+    }
+
+    /// Similar to [`Self::submit_and_await_commit`], but the status also contains transaction.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_commit_with_tx(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<StatusWithTransaction> {
+        use cynic::SubscriptionBuilder;
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitSubscriptionWithTransaction::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let mut stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitSubscriptionWithTransaction>| {
+                let status: StatusWithTransaction = r?.submit_and_await.try_into()?;
                 Result::<_, io::Error>::Ok(status)
             },
         );

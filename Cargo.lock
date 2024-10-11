@@ -3173,6 +3173,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-graphql",
+ "async-graphql-value",
  "async-trait",
  "axum",
  "clap 4.5.19",
