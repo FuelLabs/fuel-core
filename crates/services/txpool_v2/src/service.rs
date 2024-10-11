@@ -75,7 +75,10 @@ use fuel_core_types::{
 use futures::StreamExt;
 use parking_lot::RwLock;
 use std::{
-    collections::VecDeque,
+    collections::{
+        HashSet,
+        VecDeque,
+    },
     sync::Arc,
     time::{
         SystemTime,
@@ -181,7 +184,8 @@ pub struct Task<View> {
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
-    current_height: Arc<RwLock<BlockHeight>>,
+    current_height: Shared<BlockHeight>,
+    tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
 }
 
@@ -190,7 +194,7 @@ impl<View> RunnableService for Task<View>
 where
     View: TxPoolPersistentStorage,
 {
-    const NAME: &'static str = "TxPoolv2";
+    const NAME: &'static str = "TxPool";
 
     type SharedData = SharedState;
 
@@ -217,44 +221,42 @@ where
     View: TxPoolPersistentStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
-
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                should_continue = false;
+                return Ok(false)
             }
 
             block_result = self.subscriptions.imported_blocks.next() => {
                 if let Some(result) = block_result {
                     self.import_block(result);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
                     self.borrow_txpool(select_transaction_request);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             _ = self.pruner.ttl_timer.tick() => {
                 self.try_prune_transactions();
-                should_continue = true;
+                return Ok(true)
             }
 
             write_pool_request = self.subscriptions.write_pool.recv() => {
                 if let Some(write_pool_request) = write_pool_request {
                     self.process_write(write_pool_request);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
@@ -263,32 +265,30 @@ where
                     if let Some(tx) = data {
                         self.manage_tx_from_p2p(tx, message_id, peer_id);
                     }
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             new_peer_subscribed = self.subscriptions.new_tx_source.next() => {
                 if let Some(peer_id) = new_peer_subscribed {
                     self.manage_new_peer_subscribed(peer_id);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
                     self.process_read(read_pool_request);
-                    should_continue = true;
+                    return Ok(true)
                 } else {
-                    should_continue = false;
+                    return Ok(false)
                 }
             }
         }
-
-        Ok(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -507,7 +507,17 @@ where
             let p2p = self.p2p.clone();
             let pool = self.pool.clone();
             let txs_insert_sender = self.shared_state.write_pool_requests_sender.clone();
+            let tx_sync_history = self.tx_sync_history.clone();
             async move {
+                {
+                    let mut tx_sync_history = tx_sync_history.write();
+
+                    // We already synced with this peer in the past.
+                    if !tx_sync_history.insert(peer_id.clone()) {
+                        return
+                    }
+                }
+
                 let peer_tx_ids = p2p
                     .request_tx_ids(peer_id.clone())
                     .await
@@ -589,6 +599,13 @@ where
             self.shared_state
                 .tx_status_sender
                 .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
+        }
+
+        {
+            // Each time when we prune transactions, clear the history of synchronization
+            // to have a chance to sync this transaction again from other peers.
+            let mut tx_sync_history = self.tx_sync_history.write();
+            tx_sync_history.clear();
         }
     }
 
@@ -721,12 +738,14 @@ where
     };
 
     let transaction_verifier_process = SyncProcessor::new(
+        "TxPool_TxVerifierProcessor",
         config.heavy_work.number_threads_to_verify_transactions,
         config.heavy_work.size_of_verification_queue,
     )
     .unwrap();
 
     let p2p_sync_process = AsyncProcessor::new(
+        "TxPool_P2PSynchronizationProcessor",
         config.heavy_work.number_threads_p2p_sync,
         config.heavy_work.size_of_p2p_sync_queue,
     )
@@ -754,5 +773,6 @@ where
         current_height: Arc::new(RwLock::new(current_height)),
         pool: Arc::new(RwLock::new(txpool)),
         shared_state,
+        tx_sync_history: Default::default(),
     })
 }

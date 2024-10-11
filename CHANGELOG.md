@@ -8,7 +8,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The total gas used in a block" (`importer_gas_per_block`), "The total fee (gwei) paid by transactions in a block" (`importer_fee_per_block_gwei`), "The total number of transactions in a block" (`importer_transactions_per_block`), P2P metrics for swarm and protocol.
-            
+- [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Added metrics for sync, async processor and for all GraphQL queries.
+
+## Fixed
+- [2320](https://github.com/FuelLabs/fuel-core/issues/2320): Prevent `/health` and `/v1/health` from being throttled by the concurrency limiter.
+- [2322](https://github.com/FuelLabs/fuel-core/issues/2322): Set the salt of genesis contracts to zero on execution.
+- [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Ignore peer if we already are syncing transactions from it.
+
+### Changed
+
+#### Breaking
+- [2311](https://github.com/FuelLabs/fuel-core/pull/2311): Changed the text of the error returned by the executor if gas overflows.
+
+
 ## [Version 0.38.0]
 
 ### Added

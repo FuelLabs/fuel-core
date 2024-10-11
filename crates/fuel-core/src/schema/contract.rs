@@ -71,7 +71,7 @@ pub struct ContractQuery;
 
 #[Object]
 impl ContractQuery {
-    #[graphql(complexity = "QUERY_COSTS.storage_read")]
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn contract(
         &self,
         ctx: &Context<'_>,
