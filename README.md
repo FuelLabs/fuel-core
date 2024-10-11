@@ -1,3 +1,5 @@
+Just for testing access! - REMOVE THIS BRANCH
+
 # Fuel Client
 
 [![build](https://github.com/FuelLabs/fuel-core/actions/workflows/ci.yml/badge.svg)](https://github.com/FuelLabs/fuel-core/actions/workflows/ci.yml)
