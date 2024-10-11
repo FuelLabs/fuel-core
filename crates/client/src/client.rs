@@ -1085,6 +1085,17 @@ impl FuelClient {
         Ok(messages)
     }
 
+    pub async fn contract_info(
+        &self,
+        contract: &ContractId,
+    ) -> io::Result<Option<types::Contract>> {
+        let query = schema::contract::ContractByIdQuery::build(ContractByIdArgs {
+            id: (*contract).into(),
+        });
+        let contract_info = self.query(query).await?.contract.map(Into::into);
+        Ok(contract_info)
+    }
+
     pub async fn message_status(&self, nonce: &Nonce) -> io::Result<MessageStatus> {
         let query = schema::message::MessageStatusQuery::build(MessageStatusArgs {
             nonce: (*nonce).into(),
