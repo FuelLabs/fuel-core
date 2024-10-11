@@ -11,6 +11,7 @@ use crate::{
             P2pPort,
             TxPoolPort,
         },
+        validation_extension::ValidationExtension,
         view_extension::ViewExtension,
         Config,
     },
@@ -225,6 +226,8 @@ where
     let request_timeout = config.config.api_request_timeout;
     let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
+    let max_queries_resolver_recursive_depth =
+        config.config.max_queries_resolver_recursive_depth;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -243,6 +246,9 @@ where
         .data(gas_price_provider)
         .data(consensus_parameters_provider)
         .data(memory_pool)
+        .extension(ValidationExtension::new(
+            max_queries_resolver_recursive_depth,
+        ))
         .extension(async_graphql::extensions::Tracing)
         .extension(ViewExtension::new())
         .finish();
