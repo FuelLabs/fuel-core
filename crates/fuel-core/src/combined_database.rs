@@ -222,25 +222,6 @@ impl CombinedDatabase {
         Ok(state_config)
     }
 
-    /// Converts the combined database into a genesis combined database.
-    pub fn into_genesis(self) -> CombinedGenesisDatabase {
-        CombinedGenesisDatabase {
-            on_chain: self.on_chain.into_genesis(),
-            off_chain: self.off_chain.into_genesis(),
-            relayer: self.relayer.into_genesis(),
-        }
-    }
-
-    /// Converts the combined database into a genesis combined database without
-    /// checking the height of the databases.
-    pub fn unsafe_into_genesis(self) -> CombinedGenesisDatabase {
-        CombinedGenesisDatabase {
-            on_chain: self.on_chain.unsafe_into_genesis(),
-            off_chain: self.off_chain.unsafe_into_genesis(),
-            relayer: self.relayer.unsafe_into_genesis(),
-        }
-    }
-
     /// Rollbacks the state of the blockchain to a specific block height.
     pub fn rollback_to<S>(
         &self,
@@ -377,9 +358,8 @@ pub trait ShutdownListener {
 /// genesis databases into one entity.
 #[derive(Default, Clone)]
 pub struct CombinedGenesisDatabase {
-    on_chain: GenesisDatabase<OnChain>,
-    off_chain: GenesisDatabase<OffChain>,
-    relayer: GenesisDatabase<Relayer>,
+    pub on_chain: GenesisDatabase<OnChain>,
+    pub off_chain: GenesisDatabase<OffChain>,
 }
 
 impl CombinedGenesisDatabase {
@@ -389,9 +369,5 @@ impl CombinedGenesisDatabase {
 
     pub fn off_chain(&self) -> &GenesisDatabase<OffChain> {
         &self.off_chain
-    }
-
-    pub fn relayer(&self) -> &GenesisDatabase<Relayer> {
-        &self.relayer
     }
 }
