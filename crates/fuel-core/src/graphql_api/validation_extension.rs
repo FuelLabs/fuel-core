@@ -47,7 +47,7 @@ impl ExtensionFactory for ValidationExtension {
 
 struct ValidationInner {
     recursion_limit: usize,
-    errors: Mutex<Option<Vec<RuleError>>>,
+    errors: Mutex<Vec<RuleError>>,
 }
 
 impl ValidationInner {
@@ -84,7 +84,7 @@ impl Extension for ValidationInner {
                 .errors
                 .lock()
                 .expect("Only one instance owns `ValidationInner`; qed");
-            *store = Some(errors);
+            store.extend(errors);
         }
 
         Ok(result)
@@ -95,13 +95,14 @@ impl Extension for ValidationInner {
         ctx: &ExtensionContext<'_>,
         next: NextValidation<'_>,
     ) -> async_graphql::Result<ValidationResult, Vec<ServerError>> {
-        if let Some(errors) = self
-            .errors
-            .lock()
-            .expect("Only one instance owns `ValidationInner`; qed")
-            .take()
         {
-            return Err(errors.into_iter().map(Into::into).collect())
+            let mut errors = self
+                .errors
+                .lock()
+                .expect("Only one instance owns `ValidationInner`; qed");
+            if !errors.is_empty() {
+                return Err(errors.drain(..).map(Into::into).collect())
+            }
         }
 
         next.run(ctx).await
