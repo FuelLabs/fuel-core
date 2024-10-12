@@ -34,7 +34,7 @@ pub mod run;
 #[cfg(feature = "rocksdb")]
 pub mod snapshot;
 
-// Default database cache is 1 GB
+// Default database cache size is 1 GB
 pub const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[derive(Parser, Debug)]
@@ -91,27 +91,25 @@ pub fn init_logging() {
     let layer = tracing_subscriber::fmt::Layer::default().with_writer(std::io::stderr);
 
     let fmt = if human_logging {
-        // use pretty logs
+        // Use pretty logs
         layer
             .with_ansi(true)
             .with_level(true)
             .with_line_number(true)
             .boxed()
     } else {
-        // use machine parseable structured logs
+        // Use machine-parsable structured logs
         layer
-            // disable terminal colors
             .with_ansi(false)
             .with_level(true)
             .with_line_number(true)
-            // use json
             .json()
             .boxed()
     };
 
-    let subscriber = registry::Registry::default() // provide underlying span data store
-        .with(filter) // filter out low-level debug tracing (eg tokio executor)
-        .with(fmt); // log to stdout
+    let subscriber = registry::Registry::default()
+        .with(filter)
+        .with(fmt);
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting global default failed");
@@ -127,7 +125,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
     if opt.is_err() {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
-            tracing::warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
+            tracing::warn!("This CLI format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
             return run::exec(command).await;
         }
     }
@@ -141,7 +139,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
             Fuel::Rollback(command) => rollback::exec(command).await,
         },
         Err(e) => {
-            // Prints the error and exits.
+            // Print the error and exit.
             e.exit()
         }
     }
@@ -197,31 +195,31 @@ mod tests {
 
         #[test]
         fn can_snapshot() {
-            // given
+            // Given
             let line = "./core snapshot";
-            let irrelevant_remainder = "--output-directory dir everything  encoding json";
+            let irrelevant_remainder = "--output-directory dir everything encoding json";
 
-            // when
+            // When
             let command = parse_cli(line, irrelevant_remainder)
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             assert!(matches!(command, Fuel::Snapshot(_)));
         }
 
         #[test]
         fn db_is_default_if_not_given() {
-            // given
+            // Given
             let line = "./core snapshot";
             let irrelevant_remainder = "--output-directory dir everything encoding json";
 
-            // when
+            // When
             let command = parse_cli(line, irrelevant_remainder)
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let Fuel::Snapshot(snapshot::Command { database_path, .. }) = command else {
                 panic!("Expected a snapshot command")
             };
@@ -230,16 +228,16 @@ mod tests {
 
         #[test]
         fn db_is_as_given() {
-            // given
+            // Given
             let line = "./core snapshot --db-path ./some/path";
-            let irrelevant_remainder = "--output-directory dir everything  encoding json";
+            let irrelevant_remainder = "--output-directory dir everything encoding json";
 
-            // when
+            // When
             let command = parse_cli(line, irrelevant_remainder)
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let Fuel::Snapshot(snapshot::Command { database_path, .. }) = command else {
                 panic!("Expected a snapshot command")
             };
@@ -248,29 +246,29 @@ mod tests {
 
         #[test]
         fn output_dir_required() {
-            // given
+            // Given
             let line = "./core snapshot";
             let irrelevant_remainder = "everything encoding json";
 
-            // when
+            // When
             let result = parse_cli(line, irrelevant_remainder);
 
-            // then
+            // Then
             assert!(result.is_err());
         }
 
         #[test]
         fn output_dir_is_as_given() {
-            // given
+            // Given
             let line = "./core snapshot --output-directory ./some/path";
             let irrelevant_remainder = "everything encoding json";
 
-            // when
+            // When
             let command = parse_cli(line, irrelevant_remainder)
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let Fuel::Snapshot(snapshot::Command { output_dir, .. }) = command else {
                 panic!("Expected a snapshot command")
             };
@@ -295,7 +293,7 @@ mod tests {
                             encoding_command,
                         },
                     output_dir,
-                    ..
+                    .. 
                 }) => Ok((chain_config, output_dir, encoding_command)),
                 _ => bail!("Expected a snapshot everything command"),
             }
@@ -303,43 +301,43 @@ mod tests {
 
         #[test]
         fn snapshot_everything() {
-            // given
+            // Given
             let line = "./core snapshot --output-directory dir everything ";
             let irrelevant_remainder = "encoding json";
 
-            // when
+            // When
             let command = parse_cli(line, irrelevant_remainder)
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             extract_everything_command(command).expect("Can extract command");
         }
 
         #[test]
         fn output_dir_required() {
-            // given
+            // Given
             let line = "./core snapshot everything";
 
-            // when
+            // When
             let result = parse_cli(line, "");
 
-            // then
+            // Then
             assert!(result.is_err());
         }
 
         #[test]
         fn chain_config_is_as_given() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory ./some/path everything --chain ./some/chain/config";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (chain_config, _, _) =
                 extract_everything_command(command).expect("Can extract command");
             assert_eq!(chain_config, Some(PathBuf::from("./some/chain/config")));
@@ -347,14 +345,15 @@ mod tests {
 
         #[test]
         fn encoding_is_optional() {
-            // given
+            // Given
             let line = "./core snapshot --output-directory ./some/path everything";
-            // when
+
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
             assert!(encoding_command.is_none());
@@ -362,16 +361,16 @@ mod tests {
 
         #[test]
         fn chain_config_dir_is_optional() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory ./some/path everything encoding json";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (chain_config, _, _) =
                 extract_everything_command(command).expect("Can extract command");
             assert!(chain_config.is_none());
@@ -379,15 +378,15 @@ mod tests {
 
         #[test]
         fn can_choose_json_encoding() {
-            // given
+            // Given
             let line = "./core snapshot --output-directory dir everything encoding json";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
 
@@ -402,16 +401,16 @@ mod tests {
         #[cfg(feature = "parquet")]
         #[test]
         fn can_choose_parquet_encoding() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory dir everything encoding parquet";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
 
@@ -426,16 +425,16 @@ mod tests {
         #[cfg(feature = "parquet")]
         #[test]
         fn group_size_is_configurable() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory dir everything encoding parquet --group-size 101";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
 
@@ -452,16 +451,16 @@ mod tests {
         #[cfg(feature = "parquet")]
         #[test]
         fn group_size_has_a_default() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory dir everything encoding parquet";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
 
@@ -478,16 +477,16 @@ mod tests {
         #[cfg(feature = "parquet")]
         #[test]
         fn can_configure_compression() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory dir everything encoding parquet --compression-level 7";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
             let Some(snapshot::EncodingCommand::Encoding {
@@ -502,16 +501,16 @@ mod tests {
         #[cfg(feature = "parquet")]
         #[test]
         fn compression_has_a_default() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory dir everything encoding parquet";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
             let Some(snapshot::EncodingCommand::Encoding {
@@ -526,14 +525,14 @@ mod tests {
 
         #[test]
         fn json_encoding_doesnt_allow_for_group_size() {
-            // given
+            // Given
             let line =
                 "./core snapshot --output-directory dir everything encoding json --group-size 101";
 
-            // when
+            // When
             let result = parse_cli(line, "");
 
-            // then
+            // Then
             assert!(result.is_err());
         }
     }
@@ -543,20 +542,20 @@ mod tests {
 
         #[test]
         fn snapshot_contract() {
-            // given
+            // Given
             let line = "./core snapshot --output-directory ./snapshot contract";
             let irrelevant_remainder =
                 "--id 0x0000000000000000000000000000000000000000000000000000000000000000";
 
-            // when
+            // When
             let command = parse_cli(line, irrelevant_remainder)
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let Fuel::Snapshot(snapshot::Command {
                 subcommand: snapshot::SubCommands::Contract { .. },
-                ..
+                .. 
             }) = command
             else {
                 panic!("Expected a snapshot contract command");
@@ -565,30 +564,30 @@ mod tests {
 
         #[test]
         fn snapshot_contract_id_required() {
-            // given
+            // Given
             let line = "./core snapshot --output-directory ./snapshot contract";
 
-            // when
+            // When
             let result = parse_cli(line, "");
 
-            // then
+            // Then
             assert!(result.is_err());
         }
 
         #[test]
         fn snapshot_contract_id_given() {
-            // given
+            // Given
             let line = "./core snapshot --output-directory ./snapshot contract --id 0x1111111111111111111111111111111111111111111111111111111111111111";
 
-            // when
+            // When
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
-            // then
+            // Then
             let Fuel::Snapshot(snapshot::Command {
                 subcommand: snapshot::SubCommands::Contract { contract_id },
-                ..
+                .. 
             }) = command
             else {
                 panic!("Expected a snapshot contract command");
@@ -604,15 +603,15 @@ mod tests {
 
         #[test]
         fn can_ask_for_db_prune() {
-            // given
+            // Given
             let line = "./core run --db-prune";
 
-            // when
+            // When
             let command = super::parse_cli(line, "")
                 .expect("should parse the run command")
                 .command;
 
-            // then
+            // Then
             let super::Fuel::Run(run::Command { db_prune, .. }) = command else {
                 panic!("Expected a run command");
             };
@@ -622,15 +621,15 @@ mod tests {
 
         #[test]
         fn db_prune_off_by_default() {
-            // given
+            // Given
             let line = "./core run";
 
-            // when
+            // When
             let command = super::parse_cli(line, "")
                 .expect("should parse the run command")
                 .command;
 
-            // then
+            // Then
             let super::Fuel::Run(run::Command { db_prune, .. }) = command else {
                 panic!("Expected a run command");
             };
@@ -640,18 +639,18 @@ mod tests {
 
         #[test]
         fn can_give_a_snapshot() {
-            // given
+            // Given
             let line = "./core run --snapshot ./some/path";
 
-            // when
+            // When
             let command = super::parse_cli(line, "")
                 .expect("should parse the run command")
                 .command;
 
-            // then
+            // Then
             let super::Fuel::Run(run::Command {
                 snapshot: Some(snapshot),
-                ..
+                .. 
             }) = command
             else {
                 panic!("Expected a run command");
@@ -662,15 +661,15 @@ mod tests {
 
         #[test]
         fn snapshot_is_optional() {
-            // given
+            // Given
             let line = "./core run";
 
-            // when
+            // When
             let command = super::parse_cli(line, "")
                 .expect("should parse the run command")
                 .command;
 
-            // then
+            // Then
             let super::Fuel::Run(run::Command { snapshot: None, .. }) = command else {
                 panic!("Expected a run command without a snapshot");
             };
