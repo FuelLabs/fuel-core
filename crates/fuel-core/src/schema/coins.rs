@@ -214,8 +214,8 @@ impl CoinQuery {
         #[graphql(desc = "\
             The list of requested assets` coins with asset ids, `target` amount the user wants \
             to reach, and the `max` number of coins in the selection. Several entries with the \
-            same asset id are not allowed.")]
-        query_per_asset: Vec<SpendQueryElementInput>,
+            same asset id are not allowed. The result can't contain more coins than `max_inputs`.")]
+        mut query_per_asset: Vec<SpendQueryElementInput>,
         #[graphql(desc = "The excluded coins from the selection.")] excluded_ids: Option<
             ExcludeInput,
         >,
@@ -225,12 +225,12 @@ impl CoinQuery {
             .latest_consensus_params();
         let max_input = params.tx_params().max_inputs();
 
-        if query_per_asset.len() > max_input as usize {
-            return Err(anyhow::anyhow!(
-                "The number of assets to spend is greater than the maximum number of inputs."
-            )
-            .into());
-        }
+        // `coins_to_spend` exists to help select inputs for the transactions.
+        // It doesn't make sense to allow the user to request more than the maximum number
+        // of inputs.
+        // TODO: To avoid breaking changes, we will truncate request for now.
+        //  In the future, we should return an error if the input is too large.
+        query_per_asset.truncate(max_input as usize);
 
         let owner: fuel_tx::Address = owner.0;
         let query_per_asset = query_per_asset
