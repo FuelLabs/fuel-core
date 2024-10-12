@@ -5,7 +5,6 @@ use crate::fuel_core_graphql_api::{
 use fuel_core_storage::{
     iter::{
         BoxedIter,
-        IntoBoxedIter,
         IterDirection,
     },
     not_found,
@@ -37,6 +36,10 @@ use fuel_core_types::{
         Nonce,
     },
     services::txpool::TransactionStatus,
+};
+use futures::{
+    Stream,
+    StreamExt,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -78,15 +81,19 @@ impl ReadView {
             .map(Cow::into_owned)
     }
 
-    pub fn owned_messages(
-        &self,
-        owner: &Address,
+    pub fn owned_messages<'a>(
+        &'a self,
+        owner: &'a Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Message>> {
+    ) -> impl Stream<Item = StorageResult<Message>> + 'a {
         self.owned_message_ids(owner, start_message_id, direction)
-            .map(|result| result.and_then(|id| self.message(&id)))
-            .into_boxed()
+            .map(|result| {
+                result.and_then(|id| {
+                    // TODO: Move `message` fetching to a separate thread
+                    self.message(&id)
+                })
+            })
     }
 }
 

@@ -1,11 +1,6 @@
 use crate::fuel_core_graphql_api::database::ReadView;
-
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
+    iter::IterDirection,
     not_found,
     tables::Transactions,
     Result as StorageResult,
@@ -19,6 +14,10 @@ use fuel_core_types::{
     },
     fuel_types::Address,
     services::txpool::TransactionStatus,
+};
+use futures::{
+    Stream,
+    StreamExt,
 };
 
 impl ReadView {
@@ -42,15 +41,15 @@ impl ReadView {
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>> {
+    ) -> impl Stream<Item = StorageResult<(TxPointer, Transaction)>> + '_ {
         self.owned_transactions_ids(owner, start, direction)
             .map(|result| {
                 result.and_then(|(tx_pointer, tx_id)| {
+                    // TODO: Fetch transactions in a separate thread
                     let tx = self.transaction(&tx_id)?;
 
                     Ok((tx_pointer, tx))
                 })
             })
-            .into_boxed()
     }
 }

@@ -40,6 +40,7 @@ use fuel_core_types::{
     fuel_tx,
 };
 use itertools::Itertools;
+use tokio_stream::StreamExt;
 
 pub struct Coin(pub(crate) CoinModel);
 
@@ -174,8 +175,8 @@ impl CoinQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
         let query = ctx.read_view()?;
+        let owner: fuel_tx::Address = filter.owner.into();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let owner: fuel_tx::Address = filter.owner.into();
             let coins = query
                 .owned_coins(&owner, (*start).map(Into::into), direction)
                 .filter_map(|result| {
@@ -222,6 +223,14 @@ impl CoinQuery {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
+        let max_input = params.tx_params().max_inputs();
+
+        if query_per_asset.len() > max_input as usize {
+            return Err(anyhow::anyhow!(
+                "The number of assets to spend is greater than the maximum number of inputs."
+            )
+            .into());
+        }
 
         let owner: fuel_tx::Address = owner.0;
         let query_per_asset = query_per_asset
@@ -230,7 +239,10 @@ impl CoinQuery {
                 AssetSpendTarget::new(
                     e.asset_id.0,
                     e.amount.0,
-                    e.max.map(|max| max.0 as usize).unwrap_or(usize::MAX),
+                    e.max
+                        .and_then(|max| u16::try_from(max.0).ok())
+                        .unwrap_or(max_input)
+                        .min(max_input),
                 )
             })
             .collect_vec();
@@ -252,7 +264,8 @@ impl CoinQuery {
 
         let query = ctx.read_view()?;
 
-        let coins = random_improve(query.as_ref(), &spend_query)?
+        let coins = random_improve(query.as_ref(), &spend_query)
+            .await?
             .into_iter()
             .map(|coins| {
                 coins
