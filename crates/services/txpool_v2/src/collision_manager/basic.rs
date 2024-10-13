@@ -273,14 +273,8 @@ where
                 }
             }
             for output in tx.outputs() {
-                match output {
-                    Output::Coin { .. }
-                    | Output::Change { .. }
-                    | Output::Variable { .. }
-                    | Output::Contract(_) => {}
-                    Output::ContractCreated { contract_id, .. } => {
-                        contracts_creators.insert(*contract_id, tx.id());
-                    }
+                if let Output::ContractCreated { contract_id, .. } = output {
+                    contracts_creators.insert(*contract_id, tx.id());
                 }
             }
         }
