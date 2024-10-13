@@ -266,11 +266,17 @@ where
             .map(|tx| (tx.id(), tx.clone()))
             .collect();
         for key in self.executable_transactions_sorted_tip_gas_ratio.keys() {
-            expected_txs.remove(&key.0.tx_id).expect("A transaction is present on the selection algorithm that shouldn't be there.");
+            expected_txs.remove(&key.0.tx_id).unwrap_or_else(|| {
+                panic!(
+                    "Transaction with id {:?} is not in the expected transactions.",
+                    key.0.tx_id
+                )
+            });
         }
         assert!(
             expected_txs.is_empty(),
-            "Some transactions are missing from the selection algorithm."
+            "Some transactions are missing from the selection algorithm: {:?}",
+            expected_txs.keys().collect::<Vec<_>>()
         );
     }
 }

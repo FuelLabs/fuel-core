@@ -241,6 +241,8 @@ where
     }
 
     #[cfg(test)]
+    /// Expected transactions are the transactions that must be populate all elements present in the collision manager.
+    /// This function will check if all elements present in the collision manager are present in the expected transactions and vice versa.
     fn assert_integrity(&self, expected_txs: &[ArcPoolTx]) {
         use std::ops::Deref;
 
@@ -279,25 +281,37 @@ where
             }
         }
         for nonce in self.messages_spenders.keys() {
-            message_spenders.remove(nonce).expect("A message sender is present on the collision manager that shouldn't be there.");
+            message_spenders.remove(nonce).unwrap_or_else(|| panic!(
+                "A message ({}) spender is present on the collision manager that shouldn't be there.",
+                nonce
+            ));
         }
         assert!(
             message_spenders.is_empty(),
-            "Some message senders are missing from the collision manager."
+            "Some message senders are missing from the collision manager: {:?}",
+            message_spenders
         );
         for utxo_id in self.coins_spenders.keys() {
-            coins_spenders.remove(utxo_id).expect("A coin sender is present on the collision manager that shouldn't be there.");
+            coins_spenders.remove(utxo_id).unwrap_or_else(|| panic!(
+                "A coin ({}) spender is present on the collision manager that shouldn't be there.",
+                utxo_id
+            ));
         }
         assert!(
             coins_spenders.is_empty(),
-            "Some coin senders are missing from the collision manager."
+            "Some coin senders are missing from the collision manager: {:?}",
+            coins_spenders
         );
         for contract_id in self.contracts_creators.keys() {
-            contracts_creators.remove(contract_id).expect("A contract creator is present on the collision manager that shouldn't be there.");
+            contracts_creators.remove(contract_id).unwrap_or_else(|| panic!(
+                "A contract ({}) creator is present on the collision manager that shouldn't be there.",
+                contract_id
+            ));
         }
         assert!(
             contracts_creators.is_empty(),
-            "Some contract creators are missing from the collision manager."
+            "Some contract creators are missing from the collision manager: {:?}",
+            contracts_creators
         );
     }
 }

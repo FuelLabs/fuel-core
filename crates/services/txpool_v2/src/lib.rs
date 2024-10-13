@@ -6,13 +6,13 @@
 //! If a transaction has a dependency, it cannot be selected in a block until the dependent transaction has been selected.
 //! A transaction can have a dependency per input and this dependency transaction can also have its own dependencies.
 //! This creates a dependency tree between transactions inside the pool which can be very costly to compute for insertion/deletion etc...
-//! In order to avoid too much cost, the transaction pool only allow a maximum of transaction inside a dependency chain.
+//! In order to avoid too much cost, the transaction pool only allow a maximum number of transaction inside a dependency chain.
 //! There is others limits on the pool that prevent its size to grow too much: maximum gas in the pool, maximum bytes in the pool, maximum number of transactions in the pool.
 //! The pool also implements a TTL for the transactions, if a transaction is not selected in a block after a certain time, it is removed from the pool.
 //!
 //! All the transactions ordered by their ratio of gas/tip to be selected in a block.
 //! It's possible that a transaction is not profitable enough to be selected for now and so either it will be selected later or it will be removed from the pool.
-//! In order to make a transaction more likely to be selected, it's needed to submit a new collidng transaction (see below) with a higher tip/gas ratio.
+//! In order to make a transaction more likely to be selected, it's needed to submit a new colliding transaction (see below) with a higher tip/gas ratio.
 //!
 //! When a transaction is inserted it's possible that it use same inputs as one or multiple transactions already in the pool: this is what we call a collision.
 //! The pool has to choose which transaction to keep and which to remove.
@@ -24,7 +24,8 @@
 //!       the same transaction with a higher tip but not merge one or more
 //!         transactions into one.
 //!     - A new transaction can be accepted if its profitability is higher than
-//!         the collided subtree's.
+//!         the cumulative profitability of the colliding transactions, and all
+//!         the transactions that depend on it.
 //! - A transaction doesn't have dependencies:
 //!     - A new transaction can be accepted if its profitability is higher
 //!         than the collided subtrees'.

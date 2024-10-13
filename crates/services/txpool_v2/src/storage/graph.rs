@@ -650,7 +650,8 @@ impl Storage for GraphStorage {
         }
         assert!(
             txs_map.is_empty(),
-            "Some transactions are missing in storage"
+            "Some transactions are missing in storage {:?}",
+            txs_map.keys()
         );
 
         let mut coins_creators = HashMap::new();
@@ -671,12 +672,10 @@ impl Storage for GraphStorage {
             }
         }
         for (utxo_id, node_id) in &self.coins_creators {
-            let tx_id = coins_creators.remove(utxo_id).expect(
-                "A coin creator is present in the storage that shouldn't be there",
-            );
-            let expected_node_id = tx_id_node_id
-                .get(&tx_id)
-                .expect("A node id is missing for a transaction");
+            let tx_id = coins_creators.remove(utxo_id).unwrap_or_else(|| panic!("A coin creator (coin: {}) is present in the storage that shouldn't be there", utxo_id));
+            let expected_node_id = tx_id_node_id.get(&tx_id).unwrap_or_else(|| {
+                panic!("A node id is missing for a transaction (tx_id: {})", tx_id)
+            });
             assert_eq!(
                 expected_node_id, node_id,
                 "The node id is different from the expected one"
@@ -684,16 +683,15 @@ impl Storage for GraphStorage {
         }
         assert!(
             coins_creators.is_empty(),
-            "Some contract creators are missing in storage"
+            "Some contract creators are missing in storage: {:?}",
+            coins_creators
         );
 
         for (contract_id, node_id) in &self.contracts_creators {
-            let tx_id = contracts_creators.remove(contract_id).expect(
-                "A contract creator is present in the storage that shouldn't be there",
-            );
-            let expected_node_id = tx_id_node_id
-                .get(&tx_id)
-                .expect("A node id is missing for a transaction");
+            let tx_id = contracts_creators.remove(contract_id).unwrap_or_else(|| panic!("A contract creator (contract: {}) is present in the storage that shouldn't be there", contract_id));
+            let expected_node_id = tx_id_node_id.get(&tx_id).unwrap_or_else(|| {
+                panic!("A node id is missing for a transaction (tx_id: {})", tx_id)
+            });
             assert_eq!(
                 expected_node_id, node_id,
                 "The node id is different from the expected one"
@@ -701,7 +699,8 @@ impl Storage for GraphStorage {
         }
         assert!(
             contracts_creators.is_empty(),
-            "Some contract creators are missing in storage"
+            "Some contract creators are missing in storage: {:?}",
+            contracts_creators
         );
 
         txs_info
