@@ -12,6 +12,10 @@ pub struct GraphQLArgs {
     #[clap(long = "port", default_value = "4000", env)]
     pub port: u16,
 
+    /// The size of the butch fetched from the database by GraphQL service.
+    #[clap(long = "graphql-database-butch-size", default_value = "100", env)]
+    pub database_butch_size: usize,
+
     /// The max depth of GraphQL queries.
     #[clap(long = "graphql-max-depth", default_value = "16", env)]
     pub graphql_max_depth: usize,

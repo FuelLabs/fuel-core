@@ -25,7 +25,6 @@ use fuel_core_types::{
     fuel_tx::{
         input::message::compute_message_id,
         Receipt,
-        Transaction,
         TxId,
     },
     fuel_types::{
@@ -40,6 +39,7 @@ use fuel_core_types::{
 use futures::{
     Stream,
     StreamExt,
+    TryStreamExt,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -81,6 +81,16 @@ impl ReadView {
             .map(Cow::into_owned)
     }
 
+    pub async fn messages(
+        &self,
+        ids: Vec<Nonce>,
+    ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
+        let messages = ids.into_iter().map(|id| self.message(&id));
+        // Yield to the runtime to allow other tasks to run.
+        tokio::task::yield_now().await;
+        messages
+    }
+
     pub fn owned_messages<'a>(
         &'a self,
         owner: &'a Address,
@@ -88,12 +98,16 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<Message>> + 'a {
         self.owned_message_ids(owner, start_message_id, direction)
-            .map(|result| {
-                result.and_then(|id| {
-                    // TODO: Move `message` fetching to a separate thread
-                    self.message(&id)
-                })
+            .chunks(self.butch_size)
+            .map(|chunk| {
+                let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                Ok(chunk)
             })
+            .try_filter_map(move |chunk| async move {
+                let chunk = self.messages(chunk).await;
+                Ok::<_, StorageError>(Some(futures::stream::iter(chunk)))
+            })
+            .try_flatten()
     }
 }
 
@@ -101,9 +115,6 @@ impl ReadView {
 pub trait MessageProofData {
     /// Get the block.
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock>;
-
-    /// Get the transaction.
-    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
 
     /// Return all receipts in the given transaction.
     fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
@@ -128,10 +139,6 @@ impl MessageProofData for ReadView {
         self.block(id)
     }
 
-    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction> {
-        self.transaction(transaction_id)
-    }
-
     fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
         self.receipts(transaction_id)
     }
@@ -140,7 +147,7 @@ impl MessageProofData for ReadView {
         &self,
         transaction_id: &TxId,
     ) -> StorageResult<TransactionStatus> {
-        self.status(transaction_id)
+        self.tx_status(transaction_id)
     }
 
     fn block_history_proof(

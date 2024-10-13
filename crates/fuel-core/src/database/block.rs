@@ -67,7 +67,7 @@ impl OnChainIterableKeyValueView {
         let db_block = self.storage::<FuelBlocks>().get(height)?;
         if let Some(block) = db_block {
             // fetch all the transactions
-            // TODO: optimize with multi-key get
+            // TODO: Use multiget when it's implemented.
             let txs = block
                 .transactions()
                 .iter()

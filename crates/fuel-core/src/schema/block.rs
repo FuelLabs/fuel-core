@@ -44,12 +44,14 @@ use fuel_core_types::{
         block::CompressedBlock,
         header::BlockHeader,
     },
+    fuel_tx::TxId,
     fuel_types,
     fuel_types::BlockHeight,
 };
 use futures::{
     Stream,
     StreamExt,
+    TryStreamExt,
 };
 
 pub struct Block(pub(crate) CompressedBlock);
@@ -135,14 +137,27 @@ impl Block {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
         let query = ctx.read_view()?;
-        self.0
-            .transactions()
-            .iter()
-            .map(|tx_id| {
-                let tx = query.transaction(tx_id)?;
-                Ok(Transaction::from_tx(*tx_id, tx))
+        let tx_ids = futures::stream::iter(self.0.transactions().iter().copied());
+
+        let result = tx_ids
+            .chunks(query.butch_size)
+            .filter_map(move |tx_ids: Vec<TxId>| {
+                let async_query = query.as_ref().clone();
+                async move {
+                    let txs = async_query.transactions(tx_ids.clone()).await;
+                    let txs = txs
+                        .into_iter()
+                        .zip(tx_ids.into_iter())
+                        .map(|(r, tx_id)| r.map(|tx| Transaction::from_tx(tx_id, tx)));
+
+                    Some(futures::stream::iter(txs))
+                }
             })
-            .collect()
+            .flatten()
+            .try_collect()
+            .await?;
+
+        Ok(result)
     }
 }
 

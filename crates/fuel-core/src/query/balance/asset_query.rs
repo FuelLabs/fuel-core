@@ -1,4 +1,5 @@
 use crate::graphql_api::database::ReadView;
+use async_graphql::futures_util::TryStreamExt;
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_storage::{
     iter::IterDirection,
@@ -78,7 +79,9 @@ impl<'a> AssetsQuery<'a> {
 
     fn coins_iter(mut self) -> impl Stream<Item = StorageResult<CoinType>> + 'a {
         let assets = self.assets.take();
-        self.database
+        let database = self.database;
+        let stream = self
+            .database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .map(|id| id.map(CoinId::from))
             .filter(move |result| {
@@ -99,12 +102,25 @@ impl<'a> AssetsQuery<'a> {
                     } else {
                         return Err(anyhow::anyhow!("The coin is not UTXO").into());
                     };
-                    // TODO: Fetch coin in a separate thread
-                    let coin = self.database.coin(id)?;
-
-                    Ok(CoinType::Coin(coin))
+                    Ok(id)
                 })
+            });
+
+        futures::stream::StreamExt::chunks(stream, database.butch_size)
+            .map(|chunk| {
+                use itertools::Itertools;
+
+                let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                Ok::<_, StorageError>(chunk)
             })
+            .try_filter_map(move |chunk| async move {
+                let chunk = database
+                    .coins(chunk)
+                    .await
+                    .map(|result| result.map(CoinType::Coin));
+                Ok(Some(futures::stream::iter(chunk)))
+            })
+            .try_flatten()
             .filter(move |result| {
                 if let Ok(CoinType::Coin(coin)) = result {
                     has_asset(&assets, &coin.asset_id)
@@ -117,7 +133,8 @@ impl<'a> AssetsQuery<'a> {
     fn messages_iter(&self) -> impl Stream<Item = StorageResult<CoinType>> + 'a {
         let exclude = self.exclude;
         let database = self.database;
-        self.database
+        let stream = self
+            .database
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .map(|id| id.map(CoinId::from))
             .filter(move |result| {
@@ -138,11 +155,22 @@ impl<'a> AssetsQuery<'a> {
                     } else {
                         return Err(anyhow::anyhow!("The coin is not a message").into());
                     };
-                    // TODO: Fetch message in a separate thread
-                    let message = database.message(&id)?;
-                    Ok(message)
+                    Ok(id)
                 })
+            });
+
+        futures::stream::StreamExt::chunks(stream, database.butch_size)
+            .map(|chunk| {
+                use itertools::Itertools;
+
+                let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                Ok(chunk)
             })
+            .try_filter_map(move |chunk| async move {
+                let chunk = database.messages(chunk).await;
+                Ok::<_, StorageError>(Some(futures::stream::iter(chunk)))
+            })
+            .try_flatten()
             .filter(|result| {
                 if let Ok(message) = result {
                     message.data().is_empty()

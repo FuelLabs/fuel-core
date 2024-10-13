@@ -20,6 +20,7 @@ pub mod worker_service;
 #[derive(Clone, Debug)]
 pub struct ServiceConfig {
     pub addr: SocketAddr,
+    pub database_butch_size: usize,
     pub max_queries_depth: usize,
     pub max_queries_complexity: usize,
     pub max_queries_recursive_depth: usize,
