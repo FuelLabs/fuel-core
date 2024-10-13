@@ -157,22 +157,18 @@ impl TxQuery {
                             false
                         };
 
-                        async move { Ok(skip) }
+                        async move { Ok::<_, StorageError>(skip) }
                     })
                     .chunks(query_ref.batch_size)
-                    .filter_map(move |chunk: Vec<StorageResult<SortedTxCursor>>| {
+                    .map(|chunk| {
+                        use itertools::Itertools;
+
+                        let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                        Ok::<_, StorageError>(chunk)
+                    })
+                    .try_filter_map(move |chunk| {
                         let async_query = query_ref.clone();
                         async move {
-                            use itertools::Itertools;
-                            let result = chunk.into_iter().try_collect::<_, Vec<_>, _>();
-
-                            let chunk = match result {
-                                Ok(chunk) => chunk,
-                                Err(err) => {
-                                    return Some(Err(err));
-                                }
-                            };
-
                             let tx_ids = chunk
                                 .iter()
                                 .map(|sorted| sorted.tx_id.0)
@@ -185,7 +181,7 @@ impl TxQuery {
                                     })
                                 },
                             );
-                            Some(Ok(futures::stream::iter(txs)))
+                            Ok(Some(futures::stream::iter(txs)))
                         }
                     })
                     .try_flatten();
