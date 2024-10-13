@@ -106,7 +106,7 @@ impl ReadView {
             })
             .map_ok(|stream| stream.map(Ok))
             .try_flatten()
-            .chunks(self.butch_size)
+            .chunks(self.batch_size)
             .filter_map(|chunk| async move {
                 // Give a chance to other tasks to run.
                 tokio::task::yield_now().await;

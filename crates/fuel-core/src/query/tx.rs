@@ -41,7 +41,7 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<(TxPointer, Transaction)>> + '_ {
         self.owned_transactions_ids(owner, start, direction)
-            .chunks(self.butch_size)
+            .chunks(self.batch_size)
             .map(|chunk| {
                 use itertools::Itertools;
 

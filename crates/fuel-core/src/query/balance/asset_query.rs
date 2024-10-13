@@ -106,7 +106,7 @@ impl<'a> AssetsQuery<'a> {
                 })
             });
 
-        futures::stream::StreamExt::chunks(stream, database.butch_size)
+        futures::stream::StreamExt::chunks(stream, database.batch_size)
             .map(|chunk| {
                 use itertools::Itertools;
 
@@ -159,7 +159,7 @@ impl<'a> AssetsQuery<'a> {
                 })
             });
 
-        futures::stream::StreamExt::chunks(stream, database.butch_size)
+        futures::stream::StreamExt::chunks(stream, database.batch_size)
             .map(|chunk| {
                 use itertools::Itertools;
 

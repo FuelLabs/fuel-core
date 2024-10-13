@@ -488,7 +488,7 @@ impl Command {
         let config = Config {
             graphql_config: GraphQLConfig {
                 addr,
-                database_butch_size: graphql.database_butch_size,
+                database_batch_size: graphql.database_batch_size,
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,

@@ -222,7 +222,7 @@ where
 {
     let network_addr = config.config.addr;
     let combined_read_database = ReadDatabase::new(
-        config.config.database_butch_size,
+        config.config.database_batch_size,
         genesis_block_height,
         on_database,
         off_database,

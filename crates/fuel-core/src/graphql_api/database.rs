@@ -78,8 +78,8 @@ pub type OffChainView = Arc<dyn OffChainDatabase>;
 /// The container of the on-chain and off-chain database view provides.
 /// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
-    /// The size of the butch during fetching from the database.
-    butch_size: usize,
+    /// The size of the batch during fetching from the database.
+    batch_size: usize,
     /// The height of the genesis block.
     genesis_height: BlockHeight,
     /// The on-chain database view provider.
@@ -91,7 +91,7 @@ pub struct ReadDatabase {
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
     pub fn new<OnChain, OffChain>(
-        butch_size: usize,
+        batch_size: usize,
         genesis_height: BlockHeight,
         on_chain: OnChain,
         off_chain: OffChain,
@@ -103,7 +103,7 @@ impl ReadDatabase {
         OffChain::LatestView: OffChainDatabase,
     {
         Self {
-            butch_size,
+            batch_size,
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
@@ -116,7 +116,7 @@ impl ReadDatabase {
         //  It is not possible to implement until `view_at` is implemented for the `AtomicView`.
         //  https://github.com/FuelLabs/fuel-core/issues/1582
         Ok(ReadView {
-            butch_size: self.butch_size,
+            batch_size: self.batch_size,
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
@@ -131,7 +131,7 @@ impl ReadDatabase {
 
 #[derive(Clone)]
 pub struct ReadView {
-    pub(crate) butch_size: usize,
+    pub(crate) batch_size: usize,
     pub(crate) genesis_height: BlockHeight,
     pub(crate) on_chain: OnChainView,
     pub(crate) off_chain: OffChainView,
@@ -273,7 +273,7 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<Message>> + '_ {
         futures::stream::iter(self.on_chain.all_messages(start_message_id, direction))
-            .chunks(self.butch_size)
+            .chunks(self.batch_size)
             .filter_map(|chunk| async move {
                 // Give a chance to other tasks to run.
                 tokio::task::yield_now().await;
@@ -304,7 +304,7 @@ impl ReadView {
             start_asset,
             direction,
         ))
-        .chunks(self.butch_size)
+        .chunks(self.batch_size)
         .filter_map(|chunk| async move {
             // Give a chance to other tasks to run.
             tokio::task::yield_now().await;

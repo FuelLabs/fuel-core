@@ -98,7 +98,7 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<Message>> + 'a {
         self.owned_message_ids(owner, start_message_id, direction)
-            .chunks(self.butch_size)
+            .chunks(self.batch_size)
             .map(|chunk| {
                 let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
                 Ok(chunk)

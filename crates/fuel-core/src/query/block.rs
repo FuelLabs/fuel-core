@@ -27,7 +27,7 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<CompressedBlock>> + '_ {
         futures::stream::iter(self.blocks(height, direction))
-            .chunks(self.butch_size)
+            .chunks(self.batch_size)
             .filter_map(|chunk| async move {
                 // Give a chance to other tasks to run.
                 tokio::task::yield_now().await;

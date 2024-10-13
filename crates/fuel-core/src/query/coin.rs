@@ -49,7 +49,7 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<Coin>> + '_ {
         self.owned_coins_ids(owner, start_coin, direction)
-            .chunks(self.butch_size)
+            .chunks(self.batch_size)
             .map(|chunk| {
                 use itertools::Itertools;
 

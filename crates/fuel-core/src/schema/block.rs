@@ -140,7 +140,7 @@ impl Block {
         let tx_ids = futures::stream::iter(self.0.transactions().iter().copied());
 
         let result = tx_ids
-            .chunks(query.butch_size)
+            .chunks(query.batch_size)
             .filter_map(move |tx_ids: Vec<TxId>| {
                 let async_query = query.as_ref().clone();
                 async move {

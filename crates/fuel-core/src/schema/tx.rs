@@ -159,7 +159,7 @@ impl TxQuery {
 
                         async move { Ok(skip) }
                     })
-                    .chunks(query_ref.butch_size)
+                    .chunks(query_ref.batch_size)
                     .filter_map(move |chunk: Vec<StorageResult<SortedTxCursor>>| {
                         let async_query = query_ref.clone();
                         async move {
