@@ -21,6 +21,7 @@ pub struct ImporterMetrics {
     pub gas_per_block: Gauge,
     pub fee_per_block: Gauge,
     pub transactions_per_block: Gauge,
+    pub gas_price: Gauge,
 }
 
 impl Default for ImporterMetrics {
@@ -31,6 +32,7 @@ impl Default for ImporterMetrics {
         let gas_per_block = Gauge::default();
         let fee_per_block = Gauge::default();
         let transactions_per_block = Gauge::default();
+        let gas_price = Gauge::default();
 
         let mut registry = global_registry().registry.lock();
         registry.register(
@@ -69,6 +71,12 @@ impl Default for ImporterMetrics {
             transactions_per_block.clone(),
         );
 
+        registry.register(
+            "importer_gas_price_for_block",
+            "The gas prices used in a block",
+            transactions_per_block.clone(),
+        );
+
         Self {
             block_height: block_height_gauge,
             latest_block_import_timestamp: latest_block_import_ms,
@@ -76,6 +84,7 @@ impl Default for ImporterMetrics {
             gas_per_block,
             fee_per_block,
             transactions_per_block,
+            gas_price,
         }
     }
 }
