@@ -15,6 +15,7 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
+    graphql_api,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -232,6 +233,8 @@ where
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
 {
+    graphql_api::initialize_query_costs(config.config.costs.clone())?;
+
     let network_addr = config.config.addr;
     let combined_read_database = ReadDatabase::new(
         config.config.database_batch_size,
