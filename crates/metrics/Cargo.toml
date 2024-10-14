@@ -18,6 +18,8 @@ regex = "1"
 tracing = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+itertools = { workspace = true }
+once_cell = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

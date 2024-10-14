@@ -3516,6 +3516,8 @@ dependencies = [
 name = "fuel-core-metrics"
 version = "0.39.0"
 dependencies = [
+ "itertools 0.12.1",
+ "once_cell",
  "parking_lot",
  "pin-project-lite",
  "prometheus-client",

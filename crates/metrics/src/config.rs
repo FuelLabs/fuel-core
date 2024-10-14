@@ -1,10 +1,13 @@
+use itertools::Itertools;
+use once_cell::sync::Lazy;
 use strum::IntoEnumIterator;
 use strum_macros::{
+    Display,
     EnumIter,
     EnumString,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, EnumString, EnumIter)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, EnumString, EnumIter)]
 #[strum(serialize_all = "lowercase")]
 pub enum Module {
     Importer,
@@ -33,6 +36,18 @@ impl std::convert::From<&str> for Config {
                 .collect(),
         )
     }
+}
+
+pub static HELP_STRING: Lazy<String> = Lazy::new(|| {
+    let all_modules: Vec<_> = Module::iter().collect();
+    format!(
+        "Comma-separated list of modules or 'all' to disable all metrics. Available options: {}, all",
+        all_modules.iter().join(", ")
+    )
+});
+
+pub fn help_string() -> &'static str {
+    &HELP_STRING
 }
 
 #[cfg(test)]

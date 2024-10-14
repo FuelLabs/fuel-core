@@ -236,7 +236,7 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
-    #[arg(long = "disable-metrics", value_delimiter = ',', env)]
+    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
     pub metrics: fuel_core_metrics::config::Config,
 
     #[clap(long = "verify-max-da-lag", default_value = "10", env)]
