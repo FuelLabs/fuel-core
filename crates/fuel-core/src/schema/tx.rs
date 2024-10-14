@@ -89,7 +89,7 @@ pub struct TxQuery;
 
 #[Object]
 impl TxQuery {
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
     async fn transaction(
         &self,
         ctx: &Context<'_>,
@@ -111,7 +111,7 @@ impl TxQuery {
 
     // We assume that each block has 100 transactions.
     #[graphql(complexity = "{\
-        (query_costs().tx_get + child_complexity) \
+        (query_costs(|costs| costs.tx_get) + child_complexity) \
         * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize)
     }")]
     async fn transactions(
@@ -176,9 +176,9 @@ impl TxQuery {
     }
 
     #[graphql(complexity = "{\
-        query_costs().storage_iterator\
-        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        query_costs(|costs| costs.storage_iterator)\
+        + (query_costs(|costs| costs.storage_read) + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs(|costs| costs.storage_read) + last.unwrap_or_default() as usize) * child_complexity\
     }")]
     async fn transactions_by_owner(
         &self,
@@ -219,7 +219,9 @@ impl TxQuery {
     }
 
     /// Estimate the predicate gas for the provided transaction
-    #[graphql(complexity = "query_costs().estimate_predicates + child_complexity")]
+    #[graphql(
+        complexity = "query_costs(|costs| costs.estimate_predicates) + child_complexity"
+    )]
     async fn estimate_predicates(
         &self,
         ctx: &Context<'_>,
@@ -264,7 +266,7 @@ pub struct TxMutation;
 impl TxMutation {
     /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
     #[graphql(
-        complexity = "query_costs().dry_run * txs.len() + child_complexity * txs.len()"
+        complexity = "query_costs(|costs| costs.dry_run) * txs.len() + child_complexity * txs.len()"
     )]
     async fn dry_run(
         &self,
@@ -316,7 +318,7 @@ impl TxMutation {
     /// Submits transaction to the `TxPool`.
     ///
     /// Returns submitted transaction if the transaction is included in the `TxPool` without problems.
-    #[graphql(complexity = "query_costs().submit + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.submit) + child_complexity")]
     async fn submit(
         &self,
         ctx: &Context<'_>,
@@ -356,7 +358,7 @@ impl TxStatusSubscription {
     /// then the updates arrive. In such a case the stream will close without
     /// a status. If this occurs the stream can simply be restarted to return
     /// the latest status.
-    #[graphql(complexity = "query_costs().status_change + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.status_change) + child_complexity")]
     async fn status_change<'a>(
         &self,
         ctx: &'a Context<'a>,
@@ -376,7 +378,9 @@ impl TxStatusSubscription {
     }
 
     /// Submits transaction to the `TxPool` and await either confirmation or failure.
-    #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
+    #[graphql(
+        complexity = "query_costs(|costs| costs.submit_and_await) + child_complexity"
+    )]
     async fn submit_and_await<'a>(
         &self,
         ctx: &'a Context<'a>,
@@ -394,7 +398,9 @@ impl TxStatusSubscription {
     /// Submits the transaction to the `TxPool` and returns a stream of events.
     /// Compared to the `submitAndAwait`, the stream also contains `
     /// SubmittedStatus` as an intermediate state.
-    #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
+    #[graphql(
+        complexity = "query_costs(|costs| costs.submit_and_await) + child_complexity"
+    )]
     async fn submit_and_await_status<'a>(
         &self,
         ctx: &'a Context<'a>,

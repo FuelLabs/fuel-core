@@ -23,7 +23,7 @@ pub struct RelayedTransactionQuery {}
 
 #[Object]
 impl RelayedTransactionQuery {
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
     async fn relayed_transaction_status(
         &self,
         ctx: &Context<'_>,

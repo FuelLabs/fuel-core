@@ -64,7 +64,7 @@ pub struct MessageQuery {}
 
 #[Object]
 impl MessageQuery {
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
     async fn message(
         &self,
         ctx: &Context<'_>,
@@ -76,9 +76,9 @@ impl MessageQuery {
     }
 
     #[graphql(complexity = "{\
-        query_costs().storage_iterator\
-        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        query_costs(|costs| costs.storage_iterator)\
+        + (query_costs(|costs| costs.storage_read) + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs(|costs| costs.storage_read) + last.unwrap_or_default() as usize) * child_complexity\
     }")]
     async fn messages(
         &self,
@@ -122,7 +122,9 @@ impl MessageQuery {
     }
 
     // 256 * QUERY_COSTS.storage_read because the depth of the Merkle tree in the worst case is 256
-    #[graphql(complexity = "256 * query_costs().storage_read + child_complexity")]
+    #[graphql(
+        complexity = "256 * query_costs(|costs| costs.storage_read) + child_complexity"
+    )]
     async fn message_proof(
         &self,
         ctx: &Context<'_>,
@@ -153,7 +155,7 @@ impl MessageQuery {
         .map(MessageProof))
     }
 
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
     async fn message_status(
         &self,
         ctx: &Context<'_>,

@@ -42,7 +42,7 @@ impl NodeInfo {
         self.node_version.to_owned()
     }
 
-    #[graphql(complexity = "query_costs().get_peers + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.get_peers) + child_complexity")]
     async fn peers(&self, _ctx: &Context<'_>) -> async_graphql::Result<Vec<PeerInfo>> {
         #[cfg(feature = "p2p")]
         {
@@ -66,7 +66,7 @@ pub struct NodeQuery {}
 
 #[Object]
 impl NodeQuery {
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
     async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
