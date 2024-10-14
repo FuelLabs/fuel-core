@@ -12,6 +12,10 @@ pub struct GraphQLArgs {
     #[clap(long = "port", default_value = "4000", env)]
     pub port: u16,
 
+    /// The number of threads to use for the GraphQL service.
+    #[clap(long = "graphql-number-of-threads", default_value = "2", env)]
+    pub graphql_number_of_threads: usize,
+
     /// The max depth of GraphQL queries.
     #[clap(long = "graphql-max-depth", default_value = "16", env)]
     pub graphql_max_depth: usize,
