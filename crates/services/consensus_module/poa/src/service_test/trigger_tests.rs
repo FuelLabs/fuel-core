@@ -478,3 +478,32 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
     // similarly to how it works when time is lagging.
     assert_eq!(second_block_time, start_time + block_time.as_secs() * 2);
 }
+
+#[tokio::test]
+async fn interval_trigger_even_if_queued_tx_events() {
+    let block_time = Duration::from_secs(2);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    })
+    .await;
+    let block_creation_notifier = Arc::new(Notify::new());
+    tokio::task::spawn({
+        let notifier = ctx.new_txs_notifier.clone();
+        async move {
+            loop {
+                time::sleep(Duration::from_nanos(10)).await;
+                notifier.send_replace(());
+            }
+        }
+    });
+    let block_creation_waiter = block_creation_notifier.clone();
+    tokio::task::spawn(async move {
+        ctx.block_import.recv().await.unwrap();
+        dbg!("First block produced");
+        block_creation_notifier.notify_waiters();
+    });
+    block_creation_waiter.notified().await;
+}
