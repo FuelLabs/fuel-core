@@ -81,13 +81,11 @@ use libp2p::{
     PeerId,
 };
 use std::{
-    collections::HashMap,
     fmt::Debug,
     future::Future,
     ops::Range,
     sync::{
         Arc,
-        Mutex,
     },
 };
 use tokio::{
@@ -104,6 +102,7 @@ use tokio::{
         Instant,
     },
 };
+use dashmap::DashMap;
 use tracing::warn;
 
 const CHANNEL_SIZE: usize = 1024 * 10;
@@ -396,10 +395,7 @@ pub struct UninitializedTask<V, B, T> {
 
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
-pub struct Task<P, V, B, T>
-where
-    V: AtomicView,
-{
+pub struct Task<P, V, B, T> {
     chain_id: ChainId,
     response_timeout: Duration,
     p2p_service: P,
@@ -421,7 +417,7 @@ where
     next_check_time: Instant,
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
     // cached view
-    cached_view: Arc<Mutex<CachedView<V::LatestView>>>,
+    cached_view: Arc<CachedView>,
     // milliseconds wait time between cache reset
     cache_reset_interval: Duration,
     next_cache_reset_time: Instant,
@@ -500,31 +496,35 @@ impl<P: TaskP2PService, V: AtomicView, B: Broadcast, T> Task<P, V, B, T> {
     }
 }
 
-struct CachedView<V> {
-    inner: V,
-    sealed_block_headers: HashMap<Range<u32>, Vec<SealedBlockHeader>>,
-    transactions_on_blocks: HashMap<Range<u32>, Vec<Transactions>>,
+struct CachedView {
+    sealed_block_headers: DashMap<Range<u32>, Vec<SealedBlockHeader>>,
+    transactions_on_blocks: DashMap<Range<u32>, Vec<Transactions>>,
 }
 
-impl<V: P2pDb> CachedView<V> {
-    fn new(inner: V) -> Self {
+impl CachedView{
+    fn new() -> Self {
         Self {
-            inner,
-            sealed_block_headers: HashMap::new(),
-            transactions_on_blocks: HashMap::new(),
+            sealed_block_headers: DashMap::new(),
+            transactions_on_blocks: DashMap::new(),
         }
+    }
+
+    fn clear(&self) {
+        self.sealed_block_headers.clear();
+        self.transactions_on_blocks.clear();
     }
 }
 
-impl<V: P2pDb> CachedView<V> {
-    fn get_sealed_headers(
-        &mut self,
+impl CachedView {
+    fn get_sealed_headers<V>(
+        &self,
+        view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
+    ) -> StorageResult<Option<Vec<SealedBlockHeader>>> where V: P2pDb {
         if let Some(headers) = self.sealed_block_headers.get(&block_height_range) {
             Ok(Some(headers.clone()))
         } else {
-            let headers = self.inner.get_sealed_headers(block_height_range.clone())?;
+            let headers = view.get_sealed_headers(block_height_range.clone())?;
             if let Some(headers) = &headers {
                 self.sealed_block_headers
                     .insert(block_height_range, headers.clone());
@@ -533,14 +533,15 @@ impl<V: P2pDb> CachedView<V> {
         }
     }
 
-    fn get_transactions(
-        &mut self,
+    fn get_transactions<V>(
+        &self,
+        view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<Transactions>>> {
+    ) -> StorageResult<Option<Vec<Transactions>>> where V: P2pDb {
         if let Some(transactions) = self.transactions_on_blocks.get(&block_height_range) {
             Ok(Some(transactions.clone()))
         } else {
-            let transactions = self.inner.get_transactions(block_height_range.clone())?;
+            let transactions = view.get_transactions(block_height_range.clone())?;
             if let Some(transactions) = &transactions {
                 self.transactions_on_blocks
                     .insert(block_height_range, transactions.clone());
@@ -596,7 +597,7 @@ where
         max_len: usize,
     ) -> anyhow::Result<()>
     where
-        DbLookUpFn: Fn(&mut CachedView<V::LatestView>, Range<u32>) -> anyhow::Result<Option<R>>
+        DbLookUpFn: Fn(&V::LatestView, &Arc<CachedView>, Range<u32>) -> anyhow::Result<Option<R>>
             + Send
             + 'static,
         ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
@@ -624,17 +625,16 @@ where
             return Ok(());
         }
 
-        let view = self.cached_view.clone();
+        let view = self.view_provider.latest_view()?;
         let result = self.db_heavy_task_processor.try_spawn({
+            let cached_view = self.cached_view.clone();
             move || {
                 if instant.elapsed() > timeout {
                     tracing::warn!("Request timed out");
                     return;
                 }
 
-                let mut view = view.lock().expect("Cached view lock poisoned");
-
-                let response = db_lookup(&mut view, range.clone()).ok().flatten();
+                let response = db_lookup(&view, &cached_view, range.clone()).ok().flatten();
 
                 let _ = response_channel
                     .try_send(task_request(response, request_id))
@@ -660,7 +660,7 @@ where
             range,
             request_id,
             ResponseMessage::Transactions,
-            |view, range| view.get_transactions(range).map_err(anyhow::Error::from),
+            |view, cached_view, range| cached_view.get_transactions(view, range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
                 request_id,
@@ -678,7 +678,7 @@ where
             range,
             request_id,
             ResponseMessage::SealedHeaders,
-            |view, range| view.get_sealed_headers(range).map_err(anyhow::Error::from),
+            |view, cached_view, range| cached_view.get_sealed_headers(view, range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
                 request_id,
@@ -876,7 +876,7 @@ where
             heartbeat_max_time_since_last,
             next_check_time,
             heartbeat_peer_reputation_config,
-            cached_view: Arc::new(Mutex::new(CachedView::new(view))),
+            cached_view: Arc::new(CachedView::new()),
             cache_reset_interval,
             next_cache_reset_time,
         };
@@ -1028,10 +1028,7 @@ where
             }
             _ = tokio::time::sleep_until(self.next_cache_reset_time) => {
                 should_continue = true;
-                let mut view = self.cached_view.lock().map_err(|e| anyhow!("Failed to lock cached view: {:?}", e))?;
-                // we could just call .clear() on the internal hashmaps
-                let latest_view = self.view_provider.latest_view()?;
-                *view = CachedView::new(latest_view);
+                self.cached_view.clear();
                 self.next_cache_reset_time += self.cache_reset_interval;
             }
         }
@@ -1664,7 +1661,7 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
-            cached_view: Arc::new(Mutex::new(CachedView::new(FakeDB))),
+            cached_view: Arc::new(CachedView::new()),
             cache_reset_interval: Duration::from_secs(0),
             next_cache_reset_time: Instant::now(),
         };
@@ -1757,7 +1754,7 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
-            cached_view: Arc::new(Mutex::new(CachedView::new(FakeDB))),
+            cached_view: Arc::new(CachedView::new()),
             cache_reset_interval: Duration::from_secs(0),
             next_cache_reset_time: Instant::now(),
         };
@@ -1822,7 +1819,7 @@ pub mod tests {
             heartbeat_max_time_since_last: Default::default(),
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: Default::default(),
-            cached_view: Arc::new(Mutex::new(CachedView::new(FakeDB))),
+            cached_view: Arc::new(CachedView::new()),
             cache_reset_interval: Duration::from_secs(0),
             next_cache_reset_time: Instant::now(),
         };
