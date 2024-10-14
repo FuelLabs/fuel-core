@@ -19,7 +19,7 @@ use fuel_core_types::{
         Word,
     },
 };
-use itertools::Itertools;
+use futures::TryStreamExt;
 use rand::prelude::*;
 use std::{
     cmp::Reverse,
@@ -119,8 +119,13 @@ impl SpendQuery {
 /// Returns the biggest inputs of the `owner` to satisfy the required `target` of the asset. The
 /// number of inputs for each asset can't exceed `max_inputs`, otherwise throw an error that query
 /// can't be satisfied.
-pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryError> {
-    let mut inputs: Vec<_> = query.coins().try_collect()?;
+pub async fn largest_first(
+    query: AssetQuery<'_>,
+) -> Result<Vec<CoinType>, CoinsQueryError> {
+    let target = query.asset.target;
+    let max = query.asset.max;
+    let asset_id = query.asset.id;
+    let mut inputs: Vec<CoinType> = query.coins().try_collect().await?;
     inputs.sort_by_key(|coin| Reverse(coin.amount()));
 
     let mut collected_amount = 0u64;
@@ -128,12 +133,12 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
 
     for coin in inputs {
         // Break if we don't need any more coins
-        if collected_amount >= query.asset.target {
+        if collected_amount >= target {
             break
         }
 
         // Error if we can't fit more coins
-        if coins.len() >= query.asset.max {
+        if coins.len() >= max as usize {
             return Err(CoinsQueryError::MaxCoinsReached)
         }
 
@@ -142,9 +147,9 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
         coins.push(coin);
     }
 
-    if collected_amount < query.asset.target {
+    if collected_amount < target {
         return Err(CoinsQueryError::InsufficientCoins {
-            asset_id: query.asset.id,
+            asset_id,
             collected_amount,
         })
     }
@@ -153,23 +158,32 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
 }
 
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
-pub fn random_improve(
+// TODO: Reimplement this algorithm to be simpler and faster:
+//  Instead of selecting random coins first, we can sort them.
+//  After that, we can split the coins into the part that covers the
+//  target and the part that does not(by choosing the most expensive coins).
+//  When the target is satisfied, we can select random coins from the remaining
+//  coins not used in the target.
+//  https://github.com/FuelLabs/fuel-core/issues/1965
+pub async fn random_improve(
     db: &ReadView,
     spend_query: &SpendQuery,
 ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut coins_per_asset = vec![];
 
     for query in spend_query.asset_queries(db) {
-        let mut inputs: Vec<_> = query.coins().try_collect()?;
+        let target = query.asset.target;
+        let max = query.asset.max;
+
+        let mut inputs: Vec<_> = query.clone().coins().try_collect().await?;
         inputs.shuffle(&mut thread_rng());
-        inputs.truncate(query.asset.max);
+        inputs.truncate(max as usize);
 
         let mut collected_amount = 0;
         let mut coins = vec![];
 
         // Set parameters according to spec
-        let target = query.asset.target;
-        let upper_target = query.asset.target.saturating_mul(2);
+        let upper_target = target.saturating_mul(2);
 
         for coin in inputs {
             // Try to improve the result by adding dust to the result.
@@ -197,8 +211,8 @@ pub fn random_improve(
         }
 
         // Fallback to largest_first if we can't fit more coins
-        if collected_amount < query.asset.target {
-            swap(&mut coins, &mut largest_first(&query)?);
+        if collected_amount < target {
+            swap(&mut coins, &mut largest_first(query).await?);
         }
 
         coins_per_asset.push(coins);
@@ -266,6 +280,10 @@ mod tests {
         fuel_asm::Word,
         fuel_tx::*,
     };
+    use futures::{
+        StreamExt,
+        TryStreamExt,
+    };
     use itertools::Itertools;
     use rand::{
         rngs::StdRng,
@@ -324,34 +342,36 @@ mod tests {
     mod largest_first {
         use super::*;
 
-        fn query(
+        async fn query(
             spend_query: &[AssetSpendTarget],
             owner: &Address,
             base_asset_id: &AssetId,
             db: &ServiceDatabase,
         ) -> Result<Vec<Vec<(AssetId, Word)>>, CoinsQueryError> {
-            let result: Vec<_> = spend_query
-                .iter()
-                .map(|asset| {
-                    largest_first(&AssetQuery::new(
-                        owner,
-                        asset,
-                        base_asset_id,
-                        None,
-                        &db.test_view(),
-                    ))
-                    .map(|coins| {
-                        coins
-                            .iter()
-                            .map(|coin| (*coin.asset_id(base_asset_id), coin.amount()))
-                            .collect()
-                    })
-                })
-                .try_collect()?;
-            Ok(result)
+            let mut results = vec![];
+
+            for asset in spend_query {
+                let coins = largest_first(AssetQuery::new(
+                    owner,
+                    asset,
+                    base_asset_id,
+                    None,
+                    &db.test_view(),
+                ))
+                .await
+                .map(|coins| {
+                    coins
+                        .iter()
+                        .map(|coin| (*coin.asset_id(base_asset_id), coin.amount()))
+                        .collect()
+                })?;
+                results.push(coins);
+            }
+
+            Ok(results)
         }
 
-        fn single_asset_assert(
+        async fn single_asset_assert(
             owner: Address,
             asset_ids: &[AssetId],
             base_asset_id: &AssetId,
@@ -362,11 +382,12 @@ mod tests {
             // Query some targets, including higher than the owner's balance
             for target in 0..20 {
                 let coins = query(
-                    &[AssetSpendTarget::new(asset_id, target, usize::MAX)],
+                    &[AssetSpendTarget::new(asset_id, target, u16::MAX)],
                     &owner,
                     base_asset_id,
                     &db.service_database(),
-                );
+                )
+                .await;
 
                 // Transform result for convenience
                 let coins = coins.map(|coins| {
@@ -425,32 +446,33 @@ mod tests {
                 &owner,
                 base_asset_id,
                 &db.service_database(),
-            );
+            )
+            .await;
             assert_matches!(coins, Err(CoinsQueryError::MaxCoinsReached));
         }
 
-        #[test]
-        fn single_asset_coins() {
+        #[tokio::test]
+        async fn single_asset_coins() {
             // Setup for coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
-            single_asset_assert(owner, &asset_ids, &base_asset_id, db);
+            single_asset_assert(owner, &asset_ids, &base_asset_id, db).await;
         }
 
-        #[test]
-        fn single_asset_messages() {
+        #[tokio::test]
+        async fn single_asset_messages() {
             // Setup for messages
             let (owner, base_asset_id, db) = setup_messages();
-            single_asset_assert(owner, &[base_asset_id], &base_asset_id, db);
+            single_asset_assert(owner, &[base_asset_id], &base_asset_id, db).await;
         }
 
-        #[test]
-        fn single_asset_coins_and_messages() {
+        #[tokio::test]
+        async fn single_asset_coins_and_messages() {
             // Setup for coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
-            single_asset_assert(owner, &asset_ids, &base_asset_id, db);
+            single_asset_assert(owner, &asset_ids, &base_asset_id, db).await;
         }
 
-        fn multiple_assets_helper(
+        async fn multiple_assets_helper(
             owner: Address,
             asset_ids: &[AssetId],
             base_asset_id: &AssetId,
@@ -458,13 +480,14 @@ mod tests {
         ) {
             let coins = query(
                 &[
-                    AssetSpendTarget::new(asset_ids[0], 3, usize::MAX),
-                    AssetSpendTarget::new(asset_ids[1], 6, usize::MAX),
+                    AssetSpendTarget::new(asset_ids[0], 3, u16::MAX),
+                    AssetSpendTarget::new(asset_ids[1], 6, u16::MAX),
                 ],
                 &owner,
                 base_asset_id,
                 &db.service_database(),
-            );
+            )
+            .await;
             let expected = vec![
                 vec![(asset_ids[0], 5)],
                 vec![(asset_ids[1], 5), (asset_ids[1], 4)],
@@ -472,25 +495,25 @@ mod tests {
             assert_matches!(coins, Ok(coins) if coins == expected);
         }
 
-        #[test]
-        fn multiple_assets_coins() {
+        #[tokio::test]
+        async fn multiple_assets_coins() {
             // Setup coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
-            multiple_assets_helper(owner, &asset_ids, &base_asset_id, db);
+            multiple_assets_helper(owner, &asset_ids, &base_asset_id, db).await;
         }
 
-        #[test]
-        fn multiple_assets_coins_and_messages() {
+        #[tokio::test]
+        async fn multiple_assets_coins_and_messages() {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
-            multiple_assets_helper(owner, &asset_ids, &base_asset_id, db);
+            multiple_assets_helper(owner, &asset_ids, &base_asset_id, db).await;
         }
     }
 
     mod random_improve {
         use super::*;
 
-        fn query(
+        async fn query(
             query_per_asset: Vec<AssetSpendTarget>,
             owner: Address,
             asset_ids: &[AssetId],
@@ -500,7 +523,8 @@ mod tests {
             let coins = random_improve(
                 &db.test_view(),
                 &SpendQuery::new(owner, &query_per_asset, None, base_asset_id)?,
-            );
+            )
+            .await;
 
             // Transform result for convenience
             coins.map(|coins| {
@@ -521,7 +545,7 @@ mod tests {
             })
         }
 
-        fn single_asset_assert(
+        async fn single_asset_assert(
             owner: Address,
             asset_ids: &[AssetId],
             base_asset_id: AssetId,
@@ -532,12 +556,13 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![AssetSpendTarget::new(asset_id, amount, usize::MAX)],
+                    vec![AssetSpendTarget::new(asset_id, amount, u16::MAX)],
                     owner,
                     asset_ids,
                     base_asset_id,
                     &db.service_database(),
-                );
+                )
+                .await;
 
                 // Transform result for convenience
                 let coins = coins.map(|coins| {
@@ -589,32 +614,33 @@ mod tests {
                 asset_ids,
                 base_asset_id,
                 &db.service_database(),
-            );
+            )
+            .await;
             assert_matches!(coins, Err(CoinsQueryError::MaxCoinsReached));
         }
 
-        #[test]
-        fn single_asset_coins() {
+        #[tokio::test]
+        async fn single_asset_coins() {
             // Setup for coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
-            single_asset_assert(owner, &asset_ids, base_asset_id, db);
+            single_asset_assert(owner, &asset_ids, base_asset_id, db).await;
         }
 
-        #[test]
-        fn single_asset_messages() {
+        #[tokio::test]
+        async fn single_asset_messages() {
             // Setup for messages
             let (owner, base_asset_id, db) = setup_messages();
-            single_asset_assert(owner, &[base_asset_id], base_asset_id, db);
+            single_asset_assert(owner, &[base_asset_id], base_asset_id, db).await;
         }
 
-        #[test]
-        fn single_asset_coins_and_messages() {
+        #[tokio::test]
+        async fn single_asset_coins_and_messages() {
             // Setup for coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
-            single_asset_assert(owner, &asset_ids, base_asset_id, db);
+            single_asset_assert(owner, &asset_ids, base_asset_id, db).await;
         }
 
-        fn multiple_assets_assert(
+        async fn multiple_assets_assert(
             owner: Address,
             asset_ids: &[AssetId],
             base_asset_id: AssetId,
@@ -638,7 +664,8 @@ mod tests {
                 asset_ids,
                 base_asset_id,
                 &db.service_database(),
-            );
+            )
+            .await;
             assert_matches!(coins, Ok(ref coins) if coins.len() <= 6);
             let coins = coins.unwrap();
             assert!(
@@ -659,18 +686,18 @@ mod tests {
             );
         }
 
-        #[test]
-        fn multiple_assets_coins() {
+        #[tokio::test]
+        async fn multiple_assets_coins() {
             // Setup coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
-            multiple_assets_assert(owner, &asset_ids, base_asset_id, db);
+            multiple_assets_assert(owner, &asset_ids, base_asset_id, db).await;
         }
 
-        #[test]
-        fn multiple_assets_coins_and_messages() {
+        #[tokio::test]
+        async fn multiple_assets_coins_and_messages() {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
-            multiple_assets_assert(owner, &asset_ids, base_asset_id, db);
+            multiple_assets_assert(owner, &asset_ids, base_asset_id, db).await;
         }
     }
 
@@ -678,7 +705,41 @@ mod tests {
         use super::*;
         use fuel_core_types::entities::coins::CoinId;
 
-        fn exclusion_assert(
+        async fn query(
+            db: &ServiceDatabase,
+            owner: Address,
+            base_asset_id: AssetId,
+            asset_ids: &[AssetId],
+            query_per_asset: Vec<AssetSpendTarget>,
+            excluded_ids: Vec<CoinId>,
+        ) -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
+            let spend_query = SpendQuery::new(
+                owner,
+                &query_per_asset,
+                Some(excluded_ids),
+                base_asset_id,
+            )?;
+            let coins = random_improve(&db.test_view(), &spend_query).await;
+
+            // Transform result for convenience
+            coins.map(|coins| {
+                coins
+                    .into_iter()
+                    .flat_map(|coin| {
+                        coin.into_iter()
+                            .map(|coin| (*coin.asset_id(&base_asset_id), coin.amount()))
+                            .sorted_by_key(|(asset_id, amount)| {
+                                (
+                                    asset_ids.iter().position(|c| c == asset_id).unwrap(),
+                                    Reverse(*amount),
+                                )
+                            })
+                    })
+                    .collect()
+            })
+        }
+
+        async fn exclusion_assert(
             owner: Address,
             asset_ids: &[AssetId],
             base_asset_id: AssetId,
@@ -687,47 +748,17 @@ mod tests {
         ) {
             let asset_id = asset_ids[0];
 
-            let query = |query_per_asset: Vec<AssetSpendTarget>,
-                         excluded_ids: Vec<CoinId>|
-             -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
-                let spend_query = SpendQuery::new(
-                    owner,
-                    &query_per_asset,
-                    Some(excluded_ids),
-                    base_asset_id,
-                )?;
-                let coins =
-                    random_improve(&db.service_database().test_view(), &spend_query);
-
-                // Transform result for convenience
-                coins.map(|coins| {
-                    coins
-                        .into_iter()
-                        .flat_map(|coin| {
-                            coin.into_iter()
-                                .map(|coin| {
-                                    (*coin.asset_id(&base_asset_id), coin.amount())
-                                })
-                                .sorted_by_key(|(asset_id, amount)| {
-                                    (
-                                        asset_ids
-                                            .iter()
-                                            .position(|c| c == asset_id)
-                                            .unwrap(),
-                                        Reverse(*amount),
-                                    )
-                                })
-                        })
-                        .collect()
-                })
-            };
-
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![AssetSpendTarget::new(asset_id, amount, usize::MAX)],
+                    &db.service_database(),
+                    owner,
+                    base_asset_id,
+                    asset_ids,
+                    vec![AssetSpendTarget::new(asset_id, amount, u16::MAX)],
                     excluded_ids.clone(),
-                );
+                )
+                .await;
 
                 // Transform result for convenience
                 let coins = coins.map(|coins| {
@@ -769,52 +800,56 @@ mod tests {
             }
         }
 
-        #[test]
-        fn exclusion_coins() {
+        #[tokio::test]
+        async fn exclusion_coins() {
             // Setup coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
 
             // Exclude largest coin IDs
             let excluded_ids = db
                 .owned_coins(&owner)
+                .await
                 .into_iter()
                 .filter(|coin| coin.amount == 5)
                 .map(|coin| CoinId::Utxo(coin.utxo_id))
                 .collect_vec();
 
-            exclusion_assert(owner, &asset_ids, base_asset_id, db, excluded_ids);
+            exclusion_assert(owner, &asset_ids, base_asset_id, db, excluded_ids).await;
         }
 
-        #[test]
-        fn exclusion_messages() {
+        #[tokio::test]
+        async fn exclusion_messages() {
             // Setup messages
             let (owner, base_asset_id, db) = setup_messages();
 
             // Exclude largest messages IDs
             let excluded_ids = db
                 .owned_messages(&owner)
+                .await
                 .into_iter()
                 .filter(|message| message.amount() == 5)
                 .map(|message| CoinId::Message(*message.id()))
                 .collect_vec();
 
-            exclusion_assert(owner, &[base_asset_id], base_asset_id, db, excluded_ids);
+            exclusion_assert(owner, &[base_asset_id], base_asset_id, db, excluded_ids)
+                .await;
         }
 
-        #[test]
-        fn exclusion_coins_and_messages() {
+        #[tokio::test]
+        async fn exclusion_coins_and_messages() {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
 
             // Exclude largest messages IDs, because coins only 1 and 2
             let excluded_ids = db
                 .owned_messages(&owner)
+                .await
                 .into_iter()
                 .filter(|message| message.amount() == 5)
                 .map(|message| CoinId::Message(*message.id()))
                 .collect_vec();
 
-            exclusion_assert(owner, &asset_ids, base_asset_id, db, excluded_ids);
+            exclusion_assert(owner, &asset_ids, base_asset_id, db, excluded_ids).await;
         }
     }
 
@@ -822,7 +857,7 @@ mod tests {
     struct TestCase {
         db_amount: Vec<Word>,
         target_amount: u64,
-        max_coins: usize,
+        max_coins: u16,
     }
 
     pub enum CoinType {
@@ -830,7 +865,7 @@ mod tests {
         Message,
     }
 
-    fn test_case_run(
+    async fn test_case_run(
         case: TestCase,
         coin_type: CoinType,
         base_asset_id: AssetId,
@@ -866,23 +901,26 @@ mod tests {
                 None,
                 base_asset_id,
             )?,
-        )?;
+        )
+        .await?;
 
         assert_eq!(coins.len(), 1);
         Ok(coins[0].len())
     }
 
-    #[test]
-    fn insufficient_coins_returns_error() {
+    #[tokio::test]
+    async fn insufficient_coins_returns_error() {
         let test_case = TestCase {
             db_amount: vec![0],
             target_amount: u64::MAX,
-            max_coins: usize::MAX,
+            max_coins: u16::MAX,
         };
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
         let base_asset_id = rng.gen();
-        let coin_result = test_case_run(test_case.clone(), CoinType::Coin, base_asset_id);
-        let message_result = test_case_run(test_case, CoinType::Message, base_asset_id);
+        let coin_result =
+            test_case_run(test_case.clone(), CoinType::Coin, base_asset_id).await;
+        let message_result =
+            test_case_run(test_case, CoinType::Message, base_asset_id).await;
         assert_eq!(coin_result, message_result);
         assert_matches!(
             coin_result,
@@ -897,7 +935,7 @@ mod tests {
         TestCase {
             db_amount: vec![u64::MAX, u64::MAX],
             target_amount: u64::MAX,
-            max_coins: usize::MAX,
+            max_coins: u16::MAX,
         }
         => Ok(1)
         ; "Enough coins in the DB to reach target(u64::MAX) by 1 coin"
@@ -920,11 +958,13 @@ mod tests {
         => Err(CoinsQueryError::MaxCoinsReached)
         ; "Enough coins in the DB to reach target(u64::MAX) but limit is zero"
     )]
-    fn corner_cases(case: TestCase) -> Result<usize, CoinsQueryError> {
+    #[tokio::test]
+    async fn corner_cases(case: TestCase) -> Result<usize, CoinsQueryError> {
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
         let base_asset_id = rng.gen();
-        let coin_result = test_case_run(case.clone(), CoinType::Coin, base_asset_id);
-        let message_result = test_case_run(case, CoinType::Message, base_asset_id);
+        let coin_result =
+            test_case_run(case.clone(), CoinType::Coin, base_asset_id).await;
+        let message_result = test_case_run(case, CoinType::Message, base_asset_id).await;
         assert_eq!(coin_result, message_result);
         coin_result
     }
@@ -1001,23 +1041,25 @@ mod tests {
             message
         }
 
-        pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
+        pub async fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
             let query = self.service_database();
             let query = query.test_view();
             query
                 .owned_coins_ids(owner, None, IterDirection::Forward)
                 .map(|res| res.map(|id| query.coin(id).unwrap()))
                 .try_collect()
+                .await
                 .unwrap()
         }
 
-        pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
+        pub async fn owned_messages(&self, owner: &Address) -> Vec<Message> {
             let query = self.service_database();
             let query = query.test_view();
             query
                 .owned_message_ids(owner, None, IterDirection::Forward)
                 .map(|res| res.map(|id| query.message(&id).unwrap()))
                 .try_collect()
+                .await
                 .unwrap()
         }
     }
