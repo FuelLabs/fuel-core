@@ -61,7 +61,6 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
-use futures::Stream;
 use std::{
     borrow::Cow,
     sync::Arc,
@@ -250,8 +249,8 @@ impl ReadView {
         &self,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<Message>> + '_ {
-        futures::stream::iter(self.on_chain.all_messages(start_message_id, direction))
+    ) -> BoxedIter<'_, StorageResult<Message>> {
+        self.on_chain.all_messages(start_message_id, direction)
     }
 
     pub fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
@@ -270,12 +269,9 @@ impl ReadView {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<ContractBalance>> + '_ {
-        futures::stream::iter(self.on_chain.contract_balances(
-            contract,
-            start_asset,
-            direction,
-        ))
+    ) -> BoxedIter<StorageResult<ContractBalance>> {
+        self.on_chain
+            .contract_balances(contract, start_asset, direction)
     }
 
     pub fn da_height(&self) -> StorageResult<DaBlockHeight> {
@@ -310,23 +306,18 @@ impl ReadView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<UtxoId>> + '_ {
-        let iter = self.off_chain.owned_coins_ids(owner, start_coin, direction);
-
-        futures::stream::iter(iter)
+    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
+        self.off_chain.owned_coins_ids(owner, start_coin, direction)
     }
 
-    pub fn owned_message_ids<'a>(
-        &'a self,
-        owner: &'a Address,
+    pub fn owned_message_ids(
+        &self,
+        owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<Nonce>> + 'a {
-        futures::stream::iter(self.off_chain.owned_message_ids(
-            owner,
-            start_message_id,
-            direction,
-        ))
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+        self.off_chain
+            .owned_message_ids(owner, start_message_id, direction)
     }
 
     pub fn owned_transactions_ids(
@@ -334,11 +325,9 @@ impl ReadView {
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<(TxPointer, TxId)>> + '_ {
-        futures::stream::iter(
-            self.off_chain
-                .owned_transactions_ids(owner, start, direction),
-        )
+    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
+        self.off_chain
+            .owned_transactions_ids(owner, start, direction)
     }
 
     pub fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {

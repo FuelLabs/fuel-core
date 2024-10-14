@@ -29,7 +29,7 @@ pub mod changes_iterator;
 // TODO: BoxedIter to be used until RPITIT lands in stable rust.
 /// A boxed variant of the iterator that can be used as a return type of the traits.
 pub struct BoxedIter<'a, T> {
-    iter: Box<dyn Iterator<Item = T> + 'a + Send>,
+    iter: Box<dyn Iterator<Item = T> + 'a>,
 }
 
 impl<'a, T> Iterator for BoxedIter<'a, T> {
@@ -48,7 +48,7 @@ pub trait IntoBoxedIter<'a, T> {
 
 impl<'a, T, I> IntoBoxedIter<'a, T> for I
 where
-    I: Iterator<Item = T> + 'a + Send,
+    I: Iterator<Item = T> + 'a,
 {
     fn into_boxed(self) -> BoxedIter<'a, T> {
         BoxedIter {
@@ -346,10 +346,7 @@ pub fn iterator<'a, V>(
     prefix: Option<&[u8]>,
     start: Option<&[u8]>,
     direction: IterDirection,
-) -> impl Iterator<Item = (&'a ReferenceBytesKey, &'a V)> + 'a
-where
-    V: Send + Sync,
-{
+) -> impl Iterator<Item = (&'a ReferenceBytesKey, &'a V)> + 'a {
     match (prefix, start) {
         (None, None) => {
             if direction == IterDirection::Forward {
@@ -404,10 +401,7 @@ pub fn keys_iterator<'a, V>(
     prefix: Option<&[u8]>,
     start: Option<&[u8]>,
     direction: IterDirection,
-) -> impl Iterator<Item = &'a ReferenceBytesKey> + 'a
-where
-    V: Send + Sync,
-{
+) -> impl Iterator<Item = &'a ReferenceBytesKey> + 'a {
     match (prefix, start) {
         (None, None) => {
             if direction == IterDirection::Forward {

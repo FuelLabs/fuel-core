@@ -18,9 +18,9 @@ pub struct RocksDBKeyIterator<'a, D: DBAccess, R> {
     _marker: core::marker::PhantomData<R>,
 }
 
-pub trait ExtractItem: Send + Sync + 'static {
+pub trait ExtractItem: 'static {
     /// The item type returned by the iterator.
-    type Item: Send + Sync;
+    type Item;
 
     /// Extracts the item from the raw iterator.
     fn extract_item<D>(

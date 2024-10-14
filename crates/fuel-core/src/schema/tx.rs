@@ -67,6 +67,7 @@ use futures::{
     Stream,
     TryStreamExt,
 };
+use itertools::Itertools;
 use std::{
     borrow::Cow,
     iter,
@@ -132,40 +133,41 @@ impl TxQuery {
             |start: &Option<SortedTxCursor>, direction| {
                 let start = *start;
                 let block_id = start.map(|sorted| sorted.block_height);
-                let compressed_blocks = query.compressed_blocks(block_id, direction);
+                let all_block_ids = query.compressed_blocks(block_id, direction);
 
-                let all_txs = compressed_blocks
-                    .map_ok(move |fuel_block| {
-                        let (header, mut txs) = fuel_block.into_inner();
+                let all_txs = all_block_ids
+                    .map(move |block| {
+                        block.map(|fuel_block| {
+                            let (header, mut txs) = fuel_block.into_inner();
 
-                        if direction == IterDirection::Reverse {
-                            txs.reverse();
-                        }
+                            if direction == IterDirection::Reverse {
+                                txs.reverse();
+                            }
 
-                        let iter = txs.into_iter().zip(iter::repeat(*header.height()));
-                        futures::stream::iter(iter).map(Ok)
-                    })
-                    .try_flatten()
-                    .map_ok(|(tx_id, block_height)| {
-                        SortedTxCursor::new(block_height, tx_id.into())
-                    })
-                    .try_skip_while(move |sorted| {
-                        let skip = if let Some(start) = start {
-                            sorted != &start
-                        } else {
-                            false
-                        };
-
-                        async move { Ok(skip) }
-                    })
-                    .map(|result: StorageResult<SortedTxCursor>| {
-                        result.and_then(|sorted| {
-                            // TODO: Request transactions in a separate thread
-                            let tx = query.transaction(&sorted.tx_id.0)?;
-
-                            Ok((sorted, Transaction::from_tx(sorted.tx_id.0, tx)))
+                            txs.into_iter().zip(iter::repeat(*header.height()))
                         })
+                    })
+                    .flatten_ok()
+                    .map(|result| {
+                        result.map(|(tx_id, block_height)| {
+                            SortedTxCursor::new(block_height, tx_id.into())
+                        })
+                    })
+                    .skip_while(move |result| {
+                        if let Ok(sorted) = result {
+                            if let Some(start) = start {
+                                return sorted != &start
+                            }
+                        }
+                        false
                     });
+                let all_txs = all_txs.map(|result: StorageResult<SortedTxCursor>| {
+                    result.and_then(|sorted| {
+                        let tx = query.transaction(&sorted.tx_id.0)?;
+
+                        Ok((sorted, Transaction::from_tx(sorted.tx_id.0, tx)))
+                    })
+                });
 
                 Ok(all_txs)
             },

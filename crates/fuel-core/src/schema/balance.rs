@@ -23,7 +23,6 @@ use async_graphql::{
     Object,
 };
 use fuel_core_types::services::graphql_api;
-use futures::StreamExt;
 
 pub struct Balance(graphql_api::AddressBalance);
 
@@ -65,10 +64,7 @@ impl BalanceQuery {
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params()
             .base_asset_id();
-        let balance = query
-            .balance(owner.0, asset_id.0, base_asset_id)
-            .await?
-            .into();
+        let balance = query.balance(owner.0, asset_id.0, base_asset_id)?.into();
         Ok(balance)
     }
 
@@ -89,14 +85,14 @@ impl BalanceQuery {
             return Err(anyhow!("pagination is not yet supported").into())
         }
         let query = ctx.read_view()?;
-        let base_asset_id = *ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params()
-            .base_asset_id();
-        let owner = filter.owner.into();
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
+            let owner = filter.owner.into();
+            let base_asset_id = *ctx
+                .data_unchecked::<ConsensusProvider>()
+                .latest_consensus_params()
+                .base_asset_id();
             Ok(query
-                .balances(&owner, direction, &base_asset_id)
+                .balances(owner, direction, base_asset_id)
                 .map(|result| {
                     result.map(|balance| (balance.asset_id.into(), balance.into()))
                 }))

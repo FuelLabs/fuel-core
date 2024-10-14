@@ -23,12 +23,8 @@ use fuel_core_storage::{
     iter::IterDirection,
     Result as StorageResult,
 };
-use futures::{
-    Stream,
-    TryStreamExt,
-};
+use itertools::Itertools;
 use std::borrow::Cow;
-use tokio_stream::StreamExt;
 
 pub mod balance;
 pub mod blob;
@@ -103,7 +99,7 @@ where
     //  It means also returning `has_previous_page` and `has_next_page` values.
     // entries(start_key: Option<DBKey>)
     F: FnOnce(&Option<SchemaKey>, IterDirection) -> StorageResult<Entries>,
-    Entries: Stream<Item = StorageResult<(SchemaKey, SchemaValue)>>,
+    Entries: Iterator<Item = StorageResult<(SchemaKey, SchemaValue)>>,
     SchemaKey: Eq,
 {
     match (after.as_ref(), before.as_ref(), first, last) {
@@ -196,7 +192,7 @@ where
                 }
             });
 
-            let entries: Vec<_> = entries.try_collect().await?;
+            let entries: Vec<_> = entries.try_collect()?;
             let entries = entries.into_iter();
 
             let mut connection = Connection::new(has_previous_page, has_next_page);

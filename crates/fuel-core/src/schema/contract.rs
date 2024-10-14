@@ -31,7 +31,6 @@ use fuel_core_types::{
     fuel_types,
     services::graphql_api,
 };
-use futures::StreamExt;
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
@@ -169,7 +168,7 @@ impl ContractBalanceQuery {
                     (*start).map(Into::into),
                     direction,
                 )
-                .map(|balance| {
+                .map(move |balance| {
                     let balance = balance?;
                     let asset_id = balance.asset_id;
 

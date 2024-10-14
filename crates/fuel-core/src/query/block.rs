@@ -1,13 +1,15 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        BoxedIter,
+        IterDirection,
+    },
     Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
     fuel_types::BlockHeight,
 };
-use futures::Stream;
 
 impl ReadView {
     pub fn latest_block_height(&self) -> StorageResult<BlockHeight> {
@@ -22,7 +24,7 @@ impl ReadView {
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<CompressedBlock>> + '_ {
-        futures::stream::iter(self.blocks(height, direction))
+    ) -> BoxedIter<StorageResult<CompressedBlock>> {
+        self.blocks(height, direction)
     }
 }
