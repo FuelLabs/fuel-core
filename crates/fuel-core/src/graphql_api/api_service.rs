@@ -15,6 +15,7 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
+    graphql_api,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -132,7 +133,11 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        let _ = self.processor.try_spawn(fut);
+        let result = self.processor.try_spawn(fut);
+
+        if let Err(err) = result {
+            tracing::error!("Failed to spawn a task for GraphQL: {:?}", err);
+        }
     }
 }
 
@@ -228,6 +233,8 @@ where
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
 {
+    graphql_api::initialize_query_costs(config.config.costs.clone())?;
+
     let network_addr = config.config.addr;
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
