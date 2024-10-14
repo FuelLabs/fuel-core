@@ -1,3 +1,4 @@
+use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -13,27 +14,14 @@ use fuel_core_types::{
     fuel_vm::UploadedBytecode,
 };
 
-use crate::graphql_api::ports::OnChainDatabase;
-
-pub trait UpgradeQueryData: Send + Sync {
-    fn state_transition_bytecode_root(
-        &self,
-        version: StateTransitionBytecodeVersion,
-    ) -> StorageResult<Bytes32>;
-
-    fn state_transition_bytecode(&self, root: Bytes32)
-        -> StorageResult<UploadedBytecode>;
-}
-
-impl<D> UpgradeQueryData for D
-where
-    D: OnChainDatabase + ?Sized,
-{
-    fn state_transition_bytecode_root(
+impl ReadView {
+    pub fn state_transition_bytecode_root(
         &self,
         version: StateTransitionBytecodeVersion,
     ) -> StorageResult<Bytes32> {
         let merkle_root = self
+            .on_chain
+            .as_ref()
             .storage::<StateTransitionBytecodeVersions>()
             .get(&version)?
             .ok_or(not_found!(StateTransitionBytecodeVersions))?
@@ -42,11 +30,13 @@ where
         Ok(merkle_root)
     }
 
-    fn state_transition_bytecode(
+    pub fn state_transition_bytecode(
         &self,
         root: Bytes32,
     ) -> StorageResult<UploadedBytecode> {
         let bytecode = self
+            .on_chain
+            .as_ref()
             .storage::<UploadedBytecodes>()
             .get(&root)?
             .ok_or(not_found!(UploadedBytecodes))?

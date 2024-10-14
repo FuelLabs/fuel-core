@@ -1,10 +1,4 @@
-use crate::{
-    graphql_api::database::ReadView,
-    query::{
-        CoinQueryData,
-        MessageQueryData,
-    },
-};
+use crate::graphql_api::database::ReadView;
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,

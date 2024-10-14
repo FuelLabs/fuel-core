@@ -3,7 +3,6 @@ use crate::{
         api_service::ConsensusProvider,
         QUERY_COSTS,
     },
-    query::BalanceQueryData,
     schema::{
         scalars::{
             Address,
