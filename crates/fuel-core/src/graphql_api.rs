@@ -58,6 +58,7 @@ pub struct Costs {
     pub da_compressed_block_read: usize,
 }
 
+#[cfg(feature = "test-helpers")]
 impl Default for Costs {
     fn default() -> Self {
         DEFAULT_QUERY_COSTS
@@ -91,6 +92,10 @@ pub fn query_costs() -> &'static Costs {
 }
 
 pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
+
+fn initialize_query_costs(config: Config) {
+    QUERY_COSTS.get_or_init(|| config.config.costs);
+}
 
 #[derive(Clone, Debug)]
 pub struct Config {

@@ -15,7 +15,7 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
-    graphql_api::QUERY_COSTS,
+    graphql_api,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -221,7 +221,8 @@ where
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
 {
-    initialize_query_costs(config.clone());
+    graphql_api::initialize_query_costs(config.clone());
+
     let network_addr = config.config.addr;
     let combined_read_database =
         ReadDatabase::new(genesis_block_height, on_database, off_database);
@@ -296,10 +297,6 @@ where
         GraphqlService { bound_address },
         ServerParams { router, listener },
     ))
-}
-
-fn initialize_query_costs(config: Config) {
-    QUERY_COSTS.get_or_init(|| config.config.costs);
 }
 
 async fn graphql_playground() -> impl IntoResponse {
