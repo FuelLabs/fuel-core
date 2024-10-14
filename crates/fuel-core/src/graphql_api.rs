@@ -4,7 +4,7 @@ use fuel_core_storage::{
 };
 use std::{
     net::SocketAddr,
-    sync::RwLock,
+    sync::OnceLock,
     time::Duration,
 };
 
@@ -87,14 +87,14 @@ pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     da_compressed_block_read: 4000,
 };
 
-pub fn query_costs(extract_field: impl FnOnce(&Costs) -> usize) -> usize {
-    extract_field(&QUERY_COSTS.read().unwrap())
+pub fn query_costs() -> &'static Costs {
+    QUERY_COSTS.get().unwrap_or(&DEFAULT_QUERY_COSTS)
 }
 
-static QUERY_COSTS: RwLock<Costs> = RwLock::new(DEFAULT_QUERY_COSTS);
+pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
 
-fn initialize_query_costs(costs: Costs) {
-    *QUERY_COSTS.write().unwrap() = costs;
+fn initialize_query_costs(config: Config) {
+    QUERY_COSTS.get_or_init(|| config.config.costs);
 }
 
 #[derive(Clone, Debug)]

@@ -27,7 +27,7 @@ impl Blob {
         self.0.into()
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.bytecode_read)")]
+    #[graphql(complexity = "query_costs().bytecode_read")]
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let query = ctx.read_view()?;
         query
@@ -48,7 +48,7 @@ pub struct BlobQuery;
 
 #[Object]
 impl BlobQuery {
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn blob(
         &self,
         ctx: &Context<'_>,

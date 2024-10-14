@@ -46,7 +46,7 @@ impl Contract {
         self.0.into()
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.bytecode_read)")]
+    #[graphql(complexity = "query_costs().bytecode_read")]
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let query = ctx.read_view()?;
         query
@@ -55,7 +55,7 @@ impl Contract {
             .map_err(Into::into)
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read)")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
         let query = ctx.read_view()?;
         query
@@ -70,7 +70,7 @@ pub struct ContractQuery;
 
 #[Object]
 impl ContractQuery {
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn contract(
         &self,
         ctx: &Context<'_>,
@@ -118,7 +118,7 @@ pub struct ContractBalanceQuery;
 
 #[Object]
 impl ContractBalanceQuery {
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read)")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn contract_balance(
         &self,
         ctx: &Context<'_>,
@@ -144,9 +144,9 @@ impl ContractBalanceQuery {
     }
 
     #[graphql(complexity = "{\
-        query_costs(|costs| costs.storage_iterator)\
-        + (query_costs(|costs| costs.storage_read) + first.unwrap_or_default() as usize) * child_complexity\
-        + (query_costs(|costs| costs.storage_read) + last.unwrap_or_default() as usize) * child_complexity\
+        query_costs().storage_iterator\
+        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
     }")]
     async fn contract_balances(
         &self,

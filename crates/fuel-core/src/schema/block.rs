@@ -112,14 +112,14 @@ impl Block {
         self.0.header().clone().into()
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query = ctx.read_view()?;
         let height = self.0.header().height();
         Ok(query.consensus(height)?.try_into()?)
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.block_transactions_ids)")]
+    #[graphql(complexity = "query_costs().block_transactions_ids")]
     async fn transaction_ids(&self) -> Vec<TransactionId> {
         self.0
             .transactions()
@@ -129,9 +129,7 @@ impl Block {
     }
 
     // Assume that in average we have 32 transactions per block.
-    #[graphql(
-        complexity = "query_costs(|costs| costs.block_transactions) + child_complexity"
-    )]
+    #[graphql(complexity = "query_costs().block_transactions + child_complexity")]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -242,7 +240,7 @@ pub struct BlockQuery;
 
 #[Object]
 impl BlockQuery {
-    #[graphql(complexity = "query_costs(|costs| costs.block_header) + child_complexity")]
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(
         &self,
         ctx: &Context<'_>,
@@ -272,7 +270,7 @@ impl BlockQuery {
     }
 
     #[graphql(complexity = "{\
-        (query_costs(|costs| costs.block_header) + child_complexity) \
+        (query_costs().block_header + child_complexity) \
         * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize) \
     }")]
     async fn blocks(
@@ -300,7 +298,7 @@ pub struct HeaderQuery;
 
 #[Object]
 impl HeaderQuery {
-    #[graphql(complexity = "query_costs(|costs| costs.block_header) + child_complexity")]
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn header(
         &self,
         ctx: &Context<'_>,
@@ -314,7 +312,7 @@ impl HeaderQuery {
     }
 
     #[graphql(complexity = "{\
-        (query_costs(|costs| costs.block_header) + child_complexity) \
+        (query_costs().block_header + child_complexity) \
         * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize) \
     }")]
     async fn headers(

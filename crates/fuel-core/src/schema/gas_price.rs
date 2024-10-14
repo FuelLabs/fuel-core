@@ -42,7 +42,7 @@ pub struct LatestGasPriceQuery {}
 
 #[Object]
 impl LatestGasPriceQuery {
-    #[graphql(complexity = "query_costs(|costs| costs.block_header)")]
+    #[graphql(complexity = "query_costs().block_header")]
     async fn latest_gas_price(
         &self,
         ctx: &Context<'_>,
@@ -80,7 +80,7 @@ pub struct EstimateGasPriceQuery {}
 
 #[Object]
 impl EstimateGasPriceQuery {
-    #[graphql(complexity = "2 * query_costs(|costs| costs.storage_read)")]
+    #[graphql(complexity = "2 * query_costs().storage_read")]
     async fn estimate_gas_price(
         &self,
         ctx: &Context<'_>,

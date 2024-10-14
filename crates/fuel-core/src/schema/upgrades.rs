@@ -29,7 +29,7 @@ pub struct UpgradeQuery;
 
 #[Object]
 impl UpgradeQuery {
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn consensus_parameters(
         &self,
         ctx: &Context<'_>,
@@ -42,7 +42,7 @@ impl UpgradeQuery {
         Ok(ConsensusParameters(params))
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn state_transition_bytecode_by_version(
         &self,
         ctx: &Context<'_>,
@@ -54,7 +54,7 @@ impl UpgradeQuery {
             .into_api_result()
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn state_transition_bytecode_by_root(
         &self,
         root: HexString,
@@ -73,7 +73,7 @@ impl StateTransitionBytecode {
         HexString(self.root.to_vec())
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.state_transition_bytecode_read)")]
+    #[graphql(complexity = "query_costs().state_transition_bytecode_read")]
     async fn bytecode(
         &self,
         ctx: &Context<'_>,

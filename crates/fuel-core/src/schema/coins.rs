@@ -92,7 +92,7 @@ impl MessageCoin {
         self.0.amount.into()
     }
 
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read)")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn asset_id(&self, ctx: &Context<'_>) -> AssetId {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -148,7 +148,7 @@ pub struct CoinQuery;
 #[async_graphql::Object]
 impl CoinQuery {
     /// Gets the coin by `utxo_id`.
-    #[graphql(complexity = "query_costs(|costs| costs.storage_read) + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn coin(
         &self,
         ctx: &Context<'_>,
@@ -160,9 +160,9 @@ impl CoinQuery {
 
     /// Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
     #[graphql(complexity = "{\
-        query_costs(|costs| costs.storage_iterator)\
-        + (query_costs(|costs| costs.storage_read) + first.unwrap_or_default() as usize) * child_complexity \
-        + (query_costs(|costs| costs.storage_read) + last.unwrap_or_default() as usize) * child_complexity\
+        query_costs().storage_iterator\
+        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
     }")]
     async fn coins(
         &self,
@@ -205,7 +205,7 @@ impl CoinQuery {
     ///     The list of spendable coins per asset from the query. The length of the result is
     ///     the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
     ///     is the same.
-    #[graphql(complexity = "query_costs(|costs| costs.coins_to_spend)")]
+    #[graphql(complexity = "query_costs().coins_to_spend")]
     async fn coins_to_spend(
         &self,
         ctx: &Context<'_>,
