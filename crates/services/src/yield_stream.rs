@@ -49,35 +49,32 @@ impl<St: Stream> Stream for YieldStream<St> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let mut this = self.as_mut().project();
-        loop {
-            // If we have a cached item, return it because that means we were woken up.
-            if let Some(item) = this.item.take() {
-                *this.counter = 1;
-                return Poll::Ready(Some(item));
-            }
 
-            match ready!(this.stream.as_mut().poll_next(cx)) {
-                // Return items, unless we reached the batch size.
-                // after that, we want to yield before returning the next item.
-                Some(item) => {
-                    if this.counter < this.batch_size {
-                        *this.counter = this.counter.saturating_add(1);
+        // If we have a cached item, return it because that means we were woken up.
+        if let Some(item) = this.item.take() {
+            *this.counter = 1;
+            return Poll::Ready(Some(item));
+        }
 
-                        return Poll::Ready(Some(item));
-                    } else {
-                        *this.item = Some(item);
+        match ready!(this.stream.as_mut().poll_next(cx)) {
+            // Return items, unless we reached the batch size.
+            // after that, we want to yield before returning the next item.
+            Some(item) => {
+                if this.counter < this.batch_size {
+                    *this.counter = this.counter.saturating_add(1);
 
-                        cx.waker().wake_by_ref();
+                    Poll::Ready(Some(item))
+                } else {
+                    *this.item = Some(item);
 
-                        return Poll::Pending;
-                    }
-                }
+                    cx.waker().wake_by_ref();
 
-                // Underlying stream ran out of values, so finish this stream as well.
-                None => {
-                    return Poll::Ready(None);
+                    Poll::Pending
                 }
             }
+
+            // Underlying stream ran out of values, so finish this stream as well.
+            None => Poll::Ready(None),
         }
     }
 
