@@ -484,9 +484,11 @@ where
             .storage_as_mut::<MetadataTable<Description>>()
             .insert(
                 &(),
-                &DatabaseMetadata::V1 {
+                &DatabaseMetadata::V2 {
                     version: Description::version(),
                     height: new_height,
+                    // TODO[RC]: This value must NOT be updated here.
+                    balances_indexation_progress: Default::default(),
                 },
             )?;
 
@@ -908,9 +910,10 @@ mod tests {
                 .storage_as_mut::<MetadataTable<Relayer>>()
                 .insert(
                     &(),
-                    &DatabaseMetadata::<DaBlockHeight>::V1 {
+                    &DatabaseMetadata::<DaBlockHeight>::V2 {
                         version: Default::default(),
                         height: Default::default(),
+                        balances_indexation_progress: Default::default(),
                     },
                 )
                 .unwrap();
@@ -982,9 +985,10 @@ mod tests {
             // When
             let result = database.storage_as_mut::<MetadataTable<Relayer>>().insert(
                 &(),
-                &DatabaseMetadata::<DaBlockHeight>::V1 {
+                &DatabaseMetadata::<DaBlockHeight>::V2 {
                     version: Default::default(),
                     height: Default::default(),
+                    balances_indexation_progress: Default::default(),
                 },
             );
 
