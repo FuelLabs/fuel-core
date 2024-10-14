@@ -50,44 +50,44 @@ impl Default for TxPoolMetrics {
 
         let mut registry = global_registry().registry.lock();
         registry.register(
-            "Tx_Size_Histogram",
-            "A Histogram keeping track of the size of transactions in bytes",
+            "txpool_tx_size",
+            "The size of transactions in the txpool",
             metrics.tx_size.clone(),
         );
 
         registry.register(
-            "Tx_Time_in_Txpool_Histogram",
-            "A Histogram keeping track of the time spent by transactions in the txpool in seconds",
+            "txpool_tx_time_in_txpool_seconds",
+            "The time spent by a transaction in the txpool in seconds",
             metrics.transaction_time_in_txpool_secs.clone(),
         );
 
         registry.register(
-            "Number_Of_Transactions_Gauge",
-            "A Gauge keeping track of the number of transactions in the txpool",
+            "txpool_number_of_transactions",
+            "The number of transactions in the txpool",
             metrics.number_of_transactions.clone(),
         );
 
         registry.register(
-            "Number_Of_Executable_Transactions_Gauge",
-            "A Gauge keeping track of the number of executable transactions",
+            "txpool_number_of_executable_transactions",
+            "The number of executable transactions in the txpool",
             metrics.number_of_executable_transactions.clone(),
         );
 
         registry.register(
-            "Number_Of_Transactions_Pending_Verification_Gaguge",
-            "A Gauge keeping track of the number of transactions pending verification",
+            "txpool_number_of_transactions_pending_verification",
+            "The number of transactions pending verification before entering the txpool",
             metrics.number_of_transactions_pending_verification.clone(),
         );
 
         registry.register(
-            "Select_Transaction_Time_Nanoseconds",
-            "How long in nanoseconds it took for the selection algorithm to select transactions",
+            "txpool_select_transaction_time_nanoseconds",
+            "The time it took to select transactions for inclusion in a block in nanoseconds",
             metrics.select_transaction_time_nanoseconds.clone(),
         );
 
         registry.register(
-            "Insert_Transaction_Time_Milliseconds",
-            "Time spent by transaction insertion function in the rayon thread pool in milliseconds",
+            "txpool_insert_transaction_time_milliseconds",
+            "The time it took to insert a transaction in the txpool in milliseconds",
             metrics.select_transaction_time_nanoseconds.clone(),
         );
 
