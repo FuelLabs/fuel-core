@@ -60,7 +60,10 @@ impl TableWithBlueprint for Balances {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use fuel_core_storage::{
+        iter::IterDirection,
         StorageInspect,
         StorageMutate,
     };
@@ -118,10 +121,27 @@ mod tests {
 
             result.map(|r| r.into_owned())
         }
+
+        pub fn query_balances(&self, owner: &Address) -> HashMap<AssetId, u64> {
+            let db = self.database.off_chain();
+
+            let mut key_prefix = owner.as_ref().to_vec();
+            db.entries::<Balances>(Some(key_prefix), IterDirection::Forward)
+                .map(|asset| {
+                    let asset = asset.unwrap();
+                    let asset_id =
+                        AssetId::from_bytes_ref_checked(&asset.key[AssetId::LEN..])
+                            .copied()
+                            .expect("incorrect bytes");
+                    let balance = asset.value;
+                    (asset_id, balance)
+                })
+                .collect()
+        }
     }
 
     #[test]
-    fn can_store_and_retrieve_assets() {
+    fn can_retrieve_balance_of_asset() {
         let mut db = TestDatabase::new();
 
         let alice = Address::from([1; 32]);
@@ -150,5 +170,46 @@ mod tests {
 
         // Carol has correct balances
         assert_eq!(db.query_balance(&carol, &carol_tx_1.0), Some(200_u64));
+    }
+
+    #[test]
+    fn can_retrieve_balances_of_all_assets_of_owner() {
+        let mut db = TestDatabase::new();
+
+        let alice = Address::from([1; 32]);
+        let bob = Address::from([2; 32]);
+        let carol = Address::from([3; 32]);
+
+        let ASSET_1 = AssetId::from([1; 32]);
+        let ASSET_2 = AssetId::from([2; 32]);
+
+        // Alice has 100 of asset 1 and a total of 1000 of asset 2
+        let alice_tx_1 = (ASSET_1, 100_u64);
+        let alice_tx_2 = (ASSET_2, 600_u64);
+        let alice_tx_3 = (ASSET_2, 400_u64);
+
+        // Carol has 200 of asset 2
+        let carol_tx_1 = (ASSET_2, 200_u64);
+
+        let res = db.balance_tx(&alice, &alice_tx_1);
+        let res = db.balance_tx(&alice, &alice_tx_2);
+        let res = db.balance_tx(&alice, &alice_tx_3);
+        let res = db.balance_tx(&carol, &carol_tx_1);
+
+        // Verify Alice balances
+        let expected: HashMap<_, _> = vec![(ASSET_1, 100_u64), (ASSET_2, 1000_u64)]
+            .into_iter()
+            .collect();
+        let actual = db.query_balances(&alice);
+        assert_eq!(expected, actual);
+
+        // Verify Bob balances
+        let actual = db.query_balances(&bob);
+        assert_eq!(HashMap::new(), actual);
+
+        // Verify Carol balances
+        let expected: HashMap<_, _> = vec![(ASSET_2, 200_u64)].into_iter().collect();
+        let actual = db.query_balances(&carol);
+        assert_eq!(expected, actual);
     }
 }
