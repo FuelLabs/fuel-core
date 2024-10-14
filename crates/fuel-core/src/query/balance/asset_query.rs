@@ -53,7 +53,7 @@ impl Exclude {
 #[derive(Clone)]
 pub struct AssetsQuery<'a> {
     pub owner: &'a Address,
-    pub assets: Option<HashSet<&'a AssetId>>,
+    pub allowed_assets: Option<HashSet<&'a AssetId>>,
     pub exclude: Option<&'a Exclude>,
     pub database: &'a ReadView,
     pub base_asset_id: &'a AssetId,
@@ -62,14 +62,14 @@ pub struct AssetsQuery<'a> {
 impl<'a> AssetsQuery<'a> {
     pub fn new(
         owner: &'a Address,
-        assets: Option<HashSet<&'a AssetId>>,
+        allowed_assets: Option<HashSet<&'a AssetId>>,
         exclude: Option<&'a Exclude>,
         database: &'a ReadView,
         base_asset_id: &'a AssetId,
     ) -> Self {
         Self {
             owner,
-            assets,
+            allowed_assets,
             exclude,
             database,
             base_asset_id,
@@ -77,7 +77,7 @@ impl<'a> AssetsQuery<'a> {
     }
 
     fn coins_iter(mut self) -> impl Stream<Item = StorageResult<CoinType>> + 'a {
-        let assets = self.assets.take();
+        let allowed_assets = self.allowed_assets.take();
         self.database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .map(|id| id.map(CoinId::from))
@@ -107,7 +107,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .filter(move |result| {
                 if let Ok(CoinType::Coin(coin)) = result {
-                    has_asset(&assets, &coin.asset_id)
+                    allowed_asset(&allowed_assets, &coin.asset_id)
                 } else {
                     true
                 }
@@ -167,7 +167,7 @@ impl<'a> AssetsQuery<'a> {
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn coins(self) -> impl Stream<Item = StorageResult<CoinType>> + 'a {
-        let has_base_asset = has_asset(&self.assets, self.base_asset_id);
+        let has_base_asset = allowed_asset(&self.allowed_assets, self.base_asset_id);
         if has_base_asset {
             let message_iter = self.messages_iter();
             self.coins_iter().chain(message_iter).into_boxed_ref()
@@ -218,9 +218,9 @@ impl<'a> AssetQuery<'a> {
     }
 }
 
-fn has_asset(assets: &Option<HashSet<&AssetId>>, asset_id: &AssetId) -> bool {
-    assets
+fn allowed_asset(allowed_assets: &Option<HashSet<&AssetId>>, asset_id: &AssetId) -> bool {
+    allowed_assets
         .as_ref()
-        .map(|assets| assets.contains(asset_id))
+        .map(|allowed_assets| allowed_assets.contains(asset_id))
         .unwrap_or(true)
 }
