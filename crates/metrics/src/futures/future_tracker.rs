@@ -1,3 +1,4 @@
+use crate::futures::FuturesMetrics;
 use core::{
     future::Future,
     pin::Pin,
@@ -13,11 +14,27 @@ use std::time::Instant;
 #[derive(Debug)]
 pub struct ExecutionTime<Output> {
     /// The time spent for real action of the future.
-    pub busy: Duration,
+    busy: Duration,
     /// The idle time of the future.
-    pub idle: Duration,
+    idle: Duration,
     /// The output of the future.
-    pub output: Output,
+    output: Output,
+}
+
+impl<Output> ExecutionTime<Output> {
+    /// Extracts the future output and records the execution report into the metrics.
+    pub fn extract(self, metric: &FuturesMetrics) -> Output {
+        // TODO: Use `u128` when `AtomicU128` is stable.
+        metric.busy.inc_by(
+            u64::try_from(self.busy.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
+        metric.idle.inc_by(
+            u64::try_from(self.idle.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
+        self.output
+    }
 }
 
 /// A guard representing a span which has been entered and is currently
@@ -135,7 +152,7 @@ impl<T: Future> Future for FutureTracker<T> {
 mod tests {
     use std::time::Duration;
 
-    use crate::future_tracker::FutureTracker;
+    use crate::futures::future_tracker::FutureTracker;
 
     #[tokio::test]
     async fn empty_future() {

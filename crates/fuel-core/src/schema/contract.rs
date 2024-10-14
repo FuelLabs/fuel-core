@@ -3,7 +3,6 @@ use crate::{
         IntoApiResult,
         QUERY_COSTS,
     },
-    query::ContractQueryData,
     schema::{
         scalars::{
             AssetId,
@@ -60,7 +59,7 @@ impl Contract {
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
         let query = ctx.read_view()?;
         query
-            .contract_salt(self.0)
+            .contract_salt(&self.0)
             .map(Into::into)
             .map_err(Into::into)
     }
@@ -71,7 +70,7 @@ pub struct ContractQuery;
 
 #[Object]
 impl ContractQuery {
-    #[graphql(complexity = "QUERY_COSTS.storage_read")]
+    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
     async fn contract(
         &self,
         ctx: &Context<'_>,

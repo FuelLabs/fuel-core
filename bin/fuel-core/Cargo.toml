@@ -28,6 +28,7 @@ dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-compression = { workspace = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-poa = { workspace = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 hex = { workspace = true }

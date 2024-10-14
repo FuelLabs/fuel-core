@@ -1,7 +1,6 @@
 use crate::{
     fuel_core_graphql_api::QUERY_COSTS,
     graphql_api::IntoApiResult,
-    query::BlobQueryData,
     schema::{
         scalars::{
             BlobId,

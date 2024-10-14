@@ -50,6 +50,7 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
+use fuel_core_metrics::config::Module;
 use fuel_core_poa::signer::SignMode;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use pyroscope::{
@@ -235,8 +236,8 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
-    #[arg(long = "metrics", env)]
-    pub metrics: bool,
+    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
+    pub metrics: Option<fuel_core_metrics::config::Config>,
 
     #[clap(long = "verify-max-da-lag", default_value = "10", env)]
     pub max_da_lag: u64,
@@ -293,7 +294,7 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
-            metrics,
+            metrics: maybe_metrics_config,
             max_da_lag,
             max_wait_time,
             tx_pool,
@@ -319,7 +320,12 @@ impl Command {
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(chain_config.chain_name.clone(), metrics)?;
+        let p2p_cfg = p2p_args.into_config(
+            chain_config.chain_name.clone(),
+            maybe_metrics_config
+                .as_ref()
+                .map_or(true, |metrics| metrics.is_enabled(Module::P2P)),
+        )?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -427,8 +433,11 @@ impl Command {
             state_rewind_policy,
         };
 
-        let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new(metrics);
+        let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
+            maybe_metrics_config
+                .as_ref()
+                .map_or(true, |metrics| metrics.is_enabled(Module::Importer)),
+        );
 
         let da_compression = match da_compression {
             Some(retention) => {
@@ -491,6 +500,8 @@ impl Command {
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
+                max_queries_resolver_recursive_depth: graphql
+                    .max_queries_resolver_recursive_depth,
                 max_queries_directives: graphql.max_queries_directives,
                 max_concurrent_queries: graphql.graphql_max_concurrent_queries,
                 request_body_bytes_limit: graphql.graphql_request_body_bytes_limit,
@@ -518,11 +529,14 @@ impl Command {
                 pool_limits,
                 heavy_work: pool_heavy_work_config,
                 service_channel_limits,
-                metrics,
+                metrics: maybe_metrics_config
+                    .as_ref()
+                    .map_or(true, |metrics| metrics.is_enabled(Module::TxPool)),
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
-                metrics,
+                metrics: maybe_metrics_config
+                    .map_or(true, |metrics| metrics.is_enabled(Module::Producer)),
             },
             starting_gas_price,
             gas_price_change_percent,
