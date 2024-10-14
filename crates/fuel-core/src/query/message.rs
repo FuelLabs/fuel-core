@@ -85,6 +85,8 @@ impl ReadView {
         &self,
         ids: Vec<Nonce>,
     ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
+        // TODO: Use multiget when it's implemented.
+        //  https://github.com/FuelLabs/fuel-core/issues/2344
         let messages = ids.into_iter().map(|id| self.message(&id));
         // Yield to the runtime to allow other tasks to run.
         tokio::task::yield_now().await;

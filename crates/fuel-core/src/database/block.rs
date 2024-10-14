@@ -68,6 +68,7 @@ impl OnChainIterableKeyValueView {
         if let Some(block) = db_block {
             // fetch all the transactions
             // TODO: Use multiget when it's implemented.
+            //  https://github.com/FuelLabs/fuel-core/issues/2344
             let txs = block
                 .transactions()
                 .iter()

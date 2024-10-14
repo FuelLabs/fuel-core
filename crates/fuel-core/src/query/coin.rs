@@ -36,6 +36,7 @@ impl ReadView {
         utxo_ids: Vec<UtxoId>,
     ) -> impl Iterator<Item = StorageResult<Coin>> + '_ {
         // TODO: Use multiget when it's implemented.
+        //  https://github.com/FuelLabs/fuel-core/issues/2344
         let coins = utxo_ids.into_iter().map(|id| self.coin(id));
         // Yield to the runtime to allow other tasks to run.
         tokio::task::yield_now().await;

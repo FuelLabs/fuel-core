@@ -156,6 +156,7 @@ impl ReadView {
         tx_ids: Vec<TxId>,
     ) -> Vec<StorageResult<Transaction>> {
         // TODO: Use multiget when it's implemented.
+        //  https://github.com/FuelLabs/fuel-core/issues/2344
         let result = tx_ids
             .iter()
             .map(|tx_id| self.transaction(tx_id))
