@@ -88,7 +88,7 @@ impl ReadView {
         // TODO: Use multiget when it's implemented.
         //  https://github.com/FuelLabs/fuel-core/issues/2344
         let messages = ids.into_iter().map(|id| self.message(&id));
-        // Yield to the runtime to allow other tasks to run.
+        // Give a chance to other tasks to run.
         tokio::task::yield_now().await;
         messages
     }

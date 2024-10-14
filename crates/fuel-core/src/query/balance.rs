@@ -4,6 +4,7 @@ use asset_query::{
     AssetSpendTarget,
     AssetsQuery,
 };
+use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::IterDirection,
     Result as StorageResult,
@@ -106,12 +107,6 @@ impl ReadView {
             })
             .map_ok(|stream| stream.map(Ok))
             .try_flatten()
-            .chunks(self.batch_size)
-            .filter_map(|chunk| async move {
-                // Give a chance to other tasks to run.
-                tokio::task::yield_now().await;
-                Some(futures::stream::iter(chunk))
-            })
-            .flatten()
+            .yield_each(self.batch_size)
     }
 }

@@ -5,7 +5,7 @@ use crate::fuel_core_graphql_api::{
         OnChainDatabase,
     },
 };
-use async_graphql::futures_util::StreamExt;
+use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -274,13 +274,7 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<Message>> + '_ {
         futures::stream::iter(self.on_chain.all_messages(start_message_id, direction))
-            .chunks(self.batch_size)
-            .filter_map(|chunk| async move {
-                // Give a chance to other tasks to run.
-                tokio::task::yield_now().await;
-                Some(futures::stream::iter(chunk))
-            })
-            .flatten()
+            .yield_each(self.batch_size)
     }
 
     pub fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
@@ -305,13 +299,7 @@ impl ReadView {
             start_asset,
             direction,
         ))
-        .chunks(self.batch_size)
-        .filter_map(|chunk| async move {
-            // Give a chance to other tasks to run.
-            tokio::task::yield_now().await;
-            Some(futures::stream::iter(chunk))
-        })
-        .flatten()
+        .yield_each(self.batch_size)
     }
 
     pub fn da_height(&self) -> StorageResult<DaBlockHeight> {

@@ -18,6 +18,7 @@ parking_lot = { workspace = true }
 rayon = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
+pin-project-lite = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { path = ".", features = ["sync-processor"] }
