@@ -1,5 +1,4 @@
 use crate::graphql_api::database::ReadView;
-use async_graphql::futures_util::TryStreamExt;
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_storage::{
     iter::IterDirection,
@@ -16,7 +15,10 @@ use fuel_core_types::{
         AssetId,
     },
 };
-use futures::Stream;
+use futures::{
+    Stream,
+    TryStreamExt,
+};
 use std::collections::HashSet;
 use tokio_stream::StreamExt;
 

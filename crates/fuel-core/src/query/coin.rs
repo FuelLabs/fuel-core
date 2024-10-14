@@ -1,5 +1,4 @@
 use crate::fuel_core_graphql_api::database::ReadView;
-use async_graphql::futures_util::TryStreamExt;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
@@ -16,6 +15,7 @@ use fuel_core_types::{
 use futures::{
     Stream,
     StreamExt,
+    TryStreamExt,
 };
 
 impl ReadView {
