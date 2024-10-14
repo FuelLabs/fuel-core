@@ -132,7 +132,11 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        let _ = self.processor.try_spawn(fut);
+        let result = self.processor.try_spawn(fut);
+
+        if let Err(err) = result {
+            tracing::error!("Failed to spawn a task for GraphQL: {:?}", err);
+        }
     }
 }
 
