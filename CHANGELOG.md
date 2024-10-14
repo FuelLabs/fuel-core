@@ -5,8 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
 ### Added
 - [2350](https://github.com/FuelLabs/fuel-core/pull/2350): Added a new CLI flag `graphql-number-of-threads` to limit the number of threads used by the GraphQL service. The default value is `2`, `0` enables the old behavior.
+- [2335](https://github.com/FuelLabs/fuel-core/pull/2335): Added CLI arguments for configuring GraphQL query costs.
 
 ### Fixed
 - [2345](https://github.com/FuelLabs/fuel-core/pull/2345): In PoA increase priority of block creation timer trigger compare to txpool event management
