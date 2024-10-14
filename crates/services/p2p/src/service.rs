@@ -38,7 +38,10 @@ use fuel_core_services::{
     SyncProcessor,
     TraceErr,
 };
-use fuel_core_storage::transactional::AtomicView;
+use fuel_core_storage::{
+    transactional::AtomicView,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
     fuel_tx::{
@@ -78,10 +81,14 @@ use libp2p::{
     PeerId,
 };
 use std::{
+    collections::HashMap,
     fmt::Debug,
     future::Future,
     ops::Range,
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tokio::{
     sync::{
@@ -389,7 +396,10 @@ pub struct UninitializedTask<V, B, T> {
 
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
-pub struct Task<P, V, B, T> {
+pub struct Task<P, V, B, T>
+where
+    V: AtomicView,
+{
     chain_id: ChainId,
     response_timeout: Duration,
     p2p_service: P,
@@ -410,6 +420,11 @@ pub struct Task<P, V, B, T> {
     heartbeat_max_time_since_last: Duration,
     next_check_time: Instant,
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
+    // cached view
+    cached_view: Arc<Mutex<CachedView<V::LatestView>>>,
+    // milliseconds wait time between cache reset
+    cache_reset_interval: Duration,
+    next_cache_reset_time: Instant,
 }
 
 #[derive(Default, Clone)]
@@ -442,7 +457,7 @@ impl<V, T> UninitializedTask<V, SharedState, T> {
     }
 }
 
-impl<P: TaskP2PService, V, B: Broadcast, T> Task<P, V, B, T> {
+impl<P: TaskP2PService, V: AtomicView, B: Broadcast, T> Task<P, V, B, T> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_all_peer_info() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
@@ -485,12 +500,63 @@ impl<P: TaskP2PService, V, B: Broadcast, T> Task<P, V, B, T> {
     }
 }
 
+struct CachedView<V> {
+    inner: V,
+    sealed_block_headers: HashMap<Range<u32>, Vec<SealedBlockHeader>>,
+    transactions_on_blocks: HashMap<Range<u32>, Vec<Transactions>>,
+}
+
+impl<V: P2pDb> CachedView<V> {
+    fn new(inner: V) -> Self {
+        Self {
+            inner,
+            sealed_block_headers: HashMap::new(),
+            transactions_on_blocks: HashMap::new(),
+        }
+    }
+}
+
+impl<V: P2pDb> CachedView<V> {
+    fn get_sealed_headers(
+        &mut self,
+        block_height_range: Range<u32>,
+    ) -> StorageResult<Option<Vec<SealedBlockHeader>>> {
+        if let Some(headers) = self.sealed_block_headers.get(&block_height_range) {
+            Ok(Some(headers.clone()))
+        } else {
+            let headers = self.inner.get_sealed_headers(block_height_range.clone())?;
+            if let Some(headers) = &headers {
+                self.sealed_block_headers
+                    .insert(block_height_range, headers.clone());
+            }
+            Ok(headers)
+        }
+    }
+
+    fn get_transactions(
+        &mut self,
+        block_height_range: Range<u32>,
+    ) -> StorageResult<Option<Vec<Transactions>>> {
+        if let Some(transactions) = self.transactions_on_blocks.get(&block_height_range) {
+            Ok(Some(transactions.clone()))
+        } else {
+            let transactions = self.inner.get_transactions(block_height_range.clone())?;
+            if let Some(transactions) = &transactions {
+                self.transactions_on_blocks
+                    .insert(block_height_range, transactions.clone());
+            }
+            Ok(transactions)
+        }
+    }
+}
+
 impl<P, V, B, T> Task<P, V, B, T>
 where
     P: TaskP2PService + 'static,
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
     T: TxPool + 'static,
+    B: Send,
 {
     fn update_metrics<U>(&self, update_fn: U)
     where
@@ -530,8 +596,9 @@ where
         max_len: usize,
     ) -> anyhow::Result<()>
     where
-        DbLookUpFn:
-            Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
+        DbLookUpFn: Fn(&mut CachedView<V::LatestView>, Range<u32>) -> anyhow::Result<Option<R>>
+            + Send
+            + 'static,
         ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
         R: Send + 'static,
@@ -557,18 +624,22 @@ where
             return Ok(());
         }
 
-        let view = self.view_provider.latest_view()?;
-        let result = self.db_heavy_task_processor.try_spawn(move || {
-            if instant.elapsed() > timeout {
-                tracing::warn!("Request timed out");
-                return;
+        let view = self.cached_view.clone();
+        let result = self.db_heavy_task_processor.try_spawn({
+            move || {
+                if instant.elapsed() > timeout {
+                    tracing::warn!("Request timed out");
+                    return;
+                }
+
+                let mut view = view.lock().expect("Cached view lock poisoned");
+
+                let response = db_lookup(&mut view, range.clone()).ok().flatten();
+
+                let _ = response_channel
+                    .try_send(task_request(response, request_id))
+                    .trace_err("Failed to send response to the request channel");
             }
-
-            let response = db_lookup(&view, range.clone()).ok().flatten();
-
-            let _ = response_channel
-                .try_send(task_request(response, request_id))
-                .trace_err("Failed to send response to the request channel");
         });
 
         if result.is_err() {
@@ -781,6 +852,11 @@ where
             AsyncProcessor::new("P2P_TxPoolLookUpProcessor", tx_pool_threads, 32)?;
         let request_sender = broadcast.request_sender.clone();
 
+        let cache_reset_interval = Duration::from_millis(10_000);
+        let next_cache_reset_time = Instant::now()
+            .checked_add(cache_reset_interval)
+            .expect("The cache reset interval should be small enough to do frequently");
+
         let task = Task {
             chain_id,
             response_timeout,
@@ -800,6 +876,9 @@ where
             heartbeat_max_time_since_last,
             next_check_time,
             heartbeat_peer_reputation_config,
+            cached_view: Arc::new(Mutex::new(CachedView::new(view))),
+            cache_reset_interval,
+            next_cache_reset_time,
         };
         Ok(task)
     }
@@ -946,6 +1025,14 @@ where
                     }
                 }
                 self.next_check_time += self.heartbeat_check_interval;
+            }
+            _ = tokio::time::sleep_until(self.next_cache_reset_time) => {
+                should_continue = true;
+                let mut view = self.cached_view.lock().expect("Cached view lock poisoned");
+                // we could just call .clear() on the internal hashmaps
+                let latest_view = self.view_provider.latest_view()?;
+                *view = CachedView::new(latest_view);
+                self.next_cache_reset_time += self.cache_reset_interval;
             }
         }
 
@@ -1577,6 +1664,9 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
+            cached_view: Arc::new(Mutex::new(CachedView::new(FakeDB))),
+            cache_reset_interval: Duration::from_secs(0),
+            next_cache_reset_time: Instant::now(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1667,6 +1757,9 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
+            cached_view: Arc::new(Mutex::new(CachedView::new(FakeDB))),
+            cache_reset_interval: Duration::from_secs(0),
+            next_cache_reset_time: Instant::now(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1729,6 +1822,9 @@ pub mod tests {
             heartbeat_max_time_since_last: Default::default(),
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: Default::default(),
+            cached_view: Arc::new(Mutex::new(CachedView::new(FakeDB))),
+            cache_reset_interval: Duration::from_secs(0),
+            next_cache_reset_time: Instant::now(),
         };
         let mut watcher = StateWatcher::started();
         // End of initialization
