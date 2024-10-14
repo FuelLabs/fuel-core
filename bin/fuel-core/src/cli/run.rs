@@ -305,6 +305,8 @@ impl Command {
             profiling: _,
         } = self;
 
+        info!("Metrics config: {}", metrics);
+
         let addr = net::SocketAddr::new(graphql.ip, graphql.port);
 
         let snapshot_reader = match snapshot.as_ref() {
