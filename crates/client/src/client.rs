@@ -1,3 +1,5 @@
+#[cfg(feature = "subscriptions")]
+use crate::client::types::StatusWithTransaction;
 use crate::client::{
     schema::{
         block::BlockByHeightArgs,
@@ -549,6 +551,33 @@ impl FuelClient {
         Ok(status)
     }
 
+    /// Similar to [`Self::submit_and_await_commit`], but the status also contains transaction.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_commit_with_tx(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<StatusWithTransaction> {
+        use cynic::SubscriptionBuilder;
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitSubscriptionWithTransaction::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let mut stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitSubscriptionWithTransaction>| {
+                let status: StatusWithTransaction = r?.submit_and_await.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        let status = stream.next().await.ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to get status from the submission",
+        ))??;
+
+        Ok(status)
+    }
+
     /// Submits the transaction to the `TxPool` and returns a stream of events.
     /// Compared to the `submit_and_await_commit`, the stream also contains
     /// `SubmittedStatus` as an intermediate state.
@@ -1083,6 +1112,17 @@ impl FuelClient {
         let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
+    }
+
+    pub async fn contract_info(
+        &self,
+        contract: &ContractId,
+    ) -> io::Result<Option<types::Contract>> {
+        let query = schema::contract::ContractByIdQuery::build(ContractByIdArgs {
+            id: (*contract).into(),
+        });
+        let contract_info = self.query(query).await?.contract.map(Into::into);
+        Ok(contract_info)
     }
 
     pub async fn message_status(&self, nonce: &Nonce) -> io::Result<MessageStatus> {

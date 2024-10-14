@@ -1,11 +1,16 @@
+use self::importer::SnapshotImporter;
 use crate::{
-    combined_database::CombinedDatabase,
+    combined_database::{
+        CombinedDatabase,
+        CombinedGenesisDatabase,
+    },
     database::{
         database_description::{
             off_chain::OffChain,
             on_chain::OnChain,
         },
         genesis_progress::GenesisMetadata,
+        Database,
     },
     service::config::Config,
 };
@@ -13,12 +18,14 @@ use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     iter::IteratorOverTable,
+    not_found,
     tables::{
         ConsensusParametersVersions,
         StateTransitionBytecodeVersions,
         UploadedBytecodes,
     },
     transactional::{
+        AtomicView,
         Changes,
         IntoTransaction,
         ReadTransaction,
@@ -53,15 +60,13 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
+pub use exporter::Exporter;
+pub use task_manager::NotifyCancel;
+
 mod exporter;
 mod importer;
 mod progress;
 mod task_manager;
-
-pub use exporter::Exporter;
-pub use task_manager::NotifyCancel;
-
-use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
@@ -71,10 +76,24 @@ pub async fn execute_genesis_block(
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let genesis_block = create_genesis_block(config);
     tracing::info!("Genesis block created: {:?}", genesis_block.header());
-    let db = db.clone().into_genesis();
+    let on_chain = db
+        .on_chain()
+        .clone()
+        .into_genesis()
+        .map_err(|_| anyhow::anyhow!("On chain database is already initialized"))?;
+    let off_chain = db
+        .off_chain()
+        .clone()
+        .into_genesis()
+        .map_err(|_| anyhow::anyhow!("Off chain database is already initialized"))?;
+
+    let genesis_db = CombinedGenesisDatabase {
+        on_chain,
+        off_chain,
+    };
 
     SnapshotImporter::import(
-        db.clone(),
+        genesis_db.clone(),
         genesis_block.clone(),
         config.snapshot_reader.clone(),
         watcher,
@@ -93,10 +112,10 @@ pub async fn execute_genesis_block(
     let chain_config = config.snapshot_reader.chain_config();
     let genesis = Genesis {
         chain_config_hash: chain_config.root()?.into(),
-        coins_root: db.on_chain().genesis_coins_root()?.into(),
-        messages_root: db.on_chain().genesis_messages_root()?.into(),
-        contracts_root: db.on_chain().genesis_contracts_root()?.into(),
-        transactions_root: db.on_chain().processed_transactions_root()?.into(),
+        coins_root: genesis_db.on_chain().genesis_coins_root()?.into(),
+        messages_root: genesis_db.on_chain().genesis_messages_root()?.into(),
+        contracts_root: genesis_db.on_chain().genesis_contracts_root()?.into(),
+        transactions_root: genesis_db.on_chain().processed_transactions_root()?.into(),
     };
 
     let consensus = Consensus::Genesis(genesis);
@@ -148,6 +167,38 @@ pub async fn execute_genesis_block(
     );
 
     Ok(result)
+}
+
+pub async fn recover_missing_tables_from_genesis_state_config(
+    watcher: StateWatcher,
+    config: &Config,
+    db: &CombinedDatabase,
+) -> anyhow::Result<()> {
+    // TODO: The code below only modifies the contract of the genesis block of the off chain database.
+    //  It is safe to initialize some missing data, for now, but it can change in the future.
+    //  We plan to remove this code later, see: https://github.com/FuelLabs/fuel-core/issues/2326
+    let Err(off_chain) = db.off_chain().clone().into_genesis() else {
+        return Ok(())
+    };
+
+    let genesis_db = CombinedGenesisDatabase {
+        on_chain: Database::default(),
+        off_chain,
+    };
+    let genesis_block = db
+        .on_chain()
+        .latest_view()?
+        .genesis_block()?
+        .ok_or(not_found!("Genesis block"))?;
+    let genesis_block = genesis_block.uncompress(vec![]);
+
+    SnapshotImporter::repopulate_maybe_missing_tables(
+        genesis_db,
+        genesis_block,
+        config.snapshot_reader.clone(),
+        watcher,
+    )
+    .await
 }
 
 #[cfg(feature = "test-helpers")]
