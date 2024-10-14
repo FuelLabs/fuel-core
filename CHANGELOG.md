@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - [2335](https://github.com/FuelLabs/fuel-core/pull/2335): Added CLI arguments for configuring GraphQL query costs.
 
+### Added
+- [2347](https://github.com/FuelLabs/fuel-core/pull/2347): Add GraphQL complexity histogram
+
 ## [Version 0.39.0]
 
 ### Added
