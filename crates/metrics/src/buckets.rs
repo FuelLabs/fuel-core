@@ -9,10 +9,6 @@ use strum_macros::EnumIter;
 #[cfg_attr(test, derive(EnumIter))]
 pub(crate) enum Buckets {
     Timing,
-    GasUsed,
-    TransactionsCount,
-    Fee,
-    SizeUsed,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
 pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
@@ -37,101 +33,6 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                 5.000,
                10.000,
             ],
-        ),
-        (
-            // Gas limit is 30_000_000.
-            Buckets::GasUsed,
-            vec![
-                    10_000.0,
-                    25_000.0,
-                    50_000.0,
-                   100_000.0,
-                   250_000.0,
-                   500_000.0,
-                 1_000_000.0,
-                 3_000_000.0,
-                 7_500_000.0,
-                15_000_000.0,
-                25_000_000.0,
-            ],
-        ),
-        (
-            // Transaction count is fixed at 65_535.
-            Buckets::TransactionsCount,
-            vec![
-                         1.0,
-                         2.0,
-                         3.0,
-                         4.0,
-                         5.0,
-                        10.0,
-                        18.0,
-                        32.0,
-                        57.0,
-                       102.0,
-                       183.0,
-                       327.0,
-                       853.0,
-                     1_041.0,
-                     1_858.0,
-                     3_316.0,
-                     5_918.0,
-                    10_561.0,
-                    18_844.0,
-                    33_625.0,
-                    60_000.0,
-            ],
-        ),
-        (
-            // 50 ETH is expected to be the realistic maximum fee for the time being.
-            Buckets::Fee,
-            vec![
-                         0.0,
-                       100.0,
-                       200.0,
-                       400.0,
-                       800.0,
-                     1_600.0,
-                     3_200.0,
-                     6_400.0,
-                    12_800.0,
-                    25_600.0,
-                    51_200.0,
-                   102_400.0,
-                   204_800.0,
-                   409_600.0,
-                   819_200.0,
-                 1_638_400.0,
-                 3_276_800.0,
-                 6_553_600.0,
-                13_107_200.0,
-                26_214_400.0,
-                52_428_800.0,
-             ]
-        ),
-        (
-            // Consider blocks up to 256kb in size.
-            Buckets::SizeUsed,
-            vec![
-                  1.0 * 1024.0,
-                  2.0 * 1024.0,
-                  3.0 * 1024.0,
-                  4.0 * 1024.0,
-                  5.0 * 1024.0,
-                  7.0 * 1024.0,
-                 10.0 * 1024.0,
-                 13.0 * 1024.0,
-                 18.0 * 1024.0,
-                 24.0 * 1024.0,
-                 33.0 * 1024.0,
-                 44.0 * 1024.0,
-                 59.0 * 1024.0,
-                 79.0 * 1024.0,
-                106.0 * 1024.0,
-                142.0 * 1024.0,
-                191.0 * 1024.0,
-                256.0 * 1024.0,
-            ]
         ),
     ]
     .into_iter()

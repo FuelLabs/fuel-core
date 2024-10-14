@@ -413,11 +413,13 @@ where
             .set(current_time);
         importer_metrics()
             .gas_per_block
-            .observe(total_gas_used as f64);
-        importer_metrics().fee_per_block.observe(total_fee as f64);
+            .set(total_gas_used.try_into().unwrap_or(i64::MAX));
+        importer_metrics()
+            .fee_per_block
+            .set(total_fee.try_into().unwrap_or(i64::MAX));
         importer_metrics()
             .transactions_per_block
-            .observe(total_transactions as f64);
+            .set(total_transactions.try_into().unwrap_or(i64::MAX));
     }
 }
 
