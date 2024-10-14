@@ -16,8 +16,8 @@ pin-project-lite = { workspace = true }
 prometheus-client = { workspace = true }
 regex = "1"
 tracing = { workspace = true }
-
-[dev-dependencies]
 strum = { workspace = true }
 strum_macros = { workspace = true }
+
+[dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

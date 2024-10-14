@@ -3284,6 +3284,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-compression",
+ "fuel-core-metrics",
  "fuel-core-poa",
  "fuel-core-storage",
  "fuel-core-types 0.39.0",

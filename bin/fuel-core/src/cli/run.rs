@@ -50,6 +50,7 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
+use fuel_core_metrics::config::Module;
 use fuel_core_poa::signer::SignMode;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use pyroscope::{
@@ -235,8 +236,8 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
-    #[arg(long = "metrics", env)]
-    pub metrics: bool,
+    #[arg(long = "disable-metrics", value_delimiter = ',', env)]
+    pub metrics: fuel_core_metrics::config::Config,
 
     #[clap(long = "verify-max-da-lag", default_value = "10", env)]
     pub max_da_lag: u64,
@@ -319,7 +320,10 @@ impl Command {
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(chain_config.chain_name.clone(), metrics)?;
+        let p2p_cfg = p2p_args.into_config(
+            chain_config.chain_name.clone(),
+            metrics.is_enabled(Module::P2P),
+        )?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -427,8 +431,9 @@ impl Command {
             state_rewind_policy,
         };
 
-        let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new(metrics);
+        let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
+            metrics.is_enabled(Module::Importer),
+        );
 
         let da_compression = match da_compression {
             Some(retention) => {
@@ -523,7 +528,7 @@ impl Command {
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
-                metrics,
+                metrics: metrics.is_enabled(Module::Producer),
             },
             starting_gas_price,
             gas_price_change_percent,

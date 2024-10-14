@@ -20,6 +20,7 @@ pub struct GlobalRegistry {
 }
 
 mod buckets;
+pub mod config;
 pub mod core_metrics;
 pub mod futures;
 pub mod graphql_metrics;
