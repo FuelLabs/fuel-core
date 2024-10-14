@@ -1,4 +1,10 @@
+#[cfg(test)]
+use itertools as _;
+#[cfg(not(test))]
 use itertools::Itertools;
+#[cfg(test)]
+use once_cell as _;
+#[cfg(not(test))]
 use once_cell::sync::Lazy;
 use strum::IntoEnumIterator;
 use strum_macros::{
@@ -38,6 +44,7 @@ impl std::convert::From<&str> for Config {
     }
 }
 
+#[cfg(not(test))]
 static HELP_STRING: Lazy<String> = Lazy::new(|| {
     format!(
         "Comma-separated list of modules or 'all' to disable all metrics. Available options: {}, all",
@@ -45,6 +52,7 @@ static HELP_STRING: Lazy<String> = Lazy::new(|| {
     )
 });
 
+#[cfg(not(test))]
 pub fn help_string() -> &'static str {
     &HELP_STRING
 }
