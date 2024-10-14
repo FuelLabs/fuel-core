@@ -1028,7 +1028,7 @@ where
             }
             _ = tokio::time::sleep_until(self.next_cache_reset_time) => {
                 should_continue = true;
-                let mut view = self.cached_view.lock().expect("Cached view lock poisoned");
+                let mut view = self.cached_view.lock().map_err(|e| anyhow!("Failed to lock cached view: {:?}", e))?;
                 // we could just call .clear() on the internal hashmaps
                 let latest_view = self.view_provider.latest_view()?;
                 *view = CachedView::new(latest_view);
