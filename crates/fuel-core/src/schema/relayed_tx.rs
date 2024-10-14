@@ -1,8 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::{
-        ports::DatabaseRelayedTransactions,
-        QUERY_COSTS,
-    },
+    fuel_core_graphql_api::QUERY_COSTS,
     schema::{
         scalars::{
             RelayedTransactionId,
@@ -33,7 +30,7 @@ impl RelayedTransactionQuery {
         #[graphql(desc = "The id of the relayed tx")] id: RelayedTransactionId,
     ) -> async_graphql::Result<Option<RelayedTransactionStatus>> {
         let query = ctx.read_view()?;
-        let status = query.transaction_status(id.0)?.map(|status| status.into());
+        let status = query.relayed_tx_status(id.0)?.map(|status| status.into());
         Ok(status)
     }
 }
