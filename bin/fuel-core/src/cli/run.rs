@@ -309,7 +309,13 @@ impl Command {
             profiling: _,
         } = self;
 
-        info!("Metrics config: {:?}", metrics);
+        let enabled_metrics = metrics.list_of_enabled();
+
+        if !enabled_metrics.is_empty() {
+            info!("`{:?}` metrics are enabled", enabled_metrics);
+        } else {
+            info!("All metrics are disabled");
+        }
 
         let addr = net::SocketAddr::new(graphql.ip, graphql.port);
 

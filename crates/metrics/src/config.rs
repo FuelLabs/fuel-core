@@ -21,11 +21,20 @@ pub enum Module {
 pub trait DisableConfig {
     /// Returns `true` if the given module is enabled.
     fn is_enabled(&self, module: Module) -> bool;
+
+    /// Returns the list of enabled modules.
+    fn list_of_enabled(&self) -> Vec<Module>;
 }
 
 impl DisableConfig for Vec<Module> {
     fn is_enabled(&self, module: Module) -> bool {
         !self.contains(&module) && !self.contains(&Module::All)
+    }
+
+    fn list_of_enabled(&self) -> Vec<Module> {
+        Module::iter()
+            .filter(|module| self.is_enabled(*module) && *module != Module::All)
+            .collect()
     }
 }
 
