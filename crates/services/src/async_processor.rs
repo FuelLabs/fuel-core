@@ -12,6 +12,7 @@ use tokio::{
         OwnedSemaphorePermit,
         Semaphore,
     },
+    task::JoinHandle,
 };
 
 /// A processor that can execute async tasks with a limit on the number of tasks that can be
@@ -76,40 +77,50 @@ impl AsyncProcessor {
     }
 
     /// Spawn a task with a reservation.
-    pub fn spawn_reserved<F>(&self, reservation: AsyncReservation, future: F)
+    pub fn spawn_reserved<F>(
+        &self,
+        reservation: AsyncReservation,
+        future: F,
+    ) -> JoinHandle<F::Output>
     where
-        F: Future<Output = ()> + Send + 'static,
+        F: Future + Send + 'static,
+        F::Output: Send,
     {
         let permit = reservation.0;
         let future = async move {
             let permit = permit;
-            future.await;
-            drop(permit)
+            let result = future.await;
+            drop(permit);
+            result
         };
         let metered_future = MeteredFuture::new(future, self.metric.clone());
         if let Some(runtime) = &self.thread_pool {
-            runtime.spawn(metered_future);
+            runtime.spawn(metered_future)
         } else {
-            tokio::spawn(metered_future);
+            tokio::spawn(metered_future)
         }
     }
 
     /// Tries to spawn a task. If the task cannot be spawned, returns an error.
-    pub fn try_spawn<F>(&self, future: F) -> Result<(), OutOfCapacity>
+    pub fn try_spawn<F>(&self, future: F) -> Result<JoinHandle<F::Output>, OutOfCapacity>
     where
-        F: Future<Output = ()> + Send + 'static,
+        F: Future + Send + 'static,
+        F::Output: Send,
     {
         let reservation = self.reserve()?;
-        self.spawn_reserved(reservation, future);
-        Ok(())
+        Ok(self.spawn_reserved(reservation, future))
     }
 }
 
 #[cfg(test)]
 #[allow(clippy::bool_assert_comparison)]
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
+    use futures::future::join_all;
     use std::{
+        collections::HashSet,
+        iter,
         thread::sleep,
         time::Duration,
     };
@@ -129,9 +140,43 @@ mod tests {
         });
 
         // Then
-        assert_eq!(result, Ok(()));
+        result.expect("Expected Ok result");
         sleep(Duration::from_secs(1));
         receiver.try_recv().unwrap();
+    }
+
+    #[tokio::test]
+    async fn one_spawn_single_tasks_works__thread_id_is_different_than_main() {
+        // Given
+        let number_of_threads = 10;
+        let number_of_pending_tasks = 10000;
+        let heavy_task_processor =
+            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+                .unwrap();
+        let main_handler = tokio::spawn(async move { std::thread::current().id() });
+        let main_id = main_handler.await.unwrap();
+
+        // When
+        let futures = iter::repeat_with(|| {
+            heavy_task_processor
+                .try_spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    std::thread::current().id()
+                })
+                .unwrap()
+        })
+        .take(number_of_pending_tasks)
+        .collect::<Vec<_>>();
+
+        // Then
+        let thread_ids = join_all(futures).await;
+        let unique_thread_ids = thread_ids
+            .into_iter()
+            .map(|r| r.unwrap())
+            .collect::<HashSet<_>>();
+
+        assert!(!unique_thread_ids.contains(&main_id));
+        assert_eq!(unique_thread_ids.len(), number_of_threads);
     }
 
     #[test]
@@ -143,7 +188,7 @@ mod tests {
         let first_spawn_result = heavy_task_processor.try_spawn(async move {
             sleep(Duration::from_secs(1));
         });
-        assert_eq!(first_spawn_result, Ok(()));
+        first_spawn_result.expect("Expected Ok result");
 
         // When
         let second_spawn_result = heavy_task_processor.try_spawn(async move {
@@ -151,7 +196,8 @@ mod tests {
         });
 
         // Then
-        assert_eq!(second_spawn_result, Err(OutOfCapacity));
+        let err = second_spawn_result.expect_err("Expected Ok result");
+        assert_eq!(err, OutOfCapacity);
     }
 
     #[test]
@@ -166,7 +212,7 @@ mod tests {
             sleep(Duration::from_secs(1));
             sender.send(()).unwrap();
         });
-        assert_eq!(first_spawn, Ok(()));
+        first_spawn.expect("Expected Ok result");
         futures::executor::block_on(async move {
             receiver.await.unwrap();
         });
@@ -177,7 +223,7 @@ mod tests {
         });
 
         // Then
-        assert_eq!(second_spawn, Ok(()));
+        second_spawn.expect("Expected Ok result");
     }
 
     #[test]
@@ -194,7 +240,7 @@ mod tests {
             });
 
             // Then
-            assert_eq!(result, Ok(()));
+            result.expect("Expected Ok result");
         }
     }
 
@@ -217,13 +263,15 @@ mod tests {
                 sleep(Duration::from_secs(1));
                 broadcast_sender.send(()).unwrap();
             });
-            assert_eq!(result, Ok(()));
+            result.expect("Expected Ok result");
         }
         drop(broadcast_sender);
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
         assert!(instant.elapsed() >= Duration::from_secs(10));
+        // Wait for the metrics to be updated.
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
         assert_eq!(duration.as_secs(), 10);
         let duration = Duration::from_nanos(heavy_task_processor.metric.idle.get());
@@ -249,13 +297,15 @@ mod tests {
                 sleep(Duration::from_secs(1));
                 broadcast_sender.send(()).unwrap();
             });
-            assert_eq!(result, Ok(()));
+            result.expect("Expected Ok result");
         }
         drop(broadcast_sender);
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
         assert!(instant.elapsed() <= Duration::from_secs(2));
+        // Wait for the metrics to be updated.
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
         assert_eq!(duration.as_secs(), 10);
         let duration = Duration::from_nanos(heavy_task_processor.metric.idle.get());
@@ -281,14 +331,15 @@ mod tests {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 broadcast_sender.send(()).unwrap();
             });
-            assert_eq!(result, Ok(()));
+            result.expect("Expected Ok result");
         }
         drop(broadcast_sender);
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
-        tokio::task::yield_now().await;
         assert!(instant.elapsed() <= Duration::from_secs(2));
+        // Wait for the metrics to be updated.
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
         assert_eq!(duration.as_secs(), 0);
         let duration = Duration::from_nanos(heavy_task_processor.metric.idle.get());
