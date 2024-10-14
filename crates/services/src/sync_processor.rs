@@ -209,6 +209,8 @@ mod tests {
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
         assert!(instant.elapsed() >= Duration::from_secs(10));
+        // Wait for the metrics to be updated.
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
         assert_eq!(duration.as_secs(), 10);
     }
@@ -275,6 +277,8 @@ mod tests {
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
         assert!(instant.elapsed() <= Duration::from_secs(2));
+        // Wait for the metrics to be updated.
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
         assert_eq!(duration.as_secs(), 10);
     }
