@@ -6,6 +6,14 @@ use strum_macros::{
     EnumString,
 };
 
+#[derive(Debug, derive_more::Display)]
+pub enum ConfigCreationError {
+    #[display(fmt = "Can not build config from empty value")]
+    EmptyValue,
+    #[display(fmt = "No such module: {}", _0)]
+    UnknownModule(String),
+}
+
 #[derive(Debug, Display, Clone, Copy, PartialEq, EnumString, EnumIter)]
 #[strum(serialize_all = "lowercase")]
 pub enum Module {
@@ -24,16 +32,27 @@ impl Config {
     }
 }
 
-impl std::convert::From<&str> for Config {
-    fn from(s: &str) -> Self {
+impl std::str::FromStr for Config {
+    // TODO: Figure out how to make `clap` work directly with `ConfigCreationError`
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "all" {
-            return Self(Module::iter().collect())
+            return Ok(Self(Module::iter().collect()))
         }
-        Self(
-            s.split(',')
-                .filter_map(|s| s.parse::<Module>().ok())
-                .collect(),
-        )
+        if s.is_empty() {
+            return Err(ConfigCreationError::EmptyValue.to_string());
+        }
+
+        let mut modules = vec![];
+
+        for token in s.split(',') {
+            let parsed_module = token.parse::<Module>().map_err(|_| {
+                ConfigCreationError::UnknownModule(token.to_string()).to_string()
+            })?;
+            modules.push(parsed_module);
+        }
+
+        Ok(Self(modules))
     }
 }
 
@@ -51,6 +70,8 @@ pub fn help_string() -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use strum::IntoEnumIterator;
 
     use crate::config::{
@@ -77,7 +98,7 @@ mod tests {
 
         let expected_disabled = [Module::Importer, Module::TxPool].to_vec();
 
-        let config: Config = EXCLUDED_METRICS.into();
+        let config = Config::from_str(EXCLUDED_METRICS).expect("should create config");
         assert_config(&config, expected_disabled);
     }
 
@@ -85,20 +106,19 @@ mod tests {
     fn metrics_config_with_incorrect_values() {
         const EXCLUDED_METRICS: &str = "txpool,alpha,bravo";
 
-        let expected_disabled = [Module::TxPool].to_vec();
-
-        let config: Config = EXCLUDED_METRICS.into();
-        assert_config(&config, expected_disabled);
+        let config = Config::from_str(EXCLUDED_METRICS);
+        assert!(matches!(config, Err(err) if err == "No such module: alpha"));
     }
 
     #[test]
     fn metrics_config_with_empty_value() {
+        // This case is still possible if someone calls `--disable-metrics ""`
         const EXCLUDED_METRICS: &str = "";
 
-        let expected_disabled = vec![];
-
-        let config: Config = EXCLUDED_METRICS.into();
-        assert_config(&config, expected_disabled);
+        let config = Config::from_str(EXCLUDED_METRICS);
+        assert!(
+            matches!(config, Err(err) if err == "Can not build config from empty value")
+        );
     }
 
     #[test]
@@ -107,7 +127,7 @@ mod tests {
 
         let expected_disabled = Module::iter().collect::<Vec<_>>();
 
-        let config: Config = EXCLUDED_METRICS.into();
+        let config = Config::from_str(EXCLUDED_METRICS).expect("should create config");
         assert_config(&config, expected_disabled);
     }
 }

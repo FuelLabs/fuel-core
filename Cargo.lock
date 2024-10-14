@@ -3516,6 +3516,7 @@ dependencies = [
 name = "fuel-core-metrics"
 version = "0.39.0"
 dependencies = [
+ "derive_more",
  "once_cell",
  "parking_lot",
  "pin-project-lite",

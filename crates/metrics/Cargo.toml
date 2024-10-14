@@ -11,6 +11,7 @@ repository = { workspace = true }
 description = "Fuel metrics"
 
 [dependencies]
+derive_more = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 pin-project-lite = { workspace = true }
