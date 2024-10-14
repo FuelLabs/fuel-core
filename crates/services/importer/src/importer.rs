@@ -25,6 +25,10 @@ use fuel_core_types::{
         primitives::BlockId,
         SealedBlock,
     },
+    fuel_tx::{
+        field::MintGasPrice,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -34,8 +38,10 @@ use fuel_core_types::{
             ImportResult,
             UncommittedResult,
         },
-        executor,
-        executor::ValidationResult,
+        executor::{
+            self,
+            ValidationResult,
+        },
         Uncommitted,
     },
 };
@@ -58,6 +64,7 @@ use tokio::sync::{
     Semaphore,
     TryAcquireError,
 };
+use tracing::warn;
 
 #[cfg(test)]
 pub mod test;
@@ -399,6 +406,16 @@ where
                     acc_fee.saturating_add(fee),
                 )
             });
+        let maybe_last_tx = result.sealed_block.entity.transactions().last();
+        if let Some(last_tx) = maybe_last_tx {
+            if let Transaction::Mint(mint) = last_tx {
+                importer_metrics()
+                    .gas_price
+                    .set((*mint.gas_price()).try_into().unwrap_or(i64::MAX));
+            } else {
+                warn!("Last transaction is not a mint transaction");
+            }
+        }
 
         let total_transactions = result.tx_status.len();
         importer_metrics()
@@ -413,11 +430,13 @@ where
             .set(current_time);
         importer_metrics()
             .gas_per_block
-            .observe(total_gas_used as f64);
-        importer_metrics().fee_per_block.observe(total_fee as f64);
+            .set(total_gas_used.try_into().unwrap_or(i64::MAX));
+        importer_metrics()
+            .fee_per_block
+            .set(total_fee.try_into().unwrap_or(i64::MAX));
         importer_metrics()
             .transactions_per_block
-            .observe(total_transactions as f64);
+            .set(total_transactions.try_into().unwrap_or(i64::MAX));
     }
 }
 

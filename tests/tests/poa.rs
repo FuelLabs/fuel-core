@@ -259,6 +259,7 @@ mod p2p {
     // Then starts second_producer that uses the first one as a reserved peer.
     // second_producer should not produce blocks while the first one is producing
     // after the first_producer stops, second_producer should start producing blocks
+    #[ignore = "seems to be flaky, issue: https://github.com/FuelLabs/fuel-core/issues/2351"]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
         const SYNC_TIMEOUT: u64 = 30;

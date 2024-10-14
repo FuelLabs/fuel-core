@@ -5,14 +5,19 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- [2350](https://github.com/FuelLabs/fuel-core/pull/2350): Added a new CLI flag `graphql-number-of-threads` to limit the number of threads used by the GraphQL service. The default value is `2`, `0` enables the old behavior.
+
+### Fixed
+- [2345](https://github.com/FuelLabs/fuel-core/pull/2345): In PoA increase priority of block creation timer trigger compare to txpool event management
 
 ### Changed
-
 - [2334](https://github.com/FuelLabs/fuel-core/pull/2334): Prepare the GraphQL service for the switching to `async` methods.
-- [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The total gas used in a block" (`importer_gas_per_block`), "The total fee (gwei) paid by transactions in a block" (`importer_fee_per_block_gwei`), "The total number of transactions in a block" (`importer_transactions_per_block`), P2P metrics for swarm and protocol.
+- [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The gas prices used in a block" (`importer_gas_price_for_block`), "The total gas used in a block" (`importer_gas_per_block`), "The total fee (gwei) paid by transactions in a block" (`importer_fee_per_block_gwei`), "The total number of transactions in a block" (`importer_transactions_per_block`), P2P metrics for swarm and protocol.
 
 #### Breaking
 - [2310](https://github.com/FuelLabs/fuel-core/pull/2310): The `metrics` command-line parameter has been replaced with `disable-metrics`. Metrics are now enabled by default, with the option to disable them entirely or on a per-module basis.
+- [2350](https://github.com/FuelLabs/fuel-core/pull/2350): Limited the number of threads used by the GraphQL service.
 
 ## [Version 0.39.0]
 
