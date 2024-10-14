@@ -90,7 +90,7 @@ impl ReadView {
         self.owned_message_ids(owner, start_message_id, direction)
             .map(|result| {
                 result.and_then(|id| {
-                    // TODO: Move `message` fetching to a separate thread
+                    // TODO: Move `message` fetching to a separate thread (https://github.com/FuelLabs/fuel-core/pull/2340)
                     self.message(&id)
                 })
             })

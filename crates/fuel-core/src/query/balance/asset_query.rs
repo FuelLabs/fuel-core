@@ -138,7 +138,7 @@ impl<'a> AssetsQuery<'a> {
                     } else {
                         return Err(anyhow::anyhow!("The coin is not a message").into());
                     };
-                    // TODO: Fetch message in a separate thread
+                    // TODO: Fetch message in a separate thread (https://github.com/FuelLabs/fuel-core/pull/2340)
                     let message = database.message(&id)?;
                     Ok(message)
                 })

@@ -45,7 +45,7 @@ impl ReadView {
         self.owned_transactions_ids(owner, start, direction)
             .map(|result| {
                 result.and_then(|(tx_pointer, tx_id)| {
-                    // TODO: Fetch transactions in a separate thread
+                    // TODO: Fetch transactions in a separate thread (https://github.com/FuelLabs/fuel-core/pull/2340)
                     let tx = self.transaction(&tx_id)?;
 
                     Ok((tx_pointer, tx))

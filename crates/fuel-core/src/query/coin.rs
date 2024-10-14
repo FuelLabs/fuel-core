@@ -38,7 +38,7 @@ impl ReadView {
         self.owned_coins_ids(owner, start_coin, direction)
             .map(|res| {
                 res.and_then(|id| {
-                    // TODO: Move fetching of the coin to a separate thread
+                    // TODO: Move fetching of the coin to a separate thread (https://github.com/FuelLabs/fuel-core/pull/2340)
                     self.coin(id)
                 })
             })
