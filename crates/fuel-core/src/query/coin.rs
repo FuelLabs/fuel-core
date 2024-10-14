@@ -1,10 +1,6 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
+    iter::IterDirection,
     not_found,
     tables::Coins,
     Result as StorageResult,
@@ -14,6 +10,10 @@ use fuel_core_types::{
     entities::coins::coin::Coin,
     fuel_tx::UtxoId,
     fuel_types::Address,
+};
+use futures::{
+    Stream,
+    StreamExt,
 };
 
 impl ReadView {
@@ -34,9 +34,13 @@ impl ReadView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Coin>> {
+    ) -> impl Stream<Item = StorageResult<Coin>> + '_ {
         self.owned_coins_ids(owner, start_coin, direction)
-            .map(|res| res.and_then(|id| self.coin(id)))
-            .into_boxed()
+            .map(|res| {
+                res.and_then(|id| {
+                    // TODO: Move fetching of the coin to a separate thread (https://github.com/FuelLabs/fuel-core/pull/2340)
+                    self.coin(id)
+                })
+            })
     }
 }
