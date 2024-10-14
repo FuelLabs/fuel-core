@@ -351,12 +351,12 @@ impl ReadView {
         futures::stream::iter(iter)
     }
 
-    pub fn owned_message_ids<'a>(
-        &'a self,
-        owner: &'a Address,
+    pub fn owned_message_ids(
+        &self,
+        owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<Nonce>> + 'a {
+    ) -> impl Stream<Item = StorageResult<Nonce>> + '_ {
         futures::stream::iter(self.off_chain.owned_message_ids(
             owner,
             start_message_id,
