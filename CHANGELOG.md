@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [2334](https://github.com/FuelLabs/fuel-core/pull/2334): Prepare the GraphQL service for the switching to `async` methods.
 
+### Added
+- [2347](https://github.com/FuelLabs/fuel-core/pull/2347): Add GraphQL complexity histogram
+
 ## [Version 0.39.0]
 
 ### Added
