@@ -236,8 +236,8 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
-    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
-    pub metrics: Option<fuel_core_metrics::config::Config>,
+    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), default_value = "", env)]
+    pub metrics: fuel_core_metrics::config::Config,
 
     #[clap(long = "verify-max-da-lag", default_value = "10", env)]
     pub max_da_lag: u64,
@@ -294,7 +294,7 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
-            metrics: maybe_metrics_config,
+            metrics,
             max_da_lag,
             max_wait_time,
             tx_pool,
@@ -322,9 +322,7 @@ impl Command {
         #[cfg(feature = "p2p")]
         let p2p_cfg = p2p_args.into_config(
             chain_config.chain_name.clone(),
-            maybe_metrics_config
-                .as_ref()
-                .map_or(true, |metrics| metrics.is_enabled(Module::P2P)),
+            metrics.is_enabled(Module::P2P),
         )?;
 
         let trigger: Trigger = poa_trigger.into();
@@ -434,9 +432,7 @@ impl Command {
         };
 
         let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
-            maybe_metrics_config
-                .as_ref()
-                .map_or(true, |metrics| metrics.is_enabled(Module::Importer)),
+            metrics.is_enabled(Module::Importer),
         );
 
         let da_compression = match da_compression {
@@ -533,8 +529,7 @@ impl Command {
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
-                metrics: maybe_metrics_config
-                    .map_or(true, |metrics| metrics.is_enabled(Module::Producer)),
+                metrics: metrics.is_enabled(Module::Producer),
             },
             starting_gas_price,
             gas_price_change_percent,
