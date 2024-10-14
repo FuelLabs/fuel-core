@@ -70,6 +70,24 @@ mod tests {
     }
 
     #[test]
+    fn metrics_config_with_incorrect_values() {
+        const EXCLUDED_METRICS: &str = "txpool,alpha,bravo";
+
+        let config: Config = EXCLUDED_METRICS.into();
+        assert!(!config.is_enabled(Module::TxPool));
+        assert!(config.is_enabled(Module::P2P));
+    }
+
+    #[test]
+    fn metrics_config_with_empty_value() {
+        const EXCLUDED_METRICS: &str = "";
+
+        let config: Config = EXCLUDED_METRICS.into();
+        assert!(config.is_enabled(Module::TxPool));
+        assert!(config.is_enabled(Module::P2P));
+    }
+
+    #[test]
     fn metrics_config_supports_all() {
         const EXCLUDED_METRICS: &str = "all";
 
