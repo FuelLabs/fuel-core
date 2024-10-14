@@ -3,6 +3,7 @@ use fuel_core_storage::{
     iter::IterDirection,
     not_found,
     tables::Transactions,
+    Error as StorageError,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -18,11 +19,12 @@ use fuel_core_types::{
 use futures::{
     Stream,
     StreamExt,
+    TryStreamExt,
 };
 
 impl ReadView {
     pub fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        let status = self.status(tx_id)?;
+        let status = self.tx_status(tx_id)?;
 
         let receipts = match status {
             TransactionStatus::Success { receipts, .. }
@@ -32,10 +34,6 @@ impl ReadView {
         receipts.ok_or(not_found!(Transactions))
     }
 
-    pub fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
-        self.tx_status(tx_id)
-    }
-
     pub fn owned_transactions(
         &self,
         owner: Address,
@@ -43,13 +41,22 @@ impl ReadView {
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<(TxPointer, Transaction)>> + '_ {
         self.owned_transactions_ids(owner, start, direction)
-            .map(|result| {
-                result.and_then(|(tx_pointer, tx_id)| {
-                    // TODO: Fetch transactions in a separate thread (https://github.com/FuelLabs/fuel-core/pull/2340)
-                    let tx = self.transaction(&tx_id)?;
+            .chunks(self.batch_size)
+            .map(|chunk| {
+                use itertools::Itertools;
 
-                    Ok((tx_pointer, tx))
-                })
+                let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                Ok::<_, StorageError>(chunk)
             })
+            .try_filter_map(move |chunk| async move {
+                let tx_ids = chunk.iter().map(|(_, tx_id)| *tx_id).collect::<Vec<_>>();
+                let txs = self.transactions(tx_ids).await;
+                let txs = txs
+                    .into_iter()
+                    .zip(chunk)
+                    .map(|(result, (tx_pointer, _))| result.map(|tx| (tx_pointer, tx)));
+                Ok(Some(futures::stream::iter(txs)))
+            })
+            .try_flatten()
     }
 }
