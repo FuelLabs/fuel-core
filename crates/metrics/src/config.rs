@@ -8,8 +8,6 @@ use strum_macros::{
 
 #[derive(Debug, derive_more::Display)]
 pub enum ConfigCreationError {
-    #[display(fmt = "Can not build config from empty value")]
-    EmptyValue,
     #[display(fmt = "No such module: {}", _0)]
     UnknownModule(String),
 }
@@ -32,17 +30,24 @@ impl Config {
     }
 }
 
+impl std::fmt::Display for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let disabled_modules = self
+            .0
+            .iter()
+            .map(|module| module.to_string())
+            .collect::<Vec<_>>();
+        write!(f, "Disable modules: {}", disabled_modules.join(", "))
+    }
+}
+
 impl std::str::FromStr for Config {
     // TODO: Figure out how to make `clap` work directly with `ConfigCreationError`
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "all" {
+        if s == "all" || s.is_empty() {
             return Ok(Self(Module::iter().collect()))
         }
-        if s.is_empty() {
-            return Err(ConfigCreationError::EmptyValue.to_string());
-        }
-
         let mut modules = vec![];
 
         for token in s.split(',') {
@@ -115,10 +120,10 @@ mod tests {
         // This case is still possible if someone calls `--disable-metrics ""`
         const EXCLUDED_METRICS: &str = "";
 
-        let config = Config::from_str(EXCLUDED_METRICS);
-        assert!(
-            matches!(config, Err(err) if err == "Can not build config from empty value")
-        );
+        let expected_disabled = Module::iter().collect::<Vec<_>>();
+
+        let config = Config::from_str(EXCLUDED_METRICS).expect("should create config");
+        assert_config(&config, expected_disabled);
     }
 
     #[test]
