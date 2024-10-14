@@ -27,24 +27,8 @@ use std::{
 
 pub mod asset_query;
 
-pub trait BalanceQueryData: Send + Sync {
-    fn balance(
-        &self,
-        owner: Address,
-        asset_id: AssetId,
-        base_asset_id: AssetId,
-    ) -> StorageResult<AddressBalance>;
-
-    fn balances(
-        &self,
-        owner: Address,
-        direction: IterDirection,
-        base_asset_id: AssetId,
-    ) -> BoxedIter<StorageResult<AddressBalance>>;
-}
-
-impl BalanceQueryData for ReadView {
-    fn balance(
+impl ReadView {
+    pub fn balance(
         &self,
         owner: Address,
         asset_id: AssetId,
@@ -75,7 +59,7 @@ impl BalanceQueryData for ReadView {
         })
     }
 
-    fn balances(
+    pub fn balances(
         &self,
         owner: Address,
         direction: IterDirection,

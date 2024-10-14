@@ -287,6 +287,7 @@ mod tests {
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
+        tokio::task::yield_now().await;
         assert!(instant.elapsed() <= Duration::from_secs(2));
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
         assert_eq!(duration.as_secs(), 0);

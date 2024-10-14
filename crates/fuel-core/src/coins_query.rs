@@ -1002,7 +1002,6 @@ mod tests {
         }
 
         pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
-            use crate::query::CoinQueryData;
             let query = self.service_database();
             let query = query.test_view();
             query
@@ -1013,7 +1012,6 @@ mod tests {
         }
 
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
-            use crate::query::MessageQueryData;
             let query = self.service_database();
             let query = query.test_view();
             query

@@ -11,12 +11,8 @@ use super::{
     ReadViewProvider,
 };
 use crate::{
-    fuel_core_graphql_api::{
-        ports::OffChainDatabase,
-        QUERY_COSTS,
-    },
+    fuel_core_graphql_api::QUERY_COSTS,
     graphql_api::IntoApiResult,
-    query::MessageQueryData,
     schema::scalars::{
         BlockId,
         U32,

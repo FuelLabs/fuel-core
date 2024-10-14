@@ -8,10 +8,7 @@ use crate::{
         QUERY_COSTS,
     },
     graphql_api::api_service::ConsensusProvider,
-    query::{
-        asset_query::AssetSpendTarget,
-        CoinQueryData,
-    },
+    query::asset_query::AssetSpendTarget,
     schema::{
         scalars::{
             Address,

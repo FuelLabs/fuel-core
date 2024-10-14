@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 
 - [2345](https://github.com/FuelLabs/fuel-core/pull/2345): In PoA increase priority of block creation timer trigger compare to txpool event management
+### Changed
+
+- [2334](https://github.com/FuelLabs/fuel-core/pull/2334): Prepare the GraphQL service for the switching to `async` methods.
 
 ## [Version 0.39.0]
 
