@@ -28,7 +28,9 @@ use async_graphql::{
     Enum,
     Object,
 };
+use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_types::entities;
+use futures::StreamExt;
 
 pub struct Message(pub(crate) entities::relayer::message::Message);
 
@@ -91,6 +93,8 @@ impl MessageQuery {
     ) -> async_graphql::Result<Connection<HexString, Message, EmptyFields, EmptyFields>>
     {
         let query = ctx.read_view()?;
+        let owner = owner.map(|owner| owner.0);
+        let owner_ref = owner.as_ref();
         crate::schema::query_pagination(
             after,
             before,
@@ -103,10 +107,12 @@ impl MessageQuery {
                     None
                 };
 
-                let messages = if let Some(owner) = owner {
-                    query.owned_messages(&owner.0, start, direction)
+                let messages = if let Some(owner) = owner_ref {
+                    query
+                        .owned_messages(owner, start, direction)
+                        .into_boxed_ref()
                 } else {
-                    query.all_messages(start, direction)
+                    query.all_messages(start, direction).into_boxed_ref()
                 };
 
                 let messages = messages.map(|result| {

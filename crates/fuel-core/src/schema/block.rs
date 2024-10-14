@@ -36,11 +36,7 @@ use async_graphql::{
     Union,
 };
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
+    iter::IterDirection,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -50,6 +46,10 @@ use fuel_core_types::{
     },
     fuel_types,
     fuel_types::BlockHeight,
+};
+use futures::{
+    Stream,
+    StreamExt,
 };
 
 pub struct Block(pub(crate) CompressedBlock);
@@ -339,16 +339,14 @@ fn blocks_query<T>(
     query: &ReadView,
     height: Option<BlockHeight>,
     direction: IterDirection,
-) -> BoxedIter<StorageResult<(U32, T)>>
+) -> impl Stream<Item = StorageResult<(U32, T)>> + '_
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
 {
-    let blocks = query.compressed_blocks(height, direction).map(|result| {
+    query.compressed_blocks(height, direction).map(|result| {
         result.map(|block| ((*block.header().height()).into(), block.into()))
-    });
-
-    blocks.into_boxed()
+    })
 }
 
 #[derive(Default)]

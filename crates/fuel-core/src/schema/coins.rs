@@ -40,6 +40,7 @@ use fuel_core_types::{
     fuel_tx,
 };
 use itertools::Itertools;
+use tokio_stream::StreamExt;
 
 pub struct Coin(pub(crate) CoinModel);
 
@@ -174,8 +175,8 @@ impl CoinQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
         let query = ctx.read_view()?;
+        let owner: fuel_tx::Address = filter.owner.into();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let owner: fuel_tx::Address = filter.owner.into();
             let coins = query
                 .owned_coins(&owner, (*start).map(Into::into), direction)
                 .filter_map(|result| {
@@ -213,8 +214,8 @@ impl CoinQuery {
         #[graphql(desc = "\
             The list of requested assets` coins with asset ids, `target` amount the user wants \
             to reach, and the `max` number of coins in the selection. Several entries with the \
-            same asset id are not allowed.")]
-        query_per_asset: Vec<SpendQueryElementInput>,
+            same asset id are not allowed. The result can't contain more coins than `max_inputs`.")]
+        mut query_per_asset: Vec<SpendQueryElementInput>,
         #[graphql(desc = "The excluded coins from the selection.")] excluded_ids: Option<
             ExcludeInput,
         >,
@@ -222,6 +223,14 @@ impl CoinQuery {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
+        let max_input = params.tx_params().max_inputs();
+
+        // `coins_to_spend` exists to help select inputs for the transactions.
+        // It doesn't make sense to allow the user to request more than the maximum number
+        // of inputs.
+        // TODO: To avoid breaking changes, we will truncate request for now.
+        //  In the future, we should return an error if the input is too large.
+        query_per_asset.truncate(max_input as usize);
 
         let owner: fuel_tx::Address = owner.0;
         let query_per_asset = query_per_asset
@@ -230,7 +239,10 @@ impl CoinQuery {
                 AssetSpendTarget::new(
                     e.asset_id.0,
                     e.amount.0,
-                    e.max.map(|max| max.0 as usize).unwrap_or(usize::MAX),
+                    e.max
+                        .and_then(|max| u16::try_from(max.0).ok())
+                        .unwrap_or(max_input)
+                        .min(max_input),
                 )
             })
             .collect_vec();
@@ -252,7 +264,8 @@ impl CoinQuery {
 
         let query = ctx.read_view()?;
 
-        let coins = random_improve(query.as_ref(), &spend_query)?
+        let coins = random_improve(query.as_ref(), &spend_query)
+            .await?
             .into_iter()
             .map(|coins| {
                 coins
