@@ -4,6 +4,7 @@ use asset_query::{
     AssetSpendTarget,
     AssetsQuery,
 };
+use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::IterDirection,
     Result as StorageResult,
@@ -106,5 +107,6 @@ impl ReadView {
             })
             .map_ok(|stream| stream.map(Ok))
             .try_flatten()
+            .yield_each(self.batch_size)
     }
 }

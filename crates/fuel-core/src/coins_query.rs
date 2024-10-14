@@ -280,10 +280,7 @@ mod tests {
         fuel_asm::Word,
         fuel_tx::*,
     };
-    use futures::{
-        StreamExt,
-        TryStreamExt,
-    };
+    use futures::TryStreamExt;
     use itertools::Itertools;
     use rand::{
         rngs::StdRng,
@@ -988,7 +985,7 @@ mod tests {
         fn service_database(&self) -> ServiceDatabase {
             let on_chain = self.database.on_chain().clone();
             let off_chain = self.database.off_chain().clone();
-            ServiceDatabase::new(0u32.into(), on_chain, off_chain)
+            ServiceDatabase::new(100, 0u32.into(), on_chain, off_chain)
         }
     }
 
@@ -1045,8 +1042,7 @@ mod tests {
             let query = self.service_database();
             let query = query.test_view();
             query
-                .owned_coins_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.coin(id).unwrap()))
+                .owned_coins(owner, None, IterDirection::Forward)
                 .try_collect()
                 .await
                 .unwrap()
@@ -1056,8 +1052,7 @@ mod tests {
             let query = self.service_database();
             let query = query.test_view();
             query
-                .owned_message_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.message(&id).unwrap()))
+                .owned_messages(owner, None, IterDirection::Forward)
                 .try_collect()
                 .await
                 .unwrap()

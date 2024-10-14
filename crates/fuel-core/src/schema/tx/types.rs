@@ -987,7 +987,7 @@ pub(crate) async fn get_tx_status(
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query
-        .status(&id)
+        .tx_status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => {
