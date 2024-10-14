@@ -38,11 +38,10 @@ impl std::convert::From<&str> for Config {
     }
 }
 
-pub static HELP_STRING: Lazy<String> = Lazy::new(|| {
-    let all_modules: Vec<_> = Module::iter().collect();
+static HELP_STRING: Lazy<String> = Lazy::new(|| {
     format!(
         "Comma-separated list of modules or 'all' to disable all metrics. Available options: {}, all",
-        all_modules.iter().join(", ")
+        Module::iter().join(", ")
     )
 });
 
