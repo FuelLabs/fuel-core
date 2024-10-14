@@ -27,6 +27,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use dashmap::DashMap;
 use fuel_core_metrics::p2p_metrics::set_blocks_requested;
 use fuel_core_services::{
     stream::BoxStream,
@@ -84,9 +85,7 @@ use std::{
     fmt::Debug,
     future::Future,
     ops::Range,
-    sync::{
-        Arc,
-    },
+    sync::Arc,
 };
 use tokio::{
     sync::{
@@ -102,7 +101,6 @@ use tokio::{
         Instant,
     },
 };
-use dashmap::DashMap;
 use tracing::warn;
 
 const CHANNEL_SIZE: usize = 1024 * 10;
@@ -501,7 +499,7 @@ struct CachedView {
     transactions_on_blocks: DashMap<Range<u32>, Vec<Transactions>>,
 }
 
-impl CachedView{
+impl CachedView {
     fn new() -> Self {
         Self {
             sealed_block_headers: DashMap::new(),
@@ -520,7 +518,10 @@ impl CachedView {
         &self,
         view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<SealedBlockHeader>>> where V: P2pDb {
+    ) -> StorageResult<Option<Vec<SealedBlockHeader>>>
+    where
+        V: P2pDb,
+    {
         if let Some(headers) = self.sealed_block_headers.get(&block_height_range) {
             Ok(Some(headers.clone()))
         } else {
@@ -537,7 +538,10 @@ impl CachedView {
         &self,
         view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<Transactions>>> where V: P2pDb {
+    ) -> StorageResult<Option<Vec<Transactions>>>
+    where
+        V: P2pDb,
+    {
         if let Some(transactions) = self.transactions_on_blocks.get(&block_height_range) {
             Ok(Some(transactions.clone()))
         } else {
@@ -634,7 +638,8 @@ where
                     return;
                 }
 
-                let response = db_lookup(&view, &cached_view, range.clone()).ok().flatten();
+                let response =
+                    db_lookup(&view, &cached_view, range.clone()).ok().flatten();
 
                 let _ = response_channel
                     .try_send(task_request(response, request_id))
@@ -660,7 +665,11 @@ where
             range,
             request_id,
             ResponseMessage::Transactions,
-            |view, cached_view, range| cached_view.get_transactions(view, range).map_err(anyhow::Error::from),
+            |view, cached_view, range| {
+                cached_view
+                    .get_transactions(view, range)
+                    .map_err(anyhow::Error::from)
+            },
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
                 request_id,
@@ -678,7 +687,11 @@ where
             range,
             request_id,
             ResponseMessage::SealedHeaders,
-            |view, cached_view, range| cached_view.get_sealed_headers(view, range).map_err(anyhow::Error::from),
+            |view, cached_view, range| {
+                cached_view
+                    .get_sealed_headers(view, range)
+                    .map_err(anyhow::Error::from)
+            },
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
                 request_id,
