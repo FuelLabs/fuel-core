@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - [2334](https://github.com/FuelLabs/fuel-core/pull/2334): Prepare the GraphQL service for the switching to `async` methods.
-- [2337](https://github.com/FuelLabs/fuel-core/pull/2337): Updated all pagination queries to work with the async stream instead of the sync iterator.
+- [2341](https://github.com/FuelLabs/fuel-core/pull/2341): Updated all pagination queries to work with the async stream instead of the sync iterator.
 - [2340](https://github.com/FuelLabs/fuel-core/pull/2340): Avoid long heavy tasks in the GraphQL service by splitting work into batches.
 
 #### Breaking
-- [2337](https://github.com/FuelLabs/fuel-core/pull/2337): The maximum number of processed coins from the `coins_to_spend` query is limited to `max_inputs`.
+- [2341](https://github.com/FuelLabs/fuel-core/pull/2341): The maximum number of processed coins from the `coins_to_spend` query is limited to `max_inputs`.
 
 ## [Version 0.39.0]
 

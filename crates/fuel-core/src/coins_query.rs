@@ -164,6 +164,7 @@ pub async fn largest_first(
 //  target and the part that does not(by choosing the most expensive coins).
 //  When the target is satisfied, we can select random coins from the remaining
 //  coins not used in the target.
+//  https://github.com/FuelLabs/fuel-core/issues/1965
 pub async fn random_improve(
     db: &ReadView,
     spend_query: &SpendQuery,
