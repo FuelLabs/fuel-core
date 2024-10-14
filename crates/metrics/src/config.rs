@@ -58,42 +58,56 @@ mod tests {
         Module,
     };
 
+    fn assert_config(config: &Config, expected_disabled: Vec<Module>) {
+        expected_disabled
+            .iter()
+            .for_each(|module| assert!(!config.is_enabled(*module)));
+
+        let expected_enabled: Vec<_> = Module::iter()
+            .filter(|module| !expected_disabled.contains(module))
+            .collect();
+        expected_enabled
+            .iter()
+            .for_each(|module| assert!(config.is_enabled(*module)));
+    }
+
     #[test]
     fn metrics_config() {
         const EXCLUDED_METRICS: &str = "importer,txpool";
 
+        let expected_disabled = [Module::Importer, Module::TxPool].to_vec();
+
         let config: Config = EXCLUDED_METRICS.into();
-        assert!(!config.is_enabled(Module::Importer));
-        assert!(!config.is_enabled(Module::TxPool));
-        assert!(config.is_enabled(Module::P2P));
-        assert!(config.is_enabled(Module::Producer));
+        assert_config(&config, expected_disabled);
     }
 
     #[test]
     fn metrics_config_with_incorrect_values() {
         const EXCLUDED_METRICS: &str = "txpool,alpha,bravo";
 
+        let expected_disabled = [Module::TxPool].to_vec();
+
         let config: Config = EXCLUDED_METRICS.into();
-        assert!(!config.is_enabled(Module::TxPool));
-        assert!(config.is_enabled(Module::P2P));
+        assert_config(&config, expected_disabled);
     }
 
     #[test]
     fn metrics_config_with_empty_value() {
         const EXCLUDED_METRICS: &str = "";
 
+        let expected_disabled = vec![];
+
         let config: Config = EXCLUDED_METRICS.into();
-        assert!(config.is_enabled(Module::TxPool));
-        assert!(config.is_enabled(Module::P2P));
+        assert_config(&config, expected_disabled);
     }
 
     #[test]
     fn metrics_config_supports_all() {
         const EXCLUDED_METRICS: &str = "all";
 
+        let expected_disabled = Module::iter().collect::<Vec<_>>();
+
         let config: Config = EXCLUDED_METRICS.into();
-        for module in Module::iter() {
-            assert!(!config.is_enabled(module));
-        }
+        assert_config(&config, expected_disabled);
     }
 }
