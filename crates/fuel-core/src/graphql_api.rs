@@ -19,6 +19,17 @@ pub(crate) mod view_extension;
 pub mod worker_service;
 
 #[derive(Clone, Debug)]
+pub struct Config {
+    pub config: ServiceConfig,
+    pub utxo_validation: bool,
+    pub debug: bool,
+    pub vm_backtrace: bool,
+    pub max_tx: usize,
+    pub max_txpool_dependency_chain_length: usize,
+    pub chain_name: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct ServiceConfig {
     pub addr: SocketAddr,
     pub max_queries_depth: usize,
@@ -35,7 +46,7 @@ pub struct ServiceConfig {
     pub costs: Costs,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Costs {
     pub balance_query: usize,
     pub coins_to_spend: usize,
@@ -93,19 +104,18 @@ pub fn query_costs() -> &'static Costs {
 
 pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
 
-fn initialize_query_costs(config: Config) {
-    QUERY_COSTS.get_or_init(|| config.config.costs);
-}
+fn initialize_query_costs(costs: Costs) -> anyhow::Result<()> {
+    #[cfg(feature = "test-helpers")]
+    if costs != DEFAULT_QUERY_COSTS {
+        // We don't support setting these values in test contexts, because
+        // it can lead to unexpected behavior if multiple tests try to
+        // initialize different values.
+        anyhow::bail!("cannot initialize queries with non-default costs in tests")
+    }
 
-#[derive(Clone, Debug)]
-pub struct Config {
-    pub config: ServiceConfig,
-    pub utxo_validation: bool,
-    pub debug: bool,
-    pub vm_backtrace: bool,
-    pub max_tx: usize,
-    pub max_txpool_dependency_chain_length: usize,
-    pub chain_name: String,
+    QUERY_COSTS.get_or_init(|| costs);
+
+    Ok(())
 }
 
 pub trait IntoApiResult<T> {

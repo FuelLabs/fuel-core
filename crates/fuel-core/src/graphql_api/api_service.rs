@@ -221,7 +221,7 @@ where
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
 {
-    graphql_api::initialize_query_costs(config.clone());
+    graphql_api::initialize_query_costs(config.config.costs.clone())?;
 
     let network_addr = config.config.addr;
     let combined_read_database =
