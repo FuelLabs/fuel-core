@@ -488,6 +488,7 @@ impl Command {
         let config = Config {
             graphql_config: GraphQLConfig {
                 addr,
+                number_of_threads: graphql.graphql_number_of_threads,
                 database_batch_size: graphql.database_batch_size,
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
