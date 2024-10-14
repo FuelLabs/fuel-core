@@ -7,7 +7,6 @@ use crate::{
         IntoApiResult,
         QUERY_COSTS,
     },
-    query::da_compressed::DaCompressedBlockData,
     schema::scalars::U32,
 };
 use async_graphql::{

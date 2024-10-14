@@ -57,24 +57,15 @@ fn receipt(i: Option<u8>) -> Receipt {
 
 mockall::mock! {
     pub ProofDataStorage {}
-    impl SimpleBlockData for ProofDataStorage {
+    impl MessageProofData for ProofDataStorage {
         fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
-    }
-
-    impl DatabaseMessageProof for ProofDataStorage {
         fn block_history_proof(
             &self,
             message_block_height: &BlockHeight,
             commit_block_height: &BlockHeight,
         ) -> StorageResult<MerkleProof>;
-    }
-
-    impl SimpleTransactionData for ProofDataStorage {
         fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
         fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
-    }
-
-    impl MessageProofData for ProofDataStorage {
         fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
     }
 }

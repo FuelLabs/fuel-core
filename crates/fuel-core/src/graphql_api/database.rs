@@ -1,12 +1,6 @@
 use crate::fuel_core_graphql_api::{
     database::arc_wrapper::ArcWrapper,
     ports::{
-        DatabaseBlocks,
-        DatabaseChain,
-        DatabaseContracts,
-        DatabaseMessageProof,
-        DatabaseMessages,
-        DatabaseRelayedTransactions,
         OffChainDatabase,
         OnChainDatabase,
     },
@@ -72,8 +66,6 @@ use std::{
     sync::Arc,
 };
 
-use super::ports::DatabaseDaCompressedBlocks;
-
 mod arc_wrapper;
 
 /// The on-chain view of the database used by the [`ReadView`] to fetch on-chain data.
@@ -132,13 +124,13 @@ impl ReadDatabase {
 
 #[derive(Clone)]
 pub struct ReadView {
-    genesis_height: BlockHeight,
-    on_chain: OnChainView,
-    off_chain: OffChainView,
+    pub(crate) genesis_height: BlockHeight,
+    pub(crate) on_chain: OnChainView,
+    pub(crate) off_chain: OffChainView,
 }
 
-impl DatabaseBlocks for ReadView {
-    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+impl ReadView {
+    pub fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         let result = self.on_chain.transaction(tx_id);
         if result.is_not_found() {
             if let Some(tx) = self.old_transaction(tx_id)? {
@@ -151,7 +143,7 @@ impl DatabaseBlocks for ReadView {
         }
     }
 
-    fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+    pub fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
         if *height >= self.genesis_height {
             self.on_chain.block(height)
         } else {
@@ -159,7 +151,7 @@ impl DatabaseBlocks for ReadView {
         }
     }
 
-    fn blocks(
+    pub fn blocks(
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
@@ -202,11 +194,11 @@ impl DatabaseBlocks for ReadView {
         }
     }
 
-    fn latest_height(&self) -> StorageResult<BlockHeight> {
+    pub fn latest_height(&self) -> StorageResult<BlockHeight> {
         self.on_chain.latest_height()
     }
 
-    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
+    pub fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
         if *id >= self.genesis_height {
             self.on_chain.consensus(id)
         } else {
@@ -215,45 +207,34 @@ impl DatabaseBlocks for ReadView {
     }
 }
 
-impl DatabaseDaCompressedBlocks for ReadView {
-    fn da_compressed_block(&self, id: &BlockHeight) -> StorageResult<Vec<u8>> {
-        self.off_chain.da_compressed_block(id)
-    }
-
-    fn latest_height(&self) -> StorageResult<BlockHeight> {
-        self.on_chain.latest_height()
-    }
-}
-
-impl<M> StorageInspect<M> for ReadView
-where
-    M: Mappable,
-    dyn OnChainDatabase: StorageInspect<M, Error = StorageError>,
-{
+impl StorageInspect<BlobData> for ReadView {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> StorageResult<Option<Cow<M::OwnedValue>>> {
-        self.on_chain.get(key)
+    fn get(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+    ) -> StorageResult<Option<Cow<<BlobData as Mappable>::OwnedValue>>> {
+        StorageInspect::<BlobData>::get(self.on_chain.as_ref(), key)
     }
 
-    fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {
-        self.on_chain.contains_key(key)
+    fn contains_key(&self, key: &<BlobData as Mappable>::Key) -> StorageResult<bool> {
+        StorageInspect::<BlobData>::contains_key(self.on_chain.as_ref(), key)
     }
 }
 
 impl StorageSize<BlobData> for ReadView {
     fn size_of_value(&self, key: &BlobId) -> Result<Option<usize>, Self::Error> {
-        self.on_chain.size_of_value(key)
+        StorageSize::<BlobData>::size_of_value(self.on_chain.as_ref(), key)
     }
 }
 
 impl StorageRead<BlobData> for ReadView {
     fn read(&self, key: &BlobId, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
-        self.on_chain.read(key, buf)
+        StorageRead::<BlobData>::read(self.on_chain.as_ref(), key, buf)
     }
 
     fn read_alloc(&self, key: &BlobId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.on_chain.read_alloc(key)
+        StorageRead::<BlobData>::read_alloc(self.on_chain.as_ref(), key)
     }
 }
 
@@ -263,8 +244,8 @@ impl PredicateStorageRequirements for ReadView {
     }
 }
 
-impl DatabaseMessages for ReadView {
-    fn all_messages(
+impl ReadView {
+    pub fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
@@ -272,23 +253,18 @@ impl DatabaseMessages for ReadView {
         self.on_chain.all_messages(start_message_id, direction)
     }
 
-    fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
+    pub fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.on_chain.message_exists(nonce)
     }
-}
 
-impl DatabaseRelayedTransactions for ReadView {
-    fn transaction_status(
+    pub fn relayed_transaction_status(
         &self,
         id: Bytes32,
     ) -> StorageResult<Option<RelayedTransactionStatus>> {
-        let maybe_status = self.off_chain.relayed_tx_status(id)?;
-        Ok(maybe_status)
+        self.off_chain.relayed_tx_status(id)
     }
-}
 
-impl DatabaseContracts for ReadView {
-    fn contract_balances(
+    pub fn contract_balances(
         &self,
         contract: ContractId,
         start_asset: Option<AssetId>,
@@ -297,16 +273,12 @@ impl DatabaseContracts for ReadView {
         self.on_chain
             .contract_balances(contract, start_asset, direction)
     }
-}
 
-impl DatabaseChain for ReadView {
-    fn da_height(&self) -> StorageResult<DaBlockHeight> {
+    pub fn da_height(&self) -> StorageResult<DaBlockHeight> {
         self.on_chain.da_height()
     }
-}
 
-impl DatabaseMessageProof for ReadView {
-    fn block_history_proof(
+    pub fn block_history_proof(
         &self,
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
@@ -316,22 +288,20 @@ impl DatabaseMessageProof for ReadView {
     }
 }
 
-impl OnChainDatabase for ReadView {}
-
-impl OffChainDatabase for ReadView {
-    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
+impl ReadView {
+    pub fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
         self.off_chain.block_height(block_id)
     }
 
-    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
+    pub fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
         self.off_chain.da_compressed_block(height)
     }
 
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+    pub fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.off_chain.tx_status(tx_id)
     }
 
-    fn owned_coins_ids(
+    pub fn owned_coins_ids(
         &self,
         owner: &Address,
         start_coin: Option<UtxoId>,
@@ -340,7 +310,7 @@ impl OffChainDatabase for ReadView {
         self.off_chain.owned_coins_ids(owner, start_coin, direction)
     }
 
-    fn owned_message_ids(
+    pub fn owned_message_ids(
         &self,
         owner: &Address,
         start_message_id: Option<Nonce>,
@@ -350,7 +320,7 @@ impl OffChainDatabase for ReadView {
             .owned_message_ids(owner, start_message_id, direction)
     }
 
-    fn owned_transactions_ids(
+    pub fn owned_transactions_ids(
         &self,
         owner: Address,
         start: Option<TxPointer>,
@@ -360,15 +330,15 @@ impl OffChainDatabase for ReadView {
             .owned_transactions_ids(owner, start, direction)
     }
 
-    fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
+    pub fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
         self.off_chain.contract_salt(contract_id)
     }
 
-    fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
+    pub fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
         self.off_chain.old_block(height)
     }
 
-    fn old_blocks(
+    pub fn old_blocks(
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
@@ -376,25 +346,25 @@ impl OffChainDatabase for ReadView {
         self.off_chain.old_blocks(height, direction)
     }
 
-    fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
+    pub fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
         self.off_chain.old_block_consensus(height)
     }
 
-    fn old_transaction(
+    pub fn old_transaction(
         &self,
         id: &TxId,
     ) -> StorageResult<Option<fuel_core_types::fuel_tx::Transaction>> {
         self.off_chain.old_transaction(id)
     }
 
-    fn relayed_tx_status(
+    pub fn relayed_tx_status(
         &self,
         id: Bytes32,
     ) -> StorageResult<Option<RelayedTransactionStatus>> {
         self.off_chain.relayed_tx_status(id)
     }
 
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
+    pub fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.off_chain.message_is_spent(nonce)
     }
 }

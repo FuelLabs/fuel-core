@@ -7,10 +7,6 @@ use crate::{
         api_service::GasPriceProvider,
         QUERY_COSTS,
     },
-    query::{
-        BlockQueryData,
-        SimpleTransactionData,
-    },
     schema::ReadViewProvider,
 };
 use async_graphql::{

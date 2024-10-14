@@ -4,10 +4,6 @@ use crate::{
         QUERY_COSTS,
     },
     graphql_api::Config,
-    query::{
-        BlockQueryData,
-        ChainQueryData,
-    },
     schema::{
         block::Block,
         scalars::{

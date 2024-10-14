@@ -491,6 +491,8 @@ impl Command {
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
+                max_queries_resolver_recursive_depth: graphql
+                    .max_queries_resolver_recursive_depth,
                 max_queries_directives: graphql.max_queries_directives,
                 max_concurrent_queries: graphql.graphql_max_concurrent_queries,
                 request_body_bytes_limit: graphql.graphql_request_body_bytes_limit,

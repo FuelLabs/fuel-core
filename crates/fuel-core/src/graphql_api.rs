@@ -13,6 +13,7 @@ pub mod database;
 pub(crate) mod metrics_extension;
 pub mod ports;
 pub mod storage;
+pub(crate) mod validation_extension;
 pub(crate) mod view_extension;
 pub mod worker_service;
 
@@ -22,6 +23,7 @@ pub struct ServiceConfig {
     pub max_queries_depth: usize,
     pub max_queries_complexity: usize,
     pub max_queries_recursive_depth: usize,
+    pub max_queries_resolver_recursive_depth: usize,
     pub max_queries_directives: usize,
     pub max_concurrent_queries: usize,
     pub request_body_bytes_limit: usize,
