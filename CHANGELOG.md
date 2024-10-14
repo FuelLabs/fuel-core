@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.40.0]
+
 ### Added
 - [2347](https://github.com/FuelLabs/fuel-core/pull/2347): Add GraphQL complexity histogram to metrics.
 - [2350](https://github.com/FuelLabs/fuel-core/pull/2350): Added a new CLI flag `graphql-number-of-threads` to limit the number of threads used by the GraphQL service. The default value is `2`, `0` enables the old behavior.
