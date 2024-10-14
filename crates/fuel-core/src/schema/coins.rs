@@ -230,6 +230,7 @@ impl CoinQuery {
         // of inputs.
         // TODO: To avoid breaking changes, we will truncate request for now.
         //  In the future, we should return an error if the input is too large.
+        //  https://github.com/FuelLabs/fuel-core/issues/2343
         query_per_asset.truncate(max_input as usize);
 
         let owner: fuel_tx::Address = owner.0;
