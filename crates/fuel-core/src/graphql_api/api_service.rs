@@ -236,8 +236,12 @@ where
     graphql_api::initialize_query_costs(config.config.costs.clone())?;
 
     let network_addr = config.config.addr;
-    let combined_read_database =
-        ReadDatabase::new(genesis_block_height, on_database, off_database);
+    let combined_read_database = ReadDatabase::new(
+        config.config.database_batch_size,
+        genesis_block_height,
+        on_database,
+        off_database,
+    );
     let request_timeout = config.config.api_request_timeout;
     let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;

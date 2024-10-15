@@ -11,6 +11,7 @@ mod state;
 mod sync;
 #[cfg(feature = "sync-processor")]
 mod sync_processor;
+pub mod yield_stream;
 
 /// Re-exports for streaming utilities
 pub mod stream {

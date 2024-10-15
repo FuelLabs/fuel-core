@@ -1,4 +1,5 @@
 use crate::fuel_core_graphql_api::database::ReadView;
+use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::IterDirection,
     Result as StorageResult,
@@ -23,6 +24,6 @@ impl ReadView {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<CompressedBlock>> + '_ {
-        futures::stream::iter(self.blocks(height, direction))
+        futures::stream::iter(self.blocks(height, direction)).yield_each(self.batch_size)
     }
 }

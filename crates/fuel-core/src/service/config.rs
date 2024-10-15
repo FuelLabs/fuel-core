@@ -139,6 +139,7 @@ impl Config {
                     0,
                 ),
                 number_of_threads: 0,
+                database_batch_size: 100,
                 max_queries_depth: 16,
                 max_queries_complexity: 80000,
                 max_queries_recursive_depth: 16,

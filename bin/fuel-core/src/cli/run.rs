@@ -51,7 +51,10 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
-use fuel_core_metrics::config::Module;
+use fuel_core_metrics::config::{
+    DisableConfig,
+    Module,
+};
 use fuel_core_poa::signer::SignMode;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use pyroscope::{
@@ -237,8 +240,8 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
-    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), default_value = "", env)]
-    pub metrics: fuel_core_metrics::config::Config,
+    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
+    pub disabled_metrics: Vec<Module>,
 
     #[clap(long = "verify-max-da-lag", default_value = "10", env)]
     pub max_da_lag: u64,
@@ -295,7 +298,7 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
-            metrics,
+            disabled_metrics: metrics,
             max_da_lag,
             max_wait_time,
             tx_pool,
@@ -306,7 +309,13 @@ impl Command {
             profiling: _,
         } = self;
 
-        info!("Metrics config: {}", metrics);
+        let enabled_metrics = metrics.list_of_enabled();
+
+        if !enabled_metrics.is_empty() {
+            info!("`{:?}` metrics are enabled", enabled_metrics);
+        } else {
+            info!("All metrics are disabled");
+        }
 
         let addr = net::SocketAddr::new(graphql.ip, graphql.port);
 
@@ -497,6 +506,7 @@ impl Command {
             graphql_config: GraphQLConfig {
                 addr,
                 number_of_threads: graphql.graphql_number_of_threads,
+                database_batch_size: graphql.database_batch_size,
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
@@ -665,4 +675,86 @@ fn start_pyroscope_agent(
             Ok(agent_running)
         })
         .transpose()
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+#[allow(clippy::bool_assert_comparison)]
+mod tests {
+    use super::*;
+    use strum::IntoEnumIterator;
+
+    fn parse_command(args: &[&str]) -> anyhow::Result<Command> {
+        Ok(Command::try_parse_from([""].iter().chain(args))?)
+    }
+
+    #[test]
+    fn parse_disabled_metrics__no_value_enables_everything() {
+        // Given
+        let args = [];
+
+        // When
+        let command = parse_command(&args).unwrap();
+
+        // Then
+        let config = command.disabled_metrics;
+        Module::iter().for_each(|module| {
+            assert_eq!(config.is_enabled(module), true);
+        });
+    }
+
+    #[test]
+    fn parse_disabled_metrics__all() {
+        // Given
+        let args = ["--disable-metrics", "all"];
+
+        // When
+        let command = parse_command(&args).unwrap();
+
+        // Then
+        let config = command.disabled_metrics;
+        Module::iter().for_each(|module| {
+            assert_eq!(config.is_enabled(module), false);
+        });
+    }
+
+    #[test]
+    fn parse_disabled_metrics__mixed_args() {
+        // Given
+        let args = [
+            "--disable-metrics",
+            "txpool,importer",
+            "--disable-metrics",
+            "graphql",
+        ];
+
+        // When
+        let command = parse_command(&args).unwrap();
+
+        // Then
+        let config = command.disabled_metrics;
+        assert_eq!(config.is_enabled(Module::TxPool), false);
+        assert_eq!(config.is_enabled(Module::Importer), false);
+        assert_eq!(config.is_enabled(Module::GraphQL), false);
+        assert_eq!(config.is_enabled(Module::P2P), true);
+        assert_eq!(config.is_enabled(Module::Producer), true);
+    }
+
+    #[test]
+    fn parse_disabled_metrics__bad_values() {
+        // Given
+        let args = ["--disable-metrics", "txpool,alpha,bravo"];
+
+        // When
+        let command = parse_command(&args);
+
+        // Then
+        let err = command.expect_err("should fail to parse");
+        assert_eq!(
+            err.to_string(),
+            "error: invalid value 'alpha' for \
+            '--disable-metrics <DISABLED_METRICS>': Matching variant not found\
+            \n\nFor more information, try '--help'.\n"
+        );
+    }
 }

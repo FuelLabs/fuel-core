@@ -71,7 +71,6 @@ use std::{
     borrow::Cow,
     iter,
 };
-use tokio_stream::StreamExt;
 use types::{
     DryRunTransactionExecutionStatus,
     Transaction,
@@ -123,7 +122,9 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
+        use futures::stream::StreamExt;
         let query = ctx.read_view()?;
+        let query_ref = query.as_ref();
         crate::schema::query_pagination(
             after,
             before,
@@ -156,16 +157,34 @@ impl TxQuery {
                             false
                         };
 
-                        async move { Ok(skip) }
+                        async move { Ok::<_, StorageError>(skip) }
                     })
-                    .map(|result: StorageResult<SortedTxCursor>| {
-                        result.and_then(|sorted| {
-                            // TODO: Request transactions in a separate thread
-                            let tx = query.transaction(&sorted.tx_id.0)?;
+                    .chunks(query_ref.batch_size)
+                    .map(|chunk| {
+                        use itertools::Itertools;
 
-                            Ok((sorted, Transaction::from_tx(sorted.tx_id.0, tx)))
-                        })
-                    });
+                        let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                        Ok::<_, StorageError>(chunk)
+                    })
+                    .try_filter_map(move |chunk| {
+                        let async_query = query_ref.clone();
+                        async move {
+                            let tx_ids = chunk
+                                .iter()
+                                .map(|sorted| sorted.tx_id.0)
+                                .collect::<Vec<_>>();
+                            let txs = async_query.transactions(tx_ids).await;
+                            let txs = txs.into_iter().zip(chunk.into_iter()).map(
+                                |(result, sorted)| {
+                                    result.map(|tx| {
+                                        (sorted, Transaction::from_tx(sorted.tx_id.0, tx))
+                                    })
+                                },
+                            );
+                            Ok(Some(futures::stream::iter(txs)))
+                        }
+                    })
+                    .try_flatten();
 
                 Ok(all_txs)
             },
@@ -188,6 +207,7 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
+        use futures::stream::StreamExt;
         let query = ctx.read_view()?;
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -382,6 +402,7 @@ impl TxStatusSubscription {
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
+        use tokio_stream::StreamExt;
         let subscription = submit_and_await_status(ctx, tx).await?;
 
         Ok(subscription
@@ -410,6 +431,7 @@ async fn submit_and_await_status<'a>(
 ) -> async_graphql::Result<
     impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {
+    use tokio_stream::StreamExt;
     let txpool = ctx.data_unchecked::<TxPool>();
     let params = ctx
         .data_unchecked::<ConsensusProvider>()

@@ -54,6 +54,7 @@ itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+strum = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 
