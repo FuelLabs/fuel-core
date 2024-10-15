@@ -26,6 +26,7 @@ use crate::{
         Punisher,
     },
     peer_report::PeerReportEvent,
+    request_response as fuel_request_response,
     request_response::messages::{
         RequestError,
         RequestMessage,
@@ -717,6 +718,8 @@ impl FuelP2PService {
             identify::Event::Received { peer_id, info } => {
                 self.update_metrics(increment_unique_peers);
 
+                let request_response_protocol_version =
+                    fuel_request_response::ProtocolVersion::latest_compatible_version_for_peer(&info);
                 let mut addresses = info.listen_addrs;
                 let agent_version = info.agent_version;
                 if addresses.len() > MAX_IDENTIFY_ADDRESSES {
@@ -733,6 +736,7 @@ impl FuelP2PService {
                     &peer_id,
                     addresses.clone(),
                     agent_version,
+                    request_response_protocol_version,
                 );
 
                 self.swarm

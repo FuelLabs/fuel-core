@@ -25,7 +25,7 @@ impl ProtocolVersion {
     }
 
     pub fn latest_compatible_version_for_peer(
-        info: identify::Info,
+        info: &identify::Info,
     ) -> Option<ProtocolVersion> {
         info.protocols
             .iter()
@@ -93,7 +93,7 @@ mod tests {
         let peer_info =
             peer_info(&[MessageExchangePostcardProtocol.as_ref(), HEARTBEAT_PROTOCOL]);
         let latest_compatible_version_for_peer =
-            ProtocolVersion::latest_compatible_version_for_peer(peer_info).unwrap();
+            ProtocolVersion::latest_compatible_version_for_peer(&peer_info).unwrap();
         assert_eq!(
             latest_compatible_version_for_peer,
             crate::request_response::protocols::ProtocolVersion::V1(
@@ -106,7 +106,7 @@ mod tests {
     fn test_latest_protocol_version_undefined() {
         let peer_info = peer_info(&[HEARTBEAT_PROTOCOL, "/some/other/protocol/1.0.0"]);
         let latest_compatible_version_for_peer =
-            ProtocolVersion::latest_compatible_version_for_peer(peer_info);
+            ProtocolVersion::latest_compatible_version_for_peer(&peer_info);
         assert!(latest_compatible_version_for_peer.is_none(),);
     }
 }

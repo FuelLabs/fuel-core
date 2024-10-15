@@ -1534,6 +1534,7 @@ pub mod tests {
             client_version: None,
             heartbeat_data,
             score: 100.0,
+            request_response_protocol_version: None,
         };
         let peer_info = vec![(peer_id, peer_info)];
         let p2p_service = FakeP2PService {
@@ -1624,6 +1625,7 @@ pub mod tests {
             client_version: None,
             heartbeat_data,
             score: 100.0,
+            request_response_protocol_version: None,
         };
         let peer_info = vec![(peer_id, peer_info)];
         let p2p_service = FakeP2PService {
