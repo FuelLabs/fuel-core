@@ -104,7 +104,7 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
-        let block_importer = fuel_core_importer::Config::new();
+        let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
         let native_executor_version = latest_block
@@ -138,6 +138,8 @@ impl Config {
                     std::net::Ipv4Addr::new(127, 0, 0, 1).into(),
                     0,
                 ),
+                number_of_threads: 0,
+                database_batch_size: 100,
                 max_queries_depth: 16,
                 max_queries_complexity: 80000,
                 max_queries_recursive_depth: 16,
@@ -147,6 +149,7 @@ impl Config {
                 request_body_bytes_limit: 16 * 1024 * 1024,
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
+                costs: Default::default(),
             },
             combined_db_config,
             continue_on_error: false,
