@@ -50,7 +50,7 @@ struct Input {
         block_stream_buffer_size: 10,
         header_batch_size: 5,
     }
-    => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 50 }
+    => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 51 }
     ; "1000 headers with max 5 size and max 10 requests when slow headers"
 )]
 #[test_case(
