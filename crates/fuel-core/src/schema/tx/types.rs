@@ -10,8 +10,8 @@ use crate::{
             TxPool,
         },
         database::ReadView,
+        query_costs,
         IntoApiResult,
-        QUERY_COSTS,
     },
     schema::{
         block::Block,
@@ -177,14 +177,14 @@ impl SuccessStatus {
         self.block_height.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.block_header + child_complexity")]
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
         let query = ctx.read_view()?;
         let transaction = query.transaction(&self.tx_id)?;
@@ -233,14 +233,14 @@ impl FailureStatus {
         self.block_height.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.block_header + child_complexity")]
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
         let query = ctx.read_view()?;
         let transaction = query.transaction(&self.tx_id)?;
@@ -412,7 +412,7 @@ impl Transaction {
         TransactionId(self.1)
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -688,7 +688,7 @@ impl Transaction {
         }
     }
 
-    #[graphql(complexity = "QUERY_COSTS.tx_status_read + child_complexity")]
+    #[graphql(complexity = "query_costs().tx_status_read + child_complexity")]
     async fn status(
         &self,
         ctx: &Context<'_>,
@@ -843,7 +843,7 @@ impl Transaction {
         }
     }
 
-    #[graphql(complexity = "QUERY_COSTS.tx_raw_payload")]
+    #[graphql(complexity = "query_costs().tx_raw_payload")]
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
@@ -987,7 +987,7 @@ pub(crate) async fn get_tx_status(
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query
-        .status(&id)
+        .tx_status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => {

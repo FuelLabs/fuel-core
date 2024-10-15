@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::QUERY_COSTS,
+    fuel_core_graphql_api::query_costs,
     graphql_api::IntoApiResult,
     schema::{
         scalars::{
@@ -27,7 +27,7 @@ impl Blob {
         self.0.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.bytecode_read")]
+    #[graphql(complexity = "query_costs().bytecode_read")]
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let query = ctx.read_view()?;
         query
@@ -48,7 +48,7 @@ pub struct BlobQuery;
 
 #[Object]
 impl BlobQuery {
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn blob(
         &self,
         ctx: &Context<'_>,

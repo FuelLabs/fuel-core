@@ -4,6 +4,7 @@ use fuel_core_storage::{
 };
 use std::{
     net::SocketAddr,
+    sync::OnceLock,
     time::Duration,
 };
 
@@ -18,8 +19,21 @@ pub(crate) mod view_extension;
 pub mod worker_service;
 
 #[derive(Clone, Debug)]
+pub struct Config {
+    pub config: ServiceConfig,
+    pub utxo_validation: bool,
+    pub debug: bool,
+    pub vm_backtrace: bool,
+    pub max_tx: usize,
+    pub max_txpool_dependency_chain_length: usize,
+    pub chain_name: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct ServiceConfig {
     pub addr: SocketAddr,
+    pub number_of_threads: usize,
+    pub database_batch_size: usize,
     pub max_queries_depth: usize,
     pub max_queries_complexity: usize,
     pub max_queries_recursive_depth: usize,
@@ -30,8 +44,11 @@ pub struct ServiceConfig {
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,
+    /// Configurable cost parameters to limit graphql queries complexity
+    pub costs: Costs,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Costs {
     pub balance_query: usize,
     pub coins_to_spend: usize,
@@ -54,16 +71,19 @@ pub struct Costs {
     pub da_compressed_block_read: usize,
 }
 
-pub const QUERY_COSTS: Costs = Costs {
-    // balance_query: 4000,
+#[cfg(feature = "test-helpers")]
+impl Default for Costs {
+    fn default() -> Self {
+        DEFAULT_QUERY_COSTS
+    }
+}
+
+pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     balance_query: 40001,
     coins_to_spend: 40001,
-    // get_peers: 2000,
     get_peers: 40001,
-    // estimate_predicates: 3000,
     estimate_predicates: 40001,
     dry_run: 12000,
-    // submit: 5000,
     submit: 40001,
     submit_and_await: 40001,
     status_change: 40001,
@@ -80,15 +100,24 @@ pub const QUERY_COSTS: Costs = Costs {
     da_compressed_block_read: 4000,
 };
 
-#[derive(Clone, Debug)]
-pub struct Config {
-    pub config: ServiceConfig,
-    pub utxo_validation: bool,
-    pub debug: bool,
-    pub vm_backtrace: bool,
-    pub max_tx: usize,
-    pub max_txpool_dependency_chain_length: usize,
-    pub chain_name: String,
+pub fn query_costs() -> &'static Costs {
+    QUERY_COSTS.get().unwrap_or(&DEFAULT_QUERY_COSTS)
+}
+
+pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
+
+fn initialize_query_costs(costs: Costs) -> anyhow::Result<()> {
+    #[cfg(feature = "test-helpers")]
+    if costs != DEFAULT_QUERY_COSTS {
+        // We don't support setting these values in test contexts, because
+        // it can lead to unexpected behavior if multiple tests try to
+        // initialize different values.
+        anyhow::bail!("cannot initialize queries with non-default costs in tests")
+    }
+
+    QUERY_COSTS.get_or_init(|| costs);
+
+    Ok(())
 }
 
 pub trait IntoApiResult<T> {

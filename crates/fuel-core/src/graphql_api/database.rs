@@ -5,6 +5,7 @@ use crate::fuel_core_graphql_api::{
         OnChainDatabase,
     },
 };
+use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -61,6 +62,7 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
+use futures::Stream;
 use std::{
     borrow::Cow,
     sync::Arc,
@@ -76,6 +78,8 @@ pub type OffChainView = Arc<dyn OffChainDatabase>;
 /// The container of the on-chain and off-chain database view provides.
 /// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
+    /// The size of the batch during fetching from the database.
+    batch_size: usize,
     /// The height of the genesis block.
     genesis_height: BlockHeight,
     /// The on-chain database view provider.
@@ -87,6 +91,7 @@ pub struct ReadDatabase {
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
     pub fn new<OnChain, OffChain>(
+        batch_size: usize,
         genesis_height: BlockHeight,
         on_chain: OnChain,
         off_chain: OffChain,
@@ -98,6 +103,7 @@ impl ReadDatabase {
         OffChain::LatestView: OffChainDatabase,
     {
         Self {
+            batch_size,
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
@@ -110,6 +116,7 @@ impl ReadDatabase {
         //  It is not possible to implement until `view_at` is implemented for the `AtomicView`.
         //  https://github.com/FuelLabs/fuel-core/issues/1582
         Ok(ReadView {
+            batch_size: self.batch_size,
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
@@ -124,6 +131,7 @@ impl ReadDatabase {
 
 #[derive(Clone)]
 pub struct ReadView {
+    pub(crate) batch_size: usize,
     pub(crate) genesis_height: BlockHeight,
     pub(crate) on_chain: OnChainView,
     pub(crate) off_chain: OffChainView,
@@ -133,7 +141,7 @@ impl ReadView {
     pub fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         let result = self.on_chain.transaction(tx_id);
         if result.is_not_found() {
-            if let Some(tx) = self.old_transaction(tx_id)? {
+            if let Some(tx) = self.off_chain.old_transaction(tx_id)? {
                 Ok(tx)
             } else {
                 Err(not_found!(Transactions))
@@ -141,6 +149,21 @@ impl ReadView {
         } else {
             result
         }
+    }
+
+    pub async fn transactions(
+        &self,
+        tx_ids: Vec<TxId>,
+    ) -> Vec<StorageResult<Transaction>> {
+        // TODO: Use multiget when it's implemented.
+        //  https://github.com/FuelLabs/fuel-core/issues/2344
+        let result = tx_ids
+            .iter()
+            .map(|tx_id| self.transaction(tx_id))
+            .collect::<Vec<_>>();
+        // Give a chance to other tasks to run.
+        tokio::task::yield_now().await;
+        result
     }
 
     pub fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
@@ -249,8 +272,9 @@ impl ReadView {
         &self,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Message>> {
-        self.on_chain.all_messages(start_message_id, direction)
+    ) -> impl Stream<Item = StorageResult<Message>> + '_ {
+        futures::stream::iter(self.on_chain.all_messages(start_message_id, direction))
+            .yield_each(self.batch_size)
     }
 
     pub fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
@@ -269,9 +293,13 @@ impl ReadView {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<ContractBalance>> {
-        self.on_chain
-            .contract_balances(contract, start_asset, direction)
+    ) -> impl Stream<Item = StorageResult<ContractBalance>> + '_ {
+        futures::stream::iter(self.on_chain.contract_balances(
+            contract,
+            start_asset,
+            direction,
+        ))
+        .yield_each(self.batch_size)
     }
 
     pub fn da_height(&self) -> StorageResult<DaBlockHeight> {
@@ -306,8 +334,10 @@ impl ReadView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
-        self.off_chain.owned_coins_ids(owner, start_coin, direction)
+    ) -> impl Stream<Item = StorageResult<UtxoId>> + '_ {
+        let iter = self.off_chain.owned_coins_ids(owner, start_coin, direction);
+
+        futures::stream::iter(iter)
     }
 
     pub fn owned_message_ids(
@@ -315,9 +345,12 @@ impl ReadView {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
-        self.off_chain
-            .owned_message_ids(owner, start_message_id, direction)
+    ) -> impl Stream<Item = StorageResult<Nonce>> + '_ {
+        futures::stream::iter(self.off_chain.owned_message_ids(
+            owner,
+            start_message_id,
+            direction,
+        ))
     }
 
     pub fn owned_transactions_ids(
@@ -325,36 +358,15 @@ impl ReadView {
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
-        self.off_chain
-            .owned_transactions_ids(owner, start, direction)
+    ) -> impl Stream<Item = StorageResult<(TxPointer, TxId)>> + '_ {
+        futures::stream::iter(
+            self.off_chain
+                .owned_transactions_ids(owner, start, direction),
+        )
     }
 
     pub fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
         self.off_chain.contract_salt(contract_id)
-    }
-
-    pub fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
-        self.off_chain.old_block(height)
-    }
-
-    pub fn old_blocks(
-        &self,
-        height: Option<BlockHeight>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
-        self.off_chain.old_blocks(height, direction)
-    }
-
-    pub fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {
-        self.off_chain.old_block_consensus(height)
-    }
-
-    pub fn old_transaction(
-        &self,
-        id: &TxId,
-    ) -> StorageResult<Option<fuel_core_types::fuel_tx::Transaction>> {
-        self.off_chain.old_transaction(id)
     }
 
     pub fn relayed_tx_status(
