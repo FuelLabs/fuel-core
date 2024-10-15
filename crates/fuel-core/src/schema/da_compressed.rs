@@ -4,10 +4,9 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
+        query_costs,
         IntoApiResult,
-        QUERY_COSTS,
     },
-    query::da_compressed::DaCompressedBlockData,
     schema::scalars::U32,
 };
 use async_graphql::{
@@ -37,7 +36,7 @@ pub struct DaCompressedBlockQuery;
 
 #[Object]
 impl DaCompressedBlockQuery {
-    #[graphql(complexity = "QUERY_COSTS.da_compressed_block_read")]
+    #[graphql(complexity = "query_costs().da_compressed_block_read")]
     async fn da_compressed_block(
         &self,
         ctx: &Context<'_>,

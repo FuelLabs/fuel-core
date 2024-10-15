@@ -13,8 +13,6 @@ use fuel_core_types::{
     fuel_tx::{
         AssetId,
         ContractId,
-        Script,
-        Transaction,
     },
     fuel_types::BlockHeight,
     tai64::Tai64,
@@ -60,24 +58,14 @@ fn receipt(i: Option<u8>) -> Receipt {
 
 mockall::mock! {
     pub ProofDataStorage {}
-    impl SimpleBlockData for ProofDataStorage {
+    impl MessageProofData for ProofDataStorage {
         fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
-    }
-
-    impl DatabaseMessageProof for ProofDataStorage {
         fn block_history_proof(
             &self,
             message_block_height: &BlockHeight,
             commit_block_height: &BlockHeight,
         ) -> StorageResult<MerkleProof>;
-    }
-
-    impl SimpleTransactionData for ProofDataStorage {
-        fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
         fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
-    }
-
-    impl MessageProofData for ProofDataStorage {
         fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
     }
 }
@@ -117,16 +105,6 @@ async fn can_build_message_proof() {
             count += 1;
             Ok(r)
         }
-    });
-
-    data.expect_transaction().returning(move |txn_id| {
-        let tx = TXNS
-            .iter()
-            .find(|t| *t == txn_id)
-            .map(|_| Script::default().into())
-            .ok_or(not_found!("Transaction in `TXNS`"))?;
-
-        Ok(tx)
     });
 
     let commit_block_header = PartialBlockHeader {
