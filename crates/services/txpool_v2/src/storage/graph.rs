@@ -620,6 +620,10 @@ impl Storage for GraphStorage {
         })
     }
 
+    fn tx_count(&self) -> usize {
+        self.graph.node_count()
+    }
+
     #[cfg(test)]
     fn assert_integrity(
         &self,

@@ -279,4 +279,8 @@ where
             expected_txs.keys().collect::<Vec<_>>()
         );
     }
+
+    fn number_of_executable_transactions(&self) -> usize {
+        self.executable_transactions_sorted_tip_gas_ratio.len()
+    }
 }

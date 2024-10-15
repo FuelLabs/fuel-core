@@ -103,6 +103,9 @@ pub trait Storage {
     /// Remove a transaction from the storage.
     fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData>;
 
+    /// Returns the number of transactions in the storage.
+    fn tx_count(&self) -> usize;
+
     #[cfg(test)]
     /// Asserts the integrity of the storage.
     /// Returns the list of the storage indexes and a boolean value indicating whether the transaction has dependencies or not.

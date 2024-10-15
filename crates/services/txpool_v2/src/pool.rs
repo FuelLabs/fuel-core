@@ -3,7 +3,10 @@ mod collisions;
 use std::{
     collections::HashMap,
     iter,
-    time::SystemTime,
+    time::{
+        Instant,
+        SystemTime,
+    },
 };
 
 use collisions::CollisionsExt;
@@ -228,6 +231,22 @@ where
         Ok(can_store_transaction)
     }
 
+    fn record_transaction_time_in_txpool(tx: &StorageData) {
+        if let Ok(elapsed) = tx.creation_instant.elapsed() {
+            fuel_core_metrics::txpool_metrics::txpool_metrics()
+                .transaction_time_in_txpool_secs
+                .observe(elapsed.as_secs_f64());
+        } else {
+            tracing::warn!("Failed to calculate transaction time in txpool");
+        }
+    }
+
+    fn record_select_transaction_time_in_nanoseconds(start: Instant) {
+        let elapsed = start.elapsed().as_nanos() as f64;
+        fuel_core_metrics::txpool_metrics::txpool_metrics()
+            .select_transaction_time_nanoseconds
+            .observe(elapsed);
+    }
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
@@ -236,9 +255,23 @@ where
         &mut self,
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
-        self.selection_algorithm
-            .gather_best_txs(constraints, &mut self.storage)
+        let start = std::time::Instant::now();
+        let metrics = self.config.metrics;
+        let best_txs = self
+            .selection_algorithm
+            .gather_best_txs(constraints, &mut self.storage);
+
+        if metrics {
+            Self::record_select_transaction_time_in_nanoseconds(start)
+        };
+
+        best_txs
             .into_iter()
+            .inspect(|storage_data| {
+                if metrics {
+                    Self::record_transaction_time_in_txpool(storage_data)
+                }
+            })
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
 
