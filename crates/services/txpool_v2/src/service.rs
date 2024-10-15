@@ -235,14 +235,8 @@ where
             let executable_txs =
                 pool.selection_algorithm.number_of_executable_transactions();
 
-            let txpool_metrics = txpool_metrics();
-            txpool_metrics
-                .number_of_transactions
-                .set(num_transactions as i64);
-
-            txpool_metrics
-                .number_of_executable_transactions
-                .set(executable_txs as i64);
+            record_number_of_transactions_in_txpool(num_transactions);
+            record_number_of_executable_transactions_in_txpool(executable_txs);
         }
 
         tokio::select! {
@@ -438,7 +432,7 @@ where
             };
 
             if metrics {
-                meter_tx_size(&checked_tx)
+                record_tx_size(&checked_tx)
             };
 
             let tx = Arc::new(checked_tx);
@@ -699,10 +693,21 @@ where
     }
 }
 
-fn meter_tx_size(tx: &PoolTransaction) {
+fn record_tx_size(tx: &PoolTransaction) {
     let size = tx.metered_bytes_size();
     let txpool_metrics = txpool_metrics();
     txpool_metrics.tx_size.observe(size as f64);
+}
+
+fn record_number_of_transactions_in_txpool(num_transactions: usize) {
+    txpool_metrics()
+        .number_of_transactions
+        .set(num_transactions as i64);
+}
+fn record_number_of_executable_transactions_in_txpool(executable_txs: usize) {
+    txpool_metrics()
+        .number_of_executable_transactions
+        .set(executable_txs as i64);
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -3,7 +3,10 @@ mod collisions;
 use std::{
     collections::HashMap,
     iter,
-    time::SystemTime,
+    time::{
+        Instant,
+        SystemTime,
+    },
 };
 
 use collisions::CollisionsExt;
@@ -238,6 +241,12 @@ where
         }
     }
 
+    fn record_select_transaction_time_in_nanoseconds(start: Instant) {
+        let elapsed = start.elapsed().as_nanos() as f64;
+        fuel_core_metrics::txpool_metrics::txpool_metrics()
+            .select_transaction_time_nanoseconds
+            .observe(elapsed);
+    }
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
@@ -247,16 +256,13 @@ where
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
         let start = std::time::Instant::now();
+        let metrics = self.config.metrics;
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
-        let elapsed = start.elapsed().as_nanos() as f64;
-        let metrics: bool = self.config.metrics;
 
         if metrics {
-            fuel_core_metrics::txpool_metrics::txpool_metrics()
-                .select_transaction_time_nanoseconds
-                .observe(elapsed);
+            Self::record_select_transaction_time_in_nanoseconds(start)
         };
 
         best_txs
