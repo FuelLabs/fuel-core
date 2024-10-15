@@ -402,7 +402,7 @@ where
         let utxo_validation = self.utxo_validation;
         let metrics = self.metrics;
 
-        let op_without_metrics = move || {
+        let op = move || {
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -494,7 +494,7 @@ where
                     .number_of_transactions_pending_verification
                     .inc();
                 let start_time = tokio::time::Instant::now();
-                op_without_metrics();
+                op();
                 let time_for_task_to_complete = start_time.elapsed().as_millis();
                 txpool_metrics
                     .transaction_insertion_time_in_thread_pool_milliseconds
@@ -503,7 +503,7 @@ where
                     .number_of_transactions_pending_verification
                     .dec();
             } else {
-                op_without_metrics();
+                op();
             }
         }
     }
