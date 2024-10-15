@@ -15,6 +15,7 @@ use fuel_core_storage::{
     StorageMutate,
     StorageWrite,
 };
+use tracing::info;
 
 impl<Storage, M> StorageMutate<M> for GenericDatabase<Storage>
 where
@@ -34,7 +35,9 @@ where
             Default::default(),
         );
         let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
-        self.commit_changes(transaction.into_changes())?;
+        let changes = transaction.into_changes();
+        dbg!(&changes);
+        self.commit_changes(changes)?;
         Ok(prev)
     }
 

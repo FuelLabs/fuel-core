@@ -61,6 +61,7 @@ use std::{
     fmt::Debug,
     sync::Arc,
 };
+use tracing::info;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -419,9 +420,13 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
+    dbg!(&changes);
+
     // Gets the all new heights from the `changes`
     let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
+
+    dbg!(&new_heights);
 
     // Changes for each block should be committed separately.
     // If we have more than one height, it means we are mixing commits
@@ -464,6 +469,7 @@ where
         (Some(prev_height), None) => {
             // In production, we shouldn't have cases where we call `commit_changes` with intermediate changes.
             // The commit always should contain all data for the corresponding height.
+            info!("XXXX - bailing here because new_height is not set");
             return Err(DatabaseError::NewHeightIsNotSet {
                 prev_height: prev_height.as_u64(),
             }

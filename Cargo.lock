@@ -3676,6 +3676,7 @@ dependencies = [
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "test-case",
+ "tracing",
 ]
 
 [[package]]
