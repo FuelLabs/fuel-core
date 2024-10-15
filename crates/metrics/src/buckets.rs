@@ -9,6 +9,7 @@ use strum_macros::EnumIter;
 #[cfg_attr(test, derive(EnumIter))]
 pub(crate) enum Buckets {
     Timing,
+    TimingCoarseGrained,
     TransactionSize,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
@@ -33,6 +34,22 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                 2.500,
                 5.000,
                10.000,
+            ],
+        ),
+        (
+            Buckets::TimingCoarseGrained,
+            vec![
+                5.0,
+                10.0,
+                25.0,
+                50.0,
+                100.0,
+                250.0,
+                500.0,
+                1000.0,
+                2500.0, 
+                5000.0, 
+                10000.0,
             ],
         ),
         (

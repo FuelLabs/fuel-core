@@ -30,9 +30,9 @@ impl Default for TxPoolMetrics {
         let tx_size = Histogram::new(buckets(Buckets::TransactionSize));
         let transaction_time_in_txpool_secs = Histogram::new(buckets(Buckets::Timing));
         let select_transaction_time_nanoseconds =
-            Histogram::new(buckets(Buckets::Timing));
+            Histogram::new(buckets(Buckets::TimingCoarseGrained));
         let transaction_insertion_time_in_thread_pool_milliseconds =
-            Histogram::new(buckets(Buckets::Timing));
+            Histogram::new(buckets(Buckets::TimingCoarseGrained));
 
         let number_of_transactions = Gauge::default();
         let number_of_transactions_pending_verification = Gauge::default();
