@@ -73,19 +73,23 @@ impl PressurePeerToPeer {
     pub fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
         mock.expect_get_sealed_block_headers().returning(|range| {
-            let peer = random_peer();
-            let headers = range
-                .clone()
-                .map(BlockHeight::from)
-                .map(empty_header)
-                .collect();
-            let headers = peer.bind(Some(headers));
-            Ok(headers)
+            Box::pin(async move {
+                let peer = random_peer();
+                let headers = range
+                    .clone()
+                    .map(BlockHeight::from)
+                    .map(empty_header)
+                    .collect();
+                let headers = peer.bind(Some(headers));
+                Ok(headers)
+            })
         });
         mock.expect_get_transactions().returning(|block_ids| {
-            let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::default()).collect();
-            Ok(Some(v))
+            Box::pin(async move {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
+                Ok(Some(v))
+            })
         });
         Self {
             p2p: mock,
