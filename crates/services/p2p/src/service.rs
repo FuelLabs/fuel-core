@@ -28,7 +28,11 @@ use crate::{
 };
 use anyhow::anyhow;
 use dashmap::DashMap;
-use fuel_core_metrics::p2p_metrics::set_blocks_requested;
+use fuel_core_metrics::p2p_metrics::{
+    increment_p2p_req_res_cache_hits,
+    increment_p2p_req_res_cache_misses,
+    set_blocks_requested,
+};
 use fuel_core_services::{
     stream::BoxStream,
     AsyncProcessor,
@@ -497,13 +501,15 @@ impl<P: TaskP2PService, V: AtomicView, B: Broadcast, T> Task<P, V, B, T> {
 struct CachedView {
     sealed_block_headers: DashMap<Range<u32>, Vec<SealedBlockHeader>>,
     transactions_on_blocks: DashMap<Range<u32>, Vec<Transactions>>,
+    metrics: bool,
 }
 
 impl CachedView {
-    fn new() -> Self {
+    fn new(metrics: bool) -> Self {
         Self {
             sealed_block_headers: DashMap::new(),
             transactions_on_blocks: DashMap::new(),
+            metrics,
         }
     }
 
@@ -511,9 +517,16 @@ impl CachedView {
         self.sealed_block_headers.clear();
         self.transactions_on_blocks.clear();
     }
-}
 
-impl CachedView {
+    fn update_metrics<U>(&self, update_fn: U)
+    where
+        U: FnOnce(),
+    {
+        if self.metrics {
+            update_fn()
+        }
+    }
+
     fn get_sealed_headers<V>(
         &self,
         view: &V,
@@ -523,8 +536,10 @@ impl CachedView {
         V: P2pDb,
     {
         if let Some(headers) = self.sealed_block_headers.get(&block_height_range) {
+            self.update_metrics(|| increment_p2p_req_res_cache_hits());
             Ok(Some(headers.clone()))
         } else {
+            self.update_metrics(|| increment_p2p_req_res_cache_misses());
             let headers = view.get_sealed_headers(block_height_range.clone())?;
             if let Some(headers) = &headers {
                 self.sealed_block_headers
@@ -543,8 +558,10 @@ impl CachedView {
         V: P2pDb,
     {
         if let Some(transactions) = self.transactions_on_blocks.get(&block_height_range) {
+            self.update_metrics(|| increment_p2p_req_res_cache_hits());
             Ok(Some(transactions.clone()))
         } else {
+            self.update_metrics(|| increment_p2p_req_res_cache_misses());
             let transactions = view.get_transactions(block_height_range.clone())?;
             if let Some(transactions) = &transactions {
                 self.transactions_on_blocks
@@ -833,6 +850,7 @@ where
             heartbeat_max_time_since_last,
             database_read_threads,
             tx_pool_threads,
+            metrics,
             ..
         } = config;
 
@@ -889,7 +907,7 @@ where
             heartbeat_max_time_since_last,
             next_check_time,
             heartbeat_peer_reputation_config,
-            cached_view: Arc::new(CachedView::new()),
+            cached_view: Arc::new(CachedView::new(metrics)),
             cache_reset_interval,
             next_cache_reset_time,
         };
@@ -1674,7 +1692,7 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
-            cached_view: Arc::new(CachedView::new()),
+            cached_view: Arc::new(CachedView::new(false)),
             cache_reset_interval: Duration::from_secs(0),
             next_cache_reset_time: Instant::now(),
         };
@@ -1767,7 +1785,7 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
-            cached_view: Arc::new(CachedView::new()),
+            cached_view: Arc::new(CachedView::new(false)),
             cache_reset_interval: Duration::from_secs(0),
             next_cache_reset_time: Instant::now(),
         };
@@ -1832,7 +1850,7 @@ pub mod tests {
             heartbeat_max_time_since_last: Default::default(),
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: Default::default(),
-            cached_view: Arc::new(CachedView::new()),
+            cached_view: Arc::new(CachedView::new(false)),
             cache_reset_interval: Duration::from_secs(0),
             next_cache_reset_time: Instant::now(),
         };
