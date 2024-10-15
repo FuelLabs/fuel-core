@@ -14,8 +14,11 @@ use std::sync::OnceLock;
 pub struct TxPoolMetrics {
     /// Size of transactions in the txpool in bytes
     pub tx_size: Histogram,
+    /// Number of transactions in the txpool
     pub number_of_transactions: Gauge,
+    /// Number of transactions pending verification, before being inserted in the txpool
     pub number_of_transactions_pending_verification: Gauge,
+    /// Number of transactions that can be included in the next block
     pub number_of_executable_transactions: Gauge,
     /// Time of transactions in the txpool in seconds
     pub transaction_time_in_txpool_secs: Histogram,
