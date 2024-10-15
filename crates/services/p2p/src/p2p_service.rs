@@ -4,7 +4,10 @@ use crate::{
         FuelBehaviourEvent,
     },
     codecs::{
-        postcard::PostcardCodec,
+        postcard::{
+            MessageExchangePostcardProtocol,
+            PostcardCodec,
+        },
         GossipsubCodec,
     },
     config::{
@@ -26,14 +29,16 @@ use crate::{
         Punisher,
     },
     peer_report::PeerReportEvent,
-    request_response as fuel_request_response,
-    request_response::messages::{
-        RequestError,
-        RequestMessage,
-        ResponseError,
-        ResponseMessage,
-        ResponseSendError,
-        ResponseSender,
+    request_response::{
+        self as fuel_request_response,
+        messages::{
+            RequestError,
+            RequestMessage,
+            ResponseError,
+            ResponseMessage,
+            ResponseSendError,
+            ResponseSender,
+        },
     },
     TryPeerId,
 };
@@ -373,14 +378,27 @@ impl FuelP2PService {
             }
         };
 
-        let request_id = self
-            .swarm
-            .behaviour_mut()
-            .send_request_msg(message_request, &peer_id);
+        let latest_compatible_request_response_protocol_version = self
+            .peer_manager
+            .get_peer_info(&peer_id)
+            .map(|peer_info| peer_info.request_response_protocol_version.as_ref())
+            .flatten()
+            .unwrap_or(&fuel_request_response::ProtocolVersion::V1(
+                MessageExchangePostcardProtocol,
+            ));
 
-        self.outbound_requests_table.insert(request_id, on_response);
+        match latest_compatible_request_response_protocol_version {
+            fuel_request_response::ProtocolVersion::V1(_) => {
+                let request_id = self
+                    .swarm
+                    .behaviour_mut()
+                    .send_request_msg(message_request, &peer_id);
 
-        Ok(request_id)
+                self.outbound_requests_table.insert(request_id, on_response);
+
+                Ok(request_id)
+            }
+        }
     }
 
     /// Sends ResponseMessage to a peer that requested the data
