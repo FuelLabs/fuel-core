@@ -536,10 +536,10 @@ impl CachedView {
         V: P2pDb,
     {
         if let Some(headers) = self.sealed_block_headers.get(&block_height_range) {
-            self.update_metrics(|| increment_p2p_req_res_cache_hits());
+            self.update_metrics(increment_p2p_req_res_cache_hits);
             Ok(Some(headers.clone()))
         } else {
-            self.update_metrics(|| increment_p2p_req_res_cache_misses());
+            self.update_metrics(increment_p2p_req_res_cache_misses);
             let headers = view.get_sealed_headers(block_height_range.clone())?;
             if let Some(headers) = &headers {
                 self.sealed_block_headers
@@ -558,10 +558,10 @@ impl CachedView {
         V: P2pDb,
     {
         if let Some(transactions) = self.transactions_on_blocks.get(&block_height_range) {
-            self.update_metrics(|| increment_p2p_req_res_cache_hits());
+            self.update_metrics(increment_p2p_req_res_cache_hits);
             Ok(Some(transactions.clone()))
         } else {
-            self.update_metrics(|| increment_p2p_req_res_cache_misses());
+            self.update_metrics(increment_p2p_req_res_cache_misses);
             let transactions = view.get_transactions(block_height_range.clone())?;
             if let Some(transactions) = &transactions {
                 self.transactions_on_blocks
