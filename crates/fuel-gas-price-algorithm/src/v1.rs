@@ -118,13 +118,8 @@ pub struct AlgorithmUpdaterV1 {
     /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: ClampedPercentage,
     // DA
-    /// The gas price for the DA portion of the last block. This can be used to calculate
-    /// the DA portion of the next block
-    // pub last_da_gas_price: u64,
-
     /// The gas price (scaled by the `gas_price_factor`) to cover the DA commitment of the next block
     pub new_scaled_da_gas_price: u64,
-
     /// Scale factor for the gas price.
     pub gas_price_factor: NonZeroU64,
     /// The lowest the algorithm allows the da gas price to go
@@ -151,9 +146,35 @@ pub struct AlgorithmUpdaterV1 {
     pub second_to_last_profit: i128,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u128,
-
+    /// Activity of L2
+    pub l2_activity: Activity,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: BTreeMap<Height, Bytes>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct Activity {
+    top: i16,
+    bottom: i16,
+    current: i16,
+}
+
+impl Activity {
+    pub fn new(top: i16, bottom: i16, current: i16) -> Self {
+        Self {
+            top,
+            bottom,
+            current,
+        }
+    }
+}
+
+fn change_percent_with_activity(base: u16, activity: u8, max_change: u16) -> u16 {
+    let activity = activity as u16;
+    let max_change = max_change as u16;
+    let base = base as u16;
+    let change = activity.saturating_mul(max_change).saturating_div(100);
+    base.saturating_add(change)
 }
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
