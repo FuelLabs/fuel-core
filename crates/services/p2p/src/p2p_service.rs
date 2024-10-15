@@ -719,7 +719,6 @@ impl FuelP2PService {
 
                 let mut addresses = info.listen_addrs;
                 let agent_version = info.agent_version;
-
                 if addresses.len() > MAX_IDENTIFY_ADDRESSES {
                     let protocol_version = info.protocol_version;
                     debug!(

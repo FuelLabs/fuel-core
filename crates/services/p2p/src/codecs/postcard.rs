@@ -166,7 +166,7 @@ impl NetworkCodec for PostcardCodec {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MessageExchangePostcardProtocol;
 
 impl AsRef<str> for MessageExchangePostcardProtocol {
