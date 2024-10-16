@@ -54,10 +54,8 @@ impl CachedView {
         let mut missing_ranges = block_height_range.clone();
         for block_height in block_height_range.clone() {
             if let Some(header) = self.sealed_block_headers.get(&block_height) {
-                self.update_metrics(increment_p2p_req_res_cache_hits);
                 headers.push(header.clone());
             } else {
-                self.update_metrics(increment_p2p_req_res_cache_misses);
                 // for the first block not in the cache, start a new range
                 missing_ranges.start = block_height;
                 break;
@@ -65,18 +63,20 @@ impl CachedView {
         }
 
         if missing_ranges.is_empty() {
-            Ok(Some(headers))
-        } else {
-            let missing_headers = view.get_sealed_headers(missing_ranges.clone())?;
-            if let Some(missing_headers) = &missing_headers {
-                for header in missing_headers.iter() {
-                    self.sealed_block_headers
-                        .insert((*header.entity.height()).into(), header.clone());
-                    headers.push(header.clone());
-                }
-            }
-            Ok(missing_headers)
+            self.update_metrics(increment_p2p_req_res_cache_hits);
+            return Ok(Some(headers))
         }
+
+        self.update_metrics(increment_p2p_req_res_cache_misses);
+        let missing_headers = view.get_sealed_headers(missing_ranges.clone())?;
+        if let Some(missing_headers) = &missing_headers {
+            for header in missing_headers.iter() {
+                self.sealed_block_headers
+                    .insert((*header.entity.height()).into(), header.clone());
+                headers.push(header.clone());
+            }
+        }
+        Ok(missing_headers)
     }
 
     pub(crate) fn get_transactions<V>(
@@ -91,29 +91,30 @@ impl CachedView {
         let mut missing_ranges = block_height_range.clone();
         for block_height in block_height_range.clone() {
             if let Some(cached_tx) = self.transactions_on_blocks.get(&block_height) {
-                self.update_metrics(increment_p2p_req_res_cache_hits);
                 transactions.push(cached_tx.clone());
             } else {
-                self.update_metrics(increment_p2p_req_res_cache_misses);
                 // for the first block not in the cache, start a new range
                 missing_ranges.start = block_height;
                 break;
             }
         }
+
         if missing_ranges.is_empty() {
-            Ok(Some(transactions))
-        } else {
-            let missing_transactions = view.get_transactions(missing_ranges.clone())?;
-            if let Some(missing_transactions) = &missing_transactions {
-                for (block_height, transactions) in
-                    missing_ranges.zip(missing_transactions.iter())
-                {
-                    self.transactions_on_blocks
-                        .insert(block_height, transactions.clone());
-                }
-            }
-            Ok(missing_transactions)
+            self.update_metrics(increment_p2p_req_res_cache_hits);
+            return Ok(Some(transactions))
         }
+
+        self.update_metrics(increment_p2p_req_res_cache_misses);
+        let transactions = view.get_transactions(missing_ranges.clone())?;
+        if let Some(transactions) = &transactions {
+            for (block_height, transactions_per_block) in
+                missing_ranges.zip(transactions.iter())
+            {
+                self.transactions_on_blocks
+                    .insert(block_height, transactions_per_block.clone());
+            }
+        }
+        Ok(transactions)
     }
 }
 

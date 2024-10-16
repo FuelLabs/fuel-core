@@ -978,6 +978,7 @@ where
             }
             _ = tokio::time::sleep_until(self.next_cache_reset_time) => {
                 should_continue = true;
+                tracing::debug!("Resetting req/res protocol cache");
                 self.cached_view.clear();
                 self.next_cache_reset_time += self.cache_reset_interval;
             }
