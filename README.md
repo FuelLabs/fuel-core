@@ -115,7 +115,7 @@ $ ./target/debug/fuel-core run --poa-instant=false
 
 If you want to participate in the Ignition network with your own node you can launch it following these simple commands.
 
-Install the latest fuelup installed :
+Install the latest fuelup :
 ```bash
 curl -fsSL https://install.fuel.network/ | sh
 fuelup toolchain install latest
