@@ -252,4 +252,8 @@ where
         let key = Self::key(storage_entry);
         self.on_removed_transaction_inner(key)
     }
+
+    fn number_of_executable_transactions(&self) -> usize {
+        self.executable_transactions_sorted_tip_gas_ratio.len()
+    }
 }
