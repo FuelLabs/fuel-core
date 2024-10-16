@@ -12,8 +12,10 @@ use fuel_core_types::{
 use std::ops::Range;
 
 pub struct CachedView {
-    sealed_block_headers: DashMap<Range<u32>, Vec<SealedBlockHeader>>,
-    transactions_on_blocks: DashMap<Range<u32>, Vec<Transactions>>,
+    // map block height to sealed block header
+    sealed_block_headers: DashMap<u32, SealedBlockHeader>,
+    // map block height to transactions
+    transactions_on_blocks: DashMap<u32, Transactions>,
     metrics: bool,
 }
 
@@ -48,17 +50,32 @@ impl CachedView {
     where
         V: P2pDb,
     {
-        if let Some(headers) = self.sealed_block_headers.get(&block_height_range) {
-            self.update_metrics(increment_p2p_req_res_cache_hits);
-            Ok(Some(headers.clone()))
-        } else {
-            self.update_metrics(increment_p2p_req_res_cache_misses);
-            let headers = view.get_sealed_headers(block_height_range.clone())?;
-            if let Some(headers) = &headers {
-                self.sealed_block_headers
-                    .insert(block_height_range, headers.clone());
+        let mut headers = Vec::new();
+        let mut missing_ranges = block_height_range.clone();
+        for block_height in block_height_range.clone() {
+            if let Some(header) = self.sealed_block_headers.get(&block_height) {
+                self.update_metrics(increment_p2p_req_res_cache_hits);
+                headers.push(header.clone());
+            } else {
+                self.update_metrics(increment_p2p_req_res_cache_misses);
+                // for the first block not in the cache, start a new range
+                missing_ranges.start = block_height;
+                break;
             }
-            Ok(headers)
+        }
+
+        if missing_ranges.is_empty() {
+            Ok(Some(headers))
+        } else {
+            let missing_headers = view.get_sealed_headers(missing_ranges.clone())?;
+            if let Some(missing_headers) = &missing_headers {
+                for header in missing_headers.iter() {
+                    self.sealed_block_headers
+                        .insert((*header.entity.height()).into(), header.clone());
+                    headers.push(header.clone());
+                }
+            }
+            Ok(missing_headers)
         }
     }
 
@@ -70,17 +87,32 @@ impl CachedView {
     where
         V: P2pDb,
     {
-        if let Some(transactions) = self.transactions_on_blocks.get(&block_height_range) {
-            self.update_metrics(increment_p2p_req_res_cache_hits);
-            Ok(Some(transactions.clone()))
-        } else {
-            self.update_metrics(increment_p2p_req_res_cache_misses);
-            let transactions = view.get_transactions(block_height_range.clone())?;
-            if let Some(transactions) = &transactions {
-                self.transactions_on_blocks
-                    .insert(block_height_range, transactions.clone());
+        let mut transactions = Vec::new();
+        let mut missing_ranges = block_height_range.clone();
+        for block_height in block_height_range.clone() {
+            if let Some(cached_tx) = self.transactions_on_blocks.get(&block_height) {
+                self.update_metrics(increment_p2p_req_res_cache_hits);
+                transactions.push(cached_tx.clone());
+            } else {
+                self.update_metrics(increment_p2p_req_res_cache_misses);
+                // for the first block not in the cache, start a new range
+                missing_ranges.start = block_height;
+                break;
             }
-            Ok(transactions)
+        }
+        if missing_ranges.is_empty() {
+            Ok(Some(transactions))
+        } else {
+            let missing_transactions = view.get_transactions(missing_ranges.clone())?;
+            if let Some(missing_transactions) = &missing_transactions {
+                for (block_height, transactions) in
+                    missing_ranges.zip(missing_transactions.iter())
+                {
+                    self.transactions_on_blocks
+                        .insert(block_height, transactions.clone());
+                }
+            }
+            Ok(missing_transactions)
         }
     }
 }
@@ -148,11 +180,15 @@ mod tests {
         };
         let cached_view = CachedView::new(false);
 
-        let block_height_range = 0..10;
-        let sealed_headers = vec![SealedBlockHeader::default()];
-        cached_view
-            .sealed_block_headers
-            .insert(block_height_range.clone(), sealed_headers.clone());
+        let block_height_range = 0..100;
+        let sealed_headers = default_sealed_headers(block_height_range.clone());
+        for (block_height, header) in
+            block_height_range.clone().zip(sealed_headers.iter())
+        {
+            cached_view
+                .sealed_block_headers
+                .insert(block_height, header.clone());
+        }
 
         let result = cached_view
             .get_sealed_headers(&db, block_height_range.clone())
@@ -172,7 +208,7 @@ mod tests {
 
         // when
         let notified = sender.notified();
-        let block_height_range = 0..10;
+        let block_height_range = 0..100;
         let sealed_headers = default_sealed_headers(block_height_range.clone());
         let result = cached_view
             .get_sealed_headers(&db, block_height_range.clone())
@@ -195,7 +231,7 @@ mod tests {
 
         // when
         let notified = sender.notified();
-        let block_height_range = 0..10;
+        let block_height_range = 0..100;
         let result = cached_view
             .get_sealed_headers(&db, block_height_range.clone())
             .unwrap();
@@ -214,11 +250,16 @@ mod tests {
         };
         let cached_view = CachedView::new(false);
 
-        let block_height_range = 0..10;
+        let block_height_range = 0..100;
         let transactions = default_transactions(block_height_range.clone());
-        cached_view
-            .transactions_on_blocks
-            .insert(block_height_range.clone(), transactions.clone());
+
+        for (block_height, transactions) in
+            block_height_range.clone().zip(transactions.iter())
+        {
+            cached_view
+                .transactions_on_blocks
+                .insert(block_height, transactions.clone());
+        }
 
         let result = cached_view
             .get_transactions(&db, block_height_range.clone())
@@ -241,7 +282,7 @@ mod tests {
 
         // when
         let notified = sender.notified();
-        let block_height_range = 0..10;
+        let block_height_range = 0..100;
         let transactions = default_transactions(block_height_range.clone());
         let result = cached_view
             .get_transactions(&db, block_height_range.clone())
@@ -266,7 +307,7 @@ mod tests {
 
         // when
         let notified = sender.notified();
-        let block_height_range = 0..10;
+        let block_height_range = 0..100;
         let result = cached_view
             .get_transactions(&db, block_height_range.clone())
             .unwrap();
