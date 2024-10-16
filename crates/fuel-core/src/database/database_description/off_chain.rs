@@ -14,7 +14,7 @@ impl DatabaseDescription for OffChain {
     fn version() -> u32 {
         // TODO[RC]: Flip to 1, to take care of DatabaseMetadata::V2
         // TODO[RC]: This will fail the check_version(), do we need to migrate first?
-        0
+        1
     }
 
     fn name() -> String {

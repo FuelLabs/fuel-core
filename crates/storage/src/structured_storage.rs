@@ -248,6 +248,10 @@ where
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.inner.commit_changes(changes)
     }
+
+    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
+        unimplemented!()
+    }
 }
 
 impl<Column, S, M> StorageInspect<M> for StructuredStorage<S>
@@ -292,6 +296,14 @@ where
 
     fn take(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::take(self, key, M::column())
+    }
+
+    fn replace_forced(
+        &mut self,
+        _key: &<M as Mappable>::Key,
+        _value: &<M as Mappable>::Value,
+    ) -> Result<Option<<M as Mappable>::OwnedValue>, Self::Error> {
+        unimplemented!()
     }
 }
 

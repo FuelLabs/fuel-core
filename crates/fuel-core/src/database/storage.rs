@@ -51,6 +51,23 @@ where
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }
+
+    fn replace_forced(
+        &mut self,
+        key: &<M as Mappable>::Key,
+        value: &<M as Mappable>::Value,
+    ) -> Result<Option<<M as Mappable>::OwnedValue>, Self::Error> {
+        let mut transaction = StorageTransaction::transaction(
+            self.as_ref(),
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
+        let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
+        let changes = transaction.into_changes();
+        dbg!(&changes);
+        self.commit_changes_forced(changes)?;
+        Ok(prev)
+    }
 }
 
 impl<Storage, M> StorageWrite<M> for GenericDatabase<Storage>

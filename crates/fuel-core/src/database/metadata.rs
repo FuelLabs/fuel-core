@@ -81,10 +81,11 @@ where
                 dbg!(&new_metadata);
                 info!("XXXX - 3007");
                 let x = self.storage_as_mut::<MetadataTable<Description>>();
+                x.replace_forced(&(), &new_metadata)?;
 
                 // None of these work.
-                //x.insert(&(), &new_metadata)?;
                 //x.replace(&(), &new_metadata)?;
+                //x.insert(&(), &new_metadata)?;
 
                 info!(
                     "...Migrated! perhaps"

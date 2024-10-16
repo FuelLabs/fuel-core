@@ -84,6 +84,7 @@ mockall::mock! {
 
     impl Modifiable for Basic {
         fn commit_changes(&mut self, changes: Changes) -> StorageResult<()>;
+        fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()>;
     }
 }
 
@@ -121,6 +122,14 @@ where
 
     fn take(&mut self, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
         MockStorageMethods::remove::<M>(&mut self.storage, key)
+    }
+
+    fn replace_forced(
+        &mut self,
+        _key: &<M as Mappable>::Key,
+        _value: &<M as Mappable>::Value,
+    ) -> Result<Option<<M as Mappable>::OwnedValue>, Self::Error> {
+        unimplemented!()
     }
 }
 

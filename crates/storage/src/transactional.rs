@@ -133,6 +133,9 @@ pub enum ConflictPolicy {
 pub trait Modifiable {
     /// Commits the changes into the storage.
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()>;
+
+    /// Commits the changes into the storage without validating block height.
+    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()>;
 }
 
 /// The wrapper around the `Vec<u8>` that supports `Borrow<[u8]>`.
@@ -325,6 +328,10 @@ impl<Storage> Modifiable for InMemoryTransaction<Storage> {
             }
         }
         Ok(())
+    }
+
+    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
+        unimplemented!()
     }
 }
 
@@ -576,6 +583,11 @@ mod test {
                 }
             }
             Ok(())
+        }
+
+        #[doc = " Commits the changes into the storage without validating block height."]
+        fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
+            unimplemented!()
         }
     }
 
