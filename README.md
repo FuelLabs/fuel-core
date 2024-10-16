@@ -111,9 +111,9 @@ $ ./target/debug/fuel-core run --poa-instant=false
 2023-06-13T12:44:12.857763Z  INFO fuel_core::cli::run: 232: Block production disabled
 ```
 
-## Running a Mainnet node
+## Running a Ignition node
 
-If you want to participate in the Mainnet network with your own node you can launch it following these simple commands.
+If you want to participate in the Ignition network with your own node you can launch it following these simple commands.
 
 Install the latest fuelup installed :
 ```bash
@@ -132,15 +132,15 @@ fuel-core-keygen new --key-type peering
 ```
 and copy the secret key displayed.
 
-Run your mainnet node (change all variable with `{}` to your own personal variables):
+Run your node (change all variable with `{}` to your own personal variables):
 ```bash
 fuel-core run \
 --enable-relayer \
---service-name fuel-mainnet-node \
+--service-name fuel-ignition-node \
 --keypair {KEYGEN_SECRET_KEY} \
 --relayer {ETHEREUM_RPC_ENDPOINT} \
 --ip=0.0.0.0 --port 4000 --peering-port 30333 \
---db-path ~/.fuel-mainnet \
+--db-path ~/.fuel-ignition \
 --snapshot {PATH_TO_CHAIN_CONFIGURATION_FOLDER}/ignition \
 --utxo-validation --poa-instant false --enable-p2p \
 --bootstrap-nodes /dnsaddr/mainnet.fuel.network \
