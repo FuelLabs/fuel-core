@@ -338,14 +338,13 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
     assert_eq!(&State::new(3, None), state.lock().deref());
     // Reset the state for a next call
     *state.lock() = State::new(3, 6);
-    
+
     // When
     // Should re-ask to P2P only block 4 and for now it reask for all blocks
     let res = import.import(&mut watcher).await.is_ok();
     assert_eq!(true, res);
     assert_eq!(&State::new(6, None), state.lock().deref());
 }
-
 
 #[tokio::test]
 async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
