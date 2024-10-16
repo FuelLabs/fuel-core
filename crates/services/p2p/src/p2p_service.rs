@@ -4,10 +4,7 @@ use crate::{
         FuelBehaviourEvent,
     },
     codecs::{
-        postcard::{
-            MessageExchangePostcardProtocol,
-            PostcardCodec,
-        },
+        postcard::PostcardCodec,
         GossipsubCodec,
     },
     config::{
