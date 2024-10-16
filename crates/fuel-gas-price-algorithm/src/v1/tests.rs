@@ -2,7 +2,10 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::v1::AlgorithmUpdaterV1;
+use crate::v1::{
+    AlgorithmUpdaterV1,
+    L2ActivityTracker,
+};
 
 #[cfg(test)]
 mod algorithm_v1_tests;
@@ -190,6 +193,7 @@ impl UpdaterBuilder {
                 .da_gas_price_factor
                 .try_into()
                 .expect("Should never be non-zero"),
+            l2_activity: L2ActivityTracker::new_always_increases(),
         }
     }
 }

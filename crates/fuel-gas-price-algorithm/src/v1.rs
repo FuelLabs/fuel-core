@@ -147,38 +147,93 @@ pub struct AlgorithmUpdaterV1 {
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u128,
     /// Activity of L2
-    pub l2_activity: Activity,
+    pub l2_activity: L2ActivityTracker,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: BTreeMap<Height, Bytes>,
 }
 
+/// Because the DA gas price can increase even when no-one is using the network, there is a potential
+/// for a negative feedback loop to occur where the gas price increases, further decreasing activity
+/// and increasing the gas price. The `L2ActivityTracker` is used to moderate changes to the DA
+/// gas price based on the activity of the L2 chain.
+///
+/// For each L2 block, the activity is calculated as a percentage of the block capacity used. If the
+/// activity is below a certain threshold, the activity is decreased. The activity exists on a scale
+/// between 0 and the sum of the increase, hold, and decrease buffers:
+///
+/// |<-- decrease range -->|<-- hold range -->|<-- increase range -->|
+///
+/// The current activity determines the behavior of the DA gas price.
+///
+/// For healthy behavior, the activity should be in the `increase` range.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct Activity {
-    top: i16,
-    bottom: i16,
-    current: i16,
+pub struct L2ActivityTracker {
+    /// The _size_ of the range of the activity buffer that will increase the gas price
+    increase_range_size: u16,
+    /// The _size_ of the range of the activity buffer that will hold the gas price
+    hold_range_size: u16,
+    /// The _size_ of the range of the activity buffer that will decrease the gas price
+    decrease_range_size: u16,
+    /// The current activity of the L2 chain
+    activity: u16,
+    /// The threshold of activity below which the activity will be decreased
+    block_activity_threshold: ClampedPercentage,
 }
 
-impl Activity {
-    pub fn new(top: i16, bottom: i16, current: i16) -> Self {
+/// Designates the intended behavior of the DA gas price based on the activity of the L2 chain
+pub enum DAGasPriceSafetyMode {
+    /// Should increase DA gas price freely
+    Increase,
+    /// Should not increase the DA gas price
+    Hold,
+    /// Should decrease the DA gas price always
+    Decrease,
+}
+
+impl L2ActivityTracker {
+    pub fn new_full(
+        increase_range_size: u16,
+        hold_range_size: u16,
+        decrease_range_size: u16,
+        block_activity_threshold: ClampedPercentage,
+    ) -> Self {
+        let activity = decrease_range_size + hold_range_size + increase_range_size;
         Self {
-            top,
-            bottom,
-            current,
+            increase_range_size,
+            hold_range_size,
+            decrease_range_size,
+            activity,
+            block_activity_threshold,
+        }
+    }
+
+    pub fn new_always_increases() -> Self {
+        Self::new_full(1, 0, 0, ClampedPercentage::new(0))
+    }
+
+    pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
+        if self.activity > self.decrease_range_size + self.hold_range_size {
+            DAGasPriceSafetyMode::Increase
+        } else if self.activity > self.decrease_range_size {
+            DAGasPriceSafetyMode::Hold
+        } else {
+            DAGasPriceSafetyMode::Decrease
+        }
+    }
+
+    pub fn update(&mut self, block_usage: ClampedPercentage) {
+        let cap =
+            self.decrease_range_size + self.hold_range_size + self.increase_range_size;
+        if block_usage < self.block_activity_threshold {
+            self.activity = self.activity.saturating_sub(1);
+        } else {
+            self.activity = self.activity.saturating_add(1).min(cap);
         }
     }
 }
 
-fn change_percent_with_activity(base: u16, activity: u8, max_change: u16) -> u16 {
-    let activity = activity as u16;
-    let max_change = max_change as u16;
-    let base = base as u16;
-    let change = activity.saturating_mul(max_change).saturating_div(100);
-    base.saturating_add(change)
-}
-
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub struct ClampedPercentage {
     value: u8,
 }
