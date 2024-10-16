@@ -248,18 +248,19 @@ async fn import__signature_fails_on_header_5_only() {
 }
 
 #[tokio::test]
-async fn import__keep_blocks_p2p_asked_in_fail_cases() {
-    // given
+async fn import__keep_data_asked_in_fail_ask_header_cases() {
     let params = Config {
         block_stream_buffer_size: 10,
         header_batch_size: 1,
     };
 
     let mut consensus_port = MockConsensusPort::default();
+    // No reask
     consensus_port
         .expect_check_sealed_header()
         .times(3)
         .returning(|_| Ok(true));
+    // No reask
     consensus_port
         .expect_await_da_height()
         .times(3)
@@ -267,6 +268,8 @@ async fn import__keep_blocks_p2p_asked_in_fail_cases() {
 
     let mut p2p = MockPeerToPeerPort::default();
     let mut seq = Sequence::new();
+    // Given
+    // Fail to get headers for block 4
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .in_sequence(&mut seq)
@@ -278,6 +281,7 @@ async fn import__keep_blocks_p2p_asked_in_fail_cases() {
         });
     p2p.expect_get_sealed_block_headers()
         .times(2)
+        .in_sequence(&mut seq)
         .returning(|range| {
             Box::pin(async move {
                 let peer = random_peer();
@@ -286,6 +290,20 @@ async fn import__keep_blocks_p2p_asked_in_fail_cases() {
                 Ok(headers)
             })
         });
+    // Then
+    // Reask only for block 4
+    p2p.expect_get_sealed_block_headers()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|range| {
+            Box::pin(async move {
+                let peer = random_peer();
+                let headers = Some(range.map(empty_header).collect());
+                let headers = peer.bind(headers);
+                Ok(headers)
+            })
+        });
+    // No reask
     p2p.expect_get_transactions()
         .times(3)
         .returning(|block_ids| {
@@ -310,6 +328,7 @@ async fn import__keep_blocks_p2p_asked_in_fail_cases() {
         p2p,
         executor,
         consensus,
+        cache: SharedMutex::new(HashMap::new()),
     };
     let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
     let mut watcher = shutdown.into();
@@ -319,6 +338,105 @@ async fn import__keep_blocks_p2p_asked_in_fail_cases() {
     assert_eq!(&State::new(3, None), state.lock().deref());
     // Reset the state for a next call
     *state.lock() = State::new(3, 6);
+    
+    // When
+    // Should re-ask to P2P only block 4 and for now it reask for all blocks
+    let res = import.import(&mut watcher).await.is_ok();
+    assert_eq!(true, res);
+    assert_eq!(&State::new(6, None), state.lock().deref());
+}
+
+
+#[tokio::test]
+async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 1,
+    };
+
+    let mut consensus_port = MockConsensusPort::default();
+    consensus_port
+        .expect_check_sealed_header()
+        .times(3)
+        .returning(|_| Ok(true));
+    consensus_port
+        .expect_await_da_height()
+        .times(4)
+        .returning(|_| Ok(()));
+
+    let mut p2p = MockPeerToPeerPort::default();
+    p2p.expect_get_sealed_block_headers()
+        .times(3)
+        .returning(|range| {
+            Box::pin(async move {
+                let peer = random_peer();
+                let headers = Some(range.map(empty_header).collect());
+                let headers = peer.bind(headers);
+                Ok(headers)
+            })
+        });
+    let mut seq = Sequence::new();
+    // Given
+    // Fail to get transactions for block 4
+    p2p.expect_get_transactions()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_| {
+            Box::pin(async move {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                Err(anyhow::anyhow!("Some network error"))
+            })
+        });
+
+    p2p.expect_get_transactions()
+        .times(2)
+        .in_sequence(&mut seq)
+        .returning(|block_ids| {
+            Box::pin(async move {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
+                Ok(Some(v))
+            })
+        });
+    // Then
+    // Reask only for block 4
+    p2p.expect_get_transactions()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|block_ids| {
+            Box::pin(async move {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
+                Ok(Some(v))
+            })
+        });
+
+    p2p.expect_report_peer().returning(|_, _| Ok(()));
+
+    let p2p = Arc::new(p2p);
+    let executor: Arc<MockBlockImporterPort> = Arc::new(DefaultMocks::times([3]));
+    let consensus = Arc::new(consensus_port);
+    let notify = Arc::new(Notify::new());
+    let state: SharedMutex<State> = State::new(3, 6).into();
+
+    let import = Import {
+        state: state.clone(),
+        notify: notify.clone(),
+        params,
+        p2p,
+        executor,
+        consensus,
+        cache: SharedMutex::new(HashMap::new()),
+    };
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+    notify.notify_one();
+    let res = import.import(&mut watcher).await.is_ok();
+    assert_eq!(false, res);
+    assert_eq!(&State::new(3, None), state.lock().deref());
+    // Reset the state for a next call
+    *state.lock() = State::new(3, 6);
+    // When
     // Should re-ask to P2P only block 4 and for now it reask for all blocks
     let res = import.import(&mut watcher).await.is_ok();
     assert_eq!(true, res);
@@ -1094,6 +1212,7 @@ async fn test_import_inner(
         p2p,
         executor,
         consensus,
+        cache: SharedMutex::new(HashMap::new()),
     };
     let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
     let mut watcher = shutdown.into();
@@ -1319,6 +1438,7 @@ impl PeerReportTestBuilder {
             p2p,
             executor,
             consensus,
+            cache: SharedMutex::new(HashMap::new()),
         };
         let (_tx, shutdown) =
             tokio::sync::watch::channel(fuel_core_services::State::Started);

@@ -113,6 +113,7 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
         p2p,
         executor,
         consensus,
+        cache: SharedMutex::new(HashMap::new()),
     };
 
     import.notify.notify_one();
