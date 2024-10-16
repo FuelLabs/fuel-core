@@ -1,55 +1,32 @@
 //! Utilities and helper methods for writing tests
 
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::{anyhow, Context};
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    types::{
-        CoinType,
-        TransactionStatus,
-    },
+    types::{CoinType, TransactionStatus},
     FuelClient,
 };
 use fuel_core_types::{
-    fuel_asm::{
-        op,
-        GTFArgs,
-        RegId,
-    },
+    fuel_asm::{op, GTFArgs, RegId},
     fuel_crypto::PublicKey,
     fuel_tx::{
-        ConsensusParameters,
-        Contract,
-        ContractId,
-        Finalizable,
-        Input,
-        Output,
-        Transaction,
-        TransactionBuilder,
-        TxId,
-        UniqueIdentifier,
-        UtxoId,
+        ConsensusParameters, Contract, ContractId, Finalizable, Input, Output, Transaction,
+        TransactionBuilder, TxId, UniqueIdentifier, UtxoId,
     },
     fuel_types::{
         canonical::Serialize,
-        Address,
-        AssetId,
-        Salt,
+        Address, AssetId, Salt,
     },
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
 
-use crate::config::{
-    ClientConfig,
-    SuiteConfig,
-};
+use crate::config::{ClientConfig, SuiteConfig};
 
 // The base amount needed to cover the cost of a simple transaction
 pub const BASE_AMOUNT: u64 = 100_000_000;
 
+#[derive(Clone)]
 pub struct TestContext {
     pub alice: Wallet,
     pub bob: Wallet,
@@ -61,8 +38,8 @@ impl TestContext {
         let alice_client = Self::new_client(config.endpoint.clone(), &config.wallet_a);
         let bob_client = Self::new_client(config.endpoint.clone(), &config.wallet_b);
         Self {
-            alice: Wallet::new(config.wallet_a.secret, alice_client).await,
-            bob: Wallet::new(config.wallet_b.secret, bob_client).await,
+            alice: Wallet::new(config.wallet_a.secret.clone(), alice_client).await,
+            bob: Wallet::new(config.wallet_b.secret.clone(), bob_client).await,
             config,
         }
     }
@@ -84,7 +61,7 @@ impl Wallet {
     pub async fn new(secret: SecretKey, client: FuelClient) -> Self {
         let public_key: PublicKey = (&secret).into();
         let address = Input::owner(&public_key);
-        // get consensus params
+        // Get consensus params
         let consensus_params = client
             .chain_info()
             .await
@@ -98,7 +75,7 @@ impl Wallet {
         }
     }
 
-    /// returns the balance associated with a wallet
+    /// Returns the balance associated with a wallet
     pub async fn balance(&self, asset_id: Option<AssetId>) -> anyhow::Result<u64> {
         self.client
             .balance(&self.address, Some(&asset_id.unwrap_or_default()))
@@ -122,13 +99,13 @@ impl Wallet {
     ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or(*self.consensus_params.base_asset_id());
         let total_amount = transfer_amount + BASE_AMOUNT;
-        // select coins
+        // Select coins
         let coins = &self
             .client
             .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
             .await?[0];
 
-        // build transaction
+        // Build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
         tx.max_fee_limit(BASE_AMOUNT);
         tx.script_gas_limit(0);
@@ -136,7 +113,7 @@ impl Wallet {
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
-                    self.secret,
+                    self.secret.clone(),
                     coin.utxo_id,
                     coin.amount,
                     coin.asset_id,
@@ -165,7 +142,7 @@ impl Wallet {
         coinbase_contract: ContractId,
         asset_id: AssetId,
     ) -> anyhow::Result<Transaction> {
-        // select coins
+        // Select coins
         let coins = &self
             .client
             .coins_to_spend(
@@ -190,7 +167,7 @@ impl Wallet {
             op::ret(RegId::ONE),
         ];
 
-        // build transaction
+        // Build transaction
         let mut tx_builder = TransactionBuilder::script(
             script.into_iter().collect(),
             asset_id
@@ -216,7 +193,7 @@ impl Wallet {
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
                 tx_builder.add_unsigned_coin_input(
-                    self.secret,
+                    self.secret.clone(),
                     coin.utxo_id,
                     coin.amount,
                     coin.asset_id,
@@ -258,10 +235,10 @@ impl Wallet {
         println!("submitting tx... {:?}", tx_id);
         let status = self.client.submit_and_await_commit(&tx).await?;
 
-        // we know the transferred coin should be output 0 from above
+        // We know the transferred coin should be output 0 from above
         let transferred_utxo = UtxoId::new(tx_id, 0);
 
-        // get status and return the utxo id of transferred coin
+        // Get status and return the utxo id of transferred coin
         Ok(TransferResult {
             tx_id,
             transferred_utxo,
@@ -277,7 +254,7 @@ impl Wallet {
     ) -> anyhow::Result<()> {
         let asset_id = *self.consensus_params.base_asset_id();
         let total_amount = BASE_AMOUNT;
-        // select coins
+        // Select coins
         let coins = &self
             .client
             .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
@@ -301,7 +278,7 @@ impl Wallet {
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
-                    self.secret,
+                    self.secret.clone(),
                     coin.utxo_id,
                     coin.amount,
                     coin.asset_id,
@@ -329,10 +306,8 @@ impl Wallet {
             .submit_and_await_commit(&tx.clone().into())
             .await?;
 
-        // check status of contract deployment
-        if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
-            &status
-        {
+        // Check status of contract deployment
+        if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } = &status {
             return Err(anyhow!(format!("unexpected transaction status {status:?}")));
         }
 

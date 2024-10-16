@@ -65,9 +65,9 @@ impl Default for SuiteConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ClientConfig {
-    // overrides the default endpoint for the suite
+    // Overrides the default endpoint for the suite
     pub endpoint: Option<String>,
-    // the account to use
+    // The account to use
     pub secret: SecretKey,
 }
 
