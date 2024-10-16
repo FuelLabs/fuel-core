@@ -63,7 +63,7 @@ mod tests {
         request_response::protocols::ProtocolVersion,
     };
 
-    fn peer_info<'a>(protocols: &[impl AsRef<str>]) -> identify::Info {
+    fn peer_info(protocols: &[impl AsRef<str>]) -> identify::Info {
         // This public key is valid, it has been copied from libp2p tests.
         let public_key = PublicKey::try_decode_protobuf(&hex::decode(
             "080112201ed1e8fae2c4a144b8be8fd4b47bf3d3b34b871c3cacf6010f0e42d474fce27e",

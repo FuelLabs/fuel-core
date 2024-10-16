@@ -420,8 +420,7 @@ impl FuelP2PService {
         let latest_compatible_request_response_protocol_version = self
             .peer_manager
             .get_peer_info(&peer_id)
-            .map(|peer_info| peer_info.request_response_protocol_version.as_ref())
-            .flatten()
+            .and_then(|peer_info| peer_info.request_response_protocol_version.as_ref())
             .unwrap_or_default();
 
         match latest_compatible_request_response_protocol_version {

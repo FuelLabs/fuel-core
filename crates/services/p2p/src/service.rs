@@ -967,7 +967,7 @@ where
 
 #[derive(Clone)]
 pub struct SharedState {
-    /// Sender of p2p with peer gossip subscription (vec<u8> represent the peer_id)
+    /// Sender of p2p with peer gossip subscription (`Vec<u8>` represents the peer_id)
     new_tx_subscription_broadcast: broadcast::Sender<FuelPeerId>,
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
