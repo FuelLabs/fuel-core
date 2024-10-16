@@ -1,6 +1,6 @@
 use crate::{
     codecs::{
-        postcard::PostcardCodec,
+        postcard::PostcardCodecV1,
         NetworkCodec,
     },
     config::Config,
@@ -60,12 +60,15 @@ pub struct FuelBehaviour {
     /// Node discovery
     discovery: discovery::Behaviour,
 
-    /// RequestResponse protocol
-    request_response: request_response::Behaviour<PostcardCodec>,
+    /// RequestResponse protocol Version 1
+    request_response_v1: request_response::Behaviour<PostcardCodecV1>,
 }
 
 impl FuelBehaviour {
-    pub(crate) fn new(p2p_config: &Config, codec: PostcardCodec) -> anyhow::Result<Self> {
+    pub(crate) fn new(
+        p2p_config: &Config,
+        codec: PostcardCodecV1,
+    ) -> anyhow::Result<Self> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -119,7 +122,7 @@ impl FuelBehaviour {
             .with_request_timeout(p2p_config.set_request_timeout)
             .with_max_concurrent_streams(p2p_config.max_concurrent_streams);
 
-        let request_response = request_response::Behaviour::with_codec(
+        let request_response_v1 = request_response::Behaviour::with_codec(
             codec,
             req_res_protocol,
             req_res_config,
@@ -130,7 +133,7 @@ impl FuelBehaviour {
             discovery,
             gossipsub,
             peer_report,
-            request_response,
+            request_response_v1,
             blocked_peer: Default::default(),
             identify,
             heartbeat,
@@ -160,7 +163,8 @@ impl FuelBehaviour {
         message_request: RequestMessage,
         peer_id: &PeerId,
     ) -> OutboundRequestId {
-        self.request_response.send_request(peer_id, message_request)
+        self.request_response_v1
+            .send_request(peer_id, message_request)
     }
 
     pub fn send_response_msg(
@@ -168,7 +172,7 @@ impl FuelBehaviour {
         channel: ResponseChannel<ResponseMessage>,
         message: ResponseMessage,
     ) -> Result<(), ResponseMessage> {
-        self.request_response.send_response(channel, message)
+        self.request_response_v1.send_response(channel, message)
     }
 
     pub fn report_message_validation_result(

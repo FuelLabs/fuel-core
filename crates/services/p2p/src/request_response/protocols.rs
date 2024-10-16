@@ -8,7 +8,7 @@ use libp2p::{
     StreamProtocol,
 };
 
-use super::messages::REQUEST_RESPONSE_PROTOCOL_ID;
+use super::messages::REQUEST_RESPONSE_PROTOCOL_ID_V1;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProtocolVersion {
@@ -40,7 +40,7 @@ impl TryFrom<StreamProtocol> for ProtocolVersion {
 
     fn try_from(protocol: StreamProtocol) -> Result<Self, Self::Error> {
         match protocol.as_ref() {
-            REQUEST_RESPONSE_PROTOCOL_ID => Ok(ProtocolVersion::V1),
+            REQUEST_RESPONSE_PROTOCOL_ID_V1 => Ok(ProtocolVersion::V1),
             _ => Err(()),
         }
     }
@@ -58,7 +58,7 @@ mod tests {
     };
 
     use crate::{
-        codecs::postcard::MessageExchangePostcardProtocol,
+        codecs::postcard::MessageExchangePostcardProtocolV1,
         heartbeat::HEARTBEAT_PROTOCOL,
         request_response::protocols::ProtocolVersion,
     };
@@ -89,8 +89,10 @@ mod tests {
 
     #[test]
     fn test_latest_protocol_version_defined() {
-        let peer_info =
-            peer_info(&[MessageExchangePostcardProtocol.as_ref(), HEARTBEAT_PROTOCOL]);
+        let peer_info = peer_info(&[
+            MessageExchangePostcardProtocolV1.as_ref(),
+            HEARTBEAT_PROTOCOL,
+        ]);
         let latest_compatible_version_for_peer =
             ProtocolVersion::latest_compatible_version_for_peer(&peer_info).unwrap();
         assert_eq!(
