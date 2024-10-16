@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - [2321](https://github.com/FuelLabs/fuel-core/pull/2321): New metrics for the txpool: "The size of transactions in the txpool" (`txpool_tx_size`), "The time spent by a transaction in the txpool in seconds" (`txpool_tx_time_in_txpool_seconds`), The number of transactions in the txpool (`txpool_number_of_transactions`), "The number of transactions pending verification before entering the txpool" (`txpool_number_of_transactions_pending_verification`), "The number of executable transactions in the txpool" (`txpool_number_of_executable_transactions`), "The time it took to select transactions for inclusion in a block in nanoseconds" (`txpool_select_transaction_time_nanoseconds`), The time it took to insert a transaction in the txpool in milliseconds (`txpool_insert_transaction_time_milliseconds`).
 
+### Changed
+- [2362](https://github.com/FuelLabs/fuel-core/pull/2362): Preparation work for supporting multiple request response protocols in the P2P service. Information about request exchange protocols known by a peer is saved in the peer manager upon connection. Currently we only have `/fuel/req_res/0.0.1`, but a node will select the latest compatible version of the protocol that is known by a peer for sending messages.
+
 ## [Version 0.40.0]
 
 ### Added
