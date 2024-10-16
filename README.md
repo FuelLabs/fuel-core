@@ -150,6 +150,7 @@ fuel-core run \
 --relayer-log-page-size=100 \
 --sync-block-stream-buffer-size 30
 ```
+Instead of directly placing your personal values on the command we advise you to use, for example, environment variables.
 
 ### Troubleshooting
 
