@@ -383,12 +383,10 @@ impl FuelP2PService {
             .get_peer_info(&peer_id)
             .map(|peer_info| peer_info.request_response_protocol_version.as_ref())
             .flatten()
-            .unwrap_or(&fuel_request_response::ProtocolVersion::V1(
-                MessageExchangePostcardProtocol,
-            ));
+            .unwrap_or_default();
 
         match latest_compatible_request_response_protocol_version {
-            fuel_request_response::ProtocolVersion::V1(_) => {
+            fuel_request_response::ProtocolVersion::V1 => {
                 let request_id = self
                     .swarm
                     .behaviour_mut()

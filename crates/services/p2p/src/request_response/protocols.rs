@@ -8,22 +8,22 @@ use libp2p::{
     StreamProtocol,
 };
 
-use crate::codecs::postcard::MessageExchangePostcardProtocol;
-
 use super::messages::REQUEST_RESPONSE_PROTOCOL_ID;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProtocolVersion {
-    V1(MessageExchangePostcardProtocol),
+    /// The Version 1 of the protocol. This version does not have error codes
+    /// in the response messages.
+    V1,
+}
+
+impl Default for &ProtocolVersion {
+    fn default() -> Self {
+        &ProtocolVersion::V1
+    }
 }
 
 impl ProtocolVersion {
-    pub fn as_ref(&self) -> &str {
-        match self {
-            ProtocolVersion::V1(protocol) => protocol.as_ref(),
-        }
-    }
-
     pub fn latest_compatible_version_for_peer(
         info: &identify::Info,
     ) -> Option<ProtocolVersion> {
@@ -40,9 +40,7 @@ impl TryFrom<StreamProtocol> for ProtocolVersion {
 
     fn try_from(protocol: StreamProtocol) -> Result<Self, Self::Error> {
         match protocol.as_ref() {
-            REQUEST_RESPONSE_PROTOCOL_ID => {
-                Ok(ProtocolVersion::V1(MessageExchangePostcardProtocol))
-            }
+            REQUEST_RESPONSE_PROTOCOL_ID => Ok(ProtocolVersion::V1),
             _ => Err(()),
         }
     }
@@ -66,9 +64,10 @@ mod tests {
     };
 
     fn peer_info<'a>(protocols: &[impl AsRef<str>]) -> identify::Info {
+        // This public key is valid, it has been copied from libp2p tests.
         let public_key = PublicKey::try_decode_protobuf(&hex::decode(
             "080112201ed1e8fae2c4a144b8be8fd4b47bf3d3b34b871c3cacf6010f0e42d474fce27e",
-        ).unwrap()).unwrap();
+        ).expect("Decoding hexadecimal string cannot fail")).expect("Decoding valid public key cannot fail");
 
         let mut stream_protocols: Vec<StreamProtocol> =
             Vec::with_capacity(protocols.len());
@@ -96,9 +95,7 @@ mod tests {
             ProtocolVersion::latest_compatible_version_for_peer(&peer_info).unwrap();
         assert_eq!(
             latest_compatible_version_for_peer,
-            crate::request_response::protocols::ProtocolVersion::V1(
-                MessageExchangePostcardProtocol
-            )
+            crate::request_response::protocols::ProtocolVersion::V1
         );
     }
 
