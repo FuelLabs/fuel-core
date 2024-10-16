@@ -93,6 +93,7 @@ pub struct TestSetupBuilder {
     pub initial_coins: Vec<CoinConfig>,
     pub starting_gas_price: u64,
     pub gas_limit: Option<u64>,
+    pub block_size_limit: Option<u64>,
     pub starting_block: Option<BlockHeight>,
     pub utxo_validation: bool,
     pub privileged_address: Address,
@@ -201,6 +202,13 @@ impl TestSetupBuilder {
                 .set_block_gas_limit(gas_limit);
         }
 
+        if let Some(block_size_limit) = self.block_size_limit {
+            chain_conf
+                .consensus_parameters
+                .set_block_transaction_size_limit(block_size_limit)
+                .expect("Should set new block size limit");
+        }
+
         chain_conf
             .consensus_parameters
             .set_privileged_address(self.privileged_address);
@@ -251,6 +259,7 @@ impl Default for TestSetupBuilder {
             initial_coins: vec![],
             starting_gas_price: 0,
             gas_limit: None,
+            block_size_limit: None,
             starting_block: None,
             utxo_validation: true,
             privileged_address: Default::default(),

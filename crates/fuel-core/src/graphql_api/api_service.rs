@@ -15,6 +15,7 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
+    graphql_api,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -58,11 +59,8 @@ use axum::{
     Json,
     Router,
 };
-use fuel_core_metrics::futures::{
-    metered_future::MeteredFuture,
-    FuturesMetrics,
-};
 use fuel_core_services::{
+    AsyncProcessor,
     RunnableService,
     RunnableTask,
     StateWatcher,
@@ -79,6 +77,7 @@ use std::{
         TcpListener,
     },
     pin::Pin,
+    sync::Arc,
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
@@ -115,6 +114,7 @@ pub struct GraphqlService {
 pub struct ServerParams {
     router: Router,
     listener: TcpListener,
+    number_of_threads: usize,
 }
 
 pub struct Task {
@@ -124,7 +124,7 @@ pub struct Task {
 
 #[derive(Clone)]
 struct ExecutorWithMetrics {
-    metric: FuturesMetrics,
+    processor: Arc<AsyncProcessor>,
 }
 
 impl<F> Executor<F> for ExecutorWithMetrics
@@ -133,9 +133,11 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        let future = MeteredFuture::new(fut, self.metric.clone());
+        let result = self.processor.try_spawn(fut);
 
-        tokio::task::spawn(future);
+        if let Err(err) = result {
+            tracing::error!("Failed to spawn a task for GraphQL: {:?}", err);
+        }
     }
 }
 
@@ -159,14 +161,25 @@ impl RunnableService for GraphqlService {
         params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let mut state = state.clone();
-        let ServerParams { router, listener } = params;
-        let metric = ExecutorWithMetrics {
-            metric: FuturesMetrics::obtain_futures_metrics("GraphQLFutures"),
+        let ServerParams {
+            router,
+            listener,
+            number_of_threads,
+        } = params;
+
+        let processor = AsyncProcessor::new(
+            "GraphQLFutures",
+            number_of_threads,
+            tokio::sync::Semaphore::MAX_PERMITS,
+        )?;
+
+        let executor = ExecutorWithMetrics {
+            processor: Arc::new(processor),
         };
 
         let server = axum::Server::from_tcp(listener)
             .unwrap()
-            .executor(metric)
+            .executor(executor)
             .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
                 state
@@ -220,14 +233,21 @@ where
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
 {
+    graphql_api::initialize_query_costs(config.config.costs.clone())?;
+
     let network_addr = config.config.addr;
-    let combined_read_database =
-        ReadDatabase::new(genesis_block_height, on_database, off_database);
+    let combined_read_database = ReadDatabase::new(
+        config.config.database_batch_size,
+        genesis_block_height,
+        on_database,
+        off_database,
+    );
     let request_timeout = config.config.api_request_timeout;
     let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
     let max_queries_resolver_recursive_depth =
         config.config.max_queries_resolver_recursive_depth;
+    let number_of_threads = config.config.number_of_threads;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -292,7 +312,11 @@ where
 
     Ok(Service::new_with_params(
         GraphqlService { bound_address },
-        ServerParams { router, listener },
+        ServerParams {
+            router,
+            listener,
+            number_of_threads,
+        },
     ))
 }
 

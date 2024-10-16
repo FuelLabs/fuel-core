@@ -1,6 +1,9 @@
 #![allow(non_snake_case)]
 
-use std::time::Instant;
+use std::time::{
+    Duration,
+    Instant,
+};
 
 use fuel_core::service::{
     Config,
@@ -234,7 +237,7 @@ async fn complex_queries__40_full_blocks__works() {
 }
 
 #[tokio::test]
-async fn complex_queries__41_full_block__query_to_complex() {
+async fn complex_queries__41_full_block__query_too_complex() {
     let query = FULL_BLOCK_QUERY.to_string();
     let query = query.replace("$NUMBER_OF_BLOCKS", "41");
 
@@ -243,6 +246,21 @@ async fn complex_queries__41_full_block__query_to_complex() {
 
     let result = send_graph_ql_query(&url, query.as_str()).await;
     assert!(result.contains("Query is too complex."));
+}
+
+#[tokio::test]
+async fn complex_queries__increased_block_header_cost__failed_to_initialize_service() {
+    let mut config = Config::local_node();
+    config.graphql_config.costs.block_header =
+        config.graphql_config.max_queries_complexity;
+
+    let Err(error) = FuelService::new_node(config).await else {
+        panic!("expected error");
+    };
+
+    assert!(error
+        .to_string()
+        .contains("cannot initialize queries with non-default costs in tests"))
 }
 
 #[tokio::test]
@@ -665,4 +683,41 @@ async fn schema_is_retrievable() {
 
     let result = send_graph_ql_query(&url, query).await;
     assert!(result.contains("__schema"), "{:?}", result);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn heavy_tasks_doesnt_block_graphql() {
+    let mut config = Config::local_node();
+
+    const NUM_OF_BLOCKS: u32 = 4000;
+    config.graphql_config.max_queries_complexity = 10_000_000;
+
+    let query = FULL_BLOCK_QUERY.to_string();
+    let query = query.replace("$NUMBER_OF_BLOCKS", NUM_OF_BLOCKS.to_string().as_str());
+
+    let node = FuelService::new_node(config).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+    let client = FuelClient::new(url.clone()).unwrap();
+    client.produce_blocks(NUM_OF_BLOCKS, None).await.unwrap();
+
+    // Given
+    for _ in 0..50 {
+        let url = url.clone();
+        let query = query.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            let result = send_graph_ql_query(&url, &query).await;
+            assert!(result.contains("transactions"));
+        });
+    }
+    // Wait for all queries to start be processed on the node.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // When
+    let result = tokio::time::timeout(Duration::from_secs(5), client.health()).await;
+
+    // Then
+    let result = result.expect("Health check timed out");
+    let health = result.expect("Health check failed");
+    assert!(health);
 }
