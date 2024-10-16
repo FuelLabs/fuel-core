@@ -1,7 +1,11 @@
-use crate::state::generic_database::GenericDatabase;
+use crate::{
+    database::ForcedCommitDatabase,
+    state::generic_database::GenericDatabase,
+};
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
     transactional::{
+        Changes,
         ConflictPolicy,
         Modifiable,
         StorageTransaction,
@@ -12,10 +16,38 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageBatchMutate,
     StorageInspect,
+    StorageMut,
     StorageMutate,
+    StorageMutateForced,
     StorageWrite,
 };
 use tracing::info;
+
+impl<Storage, M> StorageMutateForced<M> for GenericDatabase<Storage>
+where
+    M: Mappable,
+    Self: Modifiable,
+    StructuredStorage<Storage>: StorageInspect<M, Error = StorageError>,
+    for<'a> StorageTransaction<&'a Storage>: StorageMutate<M, Error = StorageError>,
+    GenericDatabase<Storage>: ForcedCommitDatabase,
+{
+    fn replace_forced(
+        &mut self,
+        key: &<M as Mappable>::Key,
+        value: &<M as Mappable>::Value,
+    ) -> Result<Option<<M as Mappable>::OwnedValue>, Self::Error> {
+        let mut transaction = StorageTransaction::transaction(
+            self.as_ref(),
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
+        let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
+        let changes = transaction.into_changes();
+        dbg!(&changes);
+        self.commit_changes_forced(changes)?;
+        Ok(prev)
+    }
+}
 
 impl<Storage, M> StorageMutate<M> for GenericDatabase<Storage>
 where
@@ -49,23 +81,6 @@ where
         );
         let prev = transaction.storage_as_mut::<M>().take(key)?;
         self.commit_changes(transaction.into_changes())?;
-        Ok(prev)
-    }
-
-    fn replace_forced(
-        &mut self,
-        key: &<M as Mappable>::Key,
-        value: &<M as Mappable>::Value,
-    ) -> Result<Option<<M as Mappable>::OwnedValue>, Self::Error> {
-        let mut transaction = StorageTransaction::transaction(
-            self.as_ref(),
-            ConflictPolicy::Overwrite,
-            Default::default(),
-        );
-        let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
-        let changes = transaction.into_changes();
-        dbg!(&changes);
-        self.commit_changes_forced(changes)?;
         Ok(prev)
     }
 }

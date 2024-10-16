@@ -349,9 +349,18 @@ impl Modifiable for Database<OnChain> {
                 .try_collect()
         })
     }
+}
 
+trait ForcedCommitDatabase {
+    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()>;
+}
+
+impl ForcedCommitDatabase
+    for GenericDatabase<DataSource<OffChain, RegularStage<OffChain>>>
+{
     fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        unimplemented!()
+        let mut height = *self.stage.height.lock();
+        self.data.commit_changes(height, changes)
     }
 }
 
@@ -363,12 +372,6 @@ impl Modifiable for Database<OffChain> {
                 .try_collect()
         })
     }
-
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        let prev_height = *self.stage.height.lock();
-        self.data.commit_changes(prev_height, changes)?;
-        Ok(())
-    }
 }
 
 impl Modifiable for Database<GasPriceDatabase> {
@@ -377,10 +380,6 @@ impl Modifiable for Database<GasPriceDatabase> {
             iter.iter_all_keys::<GasPriceMetadata>(Some(IterDirection::Reverse))
                 .try_collect()
         })
-    }
-
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        unimplemented!()
     }
 }
 
@@ -394,10 +393,6 @@ impl Modifiable for Database<Relayer> {
             .try_collect()
         })
     }
-
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        unimplemented!()
-    }
 }
 
 #[cfg(not(feature = "relayer"))]
@@ -405,19 +400,11 @@ impl Modifiable for Database<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |_| Ok(vec![]))
     }
-
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        unimplemented!()
-    }
 }
 
 impl Modifiable for GenesisDatabase<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
-    }
-
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        unimplemented!()
     }
 }
 
@@ -425,19 +412,11 @@ impl Modifiable for GenesisDatabase<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
     }
-
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        unimplemented!()
-    }
 }
 
 impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         self.data.as_ref().commit_changes(None, changes)
-    }
-
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        unimplemented!()
     }
 }
 

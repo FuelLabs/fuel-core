@@ -175,14 +175,6 @@ where
     fn take(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
         StorageMutate::<M>::take(&mut self.database, key)
     }
-    
-    fn replace_forced(
-        &mut self,
-        _key: &<M as Mappable>::Key,
-        _value: &<M as Mappable>::Value,
-    ) -> Result<Option<<M as Mappable>::OwnedValue>, Self::Error> {
-        unimplemented!()
-    }
 }
 
 impl<D, M: Mappable> StorageSize<M> for VmStorage<D>
