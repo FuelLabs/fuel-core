@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2361](https://github.com/FuelLabs/fuel-core/pull/2361): Add caches to the syync service to not reask for data it already fetched from the network.
+
 ## [Version 0.40.0]
 
 ### Added

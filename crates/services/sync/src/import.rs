@@ -27,6 +27,7 @@ use futures::{
     Stream,
 };
 use std::{
+    collections::HashMap,
     future::Future,
     ops::{
         Range,
@@ -98,6 +99,26 @@ pub struct Import<P, E, C> {
     executor: Arc<E>,
     /// Consensus port.
     consensus: Arc<C>,
+    /// A cache of already validated header or blocks.
+    cache: SharedMutex<HashMap<Range<u32>, CachedData>>,
+}
+
+/// The data that is cached for a range of headers or blocks.
+#[derive(Debug, Clone)]
+enum CachedData {
+    // Only headers fetch + check has been done
+    Headers(Batch<SealedBlockHeader>),
+    // Both headers fetch + check and blocks fetch + check has been done
+    Blocks(Batch<SealedBlock>),
+}
+
+/// The data that is fetched either in the network or in the cache for a range of headers or blocks.
+#[derive(Debug, Clone)]
+enum BlockHeaderData {
+    /// The headers (or full blocks) have been fetched and checked.
+    Cached(CachedData),
+    /// The headers has just been fetched from the network.
+    Fetched(Batch<SealedBlockHeader>),
 }
 
 impl<P, E, C> Import<P, E, C> {
@@ -118,6 +139,7 @@ impl<P, E, C> Import<P, E, C> {
             p2p,
             executor,
             consensus,
+            cache: SharedMutex::new(HashMap::new()),
         }
     }
 
@@ -127,7 +149,7 @@ impl<P, E, C> Import<P, E, C> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Batch<T> {
     peer: Option<PeerId>,
     range: Range<u32>,
@@ -199,6 +221,7 @@ where
             params,
             p2p,
             consensus,
+            cache,
             ..
         } = &self;
 
@@ -208,11 +231,17 @@ where
             let params = *params;
             let p2p = p2p.clone();
             let consensus = consensus.clone();
+            let cache = cache.clone();
             let block_stream_buffer_size = params.block_stream_buffer_size;
             let mut shutdown_signal = shutdown.clone();
             async move {
-                let block_stream =
-                    get_block_stream(range.clone(), params, p2p, consensus);
+                let block_stream = get_block_stream(
+                    range.clone(),
+                    params,
+                    p2p,
+                    consensus,
+                    cache.clone(),
+                );
 
                 let shutdown_future = {
                     let mut s = shutdown_signal.clone();
@@ -234,7 +263,9 @@ where
                                     // return an empty response
                                     _ = shutdown_signal.while_started() => None,
                                     // Stream a batch of blocks
-                                    blocks = stream_block_batch => Some(blocks),
+                                    blocks = stream_block_batch => {
+                                        Some(blocks)
+                                    },
                                 }
                             }).map(|task| {
                                 task.trace_err("Failed to join the task").ok().flatten()
@@ -327,9 +358,13 @@ where
                         };
                     }
 
-                    let batch = Batch::new(peer.clone(), range, done);
+                    let batch = Batch::new(peer.clone(), range.clone(), done);
 
                     if !batch.is_err() {
+                        {
+                            let mut cache = self.cache.lock();
+                            cache.remove(&range);
+                        }
                         report_peer(p2p, peer, PeerReportReason::SuccessfulBlockImport);
                     }
 
@@ -364,28 +399,72 @@ fn get_block_stream<
     params: Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
+    cache: SharedMutex<HashMap<Range<u32>, CachedData>>,
 ) -> impl Stream<Item = impl Future<Output = SealedBlockBatch>> {
-    let header_stream = get_header_batch_stream(range.clone(), params, p2p.clone());
-    header_stream
+    let ranges = range_chunks(range, params.header_batch_size);
+    futures::stream::iter(ranges)
+        .map({
+            let p2p = p2p.clone();
+            let cache = cache.clone();
+            move |range| {
+                let p2p = p2p.clone();
+                let cache = cache.clone();
+                async move {
+                    let cached_data = {
+                        let cache = cache.lock();
+                        cache.get(&range).cloned()
+                    };
+
+                    match cached_data {
+                        Some(cached_data) => BlockHeaderData::Cached(cached_data),
+                        None => BlockHeaderData::Fetched(
+                            get_headers_batch(range.clone(), &p2p).await,
+                        ),
+                    }
+                }
+            }
+        })
         .map({
             let p2p = p2p.clone();
             let consensus = consensus.clone();
+            let cache = cache.clone();
             move |header_batch| {
                 let p2p = p2p.clone();
                 let consensus = consensus.clone();
+                let cache = cache.clone();
                 async move {
-                    let Batch {
-                        peer,
-                        range,
-                        results,
-                    } = header_batch.await;
-                    let checked_headers = results
-                        .into_iter()
-                        .take_while(|header| {
-                            check_sealed_header(header, peer.clone(), &p2p, &consensus)
-                        })
-                        .collect::<Vec<_>>();
-                    Batch::new(peer, range, checked_headers)
+                    match header_batch.await {
+                        BlockHeaderData::Cached(cached_data) => {
+                            BlockHeaderData::Cached(cached_data)
+                        }
+                        BlockHeaderData::Fetched(fetched_batch) => {
+                            let Batch {
+                                peer,
+                                range,
+                                results,
+                            } = fetched_batch;
+                            let checked_headers = results
+                                .into_iter()
+                                .take_while(|header| {
+                                    check_sealed_header(
+                                        header,
+                                        peer.clone(),
+                                        &p2p,
+                                        &consensus,
+                                    )
+                                })
+                                .collect::<Vec<_>>();
+                            let batch = Batch::new(peer, range.clone(), checked_headers);
+                            if !batch.is_err() {
+                                let mut cache = cache.lock();
+                                cache.insert(
+                                    range.clone(),
+                                    CachedData::Headers(batch.clone()),
+                                );
+                            }
+                            BlockHeaderData::Fetched(batch)
+                        }
+                    }
                 }
             }
         })
@@ -395,45 +474,46 @@ fn get_block_stream<
             move |headers| {
                 let p2p = p2p.clone();
                 let consensus = consensus.clone();
+                let cache = cache.clone();
                 async move {
-                    let Batch {
-                        peer,
-                        range,
-                        results,
-                    } = headers.await;
-                    if results.is_empty() {
-                        SealedBlockBatch::new(peer, range, vec![])
-                    } else {
-                        await_da_height(
-                            results
-                                .last()
-                                .expect("We checked headers are not empty above"),
-                            &consensus,
-                        )
-                        .await;
-                        let headers = SealedHeaderBatch::new(peer, range, results);
-                        get_blocks(&p2p, headers).await
+                    match headers.await {
+                        BlockHeaderData::Cached(CachedData::Blocks(batch)) => batch,
+                        BlockHeaderData::Cached(CachedData::Headers(batch))
+                        | BlockHeaderData::Fetched(batch) => {
+                            let Batch {
+                                peer,
+                                range,
+                                results,
+                            } = batch;
+                            if results.is_empty() {
+                                SealedBlockBatch::new(peer, range, vec![])
+                            } else {
+                                await_da_height(
+                                    results
+                                        .last()
+                                        .expect("We checked headers are not empty above"),
+                                    &consensus,
+                                )
+                                .await;
+                                let headers =
+                                    SealedHeaderBatch::new(peer, range.clone(), results);
+                                let batch = get_blocks(&p2p, headers).await;
+                                if !batch.is_err() {
+                                    let mut cache = cache.lock();
+                                    cache.insert(
+                                        range.clone(),
+                                        CachedData::Blocks(batch.clone()),
+                                    );
+                                }
+                                batch
+                            }
+                        }
                     }
                 }
                 .instrument(tracing::debug_span!("consensus_and_transactions"))
                 .in_current_span()
             }
         })
-}
-
-fn get_header_batch_stream<P: PeerToPeerPort + Send + Sync + 'static>(
-    range: RangeInclusive<u32>,
-    params: Config,
-    p2p: Arc<P>,
-) -> impl Stream<Item = impl Future<Output = SealedHeaderBatch>> {
-    let Config {
-        header_batch_size, ..
-    } = params;
-    let ranges = range_chunks(range, header_batch_size);
-    futures::stream::iter(ranges).map(move |range| {
-        let p2p = p2p.clone();
-        async move { get_headers_batch(range, &p2p).await }
-    })
 }
 
 fn range_chunks(

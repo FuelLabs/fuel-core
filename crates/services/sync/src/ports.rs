@@ -34,8 +34,8 @@ pub enum PeerReportReason {
     InvalidTransactions,
 }
 
-#[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
 #[async_trait::async_trait]
+#[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
 /// Port for communication with the network.
 pub trait PeerToPeerPort {
     /// Stream of newly observed block heights.
@@ -47,7 +47,7 @@ pub trait PeerToPeerPort {
         block_height_range: Range<u32>,
     ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>>;
 
-    /// Request transactions from the network for the given block
+    /// Request transactions from the network for the given block range
     /// and source peer.
     async fn get_transactions(
         &self,
