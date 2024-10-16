@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::QUERY_COSTS,
+    fuel_core_graphql_api::query_costs,
     schema::{
         scalars::{
             RelayedTransactionId,
@@ -23,7 +23,7 @@ pub struct RelayedTransactionQuery {}
 
 #[Object]
 impl RelayedTransactionQuery {
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn relayed_transaction_status(
         &self,
         ctx: &Context<'_>,

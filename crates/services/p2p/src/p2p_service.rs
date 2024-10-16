@@ -42,7 +42,10 @@ use crate::{
     },
     TryPeerId,
 };
-use fuel_core_metrics::p2p_metrics::increment_unique_peers;
+use fuel_core_metrics::{
+    global_registry,
+    p2p_metrics::increment_unique_peers,
+};
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::AppScore,
@@ -57,6 +60,10 @@ use libp2p::{
         TopicHash,
     },
     identify,
+    metrics::{
+        Metrics,
+        Recorder,
+    },
     multiaddr::Protocol,
     request_response::{
         self,
@@ -128,6 +135,9 @@ pub struct FuelP2PService {
 
     /// Whether or not metrics collection is enabled
     metrics: bool,
+
+    /// libp2p metrics registry
+    libp2p_metrics_registry: Option<Metrics>,
 
     /// Holds peers' information, and manages existing connections
     peer_manager: PeerManager,
@@ -209,6 +219,8 @@ impl FuelP2PService {
         config: Config,
         codec: PostcardCodec,
     ) -> anyhow::Result<Self> {
+        let metrics = config.metrics;
+
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
@@ -223,7 +235,7 @@ impl FuelP2PService {
         let tcp_config = tcp::Config::new().port_reuse(true);
         let behaviour = FuelBehaviour::new(&config, codec.clone())?;
 
-        let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
+        let swarm_builder = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
             .with_tcp(
                 tcp_config,
@@ -231,20 +243,40 @@ impl FuelP2PService {
                 libp2p::yamux::Config::default,
             )
             .map_err(|_| anyhow::anyhow!("Failed to build Swarm"))?
-            .with_dns()?
-            .with_behaviour(|_| behaviour)?
-            .with_swarm_config(|cfg| {
-                if let Some(timeout) = config.connection_idle_timeout {
-                    cfg.with_idle_connection_timeout(timeout)
-                } else {
-                    cfg
-                }
-            })
-            .build();
+            .with_dns()?;
+
+        let mut libp2p_metrics_registry = None;
+        let mut swarm = if metrics {
+            // we use the global registry to store the metrics without needing to create a new one
+            // since libp2p already creates sub-registries
+            let mut registry = global_registry().registry.lock();
+            libp2p_metrics_registry = Some(Metrics::new(&mut registry));
+
+            swarm_builder
+                .with_bandwidth_metrics(&mut registry)
+                .with_behaviour(|_| behaviour)?
+                .with_swarm_config(|cfg| {
+                    if let Some(timeout) = config.connection_idle_timeout {
+                        cfg.with_idle_connection_timeout(timeout)
+                    } else {
+                        cfg
+                    }
+                })
+                .build()
+        } else {
+            swarm_builder
+                .with_behaviour(|_| behaviour)?
+                .with_swarm_config(|cfg| {
+                    if let Some(timeout) = config.connection_idle_timeout {
+                        cfg.with_idle_connection_timeout(timeout)
+                    } else {
+                        cfg
+                    }
+                })
+                .build()
+        };
 
         let local_peer_id = swarm.local_peer_id().to_owned();
-
-        let metrics = config.metrics;
 
         if let Some(public_address) = config.public_address.clone() {
             swarm.add_external_address(public_address);
@@ -266,6 +298,7 @@ impl FuelP2PService {
             inbound_requests_table: HashMap::default(),
             network_metadata,
             metrics,
+            libp2p_metrics_registry,
             peer_manager: PeerManager::new(
                 reserved_peers_updates,
                 reserved_peers,
@@ -315,6 +348,15 @@ impl FuelP2PService {
     {
         if self.metrics {
             update_fn();
+        }
+    }
+
+    pub fn update_libp2p_metrics<E>(&self, event: &E)
+    where
+        Metrics: Recorder<E>,
+    {
+        if let Some(registry) = self.libp2p_metrics_registry.as_ref() {
+            self.update_metrics(|| registry.record(event));
         }
     }
 
@@ -509,7 +551,10 @@ impl FuelP2PService {
                 );
                 None
             }
-            _ => None,
+            _ => {
+                self.update_libp2p_metrics(&event);
+                None
+            }
         }
     }
 
@@ -534,13 +579,23 @@ impl FuelP2PService {
         event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
         match event {
-            FuelBehaviourEvent::Gossipsub(event) => self.handle_gossipsub_event(event),
+            FuelBehaviourEvent::Gossipsub(event) => {
+                self.update_libp2p_metrics(&event);
+                self.handle_gossipsub_event(event)
+            }
             FuelBehaviourEvent::PeerReport(event) => self.handle_peer_report_event(event),
             FuelBehaviourEvent::RequestResponse(event) => {
                 self.handle_request_response_event(event)
             }
-            FuelBehaviourEvent::Identify(event) => self.handle_identify_event(event),
+            FuelBehaviourEvent::Identify(event) => {
+                self.update_libp2p_metrics(&event);
+                self.handle_identify_event(event)
+            }
             FuelBehaviourEvent::Heartbeat(event) => self.handle_heartbeat_event(event),
+            FuelBehaviourEvent::Discovery(event) => {
+                self.update_libp2p_metrics(&event);
+                None
+            }
             _ => None,
         }
     }

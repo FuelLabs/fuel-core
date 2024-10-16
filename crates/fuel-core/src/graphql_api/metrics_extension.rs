@@ -6,11 +6,14 @@ use async_graphql::{
         NextParseQuery,
         NextRequest,
         NextResolve,
+        NextValidation,
         ResolveInfo,
     },
     parser::types::ExecutableDocument,
     Response,
+    ServerError,
     ServerResult,
+    ValidationResult,
     Value,
     Variables,
 };
@@ -117,5 +120,15 @@ impl Extension for MetricsExtInner {
         }
 
         res
+    }
+
+    async fn validation(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        next: NextValidation<'_>,
+    ) -> Result<ValidationResult, Vec<ServerError>> {
+        let result = next.run(ctx).await?;
+        graphql_metrics().graphql_complexity_observe(result.complexity as f64);
+        Ok(result)
     }
 }
