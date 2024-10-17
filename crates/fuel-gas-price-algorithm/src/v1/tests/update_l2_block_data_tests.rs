@@ -789,3 +789,35 @@ fn update_l2_block_data__above_threshold_increase_activity() {
     let actual = updater.l2_activity.current_activity();
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn update_l2_block_data__below_threshold_decrease_activity() {
+    // given
+    let starting_exec_gas_price = 100;
+    let exec_gas_price_increase_percent = 10;
+    let threshold = 50;
+    let starting_activity = 2;
+    let activity = L2ActivityTracker::new(1, 1, 1, starting_activity, 50.into());
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
+        .with_l2_block_capacity_threshold(threshold)
+        .with_activity(activity)
+        .build();
+
+    let height = 1;
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let fee = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let expected = starting_activity - 1;
+    let actual = updater.l2_activity.current_activity();
+    assert_eq!(actual, expected);
+}
