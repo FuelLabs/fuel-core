@@ -159,9 +159,11 @@ pub struct AlgorithmUpdaterV1 {
 ///
 /// For each L2 block, the activity is calculated as a percentage of the block capacity used. If the
 /// activity is below a certain threshold, the activity is decreased. The activity exists on a scale
-/// between 0 and the sum of the increase, hold, and decrease buffers:
+/// between 0 and the sum of the increase, hold, and decrease buffers.
 ///
-/// |<-- decrease range -->|<-- hold range -->|<-- increase range -->|
+/// e.g. if the decrease range is 50, the hold range is 50, and the increase range is 50:
+///
+/// 0<-- decrease range -->50<-- hold range -->100<-- increase range -->150
 ///
 /// The current activity determines the behavior of the DA gas price.
 ///
@@ -198,6 +200,22 @@ impl L2ActivityTracker {
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
         let activity = decrease_range_size + hold_range_size + increase_range_size;
+        Self {
+            increase_range_size,
+            hold_range_size,
+            decrease_range_size,
+            activity,
+            block_activity_threshold,
+        }
+    }
+
+    pub fn new(
+        increase_range_size: u16,
+        hold_range_size: u16,
+        decrease_range_size: u16,
+        activity: u16,
+        block_activity_threshold: ClampedPercentage,
+    ) -> Self {
         Self {
             increase_range_size,
             hold_range_size,
@@ -385,7 +403,15 @@ impl AlgorithmUpdaterV1 {
     fn update_da_gas_price(&mut self) {
         let p = self.p();
         let d = self.d();
-        let da_change = self.da_change(p, d);
+        let maybe_da_change = self.da_change(p, d);
+        let da_change = if maybe_da_change > 0 {
+            match self.l2_activity.safety_mode() {
+                DAGasPriceSafetyMode::Increase => maybe_da_change,
+                DAGasPriceSafetyMode::Hold | DAGasPriceSafetyMode::Decrease => 0,
+            }
+        } else {
+            maybe_da_change
+        };
         let maybe_new_scaled_da_gas_price = i128::from(self.new_scaled_da_gas_price)
             .checked_add(da_change)
             .and_then(|x| u64::try_from(x).ok())
