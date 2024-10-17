@@ -136,7 +136,14 @@ impl CombinedDatabase {
     }
 
     pub fn migrate_metadata(&mut self) -> StorageResult<()> {
-        self.off_chain.migrate_metadata()?;
+        // Error: Off chain database is already initialized
+        // let mut unchecked_off_chain =
+        // self.off_chain().clone().into_genesis().map_err(|_| {
+        // anyhow::anyhow!("Off chain database is already initialized")
+        // })?;
+        // unchecked_off_chain.migrate_metadata()?;
+
+        self.migrate_metadata()?;
         Ok(())
     }
 
