@@ -7,6 +7,61 @@ use crate::v1::{
     L2ActivityTracker,
 };
 
+fn decrease_l2_activity() -> L2ActivityTracker {
+    let increase = 1;
+    let hold = 1;
+    let decrease = 100;
+    let activity = 50;
+    let threshold = 50.into();
+    L2ActivityTracker::new(increase, hold, decrease, activity, threshold)
+}
+
+fn negative_profit_updater_builder() -> UpdaterBuilder {
+    let starting_exec_gas_price = 100;
+    let starting_da_gas_price = 100;
+    let starting_cost = u128::MAX;
+    let latest_gas_per_byte = i32::MAX; // DA is very expensive
+    let da_p_component = 100;
+    let da_d_component = 10;
+    let last_profit = i128::MIN;
+    let last_last_profit = 0;
+    let smaller_starting_reward = 0;
+    UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_starting_da_gas_price(starting_da_gas_price)
+        .with_da_p_component(da_p_component)
+        .with_da_d_component(da_d_component)
+        .with_total_rewards(smaller_starting_reward)
+        .with_known_total_cost(starting_cost)
+        .with_projected_total_cost(starting_cost)
+        .with_da_cost_per_byte(latest_gas_per_byte as u128)
+        .with_last_profit(last_profit, last_last_profit)
+}
+
+fn positive_profit_updater_builder() -> UpdaterBuilder {
+    let starting_exec_gas_price = 100;
+    let last_da_gas_price = 100;
+    let starting_cost = 500;
+    let latest_gas_per_byte = 0; // DA is free
+    let da_p_component = 100;
+    let da_d_component = 10;
+    let last_profit = i128::MAX;
+    let last_last_profit = 0;
+    let large_reward = i128::MAX;
+    UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_da_p_component(da_p_component)
+        .with_da_d_component(da_d_component)
+        .with_starting_da_gas_price(last_da_gas_price)
+        .with_total_rewards(large_reward as u128)
+        .with_known_total_cost(starting_cost as u128)
+        .with_projected_total_cost(starting_cost as u128)
+        .with_da_cost_per_byte(latest_gas_per_byte as u128)
+        .with_last_profit(last_profit, last_last_profit)
+        .with_da_max_change_percent(u16::MAX)
+        .with_exec_gas_price_change_percent(0)
+}
+
 #[test]
 fn update_l2_block_data__updates_l2_block() {
     // given
@@ -266,29 +321,6 @@ fn update_l2_block_data__updates_last_and_last_last_profit() {
     assert_eq!(actual, expected);
 }
 
-fn positive_profit_updater_builder() -> UpdaterBuilder {
-    let starting_exec_gas_price = 100;
-    let last_da_gas_price = 100;
-    let starting_cost = 500;
-    let latest_gas_per_byte = 0; // DA is free
-    let da_p_component = 100;
-    let da_d_component = 10;
-    let last_profit = i128::MAX;
-    let last_last_profit = 0;
-    let large_reward = i128::MAX;
-    UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_da_p_component(da_p_component)
-        .with_da_d_component(da_d_component)
-        .with_starting_da_gas_price(last_da_gas_price)
-        .with_total_rewards(large_reward as u128)
-        .with_known_total_cost(starting_cost as u128)
-        .with_projected_total_cost(starting_cost as u128)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
-        .with_last_profit(last_profit, last_last_profit)
-        .with_da_max_change_percent(u16::MAX)
-        .with_exec_gas_price_change_percent(0)
-}
 
 #[test]
 fn update_l2_block_data__positive_profit_decrease_gas_price() {
@@ -664,36 +696,6 @@ fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activit
     );
 }
 
-fn decrease_l2_activity() -> L2ActivityTracker {
-    let increase = 1;
-    let hold = 1;
-    let decrease = 100;
-    let activity = 50;
-    let threshold = 50.into();
-    L2ActivityTracker::new(increase, hold, decrease, activity, threshold)
-}
-
-fn negative_profit_updater_builder() -> UpdaterBuilder {
-    let starting_exec_gas_price = 100;
-    let starting_da_gas_price = 100;
-    let starting_cost = u128::MAX;
-    let latest_gas_per_byte = i32::MAX; // DA is very expensive
-    let da_p_component = 100;
-    let da_d_component = 10;
-    let last_profit = i128::MIN;
-    let last_last_profit = 0;
-    let smaller_starting_reward = 0;
-    UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_starting_da_gas_price(starting_da_gas_price)
-        .with_da_p_component(da_p_component)
-        .with_da_d_component(da_d_component)
-        .with_total_rewards(smaller_starting_reward)
-        .with_known_total_cost(starting_cost)
-        .with_projected_total_cost(starting_cost)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
-        .with_last_profit(last_profit, last_last_profit)
-}
 #[test]
 fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activity_in_decrease_range(
 ) {
