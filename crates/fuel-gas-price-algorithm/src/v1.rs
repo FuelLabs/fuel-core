@@ -248,6 +248,10 @@ impl L2ActivityTracker {
             self.activity = self.activity.saturating_add(1).min(cap);
         }
     }
+
+    pub fn current_activity(&self) -> u16 {
+        self.activity
+    }
 }
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
@@ -320,6 +324,9 @@ impl AlgorithmUpdaterV1 {
             let last_profit = rewards.saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
 
+            // activity
+            self.update_activity(used, capacity);
+
             // gas prices
             self.update_exec_gas_price(used, capacity);
             self.update_da_gas_price();
@@ -328,6 +335,15 @@ impl AlgorithmUpdaterV1 {
             self.unrecorded_blocks.insert(height, block_bytes);
             Ok(())
         }
+    }
+
+    fn update_activity(&mut self, used: u64, capacity: NonZeroU64) {
+        let block_activity = used
+            .saturating_mul(100)
+            .checked_div(capacity.into())
+            .unwrap_or(100);
+        let usage = ClampedPercentage::new(block_activity.try_into().unwrap_or(100));
+        self.l2_activity.update(usage);
     }
 
     fn update_da_rewards(&mut self, fee_wei: u128) {
