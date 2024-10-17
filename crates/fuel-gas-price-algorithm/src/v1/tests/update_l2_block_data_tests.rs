@@ -725,3 +725,35 @@ fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activit
         old_gas_price
     );
 }
+
+#[test]
+fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_decrease_range(
+) {
+    // given
+    let decrease_activity = decrease_l2_activity();
+    let mut updater = positive_profit_updater_builder()
+        .with_activity(decrease_activity)
+        .build();
+    let old_gas_price = updater.algorithm().calculate();
+
+    // when
+    let block_bytes = 500u64;
+    updater
+        .update_l2_block_data(
+            updater.l2_block_height + 1,
+            50,
+            100.try_into().unwrap(),
+            block_bytes,
+            200,
+        )
+        .unwrap();
+
+    // then
+    let new_gas_price = updater.algorithm().calculate();
+    assert!(
+        new_gas_price < old_gas_price,
+        "{} !< {}",
+        old_gas_price,
+        new_gas_price
+    );
+}
