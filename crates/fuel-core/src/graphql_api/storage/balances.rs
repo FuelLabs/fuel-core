@@ -29,6 +29,11 @@ use fuel_core_types::{
     fuel_vm::double_key,
     services::txpool::TransactionStatus,
 };
+use rand::{
+    distributions::Standard,
+    prelude::Distribution,
+    Rng,
+};
 use std::{
     array::TryFromSliceError,
     mem::size_of,
@@ -37,6 +42,13 @@ use std::{
 type Amount = u64;
 
 double_key!(BalancesKey, Address, address, AssetId, asset_id);
+impl Distribution<BalancesKey> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BalancesKey {
+        let mut bytes = [0u8; BalancesKey::LEN];
+        rng.fill_bytes(bytes.as_mut());
+        BalancesKey::from_array(bytes)
+    }
+}
 
 /// These table stores the balances of asset id per owner.
 pub struct Balances;
@@ -200,9 +212,10 @@ mod tests {
         let actual = db.query_balances(&carol);
         assert_eq!(expected, actual);
     }
-}
 
-// TODO[RC]: Reuse this to test basic functionality
-// fuel_core_storage::basic_storage_tests!(
-//
-// then add an integration test to verify the logic of the balances
+    fuel_core_storage::basic_storage_tests!(
+        Balances,
+        <Balances as fuel_core_storage::Mappable>::Key::default(),
+        <Balances as fuel_core_storage::Mappable>::Value::default()
+    );
+}
