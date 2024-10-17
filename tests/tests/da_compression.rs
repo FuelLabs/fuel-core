@@ -108,8 +108,11 @@ async fn can_fetch_da_compressed_block_from_graphql() {
         }
     };
 
-    let block = client.da_compressed_block(block_height).await.unwrap();
-    let block = block.expect("Unable to get compressed block");
+    let block = client
+        .da_compressed_block(block_height)
+        .await
+        .unwrap()
+        .expect("Unable to get compressed block");
     let block: VersionedCompressedBlock = postcard::from_bytes(&block).unwrap();
 
     let db = &srv.shared.database;

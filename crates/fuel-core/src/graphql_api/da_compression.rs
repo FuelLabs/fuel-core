@@ -325,9 +325,9 @@ where
 
         let block_info = self
             .onchain_db
-            .storage_as_ref::<fuel_core_storage::tables::FuelBlocks>()
+            .storage_as_ref::<FuelBlocks>()
             .get(&c.tx_pointer.block_height())?
-            .ok_or(not_found!(fuel_core_storage::tables::FuelBlocks))?;
+            .ok_or(not_found!(FuelBlocks))?;
 
         let tx_id = *block_info
             .transactions()
@@ -347,7 +347,7 @@ where
         let coin = self
             .onchain_db
             .storage_as_ref::<fuel_core_storage::tables::Coins>()
-            .get(utxo_id)?
+            .get(&utxo_id)?
             .ok_or(not_found!(fuel_core_storage::tables::Coins))?;
         Ok(fuel_core_compression::ports::CoinInfo {
             owner: *coin.owner(),
