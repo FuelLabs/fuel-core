@@ -321,14 +321,14 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
     let notify = Arc::new(Notify::new());
     let state: SharedMutex<State> = State::new(3, 6).into();
 
-    let import = Import {
+    let mut import = Import {
         state: state.clone(),
         notify: notify.clone(),
         params,
         p2p,
         executor,
         consensus,
-        cache: SharedMutex::new(HashMap::new()),
+        cache: Cache::new(),
     };
     let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
     let mut watcher = shutdown.into();
@@ -418,14 +418,14 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
     let notify = Arc::new(Notify::new());
     let state: SharedMutex<State> = State::new(3, 6).into();
 
-    let import = Import {
+    let mut import = Import {
         state: state.clone(),
         notify: notify.clone(),
         params,
         p2p,
         executor,
         consensus,
-        cache: SharedMutex::new(HashMap::new()),
+        cache: Cache::new(),
     };
     let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
     let mut watcher = shutdown.into();
@@ -1204,14 +1204,14 @@ async fn test_import_inner(
     let executor = Arc::new(executor);
     let consensus = Arc::new(consensus_port);
 
-    let import = Import {
+    let mut import = Import {
         state,
         notify,
         params,
         p2p,
         executor,
         consensus,
-        cache: SharedMutex::new(HashMap::new()),
+        cache: Cache::new(),
     };
     let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
     let mut watcher = shutdown.into();
@@ -1430,14 +1430,14 @@ impl PeerReportTestBuilder {
             header_batch_size: 10,
         };
 
-        let import = Import {
+        let mut import = Import {
             state,
             notify,
             params,
             p2p,
             executor,
             consensus,
-            cache: SharedMutex::new(HashMap::new()),
+            cache: Cache::new(),
         };
         let (_tx, shutdown) =
             tokio::sync::watch::channel(fuel_core_services::State::Started);

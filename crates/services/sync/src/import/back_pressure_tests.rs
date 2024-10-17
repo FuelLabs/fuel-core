@@ -106,14 +106,14 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
     let consensus = Arc::new(PressureConsensus::new(counts.clone(), input.consensus));
     let notify = Arc::new(Notify::new());
 
-    let import = Import {
+    let mut import = Import {
         state,
         notify,
         params,
         p2p,
         executor,
         consensus,
-        cache: SharedMutex::new(HashMap::new()),
+        cache: Cache::new(),
     };
 
     import.notify.notify_one();
