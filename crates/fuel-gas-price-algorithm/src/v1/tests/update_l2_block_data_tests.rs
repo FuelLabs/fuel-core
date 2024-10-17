@@ -266,20 +266,17 @@ fn update_l2_block_data__updates_last_and_last_last_profit() {
     assert_eq!(actual, expected);
 }
 
-#[test]
-fn update_l2_block_data__positive_profit_decrease_gas_price() {
-    // given
+fn positive_profit_updater_builder() -> UpdaterBuilder {
     let starting_exec_gas_price = 100;
     let last_da_gas_price = 100;
     let starting_cost = 500;
     let latest_gas_per_byte = 0; // DA is free
     let da_p_component = 100;
     let da_d_component = 10;
-    let block_bytes = 500u64;
     let last_profit = i128::MAX;
     let last_last_profit = 0;
     let large_reward = i128::MAX;
-    let mut updater = UpdaterBuilder::new()
+    UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_exec_gas_price)
         .with_da_p_component(da_p_component)
         .with_da_d_component(da_d_component)
@@ -291,10 +288,16 @@ fn update_l2_block_data__positive_profit_decrease_gas_price() {
         .with_last_profit(last_profit, last_last_profit)
         .with_da_max_change_percent(u16::MAX)
         .with_exec_gas_price_change_percent(0)
-        .build();
+}
+
+#[test]
+fn update_l2_block_data__positive_profit_decrease_gas_price() {
+    // given
+    let mut updater = positive_profit_updater_builder().build();
     let old_gas_price = updater.algorithm().calculate();
 
     // when
+    let block_bytes = 500u64;
     updater
         .update_l2_block_data(
             updater.l2_block_height + 1,
@@ -497,26 +500,7 @@ fn update_l2_block_data__even_profit_maintains_price() {
 #[test]
 fn update_l2_block_data__negative_profit_increase_gas_price() {
     // given
-    let starting_exec_gas_price = 100;
-    let starting_da_gas_price = 100;
-    let starting_cost = u128::MAX;
-    let latest_gas_per_byte = i32::MAX; // DA is very expensive
-    let da_p_component = 100;
-    let da_d_component = 10;
-    let last_profit = i128::MIN;
-    let last_last_profit = 0;
-    let smaller_starting_reward = 0;
-    let mut updater = UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_starting_da_gas_price(starting_da_gas_price)
-        .with_da_p_component(da_p_component)
-        .with_da_d_component(da_d_component)
-        .with_total_rewards(smaller_starting_reward)
-        .with_known_total_cost(starting_cost)
-        .with_projected_total_cost(starting_cost)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
-        .with_last_profit(last_profit, last_last_profit)
-        .build();
+    let mut updater = negative_profit_updater_builder().build();
     let algo = updater.algorithm();
     let old_gas_price = algo.calculate();
 
@@ -625,26 +609,8 @@ fn hold_l2_activity() -> L2ActivityTracker {
 fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in_hold_range(
 ) {
     // given
-    let starting_exec_gas_price = 100;
-    let starting_da_gas_price = 100;
-    let starting_cost = u128::MAX;
-    let latest_gas_per_byte = i32::MAX; // DA is very expensive
-    let da_p_component = 100;
-    let da_d_component = 10;
-    let last_profit = i128::MIN;
-    let last_last_profit = 0;
-    let smaller_starting_reward = 0;
     let hold_activity = hold_l2_activity();
-    let mut updater = UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_starting_da_gas_price(starting_da_gas_price)
-        .with_da_p_component(da_p_component)
-        .with_da_d_component(da_d_component)
-        .with_total_rewards(smaller_starting_reward)
-        .with_known_total_cost(starting_cost)
-        .with_projected_total_cost(starting_cost)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
-        .with_last_profit(last_profit, last_last_profit)
+    let mut updater = negative_profit_updater_builder()
         .with_activity(hold_activity)
         .build();
     let algo = updater.algorithm();
@@ -670,34 +636,14 @@ fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in
 fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_hold_range(
 ) {
     // given
-    let starting_exec_gas_price = 100;
-    let last_da_gas_price = 100;
-    let starting_cost = 500;
-    let latest_gas_per_byte = 0; // DA is free
-    let da_p_component = 100;
-    let da_d_component = 10;
-    let block_bytes = 500u64;
-    let last_profit = i128::MAX;
-    let last_last_profit = 0;
-    let large_reward = i128::MAX;
     let hold_activity = hold_l2_activity();
-    let mut updater = UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_da_p_component(da_p_component)
-        .with_da_d_component(da_d_component)
-        .with_starting_da_gas_price(last_da_gas_price)
-        .with_total_rewards(large_reward as u128)
-        .with_known_total_cost(starting_cost as u128)
-        .with_projected_total_cost(starting_cost as u128)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
-        .with_last_profit(last_profit, last_last_profit)
-        .with_da_max_change_percent(u16::MAX)
-        .with_exec_gas_price_change_percent(0)
+    let mut updater = positive_profit_updater_builder()
         .with_activity(hold_activity)
         .build();
     let old_gas_price = updater.algorithm().calculate();
 
     // when
+    let block_bytes = 500u64;
     updater
         .update_l2_block_data(
             updater.l2_block_height + 1,
@@ -727,10 +673,7 @@ fn decrease_l2_activity() -> L2ActivityTracker {
     L2ActivityTracker::new(increase, hold, decrease, activity, threshold)
 }
 
-#[test]
-fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activity_in_decrease_range(
-) {
-    // given
+fn negative_profit_updater_builder() -> UpdaterBuilder {
     let starting_exec_gas_price = 100;
     let starting_da_gas_price = 100;
     let starting_cost = u128::MAX;
@@ -740,8 +683,7 @@ fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activit
     let last_profit = i128::MIN;
     let last_last_profit = 0;
     let smaller_starting_reward = 0;
-    let decrease_activity = decrease_l2_activity();
-    let mut updater = UpdaterBuilder::new()
+    UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_exec_gas_price)
         .with_starting_da_gas_price(starting_da_gas_price)
         .with_da_p_component(da_p_component)
@@ -751,6 +693,13 @@ fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activit
         .with_projected_total_cost(starting_cost)
         .with_da_cost_per_byte(latest_gas_per_byte as u128)
         .with_last_profit(last_profit, last_last_profit)
+}
+#[test]
+fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activity_in_decrease_range(
+) {
+    // given
+    let decrease_activity = decrease_l2_activity();
+    let mut updater = negative_profit_updater_builder()
         .with_activity(decrease_activity)
         .build();
     let algo = updater.algorithm();
