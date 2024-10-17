@@ -61,6 +61,7 @@ use std::{
     fmt::Debug,
     sync::Arc,
 };
+use tracing::info;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -93,6 +94,15 @@ pub mod state;
 #[cfg(feature = "test-helpers")]
 pub mod storage;
 pub mod transactions;
+
+// TODO[RC]: Perhaps move to the new "indexation" module if indexation related structs grow too big.
+#[derive(
+    Copy, Clone, Debug, serde::Serialize, serde::Deserialize, Hash, Eq, PartialEq,
+)]
+pub(crate) enum IndexationType {
+    Balances,
+    CoinsToSpend,
+}
 
 #[derive(Default, Debug, Copy, Clone)]
 pub struct GenesisStage;
@@ -350,6 +360,19 @@ impl Modifiable for Database<OnChain> {
     }
 }
 
+trait ForcedCommitDatabase {
+    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()>;
+}
+
+impl ForcedCommitDatabase
+    for GenericDatabase<DataSource<OffChain, RegularStage<OffChain>>>
+{
+    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
+        let mut height = *self.stage.height.lock();
+        self.data.commit_changes(height, changes)
+    }
+}
+
 impl Modifiable for Database<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |iter| {
@@ -419,9 +442,13 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
+    dbg!(&changes);
+
     // Gets the all new heights from the `changes`
     let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
+
+    dbg!(&new_heights);
 
     // Changes for each block should be committed separately.
     // If we have more than one height, it means we are mixing commits
@@ -464,6 +491,7 @@ where
         (Some(prev_height), None) => {
             // In production, we shouldn't have cases where we call `commit_changes` with intermediate changes.
             // The commit always should contain all data for the corresponding height.
+            info!("XXXX - bailing here because new_height is not set");
             return Err(DatabaseError::NewHeightIsNotSet {
                 prev_height: prev_height.as_u64(),
             }
@@ -484,9 +512,11 @@ where
             .storage_as_mut::<MetadataTable<Description>>()
             .insert(
                 &(),
-                &DatabaseMetadata::V1 {
+                &DatabaseMetadata::V2 {
                     version: Description::version(),
                     height: new_height,
+                    // TODO[RC]: This value must NOT be updated here.
+                    indexation_progress: Default::default(),
                 },
             )?;
 
@@ -908,9 +938,10 @@ mod tests {
                 .storage_as_mut::<MetadataTable<Relayer>>()
                 .insert(
                     &(),
-                    &DatabaseMetadata::<DaBlockHeight>::V1 {
+                    &DatabaseMetadata::<DaBlockHeight>::V2 {
                         version: Default::default(),
                         height: Default::default(),
+                        indexation_progress: Default::default(),
                     },
                 )
                 .unwrap();
@@ -982,9 +1013,10 @@ mod tests {
             // When
             let result = database.storage_as_mut::<MetadataTable<Relayer>>().insert(
                 &(),
-                &DatabaseMetadata::<DaBlockHeight>::V1 {
+                &DatabaseMetadata::<DaBlockHeight>::V2 {
                     version: Default::default(),
                     height: Default::default(),
+                    indexation_progress: Default::default(),
                 },
             );
 
