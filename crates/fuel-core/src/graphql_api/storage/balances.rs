@@ -39,7 +39,13 @@ use std::{
     mem::size_of,
 };
 
-type Amount = u64;
+#[derive(
+    Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq,
+)]
+pub struct Amount {
+    coins: u64,
+    messages: u64,
+}
 
 double_key!(BalancesKey, Address, address, AssetId, asset_id);
 impl Distribution<BalancesKey> for Standard {
@@ -69,6 +75,7 @@ impl TableWithBlueprint for Balances {
     }
 }
 
+// TODO[RC]: This needs to be additionally tested with a proper integration test
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -85,7 +92,10 @@ mod tests {
         Bytes8,
     };
 
-    use crate::combined_database::CombinedDatabase;
+    use crate::{
+        combined_database::CombinedDatabase,
+        graphql_api::storage::balances::Amount,
+    };
 
     use super::{
         Balances,
@@ -103,13 +113,16 @@ mod tests {
             }
         }
 
-        pub fn balance_tx(
+        pub fn register_amount(
             &mut self,
             owner: &Address,
-            (asset_id, amount): &(AssetId, u64),
+            (asset_id, amount): &(AssetId, Amount),
         ) {
             let current_balance = self.query_balance(owner, asset_id);
-            let new_balance = current_balance.unwrap_or(0) + amount;
+            let new_balance = Amount {
+                coins: current_balance.unwrap_or_default().coins + amount.coins,
+                messages: current_balance.unwrap_or_default().messages + amount.messages,
+            };
 
             let db = self.database.off_chain_mut();
             let key = BalancesKey::new(owner, asset_id);
@@ -117,7 +130,11 @@ mod tests {
                 .expect("couldn't store test asset");
         }
 
-        pub fn query_balance(&self, owner: &Address, asset_id: &AssetId) -> Option<u64> {
+        pub fn query_balance(
+            &self,
+            owner: &Address,
+            asset_id: &AssetId,
+        ) -> Option<Amount> {
             let db = self.database.off_chain();
             let key = BalancesKey::new(owner, asset_id);
             let result = StorageInspect::<Balances>::get(db, &key).unwrap();
@@ -125,7 +142,7 @@ mod tests {
             result.map(|r| r.into_owned())
         }
 
-        pub fn query_balances(&self, owner: &Address) -> HashMap<AssetId, u64> {
+        pub fn query_balances(&self, owner: &Address) -> HashMap<AssetId, Amount> {
             let db = self.database.off_chain();
 
             let mut key_prefix = owner.as_ref().to_vec();
@@ -151,25 +168,66 @@ mod tests {
         let ASSET_1 = AssetId::from([1; 32]);
         let ASSET_2 = AssetId::from([2; 32]);
 
-        // Alice has 100 of asset 1 and a total of 1000 of asset 2
-        let alice_tx_1 = (ASSET_1, 100_u64);
-        let alice_tx_2 = (ASSET_2, 600_u64);
-        let alice_tx_3 = (ASSET_2, 400_u64);
+        let alice_tx_1 = (
+            ASSET_1,
+            Amount {
+                coins: 100,
+                messages: 0,
+            },
+        );
+        let alice_tx_2 = (
+            ASSET_2,
+            Amount {
+                coins: 600,
+                messages: 0,
+            },
+        );
+        let alice_tx_3 = (
+            ASSET_2,
+            Amount {
+                coins: 400,
+                messages: 0,
+            },
+        );
 
         // Carol has 200 of asset 2
-        let carol_tx_1 = (ASSET_2, 200_u64);
+        let carol_tx_1 = (
+            ASSET_2,
+            Amount {
+                coins: 200,
+                messages: 0,
+            },
+        );
 
-        let res = db.balance_tx(&alice, &alice_tx_1);
-        let res = db.balance_tx(&alice, &alice_tx_2);
-        let res = db.balance_tx(&alice, &alice_tx_3);
-        let res = db.balance_tx(&carol, &carol_tx_1);
+        let res = db.register_amount(&alice, &alice_tx_1);
+        let res = db.register_amount(&alice, &alice_tx_2);
+        let res = db.register_amount(&alice, &alice_tx_3);
+        let res = db.register_amount(&carol, &carol_tx_1);
 
         // Alice has correct balances
-        assert_eq!(db.query_balance(&alice, &alice_tx_1.0), Some(100));
-        assert_eq!(db.query_balance(&alice, &alice_tx_2.0), Some(1000));
+        assert_eq!(
+            db.query_balance(&alice, &alice_tx_1.0),
+            Some(Amount {
+                coins: 100,
+                messages: 0
+            })
+        );
+        assert_eq!(
+            db.query_balance(&alice, &alice_tx_2.0),
+            Some(Amount {
+                coins: 1000,
+                messages: 0
+            })
+        );
 
         // Carol has correct balances
-        assert_eq!(db.query_balance(&carol, &carol_tx_1.0), Some(200_u64));
+        assert_eq!(
+            db.query_balance(&carol, &carol_tx_1.0),
+            Some(Amount {
+                coins: 200,
+                messages: 0
+            })
+        );
     }
 
     #[test]
@@ -183,23 +241,60 @@ mod tests {
         let ASSET_1 = AssetId::from([1; 32]);
         let ASSET_2 = AssetId::from([2; 32]);
 
-        // Alice has 100 of asset 1 and a total of 1000 of asset 2
-        let alice_tx_1 = (ASSET_1, 100_u64);
-        let alice_tx_2 = (ASSET_2, 600_u64);
-        let alice_tx_3 = (ASSET_2, 400_u64);
+        let alice_tx_1 = (
+            ASSET_1,
+            Amount {
+                coins: 100,
+                messages: 0,
+            },
+        );
+        let alice_tx_2 = (
+            ASSET_2,
+            Amount {
+                coins: 600,
+                messages: 0,
+            },
+        );
+        let alice_tx_3 = (
+            ASSET_2,
+            Amount {
+                coins: 400,
+                messages: 0,
+            },
+        );
 
-        // Carol has 200 of asset 2
-        let carol_tx_1 = (ASSET_2, 200_u64);
+        let carol_tx_1 = (
+            ASSET_2,
+            Amount {
+                coins: 200,
+                messages: 0,
+            },
+        );
 
-        let res = db.balance_tx(&alice, &alice_tx_1);
-        let res = db.balance_tx(&alice, &alice_tx_2);
-        let res = db.balance_tx(&alice, &alice_tx_3);
-        let res = db.balance_tx(&carol, &carol_tx_1);
+        let res = db.register_amount(&alice, &alice_tx_1);
+        let res = db.register_amount(&alice, &alice_tx_2);
+        let res = db.register_amount(&alice, &alice_tx_3);
+        let res = db.register_amount(&carol, &carol_tx_1);
 
         // Verify Alice balances
-        let expected: HashMap<_, _> = vec![(ASSET_1, 100_u64), (ASSET_2, 1000_u64)]
-            .into_iter()
-            .collect();
+        let expected: HashMap<_, _> = vec![
+            (
+                ASSET_1,
+                Amount {
+                    coins: 100,
+                    messages: 0,
+                },
+            ),
+            (
+                ASSET_2,
+                Amount {
+                    coins: 1000,
+                    messages: 0,
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
         let actual = db.query_balances(&alice);
         assert_eq!(expected, actual);
 
@@ -208,7 +303,15 @@ mod tests {
         assert_eq!(HashMap::new(), actual);
 
         // Verify Carol balances
-        let expected: HashMap<_, _> = vec![(ASSET_2, 200_u64)].into_iter().collect();
+        let expected: HashMap<_, _> = vec![(
+            ASSET_2,
+            Amount {
+                coins: 200,
+                messages: 0,
+            },
+        )]
+        .into_iter()
+        .collect();
         let actual = db.query_balances(&carol);
         assert_eq!(expected, actual);
     }
