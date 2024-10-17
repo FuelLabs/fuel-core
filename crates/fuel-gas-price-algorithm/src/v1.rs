@@ -199,7 +199,9 @@ impl L2ActivityTracker {
         decrease_range_size: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
-        let activity = decrease_range_size + hold_range_size + increase_range_size;
+        let activity = decrease_range_size
+            .saturating_add(hold_range_size)
+            .saturating_add(increase_range_size);
         Self {
             increase_range_size,
             hold_range_size,
@@ -230,7 +232,11 @@ impl L2ActivityTracker {
     }
 
     pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
-        if self.activity > self.decrease_range_size + self.hold_range_size {
+        if self.activity
+            > self
+                .decrease_range_size
+                .saturating_add(self.hold_range_size)
+        {
             DAGasPriceSafetyMode::Increase
         } else if self.activity > self.decrease_range_size {
             DAGasPriceSafetyMode::Hold
@@ -240,8 +246,10 @@ impl L2ActivityTracker {
     }
 
     pub fn update(&mut self, block_usage: ClampedPercentage) {
-        let cap =
-            self.decrease_range_size + self.hold_range_size + self.increase_range_size;
+        let cap = self
+            .decrease_range_size
+            .saturating_add(self.hold_range_size)
+            .saturating_add(self.increase_range_size);
         if block_usage < self.block_activity_threshold {
             self.activity = self.activity.saturating_sub(1);
         } else {
@@ -442,7 +450,7 @@ impl AlgorithmUpdaterV1 {
             match self.l2_activity.safety_mode() {
                 DAGasPriceSafetyMode::Increase => maybe_da_change,
                 DAGasPriceSafetyMode::Hold => 0,
-                DAGasPriceSafetyMode::Decrease => -self.max_change(),
+                DAGasPriceSafetyMode::Decrease => self.max_change().saturating_mul(-1),
             }
         } else {
             maybe_da_change
@@ -478,12 +486,10 @@ impl AlgorithmUpdaterV1 {
 
     fn max_change(&self) -> i128 {
         let upcast_percent = self.max_da_gas_price_change_percent.into();
-        let max_change = self
-            .new_scaled_da_gas_price
+        self.new_scaled_da_gas_price
             .saturating_mul(upcast_percent)
             .saturating_div(100)
-            .into();
-        max_change
+            .into()
     }
 
     fn exec_change(&self, principle: u64) -> u64 {
