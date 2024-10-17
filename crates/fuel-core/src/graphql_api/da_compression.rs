@@ -347,7 +347,7 @@ where
         let coin = self
             .onchain_db
             .storage_as_ref::<fuel_core_storage::tables::Coins>()
-            .get(&dbg!(utxo_id))?
+            .get(utxo_id)?
             .ok_or(not_found!(fuel_core_storage::tables::Coins))?;
         Ok(fuel_core_compression::ports::CoinInfo {
             owner: *coin.owner(),
