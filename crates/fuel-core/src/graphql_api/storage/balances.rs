@@ -37,6 +37,7 @@ const BALANCES_KEY_SIZE: usize = Address::LEN + AssetId::LEN;
 
 type Amount = u64;
 
+// TODO[RC]: Maybe use: macro_rules! double_key {
 pub type BalancesKey = [u8; Address::LEN + AssetId::LEN];
 
 /// These table stores the balances of asset id per owner.
@@ -213,3 +214,8 @@ mod tests {
         assert_eq!(expected, actual);
     }
 }
+
+// TODO[RC]: Reuse this to test basic functionality
+// fuel_core_storage::basic_storage_tests!(
+//
+// then add an integration test to verify the logic of the balances
