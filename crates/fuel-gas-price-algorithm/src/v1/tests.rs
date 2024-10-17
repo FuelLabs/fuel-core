@@ -71,7 +71,7 @@ impl UpdaterBuilder {
             last_profit: 0,
             second_to_last_profit: 0,
             da_gas_price_factor: 1,
-            l2_activity: L2ActivityTracker::new_always_increases(),
+            l2_activity: L2ActivityTracker::new_always_normal(),
         }
     }
 

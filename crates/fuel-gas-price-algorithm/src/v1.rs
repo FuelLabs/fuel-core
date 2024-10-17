@@ -171,7 +171,7 @@ pub struct AlgorithmUpdaterV1 {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct L2ActivityTracker {
     /// The _size_ of the range of the activity buffer that will increase the gas price
-    increase_range_size: u16,
+    normal_range_size: u16,
     /// The _size_ of the range of the activity buffer that will hold the gas price
     hold_range_size: u16,
     /// The _size_ of the range of the activity buffer that will decrease the gas price
@@ -185,7 +185,7 @@ pub struct L2ActivityTracker {
 /// Designates the intended behavior of the DA gas price based on the activity of the L2 chain
 pub enum DAGasPriceSafetyMode {
     /// Should increase DA gas price freely
-    Increase,
+    Normal,
     /// Should not increase the DA gas price
     Hold,
     /// Should decrease the DA gas price always
@@ -194,16 +194,16 @@ pub enum DAGasPriceSafetyMode {
 
 impl L2ActivityTracker {
     pub fn new_full(
-        increase_range_size: u16,
+        normal_range_size: u16,
         hold_range_size: u16,
         decrease_range_size: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
         let activity = decrease_range_size
             .saturating_add(hold_range_size)
-            .saturating_add(increase_range_size);
+            .saturating_add(normal_range_size);
         Self {
-            increase_range_size,
+            normal_range_size,
             hold_range_size,
             decrease_range_size,
             activity,
@@ -212,7 +212,7 @@ impl L2ActivityTracker {
     }
 
     pub fn new(
-        increase_range_size: u16,
+        normal_range_size: u16,
         hold_range_size: u16,
         decrease_range_size: u16,
         activity: u16,
@@ -220,10 +220,10 @@ impl L2ActivityTracker {
     ) -> Self {
         let max_activity = decrease_range_size
             .saturating_add(hold_range_size)
-            .saturating_add(increase_range_size);
+            .saturating_add(normal_range_size);
         let activity = activity.min(max_activity);
         Self {
-            increase_range_size,
+            normal_range_size,
             hold_range_size,
             decrease_range_size,
             activity,
@@ -231,8 +231,7 @@ impl L2ActivityTracker {
         }
     }
 
-    #[cfg(test)]
-    pub fn new_always_increases() -> Self {
+    pub fn new_always_normal() -> Self {
         Self::new_full(1, 0, 0, ClampedPercentage::new(0))
     }
 
@@ -242,7 +241,7 @@ impl L2ActivityTracker {
                 .decrease_range_size
                 .saturating_add(self.hold_range_size)
         {
-            DAGasPriceSafetyMode::Increase
+            DAGasPriceSafetyMode::Normal
         } else if self.activity > self.decrease_range_size {
             DAGasPriceSafetyMode::Hold
         } else {
@@ -254,7 +253,7 @@ impl L2ActivityTracker {
         let cap = self
             .decrease_range_size
             .saturating_add(self.hold_range_size)
-            .saturating_add(self.increase_range_size);
+            .saturating_add(self.normal_range_size);
         if block_usage < self.block_activity_threshold {
             self.activity = self.activity.saturating_sub(1);
         } else {
@@ -453,7 +452,7 @@ impl AlgorithmUpdaterV1 {
     fn da_change_accounting_for_activity(&self, maybe_da_change: i128) -> i128 {
         if maybe_da_change > 0 {
             match self.l2_activity.safety_mode() {
-                DAGasPriceSafetyMode::Increase => maybe_da_change,
+                DAGasPriceSafetyMode::Normal => maybe_da_change,
                 DAGasPriceSafetyMode::Hold => 0,
                 DAGasPriceSafetyMode::Decrease => self.max_change().saturating_mul(-1),
             }

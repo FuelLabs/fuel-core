@@ -8,12 +8,12 @@ use crate::v1::{
 };
 
 fn decrease_l2_activity() -> L2ActivityTracker {
-    let increase = 1;
+    let normal = 1;
     let hold = 1;
     let decrease = 100;
     let activity = 50;
     let threshold = 50.into();
-    L2ActivityTracker::new(increase, hold, decrease, activity, threshold)
+    L2ActivityTracker::new(normal, hold, decrease, activity, threshold)
 }
 
 fn negative_profit_updater_builder() -> UpdaterBuilder {
@@ -320,7 +320,6 @@ fn update_l2_block_data__updates_last_and_last_last_profit() {
     let actual = updater.last_profit;
     assert_eq!(actual, expected);
 }
-
 
 #[test]
 fn update_l2_block_data__positive_profit_decrease_gas_price() {
@@ -629,12 +628,12 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
 }
 
 fn hold_l2_activity() -> L2ActivityTracker {
-    let increase = 1;
+    let normal = 1;
     let hold = 100;
     let decrease = 1;
     let activity = 50;
     let threshold = 50.into();
-    L2ActivityTracker::new(increase, hold, decrease, activity, threshold)
+    L2ActivityTracker::new(normal, hold, decrease, activity, threshold)
 }
 
 #[test]
@@ -830,12 +829,12 @@ fn update_l2_block_data__if_activity_at_max_will_stop_increasing() {
     let starting_exec_gas_price = 100;
     let exec_gas_price_increase_percent = 10;
     let threshold = 50;
-    let increase_range = 1;
+    let normal_range = 1;
     let hold_range = 1;
     let decrease_range = 1;
-    let starting_activity = increase_range + hold_range + decrease_range;
+    let starting_activity = normal_range + hold_range + decrease_range;
     let activity = L2ActivityTracker::new(
-        increase_range,
+        normal_range,
         hold_range,
         decrease_range,
         starting_activity,
