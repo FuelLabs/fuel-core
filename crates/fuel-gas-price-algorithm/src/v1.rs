@@ -218,6 +218,10 @@ impl L2ActivityTracker {
         activity: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
+        let max_activity = decrease_range_size
+            .saturating_add(hold_range_size)
+            .saturating_add(increase_range_size);
+        let activity = activity.min(max_activity);
         Self {
             increase_range_size,
             hold_range_size,
@@ -227,6 +231,7 @@ impl L2ActivityTracker {
         }
     }
 
+    #[cfg(test)]
     pub fn new_always_increases() -> Self {
         Self::new_full(1, 0, 0, ClampedPercentage::new(0))
     }

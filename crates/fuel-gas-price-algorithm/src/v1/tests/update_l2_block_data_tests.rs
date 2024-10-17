@@ -821,3 +821,76 @@ fn update_l2_block_data__below_threshold_decrease_activity() {
     let actual = updater.l2_activity.current_activity();
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn update_l2_block_data__if_activity_at_max_will_stop_increasing() {
+    // given
+    let starting_exec_gas_price = 100;
+    let exec_gas_price_increase_percent = 10;
+    let threshold = 50;
+    let increase_range = 1;
+    let hold_range = 1;
+    let decrease_range = 1;
+    let starting_activity = increase_range + hold_range + decrease_range;
+    let activity = L2ActivityTracker::new(
+        increase_range,
+        hold_range,
+        decrease_range,
+        starting_activity,
+        50.into(),
+    );
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
+        .with_l2_block_capacity_threshold(threshold)
+        .with_activity(activity)
+        .build();
+
+    let height = 1;
+    let used = 60;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let fee = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let expected = starting_activity;
+    let actual = updater.l2_activity.current_activity();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn update_l2_block_data__if_activity_is_zero_will_stop_decreasing() {
+    // given
+    let starting_exec_gas_price = 100;
+    let exec_gas_price_increase_percent = 10;
+    let threshold = 50;
+    let starting_activity = 0;
+    let activity = L2ActivityTracker::new(1, 1, 1, starting_activity, 50.into());
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
+        .with_l2_block_capacity_threshold(threshold)
+        .with_activity(activity)
+        .build();
+
+    let height = 1;
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let fee = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let expected = starting_activity;
+    let actual = updater.l2_activity.current_activity();
+    assert_eq!(actual, expected);
+}
