@@ -404,14 +404,7 @@ impl AlgorithmUpdaterV1 {
         let p = self.p();
         let d = self.d();
         let maybe_da_change = self.da_change(p, d);
-        let da_change = if maybe_da_change > 0 {
-            match self.l2_activity.safety_mode() {
-                DAGasPriceSafetyMode::Increase => maybe_da_change,
-                DAGasPriceSafetyMode::Hold | DAGasPriceSafetyMode::Decrease => 0,
-            }
-        } else {
-            maybe_da_change
-        };
+        let da_change = self.da_change_accounting_for_activity(maybe_da_change);
         let maybe_new_scaled_da_gas_price = i128::from(self.new_scaled_da_gas_price)
             .checked_add(da_change)
             .and_then(|x| u64::try_from(x).ok())
@@ -426,6 +419,18 @@ impl AlgorithmUpdaterV1 {
             self.min_scaled_da_gas_price(),
             maybe_new_scaled_da_gas_price,
         );
+    }
+
+    fn da_change_accounting_for_activity(&self, maybe_da_change: i128) -> i128 {
+        if maybe_da_change > 0 {
+            match self.l2_activity.safety_mode() {
+                DAGasPriceSafetyMode::Increase => maybe_da_change,
+                DAGasPriceSafetyMode::Hold => 0,
+                DAGasPriceSafetyMode::Decrease => -self.max_change(),
+            }
+        } else {
+            maybe_da_change
+        }
     }
 
     fn min_scaled_da_gas_price(&self) -> u64 {
@@ -450,14 +455,19 @@ impl AlgorithmUpdaterV1 {
 
     fn da_change(&self, p: i128, d: i128) -> i128 {
         let pd_change = p.saturating_add(d);
+        let max_change = self.max_change();
+        let clamped_change = pd_change.saturating_abs().min(max_change);
+        pd_change.signum().saturating_mul(clamped_change)
+    }
+
+    fn max_change(&self) -> i128 {
         let upcast_percent = self.max_da_gas_price_change_percent.into();
         let max_change = self
             .new_scaled_da_gas_price
             .saturating_mul(upcast_percent)
             .saturating_div(100)
             .into();
-        let clamped_change = pd_change.saturating_abs().min(max_change);
-        pd_change.signum().saturating_mul(clamped_change)
+        max_change
     }
 
     fn exec_change(&self, principle: u64) -> u64 {
