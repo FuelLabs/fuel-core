@@ -11,7 +11,7 @@ use crate::{
     request_response::messages::{
         RequestMessage,
         ResponseMessage,
-        REQUEST_RESPONSE_PROTOCOL_ID_V1,
+        REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
@@ -40,14 +40,14 @@ fn serialize<D: Serialize>(data: &D) -> Result<Vec<u8>, io::Error> {
 }
 
 #[derive(Debug, Clone)]
-pub struct PostcardCodec<const VERSION: usize> {
+pub struct PostcardCodec {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
     max_response_size: usize,
 }
 
-impl<const VERSION: usize> PostcardCodec<VERSION> {
+impl PostcardCodec {
     pub fn new(max_block_size: usize) -> Self {
         assert_ne!(
             max_block_size, 0,
@@ -60,8 +60,6 @@ impl<const VERSION: usize> PostcardCodec<VERSION> {
     }
 }
 
-pub type PostcardCodecV1 = PostcardCodec<0>;
-
 /// Since Postcard does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
 /// We expect the substream to be properly closed when response channel is dropped.
@@ -70,8 +68,8 @@ pub type PostcardCodecV1 = PostcardCodec<0>;
 /// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl request_response::Codec for PostcardCodecV1 {
-    type Protocol = MessageExchangePostcardProtocolV1;
+impl request_response::Codec for PostcardCodec {
+    type Protocol = MessageExchangePostcardProtocol;
     type Request = RequestMessage;
     type Response = ResponseMessage;
 
@@ -137,8 +135,7 @@ impl request_response::Codec for PostcardCodecV1 {
     }
 }
 
-// GossipsubCodec is independent of the PostcardCoded version being used
-impl<const VERSION: usize> GossipsubCodec for PostcardCodec<VERSION> {
+impl GossipsubCodec for PostcardCodec {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
 
@@ -163,18 +160,18 @@ impl<const VERSION: usize> GossipsubCodec for PostcardCodec<VERSION> {
     }
 }
 
-impl NetworkCodec for PostcardCodecV1 {
+impl NetworkCodec for PostcardCodec {
     fn get_req_res_protocol(&self) -> <Self as request_response::Codec>::Protocol {
-        MessageExchangePostcardProtocolV1 {}
+        MessageExchangePostcardProtocol {}
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MessageExchangePostcardProtocolV1;
+#[derive(Default, Debug, Clone)]
+pub struct MessageExchangePostcardProtocol;
 
-impl AsRef<str> for MessageExchangePostcardProtocolV1 {
+impl AsRef<str> for MessageExchangePostcardProtocol {
     fn as_ref(&self) -> &str {
-        REQUEST_RESPONSE_PROTOCOL_ID_V1
+        REQUEST_RESPONSE_PROTOCOL_ID
     }
 }
 

@@ -967,7 +967,7 @@ where
 
 #[derive(Clone)]
 pub struct SharedState {
-    /// Sender of p2p with peer gossip subscription (`Vec<u8>` represents the peer_id)
+    /// Sender of p2p with peer gossip subscription (vec<u8> represent the peer_id)
     new_tx_subscription_broadcast: broadcast::Sender<FuelPeerId>,
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
@@ -1534,7 +1534,6 @@ pub mod tests {
             client_version: None,
             heartbeat_data,
             score: 100.0,
-            request_response_protocol_version: None,
         };
         let peer_info = vec![(peer_id, peer_info)];
         let p2p_service = FakeP2PService {
@@ -1625,7 +1624,6 @@ pub mod tests {
             client_version: None,
             heartbeat_data,
             score: 100.0,
-            request_response_protocol_version: None,
         };
         let peer_info = vec![(peer_id, peer_info)];
         let p2p_service = FakeP2PService {

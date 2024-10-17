@@ -4,7 +4,7 @@ use crate::{
         FuelBehaviourEvent,
     },
     codecs::{
-        postcard::PostcardCodecV1,
+        postcard::PostcardCodec,
         GossipsubCodec,
     },
     config::{
@@ -26,16 +26,13 @@ use crate::{
         Punisher,
     },
     peer_report::PeerReportEvent,
-    request_response::{
-        self as fuel_request_response,
-        messages::{
-            RequestError,
-            RequestMessage,
-            ResponseError,
-            ResponseMessage,
-            ResponseSendError,
-            ResponseSender,
-        },
+    request_response::messages::{
+        RequestError,
+        RequestMessage,
+        ResponseError,
+        ResponseMessage,
+        ResponseSendError,
+        ResponseSender,
     },
     TryPeerId,
 };
@@ -125,7 +122,7 @@ pub struct FuelP2PService {
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
     /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
-    network_codec: PostcardCodecV1,
+    network_codec: PostcardCodec,
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
@@ -214,7 +211,7 @@ impl FuelP2PService {
     pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
-        codec: PostcardCodecV1,
+        codec: PostcardCodec,
     ) -> anyhow::Result<Self> {
         let metrics = config.metrics;
 
@@ -417,24 +414,14 @@ impl FuelP2PService {
             }
         };
 
-        let latest_compatible_request_response_protocol_version = self
-            .peer_manager
-            .get_peer_info(&peer_id)
-            .and_then(|peer_info| peer_info.request_response_protocol_version.as_ref())
-            .unwrap_or_default();
+        let request_id = self
+            .swarm
+            .behaviour_mut()
+            .send_request_msg(message_request, &peer_id);
 
-        match latest_compatible_request_response_protocol_version {
-            fuel_request_response::ProtocolVersion::V1 => {
-                let request_id = self
-                    .swarm
-                    .behaviour_mut()
-                    .send_request_msg(message_request, &peer_id);
+        self.outbound_requests_table.insert(request_id, on_response);
 
-                self.outbound_requests_table.insert(request_id, on_response);
-
-                Ok(request_id)
-            }
-        }
+        Ok(request_id)
     }
 
     /// Sends ResponseMessage to a peer that requested the data
@@ -580,7 +567,7 @@ impl FuelP2PService {
                 self.handle_gossipsub_event(event)
             }
             FuelBehaviourEvent::PeerReport(event) => self.handle_peer_report_event(event),
-            FuelBehaviourEvent::RequestResponseV1(event) => {
+            FuelBehaviourEvent::RequestResponse(event) => {
                 self.handle_request_response_event(event)
             }
             FuelBehaviourEvent::Identify(event) => {
@@ -785,10 +772,9 @@ impl FuelP2PService {
             identify::Event::Received { peer_id, info } => {
                 self.update_metrics(increment_unique_peers);
 
-                let request_response_protocol_version =
-                    fuel_request_response::ProtocolVersion::latest_compatible_version_for_peer(&info);
                 let mut addresses = info.listen_addrs;
                 let agent_version = info.agent_version;
+
                 if addresses.len() > MAX_IDENTIFY_ADDRESSES {
                     let protocol_version = info.protocol_version;
                     debug!(
@@ -803,7 +789,6 @@ impl FuelP2PService {
                     &peer_id,
                     addresses.clone(),
                     agent_version,
-                    request_response_protocol_version,
                 );
 
                 self.swarm

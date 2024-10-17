@@ -31,10 +31,6 @@ use tracing::{
 use crate::{
     gossipsub_config::GRAYLIST_THRESHOLD,
     peer_manager::heartbeat_data::HeartbeatData,
-    request_response::{
-        self,
-        ProtocolVersion,
-    },
 };
 
 pub mod heartbeat_data;
@@ -49,9 +45,6 @@ pub struct PeerInfo {
     pub client_version: Option<String>,
     pub heartbeat_data: HeartbeatData,
     pub score: AppScore,
-    /// The latest protocol version that the peer supports and that is
-    /// compatible with the current version of the node
-    pub request_response_protocol_version: Option<request_response::ProtocolVersion>,
 }
 
 impl PeerInfo {
@@ -61,7 +54,6 @@ impl PeerInfo {
             client_version: None,
             heartbeat_data: HeartbeatData::new(heartbeat_avg_window),
             score: DEFAULT_APP_SCORE,
-            request_response_protocol_version: None,
         }
     }
 }
@@ -143,14 +135,10 @@ impl PeerManager {
         peer_id: &PeerId,
         addresses: Vec<Multiaddr>,
         agent_version: String,
-        protocol_version: Option<ProtocolVersion>,
     ) {
         let peers = self.get_assigned_peer_table_mut(peer_id);
         insert_client_version(peers, peer_id, agent_version);
         insert_peer_addresses(peers, peer_id, addresses);
-        protocol_version.into_iter().for_each(|protocol| {
-            update_request_response_protocol_version(peers, peer_id, protocol)
-        });
     }
 
     pub fn batch_update_score_with_decay(&mut self) {
@@ -363,19 +351,6 @@ fn insert_client_version(
 ) {
     if let Some(peer) = peers.get_mut(peer_id) {
         peer.client_version = Some(client_version);
-    } else {
-        log_missing_peer(peer_id);
-    }
-}
-
-// Updates the latest request response protocol version that the peer supports
-fn update_request_response_protocol_version(
-    peers: &mut HashMap<PeerId, PeerInfo>,
-    peer_id: &PeerId,
-    protocol: ProtocolVersion,
-) {
-    if let Some(peer) = peers.get_mut(peer_id) {
-        peer.request_response_protocol_version = Some(protocol);
     } else {
         log_missing_peer(peer_id);
     }
