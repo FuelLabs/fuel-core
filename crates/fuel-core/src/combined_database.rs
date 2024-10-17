@@ -95,7 +95,7 @@ impl CombinedDatabase {
     }
 
     /// A test-only temporary rocksdb database with given rewind policy.
-    #[cfg(feature = "rocksdb")]
+    #[cfg(all(any(test, feature = "test-helpers"), feature = "rocksdb"))]
     pub fn from_state_rewind_policy(
         state_rewind_policy: StateRewindPolicy,
     ) -> DatabaseResult<Self> {
