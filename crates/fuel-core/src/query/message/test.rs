@@ -1,10 +1,13 @@
 use std::ops::Deref;
 
 use fuel_core_types::{
-    blockchain::header::{
-        ApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
+    blockchain::{
+        block::CompressedBlock,
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
     },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
@@ -191,7 +194,6 @@ async fn can_build_message_proof() {
         nonce.to_owned(),
         *commit_block.header().height(),
     )
-    .unwrap()
     .unwrap();
     assert_eq!(
         proof.message_block_header.message_outbox_root,
