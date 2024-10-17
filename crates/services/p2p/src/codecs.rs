@@ -41,5 +41,7 @@ pub trait NetworkCodec:
 {
     /// Returns RequestResponse's Protocol
     /// Needed for initialization of RequestResponse Behaviour
-    fn get_req_res_protocol(&self) -> <Self as request_response::Codec>::Protocol;
+    fn get_req_res_protocols(
+        &self,
+    ) -> impl Iterator<Item = <Self as request_response::Codec>::Protocol>;
 }

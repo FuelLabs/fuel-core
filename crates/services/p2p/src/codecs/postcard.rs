@@ -9,9 +9,11 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
+        LegacyResponseMessage,
         RequestMessage,
         ResponseMessage,
         REQUEST_RESPONSE_PROTOCOL_ID,
+        REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
@@ -26,6 +28,8 @@ use serde::{
     Serialize,
 };
 use std::io;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 /// Helper method for decoding data
 /// Reusable across `RequestResponseCodec` and `GossipsubCodec`
@@ -69,13 +73,13 @@ impl PostcardCodec {
 /// run into a timeout waiting for the response.
 #[async_trait]
 impl request_response::Codec for PostcardCodec {
-    type Protocol = MessageExchangePostcardProtocol;
+    type Protocol = PostcardProtocol;
     type Request = RequestMessage;
     type Response = ResponseMessage;
 
     async fn read_request<T>(
         &mut self,
-        _: &Self::Protocol,
+        _protocol: &Self::Protocol,
         socket: &mut T,
     ) -> io::Result<Self::Request>
     where
@@ -91,7 +95,7 @@ impl request_response::Codec for PostcardCodec {
 
     async fn read_response<T>(
         &mut self,
-        _: &Self::Protocol,
+        protocol: &Self::Protocol,
         socket: &mut T,
     ) -> io::Result<Self::Response>
     where
@@ -103,7 +107,13 @@ impl request_response::Codec for PostcardCodec {
             .read_to_end(&mut response)
             .await?;
 
-        deserialize(&response)
+        match protocol {
+            PostcardProtocol::V1 => {
+                let legacy_response = deserialize::<LegacyResponseMessage>(&response)?;
+                Ok(legacy_response.into())
+            }
+            PostcardProtocol::V2 => deserialize::<ResponseMessage>(&response),
+        }
     }
 
     async fn write_request<T>(
@@ -122,14 +132,20 @@ impl request_response::Codec for PostcardCodec {
 
     async fn write_response<T>(
         &mut self,
-        _protocol: &Self::Protocol,
+        protocol: &Self::Protocol,
         socket: &mut T,
         res: Self::Response,
     ) -> io::Result<()>
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let encoded_data = serialize(&res)?;
+        let encoded_data = match protocol {
+            PostcardProtocol::V1 => {
+                let legacy_response: LegacyResponseMessage = res.into();
+                serialize(&legacy_response)?
+            }
+            PostcardProtocol::V2 => serialize(&res)?,
+        };
         socket.write_all(&encoded_data).await?;
         Ok(())
     }
@@ -161,17 +177,31 @@ impl GossipsubCodec for PostcardCodec {
 }
 
 impl NetworkCodec for PostcardCodec {
-    fn get_req_res_protocol(&self) -> <Self as request_response::Codec>::Protocol {
-        MessageExchangePostcardProtocol {}
+    fn get_req_res_protocols(
+        &self,
+    ) -> impl Iterator<Item = <Self as request_response::Codec>::Protocol> {
+        PostcardProtocol::iter()
     }
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct MessageExchangePostcardProtocol;
+#[derive(Debug, Clone, EnumIter)]
+pub enum PostcardProtocol {
+    V1,
+    V2,
+}
 
-impl AsRef<str> for MessageExchangePostcardProtocol {
+impl Default for PostcardProtocol {
+    fn default() -> Self {
+        PostcardProtocol::V1
+    }
+}
+
+impl AsRef<str> for PostcardProtocol {
     fn as_ref(&self) -> &str {
-        REQUEST_RESPONSE_PROTOCOL_ID
+        match self {
+            PostcardProtocol::V1 => REQUEST_RESPONSE_PROTOCOL_ID,
+            PostcardProtocol::V2 => REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
+        }
     }
 }
 

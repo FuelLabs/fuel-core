@@ -23,6 +23,7 @@ use crate::{
         OnResponse,
         RequestMessage,
         ResponseMessage,
+        ResponseMessageErrorCode,
         ResponseSender,
     },
 };
@@ -136,19 +137,20 @@ pub enum TaskRequest {
         reporting_service: &'static str,
     },
     DatabaseTransactionsLookUp {
-        response: Option<Vec<Transactions>>,
+        response: Result<Vec<Transactions>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
     DatabaseHeaderLookUp {
-        response: Option<Vec<SealedBlockHeader>>,
+        response: Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
     TxPoolAllTransactionsIds {
-        response: Option<Vec<TxId>>,
+        response: Result<Vec<TxId>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
     TxPoolFullTransactions {
-        response: Option<Vec<Option<NetworkableTransactionPool>>>,
+        response:
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
 }
@@ -532,8 +534,11 @@ where
     where
         DbLookUpFn:
             Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
-        ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
-        TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
+        ResponseSenderFn:
+            Fn(Result<R, ResponseMessageErrorCode>) -> ResponseMessage + Send + 'static,
+        TaskRequestFn: Fn(Result<R, ResponseMessageErrorCode>, InboundRequestId) -> TaskRequest
+            + Send
+            + 'static,
         R: Send + 'static,
     {
         let instant = Instant::now();
@@ -550,7 +555,8 @@ where
                 "Requested range is too big"
             );
             // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-            let response = None;
+            // TODO[AC] Use more meaningful error codes
+            let response = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(response));
@@ -564,17 +570,23 @@ where
                 return;
             }
 
-            let response = db_lookup(&view, range.clone()).ok().flatten();
+            // TODO[AC] Assign an error code to this
+            let response = db_lookup(&view, range.clone())
+                .ok()
+                .flatten()
+                .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
 
             let _ = response_channel
                 .try_send(task_request(response, request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
+        // TODO[AC]: Handle error cases and return meaningful status codes
         if result.is_err() {
+            let err = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
-                .send_response_msg(request_id, response_sender(None));
+                .send_response_msg(request_id, response_sender(err));
         }
 
         Ok(())
@@ -624,8 +636,11 @@ where
         task_request: TaskRequestFn,
     ) -> anyhow::Result<()>
     where
-        ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
-        TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
+        ResponseSenderFn:
+            Fn(Result<R, ResponseMessageErrorCode>) -> ResponseMessage + Send + 'static,
+        TaskRequestFn: Fn(Result<R, ResponseMessageErrorCode>, InboundRequestId) -> TaskRequest
+            + Send
+            + 'static,
         F: Future<Output = anyhow::Result<R>> + Send + 'static,
     {
         let instant = Instant::now();
@@ -644,14 +659,16 @@ where
 
             // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
             let _ = response_channel
-                .try_send(task_request(Some(response), request_id))
+                .try_send(task_request(Ok(response), request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
         if result.is_err() {
+            // TODO[AC]: return better error code
+            let res = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
-                .send_response_msg(request_id, response_sender(None));
+                .send_response_msg(request_id, response_sender(res));
         }
 
         Ok(())
@@ -680,10 +697,13 @@ where
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
         // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+        // TODO[AC] Use more meaningful error codes
         if tx_ids.len() > self.max_txs_per_request {
             self.p2p_service.send_response_msg(
                 request_id,
-                ResponseMessage::TxPoolFullTransactions(None),
+                ResponseMessage::TxPoolFullTransactions(Err(
+                    ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+                )),
             )?;
             return Ok(());
         }
