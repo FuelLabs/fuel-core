@@ -26,6 +26,7 @@ use fuel_core_types::{
         Bytes8,
     },
     fuel_types::BlockHeight,
+    fuel_vm::double_key,
     services::txpool::TransactionStatus,
 };
 use std::{
@@ -33,12 +34,9 @@ use std::{
     mem::size_of,
 };
 
-const BALANCES_KEY_SIZE: usize = Address::LEN + AssetId::LEN;
-
 type Amount = u64;
 
-// TODO[RC]: Maybe use: macro_rules! double_key {
-pub type BalancesKey = [u8; Address::LEN + AssetId::LEN];
+double_key!(BalancesKey, Address, address, AssetId, asset_id);
 
 /// These table stores the balances of asset id per owner.
 pub struct Balances;
@@ -102,22 +100,14 @@ mod tests {
             let new_balance = current_balance.unwrap_or(0) + amount;
 
             let db = self.database.off_chain_mut();
-
-            let mut key = [0; Address::LEN + AssetId::LEN];
-            key[0..Address::LEN].copy_from_slice(owner.as_ref());
-            key[Address::LEN..].copy_from_slice(asset_id.as_ref());
-
+            let key = BalancesKey::new(owner, asset_id);
             let _ = StorageMutate::<Balances>::insert(db, &key, &new_balance)
                 .expect("couldn't store test asset");
         }
 
         pub fn query_balance(&self, owner: &Address, asset_id: &AssetId) -> Option<u64> {
             let db = self.database.off_chain();
-
-            let mut key = [0; Address::LEN + AssetId::LEN];
-            key[0..Address::LEN].copy_from_slice(owner.as_ref());
-            key[Address::LEN..].copy_from_slice(asset_id.as_ref());
-
+            let key = BalancesKey::new(owner, asset_id);
             let result = StorageInspect::<Balances>::get(db, &key).unwrap();
 
             result.map(|r| r.into_owned())
@@ -129,11 +119,8 @@ mod tests {
             let mut key_prefix = owner.as_ref().to_vec();
             db.entries::<Balances>(Some(key_prefix), IterDirection::Forward)
                 .map(|asset| {
-                    let asset = asset.unwrap();
-                    let asset_id =
-                        AssetId::from_bytes_ref_checked(&asset.key[AssetId::LEN..])
-                            .copied()
-                            .expect("incorrect bytes");
+                    let asset = asset.expect("TODO[RC]: Fixme");
+                    let asset_id = asset.key.asset_id().clone();
                     let balance = asset.value;
                     (asset_id, balance)
                 })
