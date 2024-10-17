@@ -95,6 +95,15 @@ pub mod state;
 pub mod storage;
 pub mod transactions;
 
+// TODO[RC]: Perhaps move to the new "indexation" module if indexation related structs grow too big.
+#[derive(
+    Copy, Clone, Debug, serde::Serialize, serde::Deserialize, Hash, Eq, PartialEq,
+)]
+pub(crate) enum IndexationType {
+    Balances,
+    CoinsToSpend,
+}
+
 #[derive(Default, Debug, Copy, Clone)]
 pub struct GenesisStage;
 
@@ -507,7 +516,7 @@ where
                     version: Description::version(),
                     height: new_height,
                     // TODO[RC]: This value must NOT be updated here.
-                    balances_indexation_progress: Default::default(),
+                    indexation_progress: Default::default(),
                 },
             )?;
 
@@ -932,7 +941,7 @@ mod tests {
                     &DatabaseMetadata::<DaBlockHeight>::V2 {
                         version: Default::default(),
                         height: Default::default(),
-                        balances_indexation_progress: Default::default(),
+                        indexation_progress: Default::default(),
                     },
                 )
                 .unwrap();
@@ -1007,7 +1016,7 @@ mod tests {
                 &DatabaseMetadata::<DaBlockHeight>::V2 {
                     version: Default::default(),
                     height: Default::default(),
-                    balances_indexation_progress: Default::default(),
+                    indexation_progress: Default::default(),
                 },
             );
 

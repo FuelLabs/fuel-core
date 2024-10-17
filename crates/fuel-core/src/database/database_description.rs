@@ -4,6 +4,9 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
+use std::collections::HashMap;
+
+use super::IndexationType;
 
 pub mod gas_price;
 pub mod off_chain;
@@ -68,7 +71,7 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 }
 
 /// The metadata of the database contains information about the version and its height.
-#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum DatabaseMetadata<Height> {
     V1 {
         version: u32,
@@ -77,7 +80,7 @@ pub enum DatabaseMetadata<Height> {
     V2 {
         version: u32,
         height: Height,
-        balances_indexation_progress: Height,
+        indexation_progress: HashMap<IndexationType, Height>,
     },
 }
 
@@ -99,13 +102,16 @@ impl<Height> DatabaseMetadata<Height> {
     }
 
     /// Returns the height of the database.
-    pub fn balances_indexation_progress(&self) -> Option<&Height> {
+    pub fn balances_indexation_progress(
+        &self,
+        indexation_type: IndexationType,
+    ) -> Option<&Height> {
         match self {
             Self::V1 { height, .. } => None,
             Self::V2 {
-                balances_indexation_progress,
+                indexation_progress,
                 ..
-            } => Some(balances_indexation_progress),
+            } => indexation_progress.get(&indexation_type),
         }
     }
 }

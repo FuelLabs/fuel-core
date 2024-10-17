@@ -74,7 +74,7 @@ where
                 let new_metadata = DatabaseMetadata::V2 {
                     version: *version + 1,
                     height: *height,
-                    balances_indexation_progress: Default::default(),
+                    indexation_progress: Default::default(),
                 };
                 info!("Migrating metadata from V1 to version V2...");
                 dbg!(&new_metadata);
@@ -84,11 +84,7 @@ where
                 info!("...Migrated!");
                 Ok(())
             }
-            DatabaseMetadata::V2 {
-                version,
-                height,
-                balances_indexation_progress,
-            } => return Ok(()),
+            DatabaseMetadata::V2 { .. } => return Ok(()),
         }
     }
 }
