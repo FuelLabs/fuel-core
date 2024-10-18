@@ -91,7 +91,9 @@ impl Default for TxPoolMetrics {
         registry.register(
             "txpool_insert_transaction_time_milliseconds",
             "The time it took to insert a transaction in the txpool in milliseconds",
-            metrics.transaction_insertion_time_in_thread_pool_milliseconds.clone(),
+            metrics
+                .transaction_insertion_time_in_thread_pool_milliseconds
+                .clone(),
         );
 
         metrics
