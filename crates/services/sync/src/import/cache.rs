@@ -34,6 +34,16 @@ pub enum CachedDataBatch {
     None(Range<u32>),
 }
 
+impl CachedDataBatch {
+    pub fn is_range_empty(&self) -> bool {
+        match self {
+            CachedDataBatch::None(range) => range.is_empty(),
+            CachedDataBatch::Blocks(batch) => batch.range.is_empty(),
+            CachedDataBatch::Headers(batch) => batch.range.is_empty(),
+        }
+    }
+}
+
 impl Cache {
     pub fn new() -> Self {
         Self(SharedMutex::new(BTreeMap::new()))
@@ -61,148 +71,177 @@ impl Cache {
         let end = (*range.end()).saturating_add(1);
         let chunk_size_u32 = u32::try_from(max_chunk_size)
             .expect("The size of the chunk can't exceed `u32`");
-        let cache_iter: Vec<(u32, CachedData)> = {
-            let lock = self.0.lock();
-            lock.range(range.clone())
-                .map(|(k, v)| (*k, v.clone()))
-                .collect()
-        };
+
+        let cache_iter = self.collect_cache_data(range.clone());
         let mut current_height = *range.start();
-        // Build a stream of futures that will be splitted in chunks of available data and missing data to fetch with a maximum size of `max_chunk_size` for each chunk.
         let mut chunks = Vec::new();
         let mut current_chunk = CachedDataBatch::None(0..0);
+
         for (height, data) in cache_iter {
             if height == current_height {
-                current_chunk = match (current_chunk, data) {
-                    (CachedDataBatch::None(_), CachedData::Header(data)) => {
-                        CachedDataBatch::Headers(Batch::new(
-                            None,
-                            height..height.saturating_add(1),
-                            vec![data],
-                        ))
-                    }
-                    (CachedDataBatch::None(_), CachedData::Block(data)) => {
-                        CachedDataBatch::Blocks(Batch::new(
-                            None,
-                            height..height.saturating_add(1),
-                            vec![data],
-                        ))
-                    }
-                    (CachedDataBatch::Headers(mut batch), CachedData::Header(data)) => {
-                        batch.range = batch.range.start..height.saturating_add(1);
-                        batch.results.push(data);
-                        CachedDataBatch::Headers(batch)
-                    }
-                    (CachedDataBatch::Blocks(mut batch), CachedData::Block(data)) => {
-                        batch.range = batch.range.start..height.saturating_add(1);
-                        batch.results.push(data);
-                        CachedDataBatch::Blocks(batch)
-                    }
-                    (
-                        CachedDataBatch::Headers(headers_batch),
-                        CachedData::Block(block),
-                    ) => {
-                        chunks.push(CachedDataBatch::Headers(headers_batch));
-                        CachedDataBatch::Blocks(Batch::new(
-                            None,
-                            height..height.saturating_add(1),
-                            vec![block],
-                        ))
-                    }
-                    (
-                        CachedDataBatch::Blocks(blocks_batch),
-                        CachedData::Header(header),
-                    ) => {
-                        chunks.push(CachedDataBatch::Blocks(blocks_batch));
-                        CachedDataBatch::Headers(Batch::new(
-                            None,
-                            height..height.saturating_add(1),
-                            vec![header],
-                        ))
-                    }
-                };
-                // Check the chunk limit and push the current chunk if it is full.
-                current_chunk = match current_chunk {
-                    CachedDataBatch::Headers(batch) => {
-                        if batch.results.len() >= max_chunk_size {
-                            chunks.push(CachedDataBatch::Headers(batch));
-                            CachedDataBatch::None(current_height..current_height)
-                        } else {
-                            CachedDataBatch::Headers(batch)
-                        }
-                    }
-                    CachedDataBatch::Blocks(batch) => {
-                        if batch.results.len() >= max_chunk_size {
-                            chunks.push(CachedDataBatch::Blocks(batch));
-                            CachedDataBatch::None(current_height..current_height)
-                        } else {
-                            CachedDataBatch::Blocks(batch)
-                        }
-                    }
-                    CachedDataBatch::None(range) => CachedDataBatch::None(range),
-                }
+                current_chunk =
+                    self.handle_current_chunk(current_chunk, data, height, &mut chunks);
+                current_chunk = self.check_chunk_limit(
+                    current_chunk,
+                    max_chunk_size,
+                    &mut chunks,
+                    current_height,
+                );
             } else {
-                // Push the current chunk of cached if it is not empty.
-                match current_chunk {
-                    CachedDataBatch::Headers(batch) => {
-                        chunks.push(CachedDataBatch::Headers(batch));
-                    }
-                    CachedDataBatch::Blocks(batch) => {
-                        chunks.push(CachedDataBatch::Blocks(batch));
-                    }
-                    CachedDataBatch::None(_) => {}
-                }
-
-                // Push the missing chunks.
-                let missing_chunks = (current_height..height)
-                    .step_by(max_chunk_size)
-                    .map(move |chunk_start| {
-                        let block_end =
-                            chunk_start.saturating_add(chunk_size_u32).min(end);
-                        CachedDataBatch::None(chunk_start..block_end)
-                    });
-                chunks.extend(missing_chunks);
-
-                // Prepare the next chunk.
-                current_chunk = match data {
-                    CachedData::Header(data) => CachedDataBatch::Headers(Batch::new(
-                        None,
-                        height..height.saturating_add(1),
-                        vec![data],
-                    )),
-                    CachedData::Block(data) => CachedDataBatch::Blocks(Batch::new(
-                        None,
-                        height..height.saturating_add(1),
-                        vec![data],
-                    )),
-                };
+                self.push_current_chunk(&mut chunks, current_chunk);
+                self.push_missing_chunks(
+                    &mut chunks,
+                    current_height,
+                    height,
+                    max_chunk_size,
+                    chunk_size_u32,
+                    end,
+                );
+                current_chunk = self.prepare_next_chunk(data, height);
             }
             current_height = height.saturating_add(1);
         }
-        // Push the last chunk of cached if it is not empty.
-        match current_chunk {
-            CachedDataBatch::Headers(batch) => {
-                chunks.push(CachedDataBatch::Headers(batch));
-            }
-            CachedDataBatch::Blocks(batch) => {
-                chunks.push(CachedDataBatch::Blocks(batch));
-            }
-            CachedDataBatch::None(_) => {}
-        }
-        // Push the last missing chunk.
-        if current_height <= *range.end() {
-            // Include the last height.
-            let missing_chunks =
-                (current_height..end)
-                    .step_by(max_chunk_size)
-                    .map(move |chunk_start| {
-                        let block_end =
-                            chunk_start.saturating_add(chunk_size_u32).min(end);
-                        CachedDataBatch::None(chunk_start..block_end)
-                    });
-            chunks.extend(missing_chunks);
+
+        self.push_current_chunk(&mut chunks, current_chunk);
+        if current_height <= end {
+            self.push_missing_chunks(
+                &mut chunks,
+                current_height,
+                end,
+                max_chunk_size,
+                chunk_size_u32,
+                end,
+            );
         }
         futures::stream::iter(chunks)
+    }
+
+    fn collect_cache_data(&self, range: RangeInclusive<u32>) -> Vec<(u32, CachedData)> {
+        let lock = self.0.lock();
+        lock.range(range).map(|(k, v)| (*k, v.clone())).collect()
+    }
+
+    fn handle_current_chunk(
+        &self,
+        current_chunk: CachedDataBatch,
+        data: CachedData,
+        height: u32,
+        chunks: &mut Vec<CachedDataBatch>,
+    ) -> CachedDataBatch {
+        match (current_chunk, data) {
+            (CachedDataBatch::None(_), CachedData::Header(data)) => {
+                CachedDataBatch::Headers(Batch::new(
+                    None,
+                    height..height.saturating_add(1),
+                    vec![data],
+                ))
+            }
+            (CachedDataBatch::None(_), CachedData::Block(data)) => {
+                CachedDataBatch::Blocks(Batch::new(
+                    None,
+                    height..height.saturating_add(1),
+                    vec![data],
+                ))
+            }
+            (CachedDataBatch::Headers(mut batch), CachedData::Header(data)) => {
+                batch.range = batch.range.start..height.saturating_add(1);
+                batch.results.push(data);
+                CachedDataBatch::Headers(batch)
+            }
+            (CachedDataBatch::Blocks(mut batch), CachedData::Block(data)) => {
+                batch.range = batch.range.start..height.saturating_add(1);
+                batch.results.push(data);
+                CachedDataBatch::Blocks(batch)
+            }
+            (CachedDataBatch::Headers(headers_batch), CachedData::Block(block)) => {
+                chunks.push(CachedDataBatch::Headers(headers_batch));
+                CachedDataBatch::Blocks(Batch::new(
+                    None,
+                    height..height.saturating_add(1),
+                    vec![block],
+                ))
+            }
+            (CachedDataBatch::Blocks(blocks_batch), CachedData::Header(header)) => {
+                chunks.push(CachedDataBatch::Blocks(blocks_batch));
+                CachedDataBatch::Headers(Batch::new(
+                    None,
+                    height..height.saturating_add(1),
+                    vec![header],
+                ))
+            }
+        }
+    }
+
+    fn check_chunk_limit(
+        &self,
+        current_chunk: CachedDataBatch,
+        max_chunk_size: usize,
+        chunks: &mut Vec<CachedDataBatch>,
+        current_height: u32,
+    ) -> CachedDataBatch {
+        match current_chunk {
+            CachedDataBatch::Headers(batch) => {
+                if batch.results.len() >= max_chunk_size {
+                    chunks.push(CachedDataBatch::Headers(batch));
+                    CachedDataBatch::None(current_height..current_height)
+                } else {
+                    CachedDataBatch::Headers(batch)
+                }
+            }
+            CachedDataBatch::Blocks(batch) => {
+                if batch.results.len() >= max_chunk_size {
+                    chunks.push(CachedDataBatch::Blocks(batch));
+                    CachedDataBatch::None(current_height..current_height)
+                } else {
+                    CachedDataBatch::Blocks(batch)
+                }
+            }
+            CachedDataBatch::None(range) => CachedDataBatch::None(range),
+        }
+    }
+
+    fn push_current_chunk(
+        &self,
+        chunks: &mut Vec<CachedDataBatch>,
+        current_chunk: CachedDataBatch,
+    ) {
+        if !current_chunk.is_range_empty() {
+            chunks.push(current_chunk);
+        }
+    }
+
+    fn push_missing_chunks(
+        &self,
+        chunks: &mut Vec<CachedDataBatch>,
+        current_height: u32,
+        height: u32,
+        max_chunk_size: usize,
+        chunk_size_u32: u32,
+        end: u32,
+    ) {
+        let missing_chunks =
+            (current_height..height)
+                .step_by(max_chunk_size)
+                .map(move |chunk_start| {
+                    let block_end = chunk_start.saturating_add(chunk_size_u32).min(end);
+                    CachedDataBatch::None(chunk_start..block_end)
+                });
+        chunks.extend(missing_chunks);
+    }
+
+    fn prepare_next_chunk(&self, data: CachedData, height: u32) -> CachedDataBatch {
+        match data {
+            CachedData::Header(data) => CachedDataBatch::Headers(Batch::new(
+                None,
+                height..height.saturating_add(1),
+                vec![data],
+            )),
+            CachedData::Block(data) => CachedDataBatch::Blocks(Batch::new(
+                None,
+                height..height.saturating_add(1),
+                vec![data],
+            )),
+        }
     }
 
     pub fn remove_element(&mut self, height: &u32) {
