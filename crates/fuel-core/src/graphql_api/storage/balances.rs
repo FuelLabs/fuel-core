@@ -51,6 +51,14 @@ impl Amount {
     pub fn new(coins: u64, messages: u64) -> Self {
         Self { coins, messages }
     }
+
+    pub fn coins(&self) -> u64 {
+        self.coins
+    }
+
+    pub fn messages(&self) -> u64 {
+        self.messages
+    }
 }
 
 double_key!(BalancesKey, Address, address, AssetId, asset_id);

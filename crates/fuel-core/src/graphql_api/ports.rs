@@ -71,6 +71,8 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
+    fn balance(&self, owner: &Address, asset_id: &AssetId) -> StorageResult<u64>;
+
     fn owned_coins_ids(
         &self,
         owner: &Address,
