@@ -326,7 +326,7 @@ where
                         range,
                         results,
                     } = batch;
-                    // clean cache of all blocks that are in the range
+
                     let mut done = vec![];
                     let mut shutdown = shutdown.clone();
                     for sealed_block in results {
