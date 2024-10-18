@@ -442,13 +442,9 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
-    dbg!(&changes);
-
     // Gets the all new heights from the `changes`
     let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
-
-    dbg!(&new_heights);
 
     // Changes for each block should be committed separately.
     // If we have more than one height, it means we are mixing commits

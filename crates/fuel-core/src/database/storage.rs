@@ -43,7 +43,6 @@ where
         );
         let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
         let changes = transaction.into_changes();
-        dbg!(&changes);
         self.commit_changes_forced(changes)?;
         Ok(prev)
     }
@@ -68,7 +67,6 @@ where
         );
         let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
         let changes = transaction.into_changes();
-        dbg!(&changes);
         self.commit_changes(changes)?;
         Ok(prev)
     }
