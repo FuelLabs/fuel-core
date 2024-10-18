@@ -17,7 +17,7 @@ use fuel_core_sync::state::State;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
-async fn execute_import(import: PressureImport, shutdown: &mut StateWatcher) {
+async fn execute_import(mut import: PressureImport, shutdown: &mut StateWatcher) {
     import.import(shutdown).await.unwrap();
 }
 
@@ -50,7 +50,7 @@ fn bench_imports(c: &mut Criterion) {
                     let shared_count = SharedCounts::new(Default::default());
                     let state = State::new(None, n);
                     let shared_state = SharedMutex::new(state);
-                    let (import, _tx, mut shutdown) = provision_import_test(
+                    let (mut import, _tx, mut shutdown) = provision_import_test(
                         shared_count.clone(),
                         shared_state,
                         durations,
