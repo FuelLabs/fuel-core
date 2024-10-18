@@ -143,7 +143,7 @@ impl CombinedDatabase {
         // })?;
         // unchecked_off_chain.migrate_metadata()?;
 
-        self.migrate_metadata()?;
+        self.off_chain.migrate_metadata()?;
         Ok(())
     }
 
