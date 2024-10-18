@@ -5,6 +5,7 @@ use crate::database::{
     },
     Database,
     Error as DatabaseError,
+    IndexationType,
 };
 use fuel_core_storage::{
     blueprint::plain::Plain,
@@ -71,10 +72,14 @@ where
 
         match current_metadata.as_ref() {
             DatabaseMetadata::V1 { version, height } => {
+                let initial_progress = [
+                    (IndexationType::Balances, Description::Height::default()),
+                    (IndexationType::CoinsToSpend, Description::Height::default()),
+                ];
                 let new_metadata = DatabaseMetadata::V2 {
                     version: *version + 1,
                     height: *height,
-                    indexation_progress: Default::default(),
+                    indexation_progress: initial_progress.into_iter().collect(),
                 };
                 info!("Migrating metadata from V1 to version V2...");
                 dbg!(&new_metadata);
