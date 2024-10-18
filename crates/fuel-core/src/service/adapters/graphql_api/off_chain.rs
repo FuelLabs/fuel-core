@@ -16,10 +16,16 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
+    graphql_api::storage::{
+        balances::{
+            Balances,
+            BalancesKey,
+        },
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use fuel_core_storage::{
@@ -51,6 +57,7 @@ use fuel_core_types::{
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         Address,
+        AssetId,
         Bytes32,
         ContractId,
         Salt,
@@ -186,6 +193,13 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.message_is_spent(nonce)
+    }
+
+    fn balance(&self, owner: &Address, asset_id: &AssetId) -> StorageResult<u64> {
+        self.storage_as_ref::<Balances>()
+            .get(&BalancesKey::new(owner, asset_id))?
+            .map(|amount| amount.coins())
+            .ok_or(not_found!(Balances))
     }
 }
 

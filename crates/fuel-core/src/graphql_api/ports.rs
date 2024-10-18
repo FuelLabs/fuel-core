@@ -71,6 +71,8 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
+    fn balance(&self, owner: &Address, asset_id: &AssetId) -> StorageResult<u64>;
+
     fn owned_coins_ids(
         &self,
         owner: &Address,
@@ -273,6 +275,7 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
+            balances::Balances,
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,
@@ -327,6 +330,7 @@ pub mod worker {
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
+        + StorageMutate<Balances, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>

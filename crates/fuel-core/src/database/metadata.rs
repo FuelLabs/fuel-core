@@ -5,17 +5,28 @@ use crate::database::{
     },
     Database,
     Error as DatabaseError,
+    IndexationType,
 };
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     structured_storage::TableWithBlueprint,
+    transactional::{
+        Changes,
+        ConflictPolicy,
+        Modifiable,
+        StorageTransaction,
+    },
     Error as StorageError,
     Mappable,
     Result as StorageResult,
+    StorageAsMut,
     StorageAsRef,
     StorageInspect,
+    StorageMutate,
+    StorageMutateForced,
 };
+use tracing::info;
 
 /// The table that stores all metadata about the database.
 pub struct MetadataTable<Description>(core::marker::PhantomData<Description>);
@@ -39,6 +50,47 @@ where
 
     fn column() -> Self::Column {
         Description::metadata_column()
+    }
+}
+
+impl<Description, Stage> Database<Description, Stage>
+where
+    Description: DatabaseDescription,
+    Self: StorageInspect<MetadataTable<Description>, Error = StorageError>
+        + StorageMutateForced<MetadataTable<Description>>
+        + Modifiable,
+{
+    // TODO[RC]: Add test covering this.
+    pub fn migrate_metadata(&mut self) -> StorageResult<()> {
+        let Some(current_metadata) =
+            self.storage::<MetadataTable<Description>>().get(&())?
+        else {
+            return Ok(());
+        };
+
+        dbg!(&current_metadata);
+
+        match current_metadata.as_ref() {
+            DatabaseMetadata::V1 { version, height } => {
+                let initial_progress = [
+                    (IndexationType::Balances, Description::Height::default()),
+                    (IndexationType::CoinsToSpend, Description::Height::default()),
+                ];
+                let new_metadata = DatabaseMetadata::V2 {
+                    version: *version + 1,
+                    height: *height,
+                    indexation_progress: initial_progress.into_iter().collect(),
+                };
+                info!("Migrating metadata from V1 to version V2...");
+                dbg!(&new_metadata);
+                let x = self.storage_as_mut::<MetadataTable<Description>>();
+                x.replace_forced(&(), &new_metadata)?;
+
+                info!("...Migrated!");
+                Ok(())
+            }
+            DatabaseMetadata::V2 { .. } => return Ok(()),
+        }
     }
 }
 

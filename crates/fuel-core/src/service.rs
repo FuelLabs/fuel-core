@@ -124,6 +124,7 @@ impl FuelService {
 
         // initialize state
         tracing::info!("Initializing database");
+        database.migrate_metadata()?;
         database.check_version()?;
 
         Self::make_database_compatible_with_config(
