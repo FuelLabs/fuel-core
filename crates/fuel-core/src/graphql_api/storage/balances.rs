@@ -47,6 +47,12 @@ pub struct Amount {
     messages: u64,
 }
 
+impl Amount {
+    pub fn new(coins: u64, messages: u64) -> Self {
+        Self { coins, messages }
+    }
+}
+
 double_key!(BalancesKey, Address, address, AssetId, asset_id);
 impl Distribution<BalancesKey> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BalancesKey {

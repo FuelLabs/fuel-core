@@ -1,9 +1,15 @@
 use super::{
     da_compression::da_compress_block,
-    storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
+    storage::{
+        balances::{
+            Amount,
+            BalancesKey,
+        },
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use crate::{
@@ -13,6 +19,7 @@ use crate::{
             worker::OffChainDatabaseTransaction,
         },
         storage::{
+            balances::Balances,
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -94,6 +101,7 @@ use std::{
     borrow::Cow,
     ops::Deref,
 };
+use tracing::info;
 
 #[cfg(test)]
 mod tests;
@@ -216,6 +224,18 @@ where
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .insert(&coin_by_owner, &())?;
+
+                let address = coin.owner;
+                let asset_id = coin.asset_id;
+                let balances_key = BalancesKey::new(&address, &asset_id);
+
+                // TODO[RC]: Do not overwrite values here, update them.
+                let amount = Amount::new(coin.amount, 0);
+                info!("XXX - inserting amount: {:?}...", amount);
+                block_st_transaction
+                    .storage_as_mut::<Balances>()
+                    .insert(&balances_key, &amount);
+                info!("...inserted!");
             }
             Event::CoinConsumed(coin) => {
                 let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);

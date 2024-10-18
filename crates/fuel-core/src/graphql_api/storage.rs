@@ -36,7 +36,7 @@ use fuel_core_types::{
 };
 use statistic::StatisticTable;
 
-mod balances;
+pub mod balances;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
