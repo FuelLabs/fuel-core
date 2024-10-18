@@ -16,6 +16,8 @@ pub mod request_response;
 pub mod service;
 mod utils;
 
+mod cached_view;
+
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;
 

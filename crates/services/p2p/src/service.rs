@@ -1,4 +1,5 @@
 use crate::{
+    cached_view::CachedView,
     codecs::postcard::PostcardCodec,
     config::{
         Config,
@@ -410,6 +411,11 @@ pub struct Task<P, V, B, T> {
     heartbeat_max_time_since_last: Duration,
     next_check_time: Instant,
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
+    // cached view
+    cached_view: Arc<CachedView>,
+    // milliseconds wait time between cache reset
+    cache_reset_interval: Duration,
+    next_cache_reset_time: Instant,
 }
 
 #[derive(Default, Clone)]
@@ -442,7 +448,7 @@ impl<V, T> UninitializedTask<V, SharedState, T> {
     }
 }
 
-impl<P: TaskP2PService, V, B: Broadcast, T> Task<P, V, B, T> {
+impl<P: TaskP2PService, V: AtomicView, B: Broadcast, T> Task<P, V, B, T> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_all_peer_info() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
@@ -491,6 +497,7 @@ where
     V: AtomicView + 'static,
     V::LatestView: P2pDb,
     T: TxPool + 'static,
+    B: Send,
 {
     fn update_metrics<U>(&self, update_fn: U)
     where
@@ -530,8 +537,9 @@ where
         max_len: usize,
     ) -> anyhow::Result<()>
     where
-        DbLookUpFn:
-            Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
+        DbLookUpFn: Fn(&V::LatestView, &Arc<CachedView>, Range<u32>) -> anyhow::Result<Option<R>>
+            + Send
+            + 'static,
         ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
         R: Send + 'static,
@@ -558,17 +566,21 @@ where
         }
 
         let view = self.view_provider.latest_view()?;
-        let result = self.db_heavy_task_processor.try_spawn(move || {
-            if instant.elapsed() > timeout {
-                tracing::warn!("Request timed out");
-                return;
+        let result = self.db_heavy_task_processor.try_spawn({
+            let cached_view = self.cached_view.clone();
+            move || {
+                if instant.elapsed() > timeout {
+                    tracing::warn!("Request timed out");
+                    return;
+                }
+
+                let response =
+                    db_lookup(&view, &cached_view, range.clone()).ok().flatten();
+
+                let _ = response_channel
+                    .try_send(task_request(response, request_id))
+                    .trace_err("Failed to send response to the request channel");
             }
-
-            let response = db_lookup(&view, range.clone()).ok().flatten();
-
-            let _ = response_channel
-                .try_send(task_request(response, request_id))
-                .trace_err("Failed to send response to the request channel");
         });
 
         if result.is_err() {
@@ -589,7 +601,11 @@ where
             range,
             request_id,
             ResponseMessage::Transactions,
-            |view, range| view.get_transactions(range).map_err(anyhow::Error::from),
+            |view, cached_view, range| {
+                cached_view
+                    .get_transactions(view, range)
+                    .map_err(anyhow::Error::from)
+            },
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
                 request_id,
@@ -607,7 +623,11 @@ where
             range,
             request_id,
             ResponseMessage::SealedHeaders,
-            |view, range| view.get_sealed_headers(range).map_err(anyhow::Error::from),
+            |view, cached_view, range| {
+                cached_view
+                    .get_sealed_headers(view, range)
+                    .map_err(anyhow::Error::from)
+            },
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
                 request_id,
@@ -749,6 +769,7 @@ where
             heartbeat_max_time_since_last,
             database_read_threads,
             tx_pool_threads,
+            metrics,
             ..
         } = config;
 
@@ -781,6 +802,11 @@ where
             AsyncProcessor::new("P2P_TxPoolLookUpProcessor", tx_pool_threads, 32)?;
         let request_sender = broadcast.request_sender.clone();
 
+        let cache_reset_interval = Duration::from_millis(10_000);
+        let next_cache_reset_time = Instant::now()
+            .checked_add(cache_reset_interval)
+            .expect("The cache reset interval should be small enough to do frequently");
+
         let task = Task {
             chain_id,
             response_timeout,
@@ -800,6 +826,9 @@ where
             heartbeat_max_time_since_last,
             next_check_time,
             heartbeat_peer_reputation_config,
+            cached_view: Arc::new(CachedView::new(metrics)),
+            cache_reset_interval,
+            next_cache_reset_time,
         };
         Ok(task)
     }
@@ -946,6 +975,12 @@ where
                     }
                 }
                 self.next_check_time += self.heartbeat_check_interval;
+            }
+            _ = tokio::time::sleep_until(self.next_cache_reset_time) => {
+                should_continue = true;
+                tracing::debug!("Resetting req/res protocol cache");
+                self.cached_view.clear();
+                self.next_cache_reset_time += self.cache_reset_interval;
             }
         }
 
@@ -1577,6 +1612,9 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
+            cached_view: Arc::new(CachedView::new(false)),
+            cache_reset_interval: Duration::from_secs(0),
+            next_cache_reset_time: Instant::now(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1667,6 +1705,9 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
+            cached_view: Arc::new(CachedView::new(false)),
+            cache_reset_interval: Duration::from_secs(0),
+            next_cache_reset_time: Instant::now(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1729,6 +1770,9 @@ pub mod tests {
             heartbeat_max_time_since_last: Default::default(),
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: Default::default(),
+            cached_view: Arc::new(CachedView::new(false)),
+            cache_reset_interval: Duration::from_secs(0),
+            next_cache_reset_time: Instant::now(),
         };
         let mut watcher = StateWatcher::started();
         // End of initialization
