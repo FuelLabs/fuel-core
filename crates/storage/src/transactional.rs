@@ -112,6 +112,13 @@ impl<S> StorageTransaction<S> {
         self.inner.changes
     }
 
+    /// Returns the storage and changes to it.
+    pub fn into_inner(self) -> (S, Changes) {
+        let storage = self.inner.storage;
+        let changes = self.inner.changes;
+        (storage, changes)
+    }
+
     /// Resets the changes to the storage.
     pub fn reset_changes(&mut self) {
         self.inner.changes = Default::default();
@@ -259,10 +266,7 @@ pub trait WriteTransaction {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self>;
 }
 
-impl<S> WriteTransaction for S
-where
-    S: Modifiable,
-{
+impl<S> WriteTransaction for S {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(
             self,

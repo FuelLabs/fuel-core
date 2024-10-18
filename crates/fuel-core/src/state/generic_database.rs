@@ -44,7 +44,7 @@ impl<Storage> GenericDatabase<Storage> {
     }
 
     pub fn into_inner(self) -> Storage {
-        self.storage.into_inner()
+        self.storage.into_storage()
     }
 }
 
