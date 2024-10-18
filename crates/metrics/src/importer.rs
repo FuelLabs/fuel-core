@@ -74,7 +74,7 @@ impl Default for ImporterMetrics {
         registry.register(
             "importer_gas_price_for_block",
             "The gas prices used in a block",
-            transactions_per_block.clone(),
+            gas_price.clone(),
         );
 
         Self {
