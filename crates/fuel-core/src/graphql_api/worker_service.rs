@@ -229,9 +229,16 @@ where
                 let asset_id = coin.asset_id;
                 let balances_key = BalancesKey::new(&address, &asset_id);
 
-                // TODO[RC]: Do not overwrite values here, update them.
-                let amount = Amount::new(coin.amount, 0);
-                info!("XXX - inserting amount: {:?}...", amount);
+                // TODO[RC]: Use some separate, testable function for this and also take care of "messages"
+                let current_amount = block_st_transaction
+                    .storage::<Balances>()
+                    .get(&balances_key)?
+                    .map(|amount| amount.coins())
+                    .unwrap_or_default();
+
+                let amount = Amount::new(current_amount.saturating_add(coin.amount), 0);
+
+                info!("XXX - current amount: {current_amount}, new amount: {},  total new amount: {:?}...", coin.amount, amount);
                 block_st_transaction
                     .storage_as_mut::<Balances>()
                     .insert(&balances_key, &amount);
