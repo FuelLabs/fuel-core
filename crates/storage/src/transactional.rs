@@ -266,10 +266,7 @@ pub trait WriteTransaction {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self>;
 }
 
-impl<S> WriteTransaction for S
-where
-    S: Modifiable,
-{
+impl<S> WriteTransaction for S {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(
             self,
