@@ -6,9 +6,8 @@ use crate::{
             ConsensusProvider,
             TxPool,
         },
-        ports::OffChainDatabase,
+        query_costs,
         IntoApiResult,
-        QUERY_COSTS,
     },
     graphql_api::{
         database::ReadView,
@@ -16,9 +15,6 @@ use crate::{
     },
     query::{
         transaction_status_change,
-        BlockQueryData,
-        SimpleTransactionData,
-        TransactionQueryData,
         TxnStatusChangeState,
     },
     schema::{
@@ -71,12 +67,10 @@ use futures::{
     Stream,
     TryStreamExt,
 };
-use itertools::Itertools;
 use std::{
     borrow::Cow,
     iter,
 };
-use tokio_stream::StreamExt;
 use types::{
     DryRunTransactionExecutionStatus,
     Transaction,
@@ -93,7 +87,7 @@ pub struct TxQuery;
 
 #[Object]
 impl TxQuery {
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn transaction(
         &self,
         ctx: &Context<'_>,
@@ -115,7 +109,7 @@ impl TxQuery {
 
     // We assume that each block has 100 transactions.
     #[graphql(complexity = "{\
-        (QUERY_COSTS.tx_get + child_complexity) \
+        (query_costs().tx_get + child_complexity) \
         * (first.unwrap_or_default() as usize + last.unwrap_or_default() as usize)
     }")]
     async fn transactions(
@@ -128,7 +122,9 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
+        use futures::stream::StreamExt;
         let query = ctx.read_view()?;
+        let query_ref = query.as_ref();
         crate::schema::query_pagination(
             after,
             before,
@@ -137,41 +133,58 @@ impl TxQuery {
             |start: &Option<SortedTxCursor>, direction| {
                 let start = *start;
                 let block_id = start.map(|sorted| sorted.block_height);
-                let all_block_ids = query.compressed_blocks(block_id, direction);
+                let compressed_blocks = query.compressed_blocks(block_id, direction);
 
-                let all_txs = all_block_ids
-                    .map(move |block| {
-                        block.map(|fuel_block| {
-                            let (header, mut txs) = fuel_block.into_inner();
+                let all_txs = compressed_blocks
+                    .map_ok(move |fuel_block| {
+                        let (header, mut txs) = fuel_block.into_inner();
 
-                            if direction == IterDirection::Reverse {
-                                txs.reverse();
-                            }
-
-                            txs.into_iter().zip(iter::repeat(*header.height()))
-                        })
-                    })
-                    .flatten_ok()
-                    .map(|result| {
-                        result.map(|(tx_id, block_height)| {
-                            SortedTxCursor::new(block_height, tx_id.into())
-                        })
-                    })
-                    .skip_while(move |result| {
-                        if let Ok(sorted) = result {
-                            if let Some(start) = start {
-                                return sorted != &start
-                            }
+                        if direction == IterDirection::Reverse {
+                            txs.reverse();
                         }
-                        false
-                    });
-                let all_txs = all_txs.map(|result: StorageResult<SortedTxCursor>| {
-                    result.and_then(|sorted| {
-                        let tx = query.transaction(&sorted.tx_id.0)?;
 
-                        Ok((sorted, Transaction::from_tx(sorted.tx_id.0, tx)))
+                        let iter = txs.into_iter().zip(iter::repeat(*header.height()));
+                        futures::stream::iter(iter).map(Ok)
                     })
-                });
+                    .try_flatten()
+                    .map_ok(|(tx_id, block_height)| {
+                        SortedTxCursor::new(block_height, tx_id.into())
+                    })
+                    .try_skip_while(move |sorted| {
+                        let skip = if let Some(start) = start {
+                            sorted != &start
+                        } else {
+                            false
+                        };
+
+                        async move { Ok::<_, StorageError>(skip) }
+                    })
+                    .chunks(query_ref.batch_size)
+                    .map(|chunk| {
+                        use itertools::Itertools;
+
+                        let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                        Ok::<_, StorageError>(chunk)
+                    })
+                    .try_filter_map(move |chunk| {
+                        let async_query = query_ref.clone();
+                        async move {
+                            let tx_ids = chunk
+                                .iter()
+                                .map(|sorted| sorted.tx_id.0)
+                                .collect::<Vec<_>>();
+                            let txs = async_query.transactions(tx_ids).await;
+                            let txs = txs.into_iter().zip(chunk.into_iter()).map(
+                                |(result, sorted)| {
+                                    result.map(|tx| {
+                                        (sorted, Transaction::from_tx(sorted.tx_id.0, tx))
+                                    })
+                                },
+                            );
+                            Ok(Some(futures::stream::iter(txs)))
+                        }
+                    })
+                    .try_flatten();
 
                 Ok(all_txs)
             },
@@ -180,9 +193,9 @@ impl TxQuery {
     }
 
     #[graphql(complexity = "{\
-        QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        query_costs().storage_iterator\
+        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
     }")]
     async fn transactions_by_owner(
         &self,
@@ -194,6 +207,7 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
+        use futures::stream::StreamExt;
         let query = ctx.read_view()?;
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -223,7 +237,7 @@ impl TxQuery {
     }
 
     /// Estimate the predicate gas for the provided transaction
-    #[graphql(complexity = "QUERY_COSTS.estimate_predicates + child_complexity")]
+    #[graphql(complexity = "query_costs().estimate_predicates + child_complexity")]
     async fn estimate_predicates(
         &self,
         ctx: &Context<'_>,
@@ -268,7 +282,7 @@ pub struct TxMutation;
 impl TxMutation {
     /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
     #[graphql(
-        complexity = "QUERY_COSTS.dry_run * txs.len() + child_complexity * txs.len()"
+        complexity = "query_costs().dry_run * txs.len() + child_complexity * txs.len()"
     )]
     async fn dry_run(
         &self,
@@ -320,7 +334,7 @@ impl TxMutation {
     /// Submits transaction to the `TxPool`.
     ///
     /// Returns submitted transaction if the transaction is included in the `TxPool` without problems.
-    #[graphql(complexity = "QUERY_COSTS.submit + child_complexity")]
+    #[graphql(complexity = "query_costs().submit + child_complexity")]
     async fn submit(
         &self,
         ctx: &Context<'_>,
@@ -360,7 +374,7 @@ impl TxStatusSubscription {
     /// then the updates arrive. In such a case the stream will close without
     /// a status. If this occurs the stream can simply be restarted to return
     /// the latest status.
-    #[graphql(complexity = "QUERY_COSTS.status_change + child_complexity")]
+    #[graphql(complexity = "query_costs().status_change + child_complexity")]
     async fn status_change<'a>(
         &self,
         ctx: &'a Context<'a>,
@@ -380,7 +394,7 @@ impl TxStatusSubscription {
     }
 
     /// Submits transaction to the `TxPool` and await either confirmation or failure.
-    #[graphql(complexity = "QUERY_COSTS.submit_and_await + child_complexity")]
+    #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await<'a>(
         &self,
         ctx: &'a Context<'a>,
@@ -388,6 +402,7 @@ impl TxStatusSubscription {
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
+        use tokio_stream::StreamExt;
         let subscription = submit_and_await_status(ctx, tx).await?;
 
         Ok(subscription
@@ -398,7 +413,7 @@ impl TxStatusSubscription {
     /// Submits the transaction to the `TxPool` and returns a stream of events.
     /// Compared to the `submitAndAwait`, the stream also contains `
     /// SubmittedStatus` as an intermediate state.
-    #[graphql(complexity = "QUERY_COSTS.submit_and_await + child_complexity")]
+    #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await_status<'a>(
         &self,
         ctx: &'a Context<'a>,
@@ -416,6 +431,7 @@ async fn submit_and_await_status<'a>(
 ) -> async_graphql::Result<
     impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {
+    use tokio_stream::StreamExt;
     let txpool = ctx.data_unchecked::<TxPool>();
     let params = ctx
         .data_unchecked::<ConsensusProvider>()

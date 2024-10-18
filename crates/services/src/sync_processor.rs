@@ -1,3 +1,7 @@
+use fuel_core_metrics::futures::{
+    metered_future::MeteredFuture,
+    FuturesMetrics,
+};
 use std::sync::Arc;
 use tokio::sync::{
     OwnedSemaphorePermit,
@@ -7,6 +11,7 @@ use tokio::sync::{
 /// A processor that can execute sync tasks with a limit on the number of tasks that can
 /// wait in the queue. The number of threads defines how many tasks can be executed in parallel.
 pub struct SyncProcessor {
+    metric: FuturesMetrics,
     rayon_thread_pool: Option<rayon::ThreadPool>,
     semaphore: Arc<Semaphore>,
 }
@@ -22,6 +27,7 @@ impl SyncProcessor {
     /// Create a new `SyncProcessor` with the given number of threads and the number of pending
     /// tasks.
     pub fn new(
+        metric_name: &str,
         number_of_threads: usize,
         number_of_pending_tasks: usize,
     ) -> anyhow::Result<Self> {
@@ -35,7 +41,9 @@ impl SyncProcessor {
             None
         };
         let semaphore = Arc::new(Semaphore::new(number_of_pending_tasks));
+        let metric = FuturesMetrics::obtain_futures_metrics(metric_name);
         Ok(Self {
+            metric,
             rayon_thread_pool,
             semaphore,
         })
@@ -57,14 +65,17 @@ impl SyncProcessor {
         F: FnOnce() + Send + 'static,
     {
         let permit = reservation.0;
-        if let Some(rayon_thread_pool) = &self.rayon_thread_pool {
-            rayon_thread_pool.spawn_fifo(move || {
-                // When task started its works we can free the space.
-                drop(permit);
-                op()
-            });
-        } else {
+        let sync_future = async move {
+            // When task started its works we can free the space.
+            drop(permit);
             op()
+        };
+        let metered_future = MeteredFuture::new(sync_future, self.metric.clone());
+        if let Some(rayon_thread_pool) = &self.rayon_thread_pool {
+            rayon_thread_pool
+                .spawn_fifo(move || futures::executor::block_on(metered_future));
+        } else {
+            futures::executor::block_on(metered_future)
         }
     }
 
@@ -94,7 +105,7 @@ mod tests {
         // Given
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            SyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
 
         // When
         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -115,7 +126,7 @@ mod tests {
         // Given
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            SyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
         let first_spawn_result = heavy_task_processor.try_spawn(move || {
             sleep(Duration::from_secs(1));
         });
@@ -134,7 +145,7 @@ mod tests {
     async fn second_spawn_works_when_first_is_finished() {
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
-            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            SyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
 
         // Given
         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -159,7 +170,7 @@ mod tests {
         // Given
         let number_of_pending_tasks = 10;
         let heavy_task_processor =
-            SyncProcessor::new(1, number_of_pending_tasks).unwrap();
+            SyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
 
         for _ in 0..number_of_pending_tasks {
             // When
@@ -178,7 +189,8 @@ mod tests {
         let number_of_pending_tasks = 10;
         let number_of_threads = 1;
         let heavy_task_processor =
-            SyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            SyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+                .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -197,6 +209,10 @@ mod tests {
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
         assert!(instant.elapsed() >= Duration::from_secs(10));
+        // Wait for the metrics to be updated.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
+        assert_eq!(duration.as_secs(), 10);
     }
 
     #[tokio::test]
@@ -205,7 +221,8 @@ mod tests {
         let number_of_pending_tasks = 10;
         let number_of_threads = 1;
         let heavy_task_processor =
-            SyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            SyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+                .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -240,7 +257,8 @@ mod tests {
         let number_of_pending_tasks = 10;
         let number_of_threads = 10;
         let heavy_task_processor =
-            SyncProcessor::new(number_of_threads, number_of_pending_tasks).unwrap();
+            SyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+                .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
@@ -259,5 +277,9 @@ mod tests {
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
         assert!(instant.elapsed() <= Duration::from_secs(2));
+        // Wait for the metrics to be updated.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
+        assert_eq!(duration.as_secs(), 10);
     }
 }

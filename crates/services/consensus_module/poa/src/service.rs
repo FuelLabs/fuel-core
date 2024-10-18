@@ -573,10 +573,6 @@ where
                     should_continue = false;
                 }
             }
-            _ = self.new_txs_watcher.changed() => {
-                self.on_txpool_event().await.context("While processing txpool event")?;
-                should_continue = true;
-            }
             _ = next_block_production => {
                 match self.on_timer().await.context("While processing timer event") {
                     Ok(()) => should_continue = true,
@@ -586,6 +582,10 @@ where
                         return Err(err);
                     }
                 };
+            }
+            _ = self.new_txs_watcher.changed() => {
+                self.on_txpool_event().await.context("While processing txpool event")?;
+                should_continue = true;
             }
         }
 

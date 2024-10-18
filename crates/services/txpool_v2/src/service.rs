@@ -1,5 +1,9 @@
-use crate as fuel_core_txpool;
+use crate::{
+    self as fuel_core_txpool,
+    selection_algorithms::SelectionAlgorithm,
+};
 
+use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
     AsyncProcessor,
     RunnableService,
@@ -67,6 +71,7 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
+            PoolTransaction,
             TransactionStatus,
         },
     },
@@ -75,7 +80,10 @@ use fuel_core_types::{
 use futures::StreamExt;
 use parking_lot::RwLock;
 use std::{
-    collections::VecDeque,
+    collections::{
+        HashSet,
+        VecDeque,
+    },
     sync::Arc,
     time::{
         SystemTime,
@@ -181,8 +189,10 @@ pub struct Task<View> {
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
-    current_height: Arc<RwLock<BlockHeight>>,
+    current_height: Shared<BlockHeight>,
+    tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
+    metrics: bool,
 }
 
 #[async_trait::async_trait]
@@ -190,7 +200,7 @@ impl<View> RunnableService for Task<View>
 where
     View: TxPoolPersistentStorage,
 {
-    const NAME: &'static str = "TxPoolv2";
+    const NAME: &'static str = "TxPool";
 
     type SharedData = SharedState;
 
@@ -217,6 +227,18 @@ where
     View: TxPoolPersistentStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        // TODO: move this to the Task struct
+        if self.metrics {
+            let pool = self.pool.read();
+            let num_transactions = pool.storage.tx_count();
+
+            let executable_txs =
+                pool.selection_algorithm.number_of_executable_transactions();
+
+            record_number_of_transactions_in_txpool(num_transactions);
+            record_number_of_executable_transactions_in_txpool(executable_txs);
+        }
+
         tokio::select! {
             biased;
 
@@ -378,8 +400,9 @@ where
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
+        let metrics = self.metrics;
 
-        move || {
+        let insert_transaction_thread_pool_op = move || {
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -406,6 +429,10 @@ where
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
+            };
+
+            if metrics {
+                record_tx_size(&checked_tx)
             };
 
             let tx = Arc::new(checked_tx);
@@ -459,6 +486,25 @@ where
                     Error::Removed(RemovedReason::LessWorth(tx.id())),
                 );
             }
+        };
+        move || {
+            if metrics {
+                let txpool_metrics = txpool_metrics();
+                txpool_metrics
+                    .number_of_transactions_pending_verification
+                    .inc();
+                let start_time = tokio::time::Instant::now();
+                insert_transaction_thread_pool_op();
+                let time_for_task_to_complete = start_time.elapsed().as_millis();
+                txpool_metrics
+                    .transaction_insertion_time_in_thread_pool_milliseconds
+                    .observe(time_for_task_to_complete as f64);
+                txpool_metrics
+                    .number_of_transactions_pending_verification
+                    .dec();
+            } else {
+                insert_transaction_thread_pool_op();
+            }
         }
     }
 
@@ -503,7 +549,17 @@ where
             let p2p = self.p2p.clone();
             let pool = self.pool.clone();
             let txs_insert_sender = self.shared_state.write_pool_requests_sender.clone();
+            let tx_sync_history = self.tx_sync_history.clone();
             async move {
+                {
+                    let mut tx_sync_history = tx_sync_history.write();
+
+                    // We already synced with this peer in the past.
+                    if !tx_sync_history.insert(peer_id.clone()) {
+                        return
+                    }
+                }
+
                 let peer_tx_ids = p2p
                     .request_tx_ids(peer_id.clone())
                     .await
@@ -586,6 +642,13 @@ where
                 .tx_status_sender
                 .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
         }
+
+        {
+            // Each time when we prune transactions, clear the history of synchronization
+            // to have a chance to sync this transaction again from other peers.
+            let mut tx_sync_history = self.tx_sync_history.write();
+            tx_sync_history.clear();
+        }
     }
 
     fn process_read(&self, request: ReadPoolRequest) {
@@ -628,6 +691,23 @@ where
             }
         }
     }
+}
+
+fn record_tx_size(tx: &PoolTransaction) {
+    let size = tx.metered_bytes_size();
+    let txpool_metrics = txpool_metrics();
+    txpool_metrics.tx_size.observe(size as f64);
+}
+
+fn record_number_of_transactions_in_txpool(num_transactions: usize) {
+    txpool_metrics()
+        .number_of_transactions
+        .set(num_transactions as i64);
+}
+fn record_number_of_executable_transactions_in_txpool(executable_txs: usize) {
+    txpool_metrics()
+        .number_of_executable_transactions
+        .set(executable_txs as i64);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -717,16 +797,20 @@ where
     };
 
     let transaction_verifier_process = SyncProcessor::new(
+        "TxPool_TxVerifierProcessor",
         config.heavy_work.number_threads_to_verify_transactions,
         config.heavy_work.size_of_verification_queue,
     )
     .unwrap();
 
     let p2p_sync_process = AsyncProcessor::new(
+        "TxPool_P2PSynchronizationProcessor",
         config.heavy_work.number_threads_p2p_sync,
         config.heavy_work.size_of_p2p_sync_queue,
     )
     .unwrap();
+
+    let metrics = config.metrics;
 
     let utxo_validation = config.utxo_validation;
     let txpool = Pool::new(
@@ -750,5 +834,7 @@ where
         current_height: Arc::new(RwLock::new(current_height)),
         pool: Arc::new(RwLock::new(txpool)),
         shared_state,
+        metrics,
+        tx_sync_history: Default::default(),
     })
 }
