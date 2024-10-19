@@ -203,7 +203,6 @@ impl L2ActivityTracker {
         decrease_range_size: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
-        let decrease_range_size = decrease_range_size;
         let decrease_activity_threshold = decrease_range_size;
         let hold_activity_threshold = decrease_range_size.saturating_add(hold_range_size);
         let max_activity = hold_activity_threshold.saturating_add(normal_range_size);
