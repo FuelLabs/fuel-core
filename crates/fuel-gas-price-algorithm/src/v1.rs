@@ -152,33 +152,37 @@ pub struct AlgorithmUpdaterV1 {
     pub unrecorded_blocks: BTreeMap<Height, Bytes>,
 }
 
+/// The `L2ActivityTracker` tracks the chain activity to determine a safety mode for setting the DA price.
+///
 /// Because the DA gas price can increase even when no-one is using the network, there is a potential
 /// for a negative feedback loop to occur where the gas price increases, further decreasing activity
 /// and increasing the gas price. The `L2ActivityTracker` is used to moderate changes to the DA
 /// gas price based on the activity of the L2 chain.
 ///
-/// For each L2 block, the activity is calculated as a percentage of the block capacity used. If the
-/// activity is below a certain threshold, the activity is decreased. The activity exists on a scale
-/// between 0 and the sum of the increase, hold, and decrease buffers.
+/// The chain activity is a cumulative measure, updated whenever a new block is processed.
+/// For each L2 block, the block usage is a percentage of the block capacity used. If the
+/// block usage is below a certain threshold, the chain activity is decreased, if above the threshold,
+/// the activity is incresed The chain activity exists on a scale
+/// between 0 and the sum of the normal, hold, and decrease buffers.
 ///
-/// e.g. if the decrease range is 50, the hold range is 50, and the increase range is 50:
+/// e.g. if the decrease buffer size is 20, the hold buffer size is 60, and the increase buffer size is 40:
 ///
-/// 0<-- decrease range -->50<-- hold range -->100<-- increase range -->150
+/// 0<-- decrease buffer -->20<-- hold buffer -->80<-- normal buffer -->120
 ///
-/// The current activity determines the behavior of the DA gas price.
+/// The current chain activity determines the behavior of the DA gas price.
 ///
-/// For healthy behavior, the activity should be in the `increase` range.
+/// For healthy behavior, the activity should be in the `normal` range.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct L2ActivityTracker {
-    /// The _size_ of the range of the activity buffer that will increase the gas price
-    normal_range_size: u16,
-    /// The _size_ of the range of the activity buffer that will hold the gas price
-    hold_range_size: u16,
-    /// The _size_ of the range of the activity buffer that will decrease the gas price
-    decrease_range_size: u16,
+    /// The maximum value the chain activity can hit
+    max_activity: u16,
+    /// The threshold if the block activity is below, the DA gas price will be held when it would otherwise be increased
+    hold_activity_threshold: u16,
+    /// If the chain activity falls below this value, the DA gas price will be decreased when it would otherwise be increased
+    decrease_activity_threshold: u16,
     /// The current activity of the L2 chain
-    activity: u16,
-    /// The threshold of activity below which the activity will be decreased
+    chain_activity: u16,
+    /// The threshold of block activity below which the chain activity will be decreased
     block_activity_threshold: ClampedPercentage,
 }
 
@@ -199,14 +203,16 @@ impl L2ActivityTracker {
         decrease_range_size: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
-        let activity = decrease_range_size
-            .saturating_add(hold_range_size)
-            .saturating_add(normal_range_size);
+        let decrease_range_size = decrease_range_size;
+        let decrease_activity_threshold = decrease_range_size;
+        let hold_activity_threshold = decrease_range_size.saturating_add(hold_range_size);
+        let max_activity = hold_activity_threshold.saturating_add(normal_range_size);
+        let chain_activity = max_activity;
         Self {
-            normal_range_size,
-            hold_range_size,
-            decrease_range_size,
-            activity,
+            max_activity,
+            hold_activity_threshold,
+            decrease_activity_threshold,
+            chain_activity,
             block_activity_threshold,
         }
     }
@@ -218,17 +224,14 @@ impl L2ActivityTracker {
         activity: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
-        let max_activity = decrease_range_size
-            .saturating_add(hold_range_size)
-            .saturating_add(normal_range_size);
-        let activity = activity.min(max_activity);
-        Self {
+        let mut tracker = Self::new_full(
             normal_range_size,
             hold_range_size,
             decrease_range_size,
-            activity,
             block_activity_threshold,
-        }
+        );
+        tracker.chain_activity = activity.min(tracker.max_activity);
+        tracker
     }
 
     pub fn new_always_normal() -> Self {
@@ -236,13 +239,9 @@ impl L2ActivityTracker {
     }
 
     pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
-        if self.activity
-            > self
-                .decrease_range_size
-                .saturating_add(self.hold_range_size)
-        {
+        if self.chain_activity > self.hold_activity_threshold {
             DAGasPriceSafetyMode::Normal
-        } else if self.activity > self.decrease_range_size {
+        } else if self.chain_activity > self.decrease_activity_threshold {
             DAGasPriceSafetyMode::Hold
         } else {
             DAGasPriceSafetyMode::Decrease
@@ -250,19 +249,16 @@ impl L2ActivityTracker {
     }
 
     pub fn update(&mut self, block_usage: ClampedPercentage) {
-        let cap = self
-            .decrease_range_size
-            .saturating_add(self.hold_range_size)
-            .saturating_add(self.normal_range_size);
         if block_usage < self.block_activity_threshold {
-            self.activity = self.activity.saturating_sub(1);
+            self.chain_activity = self.chain_activity.saturating_sub(1);
         } else {
-            self.activity = self.activity.saturating_add(1).min(cap);
+            self.chain_activity =
+                self.chain_activity.saturating_add(1).min(self.max_activity);
         }
     }
 
     pub fn current_activity(&self) -> u16 {
-        self.activity
+        self.chain_activity
     }
 }
 
@@ -350,10 +346,7 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_activity(&mut self, used: u64, capacity: NonZeroU64) {
-        let block_activity = used
-            .saturating_mul(100)
-            .checked_div(capacity.into())
-            .unwrap_or(100);
+        let block_activity = used.saturating_mul(100).div(capacity);
         let usage = ClampedPercentage::new(block_activity.try_into().unwrap_or(100));
         self.l2_activity.update(usage);
     }
