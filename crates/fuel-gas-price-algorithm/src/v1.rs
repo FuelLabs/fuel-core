@@ -162,7 +162,7 @@ pub struct AlgorithmUpdaterV1 {
 /// The chain activity is a cumulative measure, updated whenever a new block is processed.
 /// For each L2 block, the block usage is a percentage of the block capacity used. If the
 /// block usage is below a certain threshold, the chain activity is decreased, if above the threshold,
-/// the activity is incresed The chain activity exists on a scale
+/// the activity is increased The chain activity exists on a scale
 /// between 0 and the sum of the normal, hold, and decrease buffers.
 ///
 /// e.g. if the decrease buffer size is 20, the hold buffer size is 60, and the increase buffer size is 40:
