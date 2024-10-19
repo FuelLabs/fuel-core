@@ -235,7 +235,17 @@ impl L2ActivityTracker {
     }
 
     pub fn new_always_normal() -> Self {
-        Self::new_full(1, 0, 0, ClampedPercentage::new(0))
+        let normal_range_size = 100;
+        let hold_range_size = 0;
+        let decrease_range_size = 0;
+        let percentage = ClampedPercentage::new(0);
+        Self::new(
+            normal_range_size,
+            hold_range_size,
+            decrease_range_size,
+            100,
+            percentage,
+        )
     }
 
     pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
@@ -481,6 +491,7 @@ impl AlgorithmUpdaterV1 {
         pd_change.signum().saturating_mul(clamped_change)
     }
 
+    // Should always be positive
     fn max_change(&self) -> i128 {
         let upcast_percent = self.max_da_gas_price_change_percent.into();
         self.new_scaled_da_gas_price
