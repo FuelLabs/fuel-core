@@ -210,7 +210,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         let coins = self
             .storage_as_ref::<Balances>()
             .get(&BalancesKey::new(owner, asset_id))?
-            .map(|amount| amount.coins())
             .ok_or(not_found!(Balances))?;
 
         let base_asset_id = base_asset_id();
@@ -218,11 +217,10 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         let messages = self
             .storage_as_ref::<Balances>()
             .get(&BalancesKey::new(owner, &base_asset_id))?
-            .map(|amount| amount.messages())
             .ok_or(not_found!(Balances))?;
 
         Ok(coins
-            .checked_add(messages)
+            .checked_add(*messages)
             .expect("TODO[RC]: balance too big"))
     }
 }

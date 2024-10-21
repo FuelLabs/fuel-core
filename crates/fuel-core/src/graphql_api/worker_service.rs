@@ -233,8 +233,7 @@ where
                     .get(&balances_key)?
                     .unwrap_or_default();
 
-                let new_amount =
-                    amount.saturating_add(&Amount::new_messages(message.amount()));
+                let new_amount = amount.saturating_add(message.amount());
 
                 println!(
                     "Processing message with amount: {} (asset_id={})",
@@ -281,7 +280,7 @@ where
                     .get(&balances_key)?
                     .unwrap_or_default();
 
-                let new_amount = amount.saturating_add(&Amount::new_coins(coin.amount));
+                let new_amount = amount.saturating_add(coin.amount);
 
                 println!(
                     "Processing coin with amount: {} (asset_id={})",
@@ -306,7 +305,6 @@ where
                     .remove(&key)?;
 
                 // *** "New" behavior (using Balances DB) ***
-                
             }
             Event::ForcedTransactionFailed {
                 id,
