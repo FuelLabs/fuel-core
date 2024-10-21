@@ -71,7 +71,12 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
-    fn balance(&self, owner: &Address, asset_id: &AssetId) -> StorageResult<u64>;
+    fn balance(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<u64>;
 
     fn owned_coins_ids(
         &self,
@@ -275,7 +280,10 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
-            balances::{Balances, MessageBalances},
+            balances::{
+                Balances,
+                MessageBalances,
+            },
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,

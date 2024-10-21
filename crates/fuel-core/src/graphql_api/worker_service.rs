@@ -288,7 +288,7 @@ where
     T: OffChainDatabaseTransaction,
 {
     println!(
-        "increasing message balance for owner: {:?}, amount: {:?}",
+        "decreasing message balance for owner: {:?}, amount: {:?}",
         owner, amount
     );
 

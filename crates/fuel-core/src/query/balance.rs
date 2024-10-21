@@ -56,11 +56,13 @@ impl ReadView {
 
         // The new way.
         // TODO[RC]: balance could return both coins and messages
-        let amount = self.off_chain.balance(&owner, &asset_id)?;
+        let amount_1 = self.off_chain.balance(&owner, &asset_id, &base_asset_id)?;
+
+        assert_eq!(amount, amount_1);
 
         Ok(AddressBalance {
             owner,
-            amount,
+            amount: amount_1,
             asset_id,
         })
     }

@@ -207,27 +207,38 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         self.message_is_spent(nonce)
     }
 
-    fn balance(&self, owner: &Address, asset_id: &AssetId) -> StorageResult<u64> {
+    fn balance(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<u64> {
         let coins = self
             .storage_as_ref::<Balances>()
             .get(&BalancesKey::new(owner, asset_id))?
             .unwrap_or_default();
 
-        let base_asset_id = base_asset_id();
+        // let base_asset_id = base_asset_id();
 
-        let messages = self
-            .storage_as_ref::<MessageBalances>()
-            .get(&owner)?
-            .unwrap_or_default();
+        if base_asset_id == asset_id {
+            let messages = self
+                .storage_as_ref::<MessageBalances>()
+                .get(&owner)?
+                .unwrap_or_default();
 
-        println!(
-            "{coins} coins + {messages} messages = {}",
-            *coins + *messages
-        );
+            println!(
+                "{coins} coins + {messages} messages = {}",
+                *coins + *messages
+            );
 
-        Ok(coins
-            .checked_add(*messages)
-            .expect("TODO[RC]: balance too big"))
+            Ok(coins
+                .checked_add(*messages)
+                .expect("TODO[RC]: balance too big"))
+        } else {
+            println!("{coins} coins");
+
+            Ok(*coins)
+        }
     }
 }
 
