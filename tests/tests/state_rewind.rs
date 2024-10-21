@@ -9,7 +9,6 @@ use fuel_core::{
     },
 };
 use fuel_core_storage::transactional::AtomicView;
-use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     fuel_tx::{
         AssetId,
@@ -17,6 +16,7 @@ use fuel_core_types::{
         Output,
         Transaction,
         TransactionBuilder,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::BlockHeight,
@@ -159,7 +159,11 @@ async fn rollback_existing_chain_to_target_height_and_verify(
         transactions.push(tx.id(&Default::default()));
 
         let result = node.submit_and_await_commit(tx).await.unwrap();
-        assert!(matches!(result, TransactionStatus::Success(_)));
+        assert!(
+            matches!(result, TransactionStatus::Success(_)),
+            "Transaction got unexpected status {:?}",
+            result
+        );
     }
     let all_transactions = all_real_transactions(node);
     assert_eq!(all_transactions.len(), blocks_in_the_chain as usize);

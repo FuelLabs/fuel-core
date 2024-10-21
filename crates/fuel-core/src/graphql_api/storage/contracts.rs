@@ -1,3 +1,8 @@
+use fuel_core_chain_config::{
+    AsTable,
+    StateConfig,
+    TableEntry,
+};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -7,8 +12,13 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_txpool::types::ContractId;
-use fuel_core_types::entities::contract::ContractsInfoType;
+use fuel_core_types::{
+    entities::contract::ContractsInfoType,
+    fuel_tx::{
+        ContractId,
+        Salt,
+    },
+};
 
 /// Contract info
 pub struct ContractsInfo;
@@ -26,6 +36,18 @@ impl TableWithBlueprint for ContractsInfo {
 
     fn column() -> Self::Column {
         Self::Column::ContractsInfo
+    }
+}
+
+impl AsTable<ContractsInfo> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<ContractsInfo>> {
+        self.contracts
+            .iter()
+            .map(|contracts_config| TableEntry {
+                key: contracts_config.contract_id,
+                value: ContractsInfoType::V1(Salt::zeroed().into()),
+            })
+            .collect()
     }
 }
 

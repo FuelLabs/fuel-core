@@ -202,6 +202,14 @@ pub struct P2PArgs {
     /// For peer reputations, the maximum time since last heartbeat before penalty
     #[clap(long = "heartbeat-max-time-since-last", default_value = "40", env)]
     pub heartbeat_max_time_since_last: u64,
+
+    /// Number of threads to read from the database.
+    #[clap(long = "p2p-database-read-threads", default_value = "2", env)]
+    pub database_read_threads: usize,
+
+    /// Number of threads to read from the tx pool.
+    #[clap(long = "p2p-txpool-threads", default_value = "0", env)]
+    pub tx_pool_threads: usize,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -351,6 +359,8 @@ impl P2PArgs {
             info_interval: Some(Duration::from_secs(self.info_interval)),
             identify_interval: Some(Duration::from_secs(self.identify_interval)),
             metrics,
+            database_read_threads: self.database_read_threads,
+            tx_pool_threads: self.tx_pool_threads,
             state: NotInitialized,
         };
         Ok(Some(config))

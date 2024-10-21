@@ -25,6 +25,7 @@ use fuel_core_types::{
             EstimatePredicates,
         },
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 use futures::StreamExt;
@@ -63,8 +64,12 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
         .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
         .add_output(Output::change(rng.gen(), 0, AssetId::default()))
         .finalize();
-    tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
-        .expect("Predicate check failed");
+    tx.estimate_predicates(
+        &CheckPredicateParams::default(),
+        MemoryInstance::new(),
+        &EmptyStorage,
+    )
+    .expect("Predicate check failed");
     tx.into()
 }
 
@@ -81,6 +86,7 @@ async fn subscribe_txn_status() {
     let maturity = Default::default();
 
     let create_script = |i: u8| {
+        const AMOUNT: u64 = 1000;
         // The first two scripts will run and the rest will fail.
         let script = [op::addi(0x11 - i, 0x10, 1), op::ret(RegId::ONE)];
         let script: Vec<u8> = script
@@ -96,7 +102,7 @@ async fn subscribe_txn_status() {
         let coin_input = Input::coin_predicate(
             utxo_id,
             owner,
-            1000,
+            AMOUNT,
             AssetId::zeroed(),
             TxPointer::default(),
             Default::default(),
@@ -109,15 +115,20 @@ async fn subscribe_txn_status() {
             vec![],
             policies::Policies::new()
                 .with_maturity(maturity)
-                .with_max_fee(0),
+                .with_max_fee(AMOUNT)
+                .with_tip(i as u64),
             vec![coin_input],
             vec![],
             vec![],
         )
         .into();
         // estimate predicate gas for coin_input predicate
-        tx.estimate_predicates(&CheckPredicateParams::default(), MemoryInstance::new())
-            .expect("should estimate predicate");
+        tx.estimate_predicates(
+            &CheckPredicateParams::default(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("should estimate predicate");
 
         tx
     };

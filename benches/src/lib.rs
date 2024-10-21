@@ -494,7 +494,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         });
 
         // add at least one coin input
-        tx.add_random_fee_input();
+        tx.add_fee_input();
 
         let mut tx = tx
             .script_gas_limit(gas_limit)
@@ -504,6 +504,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         tx.estimate_predicates(
             &CheckPredicateParams::from(&params),
             MemoryInstance::new(),
+            db.database_mut(),
         )
         .unwrap();
         let tx = tx.into_checked(height, &params).unwrap();

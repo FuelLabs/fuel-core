@@ -16,7 +16,6 @@ use tokio::{
         Instant,
     },
 };
-use tokio_stream::StreamExt;
 
 use crate::{
     ports::{
@@ -37,10 +36,7 @@ use crate::{
     Trigger,
 };
 use fuel_core_services::{
-    stream::{
-        BoxFuture,
-        BoxStream,
-    },
+    stream::BoxFuture,
     RunnableService,
     RunnableTask,
     Service as OtherService,
@@ -132,7 +128,7 @@ pub struct MainTask<T, B, I, S, PB, C> {
     block_producer: B,
     block_importer: I,
     txpool: T,
-    tx_status_update_stream: BoxStream<TxId>,
+    new_txs_watcher: tokio::sync::watch::Receiver<()>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
     last_height: BlockHeight,
@@ -164,7 +160,7 @@ where
         predefined_blocks: PB,
         clock: C,
     ) -> Self {
-        let tx_status_update_stream = txpool.transaction_status_events();
+        let new_txs_watcher = txpool.new_txs_watcher();
         let (request_sender, request_receiver) = mpsc::channel(1024);
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(clock.now(), last_block);
@@ -194,7 +190,7 @@ where
             txpool,
             block_producer,
             block_importer,
-            tx_status_update_stream,
+            new_txs_watcher,
             request_receiver,
             shared_state: SharedState { request_sender },
             last_height,
@@ -343,16 +339,18 @@ where
             .await?
             .into();
 
-        let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
-        for (tx_id, err) in skipped_transactions {
-            tracing::error!(
+        if !skipped_transactions.is_empty() {
+            let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
+            for (tx_id, err) in skipped_transactions {
+                tracing::error!(
                 "During block production got invalid transaction {:?} with error {:?}",
                 tx_id,
                 err
             );
-            tx_ids_to_remove.push((tx_id, err));
+                tx_ids_to_remove.push((tx_id, err.to_string()));
+            }
+            self.txpool.notify_skipped_txs(tx_ids_to_remove);
         }
-        self.txpool.remove_txs(tx_ids_to_remove);
 
         // Sign the block and seal it
         let seal = self.signer.seal_block(&block).await?;
@@ -438,16 +436,9 @@ where
         Ok(())
     }
 
-    pub(crate) async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
+    async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
         match self.trigger {
-            Trigger::Instant => {
-                let pending_number = self.txpool.pending_number();
-                // skip production if there are no pending transactions
-                if pending_number > 0 {
-                    self.produce_next_block().await?;
-                }
-                Ok(())
-            }
+            Trigger::Instant => self.produce_next_block().await,
             Trigger::Never | Trigger::Interval { .. } => Ok(()),
         }
     }
@@ -531,19 +522,14 @@ where
         let should_continue;
         let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
-        while *sync_state.borrow_and_update() == SyncState::NotSynced {
+        if *sync_state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     should_continue = result?.started();
                     return Ok(should_continue);
                 }
-                _ = sync_state.changed() => {
-                    break;
-                }
-                _ = self.tx_status_update_stream.next() => {
-                    // ignore txpool events while syncing
-                }
+                _ = sync_state.changed() => {}
             }
         }
 
@@ -587,20 +573,6 @@ where
                     should_continue = false;
                 }
             }
-            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
-            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
-            //       into the first block production trigger, we'll still call the event handler
-            //       for each tx after they've already been included into a block.
-            //       The poa service also doesn't care about events unrelated to new tx submissions,
-            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-            txpool_event = self.tx_status_update_stream.next() => {
-                if txpool_event.is_some()  {
-                    self.on_txpool_event().await.context("While processing txpool event")?;
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
-            }
             _ = next_block_production => {
                 match self.on_timer().await.context("While processing timer event") {
                     Ok(()) => should_continue = true,
@@ -610,6 +582,10 @@ where
                         return Err(err);
                     }
                 };
+            }
+            _ = self.new_txs_watcher.changed() => {
+                self.on_txpool_event().await.context("While processing txpool event")?;
+                should_continue = true;
             }
         }
 

@@ -136,6 +136,12 @@ pub struct Config<State = Initialized> {
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 
+    /// Number of threads to read from the database.
+    pub database_read_threads: usize,
+
+    /// Number of threads to read from the TxPool.
+    pub tx_pool_threads: usize,
+
     /// It is the state of the config initialization. Everyone can create an instance of the `Self`
     /// with the `NotInitialized` state. But it can be set into the `Initialized` state only with
     /// the `init` method.
@@ -187,6 +193,8 @@ impl Config<NotInitialized> {
             heartbeat_max_avg_interval: self.heartbeat_max_time_since_last,
             heartbeat_max_time_since_last: self.heartbeat_max_time_since_last,
             metrics: self.metrics,
+            database_read_threads: self.database_read_threads,
+            tx_pool_threads: self.tx_pool_threads,
             state: Initialized(()),
         })
     }
@@ -240,6 +248,8 @@ impl Config<NotInitialized> {
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
             metrics: false,
+            database_read_threads: 0,
+            tx_pool_threads: 0,
             state: NotInitialized,
         }
     }

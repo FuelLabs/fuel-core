@@ -10,6 +10,7 @@ use fuel_core::{
     },
     service::{
         Config,
+        DbType,
         FuelService,
     },
 };
@@ -92,6 +93,7 @@ pub struct TestSetupBuilder {
     pub initial_coins: Vec<CoinConfig>,
     pub starting_gas_price: u64,
     pub gas_limit: Option<u64>,
+    pub block_size_limit: Option<u64>,
     pub starting_block: Option<BlockHeight>,
     pub utxo_validation: bool,
     pub privileged_address: Address,
@@ -200,6 +202,13 @@ impl TestSetupBuilder {
                 .set_block_gas_limit(gas_limit);
         }
 
+        if let Some(block_size_limit) = self.block_size_limit {
+            chain_conf
+                .consensus_parameters
+                .set_block_transaction_size_limit(block_size_limit)
+                .expect("Should set new block size limit");
+        }
+
         chain_conf
             .consensus_parameters
             .set_privileged_address(self.privileged_address);
@@ -224,11 +233,12 @@ impl TestSetupBuilder {
 
         let config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::Config::default(),
+            txpool: fuel_core_txpool::config::Config::default(),
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
+        assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
@@ -249,6 +259,7 @@ impl Default for TestSetupBuilder {
             initial_coins: vec![],
             starting_gas_price: 0,
             gas_limit: None,
+            block_size_limit: None,
             starting_block: None,
             utxo_validation: true,
             privileged_address: Default::default(),

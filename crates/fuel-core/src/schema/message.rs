@@ -11,12 +11,8 @@ use super::{
     ReadViewProvider,
 };
 use crate::{
-    fuel_core_graphql_api::{
-        ports::OffChainDatabase,
-        QUERY_COSTS,
-    },
+    fuel_core_graphql_api::query_costs,
     graphql_api::IntoApiResult,
-    query::MessageQueryData,
     schema::scalars::{
         BlockId,
         U32,
@@ -32,7 +28,9 @@ use async_graphql::{
     Enum,
     Object,
 };
+use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_types::entities;
+use futures::StreamExt;
 
 pub struct Message(pub(crate) entities::relayer::message::Message);
 
@@ -68,7 +66,7 @@ pub struct MessageQuery {}
 
 #[Object]
 impl MessageQuery {
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn message(
         &self,
         ctx: &Context<'_>,
@@ -80,9 +78,9 @@ impl MessageQuery {
     }
 
     #[graphql(complexity = "{\
-        QUERY_COSTS.storage_iterator\
-        + (QUERY_COSTS.storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (QUERY_COSTS.storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        query_costs().storage_iterator\
+        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
     }")]
     async fn messages(
         &self,
@@ -95,6 +93,8 @@ impl MessageQuery {
     ) -> async_graphql::Result<Connection<HexString, Message, EmptyFields, EmptyFields>>
     {
         let query = ctx.read_view()?;
+        let owner = owner.map(|owner| owner.0);
+        let owner_ref = owner.as_ref();
         crate::schema::query_pagination(
             after,
             before,
@@ -107,10 +107,12 @@ impl MessageQuery {
                     None
                 };
 
-                let messages = if let Some(owner) = owner {
-                    query.owned_messages(&owner.0, start, direction)
+                let messages = if let Some(owner) = owner_ref {
+                    query
+                        .owned_messages(owner, start, direction)
+                        .into_boxed_ref()
                 } else {
-                    query.all_messages(start, direction)
+                    query.all_messages(start, direction).into_boxed_ref()
                 };
 
                 let messages = messages.map(|result| {
@@ -126,7 +128,7 @@ impl MessageQuery {
     }
 
     // 256 * QUERY_COSTS.storage_read because the depth of the Merkle tree in the worst case is 256
-    #[graphql(complexity = "256 * QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "256 * query_costs().storage_read + child_complexity")]
     async fn message_proof(
         &self,
         ctx: &Context<'_>,
@@ -157,7 +159,7 @@ impl MessageQuery {
         .map(MessageProof))
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn message_status(
         &self,
         ctx: &Context<'_>,

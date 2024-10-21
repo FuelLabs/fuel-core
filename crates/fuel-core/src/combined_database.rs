@@ -222,15 +222,6 @@ impl CombinedDatabase {
         Ok(state_config)
     }
 
-    /// Converts the combined database into a genesis combined database.
-    pub fn into_genesis(self) -> CombinedGenesisDatabase {
-        CombinedGenesisDatabase {
-            on_chain: self.on_chain.into_genesis(),
-            off_chain: self.off_chain.into_genesis(),
-            relayer: self.relayer.into_genesis(),
-        }
-    }
-
     /// Rollbacks the state of the blockchain to a specific block height.
     pub fn rollback_to<S>(
         &self,
@@ -311,6 +302,50 @@ impl CombinedDatabase {
 
         Ok(())
     }
+
+    /// This function is fundamentally different from `rollback_to` in that it
+    /// will rollback the off-chain/gas-price databases if they are ahead of the
+    /// on-chain database. If they don't have a height or are behind the on-chain
+    /// we leave it to the caller to decide how to bring them up to date.
+    /// We don't rollback the on-chain database as it is the source of truth.
+    /// The target height of the rollback is the latest height of the on-chain database.
+    pub fn sync_aux_db_heights<S>(&self, shutdown_listener: &mut S) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        while !shutdown_listener.is_cancelled() {
+            let on_chain_height = match self.on_chain().latest_height_from_metadata()? {
+                Some(height) => height,
+                None => break, // Exit loop if on-chain height is None
+            };
+
+            let off_chain_height = self.off_chain().latest_height_from_metadata()?;
+            let gas_price_height = self.gas_price().latest_height_from_metadata()?;
+
+            // Handle off-chain rollback if necessary
+            if let Some(off_height) = off_chain_height {
+                if off_height > on_chain_height {
+                    self.off_chain().rollback_last_block()?;
+                }
+            }
+
+            // Handle gas price rollback if necessary
+            if let Some(gas_height) = gas_price_height {
+                if gas_height > on_chain_height {
+                    self.gas_price().rollback_last_block()?;
+                }
+            }
+
+            // If both off-chain and gas price heights are synced, break
+            if off_chain_height.map_or(true, |h| h <= on_chain_height)
+                && gas_price_height.map_or(true, |h| h <= on_chain_height)
+            {
+                break;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// A trait for listening to shutdown signals.
@@ -323,9 +358,8 @@ pub trait ShutdownListener {
 /// genesis databases into one entity.
 #[derive(Default, Clone)]
 pub struct CombinedGenesisDatabase {
-    on_chain: GenesisDatabase<OnChain>,
-    off_chain: GenesisDatabase<OffChain>,
-    relayer: GenesisDatabase<Relayer>,
+    pub on_chain: GenesisDatabase<OnChain>,
+    pub off_chain: GenesisDatabase<OffChain>,
 }
 
 impl CombinedGenesisDatabase {
@@ -335,9 +369,5 @@ impl CombinedGenesisDatabase {
 
     pub fn off_chain(&self) -> &GenesisDatabase<OffChain> {
         &self.off_chain
-    }
-
-    pub fn relayer(&self) -> &GenesisDatabase<Relayer> {
-        &self.relayer
     }
 }

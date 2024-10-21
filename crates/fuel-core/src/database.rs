@@ -19,17 +19,18 @@ use crate::{
         },
         generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
-        ChangesIterator,
         ColumnType,
         IterableKeyValueView,
         KeyValueView,
     },
 };
 use fuel_core_chain_config::TableEntry;
+use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
     iter::{
+        changes_iterator::ChangesIterator,
         IterDirection,
         IterableTable,
         IteratorOverTable,
@@ -65,6 +66,7 @@ pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
+use crate::database::database_description::gas_price::GasPriceDatabase;
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -76,8 +78,6 @@ use crate::state::{
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::storage::GasPriceMetadata;
-use crate::database::database_description::gas_price::GasPriceDatabase;
 
 // Storages implementation
 pub mod balances;
@@ -121,7 +121,7 @@ pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
     GenericDatabase<DataSource<Description, Stage>>;
 pub type OnChainIterableKeyValueView = IterableKeyValueView<ColumnType<OnChain>>;
 pub type OffChainIterableKeyValueView = IterableKeyValueView<ColumnType<OffChain>>;
-pub type ReyalerIterableKeyValueView = IterableKeyValueView<ColumnType<Relayer>>;
+pub type RelayerIterableKeyValueView = IterableKeyValueView<ColumnType<Relayer>>;
 
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
@@ -217,15 +217,24 @@ where
         Ok(Self::new(Arc::new(db)))
     }
 
-    /// Converts to an unchecked database.
-    /// Panics if the height is already set.
-    pub fn into_genesis(self) -> GenesisDatabase<Description> {
-        assert!(
-            !self.stage.height.lock().is_some(),
-            "Height is already set for `{}`",
-            Description::name()
-        );
-        GenesisDatabase::new(self.into_inner().data)
+    /// Converts the regular database to an unchecked database.
+    ///
+    /// Returns an error in the case regular database is initialized with the `GenesisDatabase`,
+    /// to highlight that it is a bad idea and it is unsafe.
+    pub fn into_genesis(
+        self,
+    ) -> core::result::Result<GenesisDatabase<Description>, GenesisDatabase<Description>>
+    {
+        if !self.stage.height.lock().is_some() {
+            Ok(GenesisDatabase::new(self.into_inner().data))
+        } else {
+            tracing::warn!(
+                "Converting regular database into genesis, \
+                while height is already set for `{}`",
+                Description::name()
+            );
+            Err(GenesisDatabase::new(self.into_inner().data))
+        }
     }
 }
 
@@ -401,7 +410,7 @@ fn commit_changes_with_height_update<Description>(
     database: &mut Database<Description>,
     changes: Changes,
     heights_lookup: impl Fn(
-        &ChangesIterator<Description>,
+        &ChangesIterator<Description::Column>,
     ) -> StorageResult<Vec<Description::Height>>,
 ) -> StorageResult<()>
 where
@@ -411,7 +420,7 @@ where
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
     // Gets the all new heights from the `changes`
-    let iterator = ChangesIterator::<Description>::new(&changes);
+    let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
 
     // Changes for each block should be committed separately.

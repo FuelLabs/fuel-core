@@ -284,6 +284,10 @@ enum ContractParametersVersion {
 	V1
 }
 
+type DaCompressedBlock {
+	bytes: HexString!
+}
+
 union DependentCost = LightOperation | HeavyOperation
 
 type DryRunFailureStatus {
@@ -934,7 +938,7 @@ type Query {
 		"""
 		owner: Address!,
 		"""
-		The list of requested assets` coins with asset ids, `target` amount the user wants to reach, and the `max` number of coins in the selection. Several entries with the same asset id are not allowed.
+		The list of requested assets` coins with asset ids, `target` amount the user wants to reach, and the `max` number of coins in the selection. Several entries with the same asset id are not allowed. The result can't contain more coins than `max_inputs`.
 		"""
 		queryPerAsset: [SpendQueryElementInput!]!,
 		"""
@@ -942,6 +946,12 @@ type Query {
 		"""
 		excludedIds: ExcludeInput
 	): [[CoinType!]!]!
+	daCompressedBlock(
+		"""
+		Height of the block
+		"""
+		height: U32!
+	): DaCompressedBlock
 	contract(
 		"""
 		ID of the Contract

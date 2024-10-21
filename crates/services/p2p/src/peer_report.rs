@@ -1,4 +1,7 @@
-use crate::TryPeerId;
+use crate::{
+    utils::is_dialable,
+    TryPeerId,
+};
 use libp2p::{
     self,
     core::{
@@ -80,6 +83,11 @@ impl Behaviour {
         let mut reserved_nodes_multiaddr_map = BTreeMap::<PeerId, Vec<Multiaddr>>::new();
 
         for multiaddr in reserved_nodes_multiaddrs {
+            // skip undialable multiaddresses
+            if !is_dialable(multiaddr) {
+                break;
+            }
+
             let peer_id = multiaddr
                 .try_to_peer_id()
                 .expect("Multiaddr MUST have a PeerId");

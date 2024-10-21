@@ -28,9 +28,9 @@ use zeroize::Zeroize;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-#[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Empty generated fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Empty;
 
 /// A cryptographically secure hash, identifying a block.
@@ -153,9 +153,7 @@ impl rand::distributions::Distribution<DaBlockHeight> for rand::distributions::S
 }
 
 /// Wrapper around [`fuel_crypto::SecretKey`] to implement [`secrecy`] marker traits
-#[derive(
-    Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroize, Deref, From,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroize, Deref, From)]
 #[repr(transparent)]
 pub struct SecretKeyWrapper(SecretKey);
 

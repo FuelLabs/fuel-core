@@ -24,3 +24,6 @@ pub use service::{
     new_service,
     Service,
 };
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();

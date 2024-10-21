@@ -1,15 +1,9 @@
-use crate::fuel_core_graphql_api::ports::{
-    OffChainDatabase,
-    OnChainDatabase,
-};
+use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
+    iter::IterDirection,
     not_found,
     tables::Coins,
+    Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -18,28 +12,17 @@ use fuel_core_types::{
     fuel_tx::UtxoId,
     fuel_types::Address,
 };
+use futures::{
+    Stream,
+    StreamExt,
+    TryStreamExt,
+};
 
-pub trait CoinQueryData: Send + Sync {
-    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
-
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<UtxoId>>;
-
-    fn owned_coins(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Coin>>;
-}
-
-impl<D: OnChainDatabase + OffChainDatabase + ?Sized> CoinQueryData for D {
-    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
+impl ReadView {
+    pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
+            .on_chain
+            .as_ref()
             .storage::<Coins>()
             .get(&utxo_id)?
             .ok_or(not_found!(Coins))?
@@ -48,23 +31,36 @@ impl<D: OnChainDatabase + OffChainDatabase + ?Sized> CoinQueryData for D {
         Ok(coin.uncompress(utxo_id))
     }
 
-    fn owned_coins_ids(
+    pub async fn coins(
         &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<UtxoId>> {
-        self.owned_coins_ids(owner, start_coin, direction)
+        utxo_ids: Vec<UtxoId>,
+    ) -> impl Iterator<Item = StorageResult<Coin>> + '_ {
+        // TODO: Use multiget when it's implemented.
+        //  https://github.com/FuelLabs/fuel-core/issues/2344
+        let coins = utxo_ids.into_iter().map(|id| self.coin(id));
+        // Give a chance to other tasks to run.
+        tokio::task::yield_now().await;
+        coins
     }
 
-    fn owned_coins(
+    pub fn owned_coins(
         &self,
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Coin>> {
+    ) -> impl Stream<Item = StorageResult<Coin>> + '_ {
         self.owned_coins_ids(owner, start_coin, direction)
-            .map(|res| res.and_then(|id| self.coin(id)))
-            .into_boxed()
+            .chunks(self.batch_size)
+            .map(|chunk| {
+                use itertools::Itertools;
+
+                let chunk = chunk.into_iter().try_collect::<_, Vec<_>, _>()?;
+                Ok::<_, StorageError>(chunk)
+            })
+            .try_filter_map(move |chunk| async move {
+                let chunk = self.coins(chunk).await;
+                Ok(Some(futures::stream::iter(chunk)))
+            })
+            .try_flatten()
     }
 }
