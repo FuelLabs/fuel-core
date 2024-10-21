@@ -20,6 +20,7 @@ use crate::{
         balances::{
             Balances,
             BalancesKey,
+            MessageBalances,
         },
         old::{
             OldFuelBlockConsensus,
@@ -215,9 +216,14 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         let base_asset_id = base_asset_id();
 
         let messages = self
-            .storage_as_ref::<Balances>()
-            .get(&BalancesKey::new(owner, &base_asset_id))?
-            .ok_or(not_found!(Balances))?;
+            .storage_as_ref::<MessageBalances>()
+            .get(&owner)?
+            .ok_or(not_found!(MessageBalances))?;
+
+        println!(
+            "{coins} coins + {messages} messages = {}",
+            *coins + *messages
+        );
 
         Ok(coins
             .checked_add(*messages)

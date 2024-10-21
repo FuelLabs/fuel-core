@@ -235,14 +235,7 @@ async fn first_5_balances() {
 async fn foo_1() {
     let owner = Address::default();
 
-    // TODO[RC]: This is just a hack
-    let asset_id =
-        Vec::from_hex("aabbccdd3d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07")
-            .unwrap();
-    let arr: [u8; 32] = asset_id.try_into().unwrap();
-    let asset_id = AssetId::new(arr);
-
-    //    let asset_id = AssetId::BASE;
+    let asset_id = AssetId::BASE;
 
     // setup config
     let mut coin_generator = CoinConfigGenerator::new();
@@ -336,4 +329,60 @@ async fn foo_1() {
 
     // let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
     // assert_eq!(balance, 449);
+}
+
+#[tokio::test]
+async fn foo_2() {
+    let owner = Address::default();
+    let asset_id = AssetId::BASE;
+
+    let different_asset_id =
+        Vec::from_hex("0606060606060606060606060606060606060606060606060606060606060606")
+            .unwrap();
+    let arr: [u8; 32] = different_asset_id.try_into().unwrap();
+    let different_asset_id = AssetId::new(arr);
+
+    // setup config
+    let mut coin_generator = CoinConfigGenerator::new();
+    let state_config = StateConfig {
+        contracts: vec![],
+        coins: vec![(owner, 1, asset_id), (owner, 10000, different_asset_id)]
+            .into_iter()
+            .map(|(owner, amount, asset_id)| CoinConfig {
+                owner,
+                amount,
+                asset_id,
+                ..coin_generator.generate()
+            })
+            .collect(),
+        messages: vec![(owner, 2)]
+            .into_iter()
+            .enumerate()
+            .map(|(nonce, (owner, amount))| MessageConfig {
+                sender: owner,
+                recipient: owner,
+                nonce: (nonce as u64).into(),
+                amount,
+                data: vec![],
+                da_height: DaBlockHeight::from(0usize),
+            })
+            .collect(),
+        ..Default::default()
+    };
+    let config = Config::local_node_with_state_config(state_config);
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // run test
+    let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
+    assert_eq!(balance, 3);
+
+    // run test
+    let balance = client
+        .balance(&owner, Some(&different_asset_id))
+        .await
+        .unwrap();
+    assert_eq!(balance, 10002);
 }

@@ -116,6 +116,7 @@ pub enum Column {
     DaCompressionTemporalRegistryPredicateCode = 22,
     /// Index of balances per user and asset.
     Balances = 23,
+    MessageBalances = 24,
 }
 
 impl Column {

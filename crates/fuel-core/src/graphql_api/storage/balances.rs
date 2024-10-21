@@ -69,6 +69,25 @@ impl TableWithBlueprint for Balances {
     }
 }
 
+/// These table stores the balances of asset id per owner.
+pub struct MessageBalances;
+
+impl Mappable for MessageBalances {
+    type Key = Address;
+    type OwnedKey = Self::Key;
+    type Value = Amount;
+    type OwnedValue = Self::Value;
+}
+
+impl TableWithBlueprint for MessageBalances {
+    type Blueprint = Plain<Raw, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::MessageBalances
+    }
+}
+
 // TODO[RC]: These are most likely not needed, we're testing at integration level.
 // TODO[RC]: This needs to be additionally tested with a proper integration test
 // #[cfg(test)]

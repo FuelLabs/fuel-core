@@ -20,7 +20,10 @@ use crate::{
             worker::OffChainDatabaseTransaction,
         },
         storage::{
-            balances::Balances,
+            balances::{
+                Balances,
+                MessageBalances,
+            },
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -54,6 +57,7 @@ use fuel_core_storage::{
     not_found,
     tables::ConsensusParametersVersions,
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
     StorageAsMut,
 };
@@ -202,7 +206,8 @@ where
     }
 }
 
-fn increase_balance<T>(
+// TODO[RC]: Maybe merge with `increase_message_balance()`?
+fn increase_coin_balance<T>(
     owner: &Address,
     asset_id: &AssetId,
     amount: Amount,
@@ -211,15 +216,40 @@ fn increase_balance<T>(
 where
     T: OffChainDatabaseTransaction,
 {
+    println!(
+        "increasing coin balance for owner: {:?}, asset_id: {:?}, amount: {:?}",
+        owner, asset_id, amount
+    );
+
     // TODO[RC]: Make sure this operation is atomic
-    let balances_key = BalancesKey::new(owner, asset_id);
+    let key = BalancesKey::new(owner, asset_id);
+    let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
+    let new_balance = current_balance.saturating_add(amount);
+    tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
+}
+
+fn increase_message_balance<T>(
+    owner: &Address,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    println!(
+        "increasing message balance for owner: {:?}, amount: {:?}",
+        owner, amount
+    );
+
+    // TODO[RC]: Make sure this operation is atomic
+    let key = owner;
     let current_balance = tx
-        .storage::<Balances>()
-        .get(&balances_key)?
+        .storage::<MessageBalances>()
+        .get(&key)?
         .unwrap_or_default();
     let new_balance = current_balance.saturating_add(amount);
-    tx.storage_as_mut::<Balances>()
-        .insert(&balances_key, &new_balance)
+    tx.storage_as_mut::<MessageBalances>()
+        .insert(&key, &new_balance)
 }
 
 /// Process the executor events and update the indexes for the messages and coins.
@@ -244,9 +274,8 @@ where
                     )?;
 
                 // *** "New" behavior (using Balances DB) ***
-                increase_balance(
+                increase_message_balance(
                     &message.recipient(),
-                    base_asset_id,
                     message.amount(),
                     block_st_transaction,
                 )?;
@@ -270,7 +299,7 @@ where
                     .insert(&coin_by_owner, &())?;
 
                 // *** "New" behavior (using Balances DB) ***
-                increase_balance(
+                increase_coin_balance(
                     &coin.owner,
                     &coin.asset_id,
                     coin.amount,

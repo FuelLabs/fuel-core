@@ -275,7 +275,7 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
-            balances::Balances,
+            balances::{Balances, MessageBalances},
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,
@@ -331,6 +331,7 @@ pub mod worker {
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
         + StorageMutate<Balances, Error = StorageError>
+        + StorageMutate<MessageBalances, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
