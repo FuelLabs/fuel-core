@@ -42,14 +42,14 @@ impl GossipsubTopics {
         }
     }
 
-    /// Given a `GossipsubBroadcastRequest` returns a `GossipTopic`
+    /// Given a `GossipsubBroadcastRequest` returns a `TopicHash`
     /// which is broadcast over the network with the serialized inner value of `GossipsubBroadcastRequest`
-    pub fn get_gossipsub_topic(
+    pub fn get_gossipsub_topic_hash(
         &self,
         outgoing_request: &GossipsubBroadcastRequest,
-    ) -> GossipTopic {
+    ) -> TopicHash {
         match outgoing_request {
-            GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.1.clone(),
+            GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.0.clone(),
         }
     }
 }
@@ -78,11 +78,11 @@ mod tests {
             Some(GossipTopicTag::NewTx)
         );
 
-        // Test given a `GossipsubBroadcastRequest` that `get_gossipsub_topic()` returns matching `Topic`
+        // Test given a `GossipsubBroadcastRequest` that `get_gossipsub_topic_hash()` returns matching `TopicHash`
         let broadcast_req =
             GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx()));
         assert_eq!(
-            gossipsub_topics.get_gossipsub_topic(&broadcast_req).hash(),
+            gossipsub_topics.get_gossipsub_topic_hash(&broadcast_req),
             new_tx_topic.hash()
         );
     }
