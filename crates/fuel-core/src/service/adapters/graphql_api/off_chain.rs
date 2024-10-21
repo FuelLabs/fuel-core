@@ -72,6 +72,17 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
+use hex::FromHex;
+
+fn base_asset_id() -> AssetId {
+    // TODO[RC]: This is just a hack, get base asset id from consensus parameters here.
+    let base_asset_id =
+        Vec::from_hex("0000000000000000000000000000000000000000000000000000000000000000")
+            .unwrap();
+    let arr: [u8; 32] = base_asset_id.try_into().unwrap();
+    let base_asset_id = AssetId::new(arr);
+    base_asset_id
+}
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -196,10 +207,23 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     }
 
     fn balance(&self, owner: &Address, asset_id: &AssetId) -> StorageResult<u64> {
-        self.storage_as_ref::<Balances>()
+        let coins = self
+            .storage_as_ref::<Balances>()
             .get(&BalancesKey::new(owner, asset_id))?
             .map(|amount| amount.coins())
-            .ok_or(not_found!(Balances))
+            .ok_or(not_found!(Balances))?;
+
+        let base_asset_id = base_asset_id();
+
+        let messages = self
+            .storage_as_ref::<Balances>()
+            .get(&BalancesKey::new(owner, &base_asset_id))?
+            .map(|amount| amount.messages())
+            .ok_or(not_found!(Balances))?;
+
+        Ok(coins
+            .checked_add(messages)
+            .expect("TODO[RC]: balance too big"))
     }
 }
 

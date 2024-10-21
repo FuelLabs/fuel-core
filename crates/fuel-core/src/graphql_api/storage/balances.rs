@@ -39,6 +39,9 @@ use std::{
     mem::size_of,
 };
 
+// TODO[RC]: Do not split to coins and messages here, just leave "amount".
+// amount for coins = owner+asset_id
+// amount for messages = owner+base_asset_id
 #[derive(
     Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq,
 )]
@@ -47,9 +50,19 @@ pub struct Amount {
     messages: u64,
 }
 
+impl core::fmt::Display for Amount {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "coins: {}, messages: {}", self.coins, self.messages)
+    }
+}
+
 impl Amount {
-    pub fn new(coins: u64, messages: u64) -> Self {
-        Self { coins, messages }
+    pub fn new_coins(coins: u64) -> Self {
+        Self { coins, messages: 0 }
+    }
+
+    pub fn new_messages(messages: u64) -> Self {
+        Self { coins: 0, messages }
     }
 
     pub fn coins(&self) -> u64 {
@@ -58,6 +71,19 @@ impl Amount {
 
     pub fn messages(&self) -> u64 {
         self.messages
+    }
+
+    pub fn saturating_add(&self, other: &Self) -> Self {
+        Self {
+            coins: self
+                .coins
+                .checked_add(other.coins)
+                .expect("TODO[RC]: balance too large"),
+            messages: self
+                .messages
+                .checked_add(other.messages)
+                .expect("TODO[RC]: balance too large"),
+        }
     }
 }
 

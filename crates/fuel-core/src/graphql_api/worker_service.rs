@@ -1,4 +1,5 @@
 use super::{
+    api_service::ConsensusProvider,
     da_compression::da_compress_block,
     storage::{
         balances::{
@@ -34,6 +35,7 @@ use crate::{
         },
     },
     graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
+    service::adapters::ConsensusParametersProvider,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
@@ -45,6 +47,12 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
+    not_found,
+    tables::ConsensusParametersVersions,
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
@@ -69,6 +77,7 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
+        AssetId,
         Contract,
         Input,
         Output,
@@ -97,6 +106,7 @@ use futures::{
     FutureExt,
     StreamExt,
 };
+use hex::FromHex;
 use std::{
     borrow::Cow,
     ops::Deref,
@@ -131,6 +141,7 @@ pub struct Task<TxPool, D> {
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
+    base_asset_id: AssetId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
 }
@@ -165,6 +176,7 @@ where
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
+            &self.base_asset_id,
         )?;
 
         match self.da_compression_config {
@@ -193,6 +205,7 @@ where
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
+    base_asset_id: &AssetId,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
@@ -201,12 +214,43 @@ where
     for event in events {
         match event.deref() {
             Event::MessageImported(message) => {
+                // *** "Old" behavior ***
                 block_st_transaction
                     .storage_as_mut::<OwnedMessageIds>()
                     .insert(
                         &OwnedMessageKey::new(message.recipient(), message.nonce()),
                         &(),
                     )?;
+
+                // *** "New" behavior (using Balances DB) ***
+                let address = message.recipient();
+                let asset_id = base_asset_id;
+                let balances_key = BalancesKey::new(&address, &asset_id);
+
+                // TODO[RC]: Use some separate, testable function for this and also take care of "messages"
+                let amount = block_st_transaction
+                    .storage::<Balances>()
+                    .get(&balances_key)?
+                    .unwrap_or_default();
+
+                let new_amount =
+                    amount.saturating_add(&Amount::new_messages(message.amount()));
+
+                println!(
+                    "Processing message with amount: {} (asset_id={})",
+                    message.amount(),
+                    asset_id
+                );
+                println!(
+                    "Storing {new_amount} for message under key [{},{:?}]",
+                    address, asset_id
+                );
+
+                info!("XXX - current amount: {amount}, adding {} messages, new amount: {new_amount}", message.amount());
+                block_st_transaction
+                    .storage_as_mut::<Balances>()
+                    .insert(&balances_key, &new_amount); // TODO[RC]: .replace()
+                info!("...inserted!");
             }
             Event::MessageConsumed(message) => {
                 block_st_transaction
@@ -220,35 +264,49 @@ where
                     .insert(message.nonce(), &())?;
             }
             Event::CoinCreated(coin) => {
+                // *** "Old" behavior ***
                 let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .insert(&coin_by_owner, &())?;
 
+                // *** "New" behavior (using Balances DB) ***
                 let address = coin.owner;
                 let asset_id = coin.asset_id;
                 let balances_key = BalancesKey::new(&address, &asset_id);
 
                 // TODO[RC]: Use some separate, testable function for this and also take care of "messages"
-                let current_amount = block_st_transaction
+                let amount = block_st_transaction
                     .storage::<Balances>()
                     .get(&balances_key)?
-                    .map(|amount| amount.coins())
                     .unwrap_or_default();
 
-                let amount = Amount::new(current_amount.saturating_add(coin.amount), 0);
+                let new_amount = amount.saturating_add(&Amount::new_coins(coin.amount));
 
-                info!("XXX - current amount: {current_amount}, new amount: {},  total new amount: {:?}...", coin.amount, amount);
+                println!(
+                    "Processing coin with amount: {} (asset_id={})",
+                    coin.amount, asset_id
+                );
+                println!(
+                    "Storing {new_amount} for coin under key [{},{:?}]",
+                    address, asset_id
+                );
+
+                info!("XXX - current amount: {amount}, adding {} coins, new amount: {new_amount}", coin.amount);
                 block_st_transaction
                     .storage_as_mut::<Balances>()
-                    .insert(&balances_key, &amount);
+                    .insert(&balances_key, &new_amount); // TODO[RC]: .replace()
                 info!("...inserted!");
             }
             Event::CoinConsumed(coin) => {
+                // *** "Old" behavior ***
                 let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
+
+                // *** "New" behavior (using Balances DB) ***
+                
             }
             Event::ForcedTransactionFailed {
                 id,
@@ -471,6 +529,16 @@ where
     Ok(())
 }
 
+fn base_asset_id() -> AssetId {
+    // TODO[RC]: This is just a hack, get base asset id from consensus parameters here.
+    let base_asset_id =
+        Vec::from_hex("0000000000000000000000000000000000000000000000000000000000000000")
+            .unwrap();
+    let arr: [u8; 32] = base_asset_id.try_into().unwrap();
+    let base_asset_id = AssetId::new(arr);
+    base_asset_id
+}
+
 #[async_trait::async_trait]
 impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
@@ -500,6 +568,8 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
+        let base_asset_id = base_asset_id();
+
         let InitializeTask {
             chain_id,
             da_compression_config,
@@ -518,6 +588,7 @@ where
             chain_id,
             da_compression_config,
             continue_on_error,
+            base_asset_id,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
