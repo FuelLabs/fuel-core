@@ -49,7 +49,7 @@ async fn test_import_0_to_5() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -99,7 +99,7 @@ async fn test_import_3_to_5() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -169,7 +169,7 @@ async fn test_import_0_to_499() {
 
     // Happens once for each batch
     let times = div_ceil(n, header_batch_size);
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(times)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -219,7 +219,7 @@ async fn import__signature_fails_on_header_5_only() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -304,7 +304,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
             })
         });
     // No reask
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(3)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -377,7 +377,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
     let mut seq = Sequence::new();
     // Given
     // Fail to get transactions for block 4
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .in_sequence(&mut seq)
         .returning(|_| {
@@ -387,7 +387,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
             })
         });
 
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(2)
         .in_sequence(&mut seq)
         .returning(|block_ids| {
@@ -404,9 +404,12 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
         .in_sequence(&mut seq)
         .returning(|block_ids| {
             Box::pin(async move {
-                let data = block_ids.data;
+                let data = block_ids;
                 let v = data.into_iter().map(|_| Transactions::default()).collect();
-                Ok(Some(v))
+                Ok(SourcePeer {
+                    peer_id: random_peer(),
+                    data: Some(v),
+                })
             })
         });
 
@@ -466,7 +469,7 @@ async fn import__signature_fails_on_header_4_only() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(0)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -575,7 +578,7 @@ async fn import__header_5_not_found() {
             })
         });
 
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -617,7 +620,7 @@ async fn import__header_4_not_found() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions().times(0);
+    p2p.expect_get_transactions_from_peer().times(0);
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -661,7 +664,7 @@ async fn import__transactions_not_found() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|_| Box::pin(async move { Ok(None) }));
 
@@ -708,7 +711,7 @@ async fn import__transactions_not_found_for_header_4() {
             })
         });
     let mut height = 3;
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(move |block_ids| {
             Box::pin(async move {
@@ -765,12 +768,14 @@ async fn import__transactions_not_found_for_header_5() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions().times(1).returning(move |_| {
-        Box::pin(async move {
-            let v = vec![Transactions::default()];
-            Ok(Some(v))
-        })
-    });
+    p2p.expect_get_transactions_from_peer()
+        .times(1)
+        .returning(move |_| {
+            Box::pin(async move {
+                let v = vec![Transactions::default()];
+                Ok(Some(v))
+            })
+        });
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -799,7 +804,7 @@ async fn import__p2p_error() {
         .returning(|_| {
             Box::pin(async move { Err(anyhow::anyhow!("Some network error")) })
         });
-    p2p.expect_get_transactions().times(0);
+    p2p.expect_get_transactions_from_peer().times(0);
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -843,9 +848,11 @@ async fn import__p2p_error_on_4_transactions() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions().times(1).returning(|_| {
-        Box::pin(async move { Err(anyhow::anyhow!("Some network error")) })
-    });
+    p2p.expect_get_transactions_from_peer()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async move { Err(anyhow::anyhow!("Some network error")) })
+        });
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -895,7 +902,7 @@ async fn import__consensus_error_on_4() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions().times(0);
+    p2p.expect_get_transactions_from_peer().times(0);
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -945,7 +952,7 @@ async fn import__consensus_error_on_5() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -997,7 +1004,7 @@ async fn import__execution_error_on_header_4() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -1061,7 +1068,7 @@ async fn import__execution_error_on_header_5() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(1)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -1158,7 +1165,7 @@ async fn import__can_work_in_two_loops() {
                 Ok(headers)
             })
         });
-    p2p.expect_get_transactions()
+    p2p.expect_get_transactions_from_peer()
         .times(2)
         .returning(|block_ids| {
             Box::pin(async move {
@@ -1310,13 +1317,14 @@ async fn import__execution_error_on_header_4_when_awaits_for_1000000_blocks() {
             Ok(headers)
         })
     });
-    p2p.expect_get_transactions().returning(|block_ids| {
-        Box::pin(async move {
-            let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::default()).collect();
-            Ok(Some(v))
-        })
-    });
+    p2p.expect_get_transactions_from_peer()
+        .returning(|block_ids| {
+            Box::pin(async move {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
+                Ok(Some(v))
+            })
+        });
 
     let mut executor = MockBlockImporterPort::default();
     executor
@@ -1477,18 +1485,20 @@ impl PeerReportTestBuilder {
 
         let transactions = self.get_transactions.clone();
         if let Some(t) = transactions {
-            p2p.expect_get_transactions().returning(move |_| {
+            p2p.expect_get_transactions_from_peer().returning(move |_| {
                 let t = t.clone();
                 Box::pin(async move { Ok(t) })
             });
         } else {
-            p2p.expect_get_transactions().returning(|block_ids| {
-                Box::pin(async move {
-                    let data = block_ids.data;
-                    let v = data.into_iter().map(|_| Transactions::default()).collect();
-                    Ok(Some(v))
-                })
-            });
+            p2p.expect_get_transactions_from_peer()
+                .returning(|block_ids| {
+                    Box::pin(async move {
+                        let data = block_ids.data;
+                        let v =
+                            data.into_iter().map(|_| Transactions::default()).collect();
+                        Ok(Some(v))
+                    })
+                });
         }
 
         let mut seq = mockall::Sequence::new();
@@ -1611,7 +1621,7 @@ impl DefaultMocks for MockPeerToPeerPort {
                 })
             });
 
-        p2p.expect_get_transactions()
+        p2p.expect_get_transactions_from_peer()
             .times(t.next().unwrap())
             .returning(|block_ids| {
                 Box::pin(async move {

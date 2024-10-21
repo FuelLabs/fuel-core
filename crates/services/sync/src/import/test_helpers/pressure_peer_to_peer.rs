@@ -47,13 +47,26 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.get_sealed_block_headers(block_height_range).await
     }
 
-    async fn get_transactions(
+    async fn get_transactions_from_peer(
         &self,
         block_ids: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         self.counts.apply(|c| c.inc_transactions());
         tokio::time::sleep(self.durations[1]).await;
         for _height in block_ids.data.clone() {
+            self.counts.apply(|c| c.inc_blocks());
+        }
+        self.counts.apply(|c| c.dec_transactions());
+        self.p2p.get_transactions_from_peer(block_ids).await
+    }
+
+    async fn get_transactions(
+        &self,
+        block_ids: Range<u32>,
+    ) -> anyhow::Result<SourcePeer<Option<Vec<Transactions>>>> {
+        self.counts.apply(|c| c.inc_transactions());
+        tokio::time::sleep(self.durations[1]).await;
+        for _height in block_ids.clone() {
             self.counts.apply(|c| c.inc_blocks());
         }
         self.counts.apply(|c| c.dec_transactions());
@@ -84,13 +97,14 @@ impl PressurePeerToPeer {
                 Ok(headers)
             })
         });
-        mock.expect_get_transactions().returning(|block_ids| {
-            Box::pin(async move {
-                let data = block_ids.data;
-                let v = data.into_iter().map(|_| Transactions::default()).collect();
-                Ok(Some(v))
-            })
-        });
+        mock.expect_get_transactions_from_peer()
+            .returning(|block_ids| {
+                Box::pin(async move {
+                    let data = block_ids.data;
+                    let v = data.into_iter().map(|_| Transactions::default()).collect();
+                    Ok(Some(v))
+                })
+            });
         Self {
             p2p: mock,
             durations: delays,

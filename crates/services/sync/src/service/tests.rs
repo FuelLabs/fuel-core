@@ -46,13 +46,14 @@ async fn test_new_service() {
             Ok(headers)
         })
     });
-    p2p.expect_get_transactions().returning(|block_ids| {
-        Box::pin(async move {
-            let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::default()).collect();
-            Ok(Some(v))
-        })
-    });
+    p2p.expect_get_transactions_from_peer()
+        .returning(|block_ids| {
+            Box::pin(async move {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
+                Ok(Some(v))
+            })
+        });
     let mut importer = MockBlockImporterPort::default();
     importer
         .expect_committed_height_stream()

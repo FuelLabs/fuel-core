@@ -563,27 +563,47 @@ where
 }
 
 async fn get_transactions<P>(
-    peer_id: PeerId,
     range: Range<u32>,
+    peer_id: Option<PeerId>,
     p2p: &Arc<P>,
-) -> Option<Vec<Transactions>>
+) -> Option<SourcePeer<Vec<Transactions>>>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
-    let range = peer_id.clone().bind(range);
-    let res = p2p
-        .get_transactions(range)
-        .await
-        .trace_err("Failed to get transactions");
-    match res {
-        Ok(Some(transactions)) => Some(transactions),
-        _ => {
-            report_peer(
-                p2p,
-                Some(peer_id.clone()),
-                PeerReportReason::MissingTransactions,
-            );
-            None
+    match peer_id {
+        Some(peer_id) => {
+            let source_peer = peer_id.clone().bind(range.clone());
+            let Ok(Some(txs)) = p2p
+                .get_transactions_from_peer(source_peer)
+                .await
+                .trace_err("Failed to get transactions")
+            else {
+                report_peer(
+                    p2p,
+                    Some(peer_id.clone()),
+                    PeerReportReason::MissingTransactions,
+                );
+                return None;
+            };
+            Some(SourcePeer { peer_id, data: txs })
+        }
+        None => {
+            let Ok(SourcePeer { peer_id, data }) = p2p
+                .get_transactions(range.clone())
+                .await
+                .trace_err("Failed to get transactions")
+            else {
+                return None;
+            };
+            let Some(txs) = data else {
+                report_peer(
+                    p2p,
+                    Some(peer_id.clone()),
+                    PeerReportReason::MissingTransactions,
+                );
+                return None;
+            };
+            Some(SourcePeer { peer_id, data: txs })
         }
     }
 }
@@ -646,20 +666,19 @@ where
 {
     let Batch {
         results: headers,
-        peer,
         range,
+        peer,
     } = headers;
 
-    let Some(peer) = peer else {
-        return SealedBlockBatch::new(None, range, vec![])
-    };
-
-    let Some(transaction_data) = get_transactions(peer.clone(), range.clone(), p2p).await
+    let Some(SourcePeer {
+        peer_id,
+        data: transactions,
+    }) = get_transactions(range.clone(), peer.clone(), p2p).await
     else {
-        return Batch::new(Some(peer), range, vec![])
+        return Batch::new(peer, range, vec![])
     };
 
-    let iter = headers.into_iter().zip(transaction_data.into_iter());
+    let iter = headers.into_iter().zip(transactions.into_iter());
     let mut blocks = vec![];
     for (block_header, transactions) in iter {
         let SealedBlockHeader {
@@ -676,13 +695,13 @@ where
         } else {
             report_peer(
                 p2p,
-                Some(peer.clone()),
+                Some(peer_id.clone()),
                 PeerReportReason::InvalidTransactions,
             );
             break
         }
     }
-    Batch::new(Some(peer), range, blocks)
+    Batch::new(Some(peer_id), range, blocks)
 }
 
 #[tracing::instrument(
