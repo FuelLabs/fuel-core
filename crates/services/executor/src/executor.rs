@@ -916,9 +916,15 @@ where
                         if message.da_height() != da_height {
                             return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
-                        block_storage_tx
-                            .storage_as_mut::<Messages>()
-                            .insert(message.nonce(), &message)?;
+                        let message_nonce = message.nonce();
+                        if !block_storage_tx
+                            .storage_as_ref::<Messages>()
+                            .contains_key(message_nonce)?
+                        {
+                            block_storage_tx
+                                .storage_as_mut::<Messages>()
+                                .insert(message_nonce, &message)?;
+                        }
                         execution_data
                             .events
                             .push(ExecutorEvent::MessageImported(message));

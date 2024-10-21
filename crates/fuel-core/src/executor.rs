@@ -3314,7 +3314,7 @@ mod tests {
         }
 
         #[test]
-        fn produce_and_commit__messages_with_duplicate_nonces_are_ignored() {
+        fn produce_without_commit__messages_with_duplicate_nonces_are_ignored() {
             // given
             let previous_da_height = 1;
             let shared_nonce = 1234.into();
