@@ -188,16 +188,11 @@ impl NetworkCodec for PostcardCodec {
     }
 }
 
-#[derive(Debug, Clone, EnumIter)]
+#[derive(Debug, Default, Clone, EnumIter)]
 pub enum PostcardProtocol {
+    #[default]
     V1,
     V2,
-}
-
-impl Default for PostcardProtocol {
-    fn default() -> Self {
-        PostcardProtocol::V1
-    }
 }
 
 impl AsRef<str> for PostcardProtocol {
