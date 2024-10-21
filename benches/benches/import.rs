@@ -50,7 +50,7 @@ fn bench_imports(c: &mut Criterion) {
                     let shared_count = SharedCounts::new(Default::default());
                     let state = State::new(None, n);
                     let shared_state = SharedMutex::new(state);
-                    let (mut import, _tx, mut shutdown) = provision_import_test(
+                    let (import, _tx, mut shutdown) = provision_import_test(
                         shared_count.clone(),
                         shared_state,
                         durations,
