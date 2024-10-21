@@ -924,10 +924,10 @@ where
                             block_storage_tx
                                 .storage_as_mut::<Messages>()
                                 .insert(message_nonce, &message)?;
+                            execution_data
+                                .events
+                                .push(ExecutorEvent::MessageImported(message));
                         }
-                        execution_data
-                            .events
-                            .push(ExecutorEvent::MessageImported(message));
                     }
                     Event::Transaction(relayed_tx) => {
                         let id = relayed_tx.id();
