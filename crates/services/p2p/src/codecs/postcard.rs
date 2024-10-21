@@ -176,11 +176,15 @@ impl GossipsubCodec for PostcardCodec {
     }
 }
 
+// TODO: Remove this NetworkCodec
 impl NetworkCodec for PostcardCodec {
     fn get_req_res_protocols(
         &self,
     ) -> impl Iterator<Item = <Self as request_response::Codec>::Protocol> {
-        PostcardProtocol::iter()
+        // TODO: Iterating over versions in reverse order should prefer
+        // peers to use V2 over V1 for exchanging messages. However, this is
+        // not guaranteed by the specs for the `request_response` protocol.
+        PostcardProtocol::iter().rev()
     }
 }
 
