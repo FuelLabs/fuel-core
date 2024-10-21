@@ -165,9 +165,10 @@ pub struct AlgorithmUpdaterV1 {
 /// the activity is increased The chain activity exists on a scale
 /// between 0 and the sum of the normal, hold, and decrease buffers.
 ///
-/// e.g. if the decrease buffer size is 20, the hold buffer size is 60, and the increase buffer size is 40:
+/// e.g. if the decrease activity threshold is 20, the hold activity threshold is 80, and the max activity is 120,
+/// we'd have the following ranges:
 ///
-/// 0<-- decrease buffer -->20<-- hold buffer -->80<-- normal buffer -->120
+/// 0 <-- decrease range -->20<-- hold range -->80<-- normal range -->120
 ///
 /// The current chain activity determines the behavior of the DA gas price.
 ///
