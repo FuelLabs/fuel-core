@@ -182,7 +182,8 @@ pub struct L2ActivityTracker {
     decrease_activity_threshold: u16,
     /// The current activity of the L2 chain
     chain_activity: u16,
-    /// The threshold of block activity below which the chain activity will be decreased
+    /// The threshold of block activity below which the chain activity will be decreased,
+    /// above or equal it will always increase
     block_activity_threshold: ClampedPercentage,
 }
 
