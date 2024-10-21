@@ -5,6 +5,7 @@ use crate::database::{
     },
     Database,
     Error as DatabaseError,
+    IndexationStatus,
     IndexationType,
 };
 use fuel_core_storage::{
@@ -73,8 +74,8 @@ where
         match current_metadata.as_ref() {
             DatabaseMetadata::V1 { version, height } => {
                 let initial_progress = [
-                    (IndexationType::Balances, Description::Height::default()),
-                    (IndexationType::CoinsToSpend, Description::Height::default()),
+                    (IndexationType::Balances, IndexationStatus::new()),
+                    (IndexationType::CoinsToSpend, IndexationStatus::new()),
                 ];
                 let new_metadata = DatabaseMetadata::V2 {
                     version: *version + 1,

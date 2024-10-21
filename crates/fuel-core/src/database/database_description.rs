@@ -6,7 +6,10 @@ use fuel_core_types::{
 };
 use std::collections::HashMap;
 
-use super::IndexationType;
+use super::{
+    IndexationStatus,
+    IndexationType,
+};
 
 pub mod gas_price;
 pub mod off_chain;
@@ -80,7 +83,7 @@ pub enum DatabaseMetadata<Height> {
     V2 {
         version: u32,
         height: Height,
-        indexation_progress: HashMap<IndexationType, Height>,
+        indexation_progress: HashMap<IndexationType, IndexationStatus>,
     },
 }
 
@@ -101,11 +104,11 @@ impl<Height> DatabaseMetadata<Height> {
         }
     }
 
-    /// Returns the height of the database.
+    /// Returns the indexation progress of a database
     pub fn balances_indexation_progress(
         &self,
         indexation_type: IndexationType,
-    ) -> Option<&Height> {
+    ) -> Option<&IndexationStatus> {
         match self {
             Self::V1 { height, .. } => None,
             Self::V2 {

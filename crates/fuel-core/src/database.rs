@@ -104,6 +104,23 @@ pub(crate) enum IndexationType {
     CoinsToSpend,
 }
 
+#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) enum IndexationStatus {
+    Pending,
+    CompletedUntil(BlockHeight),
+    Finished,
+}
+
+impl IndexationStatus {
+    pub fn new() -> Self {
+        IndexationStatus::Pending
+    }
+
+    pub fn is_finished(&self) -> bool {
+        matches!(self, IndexationStatus::Finished)
+    }
+}
+
 #[derive(Default, Debug, Copy, Clone)]
 pub struct GenesisStage;
 
