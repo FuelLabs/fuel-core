@@ -40,6 +40,12 @@ pub enum ResponseMessageErrorCode {
     /// The peer sent an empty response using protocol `/fuel/req_res/0.0.1`
     #[error("Empty response sent by peer using legacy protocol /fuel/req_res/0.0.1")]
     ProtocolV1EmptyResponse = 0,
+    #[error("The requested range is too large")]
+    RequestedRangeTooLarge = 1,
+    #[error("Timeout while processing request")]
+    Timeout = 2,
+    #[error("Sync processor is out of capacity")]
+    SyncProcessorOutOfCapacity = 3,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -552,11 +552,9 @@ where
             tracing::error!(
                 requested_length = range.len(),
                 max_len,
-                "Requested range is too big"
+                "Requested range is too large"
             );
-            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-            // TODO[AC] Use more meaningful error codes
-            let response = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let response = Err(ResponseMessageErrorCode::RequestedRangeTooLarge);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(response));
@@ -570,20 +568,18 @@ where
                 return;
             }
 
-            // TODO[AC] Assign an error code to this
             let response = db_lookup(&view, range.clone())
                 .ok()
                 .flatten()
-                .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+                .ok_or(ResponseMessageErrorCode::Timeout);
 
             let _ = response_channel
                 .try_send(task_request(response, request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
-        // TODO[AC]: Handle error cases and return meaningful status codes
         if result.is_err() {
-            let err = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let err = Err(ResponseMessageErrorCode::SyncProcessorOutOfCapacity);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(err));
@@ -664,8 +660,7 @@ where
         });
 
         if result.is_err() {
-            // TODO[AC]: return better error code
-            let res = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let res = Err(ResponseMessageErrorCode::SyncProcessorOutOfCapacity);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(res));
@@ -696,13 +691,11 @@ where
         tx_ids: Vec<TxId>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-        // TODO[AC] Use more meaningful error codes
         if tx_ids.len() > self.max_txs_per_request {
             self.p2p_service.send_response_msg(
                 request_id,
                 ResponseMessage::TxPoolFullTransactions(Err(
-                    ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+                    ResponseMessageErrorCode::RequestedRangeTooLarge,
                 )),
             )?;
             return Ok(());
