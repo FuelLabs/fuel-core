@@ -1,5 +1,8 @@
 use super::*;
-use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    L2ActivityTracker,
+};
 use std::{
     collections::BTreeMap,
     num::NonZeroU64,
@@ -83,6 +86,7 @@ impl Simulator {
     ) -> AlgorithmUpdaterV1 {
         // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
+        let always_normal_activity = L2ActivityTracker::new_always_normal();
         let updater = AlgorithmUpdaterV1 {
             min_exec_gas_price: 10,
             min_da_gas_price: 10,
@@ -109,6 +113,7 @@ impl Simulator {
             da_d_component,
             last_profit: 0,
             second_to_last_profit: 0,
+            l2_activity: always_normal_activity,
         };
         updater
     }
