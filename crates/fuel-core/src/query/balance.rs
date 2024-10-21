@@ -36,6 +36,7 @@ impl ReadView {
         asset_id: AssetId,
         base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
+        // The old way.
         let amount = AssetQuery::new(
             &owner,
             &AssetSpendTarget::new(asset_id, u64::MAX, u16::MAX),
@@ -53,9 +54,15 @@ impl ReadView {
         })
         .await?;
 
+        // The new way.
+        // TODO[RC]: balance could return both coins and messages
+        let amount_1 = self.off_chain.balance(&owner, &asset_id, &base_asset_id)?;
+
+        assert_eq!(amount, amount_1);
+
         Ok(AddressBalance {
             owner,
-            amount,
+            amount: amount_1,
             asset_id,
         })
     }

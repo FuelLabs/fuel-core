@@ -11,6 +11,7 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
+use fuel_core_types::fuel_tx::AssetId;
 
 use crate::{
     database::{

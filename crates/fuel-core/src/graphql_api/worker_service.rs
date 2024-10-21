@@ -1,9 +1,16 @@
 use super::{
+    api_service::ConsensusProvider,
     da_compression::da_compress_block,
-    storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
+    storage::{
+        balances::{
+            Amount,
+            BalancesKey,
+        },
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use crate::{
@@ -13,6 +20,10 @@ use crate::{
             worker::OffChainDatabaseTransaction,
         },
         storage::{
+            balances::{
+                Balances,
+                MessageBalances,
+            },
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -27,6 +38,7 @@ use crate::{
         },
     },
     graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
+    service::adapters::ConsensusParametersProvider,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
@@ -38,7 +50,14 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
+    not_found,
+    tables::ConsensusParametersVersions,
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
     StorageAsMut,
 };
@@ -62,6 +81,8 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
+        Address,
+        AssetId,
         Contract,
         Input,
         Output,
@@ -90,10 +111,12 @@ use futures::{
     FutureExt,
     StreamExt,
 };
+use hex::FromHex;
 use std::{
     borrow::Cow,
     ops::Deref,
 };
+use tracing::info;
 
 #[cfg(test)]
 mod tests;
@@ -123,6 +146,7 @@ pub struct Task<TxPool, D> {
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
+    base_asset_id: AssetId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
 }
@@ -157,6 +181,7 @@ where
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
+            &self.base_asset_id,
         )?;
 
         match self.da_compression_config {
@@ -181,10 +206,110 @@ where
     }
 }
 
+// TODO[RC]: Maybe merge with `increase_message_balance()`?
+fn increase_coin_balance<T>(
+    owner: &Address,
+    asset_id: &AssetId,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    println!(
+        "increasing coin balance for owner: {:?}, asset_id: {:?}, amount: {:?}",
+        owner, asset_id, amount
+    );
+
+    // TODO[RC]: Make sure this operation is atomic
+    let key = BalancesKey::new(owner, asset_id);
+    let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
+    let new_balance = current_balance
+        .checked_add(amount)
+        .expect("coin balance too big");
+    tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
+}
+
+fn decrease_coin_balance<T>(
+    owner: &Address,
+    asset_id: &AssetId,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    println!(
+        "decreasing coin balance for owner: {:?}, asset_id: {:?}, amount: {:?}",
+        owner, asset_id, amount
+    );
+
+    // TODO[RC]: Make sure this operation is atomic
+    let key = BalancesKey::new(owner, asset_id);
+    let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
+    let new_balance = current_balance
+        .checked_sub(amount)
+        .expect("can not spend more coin than a balance");
+    tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
+}
+
+fn increase_message_balance<T>(
+    owner: &Address,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    println!(
+        "increasing message balance for owner: {:?}, amount: {:?}",
+        owner, amount
+    );
+
+    // TODO[RC]: Make sure this operation is atomic
+    let key = owner;
+    let current_balance = tx
+        .storage::<MessageBalances>()
+        .get(&key)?
+        .unwrap_or_default();
+    let new_balance = current_balance
+        .checked_add(amount)
+        .expect("message balance too big");
+    tx.storage_as_mut::<MessageBalances>()
+        .insert(&key, &new_balance)
+}
+
+fn decrease_message_balance<T>(
+    owner: &Address,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    println!(
+        "decreasing message balance for owner: {:?}, amount: {:?}",
+        owner, amount
+    );
+
+    // TODO[RC]: Make sure this operation is atomic
+    let key = owner;
+    let current_balance = tx
+        .storage::<MessageBalances>()
+        .get(&key)?
+        .unwrap_or_default();
+    let new_balance = current_balance
+        .checked_sub(amount)
+        .expect("can not spend more messages than a balance");
+    tx.storage_as_mut::<MessageBalances>()
+        .insert(&key, &new_balance)
+}
+
 /// Process the executor events and update the indexes for the messages and coins.
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
+    base_asset_id: &AssetId,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
@@ -193,14 +318,23 @@ where
     for event in events {
         match event.deref() {
             Event::MessageImported(message) => {
+                // *** "Old" behavior ***
                 block_st_transaction
                     .storage_as_mut::<OwnedMessageIds>()
                     .insert(
                         &OwnedMessageKey::new(message.recipient(), message.nonce()),
                         &(),
                     )?;
+
+                // *** "New" behavior (using Balances DB) ***
+                increase_message_balance(
+                    &message.recipient(),
+                    message.amount(),
+                    block_st_transaction,
+                )?;
             }
             Event::MessageConsumed(message) => {
+                // *** "Old" behavior ***
                 block_st_transaction
                     .storage_as_mut::<OwnedMessageIds>()
                     .remove(&OwnedMessageKey::new(
@@ -210,18 +344,43 @@ where
                 block_st_transaction
                     .storage::<SpentMessages>()
                     .insert(message.nonce(), &())?;
+
+                // *** "New" behavior (using Balances DB) ***
+                decrease_message_balance(
+                    &message.recipient(),
+                    message.amount(),
+                    block_st_transaction,
+                )?;
             }
             Event::CoinCreated(coin) => {
+                // *** "Old" behavior ***
                 let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .insert(&coin_by_owner, &())?;
+
+                // *** "New" behavior (using Balances DB) ***
+                increase_coin_balance(
+                    &coin.owner,
+                    &coin.asset_id,
+                    coin.amount,
+                    block_st_transaction,
+                )?;
             }
             Event::CoinConsumed(coin) => {
+                // *** "Old" behavior ***
                 let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
+
+                // *** "New" behavior (using Balances DB) ***
+                decrease_coin_balance(
+                    &coin.owner,
+                    &coin.asset_id,
+                    coin.amount,
+                    block_st_transaction,
+                )?;
             }
             Event::ForcedTransactionFailed {
                 id,
@@ -444,6 +603,16 @@ where
     Ok(())
 }
 
+fn base_asset_id() -> AssetId {
+    // TODO[RC]: This is just a hack, get base asset id from consensus parameters here.
+    let base_asset_id =
+        Vec::from_hex("0000000000000000000000000000000000000000000000000000000000000000")
+            .unwrap();
+    let arr: [u8; 32] = base_asset_id.try_into().unwrap();
+    let base_asset_id = AssetId::new(arr);
+    base_asset_id
+}
+
 #[async_trait::async_trait]
 impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
@@ -473,6 +642,8 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
+        let base_asset_id = base_asset_id();
+
         let InitializeTask {
             chain_id,
             da_compression_config,
@@ -491,6 +662,7 @@ where
             chain_id,
             da_compression_config,
             continue_on_error,
+            base_asset_id,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;

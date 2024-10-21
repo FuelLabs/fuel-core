@@ -12,7 +12,9 @@ impl DatabaseDescription for OffChain {
     type Height = BlockHeight;
 
     fn version() -> u32 {
-        0
+        // TODO[RC]: Flip to 1, to take care of DatabaseMetadata::V2
+        // TODO[RC]: This will fail the check_version(), do we need to migrate first?
+        1
     }
 
     fn name() -> String {
