@@ -812,7 +812,7 @@ where
         D: KeyValueInspect<Column = Column>,
     {
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(
+            self.process_l1_events(
                 block_height,
                 da_block_height,
                 data,
@@ -875,7 +875,7 @@ where
         }
     }
 
-    fn process_da<D>(
+    fn process_l1_events<D>(
         &mut self,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,

@@ -3285,6 +3285,70 @@ mod tests {
             Ok(())
         }
 
+        fn on_chain_db_containing_message(
+            message: &Message,
+            da_block_height: u64,
+        ) -> Database<OnChain> {
+            let mut db = add_consensus_parameters(
+                Database::default(),
+                &ConsensusParameters::default(),
+            );
+            db.storage_as_mut::<Messages>()
+                .insert(message.id(), message)
+                .unwrap();
+
+            let mut block = Block::default();
+            block.header_mut().set_da_height(da_block_height.into());
+            block.header_mut().recalculate_metadata();
+
+            db.storage_as_mut::<FuelBlocks>()
+                .insert(&0.into(), &block)
+                .expect("Should insert genesis block without any problems");
+            db
+        }
+
+        fn relayer_db_containing_message(message: &Message) -> Database<Relayer> {
+            let mut relayer_db = Database::<Relayer>::default();
+            add_message_to_relayer(&mut relayer_db, message.clone());
+            relayer_db
+        }
+
+        #[test]
+        fn produce_and_commit__messages_with_duplicate_nonces_are_ignored() {
+            // given
+            let previous_da_height = 1;
+            let shared_nonce = 1234.into();
+            let mut message = Message::default();
+            message.set_amount(10);
+            message.set_da_height(previous_da_height.into());
+            message.set_nonce(shared_nonce);
+            let on_chain_db =
+                on_chain_db_containing_message(&message, previous_da_height);
+
+            let mut message_with_matching_nonce = message.clone();
+            message_with_matching_nonce.set_amount(20);
+            let new_da_height = previous_da_height + 1;
+            message_with_matching_nonce.set_da_height(new_da_height.into());
+            let relayer_db = relayer_db_containing_message(&message_with_matching_nonce);
+
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block_height = 1;
+            let block = test_block(block_height.into(), new_da_height.into(), 0);
+
+            // when
+            let changes = producer
+                .produce_without_commit(block.into())
+                .unwrap()
+                .into_changes();
+
+            // then
+            let changes_contains_message = ChangesIterator::<Column>::new(&changes)
+                .iter_all::<Messages>(None)
+                .count()
+                > 0;
+            assert!(!changes_contains_message);
+        }
+
         #[test]
         fn execute_without_commit__block_producer_includes_correct_inbox_event_merkle_root(
         ) {
