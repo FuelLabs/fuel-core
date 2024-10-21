@@ -375,17 +375,17 @@ impl FuelP2PService {
         &mut self,
         message: GossipsubBroadcastRequest,
     ) -> Result<MessageId, PublishError> {
-        let topic = self
+        let topic_hash = self
             .network_metadata
             .gossipsub_data
             .topics
-            .get_gossipsub_topic(&message);
+            .get_gossipsub_topic_hash(&message);
 
         match self.network_codec.encode(message) {
             Ok(encoded_data) => self
                 .swarm
                 .behaviour_mut()
-                .publish_message(topic, encoded_data),
+                .publish_message(topic_hash, encoded_data),
             Err(e) => Err(PublishError::TransformFailed(e)),
         }
     }
