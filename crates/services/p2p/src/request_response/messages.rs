@@ -115,10 +115,14 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 
 #[derive(Debug)]
 pub enum ResponseSender {
-    SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
-    Transactions(OnResponse<Option<Vec<Transactions>>>),
-    TxPoolAllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
-    TxPoolFullTransactions(OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>),
+    SealedHeaders(OnResponse<Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>>),
+    Transactions(OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>),
+    TxPoolAllTransactionsIds(OnResponse<Result<Vec<TxId>, ResponseMessageErrorCode>>),
+    TxPoolFullTransactions(
+        OnResponse<
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+        >,
+    ),
 }
 
 #[derive(Debug, Error)]

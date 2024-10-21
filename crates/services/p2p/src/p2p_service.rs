@@ -676,7 +676,7 @@ impl FuelP2PService {
                         ResponseSender::SealedHeaders(c) => match response {
                             ResponseMessage::SealedHeaders(v) => {
                                 // TODO[AC]: Change type of ResponseSender and remove the .ok() here
-                                c.send((peer, Ok(v.ok()))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -688,7 +688,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::Transactions(c) => match response {
                             ResponseMessage::Transactions(v) => {
-                                c.send((peer, Ok(v.ok()))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -700,7 +700,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::TxPoolAllTransactionsIds(c) => match response {
                             ResponseMessage::TxPoolAllTransactionsIds(v) => {
-                                c.send((peer, Ok(v.ok()))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -712,7 +712,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::TxPoolFullTransactions(c) => match response {
                             ResponseMessage::TxPoolFullTransactions(v) => {
-                                c.send((peer, Ok(v.ok()))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(

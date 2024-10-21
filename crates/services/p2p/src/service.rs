@@ -113,21 +113,23 @@ pub enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: OnResponse<Option<Vec<SealedBlockHeader>>>,
+        channel: OnResponse<Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>>,
     },
     GetTransactions {
         block_height_range: Range<u32>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<Transactions>>>,
+        channel: OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>,
     },
     TxPoolGetAllTxIds {
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<TxId>>>,
+        channel: OnResponse<Result<Vec<TxId>, ResponseMessageErrorCode>>,
     },
     TxPoolGetFullTransactions {
         tx_ids: Vec<TxId>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>,
+        channel: OnResponse<
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+        >,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -1029,8 +1031,17 @@ impl SharedState {
 
         let (peer_id, response) = receiver.await.map_err(|e| anyhow!("{e}"))?;
 
-        let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
-        Ok((peer_id.to_bytes(), data))
+        let data = match response {
+            Err(request_response_protocol_error) => Err(anyhow!(
+                "Invalid response from peer {request_response_protocol_error:?}"
+            )),
+            Ok(Err(response_error_code)) => {
+                warn!("Peer {peer_id:?} failed to respond with sealed headers: {response_error_code:?}");
+                Ok(None)
+            }
+            Ok(Ok(headers)) => Ok(Some(headers)),
+        };
+        data.map(|data| (peer_id.to_bytes(), data))
     }
 
     pub async fn get_transactions_from_peer(
@@ -1056,7 +1067,18 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))
+        match response {
+            Err(request_response_protocol_error) => Err(anyhow!(
+                "Invalid response from peer {request_response_protocol_error:?}"
+            )),
+            Ok(Err(response_error_code)) => {
+                warn!(
+                    "Peer {peer_id:?} failed to respond with transactions: {response_error_code:?}"
+                );
+                return Ok(None);
+            }
+            Ok(Ok(txs)) => Ok(Some(txs)),
+        }
     }
 
     pub async fn get_all_transactions_ids_from_peer(
@@ -1080,11 +1102,11 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let Some(txs) =
-            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-        else {
-            return Ok(vec![]);
-        };
+        let response =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+
+        let txs = response.inspect_err(|e| { warn!("Peer {peer_id:?} could not response to request to get all transactions ids: {e:?}"); } ).unwrap_or_default();
+
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
@@ -1113,11 +1135,10 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let Some(txs) =
-            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-        else {
-            return Ok(vec![]);
-        };
+        let response =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        let txs = response.inspect_err(|e| { warn!("Peer {peer_id:?} could not response to request to get full transactions: {e:?}"); } ).unwrap_or_default();
+
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
