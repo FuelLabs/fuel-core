@@ -77,6 +77,7 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
+        Address,
         AssetId,
         Contract,
         Input,
@@ -201,6 +202,26 @@ where
     }
 }
 
+fn increase_balance<T>(
+    owner: &Address,
+    asset_id: &AssetId,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    // TODO[RC]: Make sure this operation is atomic
+    let balances_key = BalancesKey::new(owner, asset_id);
+    let current_balance = tx
+        .storage::<Balances>()
+        .get(&balances_key)?
+        .unwrap_or_default();
+    let new_balance = current_balance.saturating_add(amount);
+    tx.storage_as_mut::<Balances>()
+        .insert(&balances_key, &new_balance)
+}
+
 /// Process the executor events and update the indexes for the messages and coins.
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
@@ -223,33 +244,12 @@ where
                     )?;
 
                 // *** "New" behavior (using Balances DB) ***
-                let address = message.recipient();
-                let asset_id = base_asset_id;
-                let balances_key = BalancesKey::new(&address, &asset_id);
-
-                // TODO[RC]: Use some separate, testable function for this and also take care of "messages"
-                let amount = block_st_transaction
-                    .storage::<Balances>()
-                    .get(&balances_key)?
-                    .unwrap_or_default();
-
-                let new_amount = amount.saturating_add(message.amount());
-
-                println!(
-                    "Processing message with amount: {} (asset_id={})",
+                increase_balance(
+                    &message.recipient(),
+                    base_asset_id,
                     message.amount(),
-                    asset_id
-                );
-                println!(
-                    "Storing {new_amount} for message under key [{},{:?}]",
-                    address, asset_id
-                );
-
-                info!("XXX - current amount: {amount}, adding {} messages, new amount: {new_amount}", message.amount());
-                block_st_transaction
-                    .storage_as_mut::<Balances>()
-                    .insert(&balances_key, &new_amount); // TODO[RC]: .replace()
-                info!("...inserted!");
+                    block_st_transaction,
+                )?;
             }
             Event::MessageConsumed(message) => {
                 block_st_transaction
@@ -270,32 +270,12 @@ where
                     .insert(&coin_by_owner, &())?;
 
                 // *** "New" behavior (using Balances DB) ***
-                let address = coin.owner;
-                let asset_id = coin.asset_id;
-                let balances_key = BalancesKey::new(&address, &asset_id);
-
-                // TODO[RC]: Use some separate, testable function for this and also take care of "messages"
-                let amount = block_st_transaction
-                    .storage::<Balances>()
-                    .get(&balances_key)?
-                    .unwrap_or_default();
-
-                let new_amount = amount.saturating_add(coin.amount);
-
-                println!(
-                    "Processing coin with amount: {} (asset_id={})",
-                    coin.amount, asset_id
-                );
-                println!(
-                    "Storing {new_amount} for coin under key [{},{:?}]",
-                    address, asset_id
-                );
-
-                info!("XXX - current amount: {amount}, adding {} coins, new amount: {new_amount}", coin.amount);
-                block_st_transaction
-                    .storage_as_mut::<Balances>()
-                    .insert(&balances_key, &new_amount); // TODO[RC]: .replace()
-                info!("...inserted!");
+                increase_balance(
+                    &coin.owner,
+                    &coin.asset_id,
+                    coin.amount,
+                    block_st_transaction,
+                )?;
             }
             Event::CoinConsumed(coin) => {
                 // *** "Old" behavior ***
