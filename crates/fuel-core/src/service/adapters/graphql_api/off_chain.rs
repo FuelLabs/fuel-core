@@ -211,14 +211,14 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         let coins = self
             .storage_as_ref::<Balances>()
             .get(&BalancesKey::new(owner, asset_id))?
-            .ok_or(not_found!(Balances))?;
+            .unwrap_or_default();
 
         let base_asset_id = base_asset_id();
 
         let messages = self
             .storage_as_ref::<MessageBalances>()
             .get(&owner)?
-            .ok_or(not_found!(MessageBalances))?;
+            .unwrap_or_default();
 
         println!(
             "{coins} coins + {messages} messages = {}",

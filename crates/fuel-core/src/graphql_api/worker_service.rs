@@ -224,7 +224,32 @@ where
     // TODO[RC]: Make sure this operation is atomic
     let key = BalancesKey::new(owner, asset_id);
     let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
-    let new_balance = current_balance.saturating_add(amount);
+    let new_balance = current_balance
+        .checked_add(amount)
+        .expect("coin balance too big");
+    tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
+}
+
+fn decrease_coin_balance<T>(
+    owner: &Address,
+    asset_id: &AssetId,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    println!(
+        "decreasing coin balance for owner: {:?}, asset_id: {:?}, amount: {:?}",
+        owner, asset_id, amount
+    );
+
+    // TODO[RC]: Make sure this operation is atomic
+    let key = BalancesKey::new(owner, asset_id);
+    let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
+    let new_balance = current_balance
+        .checked_sub(amount)
+        .expect("can not spend more coin than a balance");
     tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
 }
 
@@ -247,7 +272,35 @@ where
         .storage::<MessageBalances>()
         .get(&key)?
         .unwrap_or_default();
-    let new_balance = current_balance.saturating_add(amount);
+    let new_balance = current_balance
+        .checked_add(amount)
+        .expect("message balance too big");
+    tx.storage_as_mut::<MessageBalances>()
+        .insert(&key, &new_balance)
+}
+
+fn decrease_message_balance<T>(
+    owner: &Address,
+    amount: Amount,
+    tx: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    println!(
+        "increasing message balance for owner: {:?}, amount: {:?}",
+        owner, amount
+    );
+
+    // TODO[RC]: Make sure this operation is atomic
+    let key = owner;
+    let current_balance = tx
+        .storage::<MessageBalances>()
+        .get(&key)?
+        .unwrap_or_default();
+    let new_balance = current_balance
+        .checked_sub(amount)
+        .expect("can not spend more messages than a balance");
     tx.storage_as_mut::<MessageBalances>()
         .insert(&key, &new_balance)
 }
@@ -281,6 +334,7 @@ where
                 )?;
             }
             Event::MessageConsumed(message) => {
+                // *** "Old" behavior ***
                 block_st_transaction
                     .storage_as_mut::<OwnedMessageIds>()
                     .remove(&OwnedMessageKey::new(
@@ -290,6 +344,13 @@ where
                 block_st_transaction
                     .storage::<SpentMessages>()
                     .insert(message.nonce(), &())?;
+
+                // *** "New" behavior (using Balances DB) ***
+                decrease_message_balance(
+                    &message.recipient(),
+                    message.amount(),
+                    block_st_transaction,
+                )?;
             }
             Event::CoinCreated(coin) => {
                 // *** "Old" behavior ***
@@ -314,6 +375,12 @@ where
                     .remove(&key)?;
 
                 // *** "New" behavior (using Balances DB) ***
+                decrease_coin_balance(
+                    &coin.owner,
+                    &coin.asset_id,
+                    coin.amount,
+                    block_st_transaction,
+                )?;
             }
             Event::ForcedTransactionFailed {
                 id,
