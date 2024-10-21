@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- [2375](https://github.com/FuelLabs/fuel-core/pull/2375): Modify executor to ignore messages from the relayer that have a duplicate nonce
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
 
 ### Added
