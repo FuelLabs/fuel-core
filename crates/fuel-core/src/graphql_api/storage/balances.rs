@@ -50,7 +50,7 @@ impl Distribution<BalancesKey> for Standard {
     }
 }
 
-/// These table stores the balances of asset id per owner.
+/// These table stores the balances of coins per owner and asset id.
 pub struct Balances;
 
 impl Mappable for Balances {
@@ -65,11 +65,11 @@ impl TableWithBlueprint for Balances {
     type Column = super::Column;
 
     fn column() -> Self::Column {
-        Self::Column::Balances
+        Self::Column::CoinBalances
     }
 }
 
-/// These table stores the balances of asset id per owner.
+/// These table stores the balances of messages per owner.
 pub struct MessageBalances;
 
 impl Mappable for MessageBalances {

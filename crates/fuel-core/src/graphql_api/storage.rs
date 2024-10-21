@@ -114,8 +114,9 @@ pub enum Column {
     DaCompressionTemporalRegistryScriptCode = 21,
     /// See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
     DaCompressionTemporalRegistryPredicateCode = 22,
-    /// Index of balances per user and asset.
-    Balances = 23,
+    /// Coin balances per user and asset.
+    CoinBalances = 23,
+    /// Message balances per user.
     MessageBalances = 24,
 }
 
