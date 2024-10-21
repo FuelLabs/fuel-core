@@ -3342,11 +3342,11 @@ mod tests {
                 .into_changes();
 
             // then
-            let changes_contains_message = ChangesIterator::<Column>::new(&changes)
+            let no_messages_in_changes = ChangesIterator::<Column>::new(&changes)
                 .iter_all::<Messages>(None)
                 .count()
-                > 0;
-            assert!(!changes_contains_message);
+                == 0;
+            assert!(no_messages_in_changes);
         }
 
         #[test]
