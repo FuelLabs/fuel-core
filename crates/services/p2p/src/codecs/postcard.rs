@@ -340,7 +340,7 @@ mod tests {
             .await
             .expect("Valid Vec<SealedBlockHeader> is serialized using v1");
 
-        let deserialized_as_legacy = 
+        let deserialized_as_legacy =
             // We cannot access the codec trait from an old node here, 
             // so we deserialize directly using the `LegacyResponseMessage` type.
             deserialize::<LegacyResponseMessage>(&buf).expect("Deserialization as LegacyResponseMessage should succeed");
@@ -356,14 +356,17 @@ mod tests {
     async fn backward_compatibility_v1_write_error_response() {
         let response = LegacyResponseMessage::SealedHeaders(None);
         let mut codec = PostcardCodec::new(1024);
-        let buf = serialize(&response).expect("Serialization as LegacyResponseMessage should succeed");
+        let buf = serialize(&response)
+            .expect("Serialization as LegacyResponseMessage should succeed");
 
         let deserialized = codec
             .read_response(&PostcardProtocol::V1, &mut buf.as_slice())
             .await
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
         match deserialized {
-            ResponseMessage::SealedHeaders(Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse)) => {}
+            ResponseMessage::SealedHeaders(Err(
+                ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+            )) => {}
             other => {
                 panic!("Deserialized to {other:?}, expected {response:?}")
             }
