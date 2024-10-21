@@ -116,6 +116,10 @@ pub enum TaskRequest {
     },
     GetTransactions {
         block_height_range: Range<u32>,
+        channel: OnResponse<Option<Vec<Transactions>>>,
+    },
+    GetTransactionsFromPeer {
+        block_height_range: Range<u32>,
         from_peer: PeerId,
         channel: OnResponse<Option<Vec<Transactions>>>,
     },
@@ -164,6 +168,9 @@ impl Debug for TaskRequest {
             }
             TaskRequest::GetTransactions { .. } => {
                 write!(f, "TaskRequest::GetTransactions")
+            }
+            TaskRequest::GetTransactionsFromPeer { .. } => {
+                write!(f, "TaskRequest::GetTransactionsFromPeer")
             }
             TaskRequest::TxPoolGetAllTxIds { .. } => {
                 write!(f, "TaskRequest::TxPoolGetAllTxIds")
@@ -856,7 +863,16 @@ where
                             tracing::warn!("No peers found for block at height {:?}", height);
                         }
                     }
-                    Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
+                    Some(TaskRequest::GetTransactions {block_height_range, channel }) => {
+                        let channel = ResponseSender::Transactions(channel);
+                        let request_msg = RequestMessage::Transactions(block_height_range.clone());
+                        let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
+                        let peer = self.p2p_service.get_peer_id_with_height(&height);
+                        if self.p2p_service.send_request_msg(peer, request_msg, channel).is_err() {
+                            tracing::warn!("No peers found for block at height {:?}", block_height_range.end);
+                        }
+                    }
+                    Some(TaskRequest::GetTransactionsFromPeer { block_height_range, from_peer, channel }) => {
                         let channel = ResponseSender::Transactions(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range);
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always a peer here, so send has a target");
@@ -1020,6 +1036,31 @@ impl SharedState {
         Ok((peer_id.to_bytes(), data))
     }
 
+    pub async fn get_transactions(
+        &self,
+        range: Range<u32>,
+    ) -> anyhow::Result<(Vec<u8>, Option<Vec<Transactions>>)> {
+        let (sender, receiver) = oneshot::channel();
+
+        if range.is_empty() {
+            return Err(anyhow!(
+                "Cannot retrieve transactions for an empty range of block heights"
+            ));
+        }
+
+        self.request_sender
+            .send(TaskRequest::GetTransactions {
+                block_height_range: range,
+                channel: sender,
+            })
+            .await?;
+
+        let (peer_id, response) = receiver.await.map_err(|e| anyhow!("{e}"))?;
+
+        let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        Ok((peer_id.to_bytes(), data))
+    }
+
     pub async fn get_transactions_from_peer(
         &self,
         peer_id: FuelPeerId,
@@ -1028,7 +1069,7 @@ impl SharedState {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(peer_id.as_ref()).expect("Valid PeerId");
 
-        let request = TaskRequest::GetTransactions {
+        let request = TaskRequest::GetTransactionsFromPeer {
             block_height_range: range,
             from_peer,
             channel: sender,
