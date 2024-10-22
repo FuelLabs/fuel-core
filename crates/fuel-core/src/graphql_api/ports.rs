@@ -63,7 +63,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     sync::Arc,
 };
 
@@ -85,7 +85,7 @@ pub trait OffChainDatabase: Send + Sync {
         &self,
         owner: &Address,
         base_asset_id: &AssetId,
-    ) -> StorageResult<HashMap<AssetId, u64>>;
+    ) -> StorageResult<BTreeMap<AssetId, u64>>;
 
     fn owned_coins_ids(
         &self,

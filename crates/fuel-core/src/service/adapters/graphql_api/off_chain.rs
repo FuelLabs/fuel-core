@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     database::{
@@ -232,10 +232,10 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         &self,
         owner: &Address,
         _base_asset_id: &AssetId,
-    ) -> StorageResult<HashMap<AssetId, u64>> {
+    ) -> StorageResult<BTreeMap<AssetId, u64>> {
         // TODO[RC]: Use _base_asset_id to also iterate over 'MessageBalances'.
 
-        let mut balances = HashMap::new();
+        let mut balances = BTreeMap::new();
         for balance_key in self.iter_all_by_prefix_keys::<Balances, _>(Some(owner)) {
             let key = balance_key?;
             let asset_id = key.asset_id();

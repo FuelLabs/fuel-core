@@ -23,6 +23,7 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
+use itertools::Either;
 use tracing::debug;
 
 pub mod asset_query;
@@ -68,19 +69,22 @@ impl ReadView {
     pub fn balances<'a>(
         &'a self,
         owner: &'a Address,
-        _direction: IterDirection,
+        direction: IterDirection,
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
         debug!("Querying balances for {:?}", owner);
 
         match self.off_chain.balances(owner, base_asset_id) {
             Ok(balances) => {
-                stream::iter(balances.into_iter().map(|(asset_id, amount)| {
-                    AddressBalance {
-                        owner: *owner,
-                        amount,
-                        asset_id,
-                    }
+                let iter = if direction == IterDirection::Reverse {
+                    Either::Left(balances.into_iter().rev())
+                } else {
+                    Either::Right(balances.into_iter())
+                };
+                stream::iter(iter.map(|(asset_id, amount)| AddressBalance {
+                    owner: *owner,
+                    amount,
+                    asset_id,
                 }))
                 .map(Ok)
                 .into_stream()
@@ -89,54 +93,5 @@ impl ReadView {
             }
             Err(err) => stream::once(future::ready(Err(err))).right_stream(),
         }
-
-        // match self.off_chain.balances(owner, base_asset_id) {
-        //     Ok(balances) => {
-        //     }
-        //     Err(err) => stream::once(future::ready(Err(err))).yield_each(self.batch_size),
-        // }
-
-        // let query = AssetsQuery::new(owner, None, None, self, base_asset_id);
-        // let stream = query.coins();
-
-        // stream
-        // .try_fold(
-        // HashMap::new(),
-        // move |mut amounts_per_asset, coin| async move {
-        // let amount: &mut u64 = amounts_per_asset
-        // .entry(*coin.asset_id(base_asset_id))
-        // .or_default();
-        // *amount = amount.saturating_add(coin.amount());
-        // Ok(amounts_per_asset)
-        // },
-        // )
-        // .into_stream()
-        // .try_filter_map(move |amounts_per_asset| async move {
-        // let mut balances = amounts_per_asset
-        // .into_iter()
-        // .map(|(asset_id, amount)| AddressBalance {
-        // owner: *owner,
-        // amount,
-        // asset_id,
-        // })
-        // .collect::<Vec<_>>();
-
-        // balances.sort_by(|l, r| {
-        // if l.asset_id < r.asset_id {
-        // Ordering::Less
-        // } else {
-        // Ordering::Greater
-        // }
-        // });
-
-        // if direction == IterDirection::Reverse {
-        // balances.reverse();
-        // }
-
-        // Ok(Some(futures::stream::iter(balances)))
-        // })
-        // .map_ok(|stream| stream.map(Ok))
-        // .try_flatten()
-        // .yield_each(self.batch_size)
     }
 }
