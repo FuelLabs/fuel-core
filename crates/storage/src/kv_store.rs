@@ -1,6 +1,7 @@
 //! The module provides plain abstract definition of the key-value store.
 
 use crate::{
+    not_found,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -61,6 +62,20 @@ pub trait KeyValueInspect {
 
     /// Returns the value from the storage.
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>>;
+
+    /// Returns the value from the storage.
+    fn get_multi(
+        &self,
+        keys: &[&[u8]],
+        column: Self::Column,
+    ) -> StorageResult<Vec<Value>> {
+        keys.into_iter()
+            .map(|key| {
+                self.get(key.as_ref(), column)
+                    .and_then(|val| val.ok_or(not_found!(Self::Column)))
+            })
+            .collect()
+    }
 
     /// Reads the value from the storage into the `buf` and returns the number of read bytes.
     fn read(
