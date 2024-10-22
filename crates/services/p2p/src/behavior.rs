@@ -5,10 +5,7 @@ use crate::{
     },
     config::Config,
     discovery,
-    gossipsub::{
-        config::build_gossipsub_behaviour,
-        topics::GossipTopic,
-    },
+    gossipsub::config::build_gossipsub_behaviour,
     heartbeat,
     peer_report,
     request_response::messages::{
@@ -24,6 +21,7 @@ use libp2p::{
         MessageAcceptance,
         MessageId,
         PublishError,
+        TopicHash,
     },
     identify,
     request_response::{
@@ -150,10 +148,10 @@ impl FuelBehaviour {
 
     pub fn publish_message(
         &mut self,
-        topic: GossipTopic,
+        topic_hash: TopicHash,
         encoded_data: Vec<u8>,
     ) -> Result<MessageId, PublishError> {
-        self.gossipsub.publish(topic, encoded_data)
+        self.gossipsub.publish(topic_hash, encoded_data)
     }
 
     pub fn send_request_msg(
