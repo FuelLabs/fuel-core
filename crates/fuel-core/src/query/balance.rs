@@ -1,3 +1,5 @@
+use std::future;
+
 use crate::fuel_core_graphql_api::database::ReadView;
 use asset_query::{
     AssetQuery,
@@ -70,24 +72,29 @@ impl ReadView {
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
         debug!("Querying balances for {:?}", owner);
-        let balances = self
-            .off_chain
-            .balances(owner, base_asset_id)
-            .expect("Fixme");
 
-        let ret: Vec<AddressBalance> = balances
-            .iter()
-            .map(|(asset_id, amount)| AddressBalance {
-                owner: *owner,
-                amount: *amount,
-                asset_id: *asset_id,
-            })
-            .collect();
+        match self.off_chain.balances(owner, base_asset_id) {
+            Ok(balances) => {
+                stream::iter(balances.into_iter().map(|(asset_id, amount)| {
+                    AddressBalance {
+                        owner: *owner,
+                        amount,
+                        asset_id,
+                    }
+                }))
+                .map(Ok)
+                .into_stream()
+                .yield_each(self.batch_size)
+                .left_stream()
+            }
+            Err(err) => stream::once(future::ready(Err(err))).right_stream(),
+        }
 
-        stream::iter(ret)
-            .map(Ok)
-            .into_stream()
-            .yield_each(self.batch_size)
+        // match self.off_chain.balances(owner, base_asset_id) {
+        //     Ok(balances) => {
+        //     }
+        //     Err(err) => stream::once(future::ready(Err(err))).yield_each(self.batch_size),
+        // }
 
         // let query = AssetsQuery::new(owner, None, None, self, base_asset_id);
         // let stream = query.coins();
