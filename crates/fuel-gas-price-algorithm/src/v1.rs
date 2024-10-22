@@ -26,6 +26,8 @@ pub enum Error {
     L2BlockExpectedNotFound(u32),
 }
 
+// TODO: separate exec gas price and DA gas price into newtypes for clarity
+//   https://github.com/FuelLabs/fuel-core/issues/2382
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
     /// The gas price for to cover the execution of the next block
@@ -206,7 +208,8 @@ impl L2ActivityTracker {
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
         let decrease_activity_threshold = decrease_range_size;
-        let capped_activity_threshold = decrease_range_size.saturating_add(capped_range_size);
+        let capped_activity_threshold =
+            decrease_range_size.saturating_add(capped_range_size);
         let max_activity = capped_activity_threshold.saturating_add(normal_range_size);
         let chain_activity = max_activity;
         Self {
@@ -458,7 +461,9 @@ impl AlgorithmUpdaterV1 {
             match self.l2_activity.safety_mode() {
                 DAGasPriceSafetyMode::Normal => maybe_da_change,
                 DAGasPriceSafetyMode::Capped => 0,
-                DAGasPriceSafetyMode::AlwaysDecrease => self.max_change().saturating_mul(-1),
+                DAGasPriceSafetyMode::AlwaysDecrease => {
+                    self.max_change().saturating_mul(-1)
+                }
             }
         } else {
             maybe_da_change
