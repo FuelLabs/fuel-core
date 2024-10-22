@@ -20,7 +20,7 @@ use crate::{
         },
         storage::{
             balances::{
-                Balances,
+                CoinBalances,
                 MessageBalances,
             },
             blocks::FuelBlockIdsToHeights,
@@ -206,9 +206,9 @@ where
     F: Fn(Cow<u64>, Amount) -> Amount,
 {
     let key = BalancesKey::new(owner, asset_id);
-    let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
+    let current_balance = tx.storage::<CoinBalances>().get(&key)?.unwrap_or_default();
     let new_balance = updater(current_balance, amount);
-    tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
+    tx.storage_as_mut::<CoinBalances>().insert(&key, &new_balance)
 }
 
 fn update_message_balance<T, F>(

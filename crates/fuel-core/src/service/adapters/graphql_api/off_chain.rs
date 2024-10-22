@@ -20,7 +20,7 @@ use crate::{
     },
     graphql_api::storage::{
         balances::{
-            Balances,
+            CoinBalances,
             BalancesKey,
             MessageBalances,
         },
@@ -206,7 +206,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         base_asset_id: &AssetId,
     ) -> StorageResult<u64> {
         let coins = self
-            .storage_as_ref::<Balances>()
+            .storage_as_ref::<CoinBalances>()
             .get(&BalancesKey::new(owner, asset_id))?
             .unwrap_or_default();
 
@@ -234,7 +234,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         base_asset_id: &AssetId,
     ) -> StorageResult<BTreeMap<AssetId, u64>> {
         let mut balances = BTreeMap::new();
-        for balance_key in self.iter_all_by_prefix_keys::<Balances, _>(Some(owner)) {
+        for balance_key in self.iter_all_by_prefix_keys::<CoinBalances, _>(Some(owner)) {
             let key = balance_key?;
             let asset_id = key.asset_id();
 
@@ -248,7 +248,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             };
 
             let coins = self
-                .storage_as_ref::<Balances>()
+                .storage_as_ref::<CoinBalances>()
                 .get(&key)?
                 .unwrap_or_default();
 

@@ -32,16 +32,16 @@ impl Distribution<BalancesKey> for Standard {
 }
 
 /// These table stores the balances of coins per owner and asset id.
-pub struct Balances;
+pub struct CoinBalances;
 
-impl Mappable for Balances {
+impl Mappable for CoinBalances {
     type Key = BalancesKey;
     type OwnedKey = Self::Key;
     type Value = Amount;
     type OwnedValue = Self::Value;
 }
 
-impl TableWithBlueprint for Balances {
+impl TableWithBlueprint for CoinBalances {
     type Blueprint = Plain<Raw, Postcard>; // TODO[RC]: What is Plain, Raw, Postcard, Primitive<N> and others in this context?
     type Column = super::Column;
 

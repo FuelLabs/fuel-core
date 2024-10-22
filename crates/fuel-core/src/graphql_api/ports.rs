@@ -290,7 +290,7 @@ pub mod worker {
         },
         graphql_api::storage::{
             balances::{
-                Balances,
+                CoinBalances,
                 MessageBalances,
             },
             da_compression::*,
@@ -347,7 +347,7 @@ pub mod worker {
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
-        + StorageMutate<Balances, Error = StorageError>
+        + StorageMutate<CoinBalances, Error = StorageError>
         + StorageMutate<MessageBalances, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
