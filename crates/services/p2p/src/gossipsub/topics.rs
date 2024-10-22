@@ -12,19 +12,20 @@ use super::messages::{
 pub const NEW_TX_GOSSIP_TOPIC: &str = "new_tx";
 
 /// Holds used Gossipsub Topics
-/// Each field contains TopicHash and Sha256Topic itself
-/// in order to avoid converting Sha256Topic to TopicHash on each received message
+/// Each field contains TopicHash of existing topics
+/// in order to avoid converting topics to TopicHash on each received message
 #[derive(Debug)]
 pub struct GossipsubTopics {
-    new_tx_topic: (TopicHash, Sha256Topic),
+    new_tx_topic: TopicHash,
 }
 
 impl GossipsubTopics {
     pub fn new(network_name: &str) -> Self {
-        let new_tx_topic = Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
+        let new_tx_topic: Sha256Topic =
+            Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
 
         Self {
-            new_tx_topic: (new_tx_topic.hash(), new_tx_topic),
+            new_tx_topic: new_tx_topic.hash(),
         }
     }
 
@@ -33,10 +34,8 @@ impl GossipsubTopics {
         &self,
         incoming_topic: &TopicHash,
     ) -> Option<GossipTopicTag> {
-        let GossipsubTopics { new_tx_topic } = &self;
-
         match incoming_topic {
-            hash if hash == &new_tx_topic.0 => Some(GossipTopicTag::NewTx),
+            hash if hash == &self.new_tx_topic => Some(GossipTopicTag::NewTx),
             _ => None,
         }
     }
@@ -48,7 +47,7 @@ impl GossipsubTopics {
         outgoing_request: &GossipsubBroadcastRequest,
     ) -> TopicHash {
         match outgoing_request {
-            GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.0.clone(),
+            GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.clone(),
         }
     }
 }
@@ -69,7 +68,7 @@ mod tests {
         let gossipsub_topics = GossipsubTopics::new(network_name);
 
         // Test matching Topic Hashes
-        assert_eq!(gossipsub_topics.new_tx_topic.0, new_tx_topic.hash());
+        assert_eq!(gossipsub_topics.new_tx_topic, new_tx_topic.hash());
 
         // Test given a TopicHash that `get_gossipsub_tag()` returns matching `GossipTopicTag`
         assert_eq!(
