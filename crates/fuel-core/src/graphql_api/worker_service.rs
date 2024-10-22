@@ -224,11 +224,11 @@ where
     let key = owner;
     let current_balance = tx
         .storage::<MessageBalances>()
-        .get(&key)?
+        .get(key)?
         .unwrap_or_default();
     let new_balance = updater(current_balance, amount);
     tx.storage_as_mut::<MessageBalances>()
-        .insert(&key, &new_balance)
+        .insert(key, &new_balance)
 }
 
 /// Process the executor events and update the indexes for the messages and coins.

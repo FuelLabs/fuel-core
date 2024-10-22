@@ -211,7 +211,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         if base_asset_id == asset_id {
             let messages = self
                 .storage_as_ref::<MessageBalances>()
-                .get(&owner)?
+                .get(owner)?
                 .unwrap_or_default();
 
             let total = coins.checked_add(*messages).ok_or(anyhow::anyhow!(
