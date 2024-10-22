@@ -231,20 +231,32 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     fn balances(
         &self,
         owner: &Address,
-        _base_asset_id: &AssetId,
+        base_asset_id: &AssetId,
     ) -> StorageResult<BTreeMap<AssetId, u64>> {
-        // TODO[RC]: Use _base_asset_id to also iterate over 'MessageBalances'.
-
         let mut balances = BTreeMap::new();
         for balance_key in self.iter_all_by_prefix_keys::<Balances, _>(Some(owner)) {
             let key = balance_key?;
             let asset_id = key.asset_id();
-            let balance = self
+
+            let messages = if base_asset_id == asset_id {
+                *self
+                    .storage_as_ref::<MessageBalances>()
+                    .get(owner)?
+                    .unwrap_or_default()
+            } else {
+                0
+            };
+
+            let coins = self
                 .storage_as_ref::<Balances>()
                 .get(&key)?
                 .unwrap_or_default();
-            debug!(%owner, %asset_id, %balance, "balance entry");
-            balances.insert(*asset_id, *balance);
+
+            let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
+                "Total balance overflow: coins: {coins}, messages: {messages}"
+            ))?;
+            debug!(%owner, %asset_id, %total, "balance entry");
+            balances.insert(*asset_id, total);
         }
 
         Ok(balances)
