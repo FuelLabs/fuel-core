@@ -17,7 +17,7 @@ use fuel_core_client::client::{
     },
     types::{
         primitives::{
-            Address,
+            Address, 
             AssetId,
         },
         CoinType,

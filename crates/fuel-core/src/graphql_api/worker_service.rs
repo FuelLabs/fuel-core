@@ -106,6 +106,7 @@ use std::{
     borrow::Cow,
     ops::Deref,
 };
+use tracing::debug;
 
 #[cfg(test)]
 mod tests;
@@ -193,101 +194,39 @@ where
     }
 }
 
-// TODO[RC]: Maybe merge with `increase_message_balance()`?
-fn increase_coin_balance<T>(
+fn update_coin_balance<T, F>(
     owner: &Address,
     asset_id: &AssetId,
     amount: Amount,
     tx: &mut T,
+    updater: F,
 ) -> StorageResult<()>
 where
     T: OffChainDatabaseTransaction,
+    F: Fn(Cow<u64>, Amount) -> Amount,
 {
-    println!(
-        "increasing coin balance for owner: {:?}, asset_id: {:?}, amount: {:?}",
-        owner, asset_id, amount
-    );
-
-    // TODO[RC]: Make sure this operation is atomic
     let key = BalancesKey::new(owner, asset_id);
     let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
-    let new_balance = current_balance
-        .checked_add(amount)
-        .expect("coin balance too big");
+    let new_balance = updater(current_balance, amount);
     tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
 }
 
-fn decrease_coin_balance<T>(
-    owner: &Address,
-    asset_id: &AssetId,
-    amount: Amount,
-    tx: &mut T,
-) -> StorageResult<()>
-where
-    T: OffChainDatabaseTransaction,
-{
-    println!(
-        "decreasing coin balance for owner: {:?}, asset_id: {:?}, amount: {:?}",
-        owner, asset_id, amount
-    );
-
-    // TODO[RC]: Make sure this operation is atomic
-    let key = BalancesKey::new(owner, asset_id);
-    let current_balance = tx.storage::<Balances>().get(&key)?.unwrap_or_default();
-    let new_balance = current_balance
-        .checked_sub(amount)
-        .expect("can not spend more coin than a balance");
-    tx.storage_as_mut::<Balances>().insert(&key, &new_balance)
-}
-
-fn increase_message_balance<T>(
+fn update_message_balance<T, F>(
     owner: &Address,
     amount: Amount,
     tx: &mut T,
+    updater: F,
 ) -> StorageResult<()>
 where
     T: OffChainDatabaseTransaction,
+    F: Fn(Cow<u64>, Amount) -> Amount,
 {
-    println!(
-        "increasing message balance for owner: {:?}, amount: {:?}",
-        owner, amount
-    );
-
-    // TODO[RC]: Make sure this operation is atomic
     let key = owner;
     let current_balance = tx
         .storage::<MessageBalances>()
         .get(&key)?
         .unwrap_or_default();
-    let new_balance = current_balance
-        .checked_add(amount)
-        .expect("message balance too big");
-    tx.storage_as_mut::<MessageBalances>()
-        .insert(&key, &new_balance)
-}
-
-fn decrease_message_balance<T>(
-    owner: &Address,
-    amount: Amount,
-    tx: &mut T,
-) -> StorageResult<()>
-where
-    T: OffChainDatabaseTransaction,
-{
-    println!(
-        "decreasing message balance for owner: {:?}, amount: {:?}",
-        owner, amount
-    );
-
-    // TODO[RC]: Make sure this operation is atomic
-    let key = owner;
-    let current_balance = tx
-        .storage::<MessageBalances>()
-        .get(&key)?
-        .unwrap_or_default();
-    let new_balance = current_balance
-        .checked_sub(amount)
-        .expect("can not spend more messages than a balance");
+    let new_balance = updater(current_balance, amount);
     tx.storage_as_mut::<MessageBalances>()
         .insert(&key, &new_balance)
 }
@@ -304,7 +243,6 @@ where
     for event in events {
         match event.deref() {
             Event::MessageImported(message) => {
-                // *** "Old" behavior ***
                 block_st_transaction
                     .storage_as_mut::<OwnedMessageIds>()
                     .insert(
@@ -312,15 +250,15 @@ where
                         &(),
                     )?;
 
-                // *** "New" behavior (using Balances DB) ***
-                increase_message_balance(
-                    &message.recipient(),
+                debug!(recipient=%message.recipient(), amount=%message.amount(), "increasing message balance");
+                update_message_balance(
+                    message.recipient(),
                     message.amount(),
                     block_st_transaction,
+                    |balance, amount| balance.saturating_add(amount),
                 )?;
             }
             Event::MessageConsumed(message) => {
-                // *** "Old" behavior ***
                 block_st_transaction
                     .storage_as_mut::<OwnedMessageIds>()
                     .remove(&OwnedMessageKey::new(
@@ -331,41 +269,48 @@ where
                     .storage::<SpentMessages>()
                     .insert(message.nonce(), &())?;
 
-                // *** "New" behavior (using Balances DB) ***
-                decrease_message_balance(
-                    &message.recipient(),
+                debug!(recipient=%message.recipient(), amount=%message.amount(), "decreasing message balance");
+                update_message_balance(
+                    message.recipient(),
                     message.amount(),
                     block_st_transaction,
+                    |balance, amount| balance.saturating_sub(amount),
                 )?;
             }
             Event::CoinCreated(coin) => {
-                // *** "Old" behavior ***
                 let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .insert(&coin_by_owner, &())?;
 
-                // *** "New" behavior (using Balances DB) ***
-                increase_coin_balance(
+                debug!(
+                    owner=%coin.owner,
+                    asset_id=%coin.asset_id,
+                    amount=%coin.amount, "increasing coin balance");
+                update_coin_balance(
                     &coin.owner,
                     &coin.asset_id,
                     coin.amount,
                     block_st_transaction,
+                    |balance, amount| balance.saturating_add(amount),
                 )?;
             }
             Event::CoinConsumed(coin) => {
-                // *** "Old" behavior ***
                 let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
 
-                // *** "New" behavior (using Balances DB) ***
-                decrease_coin_balance(
+                debug!(
+                        owner=%coin.owner,
+                        asset_id=%coin.asset_id,
+                        amount=%coin.amount, "decreasing coin balance");
+                update_coin_balance(
                     &coin.owner,
                     &coin.asset_id,
                     coin.amount,
                     block_st_transaction,
+                    |balance, amount| balance.saturating_sub(amount),
                 )?;
             }
             Event::ForcedTransactionFailed {

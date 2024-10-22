@@ -55,7 +55,6 @@ impl ReadView {
         .await?;
 
         // The new way.
-        // TODO[RC]: balance could return both coins and messages
         let amount_1 = self.off_chain.balance(&owner, &asset_id, &base_asset_id)?;
 
         assert_eq!(amount, amount_1);
