@@ -56,6 +56,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2311](https://github.com/FuelLabs/fuel-core/pull/2311): Changed the text of the error returned by the executor if gas overflows.
 
 
+### Changed
+- [2233](https://github.com/FuelLabs/fuel-core/pull/2233): New changes to HistoricalRocksDB are written to ModificationsHistoryV2
+
 ## [Version 0.38.0]
 
 ### Added
@@ -93,8 +96,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2280](https://github.com/FuelLabs/fuel-core/pull/2280): Allow comma separated relayer addresses in cli
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support blobs in the predicates.
 - [2300](https://github.com/FuelLabs/fuel-core/pull/2300): Added new function to `fuel-core-client` for checking whether a blob exists.
-
-### Changed
 
 #### Breaking
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Anyone who wants to participate in the transaction broadcasting via p2p must upgrade to support new predicates on the TxPool level.
