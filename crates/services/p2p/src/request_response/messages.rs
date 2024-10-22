@@ -34,7 +34,6 @@ pub enum RequestMessage {
     TxPoolFullTransactions(Vec<TxId>),
 }
 
-// TODO: Do we want explicit status codes or an Error type?
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessageErrorCode {
     /// The peer sent an empty response using protocol `/fuel/req_res/0.0.1`
