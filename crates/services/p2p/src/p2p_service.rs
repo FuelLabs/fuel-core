@@ -837,10 +837,7 @@ mod tests {
                 GossipsubBroadcastRequest,
                 GossipsubMessage,
             },
-            topics::{
-                GossipTopic,
-                NEW_TX_GOSSIP_TOPIC,
-            },
+            topics::NEW_TX_GOSSIP_TOPIC,
         },
         p2p_service::FuelP2PEvent,
         peer_manager::PeerInfo,
@@ -879,7 +876,10 @@ mod tests {
         StreamExt,
     };
     use libp2p::{
-        gossipsub::Topic,
+        gossipsub::{
+            Sha256Topic,
+            Topic,
+        },
         identity::Keypair,
         swarm::{
             ListenError,
@@ -1526,7 +1526,7 @@ mod tests {
     ) {
         let mut p2p_config = Config::default_initialized("gossipsub_exchanges_messages");
 
-        let selected_topic: GossipTopic = {
+        let selected_topic: Sha256Topic = {
             let topic = match broadcast_request {
                 GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
             };

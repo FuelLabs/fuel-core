@@ -9,15 +9,14 @@ use super::messages::{
     GossipsubBroadcastRequest,
 };
 
-pub type GossipTopic = Sha256Topic;
 pub const NEW_TX_GOSSIP_TOPIC: &str = "new_tx";
 
 /// Holds used Gossipsub Topics
-/// Each field contains TopicHash and GossipTopic itself
-/// in order to avoid converting GossipTopic to TopicHash on each received message
+/// Each field contains TopicHash and Sha256Topic itself
+/// in order to avoid converting Sha256Topic to TopicHash on each received message
 #[derive(Debug)]
 pub struct GossipsubTopics {
-    new_tx_topic: (TopicHash, GossipTopic),
+    new_tx_topic: (TopicHash, Sha256Topic),
 }
 
 impl GossipsubTopics {
@@ -64,7 +63,7 @@ mod tests {
     #[test]
     fn test_gossipsub_topics() {
         let network_name = "fuel_test_network";
-        let new_tx_topic: GossipTopic =
+        let new_tx_topic: Sha256Topic =
             Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
 
         let gossipsub_topics = GossipsubTopics::new(network_name);
