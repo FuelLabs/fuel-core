@@ -50,7 +50,7 @@ pub enum V1ResponseMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ResponseMessage {
+pub enum V2ResponseMessage {
     SealedHeaders(Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>),
     Transactions(Result<Vec<Transactions>, ResponseMessageErrorCode>),
     TxPoolAllTransactionsIds(Result<Vec<TxId>, ResponseMessageErrorCode>),
@@ -59,25 +59,25 @@ pub enum ResponseMessage {
     ),
 }
 
-impl From<V1ResponseMessage> for ResponseMessage {
+impl From<V1ResponseMessage> for V2ResponseMessage {
     fn from(v1_response: V1ResponseMessage) -> Self {
         match v1_response {
             V1ResponseMessage::SealedHeaders(sealed_headers) => {
-                ResponseMessage::SealedHeaders(
+                V2ResponseMessage::SealedHeaders(
                     sealed_headers
                         .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
-            V1ResponseMessage::Transactions(vec) => ResponseMessage::Transactions(
+            V1ResponseMessage::Transactions(vec) => V2ResponseMessage::Transactions(
                 vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
             ),
             V1ResponseMessage::TxPoolAllTransactionsIds(vec) => {
-                ResponseMessage::TxPoolAllTransactionsIds(
+                V2ResponseMessage::TxPoolAllTransactionsIds(
                     vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
             V1ResponseMessage::TxPoolFullTransactions(vec) => {
-                ResponseMessage::TxPoolFullTransactions(
+                V2ResponseMessage::TxPoolFullTransactions(
                     vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
@@ -85,19 +85,19 @@ impl From<V1ResponseMessage> for ResponseMessage {
     }
 }
 
-impl From<ResponseMessage> for V1ResponseMessage {
-    fn from(response: ResponseMessage) -> Self {
+impl From<V2ResponseMessage> for V1ResponseMessage {
+    fn from(response: V2ResponseMessage) -> Self {
         match response {
-            ResponseMessage::SealedHeaders(sealed_headers) => {
+            V2ResponseMessage::SealedHeaders(sealed_headers) => {
                 V1ResponseMessage::SealedHeaders(sealed_headers.ok())
             }
-            ResponseMessage::Transactions(transactions) => {
+            V2ResponseMessage::Transactions(transactions) => {
                 V1ResponseMessage::Transactions(transactions.ok())
             }
-            ResponseMessage::TxPoolAllTransactionsIds(tx_ids) => {
+            V2ResponseMessage::TxPoolAllTransactionsIds(tx_ids) => {
                 V1ResponseMessage::TxPoolAllTransactionsIds(tx_ids.ok())
             }
-            ResponseMessage::TxPoolFullTransactions(tx_pool) => {
+            V2ResponseMessage::TxPoolFullTransactions(tx_pool) => {
                 V1ResponseMessage::TxPoolFullTransactions(tx_pool.ok())
             }
         }

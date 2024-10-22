@@ -13,7 +13,7 @@ use crate::{
     peer_report,
     request_response::messages::{
         RequestMessage,
-        ResponseMessage,
+        V2ResponseMessage,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -166,9 +166,9 @@ impl FuelBehaviour {
 
     pub fn send_response_msg(
         &mut self,
-        channel: ResponseChannel<ResponseMessage>,
-        message: ResponseMessage,
-    ) -> Result<(), ResponseMessage> {
+        channel: ResponseChannel<V2ResponseMessage>,
+        message: V2ResponseMessage,
+    ) -> Result<(), V2ResponseMessage> {
         self.request_response.send_response(channel, message)
     }
 

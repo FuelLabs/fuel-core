@@ -10,8 +10,8 @@ use crate::{
     },
     request_response::messages::{
         RequestMessage,
-        ResponseMessage,
         V1ResponseMessage,
+        V2ResponseMessage,
         REQUEST_RESPONSE_PROTOCOL_ID,
         REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
     },
@@ -75,7 +75,7 @@ impl PostcardCodec {
 impl request_response::Codec for PostcardCodec {
     type Protocol = PostcardProtocol;
     type Request = RequestMessage;
-    type Response = ResponseMessage;
+    type Response = V2ResponseMessage;
 
     async fn read_request<T>(
         &mut self,
@@ -109,10 +109,10 @@ impl request_response::Codec for PostcardCodec {
 
         match protocol {
             PostcardProtocol::V1 => {
-                let legacy_response = deserialize::<V1ResponseMessage>(&response)?;
-                Ok(legacy_response.into())
+                let v1_response = deserialize::<V1ResponseMessage>(&response)?;
+                Ok(v1_response.into())
             }
-            PostcardProtocol::V2 => deserialize::<ResponseMessage>(&response),
+            PostcardProtocol::V2 => deserialize::<V2ResponseMessage>(&response),
         }
     }
 
@@ -141,8 +141,8 @@ impl request_response::Codec for PostcardCodec {
     {
         let encoded_data = match protocol {
             PostcardProtocol::V1 => {
-                let legacy_response: V1ResponseMessage = res.into();
-                serialize(&legacy_response)?
+                let v1_response: V1ResponseMessage = res.into();
+                serialize(&v1_response)?
             }
             PostcardProtocol::V2 => serialize(&res)?,
         };
@@ -225,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn serialzation_roundtrip_using_v2() {
         let sealed_block_headers = vec![SealedBlockHeader::default()];
-        let response = ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
+        let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);
         codec
@@ -239,7 +239,7 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> should be deserialized using v1");
 
         match deserialized {
-            ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
+            V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
                 assert_eq!(sealed_block_headers, sealed_block_headers_response);
             }
             other => {
@@ -251,7 +251,7 @@ mod tests {
     #[tokio::test]
     async fn serialzation_roundtrip_using_v1() {
         let sealed_block_headers = vec![SealedBlockHeader::default()];
-        let response = ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
+        let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);
         codec
@@ -265,7 +265,7 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> should be deserialized using v1");
 
         match deserialized {
-            ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
+            V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
                 assert_eq!(sealed_block_headers, sealed_block_headers_response);
             }
             other => {
@@ -276,7 +276,7 @@ mod tests {
 
     #[tokio::test]
     async fn serialzation_roundtrip_using_v2_error_response() {
-        let response = ResponseMessage::SealedHeaders(Err(
+        let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec = PostcardCodec::new(1024);
@@ -292,7 +292,7 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 
         match deserialized {
-            ResponseMessage::SealedHeaders(Err(
+            V2ResponseMessage::SealedHeaders(Err(
                 ResponseMessageErrorCode::ProtocolV1EmptyResponse,
             )) => {}
             other => {
@@ -303,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn serialzation_roundtrip_using_v1_error_response() {
-        let response = ResponseMessage::SealedHeaders(Err(
+        let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec = PostcardCodec::new(1024);
@@ -319,7 +319,7 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 
         match deserialized {
-            ResponseMessage::SealedHeaders(Err(
+            V2ResponseMessage::SealedHeaders(Err(
                 ResponseMessageErrorCode::ProtocolV1EmptyResponse,
             )) => {}
             other => {
@@ -330,7 +330,7 @@ mod tests {
 
     #[tokio::test]
     async fn backward_compatibility_v1_read_error_response() {
-        let response = ResponseMessage::SealedHeaders(Err(
+        let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec = PostcardCodec::new(1024);
@@ -364,7 +364,7 @@ mod tests {
             .await
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
         match deserialized {
-            ResponseMessage::SealedHeaders(Err(
+            V2ResponseMessage::SealedHeaders(Err(
                 ResponseMessageErrorCode::ProtocolV1EmptyResponse,
             )) => {}
             other => {

@@ -28,7 +28,7 @@ use fuel_core_p2p::{
     p2p_service::FuelP2PEvent,
     request_response::messages::{
         RequestMessage,
-        ResponseMessage,
+        V2ResponseMessage,
     },
     service::to_message_acceptance,
 };
@@ -178,7 +178,7 @@ impl Bootstrap {
                                 if request_message == RequestMessage::TxPoolAllTransactionsIds {
                                     let _ = bootstrap.send_response_msg(
                                         request_id,
-                                        ResponseMessage::TxPoolAllTransactionsIds(Ok(vec![])),
+                                        V2ResponseMessage::TxPoolAllTransactionsIds(Ok(vec![])),
                                     );
                                 }
                             }

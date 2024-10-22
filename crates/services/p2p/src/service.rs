@@ -22,7 +22,7 @@ use crate::{
     request_response::messages::{
         OnResponse,
         RequestMessage,
-        ResponseMessage,
+        V2ResponseMessage,
         ResponseMessageErrorCode,
         ResponseSender,
     },
@@ -225,7 +225,7 @@ pub trait TaskP2PService: Send {
     fn send_response_msg(
         &mut self,
         request_id: InboundRequestId,
-        message: ResponseMessage,
+        message: V2ResponseMessage,
     ) -> anyhow::Result<()>;
 
     fn report_message(
@@ -299,7 +299,7 @@ impl TaskP2PService for FuelP2PService {
     fn send_response_msg(
         &mut self,
         request_id: InboundRequestId,
-        message: ResponseMessage,
+        message: V2ResponseMessage,
     ) -> anyhow::Result<()> {
         self.send_response_msg(request_id, message)?;
         Ok(())
@@ -535,7 +535,7 @@ where
         DbLookUpFn:
             Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
         ResponseSenderFn:
-            Fn(Result<R, ResponseMessageErrorCode>) -> ResponseMessage + Send + 'static,
+            Fn(Result<R, ResponseMessageErrorCode>) -> V2ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Result<R, ResponseMessageErrorCode>, InboundRequestId) -> TaskRequest
             + Send
             + 'static,
@@ -600,7 +600,7 @@ where
         self.handle_db_request(
             range,
             request_id,
-            ResponseMessage::Transactions,
+            V2ResponseMessage::Transactions,
             |view, range| view.get_transactions(range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
@@ -618,7 +618,7 @@ where
         self.handle_db_request(
             range,
             request_id,
-            ResponseMessage::SealedHeaders,
+            V2ResponseMessage::SealedHeaders,
             |view, range| view.get_sealed_headers(range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
@@ -637,7 +637,7 @@ where
     ) -> anyhow::Result<()>
     where
         ResponseSenderFn:
-            Fn(Result<R, ResponseMessageErrorCode>) -> ResponseMessage + Send + 'static,
+            Fn(Result<R, ResponseMessageErrorCode>) -> V2ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Result<R, ResponseMessageErrorCode>, InboundRequestId) -> TaskRequest
             + Send
             + 'static,
@@ -683,7 +683,7 @@ where
         self.handle_txpool_request(
             request_id,
             async move { tx_pool.get_tx_ids(max_txs).await },
-            ResponseMessage::TxPoolAllTransactionsIds,
+            V2ResponseMessage::TxPoolAllTransactionsIds,
             |response, request_id| TaskRequest::TxPoolAllTransactionsIds {
                 response,
                 request_id,
@@ -701,7 +701,7 @@ where
         if tx_ids.len() > self.max_txs_per_request {
             self.p2p_service.send_response_msg(
                 request_id,
-                ResponseMessage::TxPoolFullTransactions(Err(
+                V2ResponseMessage::TxPoolFullTransactions(Err(
                     ResponseMessageErrorCode::ProtocolV1EmptyResponse,
                 )),
             )?;
@@ -711,7 +711,7 @@ where
         self.handle_txpool_request(
             request_id,
             async move { tx_pool.get_full_txs(tx_ids).await },
-            ResponseMessage::TxPoolFullTransactions,
+            V2ResponseMessage::TxPoolFullTransactions,
             |response, request_id| TaskRequest::TxPoolFullTransactions {
                 response,
                 request_id,
@@ -906,16 +906,16 @@ where
                         let _ = channel.send(peers);
                     }
                     Some(TaskRequest::DatabaseTransactionsLookUp { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::Transactions(response));
                     }
                     Some(TaskRequest::DatabaseHeaderLookUp { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::SealedHeaders(response));
                     }
                     Some(TaskRequest::TxPoolAllTransactionsIds { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::TxPoolAllTransactionsIds(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::TxPoolAllTransactionsIds(response));
                     }
                     Some(TaskRequest::TxPoolFullTransactions { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::TxPoolFullTransactions(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::TxPoolFullTransactions(response));
                     }
                     None => {
                         tracing::error!("The P2P `Task` should be holder of the `Sender`");
@@ -1434,7 +1434,7 @@ pub mod tests {
         fn send_response_msg(
             &mut self,
             _request_id: InboundRequestId,
-            _message: ResponseMessage,
+            _message: V2ResponseMessage,
         ) -> anyhow::Result<()> {
             todo!()
         }

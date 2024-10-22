@@ -8,7 +8,7 @@ use crate::{
     },
     request_response::messages::{
         RequestMessage,
-        ResponseMessage,
+        V2ResponseMessage,
     },
 };
 use libp2p::request_response;
@@ -34,7 +34,7 @@ pub trait NetworkCodec:
     GossipsubCodec<
         RequestMessage = GossipsubBroadcastRequest,
         ResponseMessage = GossipsubMessage,
-    > + request_response::Codec<Request = RequestMessage, Response = ResponseMessage>
+    > + request_response::Codec<Request = RequestMessage, Response = V2ResponseMessage>
     + Clone
     + Send
     + 'static
