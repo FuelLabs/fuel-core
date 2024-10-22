@@ -3336,10 +3336,10 @@ mod tests {
             let block = test_block(block_height.into(), new_da_height.into(), 0);
 
             // when
-            let changes = producer
+            let (result, changes) = producer
                 .produce_without_commit(block.into())
                 .unwrap()
-                .into_changes();
+                .into();
 
             // then
             let no_messages_in_changes = ChangesIterator::<Column>::new(&changes)
@@ -3347,6 +3347,14 @@ mod tests {
                 .count()
                 == 0;
             assert!(no_messages_in_changes);
+            // and
+            let event_contains_ignore = result.events.iter().any(|event| {
+                matches!(event, ExecutorEvent::MessageIgnored {
+                    message,
+                    ..
+                } if message == &message_with_matching_nonce)
+            });
+            assert!(event_contains_ignore);
         }
 
         #[test]

@@ -1,5 +1,11 @@
 //! Types related to executor service.
 
+#[cfg(feature = "alloc")]
+use alloc::{
+    string::String,
+    vec::Vec,
+};
+
 use crate::{
     blockchain::{
         block::Block,
@@ -32,12 +38,6 @@ use crate::{
         ProgramState,
     },
     services::Uncommitted,
-};
-
-#[cfg(feature = "alloc")]
-use alloc::{
-    string::String,
-    vec::Vec,
 };
 
 /// The alias for executor result.
@@ -131,6 +131,13 @@ impl<DatabaseTransaction> UncommittedResult<DatabaseTransaction> {
 pub enum Event {
     /// Imported a new spendable message from the relayer.
     MessageImported(Message),
+    /// Ignored a message from the relayer.
+    MessageIgnored {
+        /// Ignored message
+        message: Message,
+        /// The reason for ignoring the message
+        reason: String,
+    },
     /// The message was consumed by the transaction.
     MessageConsumed(Message),
     /// Created a new spendable coin, produced by the transaction.

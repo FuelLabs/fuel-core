@@ -917,17 +917,20 @@ where
                             return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
                         let message_nonce = message.nonce();
-                        if !block_storage_tx
+                        let message_event = if !block_storage_tx
                             .storage_as_ref::<Messages>()
                             .contains_key(message_nonce)?
                         {
                             block_storage_tx
                                 .storage_as_mut::<Messages>()
                                 .insert(message_nonce, &message)?;
-                            execution_data
-                                .events
-                                .push(ExecutorEvent::MessageImported(message));
-                        }
+                            ExecutorEvent::MessageImported(message)
+                        } else {
+                            let reason =
+                                "Message with the same nonce already exists".to_string();
+                            ExecutorEvent::MessageIgnored { message, reason }
+                        };
+                        execution_data.events.push(message_event);
                     }
                     Event::Transaction(relayed_tx) => {
                         let id = relayed_tx.id();
