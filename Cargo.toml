@@ -143,14 +143,3 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
-
-[patch.crates-io]
-fuel-vm-private = { git = 'https://github.com/FuelLabs/fuel-vm.git', package = "fuel-vm", branch = "1965_balances" }
-#fuel-tx = { path = "../fuel-vm/fuel-tx" }
-#fuel-asm = { path = "../fuel-vm/fuel-asm" }
-#fuel-crypto = { path = "../fuel-vm/fuel-crypto" }
-#fuel-derive = { path = "../fuel-vm/fuel-derive" }
-#fuel-merkle = { path = "../fuel-vm/fuel-merkle" }
-#fuel-storage = { path = "../fuel-vm/fuel-storage" }
-#fuel-types = { path = "../fuel-vm/fuel-types" }
-#fuel-vm = { path = "../fuel-vm/fuel-vm" }

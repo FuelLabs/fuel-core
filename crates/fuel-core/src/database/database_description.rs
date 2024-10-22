@@ -76,15 +76,7 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 /// The metadata of the database contains information about the version and its height.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum DatabaseMetadata<Height> {
-    V1 {
-        version: u32,
-        height: Height,
-    },
-    V2 {
-        version: u32,
-        height: Height,
-        indexation_progress: HashMap<IndexationType, IndexationStatus>,
-    },
+    V1 { version: u32, height: Height },
 }
 
 impl<Height> DatabaseMetadata<Height> {
@@ -92,7 +84,6 @@ impl<Height> DatabaseMetadata<Height> {
     pub fn version(&self) -> u32 {
         match self {
             Self::V1 { version, .. } => *version,
-            Self::V2 { version, .. } => *version,
         }
     }
 
@@ -100,7 +91,6 @@ impl<Height> DatabaseMetadata<Height> {
     pub fn height(&self) -> &Height {
         match self {
             Self::V1 { height, .. } => height,
-            Self::V2 { height, .. } => height,
         }
     }
 
@@ -111,10 +101,6 @@ impl<Height> DatabaseMetadata<Height> {
     ) -> Option<&IndexationStatus> {
         match self {
             Self::V1 { height, .. } => None,
-            Self::V2 {
-                indexation_progress,
-                ..
-            } => indexation_progress.get(&indexation_type),
         }
     }
 }

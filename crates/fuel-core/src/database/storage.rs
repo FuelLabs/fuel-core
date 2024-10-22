@@ -18,35 +18,9 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMut,
     StorageMutate,
-    StorageMutateForced,
     StorageWrite,
 };
 use tracing::info;
-
-impl<Storage, M> StorageMutateForced<M> for GenericDatabase<Storage>
-where
-    M: Mappable,
-    Self: Modifiable,
-    StructuredStorage<Storage>: StorageInspect<M, Error = StorageError>,
-    for<'a> StorageTransaction<&'a Storage>: StorageMutate<M, Error = StorageError>,
-    GenericDatabase<Storage>: ForcedCommitDatabase,
-{
-    fn replace_forced(
-        &mut self,
-        key: &<M as Mappable>::Key,
-        value: &<M as Mappable>::Value,
-    ) -> Result<Option<<M as Mappable>::OwnedValue>, Self::Error> {
-        let mut transaction = StorageTransaction::transaction(
-            self.as_ref(),
-            ConflictPolicy::Overwrite,
-            Default::default(),
-        );
-        let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
-        let changes = transaction.into_changes();
-        self.commit_changes_forced(changes)?;
-        Ok(prev)
-    }
-}
 
 impl<Storage, M> StorageMutate<M> for GenericDatabase<Storage>
 where

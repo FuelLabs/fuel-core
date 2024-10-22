@@ -525,11 +525,9 @@ where
             .storage_as_mut::<MetadataTable<Description>>()
             .insert(
                 &(),
-                &DatabaseMetadata::V2 {
+                &DatabaseMetadata::V1 {
                     version: Description::version(),
                     height: new_height,
-                    // TODO[RC]: This value must NOT be updated here.
-                    indexation_progress: Default::default(),
                 },
             )?;
 
