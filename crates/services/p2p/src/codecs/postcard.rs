@@ -204,6 +204,7 @@ impl AsRef<str> for PostcardProtocol {
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
 
     use fuel_core_types::blockchain::SealedBlockHeader;
@@ -223,7 +224,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v2() {
+    async fn codec__serialization_roundtrip_using_v2_on_successful_response_returns_original_value(
+    ) {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
@@ -249,7 +251,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v1() {
+    async fn codec__serialization_roundtrip_using_v1_on_successful_response_returns_original_value(
+    ) {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
@@ -274,7 +277,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v2_error_response() {
+    async fn codec__serialization_roundtrip_using_v2_on_error_response_returns_original_value(
+    ) {
         // Given
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
@@ -303,8 +307,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v1_error_response() {
+    async fn codec__serialzation_roundtrip_using_v1_on_error_response_returns_predefined_error_code(
+    ) {
         // Given
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+        // Change this to a different ResponseMessageErrorCode once these have been implemented.
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
@@ -332,7 +339,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn backward_compatibility_v1_read_error_response() {
+    async fn codec__write_response_is_backwards_compatible_with_v1() {
         // Given
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
@@ -359,7 +366,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn backward_compatibility_v1_write_error_response() {
+    async fn codec__read_response_is_backwards_compatible_with_v1() {
         // Given
         let response = V1ResponseMessage::SealedHeaders(None);
         let mut codec = PostcardCodec::new(1024);
