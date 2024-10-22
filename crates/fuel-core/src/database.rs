@@ -95,32 +95,6 @@ pub mod state;
 pub mod storage;
 pub mod transactions;
 
-// TODO[RC]: Perhaps move to the new "indexation" module if indexation related structs grow too big.
-#[derive(
-    Copy, Clone, Debug, serde::Serialize, serde::Deserialize, Hash, Eq, PartialEq,
-)]
-pub(crate) enum IndexationType {
-    Balances,
-    CoinsToSpend,
-}
-
-#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub(crate) enum IndexationStatus {
-    Pending,
-    CompletedUntil(BlockHeight),
-    Finished,
-}
-
-impl IndexationStatus {
-    pub fn new() -> Self {
-        IndexationStatus::Pending
-    }
-
-    pub fn is_finished(&self) -> bool {
-        matches!(self, IndexationStatus::Finished)
-    }
-}
-
 #[derive(Default, Debug, Copy, Clone)]
 pub struct GenesisStage;
 
@@ -374,19 +348,6 @@ impl Modifiable for Database<OnChain> {
             iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
                 .try_collect()
         })
-    }
-}
-
-trait ForcedCommitDatabase {
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()>;
-}
-
-impl ForcedCommitDatabase
-    for GenericDatabase<DataSource<OffChain, RegularStage<OffChain>>>
-{
-    fn commit_changes_forced(&mut self, changes: Changes) -> StorageResult<()> {
-        let mut height = *self.stage.height.lock();
-        self.data.commit_changes(height, changes)
     }
 }
 

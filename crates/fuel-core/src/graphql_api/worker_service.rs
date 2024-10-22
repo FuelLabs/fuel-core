@@ -1,5 +1,4 @@
 use super::{
-    api_service::ConsensusProvider,
     da_compression::da_compress_block,
     storage::{
         balances::{
@@ -38,7 +37,6 @@ use crate::{
         },
     },
     graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
-    service::adapters::ConsensusParametersProvider,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
@@ -50,14 +48,7 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
-    not_found,
-    tables::ConsensusParametersVersions,
     Error as StorageError,
-    Mappable,
     Result as StorageResult,
     StorageAsMut,
 };
@@ -111,12 +102,10 @@ use futures::{
     FutureExt,
     StreamExt,
 };
-use hex::FromHex;
 use std::{
     borrow::Cow,
     ops::Deref,
 };
-use tracing::info;
 
 #[cfg(test)]
 mod tests;
@@ -146,7 +135,6 @@ pub struct Task<TxPool, D> {
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
-    base_asset_id: AssetId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
 }
@@ -181,7 +169,6 @@ where
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
-            &self.base_asset_id,
         )?;
 
         match self.da_compression_config {
@@ -309,7 +296,6 @@ where
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
-    base_asset_id: &AssetId,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
@@ -603,16 +589,6 @@ where
     Ok(())
 }
 
-fn base_asset_id() -> AssetId {
-    // TODO[RC]: This is just a hack, get base asset id from consensus parameters here.
-    let base_asset_id =
-        Vec::from_hex("0000000000000000000000000000000000000000000000000000000000000000")
-            .unwrap();
-    let arr: [u8; 32] = base_asset_id.try_into().unwrap();
-    let base_asset_id = AssetId::new(arr);
-    base_asset_id
-}
-
 #[async_trait::async_trait]
 impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
@@ -642,8 +618,6 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
-        let base_asset_id = base_asset_id();
-
         let InitializeTask {
             chain_id,
             da_compression_config,
@@ -662,7 +636,6 @@ where
             chain_id,
             da_compression_config,
             continue_on_error,
-            base_asset_id,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;

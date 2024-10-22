@@ -4,12 +4,6 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-use std::collections::HashMap;
-
-use super::{
-    IndexationStatus,
-    IndexationType,
-};
 
 pub mod gas_price;
 pub mod off_chain;
@@ -91,16 +85,6 @@ impl<Height> DatabaseMetadata<Height> {
     pub fn height(&self) -> &Height {
         match self {
             Self::V1 { height, .. } => height,
-        }
-    }
-
-    /// Returns the indexation progress of a database
-    pub fn balances_indexation_progress(
-        &self,
-        indexation_type: IndexationType,
-    ) -> Option<&IndexationStatus> {
-        match self {
-            Self::V1 { height, .. } => None,
         }
     }
 }

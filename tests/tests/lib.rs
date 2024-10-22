@@ -1,5 +1,5 @@
 #![deny(unused_must_use)]
-#![allow(warnings)] // Tmp change
+#![deny(warnings)]
 
 mod balances;
 mod blob;

@@ -1,11 +1,7 @@
-use crate::{
-    database::ForcedCommitDatabase,
-    state::generic_database::GenericDatabase,
-};
+use crate::state::generic_database::GenericDatabase;
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
     transactional::{
-        Changes,
         ConflictPolicy,
         Modifiable,
         StorageTransaction,
@@ -16,11 +12,9 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageBatchMutate,
     StorageInspect,
-    StorageMut,
     StorageMutate,
     StorageWrite,
 };
-use tracing::info;
 
 impl<Storage, M> StorageMutate<M> for GenericDatabase<Storage>
 where

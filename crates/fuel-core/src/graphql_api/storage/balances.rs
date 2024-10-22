@@ -1,18 +1,8 @@
-use fuel_core_chain_config::{
-    AddTable,
-    AsTable,
-    StateConfig,
-    StateConfigBuilder,
-    TableEntry,
-};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
-        manual::Manual,
         postcard::Postcard,
         raw::Raw,
-        Decode,
-        Encode,
     },
     structured_storage::TableWithBlueprint,
     Mappable,
@@ -21,22 +11,13 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         AssetId,
-        Bytes32,
-        Bytes64,
-        Bytes8,
     },
-    fuel_types::BlockHeight,
     fuel_vm::double_key,
-    services::txpool::TransactionStatus,
 };
 use rand::{
     distributions::Standard,
     prelude::Distribution,
     Rng,
-};
-use std::{
-    array::TryFromSliceError,
-    mem::size_of,
 };
 
 pub type Amount = u64;

@@ -5,28 +5,17 @@ use crate::database::{
     },
     Database,
     Error as DatabaseError,
-    IndexationStatus,
-    IndexationType,
 };
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     structured_storage::TableWithBlueprint,
-    transactional::{
-        Changes,
-        ConflictPolicy,
-        Modifiable,
-        StorageTransaction,
-    },
     Error as StorageError,
     Mappable,
     Result as StorageResult,
-    StorageAsMut,
     StorageAsRef,
     StorageInspect,
-    StorageMutate,
 };
-use tracing::info;
 
 /// The table that stores all metadata about the database.
 pub struct MetadataTable<Description>(core::marker::PhantomData<Description>);

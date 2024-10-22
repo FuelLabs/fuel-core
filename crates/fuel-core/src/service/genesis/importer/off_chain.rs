@@ -35,10 +35,7 @@ use fuel_core_storage::{
     transactional::StorageTransaction,
     StorageAsMut,
 };
-use fuel_core_types::{
-    fuel_tx::AssetId,
-    services::executor::Event,
-};
+use fuel_core_types::services::executor::Event;
 use std::borrow::Cow;
 
 use super::{
@@ -114,9 +111,7 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
             .into_iter()
             .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
 
-        let base_asset_id = AssetId::default(); // TODO[RC]: Get base asset id here
-
-        worker_service::process_executor_events(events, tx, &base_asset_id)?;
+        worker_service::process_executor_events(events, tx)?;
         Ok(())
     }
 }
@@ -135,9 +130,7 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
         });
 
-        let base_asset_id = AssetId::default(); // TODO[RC]: Get base asset id here, but could be not needed after having separate DB for messages and coins
-
-        worker_service::process_executor_events(events, tx, &base_asset_id)?;
+        worker_service::process_executor_events(events, tx)?;
         Ok(())
     }
 }

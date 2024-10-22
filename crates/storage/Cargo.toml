@@ -17,7 +17,6 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
-tracing = { workspace = true }
 anyhow = { workspace = true }
 derive_more = { workspace = true }
 enum-iterator = { workspace = true }
