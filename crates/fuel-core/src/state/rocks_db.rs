@@ -27,7 +27,9 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
+    not_found,
     transactional::Changes,
+    Error as StorageError,
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -719,6 +721,25 @@ where
         }
 
         Ok(value.map(Arc::new))
+    }
+
+    fn get_multi(
+        &self,
+        keys: &[&[u8]],
+        column: Self::Column,
+    ) -> StorageResult<Vec<Value>> {
+        // TODO: Metrics
+
+        let cf = &self.cf(column);
+        let keys = keys.iter().map(|key| (cf, key));
+        self.db
+            .multi_get_cf_opt(keys, &self.read_options)
+            .into_iter()
+            .map(|res| {
+                res.map_err(|e| StorageError::from(DatabaseError::Other(e.into())))
+                    .and_then(|val| val.ok_or(not_found!(Self::Column)).map(Arc::new))
+            })
+            .collect()
     }
 
     fn read(

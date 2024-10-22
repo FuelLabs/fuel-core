@@ -19,6 +19,12 @@ use crate::{
 };
 use fuel_vm_private::prelude::MerkleRoot;
 
+#[cfg(feature = "alloc")]
+use alloc::{
+    borrow::Cow,
+    vec::Vec,
+};
+
 pub mod merklized;
 pub mod plain;
 pub mod sparse;
@@ -74,6 +80,26 @@ where
                 Self::ValueCodec::decode_from_value(value).map_err(crate::Error::Codec)
             })
             .transpose()
+    }
+
+    /// Returns multiple values from the storage.
+    fn get_multi(
+        storage: &S,
+        keys: &[&M::Key],
+        column: S::Column,
+    ) -> StorageResult<Vec<M::OwnedValue>> {
+        // TODO: Ugh... find a better way to express this 🫠
+        let keys: Vec<_> = keys.iter().map(|key| Self::KeyCodec::encode(key)).collect();
+        let keys: Vec<Cow<[u8]>> = keys.iter().map(|key| key.as_bytes()).collect();
+        let keys: Vec<&[u8]> = keys.iter().map(|key| key.as_ref()).collect();
+
+        storage
+            .get_multi(&keys, column)?
+            .into_iter()
+            .map(|value| {
+                Self::ValueCodec::decode_from_value(value).map_err(crate::Error::Codec)
+            })
+            .collect()
     }
 }
 

@@ -63,7 +63,7 @@ pub trait KeyValueInspect {
     /// Returns the value from the storage.
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>>;
 
-    /// Returns the value from the storage.
+    /// Returns multiple values from the storage.
     fn get_multi(
         &self,
         keys: &[&[u8]],
