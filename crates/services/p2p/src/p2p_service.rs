@@ -30,9 +30,9 @@ use crate::{
         RequestError,
         RequestMessage,
         ResponseError,
-        ResponseMessage,
         ResponseSendError,
         ResponseSender,
+        V2ResponseMessage,
     },
     TryPeerId,
 };
@@ -119,7 +119,7 @@ pub struct FuelP2PService {
     /// Whenever we're done processing the request, it's removed from this table,
     /// and the channel is used to send the result to libp2p, which will forward it
     /// to the peer that requested it.
-    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
+    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
     /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
@@ -428,7 +428,7 @@ impl FuelP2PService {
     pub fn send_response_msg(
         &mut self,
         request_id: InboundRequestId,
-        message: ResponseMessage,
+        message: V2ResponseMessage,
     ) -> Result<(), ResponseSendError> {
         let Some(channel) = self.inbound_requests_table.remove(&request_id) else {
             debug!("ResponseChannel for {:?} does not exist!", request_id);
@@ -646,7 +646,7 @@ impl FuelP2PService {
 
     fn handle_request_response_event(
         &mut self,
-        event: request_response::Event<RequestMessage, ResponseMessage>,
+        event: request_response::Event<RequestMessage, V2ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
             request_response::Event::Message { peer, message } => match message {
@@ -674,8 +674,10 @@ impl FuelP2PService {
 
                     let send_ok = match channel {
                         ResponseSender::SealedHeaders(c) => match response {
-                            ResponseMessage::SealedHeaders(v) => {
-                                c.send((peer, Ok(v))).is_ok()
+                            V2ResponseMessage::SealedHeaders(v) => {
+                                // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+                                // Change type of ResponseSender and remove the .ok() here
+                                c.send((peer, Ok(v.ok()))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -686,8 +688,8 @@ impl FuelP2PService {
                             }
                         },
                         ResponseSender::Transactions(c) => match response {
-                            ResponseMessage::Transactions(v) => {
-                                c.send((peer, Ok(v))).is_ok()
+                            V2ResponseMessage::Transactions(v) => {
+                                c.send((peer, Ok(v.ok()))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -698,8 +700,8 @@ impl FuelP2PService {
                             }
                         },
                         ResponseSender::TxPoolAllTransactionsIds(c) => match response {
-                            ResponseMessage::TxPoolAllTransactionsIds(v) => {
-                                c.send((peer, Ok(v))).is_ok()
+                            V2ResponseMessage::TxPoolAllTransactionsIds(v) => {
+                                c.send((peer, Ok(v.ok()))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -710,8 +712,8 @@ impl FuelP2PService {
                             }
                         },
                         ResponseSender::TxPoolFullTransactions(c) => match response {
-                            ResponseMessage::TxPoolFullTransactions(v) => {
-                                c.send((peer, Ok(v))).is_ok()
+                            V2ResponseMessage::TxPoolFullTransactions(v) => {
+                                c.send((peer, Ok(v.ok()))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -847,8 +849,8 @@ mod tests {
         request_response::messages::{
             RequestMessage,
             ResponseError,
-            ResponseMessage,
             ResponseSender,
+            V2ResponseMessage,
         },
         service::to_message_acceptance,
     };
@@ -1778,16 +1780,16 @@ mod tests {
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::SealedHeaders(Ok(sealed_headers)));
                             }
                             RequestMessage::Transactions(_) => {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::Transactions(Ok(transactions)));
                             }
                             RequestMessage::TxPoolAllTransactionsIds => {
                                 let tx_ids = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolAllTransactionsIds(Some(tx_ids)));
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::TxPoolAllTransactionsIds(Ok(tx_ids)));
                             }
                             RequestMessage::TxPoolFullTransactions(tx_ids) => {
                                 let txs = tx_ids.iter().enumerate().map(|(i, _)| {
@@ -1797,7 +1799,7 @@ mod tests {
                                         Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
                                     }
                                 }).collect();
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::TxPoolFullTransactions(Some(txs)));
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::TxPoolFullTransactions(Ok(txs)));
                             }
                         }
                     }
@@ -1905,7 +1907,7 @@ mod tests {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: _ }) = &node_b_event {
                         let sealed_headers: Vec<_> = arbitrary_headers_for_range(1..3);
-                        let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
+                        let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::SealedHeaders(Ok(sealed_headers)));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
