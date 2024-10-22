@@ -205,6 +205,7 @@ impl AsRef<str> for PostcardProtocol {
 
 #[cfg(test)]
 mod tests {
+
     use fuel_core_types::blockchain::SealedBlockHeader;
     use request_response::Codec as _;
 
@@ -241,14 +242,10 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> should be deserialized using v1");
 
         // Then
-        match deserialized {
-            V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
-                assert_eq!(sealed_block_headers, sealed_block_headers_response);
-            }
-            other => {
-                panic!("Deserialized to {other:?}, expected {sealed_block_headers:?}")
-            }
-        }
+        assert!(matches!(
+            deserialized,
+            V2ResponseMessage::SealedHeaders(Ok(sealed_headers)) if sealed_headers == sealed_block_headers
+        ));
     }
 
     #[tokio::test]
@@ -271,14 +268,9 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> should be deserialized using v1");
 
         // Then
-        match deserialized {
-            V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
-                assert_eq!(sealed_block_headers, sealed_block_headers_response);
-            }
-            other => {
-                panic!("Deserialized to {other:?}, expected {sealed_block_headers:?}")
-            }
-        }
+        assert!(
+            matches!(deserialized, V2ResponseMessage::SealedHeaders(Ok(sealed_headers)) if sealed_headers == sealed_block_headers)
+        );
     }
 
     #[tokio::test]
@@ -302,14 +294,12 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 
         // Then
-        match deserialized {
+        assert!(matches!(
+            deserialized,
             V2ResponseMessage::SealedHeaders(Err(
-                ResponseMessageErrorCode::ProtocolV1EmptyResponse,
-            )) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+                ResponseMessageErrorCode::ProtocolV1EmptyResponse
+            ))
+        ));
     }
 
     #[tokio::test]
@@ -333,14 +323,12 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 
         // Then
-        match deserialized {
+        assert!(matches!(
+            deserialized,
             V2ResponseMessage::SealedHeaders(Err(
-                ResponseMessageErrorCode::ProtocolV1EmptyResponse,
-            )) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+                ResponseMessageErrorCode::ProtocolV1EmptyResponse
+            ))
+        ));
     }
 
     #[tokio::test]
@@ -364,12 +352,10 @@ mod tests {
             deserialize::<V1ResponseMessage>(&buf).expect("Deserialization as V1ResponseMessage should succeed");
 
         // Then
-        match deserialized_as_v1 {
-            V1ResponseMessage::SealedHeaders(None) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+        assert!(matches!(
+            deserialized_as_v1,
+            V1ResponseMessage::SealedHeaders(None)
+        ));
     }
 
     #[tokio::test]
@@ -387,13 +373,11 @@ mod tests {
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 
         // Then
-        match deserialized {
+        assert!(matches!(
+            deserialized,
             V2ResponseMessage::SealedHeaders(Err(
-                ResponseMessageErrorCode::ProtocolV1EmptyResponse,
-            )) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+                ResponseMessageErrorCode::ProtocolV1EmptyResponse
+            ))
+        ));
     }
 }

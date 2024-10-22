@@ -30,9 +30,9 @@ use crate::{
         RequestError,
         RequestMessage,
         ResponseError,
-        V2ResponseMessage,
         ResponseSendError,
         ResponseSender,
+        V2ResponseMessage,
     },
     TryPeerId,
 };
@@ -675,7 +675,7 @@ impl FuelP2PService {
                     let send_ok = match channel {
                         ResponseSender::SealedHeaders(c) => match response {
                             V2ResponseMessage::SealedHeaders(v) => {
-                                // TODO: https://github.com/FuelLabs/fuel-core/issues/1311 
+                                // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
                                 // Change type of ResponseSender and remove the .ok() here
                                 c.send((peer, Ok(v.ok()))).is_ok()
                             }
@@ -849,8 +849,8 @@ mod tests {
         request_response::messages::{
             RequestMessage,
             ResponseError,
-            V2ResponseMessage,
             ResponseSender,
+            V2ResponseMessage,
         },
         service::to_message_acceptance,
     };
