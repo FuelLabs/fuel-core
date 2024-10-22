@@ -18,9 +18,8 @@ use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
-pub(crate) const REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID: &str =
-    "/fuel/req_res/0.0.2";
+pub(crate) const V1_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
+pub(crate) const V2_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.2";
 
 /// Max Size in Bytes of the Request Message
 #[cfg(test)]

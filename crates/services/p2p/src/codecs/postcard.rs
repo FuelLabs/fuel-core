@@ -12,8 +12,8 @@ use crate::{
         RequestMessage,
         V1ResponseMessage,
         V2ResponseMessage,
-        REQUEST_RESPONSE_PROTOCOL_ID,
-        REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
+        V1_REQUEST_RESPONSE_PROTOCOL_ID,
+        V2_REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
@@ -176,7 +176,6 @@ impl GossipsubCodec for PostcardCodec {
     }
 }
 
-// TODO: Remove this NetworkCodec
 impl NetworkCodec for PostcardCodec {
     fn get_req_res_protocols(
         &self,
@@ -198,8 +197,8 @@ pub enum PostcardProtocol {
 impl AsRef<str> for PostcardProtocol {
     fn as_ref(&self) -> &str {
         match self {
-            PostcardProtocol::V1 => REQUEST_RESPONSE_PROTOCOL_ID,
-            PostcardProtocol::V2 => REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
+            PostcardProtocol::V1 => V1_REQUEST_RESPONSE_PROTOCOL_ID,
+            PostcardProtocol::V2 => V2_REQUEST_RESPONSE_PROTOCOL_ID,
         }
     }
 }
