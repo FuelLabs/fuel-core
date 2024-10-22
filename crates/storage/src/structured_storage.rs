@@ -265,6 +265,13 @@ where
 
     // fn get_multi(
     //    &self,
+    //    _keys: &[&<M as Mappable>::Key],
+    //) -> Result<Vec<Option<Cow<<M as Mappable>::OwnedValue>>>, Self::Error> {
+    //    todo!();
+    //}
+
+    // fn get_multi(
+    //    &self,
     //    keys: &[&<M as Mappable>::Key],
     //) -> Result<Vec<Option<Cow<<M as Mappable>::OwnedValue>>>, Self::Error> {
     //    let values =
