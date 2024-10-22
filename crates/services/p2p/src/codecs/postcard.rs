@@ -9,9 +9,9 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
-        LegacyResponseMessage,
         RequestMessage,
         ResponseMessage,
+        V1ResponseMessage,
         REQUEST_RESPONSE_PROTOCOL_ID,
         REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
     },
@@ -109,7 +109,7 @@ impl request_response::Codec for PostcardCodec {
 
         match protocol {
             PostcardProtocol::V1 => {
-                let legacy_response = deserialize::<LegacyResponseMessage>(&response)?;
+                let legacy_response = deserialize::<V1ResponseMessage>(&response)?;
                 Ok(legacy_response.into())
             }
             PostcardProtocol::V2 => deserialize::<ResponseMessage>(&response),
@@ -141,7 +141,7 @@ impl request_response::Codec for PostcardCodec {
     {
         let encoded_data = match protocol {
             PostcardProtocol::V1 => {
-                let legacy_response: LegacyResponseMessage = res.into();
+                let legacy_response: V1ResponseMessage = res.into();
                 serialize(&legacy_response)?
             }
             PostcardProtocol::V2 => serialize(&res)?,
@@ -342,10 +342,10 @@ mod tests {
 
         let deserialized_as_legacy =
             // We cannot access the codec trait from an old node here, 
-            // so we deserialize directly using the `LegacyResponseMessage` type.
-            deserialize::<LegacyResponseMessage>(&buf).expect("Deserialization as LegacyResponseMessage should succeed");
+            // so we deserialize directly using the `V1ResponseMessage` type.
+            deserialize::<V1ResponseMessage>(&buf).expect("Deserialization as V1ResponseMessage should succeed");
         match deserialized_as_legacy {
-            LegacyResponseMessage::SealedHeaders(None) => {}
+            V1ResponseMessage::SealedHeaders(None) => {}
             other => {
                 panic!("Deserialized to {other:?}, expected {response:?}")
             }
@@ -354,10 +354,10 @@ mod tests {
 
     #[tokio::test]
     async fn backward_compatibility_v1_write_error_response() {
-        let response = LegacyResponseMessage::SealedHeaders(None);
+        let response = V1ResponseMessage::SealedHeaders(None);
         let mut codec = PostcardCodec::new(1024);
         let buf = serialize(&response)
-            .expect("Serialization as LegacyResponseMessage should succeed");
+            .expect("Serialization as V1ResponseMessage should succeed");
 
         let deserialized = codec
             .read_response(&PostcardProtocol::V1, &mut buf.as_slice())

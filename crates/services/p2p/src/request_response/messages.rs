@@ -42,7 +42,7 @@ pub enum ResponseMessageErrorCode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LegacyResponseMessage {
+pub enum V1ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
     TxPoolAllTransactionsIds(Option<Vec<TxId>>),
@@ -59,24 +59,24 @@ pub enum ResponseMessage {
     ),
 }
 
-impl From<LegacyResponseMessage> for ResponseMessage {
-    fn from(v1_response: LegacyResponseMessage) -> Self {
+impl From<V1ResponseMessage> for ResponseMessage {
+    fn from(v1_response: V1ResponseMessage) -> Self {
         match v1_response {
-            LegacyResponseMessage::SealedHeaders(sealed_headers) => {
+            V1ResponseMessage::SealedHeaders(sealed_headers) => {
                 ResponseMessage::SealedHeaders(
                     sealed_headers
                         .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
-            LegacyResponseMessage::Transactions(vec) => ResponseMessage::Transactions(
+            V1ResponseMessage::Transactions(vec) => ResponseMessage::Transactions(
                 vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
             ),
-            LegacyResponseMessage::TxPoolAllTransactionsIds(vec) => {
+            V1ResponseMessage::TxPoolAllTransactionsIds(vec) => {
                 ResponseMessage::TxPoolAllTransactionsIds(
                     vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
-            LegacyResponseMessage::TxPoolFullTransactions(vec) => {
+            V1ResponseMessage::TxPoolFullTransactions(vec) => {
                 ResponseMessage::TxPoolFullTransactions(
                     vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
@@ -85,20 +85,20 @@ impl From<LegacyResponseMessage> for ResponseMessage {
     }
 }
 
-impl From<ResponseMessage> for LegacyResponseMessage {
+impl From<ResponseMessage> for V1ResponseMessage {
     fn from(response: ResponseMessage) -> Self {
         match response {
             ResponseMessage::SealedHeaders(sealed_headers) => {
-                LegacyResponseMessage::SealedHeaders(sealed_headers.ok())
+                V1ResponseMessage::SealedHeaders(sealed_headers.ok())
             }
             ResponseMessage::Transactions(transactions) => {
-                LegacyResponseMessage::Transactions(transactions.ok())
+                V1ResponseMessage::Transactions(transactions.ok())
             }
             ResponseMessage::TxPoolAllTransactionsIds(tx_ids) => {
-                LegacyResponseMessage::TxPoolAllTransactionsIds(tx_ids.ok())
+                V1ResponseMessage::TxPoolAllTransactionsIds(tx_ids.ok())
             }
             ResponseMessage::TxPoolFullTransactions(tx_pool) => {
-                LegacyResponseMessage::TxPoolFullTransactions(tx_pool.ok())
+                V1ResponseMessage::TxPoolFullTransactions(tx_pool.ok())
             }
         }
     }
