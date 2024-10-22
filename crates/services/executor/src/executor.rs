@@ -812,7 +812,7 @@ where
         D: KeyValueInspect<Column = Column>,
     {
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(
+            self.process_l1_events(
                 block_height,
                 da_block_height,
                 data,
@@ -875,7 +875,7 @@ where
         }
     }
 
-    fn process_da<D>(
+    fn process_l1_events<D>(
         &mut self,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
@@ -916,12 +916,21 @@ where
                         if message.da_height() != da_height {
                             return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
-                        block_storage_tx
-                            .storage_as_mut::<Messages>()
-                            .insert(message.nonce(), &message)?;
-                        execution_data
-                            .events
-                            .push(ExecutorEvent::MessageImported(message));
+                        let message_nonce = message.nonce();
+                        let message_event = if !block_storage_tx
+                            .storage_as_ref::<Messages>()
+                            .contains_key(message_nonce)?
+                        {
+                            block_storage_tx
+                                .storage_as_mut::<Messages>()
+                                .insert(message_nonce, &message)?;
+                            ExecutorEvent::MessageImported(message)
+                        } else {
+                            let reason =
+                                "Message with the same nonce already exists".to_string();
+                            ExecutorEvent::MessageIgnored { message, reason }
+                        };
+                        execution_data.events.push(message_event);
                     }
                     Event::Transaction(relayed_tx) => {
                         let id = relayed_tx.id();
