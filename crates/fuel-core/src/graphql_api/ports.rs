@@ -62,7 +62,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
@@ -77,6 +80,12 @@ pub trait OffChainDatabase: Send + Sync {
         asset_id: &AssetId,
         base_asset_id: &AssetId,
     ) -> StorageResult<u64>;
+
+    fn balances(
+        &self,
+        owner: &Address,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<HashMap<AssetId, u64>>;
 
     fn owned_coins_ids(
         &self,

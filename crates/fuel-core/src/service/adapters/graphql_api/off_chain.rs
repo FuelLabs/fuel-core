@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     database::{
         database_description::off_chain::OffChain,
@@ -224,6 +226,28 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             debug!(%coins, "total balance");
             Ok(*coins)
         }
+    }
+
+    fn balances(
+        &self,
+        owner: &Address,
+        _base_asset_id: &AssetId,
+    ) -> StorageResult<HashMap<AssetId, u64>> {
+        // TODO[RC]: Use _base_asset_id to also iterate over 'MessageBalances'.
+
+        let mut balances = HashMap::new();
+        for balance_key in self.iter_all_by_prefix_keys::<Balances, _>(Some(owner)) {
+            let key = balance_key?;
+            let asset_id = key.asset_id();
+            let balance = self
+                .storage_as_ref::<Balances>()
+                .get(&key)?
+                .unwrap_or_default();
+            debug!(%owner, %asset_id, %balance, "balance entry");
+            balances.insert(*asset_id, *balance);
+        }
+
+        Ok(balances)
     }
 }
 
