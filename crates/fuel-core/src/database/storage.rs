@@ -34,8 +34,7 @@ where
             Default::default(),
         );
         let prev = transaction.storage_as_mut::<M>().replace(key, value)?;
-        let changes = transaction.into_changes();
-        self.commit_changes(changes)?;
+        self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }
 

@@ -68,7 +68,7 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 }
 
 /// The metadata of the database contains information about the version and its height.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum DatabaseMetadata<Height> {
     V1 { version: u32, height: Height },
 }
