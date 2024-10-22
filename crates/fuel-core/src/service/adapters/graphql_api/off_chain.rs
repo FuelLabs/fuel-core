@@ -73,6 +73,7 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
+use tracing::debug;
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -207,25 +208,20 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             .get(&BalancesKey::new(owner, asset_id))?
             .unwrap_or_default();
 
-        // let base_asset_id = base_asset_id();
-
         if base_asset_id == asset_id {
             let messages = self
                 .storage_as_ref::<MessageBalances>()
                 .get(&owner)?
                 .unwrap_or_default();
 
-            println!(
-                "{coins} coins + {messages} messages = {}",
-                *coins + *messages
-            );
+            let total = coins.checked_add(*messages).ok_or(anyhow::anyhow!(
+                "Total balance overflow: coins: {coins}, messages: {messages}"
+            ))?;
 
-            Ok(coins
-                .checked_add(*messages)
-                .expect("TODO[RC]: balance too big"))
+            debug!(%coins, %messages, total, "total balance");
+            Ok(total)
         } else {
-            println!("{coins} coins");
-
+            debug!(%coins, "total balance");
             Ok(*coins)
         }
     }
