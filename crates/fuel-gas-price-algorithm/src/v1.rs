@@ -163,12 +163,12 @@ pub struct AlgorithmUpdaterV1 {
 /// For each L2 block, the block usage is a percentage of the block capacity used. If the
 /// block usage is below a certain threshold, the chain activity is decreased, if above the threshold,
 /// the activity is increased The chain activity exists on a scale
-/// between 0 and the sum of the normal, hold, and decrease buffers.
+/// between 0 and the sum of the normal, capped, and decrease buffers.
 ///
-/// e.g. if the decrease activity threshold is 20, the hold activity threshold is 80, and the max activity is 120,
+/// e.g. if the decrease activity threshold is 20, the capped activity threshold is 80, and the max activity is 120,
 /// we'd have the following ranges:
 ///
-/// 0 <-- decrease range -->20<-- hold range -->80<-- normal range -->120
+/// 0 <-- decrease range -->20<-- capped range -->80<-- normal range -->120
 ///
 /// The current chain activity determines the behavior of the DA gas price.
 ///
@@ -178,7 +178,7 @@ pub struct L2ActivityTracker {
     /// The maximum value the chain activity can hit
     max_activity: u16,
     /// The threshold if the block activity is below, the DA gas price will be held when it would otherwise be increased
-    hold_activity_threshold: u16,
+    capped_activity_threshold: u16,
     /// If the chain activity falls below this value, the DA gas price will be decreased when it would otherwise be increased
     decrease_activity_threshold: u16,
     /// The current activity of the L2 chain
@@ -193,25 +193,25 @@ pub enum DAGasPriceSafetyMode {
     /// Should increase DA gas price freely
     Normal,
     /// Should not increase the DA gas price
-    Hold,
+    Capped,
     /// Should decrease the DA gas price always
-    Decrease,
+    AlwaysDecrease,
 }
 
 impl L2ActivityTracker {
     pub fn new_full(
         normal_range_size: u16,
-        hold_range_size: u16,
+        capped_range_size: u16,
         decrease_range_size: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
         let decrease_activity_threshold = decrease_range_size;
-        let hold_activity_threshold = decrease_range_size.saturating_add(hold_range_size);
-        let max_activity = hold_activity_threshold.saturating_add(normal_range_size);
+        let capped_activity_threshold = decrease_range_size.saturating_add(capped_range_size);
+        let max_activity = capped_activity_threshold.saturating_add(normal_range_size);
         let chain_activity = max_activity;
         Self {
             max_activity,
-            hold_activity_threshold,
+            capped_activity_threshold,
             decrease_activity_threshold,
             chain_activity,
             block_activity_threshold,
@@ -220,14 +220,14 @@ impl L2ActivityTracker {
 
     pub fn new(
         normal_range_size: u16,
-        hold_range_size: u16,
+        capped_range_size: u16,
         decrease_range_size: u16,
         activity: u16,
         block_activity_threshold: ClampedPercentage,
     ) -> Self {
         let mut tracker = Self::new_full(
             normal_range_size,
-            hold_range_size,
+            capped_range_size,
             decrease_range_size,
             block_activity_threshold,
         );
@@ -237,12 +237,12 @@ impl L2ActivityTracker {
 
     pub fn new_always_normal() -> Self {
         let normal_range_size = 100;
-        let hold_range_size = 0;
+        let capped_range_size = 0;
         let decrease_range_size = 0;
         let percentage = ClampedPercentage::new(0);
         Self::new(
             normal_range_size,
-            hold_range_size,
+            capped_range_size,
             decrease_range_size,
             100,
             percentage,
@@ -250,12 +250,12 @@ impl L2ActivityTracker {
     }
 
     pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
-        if self.chain_activity > self.hold_activity_threshold {
+        if self.chain_activity > self.capped_activity_threshold {
             DAGasPriceSafetyMode::Normal
         } else if self.chain_activity > self.decrease_activity_threshold {
-            DAGasPriceSafetyMode::Hold
+            DAGasPriceSafetyMode::Capped
         } else {
-            DAGasPriceSafetyMode::Decrease
+            DAGasPriceSafetyMode::AlwaysDecrease
         }
     }
 
@@ -457,8 +457,8 @@ impl AlgorithmUpdaterV1 {
         if maybe_da_change > 0 {
             match self.l2_activity.safety_mode() {
                 DAGasPriceSafetyMode::Normal => maybe_da_change,
-                DAGasPriceSafetyMode::Hold => 0,
-                DAGasPriceSafetyMode::Decrease => self.max_change().saturating_mul(-1),
+                DAGasPriceSafetyMode::Capped => 0,
+                DAGasPriceSafetyMode::AlwaysDecrease => self.max_change().saturating_mul(-1),
             }
         } else {
             maybe_da_change

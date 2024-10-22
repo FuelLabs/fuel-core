@@ -9,11 +9,11 @@ use crate::v1::{
 
 fn decrease_l2_activity() -> L2ActivityTracker {
     let normal = 1;
-    let hold = 1;
+    let capped = 1;
     let decrease = 100;
     let activity = 50;
     let threshold = 50.into();
-    L2ActivityTracker::new(normal, hold, decrease, activity, threshold)
+    L2ActivityTracker::new(normal, capped, decrease, activity, threshold)
 }
 
 fn negative_profit_updater_builder() -> UpdaterBuilder {
@@ -627,22 +627,22 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
     assert!(contains_preexisting_block_bytes);
 }
 
-fn hold_l2_activity() -> L2ActivityTracker {
+fn capped_l2_activity_tracker() -> L2ActivityTracker {
     let normal = 1;
-    let hold = 100;
+    let capped = 100;
     let decrease = 1;
     let activity = 50;
     let threshold = 50.into();
-    L2ActivityTracker::new(normal, hold, decrease, activity, threshold)
+    L2ActivityTracker::new(normal, capped, decrease, activity, threshold)
 }
 
 #[test]
 fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in_hold_range(
 ) {
     // given
-    let hold_activity = hold_l2_activity();
+    let capped_activity = capped_l2_activity_tracker();
     let mut updater = negative_profit_updater_builder()
-        .with_activity(hold_activity)
+        .with_activity(capped_activity)
         .build();
     let algo = updater.algorithm();
     let old_gas_price = algo.calculate();
@@ -667,9 +667,9 @@ fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in
 fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_hold_range(
 ) {
     // given
-    let hold_activity = hold_l2_activity();
+    let capped_activity = capped_l2_activity_tracker();
     let mut updater = positive_profit_updater_builder()
-        .with_activity(hold_activity)
+        .with_activity(capped_activity)
         .build();
     let old_gas_price = updater.algorithm().calculate();
 
@@ -830,12 +830,12 @@ fn update_l2_block_data__if_activity_at_max_will_stop_increasing() {
     let exec_gas_price_increase_percent = 10;
     let threshold = 50;
     let normal_range = 1;
-    let hold_range = 1;
+    let capped_range = 1;
     let decrease_range = 1;
-    let starting_activity = normal_range + hold_range + decrease_range;
+    let starting_activity = normal_range + capped_range + decrease_range;
     let activity = L2ActivityTracker::new(
         normal_range,
-        hold_range,
+        capped_range,
         decrease_range,
         starting_activity,
         50.into(),
