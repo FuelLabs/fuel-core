@@ -135,7 +135,7 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
         });
 
-        let base_asset_id = AssetId::default(); // TODO[RC]: Get base asset id here
+        let base_asset_id = AssetId::default(); // TODO[RC]: Get base asset id here, but could be not needed after having separate DB for messages and coins
 
         worker_service::process_executor_events(events, tx, &base_asset_id)?;
         Ok(())
