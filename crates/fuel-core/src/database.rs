@@ -61,7 +61,6 @@ use std::{
     fmt::Debug,
     sync::Arc,
 };
-use tracing::info;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -465,7 +464,6 @@ where
         (Some(prev_height), None) => {
             // In production, we shouldn't have cases where we call `commit_changes` with intermediate changes.
             // The commit always should contain all data for the corresponding height.
-            info!("XXXX - bailing here because new_height is not set");
             return Err(DatabaseError::NewHeightIsNotSet {
                 prev_height: prev_height.as_u64(),
             }
@@ -910,10 +908,9 @@ mod tests {
                 .storage_as_mut::<MetadataTable<Relayer>>()
                 .insert(
                     &(),
-                    &DatabaseMetadata::<DaBlockHeight>::V2 {
+                    &DatabaseMetadata::<DaBlockHeight>::V1 {
                         version: Default::default(),
                         height: Default::default(),
-                        indexation_progress: Default::default(),
                     },
                 )
                 .unwrap();
@@ -985,10 +982,9 @@ mod tests {
             // When
             let result = database.storage_as_mut::<MetadataTable<Relayer>>().insert(
                 &(),
-                &DatabaseMetadata::<DaBlockHeight>::V2 {
+                &DatabaseMetadata::<DaBlockHeight>::V1 {
                     version: Default::default(),
                     height: Default::default(),
-                    indexation_progress: Default::default(),
                 },
             );
 
