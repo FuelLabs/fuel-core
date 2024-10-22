@@ -15,7 +15,6 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-atty = "0.2.14"
 clap = { workspace = true, features = ["derive", "env"] }
 crossterm = "0.27.0"
 fuel-core-keygen = { workspace = true }

@@ -3505,7 +3505,6 @@ name = "fuel-core-keygen-bin"
 version = "0.40.0"
 dependencies = [
  "anyhow",
- "atty",
  "clap 4.5.20",
  "crossterm",
  "fuel-core-keygen",
