@@ -22,9 +22,9 @@ use crate::{
     request_response::messages::{
         OnResponse,
         RequestMessage,
-        V2ResponseMessage,
         ResponseMessageErrorCode,
         ResponseSender,
+        V2ResponseMessage,
     },
 };
 use anyhow::anyhow;
@@ -554,8 +554,8 @@ where
                 max_len,
                 "Requested range is too big"
             );
-            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-            // TODO[AC] Use more meaningful error codes
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Return helpful error message to requester.
             let response = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
@@ -570,7 +570,8 @@ where
                 return;
             }
 
-            // TODO[AC] Assign an error code to this
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Add new error code
             let response = db_lookup(&view, range.clone())
                 .ok()
                 .flatten()
@@ -581,7 +582,8 @@ where
                 .trace_err("Failed to send response to the request channel");
         });
 
-        // TODO[AC]: Handle error cases and return meaningful status codes
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+        // Handle error cases and return meaningful status codes
         if result.is_err() {
             let err = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
@@ -657,14 +659,16 @@ where
                 return;
             };
 
-            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Return helpful error message to requester.
             let _ = response_channel
                 .try_send(task_request(Ok(response), request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
         if result.is_err() {
-            // TODO[AC]: return better error code
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Return better error code
             let res = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
@@ -696,8 +700,8 @@ where
         tx_ids: Vec<TxId>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-        // TODO[AC] Use more meaningful error codes
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+        // Return helpful error message to requester.
         if tx_ids.len() > self.max_txs_per_request {
             self.p2p_service.send_response_msg(
                 request_id,
