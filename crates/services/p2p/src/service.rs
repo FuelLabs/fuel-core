@@ -869,7 +869,7 @@ where
                         let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let peer = self.p2p_service.get_peer_id_with_height(&height);
                         if self.p2p_service.send_request_msg(peer, request_msg, channel).is_err() {
-                            tracing::warn!("No peers found for block at height {:?}", block_height_range.end);
+                            return Err(anyhow!("No peers found for block at height {:?}", height));
                         }
                     }
                     Some(TaskRequest::GetTransactionsFromPeer { block_height_range, from_peer, channel }) => {
