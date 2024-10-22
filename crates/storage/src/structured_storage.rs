@@ -263,25 +263,18 @@ where
             .map(|value| value.map(Cow::Owned))
     }
 
-    // fn get_multi(
-    //    &self,
-    //    _keys: &[&<M as Mappable>::Key],
-    //) -> Result<Vec<Option<Cow<<M as Mappable>::OwnedValue>>>, Self::Error> {
-    //    todo!();
-    //}
+    fn get_multi(
+        &self,
+        keys: &[&<M as Mappable>::Key],
+    ) -> Result<Vec<Option<Cow<<M as Mappable>::OwnedValue>>>, Self::Error> {
+        let values =
+            <M as TableWithBlueprint>::Blueprint::get_multi(self, keys, M::column())?;
 
-    // fn get_multi(
-    //    &self,
-    //    keys: &[&<M as Mappable>::Key],
-    //) -> Result<Vec<Option<Cow<<M as Mappable>::OwnedValue>>>, Self::Error> {
-    //    let values =
-    //        <M as TableWithBlueprint>::Blueprint::get_multi(self, keys, M::column())?;
-
-    //    Ok(values
-    //        .into_iter()
-    //        .map(|value| Some(Cow::Owned(value)))
-    //        .collect())
-    //}
+        Ok(values
+            .into_iter()
+            .map(|value| Some(Cow::Owned(value)))
+            .collect())
+    }
 
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::exists(self, key, M::column())
