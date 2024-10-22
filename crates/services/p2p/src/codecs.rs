@@ -28,6 +28,8 @@ pub trait GossipsubCodec {
     ) -> Result<Self::ResponseMessage, io::Error>;
 }
 
+// TODO: https://github.com/FuelLabs/fuel-core/issues/2368
+// Remove this trait
 /// Main Codec trait
 /// Needs to be implemented and provided to FuelBehaviour
 pub trait NetworkCodec:
