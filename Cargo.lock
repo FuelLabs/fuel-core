@@ -3558,6 +3558,8 @@ dependencies = [
  "serde",
  "serde_with",
  "sha2 0.10.8",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "thiserror",
  "tokio",
  "tracing",
