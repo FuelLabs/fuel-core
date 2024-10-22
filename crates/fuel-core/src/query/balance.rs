@@ -57,6 +57,7 @@ impl ReadView {
         // The new way.
         let amount_1 = self.off_chain.balance(&owner, &asset_id, &base_asset_id)?;
 
+        // Safety check for the time of development.
         assert_eq!(amount, amount_1);
 
         Ok(AddressBalance {
