@@ -223,7 +223,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             debug!(%coins, %messages, total, "total balance");
             Ok(total)
         } else {
-            debug!(%coins, "total balance");
+            debug!(%total, "total balance");
             Ok(*coins)
         }
     }
