@@ -1078,7 +1078,7 @@ impl SharedState {
                 warn!(
                     "Peer {peer_id:?} failed to respond with transactions: {response_error_code:?}"
                 );
-                return Ok(None);
+                Ok(None)
             }
             Ok(Ok(txs)) => Ok(Some(txs)),
         }

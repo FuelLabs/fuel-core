@@ -176,14 +176,15 @@ impl GossipsubCodec for PostcardCodec {
     }
 }
 
-// TODO: Remove this NetworkCodec
 impl NetworkCodec for PostcardCodec {
     fn get_req_res_protocols(
         &self,
     ) -> impl Iterator<Item = <Self as request_response::Codec>::Protocol> {
-        // TODO: Iterating over versions in reverse order should prefer
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/2374
+        // Iterating over versions in reverse order should prefer
         // peers to use V2 over V1 for exchanging messages. However, this is
-        // not guaranteed by the specs for the `request_response` protocol.
+        // not guaranteed by the specs for the `request_response` protocol,
+        // and it should be tested.
         PostcardProtocol::iter().rev()
     }
 }
@@ -310,10 +311,8 @@ mod tests {
     async fn codec__serialzation_roundtrip_using_v1_on_error_response_returns_predefined_error_code(
     ) {
         // Given
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-        // Change this to a different ResponseMessageErrorCode once these have been implemented.
         let response = V2ResponseMessage::SealedHeaders(Err(
-            ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+            ResponseMessageErrorCode::RequestedRangeTooLarge,
         ));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);

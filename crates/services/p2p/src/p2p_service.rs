@@ -1717,7 +1717,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
+                                            if let Ok((_, Ok(Ok(transactions)))) = response_message {
                                                 let check = transactions.len() == 1 && transactions[0].0.len() == 5;
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
@@ -1733,7 +1733,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(Some(transaction_ids)))) = response_message {
+                                            if let Ok((_, Ok(Ok(transaction_ids)))) = response_message {
                                                 let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
                                                 let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
                                                 let _ = tx_test_end.send(check).await;
@@ -1750,7 +1750,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
+                                            if let Ok((_, Ok(Ok(transactions)))) = response_message {
                                                 let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
                                                     if i == 0 {
                                                         None
