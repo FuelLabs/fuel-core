@@ -9,11 +9,11 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
-        LegacyResponseMessage,
         RequestMessage,
-        ResponseMessage,
-        REQUEST_RESPONSE_PROTOCOL_ID,
-        REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
+        V1ResponseMessage,
+        V2ResponseMessage,
+        V1_REQUEST_RESPONSE_PROTOCOL_ID,
+        V2_REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
@@ -75,7 +75,7 @@ impl PostcardCodec {
 impl request_response::Codec for PostcardCodec {
     type Protocol = PostcardProtocol;
     type Request = RequestMessage;
-    type Response = ResponseMessage;
+    type Response = V2ResponseMessage;
 
     async fn read_request<T>(
         &mut self,
@@ -109,10 +109,10 @@ impl request_response::Codec for PostcardCodec {
 
         match protocol {
             PostcardProtocol::V1 => {
-                let legacy_response = deserialize::<LegacyResponseMessage>(&response)?;
-                Ok(legacy_response.into())
+                let v1_response = deserialize::<V1ResponseMessage>(&response)?;
+                Ok(v1_response.into())
             }
-            PostcardProtocol::V2 => deserialize::<ResponseMessage>(&response),
+            PostcardProtocol::V2 => deserialize::<V2ResponseMessage>(&response),
         }
     }
 
@@ -141,8 +141,8 @@ impl request_response::Codec for PostcardCodec {
     {
         let encoded_data = match protocol {
             PostcardProtocol::V1 => {
-                let legacy_response: LegacyResponseMessage = res.into();
-                serialize(&legacy_response)?
+                let v1_response: V1ResponseMessage = res.into();
+                serialize(&v1_response)?
             }
             PostcardProtocol::V2 => serialize(&res)?,
         };
@@ -198,13 +198,14 @@ pub enum PostcardProtocol {
 impl AsRef<str> for PostcardProtocol {
     fn as_ref(&self) -> &str {
         match self {
-            PostcardProtocol::V1 => REQUEST_RESPONSE_PROTOCOL_ID,
-            PostcardProtocol::V2 => REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID,
+            PostcardProtocol::V1 => V1_REQUEST_RESPONSE_PROTOCOL_ID,
+            PostcardProtocol::V2 => V2_REQUEST_RESPONSE_PROTOCOL_ID,
         }
     }
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
     use fuel_core_types::blockchain::SealedBlockHeader;
     use request_response::Codec as _;
@@ -223,11 +224,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v2() {
+    async fn codec__serialization_roundtrip_using_v2_on_successful_response_returns_original_value(
+    ) {
+        // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
-        let response = ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
+        let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);
+
+        // When
         codec
             .write_response(&PostcardProtocol::V2, &mut buf, response)
             .await
@@ -238,22 +243,23 @@ mod tests {
             .await
             .expect("Valid Vec<SealedBlockHeader> should be deserialized using v1");
 
-        match deserialized {
-            ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
-                assert_eq!(sealed_block_headers, sealed_block_headers_response);
-            }
-            other => {
-                panic!("Deserialized to {other:?}, expected {sealed_block_headers:?}")
-            }
-        }
+        // Then
+        assert!(matches!(
+            deserialized,
+            V2ResponseMessage::SealedHeaders(Ok(sealed_headers)) if sealed_headers == sealed_block_headers
+        ));
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v1() {
+    async fn codec__serialization_roundtrip_using_v1_on_successful_response_returns_original_value(
+    ) {
+        // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
-        let response = ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
+        let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);
+
+        // When
         codec
             .write_response(&PostcardProtocol::V1, &mut buf, response)
             .await
@@ -264,23 +270,23 @@ mod tests {
             .await
             .expect("Valid Vec<SealedBlockHeader> should be deserialized using v1");
 
-        match deserialized {
-            ResponseMessage::SealedHeaders(Ok(sealed_block_headers_response)) => {
-                assert_eq!(sealed_block_headers, sealed_block_headers_response);
-            }
-            other => {
-                panic!("Deserialized to {other:?}, expected {sealed_block_headers:?}")
-            }
-        }
+        // Then
+        assert!(
+            matches!(deserialized, V2ResponseMessage::SealedHeaders(Ok(sealed_headers)) if sealed_headers == sealed_block_headers)
+        );
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v2_error_response() {
-        let response = ResponseMessage::SealedHeaders(Err(
+    async fn codec__serialization_roundtrip_using_v2_on_error_response_returns_original_value(
+    ) {
+        // Given
+        let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);
+
+        // When
         codec
             .write_response(&PostcardProtocol::V2, &mut buf, response.clone())
             .await
@@ -291,23 +297,28 @@ mod tests {
             .await
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 
-        match deserialized {
-            ResponseMessage::SealedHeaders(Err(
-                ResponseMessageErrorCode::ProtocolV1EmptyResponse,
-            )) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+        // Then
+        assert!(matches!(
+            deserialized,
+            V2ResponseMessage::SealedHeaders(Err(
+                ResponseMessageErrorCode::ProtocolV1EmptyResponse
+            ))
+        ));
     }
 
     #[tokio::test]
-    async fn serialzation_roundtrip_using_v1_error_response() {
-        let response = ResponseMessage::SealedHeaders(Err(
+    async fn codec__serialzation_roundtrip_using_v1_on_error_response_returns_predefined_error_code(
+    ) {
+        // Given
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+        // Change this to a different ResponseMessageErrorCode once these have been implemented.
+        let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);
+
+        // When
         codec
             .write_response(&PostcardProtocol::V1, &mut buf, response.clone())
             .await
@@ -318,58 +329,62 @@ mod tests {
             .await
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 
-        match deserialized {
-            ResponseMessage::SealedHeaders(Err(
-                ResponseMessageErrorCode::ProtocolV1EmptyResponse,
-            )) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+        // Then
+        assert!(matches!(
+            deserialized,
+            V2ResponseMessage::SealedHeaders(Err(
+                ResponseMessageErrorCode::ProtocolV1EmptyResponse
+            ))
+        ));
     }
 
     #[tokio::test]
-    async fn backward_compatibility_v1_read_error_response() {
-        let response = ResponseMessage::SealedHeaders(Err(
+    async fn codec__write_response_is_backwards_compatible_with_v1() {
+        // Given
+        let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec = PostcardCodec::new(1024);
         let mut buf = Vec::with_capacity(1024);
+
+        // When
         codec
             .write_response(&PostcardProtocol::V1, &mut buf, response.clone())
             .await
             .expect("Valid Vec<SealedBlockHeader> is serialized using v1");
 
-        let deserialized_as_legacy =
+        let deserialized_as_v1 =
             // We cannot access the codec trait from an old node here, 
-            // so we deserialize directly using the `LegacyResponseMessage` type.
-            deserialize::<LegacyResponseMessage>(&buf).expect("Deserialization as LegacyResponseMessage should succeed");
-        match deserialized_as_legacy {
-            LegacyResponseMessage::SealedHeaders(None) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+            // so we deserialize directly using the `V1ResponseMessage` type.
+            deserialize::<V1ResponseMessage>(&buf).expect("Deserialization as V1ResponseMessage should succeed");
+
+        // Then
+        assert!(matches!(
+            deserialized_as_v1,
+            V1ResponseMessage::SealedHeaders(None)
+        ));
     }
 
     #[tokio::test]
-    async fn backward_compatibility_v1_write_error_response() {
-        let response = LegacyResponseMessage::SealedHeaders(None);
+    async fn codec__read_response_is_backwards_compatible_with_v1() {
+        // Given
+        let response = V1ResponseMessage::SealedHeaders(None);
         let mut codec = PostcardCodec::new(1024);
-        let buf = serialize(&response)
-            .expect("Serialization as LegacyResponseMessage should succeed");
 
+        // When
+        let buf = serialize(&response)
+            .expect("Serialization as V1ResponseMessage should succeed");
         let deserialized = codec
             .read_response(&PostcardProtocol::V1, &mut buf.as_slice())
             .await
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
-        match deserialized {
-            ResponseMessage::SealedHeaders(Err(
-                ResponseMessageErrorCode::ProtocolV1EmptyResponse,
-            )) => {}
-            other => {
-                panic!("Deserialized to {other:?}, expected {response:?}")
-            }
-        }
+
+        // Then
+        assert!(matches!(
+            deserialized,
+            V2ResponseMessage::SealedHeaders(Err(
+                ResponseMessageErrorCode::ProtocolV1EmptyResponse
+            ))
+        ));
     }
 }

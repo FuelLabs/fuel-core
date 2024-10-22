@@ -8,7 +8,7 @@ use crate::{
     },
     request_response::messages::{
         RequestMessage,
-        ResponseMessage,
+        V2ResponseMessage,
     },
 };
 use libp2p::request_response;
@@ -28,13 +28,15 @@ pub trait GossipsubCodec {
     ) -> Result<Self::ResponseMessage, io::Error>;
 }
 
+// TODO: https://github.com/FuelLabs/fuel-core/issues/2368
+// Remove this trait
 /// Main Codec trait
 /// Needs to be implemented and provided to FuelBehaviour
 pub trait NetworkCodec:
     GossipsubCodec<
         RequestMessage = GossipsubBroadcastRequest,
         ResponseMessage = GossipsubMessage,
-    > + request_response::Codec<Request = RequestMessage, Response = ResponseMessage>
+    > + request_response::Codec<Request = RequestMessage, Response = V2ResponseMessage>
     + Clone
     + Send
     + 'static

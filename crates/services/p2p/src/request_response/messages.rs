@@ -18,9 +18,8 @@ use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
-pub(crate) const REQUEST_RESPONSE_WITH_ERROR_CODES_PROTOCOL_ID: &str =
-    "/fuel/req_res/0.0.2";
+pub(crate) const V1_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
+pub(crate) const V2_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.2";
 
 /// Max Size in Bytes of the Request Message
 #[cfg(test)]
@@ -34,7 +33,6 @@ pub enum RequestMessage {
     TxPoolFullTransactions(Vec<TxId>),
 }
 
-// TODO: Do we want explicit status codes or an Error type?
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessageErrorCode {
     /// The peer sent an empty response using protocol `/fuel/req_res/0.0.1`
@@ -49,7 +47,7 @@ pub enum ResponseMessageErrorCode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LegacyResponseMessage {
+pub enum V1ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
     TxPoolAllTransactionsIds(Option<Vec<TxId>>),
@@ -57,7 +55,7 @@ pub enum LegacyResponseMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ResponseMessage {
+pub enum V2ResponseMessage {
     SealedHeaders(Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>),
     Transactions(Result<Vec<Transactions>, ResponseMessageErrorCode>),
     TxPoolAllTransactionsIds(Result<Vec<TxId>, ResponseMessageErrorCode>),
@@ -66,25 +64,25 @@ pub enum ResponseMessage {
     ),
 }
 
-impl From<LegacyResponseMessage> for ResponseMessage {
-    fn from(v1_response: LegacyResponseMessage) -> Self {
+impl From<V1ResponseMessage> for V2ResponseMessage {
+    fn from(v1_response: V1ResponseMessage) -> Self {
         match v1_response {
-            LegacyResponseMessage::SealedHeaders(sealed_headers) => {
-                ResponseMessage::SealedHeaders(
+            V1ResponseMessage::SealedHeaders(sealed_headers) => {
+                V2ResponseMessage::SealedHeaders(
                     sealed_headers
                         .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
-            LegacyResponseMessage::Transactions(vec) => ResponseMessage::Transactions(
+            V1ResponseMessage::Transactions(vec) => V2ResponseMessage::Transactions(
                 vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
             ),
-            LegacyResponseMessage::TxPoolAllTransactionsIds(vec) => {
-                ResponseMessage::TxPoolAllTransactionsIds(
+            V1ResponseMessage::TxPoolAllTransactionsIds(vec) => {
+                V2ResponseMessage::TxPoolAllTransactionsIds(
                     vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
-            LegacyResponseMessage::TxPoolFullTransactions(vec) => {
-                ResponseMessage::TxPoolFullTransactions(
+            V1ResponseMessage::TxPoolFullTransactions(vec) => {
+                V2ResponseMessage::TxPoolFullTransactions(
                     vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
                 )
             }
@@ -92,20 +90,20 @@ impl From<LegacyResponseMessage> for ResponseMessage {
     }
 }
 
-impl From<ResponseMessage> for LegacyResponseMessage {
-    fn from(response: ResponseMessage) -> Self {
+impl From<V2ResponseMessage> for V1ResponseMessage {
+    fn from(response: V2ResponseMessage) -> Self {
         match response {
-            ResponseMessage::SealedHeaders(sealed_headers) => {
-                LegacyResponseMessage::SealedHeaders(sealed_headers.ok())
+            V2ResponseMessage::SealedHeaders(sealed_headers) => {
+                V1ResponseMessage::SealedHeaders(sealed_headers.ok())
             }
-            ResponseMessage::Transactions(transactions) => {
-                LegacyResponseMessage::Transactions(transactions.ok())
+            V2ResponseMessage::Transactions(transactions) => {
+                V1ResponseMessage::Transactions(transactions.ok())
             }
-            ResponseMessage::TxPoolAllTransactionsIds(tx_ids) => {
-                LegacyResponseMessage::TxPoolAllTransactionsIds(tx_ids.ok())
+            V2ResponseMessage::TxPoolAllTransactionsIds(tx_ids) => {
+                V1ResponseMessage::TxPoolAllTransactionsIds(tx_ids.ok())
             }
-            ResponseMessage::TxPoolFullTransactions(tx_pool) => {
-                LegacyResponseMessage::TxPoolFullTransactions(tx_pool.ok())
+            V2ResponseMessage::TxPoolFullTransactions(tx_pool) => {
+                V1ResponseMessage::TxPoolFullTransactions(tx_pool.ok())
             }
         }
     }
