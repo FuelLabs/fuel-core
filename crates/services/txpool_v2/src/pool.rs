@@ -89,6 +89,11 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             && self.current_gas == 0
             && self.current_bytes_size == 0
     }
+
+    /// Returns the number of transactions in the pool.
+    pub fn tx_count(&self) -> usize {
+        self.tx_id_to_storage_id.len()
+    }
 }
 
 impl<S: Storage, CM, SA> Pool<S, S::StorageIndex, CM, SA>

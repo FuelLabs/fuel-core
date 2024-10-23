@@ -230,7 +230,7 @@ where
         // TODO: move this to the Task struct
         if self.metrics {
             let pool = self.pool.read();
-            let num_transactions = pool.storage.tx_count();
+            let num_transactions = pool.tx_count();
 
             let executable_txs =
                 pool.selection_algorithm.number_of_executable_transactions();
