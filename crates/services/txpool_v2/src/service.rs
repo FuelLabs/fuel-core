@@ -70,7 +70,6 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
-            PoolTransaction,
             TransactionStatus,
         },
     },
@@ -379,6 +378,13 @@ where
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     ) -> impl FnOnce() + Send + 'static {
+        let metrics = self.metrics;
+        if metrics {
+            txpool_metrics()
+                .number_of_transactions_pending_verification
+                .inc();
+        }
+
         let verification = self.verification.clone();
         let pool = self.pool.clone();
         let p2p = self.p2p.clone();
@@ -387,7 +393,6 @@ where
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
-        let metrics = self.metrics;
 
         let insert_transaction_thread_pool_op = move || {
             let current_height = *current_height.read();
@@ -404,6 +409,12 @@ where
                 utxo_validation,
             );
 
+            if metrics {
+                txpool_metrics()
+                    .number_of_transactions_pending_verification
+                    .dec();
+            }
+
             p2p.process_insertion_result(from_peer_info, &result);
 
             let checked_tx = match result {
@@ -419,7 +430,8 @@ where
             };
 
             if metrics {
-                record_tx_size(&checked_tx)
+                let size = checked_tx.metered_bytes_size();
+                txpool_metrics().tx_size.observe(size as f64);
             };
 
             let tx = Arc::new(checked_tx);
@@ -476,19 +488,12 @@ where
         };
         move || {
             if metrics {
-                let txpool_metrics = txpool_metrics();
-                txpool_metrics
-                    .number_of_transactions_pending_verification
-                    .inc();
                 let start_time = tokio::time::Instant::now();
                 insert_transaction_thread_pool_op();
                 let time_for_task_to_complete = start_time.elapsed().as_micros();
-                txpool_metrics
+                txpool_metrics()
                     .transaction_insertion_time_in_thread_pool_microseconds
                     .observe(time_for_task_to_complete as f64);
-                txpool_metrics
-                    .number_of_transactions_pending_verification
-                    .dec();
             } else {
                 insert_transaction_thread_pool_op();
             }
@@ -678,12 +683,6 @@ where
             }
         }
     }
-}
-
-fn record_tx_size(tx: &PoolTransaction) {
-    let size = tx.metered_bytes_size();
-    let txpool_metrics = txpool_metrics();
-    txpool_metrics.tx_size.observe(size as f64);
 }
 
 #[allow(clippy::too_many_arguments)]
