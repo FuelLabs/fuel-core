@@ -271,19 +271,13 @@ where
         };
 
         if metrics {
-            self.register_tx_removal(best_txs.into_iter().inspect(|storage_data| {
+            best_txs.iter().for_each(|storage_data| {
                 Self::record_transaction_time_in_txpool(storage_data)
-            }))
-        } else {
-            self.register_tx_removal(best_txs.into_iter())
+            });
         }
-    }
 
-    fn register_tx_removal(
-        &mut self,
-        items: impl Iterator<Item = StorageData>,
-    ) -> Vec<ArcPoolTx> {
-        items
+        best_txs
+            .into_iter()
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
                 storage_entry.transaction
