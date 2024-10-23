@@ -1078,7 +1078,7 @@ mod tests {
             temp_dir.path(),
             1024 * 1024 * 1024,
             Default::default(),
-            -1,
+            512,
         )
         .unwrap();
         // rocks db fails

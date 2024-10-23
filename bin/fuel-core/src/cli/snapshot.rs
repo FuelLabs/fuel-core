@@ -40,7 +40,7 @@ pub struct Command {
     #[clap(
         long = "rocksdb-max-fds",
         env,
-        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).unwrap().to_string()
+        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).expect("Failed to get OS max file descriptors.").to_string()
     )]
     pub rocksdb_max_fds: i32,
 
@@ -690,7 +690,7 @@ mod tests {
         std::fs::create_dir(&db_path)?;
 
         let mut db =
-            DbPopulator::new(open_db(&db_path, None, -1)?, StdRng::seed_from_u64(2));
+            DbPopulator::new(open_db(&db_path, None, 512)?, StdRng::seed_from_u64(2));
         let state = db.given_persisted_data();
         db.flush();
 
@@ -703,7 +703,7 @@ mod tests {
                 chain_config: None,
                 encoding_command: Some(EncodingCommand::Encoding { encoding }),
             },
-            rocksdb_max_fds: -1,
+            rocksdb_max_fds: 512,
         });
 
         // Because the test_case macro doesn't work with async tests
@@ -744,7 +744,7 @@ mod tests {
         let snapshot_dir = temp_dir.path().join("snapshot");
         let db_path = temp_dir.path().join("db");
         let mut db =
-            DbPopulator::new(open_db(&db_path, None, -1)?, StdRng::seed_from_u64(2));
+            DbPopulator::new(open_db(&db_path, None, 512)?, StdRng::seed_from_u64(2));
 
         let state = db.given_persisted_data();
         db.flush();
@@ -763,7 +763,7 @@ mod tests {
                     },
                 }),
             },
-            rocksdb_max_fds: -1,
+            rocksdb_max_fds: 512,
         });
 
         tokio::runtime::Runtime::new()
@@ -789,7 +789,7 @@ mod tests {
 
         let db_path = temp_dir.path().join("db");
         let mut db =
-            DbPopulator::new(open_db(&db_path, None, -1)?, StdRng::seed_from_u64(2));
+            DbPopulator::new(open_db(&db_path, None, 512)?, StdRng::seed_from_u64(2));
 
         let original_state = db.given_persisted_data().sorted().into_state_config();
 
@@ -815,7 +815,7 @@ mod tests {
             output_dir: snapshot_dir.clone(),
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             subcommand: SubCommands::Contract { contract_id },
-            rocksdb_max_fds: -1,
+            rocksdb_max_fds: 512,
         })
         .await?;
 

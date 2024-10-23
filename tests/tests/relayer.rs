@@ -331,7 +331,7 @@ async fn can_restart_node_with_relayer_data() {
     {
         // Given
         let database =
-            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), -1)
+            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), 512)
                 .unwrap();
 
         let service = FuelService::from_combined_database(database, config.clone())
@@ -351,7 +351,7 @@ async fn can_restart_node_with_relayer_data() {
     {
         // When
         let database =
-            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), -1)
+            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), 512)
                 .unwrap();
         let service = FuelService::from_combined_database(database, config)
             .await

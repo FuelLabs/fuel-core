@@ -139,7 +139,7 @@ pub struct Command {
     #[clap(
         long = "rocksdb-max-fds",
         env,
-        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).unwrap().to_string()
+        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).expect("Failed to get OS max file descriptors.").to_string()
     )]
     pub rocksdb_max_fds: i32,
 
