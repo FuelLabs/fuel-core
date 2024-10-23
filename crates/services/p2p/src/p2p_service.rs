@@ -4,7 +4,8 @@ use crate::{
         FuelBehaviourEvent,
     },
     codecs::{
-        postcard::PostcardCodec,
+        bounded::BoundedCodec,
+        postcard::PostcardDataFormat,
         GossipsubCodec,
     },
     config::{
@@ -122,7 +123,7 @@ pub struct FuelP2PService {
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
     /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
-    network_codec: PostcardCodec,
+    network_codec: BoundedCodec<PostcardDataFormat>,
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
@@ -211,7 +212,7 @@ impl FuelP2PService {
     pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
-        codec: PostcardCodec,
+        codec: BoundedCodec<PostcardDataFormat>,
     ) -> anyhow::Result<Self> {
         let metrics = config.metrics;
 
@@ -832,7 +833,7 @@ mod tests {
         PublishError,
     };
     use crate::{
-        codecs::postcard::PostcardCodec,
+        codecs::bounded::BoundedCodec,
         config::Config,
         gossipsub::{
             messages::{
@@ -915,7 +916,7 @@ mod tests {
             broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
         let mut service =
-            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size))
+            FuelP2PService::new(sender, p2p_config, BoundedCodec::new(max_block_size))
                 .await
                 .unwrap();
         service.start().await.unwrap();

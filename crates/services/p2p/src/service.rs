@@ -1,5 +1,5 @@
 use crate::{
-    codecs::postcard::PostcardCodec,
+    codecs::bounded::BoundedCodec,
     config::{
         Config,
         NotInitialized,
@@ -787,7 +787,7 @@ where
         let mut p2p_service = FuelP2PService::new(
             broadcast.reserved_peers_broadcast.clone(),
             config,
-            PostcardCodec::new(max_block_size),
+            BoundedCodec::new(max_block_size),
         )
         .await?;
         p2p_service.start().await?;

@@ -23,7 +23,7 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_p2p::{
-    codecs::postcard::PostcardCodec,
+    codecs::bounded::BoundedCodec,
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
     request_response::messages::{
@@ -142,7 +142,7 @@ impl Bootstrap {
     /// Spawn a bootstrap node.
     pub async fn new(node_config: &Config) -> anyhow::Result<Self> {
         let bootstrap_config = extract_p2p_config(node_config).await;
-        let codec = PostcardCodec::new(bootstrap_config.max_block_size);
+        let codec = BoundedCodec::new(bootstrap_config.max_block_size);
         let (sender, _) =
             broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));
         let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec).await?;
