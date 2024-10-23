@@ -10,6 +10,7 @@ use futures::{
     AsyncWriteExt,
 };
 use libp2p::request_response;
+use strum::IntoEnumIterator as _;
 
 use crate::{
     gossipsub::messages::{
@@ -17,16 +18,17 @@ use crate::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
     },
-    request_response::messages::{
-        RequestMessage,
-        V1ResponseMessage,
-        V2ResponseMessage,
+    request_response::{
+        messages::{
+            RequestMessage,
+            V1ResponseMessage,
+            V2ResponseMessage,
+        },
+        protocols::RequestResponseProtocol,
     },
 };
-use strum::IntoEnumIterator;
 
 use super::{
-    postcard::RequestResponseProtocol,
     DataFormatCodec,
     GossipsubCodec,
     RequestResponseProtocols,

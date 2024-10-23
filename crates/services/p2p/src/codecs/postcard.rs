@@ -1,15 +1,10 @@
 use super::DataFormatCodec;
-use crate::request_response::messages::{
-    V1_REQUEST_RESPONSE_PROTOCOL_ID,
-    V2_REQUEST_RESPONSE_PROTOCOL_ID,
-};
 
 use serde::{
     Deserialize,
     Serialize,
 };
 use std::io;
-use strum_macros::EnumIter;
 
 #[derive(Clone)]
 pub struct PostcardDataFormat;
@@ -30,22 +25,6 @@ impl DataFormatCodec for PostcardDataFormat {
     }
 }
 
-#[derive(Debug, Default, Clone, EnumIter)]
-pub enum RequestResponseProtocol {
-    #[default]
-    V1,
-    V2,
-}
-
-impl AsRef<str> for RequestResponseProtocol {
-    fn as_ref(&self) -> &str {
-        match self {
-            RequestResponseProtocol::V1 => V1_REQUEST_RESPONSE_PROTOCOL_ID,
-            RequestResponseProtocol::V2 => V2_REQUEST_RESPONSE_PROTOCOL_ID,
-        }
-    }
-}
-
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
@@ -56,12 +35,15 @@ mod tests {
     use super::*;
     use crate::{
         codecs::bounded::BoundedCodec,
-        request_response::messages::{
-            RequestMessage,
-            ResponseMessageErrorCode,
-            V1ResponseMessage,
-            V2ResponseMessage,
-            MAX_REQUEST_SIZE,
+        request_response::{
+            messages::{
+                RequestMessage,
+                ResponseMessageErrorCode,
+                V1ResponseMessage,
+                V2ResponseMessage,
+                MAX_REQUEST_SIZE,
+            },
+            protocols::RequestResponseProtocol,
         },
     };
 
