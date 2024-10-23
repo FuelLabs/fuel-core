@@ -186,6 +186,11 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
         }
     }
 
+    /// Get a slice of references to the transactions.
+    pub fn transaction_refs(&self) -> Vec<&TransactionRepresentation> {
+        self.transactions().iter().collect()
+    }
+
     /// Get the executed transactions as a `Vec` type.
     pub fn transactions_vec(&self) -> &Vec<TransactionRepresentation> {
         match self {
