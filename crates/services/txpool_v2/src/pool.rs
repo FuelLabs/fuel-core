@@ -247,6 +247,7 @@ where
             .select_transaction_time_nanoseconds
             .observe(elapsed);
     }
+
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
