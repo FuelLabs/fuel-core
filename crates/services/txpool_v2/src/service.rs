@@ -1,6 +1,5 @@
 use crate::{
     self as fuel_core_txpool,
-    selection_algorithms::SelectionAlgorithm,
 };
 
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
@@ -430,21 +429,7 @@ where
                 let result = verification.persistent_storage_provider.latest_view();
 
                 match result {
-                    Ok(view) => {
-                        let insertion_result = pool.insert(tx, &view);
-                        if metrics {
-                            let num_transactions = pool.tx_count();
-                            let executable_txs = pool
-                                .selection_algorithm
-                                .number_of_executable_transactions();
-
-                            record_number_of_transactions_in_txpool(num_transactions);
-                            record_number_of_executable_transactions_in_txpool(
-                                executable_txs,
-                            );
-                        }
-                        insertion_result
-                    }
+                    Ok(view) => pool.insert(tx, &view),
                     Err(err) => Err(Error::Database(format!("{:?}", err))),
                 }
             };
@@ -699,17 +684,6 @@ fn record_tx_size(tx: &PoolTransaction) {
     let size = tx.metered_bytes_size();
     let txpool_metrics = txpool_metrics();
     txpool_metrics.tx_size.observe(size as f64);
-}
-
-fn record_number_of_transactions_in_txpool(num_transactions: usize) {
-    txpool_metrics()
-        .number_of_transactions
-        .set(num_transactions as i64);
-}
-fn record_number_of_executable_transactions_in_txpool(executable_txs: usize) {
-    txpool_metrics()
-        .number_of_executable_transactions
-        .set(executable_txs as i64);
 }
 
 #[allow(clippy::too_many_arguments)]

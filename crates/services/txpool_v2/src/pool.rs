@@ -10,6 +10,7 @@ use std::{
 };
 
 use collisions::CollisionsExt;
+use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId,
@@ -111,6 +112,16 @@ where
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
     ) -> Result<Vec<ArcPoolTx>, Error> {
+        let insertion_result = self.insert_inner(tx, persistent_storage);
+        self.register_transaction_counts();
+        insertion_result
+    }
+
+    fn insert_inner(
+        &mut self,
+        tx: std::sync::Arc<PoolTransaction>,
+        persistent_storage: &impl TxPoolPersistentStorage,
+    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, Error> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -238,7 +249,7 @@ where
 
     fn record_transaction_time_in_txpool(tx: &StorageData) {
         if let Ok(elapsed) = tx.creation_instant.elapsed() {
-            fuel_core_metrics::txpool_metrics::txpool_metrics()
+            txpool_metrics()
                 .transaction_time_in_txpool_secs
                 .observe(elapsed.as_secs_f64());
         } else {
@@ -248,9 +259,23 @@ where
 
     fn record_select_transaction_time_in_nanoseconds(start: Instant) {
         let elapsed = start.elapsed().as_nanos() as f64;
-        fuel_core_metrics::txpool_metrics::txpool_metrics()
+        txpool_metrics()
             .select_transactions_time_nanoseconds
             .observe(elapsed);
+    }
+
+    fn register_transaction_counts(&self) {
+        if self.config.metrics {
+            let num_transactions = self.tx_count();
+            let executable_txs =
+                self.selection_algorithm.number_of_executable_transactions();
+            txpool_metrics()
+                .number_of_transactions
+                .set(num_transactions as i64);
+            txpool_metrics()
+                .number_of_executable_transactions
+                .set(executable_txs as i64);
+        }
     }
 
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
@@ -530,6 +555,7 @@ where
             self.selection_algorithm
                 .on_removed_transaction(storage_entry);
         }
+        self.register_transaction_counts();
     }
 }
 
