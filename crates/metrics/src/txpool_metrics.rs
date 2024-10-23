@@ -25,14 +25,14 @@ pub struct TxPoolMetrics {
     /// Time actively spent by transaction insertion in the thread pool
     pub transaction_insertion_time_in_thread_pool_milliseconds: Histogram,
     /// How long it took for the selection algorithm to select transactions
-    pub select_transaction_time_nanoseconds: Histogram,
+    pub select_transactions_time_nanoseconds: Histogram,
 }
 
 impl Default for TxPoolMetrics {
     fn default() -> Self {
         let tx_size = Histogram::new(buckets(Buckets::TransactionSize));
         let transaction_time_in_txpool_secs = Histogram::new(buckets(Buckets::Timing));
-        let select_transaction_time_nanoseconds =
+        let select_transactions_time_nanoseconds =
             Histogram::new(buckets(Buckets::TimingCoarseGrained));
         let transaction_insertion_time_in_thread_pool_milliseconds =
             Histogram::new(buckets(Buckets::TimingCoarseGrained));
@@ -48,7 +48,7 @@ impl Default for TxPoolMetrics {
             number_of_executable_transactions,
             transaction_time_in_txpool_secs,
             transaction_insertion_time_in_thread_pool_milliseconds,
-            select_transaction_time_nanoseconds,
+            select_transactions_time_nanoseconds,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -83,9 +83,9 @@ impl Default for TxPoolMetrics {
         );
 
         registry.register(
-            "txpool_select_transaction_time_nanoseconds",
+            "txpool_select_transactions_time_nanoseconds",
             "The time it took to select transactions for inclusion in a block in nanoseconds",
-            metrics.select_transaction_time_nanoseconds.clone(),
+            metrics.select_transactions_time_nanoseconds.clone(),
         );
 
         registry.register(

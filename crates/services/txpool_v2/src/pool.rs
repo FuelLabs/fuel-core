@@ -244,7 +244,7 @@ where
     fn record_select_transaction_time_in_nanoseconds(start: Instant) {
         let elapsed = start.elapsed().as_nanos() as f64;
         fuel_core_metrics::txpool_metrics::txpool_metrics()
-            .select_transaction_time_nanoseconds
+            .select_transactions_time_nanoseconds
             .observe(elapsed);
     }
 
