@@ -5,6 +5,10 @@ use fuel_core::{
     combined_database::CombinedDatabase,
     state::historical_rocksdb::StateRewindPolicy,
 };
+use rlimit::{
+    getrlimit,
+    Resource,
+};
 use std::path::PathBuf;
 
 /// Rollbacks the state of the blockchain to a specific block height.
@@ -19,6 +23,17 @@ pub struct Command {
     )]
     pub database_path: PathBuf,
 
+    /// Defines a specific number of file descriptors that RocksDB can use.
+    ///
+    /// If defined as -1 no limit will be applied and will use the OS limits.
+    /// If not defined the system default divided by two is used.
+    #[clap(
+        long = "rocksdb-max-fds",
+        env,
+        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).unwrap().to_string()
+    )]
+    pub rocksdb_max_fds: i32,
+
     /// The path to the database.
     #[clap(long = "target-block-height")]
     pub target_block_height: u32,
@@ -32,6 +47,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         path,
         64 * 1024 * 1024,
         StateRewindPolicy::RewindFullRange,
+        command.rocksdb_max_fds,
     )
     .map_err(Into::<anyhow::Error>::into)
     .context(format!("failed to open combined database at path {path:?}"))?;

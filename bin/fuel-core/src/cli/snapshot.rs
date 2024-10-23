@@ -10,6 +10,10 @@ use fuel_core::{
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::ChainConfig;
+use rlimit::{
+    getrlimit,
+    Resource,
+};
 use std::path::{
     Path,
     PathBuf,
@@ -28,6 +32,17 @@ pub struct Command {
         default_value = default_db_path().into_os_string()
     )]
     pub database_path: PathBuf,
+
+    /// Defines a specific number of file descriptors that RocksDB can use.
+    ///
+    /// If defined as -1 no limit will be applied and will use the OS limits.
+    /// If not defined the system default divided by two is used.
+    #[clap(
+        long = "rocksdb-max-fds",
+        env,
+        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).unwrap().to_string()
+    )]
+    pub rocksdb_max_fds: i32,
 
     /// Where to save the snapshot
     #[arg(name = "OUTPUT_DIR", long = "output-directory")]
@@ -125,6 +140,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let db = open_db(
         &command.database_path,
         Some(command.max_database_cache_size),
+        command.rocksdb_max_fds,
     )?;
     let output_dir = command.output_dir;
     let shutdown_listener = ShutdownListener::spawn();
@@ -180,11 +196,16 @@ fn load_chain_config_or_use_testnet(path: Option<&Path>) -> anyhow::Result<Chain
     }
 }
 
-fn open_db(path: &Path, capacity: Option<usize>) -> anyhow::Result<CombinedDatabase> {
+fn open_db(
+    path: &Path,
+    capacity: Option<usize>,
+    max_fds: i32,
+) -> anyhow::Result<CombinedDatabase> {
     CombinedDatabase::open(
         path,
         capacity.unwrap_or(1024 * 1024 * 1024),
         StateRewindPolicy::NoRewind,
+        max_fds,
     )
     .map_err(Into::<anyhow::Error>::into)
     .context(format!("failed to open combined database at path {path:?}",))
@@ -668,7 +689,8 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         std::fs::create_dir(&db_path)?;
 
-        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
+        let mut db =
+            DbPopulator::new(open_db(&db_path, None, -1)?, StdRng::seed_from_u64(2));
         let state = db.given_persisted_data();
         db.flush();
 
@@ -681,6 +703,7 @@ mod tests {
                 chain_config: None,
                 encoding_command: Some(EncodingCommand::Encoding { encoding }),
             },
+            rocksdb_max_fds: -1,
         });
 
         // Because the test_case macro doesn't work with async tests
@@ -720,7 +743,8 @@ mod tests {
 
         let snapshot_dir = temp_dir.path().join("snapshot");
         let db_path = temp_dir.path().join("db");
-        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
+        let mut db =
+            DbPopulator::new(open_db(&db_path, None, -1)?, StdRng::seed_from_u64(2));
 
         let state = db.given_persisted_data();
         db.flush();
@@ -739,6 +763,7 @@ mod tests {
                     },
                 }),
             },
+            rocksdb_max_fds: -1,
         });
 
         tokio::runtime::Runtime::new()
@@ -763,7 +788,8 @@ mod tests {
         let snapshot_dir = temp_dir.path().join("snapshot");
 
         let db_path = temp_dir.path().join("db");
-        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
+        let mut db =
+            DbPopulator::new(open_db(&db_path, None, -1)?, StdRng::seed_from_u64(2));
 
         let original_state = db.given_persisted_data().sorted().into_state_config();
 
@@ -789,6 +815,7 @@ mod tests {
             output_dir: snapshot_dir.clone(),
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             subcommand: SubCommands::Contract { contract_id },
+            rocksdb_max_fds: -1,
         })
         .await?;
 

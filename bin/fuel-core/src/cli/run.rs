@@ -65,6 +65,10 @@ use pyroscope_pprofrs::{
     pprof_backend,
     PprofConfig,
 };
+use rlimit::{
+    getrlimit,
+    Resource,
+};
 use std::{
     env,
     net,
@@ -125,6 +129,19 @@ pub struct Command {
         env
     )]
     pub database_type: DbType,
+
+    #[cfg(feature = "rocksdb")]
+
+    /// Defines a specific number of file descriptors that RocksDB can use.
+    ///
+    /// If defined as -1 no limit will be applied and will use the OS limits.
+    /// If not defined the system default divided by two is used.
+    #[clap(
+        long = "rocksdb-max-fds",
+        env,
+        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).unwrap().to_string()
+    )]
+    pub rocksdb_max_fds: i32,
 
     #[cfg(feature = "rocksdb")]
     /// Defines the state rewind policy for the database when RocksDB is enabled.
@@ -272,6 +289,8 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
+            #[cfg(feature = "rocksdb")]
+            rocksdb_max_fds,
             #[cfg(feature = "rocksdb")]
             state_rewind_duration,
             db_prune,
@@ -441,6 +460,8 @@ impl Command {
             max_database_cache_size,
             #[cfg(feature = "rocksdb")]
             state_rewind_policy,
+            #[cfg(feature = "rocksdb")]
+            max_fds: rocksdb_max_fds,
         };
 
         let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(

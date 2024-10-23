@@ -29,7 +29,7 @@ async fn can_restart_node() {
     // start node once
     {
         let database =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default()).unwrap();
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), -1).unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
@@ -41,7 +41,7 @@ async fn can_restart_node() {
 
     {
         let database =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default()).unwrap();
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), -1).unwrap();
         let _second_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
@@ -56,7 +56,8 @@ async fn can_restart_node_with_transactions() {
     {
         // Given
         let database =
-            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default()).unwrap();
+            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), -1)
+                .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();
@@ -74,7 +75,8 @@ async fn can_restart_node_with_transactions() {
     {
         // When
         let database =
-            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default()).unwrap();
+            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), -1)
+                .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();

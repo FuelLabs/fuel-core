@@ -35,6 +35,7 @@ hex = { workspace = true }
 humantime = "2.1"
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
+rlimit = "0.10.2"
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
