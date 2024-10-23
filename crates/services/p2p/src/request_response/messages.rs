@@ -18,7 +18,8 @@ use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
+pub(crate) const V1_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
+pub(crate) const V2_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.2";
 
 /// Max Size in Bytes of the Request Message
 #[cfg(test)]
@@ -32,12 +33,74 @@ pub enum RequestMessage {
     TxPoolFullTransactions(Vec<TxId>),
 }
 
+#[derive(Error, Debug, Clone, Serialize, Deserialize)]
+pub enum ResponseMessageErrorCode {
+    /// The peer sent an empty response using protocol `/fuel/req_res/0.0.1`
+    #[error("Empty response sent by peer using legacy protocol /fuel/req_res/0.0.1")]
+    ProtocolV1EmptyResponse = 0,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ResponseMessage {
+pub enum V1ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
     TxPoolAllTransactionsIds(Option<Vec<TxId>>),
     TxPoolFullTransactions(Option<Vec<Option<NetworkableTransactionPool>>>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum V2ResponseMessage {
+    SealedHeaders(Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>),
+    Transactions(Result<Vec<Transactions>, ResponseMessageErrorCode>),
+    TxPoolAllTransactionsIds(Result<Vec<TxId>, ResponseMessageErrorCode>),
+    TxPoolFullTransactions(
+        Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+    ),
+}
+
+impl From<V1ResponseMessage> for V2ResponseMessage {
+    fn from(v1_response: V1ResponseMessage) -> Self {
+        match v1_response {
+            V1ResponseMessage::SealedHeaders(sealed_headers) => {
+                V2ResponseMessage::SealedHeaders(
+                    sealed_headers
+                        .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+                )
+            }
+            V1ResponseMessage::Transactions(vec) => V2ResponseMessage::Transactions(
+                vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+            ),
+            V1ResponseMessage::TxPoolAllTransactionsIds(vec) => {
+                V2ResponseMessage::TxPoolAllTransactionsIds(
+                    vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+                )
+            }
+            V1ResponseMessage::TxPoolFullTransactions(vec) => {
+                V2ResponseMessage::TxPoolFullTransactions(
+                    vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+                )
+            }
+        }
+    }
+}
+
+impl From<V2ResponseMessage> for V1ResponseMessage {
+    fn from(response: V2ResponseMessage) -> Self {
+        match response {
+            V2ResponseMessage::SealedHeaders(sealed_headers) => {
+                V1ResponseMessage::SealedHeaders(sealed_headers.ok())
+            }
+            V2ResponseMessage::Transactions(transactions) => {
+                V1ResponseMessage::Transactions(transactions.ok())
+            }
+            V2ResponseMessage::TxPoolAllTransactionsIds(tx_ids) => {
+                V1ResponseMessage::TxPoolAllTransactionsIds(tx_ids.ok())
+            }
+            V2ResponseMessage::TxPoolFullTransactions(tx_pool) => {
+                V1ResponseMessage::TxPoolFullTransactions(tx_pool.ok())
+            }
+        }
+    }
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
