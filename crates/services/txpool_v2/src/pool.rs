@@ -257,7 +257,7 @@ where
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
         let metrics = self.config.metrics;
-        let maybe_start = metrics.then(|| std::time::Instant::now());
+        let maybe_start = metrics.then(std::time::Instant::now);
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
