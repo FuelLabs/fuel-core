@@ -20,8 +20,8 @@ use crate::{
     },
     graphql_api::storage::{
         balances::{
-            CoinBalances,
             BalancesKey,
+            CoinBalances,
             MessageBalances,
         },
         old::{

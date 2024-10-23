@@ -208,7 +208,8 @@ where
     let key = BalancesKey::new(owner, asset_id);
     let current_balance = tx.storage::<CoinBalances>().get(&key)?.unwrap_or_default();
     let new_balance = updater(current_balance, amount);
-    tx.storage_as_mut::<CoinBalances>().insert(&key, &new_balance)
+    tx.storage_as_mut::<CoinBalances>()
+        .insert(&key, &new_balance)
 }
 
 fn update_message_balance<T, F>(
