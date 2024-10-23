@@ -189,9 +189,8 @@ impl NetworkCodec for PostcardCodec {
     }
 }
 
-#[derive(Debug, Default, Clone, EnumIter)]
+#[derive(Debug, Clone, EnumIter)]
 pub enum PostcardProtocol {
-    #[default]
     V1,
     V2,
 }
