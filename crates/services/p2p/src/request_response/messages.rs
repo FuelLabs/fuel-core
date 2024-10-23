@@ -38,6 +38,12 @@ pub enum ResponseMessageErrorCode {
     /// The peer sent an empty response using protocol `/fuel/req_res/0.0.1`
     #[error("Empty response sent by peer using legacy protocol /fuel/req_res/0.0.1")]
     ProtocolV1EmptyResponse = 0,
+    #[error("The requested range is too large")]
+    RequestedRangeTooLarge = 1,
+    #[error("Timeout while processing request")]
+    Timeout = 2,
+    #[error("Sync processor is out of capacity")]
+    SyncProcessorOutOfCapacity = 3,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,10 +113,14 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 
 #[derive(Debug)]
 pub enum ResponseSender {
-    SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
-    Transactions(OnResponse<Option<Vec<Transactions>>>),
-    TxPoolAllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
-    TxPoolFullTransactions(OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>),
+    SealedHeaders(OnResponse<Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>>),
+    Transactions(OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>),
+    TxPoolAllTransactionsIds(OnResponse<Result<Vec<TxId>, ResponseMessageErrorCode>>),
+    TxPoolFullTransactions(
+        OnResponse<
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+        >,
+    ),
 }
 
 #[derive(Debug, Error)]
