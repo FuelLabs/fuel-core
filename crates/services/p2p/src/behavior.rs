@@ -1,7 +1,7 @@
 use crate::{
     codecs::{
         postcard::PostcardCodec,
-        NetworkCodec,
+        RequestResponseCodec,
     },
     config::Config,
     discovery,

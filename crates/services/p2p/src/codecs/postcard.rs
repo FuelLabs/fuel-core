@@ -1,6 +1,6 @@
 use super::{
     GossipsubCodec,
-    NetworkCodec,
+    RequestResponseCodec,
 };
 use crate::{
     gossipsub::messages::{
@@ -176,7 +176,7 @@ impl GossipsubCodec for PostcardCodec {
     }
 }
 
-impl NetworkCodec for PostcardCodec {
+impl RequestResponseCodec for PostcardCodec {
     fn get_req_res_protocols(
         &self,
     ) -> impl Iterator<Item = <Self as request_response::Codec>::Protocol> {
