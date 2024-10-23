@@ -256,13 +256,12 @@ where
         &mut self,
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
-        let start = std::time::Instant::now();
         let metrics = self.config.metrics;
+        let maybe_start = metrics.then(|| std::time::Instant::now());
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
-
-        if metrics {
+        if let Some(start) = maybe_start {
             Self::record_select_transaction_time_in_nanoseconds(start)
         };
 
