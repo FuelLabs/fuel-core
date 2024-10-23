@@ -57,6 +57,8 @@ impl HeartbeatAction {
     }
 }
 
+
+// Enum success or not
 #[derive(Debug, Clone, Copy)]
 pub struct Event {
     pub peer_id: PeerId,

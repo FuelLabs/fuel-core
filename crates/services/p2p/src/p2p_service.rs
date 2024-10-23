@@ -517,6 +517,7 @@ impl FuelP2PService {
         // TODO: add handling for when the stream closes and return None only when there are no
         //       more events to consume
         let event = self.swarm.select_next_some().await;
+        dbg!(&event);
         tracing::debug!(?event);
         match event {
             SwarmEvent::Behaviour(fuel_behaviour) => {
@@ -1998,6 +1999,67 @@ mod tests {
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             };
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[instrument]
+    async fn heartbeat_failure() {
+        tracing_subscriber::fmt::init();
+        // Node A
+        let mut p2p_config = Config::default_initialized("heartbeat_failure");
+        p2p_config.heartbeat_config.idle_timeout = Duration::from_nanos(1);
+        p2p_config.heartbeat_config.send_timeout = Duration::from_nanos(1);
+        let mut node_a = build_service_from_config(p2p_config.clone()).await;
+
+        // Node B
+        tokio::task::spawn({
+            let mut config = p2p_config.clone();
+            let node_a_addr = node_a.multiaddrs();
+            async move {
+                config.heartbeat_config.send_timeout = Duration::from_millis(1000);
+                config.heartbeat_config.idle_timeout = Duration::from_millis(1000);
+                config.bootstrap_nodes = node_a_addr;
+                let mut node_b = build_service_from_config(config).await;
+                loop {
+                    tokio::select! {
+                        node_b_event = node_b.next_event() => {
+                            if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height}) = node_b_event {
+                                dbg!(peer_id, block_height);
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Node C to avoid decay
+        // tokio::task::spawn({
+        //     let mut config = p2p_config.clone();
+        //     let node_a_addr = node_a.multiaddrs();
+        //     async move {
+        //         config.bootstrap_nodes = node_a_addr;
+        //         let mut node_c = build_service_from_config(config).await;
+        //         loop {
+        //             tokio::select! {
+        //                 _ = node_c.next_event() => {
+        //                 }
+        //             }
+        //         }
+        //     }
+        // });
+
+        // Node A killed after one heartbeat
+        loop {
+            tokio::select! {
+                node_a_event = node_a.next_event() => {
+                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height}) = node_a_event {
+                        dbg!(peer_id, block_height);
+                        //tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                }
+            }
         }
     }
 }

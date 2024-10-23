@@ -48,12 +48,12 @@ pub enum HeartbeatOutEvent {
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Sending of `BlockHeight` should not take longer than this
-    send_timeout: Duration,
+    pub send_timeout: Duration,
     /// Idle time before sending next `BlockHeight`
-    idle_timeout: Duration,
+    pub idle_timeout: Duration,
     /// Max failures allowed.
     /// If reached `HeartbeatHandler` will request closing of the connection.
-    max_failures: NonZeroU32,
+    pub max_failures: NonZeroU32,
 }
 
 impl Config {
@@ -73,8 +73,8 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self::new(
-            Duration::from_secs(60),
             Duration::from_secs(1),
+            Duration::from_millis(500),
             NonZeroU32::new(5).expect("5 != 0"),
         )
     }
@@ -93,6 +93,7 @@ pub struct HeartbeatHandler {
 
 impl HeartbeatHandler {
     pub fn new(config: Config) -> Self {
+        dbg!("heartbeat handler");
         Self {
             config,
             inbound: None,
@@ -177,6 +178,7 @@ impl ConnectionHandler for HeartbeatHandler {
                     match outbound_block_height.poll_unpin(cx) {
                         Poll::Pending => {
                             if self.timer.poll_unpin(cx).is_ready() {
+                                dbg!("send expired");
                                 // Time for successful send expired!
                                 self.failure_count = self.failure_count.saturating_add(1);
                                 debug!(target: "fuel-libp2p", "Sending Heartbeat timed out, this is {} time it failed with this connection", self.failure_count);
@@ -188,6 +190,7 @@ impl ConnectionHandler for HeartbeatHandler {
                             }
                         }
                         Poll::Ready(Ok(stream)) => {
+                            dbg!("send success");
                             // reset failure count
                             self.failure_count = 0;
                             // start new idle timeout until next request & send
@@ -195,6 +198,7 @@ impl ConnectionHandler for HeartbeatHandler {
                             self.outbound = Some(OutboundState::Idle(stream));
                         }
                         Poll::Ready(Err(_)) => {
+                            dbg!("send error");
                             self.failure_count = self.failure_count.saturating_add(1);
                             debug!(target: "fuel-libp2p", "Sending Heartbeat failed, {}/{} failures for this connection", self.failure_count,  self.config.max_failures);
                         }
