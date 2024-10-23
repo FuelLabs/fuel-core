@@ -31,7 +31,8 @@ pub struct TxPoolMetrics {
 impl Default for TxPoolMetrics {
     fn default() -> Self {
         let tx_size = Histogram::new(buckets(Buckets::TransactionSize));
-        let transaction_time_in_txpool_secs = Histogram::new(buckets(Buckets::Timing));
+        let transaction_time_in_txpool_secs =
+            Histogram::new(buckets(Buckets::TransactionTimeInTxpool));
         let select_transactions_time_microseconds =
             Histogram::new(buckets(Buckets::SelectTransactionsTime));
         let transaction_insertion_time_in_thread_pool_microseconds =

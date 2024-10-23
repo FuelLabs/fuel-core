@@ -12,6 +12,7 @@ pub(crate) enum Buckets {
     TransactionSize,
     TransactionInsertionTimeInThreadPool,
     SelectTransactionsTime,
+    TransactionTimeInTxpool,
 }
 static BUCKETS: OnceLock<HashMap<Buckets, Vec<f64>>> = OnceLock::new();
 pub(crate) fn buckets(b: Buckets) -> impl Iterator<Item = f64> {
@@ -85,6 +86,18 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                    300000.0,
                 1_000_000.0,
                 5_000_000.0,
+            ]
+        ),
+        (
+            Buckets::TransactionTimeInTxpool,
+            vec![
+                      1.0,
+                      2.0,
+                      5.0,
+                     10.0,
+                    100.0,
+                    250.0,
+                    600.0
             ]
         ),
     ]
