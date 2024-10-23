@@ -32,7 +32,7 @@ pub struct TxPoolArgs {
     pub tx_max_total_bytes: usize,
 
     /// The max number of tx in a chain of dependent transactions that supported by the `TxPool`.
-    #[clap(long = "tx-max-depth", default_value = "32", env)]
+    #[clap(long = "tx-max-chain-count", default_value = "32", env)]
     pub tx_max_chain_count: usize,
 
     /// The maximum number of active subscriptions that supported by the `TxPool`.
