@@ -482,9 +482,9 @@ where
                     .inc();
                 let start_time = tokio::time::Instant::now();
                 insert_transaction_thread_pool_op();
-                let time_for_task_to_complete = start_time.elapsed().as_millis();
+                let time_for_task_to_complete = start_time.elapsed().as_micros();
                 txpool_metrics
-                    .transaction_insertion_time_in_thread_pool_milliseconds
+                    .transaction_insertion_time_in_thread_pool_microseconds
                     .observe(time_for_task_to_complete as f64);
                 txpool_metrics
                     .number_of_transactions_pending_verification

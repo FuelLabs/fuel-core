@@ -257,10 +257,10 @@ where
         }
     }
 
-    fn record_select_transaction_time_in_nanoseconds(start: Instant) {
-        let elapsed = start.elapsed().as_nanos() as f64;
+    fn record_select_transaction_time(start: Instant) {
+        let elapsed = start.elapsed().as_micros() as f64;
         txpool_metrics()
-            .select_transactions_time_nanoseconds
+            .select_transactions_time_microseconds
             .observe(elapsed);
     }
 
@@ -292,7 +292,7 @@ where
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
         if let Some(start) = maybe_start {
-            Self::record_select_transaction_time_in_nanoseconds(start)
+            Self::record_select_transaction_time(start)
         };
 
         if metrics {
