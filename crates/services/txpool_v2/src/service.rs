@@ -227,18 +227,6 @@ where
     View: TxPoolPersistentStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        // TODO: move this to the Task struct
-        if self.metrics {
-            let pool = self.pool.read();
-            let num_transactions = pool.tx_count();
-
-            let executable_txs =
-                pool.selection_algorithm.number_of_executable_transactions();
-
-            record_number_of_transactions_in_txpool(num_transactions);
-            record_number_of_executable_transactions_in_txpool(executable_txs);
-        }
-
         tokio::select! {
             biased;
 
@@ -442,7 +430,21 @@ where
                 let result = verification.persistent_storage_provider.latest_view();
 
                 match result {
-                    Ok(view) => pool.insert(tx, &view),
+                    Ok(view) => {
+                        let insertion_result = pool.insert(tx, &view);
+                        if metrics {
+                            let num_transactions = pool.tx_count();
+                            let executable_txs = pool
+                                .selection_algorithm
+                                .number_of_executable_transactions();
+
+                            record_number_of_transactions_in_txpool(num_transactions);
+                            record_number_of_executable_transactions_in_txpool(
+                                executable_txs,
+                            );
+                        }
+                        insertion_result
+                    }
                     Err(err) => Err(Error::Database(format!("{:?}", err))),
                 }
             };
