@@ -1,5 +1,6 @@
 pub mod bounded;
 pub mod postcard;
+pub mod unbounded;
 
 use crate::gossipsub::messages::GossipTopicTag;
 use libp2p::request_response;

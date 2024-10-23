@@ -12,25 +12,17 @@ use futures::{
 use libp2p::request_response;
 use strum::IntoEnumIterator as _;
 
-use crate::{
-    gossipsub::messages::{
-        GossipTopicTag,
-        GossipsubBroadcastRequest,
-        GossipsubMessage,
+use crate::request_response::{
+    messages::{
+        RequestMessage,
+        V1ResponseMessage,
+        V2ResponseMessage,
     },
-    request_response::{
-        messages::{
-            RequestMessage,
-            V1ResponseMessage,
-            V2ResponseMessage,
-        },
-        protocols::RequestResponseProtocol,
-    },
+    protocols::RequestResponseProtocol,
 };
 
 use super::{
     DataFormatCodec,
-    GossipsubCodec,
     RequestResponseProtocols,
 };
 
@@ -146,36 +138,6 @@ where
         };
         socket.write_all(&encoded_data).await?;
         Ok(())
-    }
-}
-
-impl<Format> GossipsubCodec for BoundedCodec<Format>
-where
-    Format: DataFormatCodec<Error = io::Error> + Send,
-{
-    type RequestMessage = GossipsubBroadcastRequest;
-    type ResponseMessage = GossipsubMessage;
-
-    fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
-        let encoded_data = match data {
-            GossipsubBroadcastRequest::NewTx(tx) => postcard::to_stdvec(&*tx),
-        };
-
-        encoded_data.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
-    }
-
-    fn decode(
-        &self,
-        encoded_data: &[u8],
-        gossipsub_tag: GossipTopicTag,
-    ) -> Result<Self::ResponseMessage, io::Error> {
-        let decoded_response = match gossipsub_tag {
-            GossipTopicTag::NewTx => {
-                GossipsubMessage::NewTx(Format::deserialize(encoded_data)?)
-            }
-        };
-
-        Ok(decoded_response)
     }
 }
 

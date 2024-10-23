@@ -66,7 +66,7 @@ pub struct FuelBehaviour {
 impl FuelBehaviour {
     pub(crate) fn new(
         p2p_config: &Config,
-        codec: BoundedCodec<PostcardDataFormat>,
+        request_response_codec: BoundedCodec<PostcardDataFormat>,
     ) -> anyhow::Result<Self> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
@@ -114,7 +114,7 @@ impl FuelBehaviour {
             BlockHeight::default(),
         );
 
-        let req_res_protocol = codec
+        let req_res_protocol = request_response_codec
             .get_req_res_protocols()
             .map(|protocol| (protocol, ProtocolSupport::Full));
 
@@ -123,7 +123,7 @@ impl FuelBehaviour {
             .with_max_concurrent_streams(p2p_config.max_concurrent_streams);
 
         let request_response = request_response::Behaviour::with_codec(
-            codec.clone(),
+            request_response_codec.clone(),
             req_res_protocol,
             req_res_config,
         );
