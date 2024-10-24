@@ -165,12 +165,10 @@ mod tests {
         },
         ports::MetadataStorage,
         v0::{
+            algorithm::SharedV0Algorithm,
             metadata::V0Metadata,
             service::GasPriceServiceV0,
-            uninitialized_task::{
-                initialize_algorithm,
-                SharedV0Algorithm,
-            },
+            uninitialized_task::initialize_algorithm,
         },
     };
     use fuel_core_services::{

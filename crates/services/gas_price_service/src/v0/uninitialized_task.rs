@@ -364,5 +364,5 @@ where
         gas_price_db,
         on_chain_db,
     )?;
-    Ok(ServiceRunner::new(gas_price_uninit))
+    Ok(ServiceRunner::new(gas_price_init))
 }
