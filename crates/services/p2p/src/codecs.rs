@@ -1,18 +1,23 @@
+pub mod bounded;
 pub mod postcard;
+pub mod unbounded;
 
-use crate::{
-    gossipsub::messages::{
-        GossipTopicTag,
-        GossipsubBroadcastRequest,
-        GossipsubMessage,
-    },
-    request_response::messages::{
-        RequestMessage,
-        V2ResponseMessage,
-    },
-};
+use crate::gossipsub::messages::GossipTopicTag;
 use libp2p::request_response;
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use std::io;
+
+trait DataFormatCodec {
+    type Error;
+    fn deserialize<'a, R: Deserialize<'a>>(
+        encoded_data: &'a [u8],
+    ) -> Result<R, Self::Error>;
+
+    fn serialize<D: Serialize>(data: &D) -> Result<Vec<u8>, Self::Error>;
+}
 
 /// Implement this in order to handle serialization & deserialization of Gossipsub messages
 pub trait GossipsubCodec {
@@ -28,19 +33,7 @@ pub trait GossipsubCodec {
     ) -> Result<Self::ResponseMessage, io::Error>;
 }
 
-// TODO: https://github.com/FuelLabs/fuel-core/issues/2368
-// Remove this trait
-/// Main Codec trait
-/// Needs to be implemented and provided to FuelBehaviour
-pub trait NetworkCodec:
-    GossipsubCodec<
-        RequestMessage = GossipsubBroadcastRequest,
-        ResponseMessage = GossipsubMessage,
-    > + request_response::Codec<Request = RequestMessage, Response = V2ResponseMessage>
-    + Clone
-    + Send
-    + 'static
-{
+pub trait RequestResponseProtocols: request_response::Codec {
     /// Returns RequestResponse's Protocol
     /// Needed for initialization of RequestResponse Behaviour
     fn get_req_res_protocols(
