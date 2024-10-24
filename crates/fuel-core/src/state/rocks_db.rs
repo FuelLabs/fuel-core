@@ -28,6 +28,7 @@ use fuel_core_storage::{
         WriteOperation,
     },
     transactional::Changes,
+    Error as StorageError,
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -730,10 +731,27 @@ where
 
     fn get_multi<'a>(
         &'a self,
-        _keys: Box<dyn Iterator<Item = Vec<u8>> + 'a>,
-        _column: Self::Column,
+        keys: Box<dyn Iterator<Item = Vec<u8>> + 'a>,
+        column: Self::Column,
     ) -> Box<dyn Iterator<Item = StorageResult<Option<Value>>> + 'a> {
-        todo!(); // TODO
+        // TODO: Metrics
+
+        let column = self.cf(column);
+        let keys = keys.map(|key| (&column, key));
+
+        let values = self
+            .db
+            .multi_get_cf_opt(keys, &self.read_options)
+            .into_iter()
+            .map(|value_opt| {
+                value_opt
+                    .map_err(|e| {
+                        StorageError::Other(DatabaseError::Other(e.into()).into())
+                    })
+                    .map(|value| value.map(Arc::new))
+            });
+
+        Box::new(values)
     }
 
     fn read(
