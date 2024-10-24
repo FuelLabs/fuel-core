@@ -1,9 +1,15 @@
 use super::{
     da_compression::da_compress_block,
-    storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
+    storage::{
+        balances::{
+            Amount,
+            BalancesKey,
+        },
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use crate::{
@@ -13,6 +19,10 @@ use crate::{
             worker::OffChainDatabaseTransaction,
         },
         storage::{
+            balances::{
+                CoinBalances,
+                MessageBalances,
+            },
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -62,6 +72,8 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
+        Address,
+        AssetId,
         Contract,
         Input,
         Output,
@@ -94,6 +106,7 @@ use std::{
     borrow::Cow,
     ops::Deref,
 };
+use tracing::debug;
 
 #[cfg(test)]
 mod tests;
@@ -181,6 +194,44 @@ where
     }
 }
 
+fn update_coin_balance<T, F>(
+    owner: &Address,
+    asset_id: &AssetId,
+    amount: Amount,
+    tx: &mut T,
+    updater: F,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+    F: Fn(Cow<u64>, Amount) -> Amount,
+{
+    let key = BalancesKey::new(owner, asset_id);
+    let current_balance = tx.storage::<CoinBalances>().get(&key)?.unwrap_or_default();
+    let new_balance = updater(current_balance, amount);
+    tx.storage_as_mut::<CoinBalances>()
+        .insert(&key, &new_balance)
+}
+
+fn update_message_balance<T, F>(
+    owner: &Address,
+    amount: Amount,
+    tx: &mut T,
+    updater: F,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+    F: Fn(Cow<u64>, Amount) -> Amount,
+{
+    let key = owner;
+    let current_balance = tx
+        .storage::<MessageBalances>()
+        .get(key)?
+        .unwrap_or_default();
+    let new_balance = updater(current_balance, amount);
+    tx.storage_as_mut::<MessageBalances>()
+        .insert(key, &new_balance)
+}
+
 /// Process the executor events and update the indexes for the messages and coins.
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
@@ -199,6 +250,14 @@ where
                         &OwnedMessageKey::new(message.recipient(), message.nonce()),
                         &(),
                     )?;
+
+                debug!(recipient=%message.recipient(), amount=%message.amount(), "increasing message balance");
+                update_message_balance(
+                    message.recipient(),
+                    message.amount(),
+                    block_st_transaction,
+                    |balance, amount| balance.saturating_add(amount),
+                )?;
             }
             Event::MessageConsumed(message) => {
                 block_st_transaction
@@ -210,18 +269,50 @@ where
                 block_st_transaction
                     .storage::<SpentMessages>()
                     .insert(message.nonce(), &())?;
+
+                debug!(recipient=%message.recipient(), amount=%message.amount(), "decreasing message balance");
+                update_message_balance(
+                    message.recipient(),
+                    message.amount(),
+                    block_st_transaction,
+                    |balance, amount| balance.saturating_sub(amount),
+                )?;
             }
             Event::CoinCreated(coin) => {
                 let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .insert(&coin_by_owner, &())?;
+
+                debug!(
+                    owner=%coin.owner,
+                    asset_id=%coin.asset_id,
+                    amount=%coin.amount, "increasing coin balance");
+                update_coin_balance(
+                    &coin.owner,
+                    &coin.asset_id,
+                    coin.amount,
+                    block_st_transaction,
+                    |balance, amount| balance.saturating_add(amount),
+                )?;
             }
             Event::CoinConsumed(coin) => {
                 let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
+
+                debug!(
+                        owner=%coin.owner,
+                        asset_id=%coin.asset_id,
+                        amount=%coin.amount, "decreasing coin balance");
+                update_coin_balance(
+                    &coin.owner,
+                    &coin.asset_id,
+                    coin.amount,
+                    block_st_transaction,
+                    |balance, amount| balance.saturating_sub(amount),
+                )?;
             }
             Event::ForcedTransactionFailed {
                 id,

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::{
     database::{
         database_description::off_chain::OffChain,
@@ -16,10 +18,17 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
+    graphql_api::storage::{
+        balances::{
+            BalancesKey,
+            CoinBalances,
+            MessageBalances,
+        },
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use fuel_core_storage::{
@@ -51,6 +60,7 @@ use fuel_core_types::{
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         Address,
+        AssetId,
         Bytes32,
         ContractId,
         Salt,
@@ -65,6 +75,7 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
+use tracing::debug;
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -186,6 +197,69 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.message_is_spent(nonce)
+    }
+
+    fn balance(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<u64> {
+        let coins = self
+            .storage_as_ref::<CoinBalances>()
+            .get(&BalancesKey::new(owner, asset_id))?
+            .unwrap_or_default();
+
+        if base_asset_id == asset_id {
+            let messages = self
+                .storage_as_ref::<MessageBalances>()
+                .get(owner)?
+                .unwrap_or_default();
+
+            let total = coins.checked_add(*messages).ok_or(anyhow::anyhow!(
+                "Total balance overflow: coins: {coins}, messages: {messages}"
+            ))?;
+
+            debug!(%coins, %messages, total, "total balance");
+            Ok(total)
+        } else {
+            debug!(%coins, "total balance");
+            Ok(*coins)
+        }
+    }
+
+    fn balances(
+        &self,
+        owner: &Address,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<BTreeMap<AssetId, u64>> {
+        let mut balances = BTreeMap::new();
+        for balance_key in self.iter_all_by_prefix_keys::<CoinBalances, _>(Some(owner)) {
+            let key = balance_key?;
+            let asset_id = key.asset_id();
+
+            let messages = if base_asset_id == asset_id {
+                *self
+                    .storage_as_ref::<MessageBalances>()
+                    .get(owner)?
+                    .unwrap_or_default()
+            } else {
+                0
+            };
+
+            let coins = self
+                .storage_as_ref::<CoinBalances>()
+                .get(&key)?
+                .unwrap_or_default();
+
+            let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
+                "Total balance overflow: coins: {coins}, messages: {messages}"
+            ))?;
+            debug!(%owner, %asset_id, %total, "balance entry");
+            balances.insert(*asset_id, total);
+        }
+
+        Ok(balances)
     }
 }
 

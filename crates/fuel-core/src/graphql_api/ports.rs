@@ -62,7 +62,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+};
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
@@ -70,6 +73,19 @@ pub trait OffChainDatabase: Send + Sync {
     fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
+    fn balance(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<u64>;
+
+    fn balances(
+        &self,
+        owner: &Address,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<BTreeMap<AssetId, u64>>;
 
     fn owned_coins_ids(
         &self,
@@ -273,6 +289,10 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
+            balances::{
+                CoinBalances,
+                MessageBalances,
+            },
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,
@@ -327,6 +347,8 @@ pub mod worker {
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
+        + StorageMutate<CoinBalances, Error = StorageError>
+        + StorageMutate<MessageBalances, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
