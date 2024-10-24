@@ -728,11 +728,11 @@ where
         Ok(value.map(Arc::new))
     }
 
-    fn get_multi(
-        &self,
-        _keys: Box<dyn Iterator<Item = &[u8]>>,
+    fn get_multi<'a>(
+        &'a self,
+        _keys: Box<dyn Iterator<Item = Vec<u8>> + 'a>,
         _column: Self::Column,
-    ) -> Box<dyn Iterator<Item = StorageResult<Option<Value>>>> {
+    ) -> Box<dyn Iterator<Item = StorageResult<Option<Value>>> + 'a> {
         todo!(); // TODO
     }
 

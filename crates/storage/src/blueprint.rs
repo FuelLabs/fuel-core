@@ -85,10 +85,19 @@ where
         keys: Box<dyn Iterator<Item = &'a M::Key>>,
         column: S::Column,
     ) -> Box<dyn Iterator<Item = StorageResult<Option<M::OwnedValue>>> + 'a> {
-        let keys =
-            Box::new(keys.map(|key| Self::KeyCodec::encode(key).as_bytes().as_ref()));
+        let keys = Box::new(
+            keys.map(|key| Self::KeyCodec::encode(&key).as_bytes().into_owned()),
+        );
 
-        storage.get_multi(keys, column)
+        Box::new(storage.get_multi(keys, column).map(|result| {
+            result.and_then(|opt| {
+                opt.map(|value| {
+                    Self::ValueCodec::decode_from_value(value)
+                        .map_err(crate::Error::Codec)
+                })
+                .transpose()
+            })
+        }))
     }
 }
 
