@@ -74,35 +74,6 @@ impl V1MetadataInitializer {
     }
 }
 
-// impl From<V1Metadata> for AlgorithmUpdaterV1 {
-//     fn from(metadata: V1Metadata) -> Self {
-//         let l2_activity = L2ActivityTracker::new_always_normal();
-//         Self {
-//             new_scaled_exec_price: metadata.new_scaled_exec_price,
-//             min_exec_gas_price: metadata.min_exec_gas_price,
-//             exec_gas_price_change_percent: metadata.exec_gas_price_change_percent,
-//             l2_block_height: metadata.l2_block_height,
-//             l2_block_fullness_threshold_percent: metadata
-//                 .l2_block_fullness_threshold_percent,
-//             new_scaled_da_gas_price: metadata.new_scaled_da_gas_price,
-//             gas_price_factor: metadata.gas_price_factor,
-//             min_da_gas_price: metadata.min_da_gas_price,
-//             max_da_gas_price_change_percent: metadata.max_da_gas_price_change_percent,
-//             total_da_rewards_excess: metadata.total_da_rewards_excess,
-//             da_recorded_block_height: metadata.da_recorded_block_height,
-//             latest_known_total_da_cost_excess: metadata.latest_known_total_da_cost_excess,
-//             projected_total_da_cost: metadata.projected_total_da_cost,
-//             da_p_component: metadata.da_p_component,
-//             da_d_component: metadata.da_d_component,
-//             last_profit: metadata.last_profit,
-//             second_to_last_profit: metadata.second_to_last_profit,
-//             latest_da_cost_per_byte: metadata.latest_da_cost_per_byte,
-//             l2_activity,
-//             unrecorded_blocks: Default::default(),
-//         }
-//     }
-// }
-
 impl From<AlgorithmUpdaterV1> for V1Metadata {
     fn from(updater: AlgorithmUpdaterV1) -> Self {
         Self {

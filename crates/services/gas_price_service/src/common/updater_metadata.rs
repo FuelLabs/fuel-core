@@ -36,28 +36,6 @@ impl From<AlgorithmUpdaterV1> for UpdaterMetadata {
     }
 }
 
-// impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV0 {
-//     type Error = Error;
-//
-//     fn try_from(metadata: UpdaterMetadata) -> Result<Self, Self::Error> {
-//         match metadata {
-//             UpdaterMetadata::V0(v0) => Ok(AlgorithmUpdaterV0::from(v0)),
-//             _ => Err(Error::CouldNotConvertMetadata),
-//         }
-//     }
-// }
-
-// impl TryFrom<UpdaterMetadata> for AlgorithmUpdaterV1 {
-//     type Error = Error;
-//
-//     fn try_from(metadata: UpdaterMetadata) -> Result<Self, Self::Error> {
-//         match metadata {
-//             UpdaterMetadata::V1(v1) => Ok(AlgorithmUpdaterV1::from(v1)),
-//             _ => Err(Error::CouldNotConvertMetadata),
-//         }
-//     }
-// }
-
 impl TryFrom<UpdaterMetadata> for V0Metadata {
     type Error = Error;
 
