@@ -100,6 +100,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2300](https://github.com/FuelLabs/fuel-core/pull/2300): Added new function to `fuel-core-client` for checking whether a blob exists.
 
 ### Changed
+- [2258](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof` and modified `message_proof()` to return a descriptive error instead of `None` when proof generation fails.
 
 #### Breaking
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Anyone who wants to participate in the transaction broadcasting via p2p must upgrade to support new predicates on the TxPool level.
