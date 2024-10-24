@@ -1,6 +1,7 @@
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     ClampedPercentage,
+    L2ActivityTracker,
 };
 use std::num::NonZeroU64;
 
@@ -103,6 +104,7 @@ impl V1MetadataInitializer {
 
 impl From<V1Metadata> for AlgorithmUpdaterV1 {
     fn from(metadata: V1Metadata) -> Self {
+        let l2_activity = L2ActivityTracker::new_always_normal();
         Self {
             new_scaled_exec_price: metadata.new_scaled_exec_price,
             min_exec_gas_price: metadata.min_exec_gas_price,
@@ -123,6 +125,7 @@ impl From<V1Metadata> for AlgorithmUpdaterV1 {
             last_profit: metadata.last_profit,
             second_to_last_profit: metadata.second_to_last_profit,
             latest_da_cost_per_byte: metadata.latest_da_cost_per_byte,
+            l2_activity,
             unrecorded_blocks: Default::default(),
         }
     }

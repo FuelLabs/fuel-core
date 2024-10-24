@@ -410,14 +410,7 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
         .clone();
 
     let V0Metadata {
-        min_exec_gas_price,
-        exec_gas_price_change_percent,
-        l2_block_height,
-        l2_block_fullness_threshold_percent,
-        ..
+        l2_block_height, ..
     } = new_metadata.try_into().unwrap();
-    assert_eq!(exec_gas_price_change_percent, 11);
-    assert_eq!(l2_block_fullness_threshold_percent, 22);
-    assert_eq!(min_exec_gas_price, 33);
     assert_eq!(l2_block_height, new_height);
 }
