@@ -883,6 +883,7 @@ mod tests {
             Topic,
         },
         identity::Keypair,
+        multiaddr::multiaddr,
         swarm::{
             ListenError,
             SwarmEvent,
@@ -893,6 +894,10 @@ mod tests {
     use rand::Rng;
     use std::{
         collections::HashSet,
+        net::{
+            IpAddr,
+            Ipv4Addr,
+        },
         ops::Range,
         sync::Arc,
         time::Duration,
@@ -1034,6 +1039,33 @@ mod tests {
             }
         }
         stop_sender.send(()).unwrap();
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn our_node_in_reserved_nodes() {
+        let mut p2p_config = Config::default_initialized("own_node_in_reserved_nodes");
+        p2p_config.address = IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]));
+        p2p_config.tcp_port = 11111;
+        let multiaddr = multiaddr!(Ip4([127, 0, 0, 1]), Tcp(11111u16))
+            .with_p2p(p2p_config.keypair.public().to_peer_id())
+            .unwrap();
+        p2p_config.public_address = Some(multiaddr.clone());
+        p2p_config.reserved_nodes = vec![multiaddr];
+
+        let mut node = build_service_from_config(p2p_config).await;
+        loop {
+            tokio::select! {
+                event = node.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event {
+                        panic!("The node should not connect to itself");
+                    }
+                }
+                _ = tokio::time::sleep(Duration::from_secs(2)) => {
+                    break;
+                }
+            }
+        }
     }
 
     // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
