@@ -65,13 +65,6 @@ pub struct UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider> {
     metadata_storage: StructuredStorage<GasPriceStore>,
 }
 
-fn get_default_metadata(
-    config: &V0MetadataInitializer,
-    latest_block_height: u32,
-) -> V0Metadata {
-    config.initialize(latest_block_height)
-}
-
 impl<L2DataStore, L2DataStoreView, GasPriceStore, SettingsProvider>
     UninitializedTask<L2DataStoreView, GasPriceStore, SettingsProvider>
 where
@@ -96,9 +89,8 @@ where
             .into();
 
         let metadata_storage = StructuredStorage::new(gas_price_db.clone());
-        let starting_metadata = get_default_metadata(&config, latest_block_height);
         let (algo_updater, shared_algo) =
-            initialize_algorithm(starting_metadata, &metadata_storage)?;
+            initialize_algorithm(&config, latest_block_height, &metadata_storage)?;
 
         let task = Self {
             config,
@@ -208,23 +200,20 @@ where
 }
 
 pub fn initialize_algorithm<Metadata>(
-    starting_metadata: V0Metadata,
+    config: &V0MetadataInitializer,
+    latest_block_height: u32,
     metadata_storage: &Metadata,
 ) -> GasPriceResult<(AlgorithmUpdaterV0, SharedV0Algorithm)>
 where
     Metadata: MetadataStorage,
 {
-    let V0Metadata {
-        min_exec_gas_price,
-        exec_gas_price_change_percent,
-        new_exec_price,
-        l2_block_fullness_threshold_percent,
-        l2_block_height,
-    } = starting_metadata;
+    let min_exec_gas_price = config.starting_gas_price.max(config.min_gas_price);
+    let exec_gas_price_change_percent = config.gas_price_change_percent;
+    let l2_block_fullness_threshold_percent = config.gas_price_threshold_percent;
 
     let algorithm_updater;
     if let Some(updater_metadata) = metadata_storage
-        .get_metadata(&l2_block_height.into())
+        .get_metadata(&latest_block_height.into())
         .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
     {
         let previous_metadata: V0Metadata = updater_metadata.try_into()?;
@@ -237,10 +226,10 @@ where
         );
     } else {
         algorithm_updater = AlgorithmUpdaterV0::new(
-            new_exec_price,
+            config.starting_gas_price,
             min_exec_gas_price,
             exec_gas_price_change_percent,
-            l2_block_height,
+            latest_block_height,
             l2_block_fullness_threshold_percent,
         );
     }
@@ -275,7 +264,17 @@ where
             "Expected metadata to exist for height: {metadata_height}"
         ))?;
 
-    let mut algo_updater = metadata.try_into()?;
+    let mut algo_updater = if let UpdaterMetadata::V0(metadata) = metadata {
+        Ok(AlgorithmUpdaterV0::new(
+            metadata.new_exec_price,
+            0,
+            0,
+            metadata.l2_block_height,
+            0,
+        ))
+    } else {
+        Err(anyhow::anyhow!("Expected V0 metadata"))
+    }?;
 
     sync_v0_metadata(
         settings,
