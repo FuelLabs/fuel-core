@@ -62,6 +62,15 @@ pub trait KeyValueInspect {
     /// Returns the value from the storage.
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>>;
 
+    /// Returns multiple values from the storage.
+    fn get_multi<'a>(
+        &'a self,
+        keys: Box<dyn Iterator<Item = &'a [u8]>>,
+        column: Self::Column,
+    ) -> Box<dyn Iterator<Item = StorageResult<Option<Value>>> + 'a> {
+        Box::new(keys.map(move |key| self.get(key, column)))
+    }
+
     /// Reads the value from the storage into the `buf` and returns the number of read bytes.
     fn read(
         &self,

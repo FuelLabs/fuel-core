@@ -19,6 +19,9 @@ use crate::{
 };
 use fuel_vm_private::prelude::MerkleRoot;
 
+#[cfg(feature = "alloc")]
+use alloc::boxed::Box;
+
 pub mod merklized;
 pub mod plain;
 pub mod sparse;
@@ -75,6 +78,18 @@ where
             })
             .transpose()
     }
+
+    /// Returns multiple values from the storage.
+    fn get_multi<'a>(
+        storage: &'a S,
+        keys: Box<dyn Iterator<Item = &'a M::Key>>,
+        column: S::Column,
+    ) -> Box<dyn Iterator<Item = StorageResult<Option<M::OwnedValue>>> + 'a> {
+        let keys =
+            Box::new(keys.map(|key| Self::KeyCodec::encode(key).as_bytes().as_ref()));
+
+        storage.get_multi(keys, column)
+    }
 }
 
 /// It is an extension of the [`BlueprintInspect`] that allows mutating the storage.
@@ -111,6 +126,7 @@ where
     fn delete(storage: &mut S, key: &M::Key, column: S::Column) -> StorageResult<()>;
 }
 
+// TODO: Rename
 /// It is an extension of the blueprint that allows supporting batch operations.
 /// Usually, they are more performant than initializing/inserting/removing values one by one.
 pub trait SupportsBatching<M, S>: BlueprintMutate<M, S>
