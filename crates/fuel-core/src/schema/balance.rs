@@ -12,7 +12,6 @@ use crate::{
         ReadViewProvider,
     },
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -85,9 +84,6 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-        if before.is_some() || after.is_some() {
-            return Err(anyhow!("pagination is not yet supported").into())
-        }
         let query = ctx.read_view()?;
         let base_asset_id = *ctx
             .data_unchecked::<ConsensusProvider>()
