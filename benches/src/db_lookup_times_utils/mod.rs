@@ -27,7 +27,7 @@ mod tests {
 
     fn setup_test_db() -> RocksDb<BenchDatabase> {
         let temp_dir = ShallowTempDir::new();
-        RocksDb::default_open(temp_dir.path(), None).unwrap()
+        RocksDb::default_open(temp_dir.path(), None, -1).unwrap()
     }
 
     #[test]

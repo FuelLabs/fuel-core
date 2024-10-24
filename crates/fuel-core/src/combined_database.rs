@@ -39,6 +39,8 @@ pub struct CombinedDatabaseConfig {
     pub max_database_cache_size: usize,
     #[cfg(feature = "rocksdb")]
     pub state_rewind_policy: StateRewindPolicy,
+    #[cfg(feature = "rocksdb")]
+    pub max_fds: i32,
 }
 
 /// A database that combines the on-chain, off-chain and relayer databases into one entity.
@@ -79,13 +81,22 @@ impl CombinedDatabase {
         path: &std::path::Path,
         capacity: usize,
         state_rewind_policy: StateRewindPolicy,
+        max_fds: i32,
     ) -> crate::database::Result<Self> {
+        // Split the fds in equitable manner between the databases
+        let max_fds = match max_fds {
+            -1 => -1,
+            _ => max_fds.saturating_div(4),
+        };
         // TODO: Use different cache sizes for different databases
-        let on_chain = Database::open_rocksdb(path, capacity, state_rewind_policy)?;
-        let off_chain = Database::open_rocksdb(path, capacity, state_rewind_policy)?;
+        let on_chain =
+            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
+        let off_chain =
+            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
         let relayer =
-            Database::open_rocksdb(path, capacity, StateRewindPolicy::NoRewind)?;
-        let gas_price = Database::open_rocksdb(path, capacity, state_rewind_policy)?;
+            Database::open_rocksdb(path, capacity, StateRewindPolicy::NoRewind, max_fds)?;
+        let gas_price =
+            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
         Ok(Self {
             on_chain,
             off_chain,
@@ -115,6 +126,7 @@ impl CombinedDatabase {
                         &config.database_path,
                         config.max_database_cache_size,
                         config.state_rewind_policy,
+                        config.max_fds,
                     )?
                 }
             }
