@@ -27,7 +27,6 @@ use fuel_core::{
         Config,
         FuelService,
     },
-    txpool::types::Word,
 };
 use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
@@ -57,6 +56,7 @@ use fuel_core_types::{
         GTFArgs,
         Instruction,
         RegId,
+        Word,
     },
     fuel_crypto::{
         secp256r1,
@@ -428,11 +428,8 @@ fn run_with_service_with_extra_inputs(
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared
                     .txpool_shared_state
-                    .insert(vec![std::sync::Arc::new(tx)])
+                    .insert(tx)
                     .await
-                    .into_iter()
-                    .next()
-                    .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);

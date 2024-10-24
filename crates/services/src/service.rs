@@ -6,9 +6,9 @@ use crate::{
     Shared,
 };
 use anyhow::anyhow;
-use fuel_core_metrics::{
+use fuel_core_metrics::futures::{
     future_tracker::FutureTracker,
-    services::ServicesMetrics,
+    FuturesMetrics,
 };
 use futures::FutureExt;
 use std::any::Any;
@@ -141,7 +141,7 @@ where
     /// Initializes a new `ServiceRunner` containing a `RunnableService` with parameters for underlying `Task`
     pub fn new_with_params(service: S, params: S::TaskParams) -> Self {
         let shared = service.shared_data();
-        let metric = ServicesMetrics::register_service(S::NAME);
+        let metric = FuturesMetrics::obtain_futures_metrics(S::NAME);
         let state = initialize_loop(service, params, metric);
         Self { shared, state }
     }
@@ -242,7 +242,7 @@ where
 fn initialize_loop<S>(
     service: S,
     params: S::TaskParams,
-    metric: ServicesMetrics,
+    metric: FuturesMetrics,
 ) -> Shared<watch::Sender<State>>
 where
     S: RunnableService + 'static,
@@ -299,7 +299,7 @@ async fn run<S>(
     service: S,
     sender: Shared<watch::Sender<State>>,
     params: S::TaskParams,
-    metric: ServicesMetrics,
+    metric: FuturesMetrics,
 ) where
     S: RunnableService + 'static,
 {
@@ -342,7 +342,7 @@ async fn run<S>(
 async fn run_task<S: RunnableTask>(
     task: &mut S,
     mut state: StateWatcher,
-    metric: &ServicesMetrics,
+    metric: &FuturesMetrics,
 ) -> Option<Box<dyn Any + Send>> {
     let mut got_panic = None;
 
@@ -358,18 +358,7 @@ async fn run_task<S: RunnableTask>(
         }
 
         let tracked_result = panic_result.expect("Checked the panic above");
-
-        // TODO: Use `u128` when `AtomicU128` is stable.
-        metric.busy.inc_by(
-            u64::try_from(tracked_result.busy.as_nanos())
-                .expect("The task doesn't live longer than `u64`"),
-        );
-        metric.idle.inc_by(
-            u64::try_from(tracked_result.idle.as_nanos())
-                .expect("The task doesn't live longer than `u64`"),
-        );
-
-        let result = tracked_result.output;
+        let result = tracked_result.extract(metric);
 
         match result {
             Ok(should_continue) => {

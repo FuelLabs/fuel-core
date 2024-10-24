@@ -4,7 +4,7 @@ use std::{
         HashSet,
         VecDeque,
     },
-    time::Instant,
+    time::SystemTime,
 };
 
 use fuel_core_types::{
@@ -28,7 +28,10 @@ use fuel_core_types::{
         TxId,
         UtxoId,
     },
-    services::txpool::PoolTransaction,
+    services::txpool::{
+        ArcPoolTx,
+        PoolTransaction,
+    },
 };
 use petgraph::{
     graph::NodeIndex,
@@ -36,7 +39,11 @@ use petgraph::{
 };
 
 use crate::{
-    error::Error,
+    error::{
+        DependencyError,
+        Error,
+        InputValidationError,
+    },
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
     storage::checked_collision::CheckedTransaction,
@@ -91,7 +98,6 @@ impl GraphStorage {
     ) {
         let Some(root) = self.graph.node_weight_mut(root_id) else {
             debug_assert!(false, "Node with id {:?} not found", root_id);
-            tracing::warn!("Node with id {:?} not found", root_id);
             return;
         };
         root.dependents_cumulative_gas = root
@@ -207,24 +213,40 @@ impl GraphStorage {
                     asset_id,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner);
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongOwner,
+                        ));
                     }
                     if amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount);
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAmount,
+                        ));
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId);
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAssetId,
+                        ));
                     }
                 }
-                Output::Contract(_) => return Err(Error::NotInsertedIoContractOutput),
+                Output::Contract(_) => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
+                }
                 Output::Change { .. } => {
-                    return Err(Error::NotInsertedInputDependentOnChangeOrVariable)
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
                 }
                 Output::Variable { .. } => {
-                    return Err(Error::NotInsertedInputDependentOnChangeOrVariable)
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
                 }
                 Output::ContractCreated { .. } => {
-                    return Err(Error::NotInsertedIoContractOutput)
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
                 }
             };
         }
@@ -317,7 +339,9 @@ impl GraphStorage {
                         direct_dependencies.insert(*node_id);
 
                         if direct_dependencies.len() >= self.config.max_txs_chain_count {
-                            return Err(Error::NotInsertedChainDependencyTooBig);
+                            return Err(Error::Dependency(
+                                DependencyError::NotInsertedChainDependencyTooBig,
+                            ));
                         }
                     }
                 }
@@ -330,7 +354,9 @@ impl GraphStorage {
                         direct_dependencies.insert(*node_id);
 
                         if direct_dependencies.len() >= self.config.max_txs_chain_count {
-                            return Err(Error::NotInsertedChainDependencyTooBig);
+                            return Err(Error::Dependency(
+                                DependencyError::NotInsertedChainDependencyTooBig,
+                            ));
                         }
                     }
                 }
@@ -351,7 +377,7 @@ impl Storage for GraphStorage {
     fn store_transaction(
         &mut self,
         checked_transaction: Self::CheckedTransaction,
-        creation_instant: Instant,
+        creation_instant: SystemTime,
     ) -> Self::StorageIndex {
         let (transaction, direct_dependencies, all_dependencies) =
             checked_transaction.unpack();
@@ -368,7 +394,6 @@ impl Storage for GraphStorage {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-
                 continue
             };
 
@@ -413,7 +438,7 @@ impl Storage for GraphStorage {
 
     fn can_store_transaction(
         &self,
-        transaction: PoolTransaction,
+        transaction: ArcPoolTx,
     ) -> Result<Self::CheckedTransaction, Error> {
         let direct_dependencies =
             self.collect_transaction_direct_dependencies(&transaction)?;
@@ -444,27 +469,32 @@ impl Storage for GraphStorage {
                 //     D      D  D  D    |
                 //    / \    / \        / \
                 //   D   D  D   D      D   D
-                return Err(Error::DependentTransactionIsADiamondDeath);
+                return Err(Error::Dependency(
+                    DependencyError::DependentTransactionIsADiamondDeath,
+                ));
             }
 
             all_dependencies.insert(node_id);
 
             if all_dependencies.len() >= self.config.max_txs_chain_count {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
 
             let Some(dependency_node) = self.graph.node_weight(node_id) else {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-
                 continue
             };
 
             if dependency_node.number_dependents_in_chain
                 >= self.config.max_txs_chain_count
             {
-                return Err(Error::NotInsertedChainDependencyTooBig);
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedChainDependencyTooBig,
+                ));
             }
 
             to_check.extend(self.get_direct_dependencies(node_id));
@@ -479,6 +509,13 @@ impl Storage for GraphStorage {
 
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData> {
         self.get_inner(index)
+    }
+
+    fn get_direct_dependents(
+        &self,
+        index: Self::StorageIndex,
+    ) -> impl Iterator<Item = Self::StorageIndex> {
+        self.get_direct_dependents(index)
     }
 
     fn has_dependencies(&self, index: &Self::StorageIndex) -> bool {
@@ -512,10 +549,14 @@ impl Storage for GraphStorage {
                             .utxo(utxo_id)
                             .map_err(|e| Error::Database(format!("{:?}", e)))?
                         else {
-                            return Err(Error::UtxoNotFound(*utxo_id));
+                            return Err(Error::InputValidation(
+                                InputValidationError::UtxoNotFound(*utxo_id),
+                            ));
                         };
                         if !coin.matches_input(input).expect("The input is coin above") {
-                            return Err(Error::NotInsertedIoCoinMismatch);
+                            return Err(Error::InputValidation(
+                                InputValidationError::NotInsertedIoCoinMismatch,
+                            ));
                         }
                     }
                 }
@@ -535,10 +576,16 @@ impl Storage for GraphStorage {
                                 .matches_input(input)
                                 .expect("Input is a message above")
                             {
-                                return Err(Error::NotInsertedIoMessageMismatch);
+                                return Err(Error::InputValidation(
+                                    InputValidationError::NotInsertedIoMessageMismatch,
+                                ));
                             }
                         } else {
-                            return Err(Error::NotInsertedInputMessageUnknown(*nonce));
+                            return Err(Error::InputValidation(
+                                InputValidationError::NotInsertedInputMessageUnknown(
+                                    *nonce,
+                                ),
+                            ));
                         }
                     }
                 }
@@ -548,8 +595,10 @@ impl Storage for GraphStorage {
                             .contract_exist(contract_id)
                             .map_err(|e| Error::Database(format!("{:?}", e)))?
                     {
-                        return Err(Error::NotInsertedInputContractDoesNotExist(
-                            *contract_id,
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedInputContractDoesNotExist(
+                                *contract_id,
+                            ),
                         ));
                     }
                 }
@@ -563,6 +612,16 @@ impl Storage for GraphStorage {
         index: Self::StorageIndex,
     ) -> RemovedTransactions {
         self.remove_node_and_dependent_sub_graph(index)
+    }
+
+    fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData> {
+        self.graph.remove_node(index).inspect(|storage_entry| {
+            self.clear_cache(storage_entry);
+        })
+    }
+
+    fn tx_count(&self) -> usize {
+        self.graph.node_count()
     }
 }
 
@@ -585,9 +644,8 @@ impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
     }
 
     fn remove(&mut self, index: &Self::StorageIndex) -> Option<StorageData> {
-        self.graph.remove_node(*index).map(|storage_entry| {
-            self.clear_cache(&storage_entry);
-            storage_entry
+        self.graph.remove_node(*index).inspect(|storage_entry| {
+            self.clear_cache(storage_entry);
         })
     }
 }

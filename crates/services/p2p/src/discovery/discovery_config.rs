@@ -3,6 +3,7 @@ use crate::{
         mdns_wrapper::MdnsWrapper,
         Behaviour,
     },
+    utils::is_dialable,
     TryPeerId,
 };
 use libp2p::{
@@ -78,7 +79,9 @@ impl Config {
     where
         I: IntoIterator<Item = Multiaddr>,
     {
-        self.reserved_nodes.extend(reserved_nodes);
+        // skip undialable multiaddresses
+        let dialable_reserved_nodes = reserved_nodes.into_iter().filter(is_dialable);
+        self.reserved_nodes.extend(dialable_reserved_nodes);
         self
     }
 

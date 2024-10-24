@@ -5,9 +5,13 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+mod async_processor;
 mod service;
 mod state;
 mod sync;
+#[cfg(feature = "sync-processor")]
+mod sync_processor;
+pub mod yield_stream;
 
 /// Re-exports for streaming utilities
 pub mod stream {
@@ -18,9 +22,12 @@ pub mod stream {
         Stream,
     };
 
-    /// A Send + Sync BoxStream
+    /// A `Send` + `Sync` BoxStream with static lifetime.
     pub type BoxStream<T> =
         core::pin::Pin<Box<dyn Stream<Item = T> + Send + Sync + 'static>>;
+
+    /// A `Send` BoxStream with a lifetime.
+    pub type RefBoxStream<'a, T> = core::pin::Pin<Box<dyn Stream<Item = T> + Send + 'a>>;
 
     /// A Send + Sync BoxFuture
     pub type BoxFuture<'a, T> =
@@ -28,16 +35,24 @@ pub mod stream {
 
     /// Helper trait to create a BoxStream from a Stream
     pub trait IntoBoxStream: Stream {
-        /// Convert this stream into a BoxStream.
+        /// Convert this stream into a [`BoxStream`].
         fn into_boxed(self) -> BoxStream<Self::Item>
         where
             Self: Sized + Send + Sync + 'static,
         {
             Box::pin(self)
         }
+
+        /// Convert this stream into a [`RefBoxStream`].
+        fn into_boxed_ref<'a>(self) -> RefBoxStream<'a, Self::Item>
+        where
+            Self: Sized + Send + 'a,
+        {
+            Box::pin(self)
+        }
     }
 
-    impl<S> IntoBoxStream for S where S: Stream + Send + Sync + 'static {}
+    impl<S> IntoBoxStream for S where S: Stream + Send {}
 }
 
 /// Helper trait to trace errors
@@ -58,6 +73,7 @@ where
     }
 }
 
+pub use async_processor::AsyncProcessor;
 pub use service::{
     EmptyShared,
     RunnableService,
@@ -74,3 +90,10 @@ pub use sync::{
     Shared,
     SharedMutex,
 };
+#[cfg(feature = "sync-processor")]
+pub use sync_processor::SyncProcessor;
+
+// For tests
+use crate as fuel_core_services;
+#[allow(unused_imports)]
+use fuel_core_services as _;

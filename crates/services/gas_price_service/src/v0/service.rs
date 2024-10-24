@@ -10,7 +10,6 @@ use crate::{
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fuel_core_services::{
-    RunnableService,
     RunnableTask,
     StateWatcher,
 };
@@ -117,32 +116,6 @@ where
 }
 
 #[async_trait]
-impl<L2, Metadata> RunnableService for GasPriceServiceV0<L2, Metadata>
-where
-    L2: L2BlockSource,
-    Metadata: MetadataStorage,
-{
-    const NAME: &'static str = "GasPriceServiceV0";
-    type SharedData = SharedV0Algorithm;
-    type Task = Self;
-    type TaskParams = ();
-
-    fn shared_data(&self) -> Self::SharedData {
-        self.shared_algo.clone()
-    }
-
-    async fn into_task(
-        mut self,
-        _state_watcher: &StateWatcher,
-        _params: Self::TaskParams,
-    ) -> anyhow::Result<Self::Task> {
-        let algorithm = self.algorithm_updater.algorithm();
-        self.shared_algo.update(algorithm).await;
-        Ok(self)
-    }
-}
-
-#[async_trait]
 impl<L2, Metadata> RunnableTask for GasPriceServiceV0<L2, Metadata>
 where
     L2: L2BlockSource,
@@ -194,16 +167,47 @@ mod tests {
         v0::{
             metadata::V0Metadata,
             service::GasPriceServiceV0,
-            uninitialized_task::initialize_algorithm,
+            uninitialized_task::{
+                initialize_algorithm,
+                SharedV0Algorithm,
+            },
         },
     };
     use fuel_core_services::{
+        RunnableService,
         Service,
         ServiceRunner,
+        StateWatcher,
     };
     use fuel_core_types::fuel_types::BlockHeight;
     use std::sync::Arc;
     use tokio::sync::mpsc;
+
+    #[async_trait::async_trait]
+    impl<L2, Metadata> RunnableService for GasPriceServiceV0<L2, Metadata>
+    where
+        L2: L2BlockSource,
+        Metadata: MetadataStorage,
+    {
+        const NAME: &'static str = "GasPriceServiceV0";
+        type SharedData = SharedV0Algorithm;
+        type Task = Self;
+        type TaskParams = ();
+
+        fn shared_data(&self) -> Self::SharedData {
+            self.shared_algo.clone()
+        }
+
+        async fn into_task(
+            mut self,
+            _state_watcher: &StateWatcher,
+            _params: Self::TaskParams,
+        ) -> anyhow::Result<Self::Task> {
+            let algorithm = self.algorithm_updater.algorithm();
+            self.shared_algo.update(algorithm).await;
+            Ok(self)
+        }
+    }
 
     struct FakeL2BlockSource {
         l2_block: mpsc::Receiver<BlockInfo>,
@@ -276,7 +280,7 @@ mod tests {
         );
         let read_algo = service.next_block_algorithm();
         let service = ServiceRunner::new(service);
-        let prev = read_algo.next_gas_price().await;
+        let prev = read_algo.next_gas_price();
 
         // when
         service.start_and_await().await.unwrap();
@@ -284,7 +288,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // then
-        let actual_price = read_algo.next_gas_price().await;
+        let actual_price = read_algo.next_gas_price();
         assert_ne!(prev, actual_price);
         service.stop_and_await().await.unwrap();
     }

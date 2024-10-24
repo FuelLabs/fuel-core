@@ -22,7 +22,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             metrics: false,
             ..Default::default()
         });
-        let ctx = ctx_builder.build();
+        let ctx = ctx_builder.build().await;
 
         assert_eq!(ctx.stop().await, State::Stopped);
     }
@@ -46,7 +46,7 @@ async fn never_trigger_never_produces_blocks() {
     let txs = (0..TX_COUNT).map(|_| make_tx(&mut rng)).collect::<Vec<_>>();
     let TxPoolContext {
         txpool,
-        status_sender,
+        new_txs_notifier,
         ..
     } = MockTransactionPool::new_with_txs(txs.clone());
     ctx_builder.with_txpool(txpool);
@@ -59,10 +59,8 @@ async fn never_trigger_never_produces_blocks() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
-    let ctx = ctx_builder.build();
-    for tx in txs {
-        status_sender.send_replace(Some(tx.id(&ChainId::default())));
-    }
+    let ctx = ctx_builder.build().await;
+    new_txs_notifier.send_replace(());
 
     // Make sure enough time passes for the block to be produced
     time::sleep(Duration::new(10, 0)).await;
@@ -75,12 +73,12 @@ struct DefaultContext {
     rng: StdRng,
     test_ctx: TestContext,
     block_import: broadcast::Receiver<SealedBlock>,
-    status_sender: Arc<watch::Sender<Option<TxId>>>,
+    new_txs_notifier: watch::Sender<()>,
     txs: Arc<StdMutex<Vec<Script>>>,
 }
 
 impl DefaultContext {
-    fn new(config: Config) -> Self {
+    async fn new(config: Config) -> Self {
         let mut rng = StdRng::seed_from_u64(1234u64);
         let mut ctx_builder = TestContextBuilder::new();
         ctx_builder.with_config(config);
@@ -88,7 +86,7 @@ impl DefaultContext {
         let tx1 = make_tx(&mut rng);
         let TxPoolContext {
             txpool,
-            status_sender,
+            new_txs_notifier,
             txs,
         } = MockTransactionPool::new_with_txs(vec![tx1]);
         ctx_builder.with_txpool(txpool);
@@ -124,13 +122,13 @@ impl DefaultContext {
         ctx_builder.with_importer(importer);
         ctx_builder.with_producer(block_producer);
 
-        let test_ctx = ctx_builder.build();
+        let test_ctx = ctx_builder.build().await;
 
         Self {
             rng,
             test_ctx,
             block_import: block_import_receiver,
-            status_sender,
+            new_txs_notifier,
             txs,
         }
     }
@@ -159,8 +157,10 @@ async fn instant_trigger_produces_block_instantly() {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
-    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    })
+    .await;
+
+    ctx.new_txs_notifier.send_replace(());
 
     // Make sure it's produced
     assert!(ctx.block_import.recv().await.is_ok());
@@ -178,8 +178,9 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
-    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    })
+    .await;
+    ctx.new_txs_notifier.send_replace(());
 
     // Make sure no blocks are produced yet
     assert!(matches!(
@@ -193,7 +194,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     // Make sure the empty block is actually produced
     assert!(ctx.block_import.try_recv().is_ok());
     // Emulate tx status update to trigger the execution
-    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    ctx.new_txs_notifier.send_replace(());
 
     // Make sure no blocks are produced before next interval
     assert!(matches!(
@@ -208,7 +209,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     assert!(ctx.block_import.try_recv().is_ok());
 
     // Emulate tx status update to trigger the execution
-    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    ctx.new_txs_notifier.send_replace(());
 
     time::sleep(Duration::from_millis(1)).await;
 
@@ -251,8 +252,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
 
     let mut ctx_builder = TestContextBuilder::new();
     ctx_builder.with_config(config);
-    let mut mock_tx_pool = MockTransactionPool::no_tx_updates();
-    mock_tx_pool.expect_remove_txs().returning(|_| vec![]);
+    let mock_tx_pool = MockTransactionPool::no_tx_updates();
     ctx_builder.with_txpool(mock_tx_pool);
 
     let mut importer = MockBlockImporter::default();
@@ -276,7 +276,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
-    let test_ctx = ctx_builder.build();
+    let test_ctx = ctx_builder.build().await;
 
     let before_retry = Instant::now();
 
@@ -299,7 +299,8 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
+    })
+    .await;
 
     // Brackets to release the lock.
     {
@@ -308,7 +309,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         for _ in 0..1_000 {
             guard.push(make_tx(&mut ctx.rng));
         }
-        ctx.status_sender.send_replace(Some(TxId::zeroed()));
+        ctx.new_txs_notifier.send_replace(());
     }
 
     // Make sure blocks are not produced before the block time has elapsed
@@ -345,8 +346,9 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
-    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    })
+    .await;
+    ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
     // When
@@ -386,8 +388,9 @@ async fn interval_trigger_produces_blocks_with_current_time_when_block_productio
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
-    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    })
+    .await;
+    ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
     // When
@@ -443,8 +446,9 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
         signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
-    });
-    ctx.status_sender.send_replace(Some(TxId::zeroed()));
+    })
+    .await;
+    ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
     // When
@@ -473,4 +477,33 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
     // Even though the real time clock rewinded, the second block is produced with a future timestamp
     // similarly to how it works when time is lagging.
     assert_eq!(second_block_time, start_time + block_time.as_secs() * 2);
+}
+
+#[tokio::test]
+async fn interval_trigger_even_if_queued_tx_events() {
+    let block_time = Duration::from_secs(2);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    })
+    .await;
+    let block_creation_notifier = Arc::new(Notify::new());
+    tokio::task::spawn({
+        let notifier = ctx.new_txs_notifier.clone();
+        async move {
+            loop {
+                time::sleep(Duration::from_nanos(10)).await;
+                notifier.send_replace(());
+            }
+        }
+    });
+    let block_creation_waiter = block_creation_notifier.clone();
+    tokio::task::spawn(async move {
+        ctx.block_import.recv().await.unwrap();
+        dbg!("First block produced");
+        block_creation_notifier.notify_waiters();
+    });
+    block_creation_waiter.notified().await;
 }

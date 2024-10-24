@@ -186,7 +186,7 @@ where
         GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn> + Clone,
     SettingsProvider: GasPriceSettingsProvider,
 {
-    const NAME: &'static str = "UninitializedGasPriceServiceV0";
+    const NAME: &'static str = "GasPriceServiceV0";
     type SharedData = SharedV0Algorithm;
     type Task = GasPriceServiceV0<
         FuelL2BlockSource<SettingsProvider>,
@@ -364,5 +364,5 @@ where
         gas_price_db,
         on_chain_db,
     )?;
-    Ok(ServiceRunner::new(gas_price_init))
+    Ok(ServiceRunner::new(gas_price_uninit))
 }

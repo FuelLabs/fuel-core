@@ -1,8 +1,10 @@
+use super::topics::NEW_TX_GOSSIP_TOPIC;
 use crate::{
     config::{
         Config,
         MAX_RESPONSE_SIZE,
     },
+    utils::is_dialable,
     TryPeerId,
 };
 use fuel_core_metrics::global_registry;
@@ -13,6 +15,7 @@ use libp2p::gossipsub::{
     MetricsConfig,
     PeerScoreParams,
     PeerScoreThresholds,
+    Sha256Topic,
     Topic,
     TopicScoreParams,
 };
@@ -23,11 +26,6 @@ use sha2::{
 use std::{
     ops::DerefMut,
     time::Duration,
-};
-
-use super::topics::{
-    GossipTopic,
-    NEW_TX_GOSSIP_TOPIC,
 };
 
 // The number of slots in each epoch.
@@ -206,6 +204,8 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> gossipsub::Behav
     let reserved_nodes = p2p_config.reserved_nodes.clone();
     let explicit_peers = reserved_nodes
         .iter()
+        // skip undialable multiaddresses
+        .filter(|multiaddr| is_dialable(multiaddr))
         .filter_map(|address| address.try_to_peer_id());
     for peer_id in explicit_peers {
         gossipsub.add_explicit_peer(&peer_id);
@@ -226,7 +226,7 @@ fn initialize_gossipsub(gossipsub: &mut gossipsub::Behaviour, p2p_config: &Confi
 
     // subscribe to gossipsub topics with the network name suffix
     for (topic, weight) in topics {
-        let t: GossipTopic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
+        let t: Sha256Topic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
 
         gossipsub
             .set_topic_params(t.clone(), initialize_topic_score_params(weight))

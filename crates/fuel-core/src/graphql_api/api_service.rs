@@ -11,9 +11,11 @@ use crate::{
             P2pPort,
             TxPoolPort,
         },
+        validation_extension::ValidationExtension,
         view_extension::ViewExtension,
         Config,
     },
+    graphql_api,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -58,6 +60,7 @@ use axum::{
     Router,
 };
 use fuel_core_services::{
+    AsyncProcessor,
     RunnableService,
     RunnableTask,
     StateWatcher,
@@ -65,6 +68,7 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
+use hyper::rt::Executor;
 use serde_json::json;
 use std::{
     future::Future,
@@ -73,8 +77,10 @@ use std::{
         TcpListener,
     },
     pin::Pin,
+    sync::Arc,
 };
 use tokio_stream::StreamExt;
+use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{
     set_header::SetResponseHeaderLayer,
     timeout::TimeoutLayer,
@@ -108,11 +114,31 @@ pub struct GraphqlService {
 pub struct ServerParams {
     router: Router,
     listener: TcpListener,
+    number_of_threads: usize,
 }
 
 pub struct Task {
     // Ugly workaround because of https://github.com/hyperium/hyper/issues/2582
     server: Pin<Box<dyn Future<Output = hyper::Result<()>> + Send + 'static>>,
+}
+
+#[derive(Clone)]
+struct ExecutorWithMetrics {
+    processor: Arc<AsyncProcessor>,
+}
+
+impl<F> Executor<F> for ExecutorWithMetrics
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        let result = self.processor.try_spawn(fut);
+
+        if let Err(err) = result {
+            tracing::error!("Failed to spawn a task for GraphQL: {:?}", err);
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -135,10 +161,25 @@ impl RunnableService for GraphqlService {
         params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let mut state = state.clone();
-        let ServerParams { router, listener } = params;
+        let ServerParams {
+            router,
+            listener,
+            number_of_threads,
+        } = params;
+
+        let processor = AsyncProcessor::new(
+            "GraphQLFutures",
+            number_of_threads,
+            tokio::sync::Semaphore::MAX_PERMITS,
+        )?;
+
+        let executor = ExecutorWithMetrics {
+            processor: Arc::new(processor),
+        };
 
         let server = axum::Server::from_tcp(listener)
             .unwrap()
+            .executor(executor)
             .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
                 state
@@ -192,11 +233,21 @@ where
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
 {
+    graphql_api::initialize_query_costs(config.config.costs.clone())?;
+
     let network_addr = config.config.addr;
-    let combined_read_database =
-        ReadDatabase::new(genesis_block_height, on_database, off_database);
+    let combined_read_database = ReadDatabase::new(
+        config.config.database_batch_size,
+        genesis_block_height,
+        on_database,
+        off_database,
+    );
     let request_timeout = config.config.api_request_timeout;
+    let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
+    let max_queries_resolver_recursive_depth =
+        config.config.max_queries_resolver_recursive_depth;
+    let number_of_threads = config.config.number_of_threads;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -215,13 +266,21 @@ where
         .data(gas_price_provider)
         .data(consensus_parameters_provider)
         .data(memory_pool)
+        .extension(ValidationExtension::new(
+            max_queries_resolver_recursive_depth,
+        ))
         .extension(async_graphql::extensions::Tracing)
         .extension(ViewExtension::new())
         .finish();
 
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
-        .route("/v1/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/v1/graphql",
+            post(graphql_handler)
+                .layer(ConcurrencyLimitLayer::new(concurrency_limit))
+                .options(ok),
+        )
         .route(
             "/v1/graphql-sub",
             post(graphql_subscription_handler).options(ok),
@@ -253,7 +312,11 @@ where
 
     Ok(Service::new_with_params(
         GraphqlService { bound_address },
-        ServerParams { router, listener },
+        ServerParams {
+            router,
+            listener,
+            number_of_threads,
+        },
     ))
 }
 

@@ -22,6 +22,7 @@ use fuel_core::{
     },
     fuel_core_graphql_api::{
         worker_service::DaCompressionConfig,
+        Costs,
         ServiceConfig as GraphQLConfig,
     },
     producer::Config as ProducerConfig,
@@ -33,9 +34,12 @@ use fuel_core::{
         RelayerConsensusConfig,
         VMConfig,
     },
-    txpool::{
-        config::BlackList,
+    txpool::config::{
+        BlackList,
         Config as TxPoolConfig,
+        HeavyWorkConfig,
+        PoolLimits,
+        ServiceChannelLimits,
     },
     types::{
         fuel_tx::ContractId,
@@ -46,6 +50,10 @@ use fuel_core::{
 use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
+};
+use fuel_core_metrics::config::{
+    DisableConfig,
+    Module,
 };
 use fuel_core_poa::signer::SignMode;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
@@ -232,8 +240,8 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
-    #[arg(long = "metrics", env)]
-    pub metrics: bool,
+    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
+    pub disabled_metrics: Vec<Module>,
 
     #[clap(long = "verify-max-da-lag", default_value = "10", env)]
     pub max_da_lag: u64,
@@ -290,7 +298,7 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
-            metrics,
+            disabled_metrics,
             max_da_lag,
             max_wait_time,
             tx_pool,
@@ -300,6 +308,14 @@ impl Command {
             memory_pool_size,
             profiling: _,
         } = self;
+
+        let enabled_metrics = disabled_metrics.list_of_enabled();
+
+        if !enabled_metrics.is_empty() {
+            info!("`{:?}` metrics are enabled", enabled_metrics);
+        } else {
+            info!("All metrics are disabled");
+        }
 
         let addr = net::SocketAddr::new(graphql.ip, graphql.port);
 
@@ -316,7 +332,10 @@ impl Command {
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(chain_config.chain_name.clone(), metrics)?;
+        let p2p_cfg = p2p_args.into_config(
+            chain_config.chain_name.clone(),
+            disabled_metrics.is_enabled(Module::P2P),
+        )?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -424,8 +443,9 @@ impl Command {
             state_rewind_policy,
         };
 
-        let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new();
+        let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
+            disabled_metrics.is_enabled(Module::Importer),
+        );
 
         let da_compression = match da_compression {
             Some(retention) => {
@@ -438,32 +458,88 @@ impl Command {
 
         let TxPoolArgs {
             tx_pool_ttl,
+            tx_ttl_check_interval,
             tx_max_number,
-            tx_max_depth,
+            tx_max_total_bytes,
+            tx_max_total_gas,
+            tx_max_chain_count,
             tx_number_active_subscriptions,
             tx_blacklist_addresses,
             tx_blacklist_coins,
             tx_blacklist_messages,
             tx_blacklist_contracts,
+            tx_number_threads_to_verify_transactions,
+            tx_size_of_verification_queue,
+            tx_number_threads_p2p_sync,
+            tx_size_of_p2p_sync_queue,
+            tx_max_pending_read_requests,
+            tx_max_pending_write_requests,
         } = tx_pool;
 
-        let blacklist = BlackList::new(
+        let black_list = BlackList::new(
             tx_blacklist_addresses,
             tx_blacklist_coins,
             tx_blacklist_messages,
             tx_blacklist_contracts,
         );
 
+        let pool_limits = PoolLimits {
+            max_txs: tx_max_number,
+            max_gas: tx_max_total_gas,
+            max_bytes_size: tx_max_total_bytes,
+        };
+
+        let pool_heavy_work_config = HeavyWorkConfig {
+            number_threads_to_verify_transactions:
+                tx_number_threads_to_verify_transactions,
+            size_of_verification_queue: tx_size_of_verification_queue,
+            number_threads_p2p_sync: tx_number_threads_p2p_sync,
+            size_of_p2p_sync_queue: tx_size_of_p2p_sync_queue,
+        };
+
+        let service_channel_limits = ServiceChannelLimits {
+            max_pending_read_pool_requests: tx_max_pending_read_requests,
+            max_pending_write_pool_requests: tx_max_pending_write_requests,
+        };
+
         let config = Config {
             graphql_config: GraphQLConfig {
                 addr,
+                number_of_threads: graphql.graphql_number_of_threads,
+                database_batch_size: graphql.database_batch_size,
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
+                max_queries_resolver_recursive_depth: graphql
+                    .max_queries_resolver_recursive_depth,
                 max_queries_directives: graphql.max_queries_directives,
+                max_concurrent_queries: graphql.graphql_max_concurrent_queries,
                 request_body_bytes_limit: graphql.graphql_request_body_bytes_limit,
                 api_request_timeout: graphql.api_request_timeout.into(),
                 query_log_threshold_time: graphql.query_log_threshold_time.into(),
+                costs: Costs {
+                    balance_query: graphql.costs.balance_query,
+                    coins_to_spend: graphql.costs.coins_to_spend,
+                    get_peers: graphql.costs.get_peers,
+                    estimate_predicates: graphql.costs.estimate_predicates,
+                    dry_run: graphql.costs.dry_run,
+                    submit: graphql.costs.submit,
+                    submit_and_await: graphql.costs.submit_and_await,
+                    status_change: graphql.costs.status_change,
+                    storage_read: graphql.costs.storage_read,
+                    tx_get: graphql.costs.tx_get,
+                    tx_status_read: graphql.costs.tx_status_read,
+                    tx_raw_payload: graphql.costs.tx_raw_payload,
+                    block_header: graphql.costs.block_header,
+                    block_transactions: graphql.costs.block_transactions,
+                    block_transactions_ids: graphql.costs.block_transactions_ids,
+                    storage_iterator: graphql.costs.storage_iterator,
+                    bytecode_read: graphql.costs.bytecode_read,
+                    state_transition_bytecode_read: graphql
+                        .costs
+                        .state_transition_bytecode_read,
+                    da_compressed_block_read: graphql.costs.da_compressed_block_read,
+                },
             },
             combined_db_config,
             snapshot_reader,
@@ -476,18 +552,21 @@ impl Command {
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            txpool: TxPoolConfig::new(
-                tx_max_number,
-                tx_max_depth,
+            txpool: TxPoolConfig {
+                max_txs_chain_count: tx_max_chain_count,
+                max_txs_ttl: tx_pool_ttl.into(),
+                ttl_check_interval: tx_ttl_check_interval.into(),
                 utxo_validation,
-                metrics,
-                tx_pool_ttl.into(),
-                tx_number_active_subscriptions,
-                blacklist,
-            ),
+                max_tx_update_subscriptions: tx_number_active_subscriptions,
+                black_list,
+                pool_limits,
+                heavy_work: pool_heavy_work_config,
+                service_channel_limits,
+                metrics: disabled_metrics.is_enabled(Module::TxPool),
+            },
             block_producer: ProducerConfig {
                 coinbase_recipient,
-                metrics,
+                metrics: disabled_metrics.is_enabled(Module::Producer),
             },
             starting_gas_price,
             gas_price_change_percent,
@@ -596,4 +675,86 @@ fn start_pyroscope_agent(
             Ok(agent_running)
         })
         .transpose()
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+#[allow(clippy::bool_assert_comparison)]
+mod tests {
+    use super::*;
+    use strum::IntoEnumIterator;
+
+    fn parse_command(args: &[&str]) -> anyhow::Result<Command> {
+        Ok(Command::try_parse_from([""].iter().chain(args))?)
+    }
+
+    #[test]
+    fn parse_disabled_metrics__no_value_enables_everything() {
+        // Given
+        let args = [];
+
+        // When
+        let command = parse_command(&args).unwrap();
+
+        // Then
+        let config = command.disabled_metrics;
+        Module::iter().for_each(|module| {
+            assert_eq!(config.is_enabled(module), true);
+        });
+    }
+
+    #[test]
+    fn parse_disabled_metrics__all() {
+        // Given
+        let args = ["--disable-metrics", "all"];
+
+        // When
+        let command = parse_command(&args).unwrap();
+
+        // Then
+        let config = command.disabled_metrics;
+        Module::iter().for_each(|module| {
+            assert_eq!(config.is_enabled(module), false);
+        });
+    }
+
+    #[test]
+    fn parse_disabled_metrics__mixed_args() {
+        // Given
+        let args = [
+            "--disable-metrics",
+            "txpool,importer",
+            "--disable-metrics",
+            "graphql",
+        ];
+
+        // When
+        let command = parse_command(&args).unwrap();
+
+        // Then
+        let config = command.disabled_metrics;
+        assert_eq!(config.is_enabled(Module::TxPool), false);
+        assert_eq!(config.is_enabled(Module::Importer), false);
+        assert_eq!(config.is_enabled(Module::GraphQL), false);
+        assert_eq!(config.is_enabled(Module::P2P), true);
+        assert_eq!(config.is_enabled(Module::Producer), true);
+    }
+
+    #[test]
+    fn parse_disabled_metrics__bad_values() {
+        // Given
+        let args = ["--disable-metrics", "txpool,alpha,bravo"];
+
+        // When
+        let command = parse_command(&args);
+
+        // Then
+        let err = command.expect_err("should fail to parse");
+        assert_eq!(
+            err.to_string(),
+            "error: invalid value 'alpha' for \
+            '--disable-metrics <DISABLED_METRICS>': Matching variant not found\
+            \n\nFor more information, try '--help'.\n"
+        );
+    }
 }

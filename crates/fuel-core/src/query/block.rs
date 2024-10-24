@@ -1,67 +1,29 @@
-use crate::fuel_core_graphql_api::ports::DatabaseBlocks;
+use crate::fuel_core_graphql_api::database::ReadView;
+use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IterDirection,
-    },
+    iter::IterDirection,
     Result as StorageResult,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        consensus::Consensus,
-    },
+    blockchain::block::CompressedBlock,
     fuel_types::BlockHeight,
 };
+use futures::Stream;
 
-pub trait SimpleBlockData: Send + Sync {
-    fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock>;
-}
-
-impl<D> SimpleBlockData for D
-where
-    D: DatabaseBlocks + ?Sized + Send + Sync,
-{
-    fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock> {
-        self.block(id)
-    }
-}
-
-pub trait BlockQueryData: Send + Sync + SimpleBlockData {
-    fn latest_block_height(&self) -> StorageResult<BlockHeight>;
-
-    fn latest_block(&self) -> StorageResult<CompressedBlock>;
-
-    fn compressed_blocks(
-        &self,
-        height: Option<BlockHeight>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<CompressedBlock>>;
-
-    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
-}
-
-impl<D> BlockQueryData for D
-where
-    D: DatabaseBlocks + ?Sized + Send + Sync,
-{
-    fn latest_block_height(&self) -> StorageResult<BlockHeight> {
+impl ReadView {
+    pub fn latest_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
     }
 
-    fn latest_block(&self) -> StorageResult<CompressedBlock> {
+    pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
         self.block(&self.latest_block_height()?)
     }
 
-    fn compressed_blocks(
+    pub fn compressed_blocks(
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<CompressedBlock>> {
-        self.blocks(height, direction)
-    }
-
-    fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
-        self.consensus(id)
+    ) -> impl Stream<Item = StorageResult<CompressedBlock>> + '_ {
+        futures::stream::iter(self.blocks(height, direction)).yield_each(self.batch_size)
     }
 }

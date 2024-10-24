@@ -18,11 +18,11 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_tx::{
         Address,
+        TxId,
         UtxoId,
     },
 };

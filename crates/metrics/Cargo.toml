@@ -11,11 +11,14 @@ repository = { workspace = true }
 description = "Fuel metrics"
 
 [dependencies]
+once_cell = { workspace = true }
 parking_lot = { workspace = true }
 pin-project-lite = { workspace = true }
 prometheus-client = { workspace = true }
 regex = "1"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

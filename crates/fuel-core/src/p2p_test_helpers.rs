@@ -28,7 +28,7 @@ use fuel_core_p2p::{
     p2p_service::FuelP2PEvent,
     request_response::messages::{
         RequestMessage,
-        ResponseMessage,
+        V2ResponseMessage,
     },
     service::to_message_acceptance,
 };
@@ -73,7 +73,6 @@ use std::{
         Index,
         IndexMut,
     },
-    sync::Arc,
     time::Duration,
 };
 use tokio::sync::broadcast;
@@ -179,7 +178,7 @@ impl Bootstrap {
                                 if request_message == RequestMessage::TxPoolAllTransactionsIds {
                                     let _ = bootstrap.send_response_msg(
                                         request_id,
-                                        ResponseMessage::TxPoolAllTransactionsIds(Some(vec![])),
+                                        V2ResponseMessage::TxPoolAllTransactionsIds(Ok(vec![])),
                                     );
                                 }
                             }
@@ -504,7 +503,7 @@ impl Node {
 
             let tx_id = not_found[0];
             let mut wait_transaction =
-                self.node.transaction_status_change(tx_id).unwrap();
+                self.node.transaction_status_change(tx_id).await.unwrap();
 
             loop {
                 tokio::select! {
@@ -546,20 +545,15 @@ impl Node {
     pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
-            let tx_result = self
-                .node
+            let tx_id = tx.id(&ChainId::default());
+            self.node
                 .shared
                 .txpool_shared_state
-                .insert(vec![Arc::new(tx.clone())])
+                .insert(tx.clone())
                 .await
-                .pop()
-                .unwrap()
                 .unwrap();
 
-            let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(&ChainId::default()), tx);
-
-            assert!(tx_result.removed.is_empty());
+            expected.insert(tx_id, tx.clone());
         }
         expected
     }

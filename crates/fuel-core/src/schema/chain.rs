@@ -1,13 +1,9 @@
 use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusProvider,
-        QUERY_COSTS,
+        query_costs,
     },
     graphql_api::Config,
-    query::{
-        BlockQueryData,
-        ChainQueryData,
-    },
     schema::{
         block::Block,
         scalars::{
@@ -779,13 +775,13 @@ impl HeavyOperation {
 
 #[Object]
 impl ChainInfo {
-    #[graphql(complexity = "QUERY_COSTS.storage_read")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         let config: &Config = ctx.data_unchecked();
         Ok(config.chain_name.clone())
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
 
@@ -793,7 +789,7 @@ impl ChainInfo {
         Ok(latest_block)
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn da_height(&self, ctx: &Context<'_>) -> U64 {
         let Ok(query) = ctx.read_view() else {
             return 0.into();
@@ -802,7 +798,7 @@ impl ChainInfo {
         query.da_height().unwrap_or_default().0.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn consensus_parameters(
         &self,
         ctx: &Context<'_>,
@@ -814,7 +810,7 @@ impl ChainInfo {
         Ok(ConsensusParameters(params))
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()

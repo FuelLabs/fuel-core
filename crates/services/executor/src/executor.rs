@@ -607,9 +607,16 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
-                if transaction.max_gas(&self.consensus_params)? > remaining_gas_limit {
-                    data.skipped_transactions
-                        .push((tx_id, ExecutorError::GasOverflow));
+                let tx_max_gas = transaction.max_gas(&self.consensus_params)?;
+                if tx_max_gas > remaining_gas_limit {
+                    data.skipped_transactions.push((
+                        tx_id,
+                        ExecutorError::GasOverflow(
+                            format!("Transaction cannot fit in remaining gas limit: ({remaining_gas_limit})."),
+                            tx_max_gas,
+                            remaining_gas_limit,
+                        ),
+                    ));
                     continue;
                 }
                 match self.execute_transaction_and_commit(
@@ -1457,10 +1464,13 @@ where
             .coinbase
             .checked_add(tx_fee)
             .ok_or(ExecutorError::FeeOverflow)?;
-        execution_data.used_gas = execution_data
-            .used_gas
-            .checked_add(used_gas)
-            .ok_or(ExecutorError::GasOverflow)?;
+        execution_data.used_gas = execution_data.used_gas.checked_add(used_gas).ok_or(
+            ExecutorError::GasOverflow(
+                "Execution used gas overflowed.".into(),
+                execution_data.used_gas,
+                used_gas,
+            ),
+        )?;
         execution_data.used_size = execution_data
             .used_size
             .checked_add(used_size)
@@ -1813,9 +1823,14 @@ where
                 gas_price,
             )
             .ok_or(ExecutorError::FeeOverflow)?;
-        let total_used_gas = min_gas
-            .checked_add(used_gas)
-            .ok_or(ExecutorError::GasOverflow)?;
+        let total_used_gas =
+            min_gas
+                .checked_add(used_gas)
+                .ok_or(ExecutorError::GasOverflow(
+                    "Total used gas overflowed.".into(),
+                    min_gas,
+                    used_gas,
+                ))?;
         // if there's no script result (i.e. create) then fee == base amount
         Ok((
             total_used_gas,
