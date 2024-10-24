@@ -24,15 +24,6 @@ impl V0MetadataInitializer {
     }
 }
 
-// impl From<V0Metadata> for AlgorithmUpdaterV0 {
-//     fn from(metadata: V0Metadata) -> Self {
-//         Self {
-//             new_exec_price: metadata.new_exec_price,
-//             l2_block_height: metadata.l2_block_height,
-//         }
-//     }
-// }
-
 impl From<AlgorithmUpdaterV0> for V0Metadata {
     fn from(updater: AlgorithmUpdaterV0) -> Self {
         Self {
