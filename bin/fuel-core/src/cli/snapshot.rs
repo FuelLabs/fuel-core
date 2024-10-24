@@ -40,7 +40,7 @@ pub struct Command {
     #[clap(
         long = "rocksdb-max-fds",
         env,
-        default_value = getrlimit(Resource::NOFILE).map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX)).expect("Our supported platforms should return max FD.").to_string()
+        default_value = get_default_max_fds().to_string()
     )]
     pub rocksdb_max_fds: i32,
 
@@ -125,6 +125,12 @@ pub enum SubCommands {
         #[clap(long = "id")]
         contract_id: ContractId,
     },
+}
+
+fn get_default_max_fds() -> i32 {
+    getrlimit(Resource::NOFILE)
+        .map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX))
+        .expect("Our supported platforms should return max FD.")
 }
 
 #[cfg(feature = "rocksdb")]
