@@ -2,6 +2,10 @@
 
 use crate::{
     common::{
+        fuel_core_storage_adapter::{
+            GasPriceSettings,
+            GasPriceSettingsProvider,
+        },
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
         utils::{
@@ -10,23 +14,50 @@ use crate::{
             Result as GasPriceResult,
         },
     },
-    ports::MetadataStorage,
+    ports::{
+        GasPriceData,
+        L2Data,
+        MetadataStorage,
+    },
     v0::{
         metadata::{
             V0Metadata,
             V0MetadataInitializer,
         },
         service::GasPriceServiceV0,
-        uninitialized_task::initialize_algorithm,
+        uninitialized_task::{
+            initialize_algorithm,
+            UninitializedTask,
+        },
     },
 };
 use anyhow::anyhow;
 use fuel_core_services::{
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
     Service,
     ServiceRunner,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_storage::{
+    transactional::AtomicView,
+    Result as StorageResult,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
+    services::block_importer::{
+        ImportResult,
+        SharedImportResult,
+    },
+};
 use std::{
+    ops::Deref,
     sync::Arc,
     time::Duration,
 };
@@ -189,6 +220,76 @@ async fn next__new_l2_block_saves_old_metadata() {
     assert!(metadata_inner.lock().unwrap().is_some());
 }
 
+#[derive(Clone)]
+struct FakeSettings;
+
+impl GasPriceSettingsProvider for FakeSettings {
+    fn settings(
+        &self,
+        _param_version: &ConsensusParametersVersion,
+    ) -> GasPriceResult<GasPriceSettings> {
+        todo!()
+    }
+}
+
+#[derive(Clone)]
+struct FakeGasPriceDb;
+
+// GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>
+impl GasPriceData for FakeGasPriceDb {
+    fn latest_height(&self) -> Option<BlockHeight> {
+        todo!()
+    }
+}
+
+#[derive(Clone)]
+struct FakeOnChainDb {
+    height: BlockHeight,
+}
+
+impl FakeOnChainDb {
+    fn new(height: u32) -> Self {
+        Self {
+            height: height.into(),
+        }
+    }
+}
+
+struct FakeL2Data {
+    height: BlockHeight,
+}
+
+impl FakeL2Data {
+    fn new(height: BlockHeight) -> Self {
+        Self { height }
+    }
+}
+
+impl L2Data for FakeL2Data {
+    fn latest_height(&self) -> StorageResult<BlockHeight> {
+        Ok(self.height)
+    }
+
+    fn get_block(
+        &self,
+        _height: &BlockHeight,
+    ) -> StorageResult<Option<Block<Transaction>>> {
+        todo!()
+    }
+}
+impl AtomicView for FakeOnChainDb {
+    type LatestView = FakeL2Data;
+
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(FakeL2Data::new(self.height))
+    }
+}
+
+fn empty_block_stream() -> BoxStream<SharedImportResult> {
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> = vec![];
+    tokio_stream::iter(blocks).into_boxed()
+}
+
 // TODO: Don't test `initialize_algorithm`. It's not our public api. We want to test the uninitialized task.
 #[tokio::test]
 async fn initialize_algorithm__if_exists_already_reload_old_values_with_overrides() {
@@ -200,7 +301,6 @@ async fn initialize_algorithm__if_exists_already_reload_old_values_with_override
         inner: metadata_inner,
     };
 
-    // when
     let different_config = different_arb_config();
     assert_ne!(
         different_config.starting_gas_price,
@@ -208,15 +308,29 @@ async fn initialize_algorithm__if_exists_already_reload_old_values_with_override
     );
     let different_l2_block = 1231;
     assert_ne!(different_l2_block, original_metadata.l2_block_height);
-    let (algo_updater, _shared_algo) =
-        initialize_algorithm(&different_config, different_l2_block, &metadata_storage)
-            .unwrap();
+    let settings = FakeSettings;
+    let block_stream = empty_block_stream();
+    let gas_price_db = FakeGasPriceDb;
+    let on_chain_db = FakeOnChainDb::new(different_l2_block);
+
+    // when
+    let service = UninitializedTask::new(
+        different_config,
+        0.into(),
+        settings,
+        block_stream,
+        gas_price_db,
+        metadata_storage,
+        on_chain_db,
+    )
+    .unwrap();
 
     // then
     let V0Metadata {
         new_exec_price,
         l2_block_height,
     } = original_metadata;
+    let UninitializedTask { algo_updater, .. } = service;
     assert_eq!(algo_updater.new_exec_price, new_exec_price);
     assert_eq!(algo_updater.l2_block_height, l2_block_height);
 }
