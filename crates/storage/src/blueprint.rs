@@ -82,7 +82,7 @@ where
     /// Returns multiple values from the storage.
     fn get_multi<'a>(
         storage: &'a S,
-        keys: Box<dyn Iterator<Item = &'a M::Key>>,
+        keys: Box<dyn Iterator<Item = &'a M::Key> + 'a>,
         column: S::Column,
     ) -> Box<dyn Iterator<Item = StorageResult<Option<M::OwnedValue>>> + 'a> {
         let keys = Box::new(

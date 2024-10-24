@@ -58,8 +58,12 @@ use alloc::{
     fmt::Debug,
 };
 
+// TODO: Format
+#[cfg(feature = "alloc")]
+use alloc::boxed::Box;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+
 use fuel_vm_private::storage::{
     predicate::PredicateStorageRequirements,
     BlobData,
@@ -261,6 +265,23 @@ where
     fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::get(self, key, M::column())
             .map(|value| value.map(Cow::Owned))
+    }
+
+    fn get_multi<'a>(
+        &'a self,
+        keys: Box<dyn Iterator<Item = &'a <M as Mappable>::Key> + 'a>,
+    ) -> Box<
+        dyn Iterator<
+                Item = Result<Option<Cow<'a, <M as Mappable>::OwnedValue>>, Self::Error>,
+            > + 'a,
+    >
+    where
+        <Self as StorageInspect<M>>::Error: 'a,
+    {
+        Box::new(
+            <M as TableWithBlueprint>::Blueprint::get_multi(self, keys, M::column())
+                .map(|result| result.map(|option| option.map(Cow::Owned))),
+        )
     }
 
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
