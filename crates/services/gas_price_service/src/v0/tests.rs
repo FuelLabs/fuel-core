@@ -290,7 +290,6 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
     tokio_stream::iter(blocks).into_boxed()
 }
 
-// TODO: Don't test `initialize_algorithm`. It's not our public api. We want to test the uninitialized task.
 #[tokio::test]
 async fn initialize_algorithm__if_exists_already_reload_old_values_with_overrides() {
     // given
@@ -335,17 +334,29 @@ async fn initialize_algorithm__if_exists_already_reload_old_values_with_override
     assert_eq!(algo_updater.l2_block_height, l2_block_height);
 }
 
-// TODO: Don't test `initialize_algorithm`. It's not our public api. We want to test the uninitialized task.
 #[tokio::test]
 async fn initialize_algorithm__should_fail_if_cannot_fetch_metadata() {
     // given
+    let config = arb_config();
+    let different_l2_block = 1231;
     let metadata_storage = ErroringMetadata;
+    let settings = FakeSettings;
+    let block_stream = empty_block_stream();
+    let gas_price_db = FakeGasPriceDb;
+    let on_chain_db = FakeOnChainDb::new(different_l2_block);
 
     // when
-    let config = arb_config();
-    let height = 0;
-    let res = initialize_algorithm(&config, height, &metadata_storage);
+    let res = UninitializedTask::new(
+        config,
+        0.into(),
+        settings,
+        block_stream,
+        gas_price_db,
+        metadata_storage,
+        on_chain_db,
+    );
 
     // then
-    assert!(matches!(res, Err(GasPriceError::CouldNotInitUpdater(_))));
+    let is_err = res.is_err();
+    assert!(is_err);
 }
