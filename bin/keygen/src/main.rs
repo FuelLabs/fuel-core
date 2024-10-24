@@ -1,5 +1,4 @@
 //! A simple keygen cli utility tool for configuring fuel-core
-use atty::Stream;
 use clap::Parser;
 use crossterm::terminal;
 use fuel_core_keygen::{
@@ -8,10 +7,7 @@ use fuel_core_keygen::{
     KeyType,
 };
 use std::io::{
-    stdin,
-    stdout,
-    Read,
-    Write,
+    stdin, stdout, IsTerminal, Read, Write
 };
 use termion::screen::IntoAlternateScreen;
 
@@ -88,7 +84,7 @@ fn display_string_discreetly(
     discreet_string: &str,
     continue_message: &str,
 ) -> anyhow::Result<()> {
-    if atty::is(Stream::Stdout) {
+    if stdout().is_terminal() {
         let mut screen = stdout().into_alternate_screen()?;
         writeln!(screen, "{discreet_string}")?;
         screen.flush()?;
