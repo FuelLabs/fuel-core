@@ -136,7 +136,7 @@ impl MessageQuery {
         nonce: Nonce,
         commit_block_id: Option<BlockId>,
         commit_block_height: Option<U32>,
-    ) -> async_graphql::Result<Option<MessageProof>> {
+    ) -> async_graphql::Result<MessageProof> {
         let query = ctx.read_view()?;
         let height = match (commit_block_id, commit_block_height) {
             (Some(commit_block_id), None) => {
@@ -157,7 +157,7 @@ impl MessageQuery {
             height,
         )?;
 
-        Ok(Some(MessageProof(proof)))
+        Ok(MessageProof(proof))
     }
 
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
