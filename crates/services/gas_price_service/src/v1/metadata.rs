@@ -1,3 +1,4 @@
+use crate::v0::metadata::V0Metadata;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     ClampedPercentage,
@@ -34,7 +35,37 @@ pub struct V1Metadata {
     pub latest_da_cost_per_byte: u128,
 }
 
-pub struct V1MetadataInitializer {
+impl V1Metadata {
+    pub fn construct_from_v0_metadata(
+        v0_metadata: V0Metadata,
+        config: V1AlgorithmConfig,
+    ) -> anyhow::Result<Self> {
+        let gas_price_factor = NonZeroU64::new(config.gas_price_factor)
+            .ok_or_else(|| anyhow::anyhow!("gas_price_factor must be non-zero"))?;
+        let metadata = Self {
+            new_scaled_exec_price: v0_metadata
+                .new_exec_price
+                .saturating_mul(gas_price_factor.get()),
+            l2_block_height: v0_metadata.l2_block_height,
+            new_scaled_da_gas_price: config
+                .min_da_gas_price
+                .saturating_mul(gas_price_factor.get()),
+            gas_price_factor,
+            total_da_rewards_excess: 0,
+            // TODO: Set to `None` after:
+            //   https://github.com/FuelLabs/fuel-core/issues/2397
+            da_recorded_block_height: 0,
+            latest_known_total_da_cost_excess: 0,
+            projected_total_da_cost: 0,
+            last_profit: 0,
+            second_to_last_profit: 0,
+            latest_da_cost_per_byte: 0,
+        };
+        Ok(metadata)
+    }
+}
+
+pub struct V1AlgorithmConfig {
     new_exec_gas_price: u64,
     min_exec_gas_price: u64,
     exec_gas_price_change_percent: u16,
@@ -44,34 +75,6 @@ pub struct V1MetadataInitializer {
     max_da_gas_price_change_percent: u16,
     da_p_component: i64,
     da_d_component: i64,
-}
-
-impl V1MetadataInitializer {
-    pub fn initialize(
-        &self,
-        l2_block_height: u32,
-        da_block_height: u32,
-    ) -> anyhow::Result<V1Metadata> {
-        let gas_price_factor = NonZeroU64::new(self.gas_price_factor)
-            .ok_or_else(|| anyhow::anyhow!("gas_price_factor must be non-zero"))?;
-        let metadata = V1Metadata {
-            #[allow(clippy::arithmetic_side_effects)]
-            new_scaled_exec_price: self.new_exec_gas_price * gas_price_factor.get(),
-            l2_block_height,
-            #[allow(clippy::arithmetic_side_effects)]
-            new_scaled_da_gas_price: self.min_da_gas_price * gas_price_factor.get(),
-            gas_price_factor,
-            total_da_rewards_excess: 0,
-            da_recorded_block_height: da_block_height,
-            latest_known_total_da_cost_excess: 0,
-            projected_total_da_cost: 0,
-            last_profit: 0,
-            second_to_last_profit: 0,
-            latest_da_cost_per_byte: 0,
-        };
-
-        Ok(metadata)
-    }
 }
 
 impl From<AlgorithmUpdaterV1> for V1Metadata {

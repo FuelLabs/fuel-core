@@ -166,7 +166,7 @@ mod tests {
         ports::MetadataStorage,
         v0::{
             algorithm::SharedV0Algorithm,
-            metadata::V0MetadataInitializer,
+            metadata::V0AlgorithmConfig,
             service::GasPriceServiceV0,
             uninitialized_task::initialize_algorithm,
         },
@@ -261,7 +261,7 @@ mod tests {
         };
         let metadata_storage = FakeMetadata::empty();
         let l2_block_height = 0;
-        let config = V0MetadataInitializer {
+        let config = V0AlgorithmConfig {
             starting_gas_price: 100,
             min_gas_price: 10,
             gas_price_change_percent: 10,

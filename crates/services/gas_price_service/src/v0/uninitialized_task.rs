@@ -23,8 +23,8 @@ use crate::{
     v0::{
         algorithm::SharedV0Algorithm,
         metadata::{
+            V0AlgorithmConfig,
             V0Metadata,
-            V0MetadataInitializer,
         },
         service::GasPriceServiceV0,
     },
@@ -48,7 +48,7 @@ use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 pub use fuel_gas_price_algorithm::v0::AlgorithmV0;
 
 pub struct UninitializedTask<L2DataStoreView, GasPriceStore, Metadata, SettingsProvider> {
-    pub config: V0MetadataInitializer,
+    pub config: V0AlgorithmConfig,
     pub genesis_block_height: BlockHeight,
     pub settings: SettingsProvider,
     pub gas_price_db: GasPriceStore,
@@ -69,7 +69,7 @@ where
     SettingsProvider: GasPriceSettingsProvider,
 {
     pub fn new(
-        config: V0MetadataInitializer,
+        config: V0AlgorithmConfig,
         genesis_block_height: BlockHeight,
         settings: SettingsProvider,
         block_stream: BoxStream<SharedImportResult>,
@@ -188,7 +188,7 @@ where
 }
 
 pub fn initialize_algorithm<Metadata>(
-    config: &V0MetadataInitializer,
+    config: &V0AlgorithmConfig,
     latest_block_height: u32,
     metadata_storage: &Metadata,
 ) -> GasPriceResult<(AlgorithmUpdaterV0, SharedV0Algorithm)>

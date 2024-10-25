@@ -21,8 +21,8 @@ use crate::{
     },
     v0::{
         metadata::{
+            V0AlgorithmConfig,
             V0Metadata,
-            V0MetadataInitializer,
         },
         service::GasPriceServiceV0,
         uninitialized_task::{
@@ -116,8 +116,8 @@ impl MetadataStorage for ErroringMetadata {
     }
 }
 
-fn arb_config() -> V0MetadataInitializer {
-    V0MetadataInitializer {
+fn arb_config() -> V0AlgorithmConfig {
+    V0AlgorithmConfig {
         starting_gas_price: 100,
         min_gas_price: 0,
         gas_price_change_percent: 10,
@@ -132,8 +132,8 @@ fn arb_metadata() -> V0Metadata {
     }
 }
 
-fn different_arb_config() -> V0MetadataInitializer {
-    V0MetadataInitializer {
+fn different_arb_config() -> V0AlgorithmConfig {
+    V0AlgorithmConfig {
         starting_gas_price: 200,
         min_gas_price: 0,
         gas_price_change_percent: 20,

@@ -3,8 +3,8 @@ use crate::{
         updater_metadata::UpdaterMetadata,
         utils::Result,
     },
-    v0::metadata::V0MetadataInitializer,
-    v1::metadata::V1MetadataInitializer,
+    v0::metadata::V0AlgorithmConfig,
+    v1::metadata::V1AlgorithmConfig,
 };
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -35,8 +35,8 @@ pub trait GasPriceData: Send + Sync {
 }
 
 pub enum VersionSpecificConfig {
-    V0(V0MetadataInitializer),
-    V1(V1MetadataInitializer),
+    V0(V0AlgorithmConfig),
+    V1(V1AlgorithmConfig),
 }
 
 impl VersionSpecificConfig {
@@ -46,7 +46,7 @@ impl VersionSpecificConfig {
         gas_price_change_percent: u64,
         gas_price_threshold_percent: u64,
     ) -> Self {
-        Self::V0(V0MetadataInitializer {
+        Self::V0(V0AlgorithmConfig {
             starting_gas_price,
             min_gas_price,
             gas_price_change_percent,
@@ -54,12 +54,12 @@ impl VersionSpecificConfig {
         })
     }
 
-    pub fn new_v1(metadata: V1MetadataInitializer) -> Self {
+    pub fn new_v1(metadata: V1AlgorithmConfig) -> Self {
         Self::V1(metadata)
     }
 
     /// Extract V0MetadataInitializer if it is of V0 version
-    pub fn v0(self) -> Option<V0MetadataInitializer> {
+    pub fn v0(self) -> Option<V0AlgorithmConfig> {
         if let VersionSpecificConfig::V0(v0) = self {
             Some(v0)
         } else {
@@ -68,7 +68,7 @@ impl VersionSpecificConfig {
     }
 
     /// Extract V1MetadataInitializer if it is of V1 version
-    pub fn v1(self) -> Option<V1MetadataInitializer> {
+    pub fn v1(self) -> Option<V1AlgorithmConfig> {
         if let VersionSpecificConfig::V1(v1) = self {
             Some(v1)
         } else {
@@ -88,11 +88,11 @@ impl GasPriceServiceConfig {
         }
     }
 
-    pub fn v0(self) -> Option<V0MetadataInitializer> {
+    pub fn v0(self) -> Option<V0AlgorithmConfig> {
         self.version_specific_config.v0()
     }
 
-    pub fn v1(self) -> Option<V1MetadataInitializer> {
+    pub fn v1(self) -> Option<V1AlgorithmConfig> {
         self.version_specific_config.v1()
     }
 }
