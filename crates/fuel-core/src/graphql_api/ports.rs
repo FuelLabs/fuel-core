@@ -31,12 +31,15 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::relayer::{
-        message::{
-            MerkleProof,
-            Message,
+    entities::{
+        coins::coin::Coin,
+        relayer::{
+            message::{
+                MerkleProof,
+                Message,
+            },
+            transaction::RelayedTransactionStatus,
         },
-        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
         Bytes32,
@@ -121,7 +124,7 @@ pub trait OnChainDatabase:
     + Sync
     + DatabaseBlocks
     + DatabaseMessages
-    + StorageInspect<Coins, Error = StorageError>
+    + DatabaseCoins
     + StorageRead<BlobData, Error = StorageError>
     + StorageInspect<StateTransitionBytecodeVersions, Error = StorageError>
     + StorageInspect<UploadedBytecodes, Error = StorageError>
@@ -135,6 +138,12 @@ pub trait OnChainDatabase:
 pub trait DatabaseBlocks {
     /// Get a transaction by its id.
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
+
+    /// Get a batch of transactions by their ids.
+    fn transactions<'a>(
+        &'a self,
+        tx_ids: BoxedIter<'a, &'a TxId>,
+    ) -> BoxedIter<'a, StorageResult<Transaction>>;
 
     /// Get a block by its height.
     fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
@@ -182,6 +191,17 @@ pub trait DatabaseRelayedTransactions {
         &self,
         id: Bytes32,
     ) -> StorageResult<Option<RelayedTransactionStatus>>;
+}
+
+/// Trait that specifies all the getters reqired for coins
+pub trait DatabaseCoins:
+    StorageInspect<Coins, Error = StorageError> + StorageBatchInspect<Coins>
+{
+    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
+    fn coins<'a>(
+        &'a self,
+        utxo_ids: BoxedIter<'a, &'a UtxoId>,
+    ) -> BoxedIter<'a, StorageResult<Coin>>;
 }
 
 /// Trait that specifies all the getters required for contract.

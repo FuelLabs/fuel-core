@@ -1,11 +1,14 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    iter::IterDirection,
-    not_found,
-    tables::Coins,
+    iter::{
+        IntoBoxedIter,
+        IterDirection,
+    },
+    // not_found,
+    // tables::Coins,
     Error as StorageError,
     Result as StorageResult,
-    StorageAsRef,
+    // StorageAsRef,
 };
 use fuel_core_types::{
     entities::coins::coin::Coin,
@@ -20,27 +23,29 @@ use futures::{
 
 impl ReadView {
     pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
-        let coin = self
-            .on_chain
-            .as_ref()
-            .storage::<Coins>()
-            .get(&utxo_id)?
-            .ok_or(not_found!(Coins))?
-            .into_owned();
+        self.on_chain.coin(utxo_id)
+        // let coin = self
+        //    .on_chain
+        //    .as_ref()
+        //    .storage::<Coins>()
+        //    .get(&utxo_id)?
+        //    .ok_or(not_found!(Coins))?
+        //    .into_owned();
 
-        Ok(coin.uncompress(utxo_id))
+        // Ok(coin.uncompress(utxo_id))
     }
 
     pub async fn coins(
         &self,
         utxo_ids: Vec<UtxoId>,
     ) -> impl Iterator<Item = StorageResult<Coin>> + '_ {
+        let coins: Vec<_> = self.on_chain.coins(utxo_ids.iter().into_boxed()).collect();
         // TODO: Use multiget when it's implemented.
         //  https://github.com/FuelLabs/fuel-core/issues/2344
-        let coins = utxo_ids.into_iter().map(|id| self.coin(id));
+        // let coins = utxo_ids.into_iter().map(|id| self.coin(id));
         // Give a chance to other tasks to run.
         tokio::task::yield_now().await;
-        coins
+        coins.into_iter()
     }
 
     pub fn owned_coins(

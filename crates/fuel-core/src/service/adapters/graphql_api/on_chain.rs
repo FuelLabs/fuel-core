@@ -11,7 +11,10 @@ use crate::{
         DatabaseMessages,
         OnChainDatabase,
     },
-    graphql_api::ports::worker,
+    graphql_api::ports::{
+        worker,
+        DatabaseCoins,
+    },
 };
 use fuel_core_storage::{
     iter::{
@@ -22,6 +25,7 @@ use fuel_core_storage::{
     },
     not_found,
     tables::{
+        Coins,
         FuelBlocks,
         Messages,
         SealedBlockConsensus,
@@ -44,6 +48,7 @@ use fuel_core_types::{
         ContractId,
         Transaction,
         TxId,
+        UtxoId,
     },
     fuel_types::{
         BlockHeight,
@@ -60,6 +65,15 @@ impl DatabaseBlocks for OnChainIterableKeyValueView {
             .get(tx_id)?
             .ok_or(not_found!(Transactions))?
             .into_owned())
+    }
+
+    fn transactions<'a>(
+        &'a self,
+        tx_ids: BoxedIter<'a, &'a TxId>,
+    ) -> BoxedIter<'a, StorageResult<Transaction>> {
+        <Self as StorageBatchInspect<Transactions>>::get_batch(self, tx_ids)
+            .map(|result| result.and_then(|opt| opt.ok_or(not_found!(Transactions))))
+            .into_boxed()
     }
 
     fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
@@ -116,6 +130,40 @@ impl DatabaseMessages for OnChainIterableKeyValueView {
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.message_exists(nonce)
+    }
+}
+
+impl DatabaseCoins for OnChainIterableKeyValueView {
+    fn coin(
+        &self,
+        utxo_id: fuel_core_types::fuel_tx::UtxoId,
+    ) -> StorageResult<fuel_core_types::entities::coins::coin::Coin> {
+        let coin = self
+            .storage::<Coins>()
+            .get(&utxo_id)?
+            .ok_or(not_found!(Coins))?
+            .into_owned();
+
+        Ok(coin.uncompress(utxo_id))
+    }
+
+    fn coins<'a>(
+        &'a self,
+        utxo_ids: BoxedIter<'a, &'a UtxoId>,
+    ) -> BoxedIter<'a, StorageResult<fuel_core_types::entities::coins::coin::Coin>> {
+        let utxo_ids_1: Vec<_> = utxo_ids.collect();
+        let utxo_ids_2 = utxo_ids_1.clone();
+
+        <Self as StorageBatchInspect<Coins>>::get_batch(
+            self,
+            utxo_ids_1.into_iter().into_boxed(),
+        )
+        .zip(utxo_ids_2.into_iter().into_boxed())
+        .map(|(res, utxo_id)| {
+            res.and_then(|opt| opt.ok_or(not_found!(Coins)))
+                .map(|coin| coin.uncompress(*utxo_id))
+        })
+        .into_boxed()
     }
 }
 
