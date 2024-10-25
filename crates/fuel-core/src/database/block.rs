@@ -69,14 +69,15 @@ impl OnChainIterableKeyValueView {
             // fetch all the transactions
             // TODO: Use multiget when it's implemented.
             //  https://github.com/FuelLabs/fuel-core/issues/2344
-            let txs = block
-                .transactions()
-                .iter()
-                .map(|tx_id| {
-                    self.storage::<Transactions>()
-                        .get(tx_id)
-                        .and_then(|tx| tx.ok_or(not_found!(Transactions)))
-                        .map(Cow::into_owned)
+
+            let transaction_ids = Box::new(block.transactions().iter());
+            let txs = self
+                .storage::<Transactions>()
+                .get_multi(transaction_ids)
+                .map(|tx| {
+                    tx.and_then(|tx| {
+                        tx.ok_or(not_found!(Transactions)).map(Cow::into_owned)
+                    })
                 })
                 .try_collect()?;
             Ok(Some(block.into_owned().uncompress(txs)))
