@@ -169,6 +169,11 @@ pub trait DatabaseMessages:
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
 
+    fn message_batch<'a>(
+        &'a self,
+        ids: BoxedIter<'a, &'a Nonce>,
+    ) -> BoxedIter<'a, StorageResult<Message>>;
+
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
 }
 

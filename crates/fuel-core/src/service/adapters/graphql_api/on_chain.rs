@@ -23,12 +23,14 @@ use fuel_core_storage::{
     not_found,
     tables::{
         FuelBlocks,
+        Messages,
         SealedBlockConsensus,
         Transactions,
     },
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
+    StorageBatchInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -100,6 +102,15 @@ impl DatabaseMessages for OnChainIterableKeyValueView {
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
+            .into_boxed()
+    }
+
+    fn message_batch<'a>(
+        &'a self,
+        ids: BoxedIter<'a, &'a Nonce>,
+    ) -> BoxedIter<'a, StorageResult<Message>> {
+        self.get_batch(ids)
+            .map(|result| result.and_then(|opt| opt.ok_or(not_found!(Messages))))
             .into_boxed()
     }
 
