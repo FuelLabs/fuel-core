@@ -72,9 +72,8 @@ where
 {
     fn get_batch<'a>(
         &'a self,
-        keys: Box<dyn Iterator<Item = &'a <M as Mappable>::Key> + 'a>,
-    ) -> Box<dyn Iterator<Item = StorageResult<Option<<M as Mappable>::OwnedValue>>> + 'a>
-    {
+        keys: BoxedIter<'a, &'a M::Key>,
+    ) -> BoxedIter<'a, StorageResult<Option<<M as Mappable>::OwnedValue>>> {
         self.storage.get_batch(keys)
     }
 }

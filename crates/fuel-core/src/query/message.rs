@@ -2,6 +2,7 @@ use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
+        IntoBoxedIter,
         IterDirection,
     },
     not_found,
@@ -80,7 +81,7 @@ impl ReadView {
 
     pub async fn messages(
         &self,
-        _ids: Vec<Nonce>,
+        ids: Vec<Nonce>,
     ) -> impl Stream<Item = StorageResult<Message>> {
         // let ids = Box::new(ids.iter());
         // let messages: Vec<_> = self
@@ -93,8 +94,10 @@ impl ReadView {
         //    })
         //    .collect();
 
-        // TODO
-        let messages = Vec::new();
+        let messages: Vec<_> = self
+            .on_chain
+            .message_batch(ids.iter().into_boxed())
+            .collect();
 
         //// TODO: Use multiget when it's implemented.
         ////  https://github.com/FuelLabs/fuel-core/issues/2344

@@ -59,9 +59,6 @@ use alloc::{
     fmt::Debug,
 };
 
-// TODO: Format
-#[cfg(feature = "alloc")]
-use alloc::boxed::Box;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
@@ -281,8 +278,8 @@ where
 {
     fn get_batch<'a>(
         &'a self,
-        keys: Box<dyn Iterator<Item = &'a M::Key> + 'a>,
-    ) -> Box<dyn Iterator<Item = StorageResult<Option<M::OwnedValue>>> + 'a> {
+        keys: BoxedIter<'a, &'a M::Key>,
+    ) -> BoxedIter<'a, StorageResult<Option<M::OwnedValue>>> {
         M::Blueprint::get_multi(self, keys, M::column())
     }
 }

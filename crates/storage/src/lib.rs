@@ -17,6 +17,7 @@ extern crate alloc;
 use anyhow::anyhow;
 use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
+use iter::BoxedIter;
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -182,8 +183,8 @@ pub trait StorageBatchInspect<Type: Mappable> {
     /// TODO
     fn get_batch<'a>(
         &'a self,
-        keys: Box<dyn Iterator<Item = &'a Type::Key> + 'a>,
-    ) -> Box<dyn Iterator<Item = Result<Option<Type::OwnedValue>>> + 'a>;
+        keys: BoxedIter<'a, &'a Type::Key>,
+    ) -> BoxedIter<'a, Result<Option<Type::OwnedValue>>>;
 }
 
 /// Creates `StorageError::NotFound` error with file and line information inside.

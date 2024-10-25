@@ -44,6 +44,7 @@ where
 impl<Description, Stage> KeyValueInspect for DataSource<Description, Stage>
 where
     Description: DatabaseDescription,
+    Stage: Send + Sync,
 {
     type Column = Description::Column;
 
@@ -76,6 +77,7 @@ where
 impl<Description, Stage> IterableStore for DataSource<Description, Stage>
 where
     Description: DatabaseDescription,
+    Stage: Send + Sync,
 {
     fn iter_store(
         &self,

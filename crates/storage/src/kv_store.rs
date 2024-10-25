@@ -1,6 +1,10 @@
 //! The module provides plain abstract definition of the key-value store.
 
 use crate::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+    },
     Error as StorageError,
     Result as StorageResult,
 };
@@ -26,7 +30,7 @@ pub type KVItem = StorageResult<(Key, Value)>;
 pub type KeyItem = StorageResult<Key>;
 
 /// A column of the storage.
-pub trait StorageColumn: Copy + core::fmt::Debug {
+pub trait StorageColumn: Copy + core::fmt::Debug + Send + Sync {
     /// Returns the name of the column.
     fn name(&self) -> String;
 
@@ -41,7 +45,7 @@ pub trait StorageColumn: Copy + core::fmt::Debug {
 
 /// The definition of the key-value inspection store.
 #[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>)]
-pub trait KeyValueInspect {
+pub trait KeyValueInspect: Send + Sync {
     /// The type of the column.
     type Column: StorageColumn;
 
@@ -65,10 +69,10 @@ pub trait KeyValueInspect {
     /// Returns multiple values from the storage.
     fn get_multi<'a>(
         &'a self,
-        keys: Box<dyn Iterator<Item = Vec<u8>> + 'a>,
+        keys: BoxedIter<'a, Vec<u8>>,
         column: Self::Column,
-    ) -> Box<dyn Iterator<Item = StorageResult<Option<Value>>> + 'a> {
-        Box::new(keys.map(move |key| self.get(&key, column)))
+    ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
+        keys.map(move |key| self.get(&key, column)).into_boxed()
     }
 
     /// Reads the value from the storage into the `buf` and returns the number of read bytes.

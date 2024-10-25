@@ -731,16 +731,15 @@ where
 
     fn get_multi<'a>(
         &'a self,
-        keys: Box<dyn Iterator<Item = Vec<u8>> + 'a>,
+        keys: BoxedIter<'a, Vec<u8>>,
         column: Self::Column,
-    ) -> Box<dyn Iterator<Item = StorageResult<Option<Value>>> + 'a> {
+    ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
         // TODO: Metrics
 
         let column = self.cf(column);
         let keys = keys.map(|key| (&column, key));
 
-        let values = self
-            .db
+        self.db
             .multi_get_cf_opt(keys, &self.read_options)
             .into_iter()
             .map(|value_opt| {
@@ -749,9 +748,8 @@ where
                         StorageError::Other(DatabaseError::Other(e.into()).into())
                     })
                     .map(|value| value.map(Arc::new))
-            });
-
-        Box::new(values)
+            })
+            .into_boxed()
     }
 
     fn read(

@@ -9,6 +9,10 @@ use crate::{
         Encode,
         Encoder,
     },
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+    },
     kv_store::{
         BatchOperations,
         KeyValueInspect,
@@ -18,9 +22,6 @@ use crate::{
     Result as StorageResult,
 };
 use fuel_vm_private::prelude::MerkleRoot;
-
-#[cfg(feature = "alloc")]
-use alloc::boxed::Box;
 
 pub mod merklized;
 pub mod plain;
@@ -82,22 +83,25 @@ where
     /// Returns multiple values from the storage.
     fn get_multi<'a>(
         storage: &'a S,
-        keys: Box<dyn Iterator<Item = &'a M::Key> + 'a>,
+        keys: BoxedIter<'a, &'a M::Key>,
         column: S::Column,
-    ) -> Box<dyn Iterator<Item = StorageResult<Option<M::OwnedValue>>> + 'a> {
-        let keys = Box::new(
-            keys.map(|key| Self::KeyCodec::encode(&key).as_bytes().into_owned()),
-        );
+    ) -> BoxedIter<'a, StorageResult<Option<M::OwnedValue>>> {
+        let keys = keys
+            .map(|key| Self::KeyCodec::encode(&key).as_bytes().into_owned())
+            .into_boxed();
 
-        Box::new(storage.get_multi(keys, column).map(|result| {
-            result.and_then(|opt| {
-                opt.map(|value| {
-                    Self::ValueCodec::decode_from_value(value)
-                        .map_err(crate::Error::Codec)
+        storage
+            .get_multi(keys, column)
+            .map(|result| {
+                result.and_then(|opt| {
+                    opt.map(|value| {
+                        Self::ValueCodec::decode_from_value(value)
+                            .map_err(crate::Error::Codec)
+                    })
+                    .transpose()
                 })
-                .transpose()
             })
-        }))
+            .into_boxed()
     }
 }
 

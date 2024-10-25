@@ -109,7 +109,7 @@ impl DatabaseMessages for OnChainIterableKeyValueView {
         &'a self,
         ids: BoxedIter<'a, &'a Nonce>,
     ) -> BoxedIter<'a, StorageResult<Message>> {
-        self.get_batch(ids)
+        <Self as StorageBatchInspect<Messages>>::get_batch(self, ids)
             .map(|result| result.and_then(|opt| opt.ok_or(not_found!(Messages))))
             .into_boxed()
     }
