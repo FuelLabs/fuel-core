@@ -18,7 +18,7 @@ use fuel_core_storage::{
             FuelBlockMerkleMetadata,
         },
         FuelBlocks,
-        Transactions,
+        // Transactions,
     },
     Error as StorageError,
     Result as StorageResult,
@@ -36,8 +36,7 @@ use fuel_core_types::{
     fuel_merkle::binary::MerkleTree,
     fuel_types::BlockHeight,
 };
-use itertools::Itertools;
-use std::borrow::Cow;
+// use std::borrow::Cow;
 
 impl OffChainIterableKeyValueView {
     pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
@@ -65,22 +64,24 @@ impl OnChainIterableKeyValueView {
     /// Retrieve the full block and all associated transactions
     pub fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Option<Block>> {
         let db_block = self.storage::<FuelBlocks>().get(height)?;
-        if let Some(block) = db_block {
+        if let Some(_block) = db_block {
             // fetch all the transactions
             // TODO: Use multiget when it's implemented.
             //  https://github.com/FuelLabs/fuel-core/issues/2344
 
-            let transaction_ids = Box::new(block.transactions().iter());
-            let txs = self
-                .storage::<Transactions>()
-                .get_multi(transaction_ids)
-                .map(|tx| {
-                    tx.and_then(|tx| {
-                        tx.ok_or(not_found!(Transactions)).map(Cow::into_owned)
-                    })
-                })
-                .try_collect()?;
-            Ok(Some(block.into_owned().uncompress(txs)))
+            // let transaction_ids = Box::new(block.transactions().iter());
+            // let txs = self
+            //    .storage::<Transactions>()
+            //    .get_multi(transaction_ids)
+            //    .map(|tx| {
+            //        tx.and_then(|tx| {
+            //            tx.ok_or(not_found!(Transactions)).map(Cow::into_owned)
+            //        })
+            //    })
+            //    .try_collect()?;
+            //
+            // Ok(Some(block.into_owned().uncompress(txs)))
+            Ok(None)
         } else {
             Ok(None)
         }

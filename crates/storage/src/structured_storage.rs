@@ -37,6 +37,7 @@ use crate::{
     MerkleRoot,
     MerkleRootStorage,
     Result as StorageResult,
+    StorageBatchInspect,
     StorageBatchMutate,
     StorageInspect,
     StorageMutate,
@@ -267,25 +268,22 @@ where
             .map(|value| value.map(Cow::Owned))
     }
 
-    fn get_multi<'a>(
-        &'a self,
-        keys: Box<dyn Iterator<Item = &'a <M as Mappable>::Key> + 'a>,
-    ) -> Box<
-        dyn Iterator<
-                Item = Result<Option<Cow<'a, <M as Mappable>::OwnedValue>>, Self::Error>,
-            > + 'a,
-    >
-    where
-        <Self as StorageInspect<M>>::Error: 'a,
-    {
-        Box::new(
-            <M as TableWithBlueprint>::Blueprint::get_multi(self, keys, M::column())
-                .map(|result| result.map(|option| option.map(Cow::Owned))),
-        )
-    }
-
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::exists(self, key, M::column())
+    }
+}
+
+impl<Column, S, M> StorageBatchInspect<M> for StructuredStorage<S>
+where
+    S: KeyValueInspect<Column = Column>,
+    M: TableWithBlueprint<Column = Column>,
+    M::Blueprint: BlueprintInspect<M, StructuredStorage<S>>,
+{
+    fn get_batch<'a>(
+        &'a self,
+        keys: Box<dyn Iterator<Item = &'a M::Key> + 'a>,
+    ) -> Box<dyn Iterator<Item = StorageResult<Option<M::OwnedValue>>> + 'a> {
+        M::Blueprint::get_multi(self, keys, M::column())
     }
 }
 

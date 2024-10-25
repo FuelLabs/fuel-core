@@ -80,18 +80,21 @@ impl ReadView {
 
     pub async fn messages(
         &self,
-        ids: Vec<Nonce>,
+        _ids: Vec<Nonce>,
     ) -> impl Stream<Item = StorageResult<Message>> {
-        let ids = Box::new(ids.iter());
-        let messages: Vec<_> = self
-            .on_chain
-            .as_ref()
-            .storage::<Messages>()
-            .get_multi(Box::new(ids))
-            .map(|res| {
-                res.and_then(|opt| opt.ok_or(not_found!(Messages)).map(Cow::into_owned))
-            })
-            .collect();
+        // let ids = Box::new(ids.iter());
+        // let messages: Vec<_> = self
+        //    .on_chain
+        //    .as_ref()
+        //    .storage::<Messages>()
+        //    .get_multi(Box::new(ids))
+        //    .map(|res| {
+        //        res.and_then(|opt| opt.ok_or(not_found!(Messages)).map(Cow::into_owned))
+        //    })
+        //    .collect();
+
+        // TODO
+        let messages = Vec::new();
 
         //// TODO: Use multiget when it's implemented.
         ////  https://github.com/FuelLabs/fuel-core/issues/2344

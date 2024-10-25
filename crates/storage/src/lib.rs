@@ -176,6 +176,16 @@ pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
         Type::Key: 'a;
 }
 
+// TODO: Document
+/// TODO
+pub trait StorageBatchInspect<Type: Mappable> {
+    /// TODO
+    fn get_batch<'a>(
+        &'a self,
+        keys: Box<dyn Iterator<Item = &'a Type::Key> + 'a>,
+    ) -> Box<dyn Iterator<Item = Result<Option<Type::OwnedValue>>> + 'a>;
+}
+
 /// Creates `StorageError::NotFound` error with file and line information inside.
 ///
 /// # Examples

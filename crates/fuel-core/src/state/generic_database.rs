@@ -18,6 +18,7 @@ use fuel_core_storage::{
     PredicateStorageRequirements,
     Result as StorageResult,
     StorageAsRef,
+    StorageBatchInspect,
     StorageInspect,
     StorageRead,
     StorageSize,
@@ -61,6 +62,20 @@ where
 
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
         self.storage.storage::<M>().contains_key(key)
+    }
+}
+
+impl<Storage, M> StorageBatchInspect<M> for GenericDatabase<Storage>
+where
+    M: Mappable,
+    StructuredStorage<Storage>: StorageBatchInspect<M>,
+{
+    fn get_batch<'a>(
+        &'a self,
+        keys: Box<dyn Iterator<Item = &'a <M as Mappable>::Key> + 'a>,
+    ) -> Box<dyn Iterator<Item = StorageResult<Option<<M as Mappable>::OwnedValue>>> + 'a>
+    {
+        self.storage.get_batch(keys)
     }
 }
 

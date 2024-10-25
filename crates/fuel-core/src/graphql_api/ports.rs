@@ -16,6 +16,7 @@ use fuel_core_storage::{
     },
     Error as StorageError,
     Result as StorageResult,
+    StorageBatchInspect,
     StorageInspect,
     StorageRead,
 };
@@ -159,7 +160,9 @@ pub trait DatabaseDaCompressedBlocks {
 }
 
 /// Trait that specifies all the getters required for messages.
-pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
+pub trait DatabaseMessages:
+    StorageInspect<Messages, Error = StorageError> + StorageBatchInspect<Messages>
+{
     fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
