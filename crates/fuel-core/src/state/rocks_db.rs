@@ -436,12 +436,9 @@ where
     }
 
     /// RocksDB prefix iteration doesn't support reverse order,
-    /// but seeking the start key and iterating in reverse order works.
-    /// So we can create a workaround. We need to find the next available
-    /// element and use it as an anchor for reverse iteration,
-    /// but skip the first element to jump on the previous prefix.
-    /// If we can't find the next element, we are at the end of the list,
-    /// so we can use `IteratorMode::End` to start reverse iteration.
+    /// so we need to to force the RocksDB iterator to order
+    /// all the prefix in the iterator so that we can take the next prefix
+    /// as start of iterator and iterate in reverse.
     fn reverse_prefix_iter<T>(
         &self,
         prefix: &[u8],
@@ -450,28 +447,20 @@ where
     where
         T: ExtractItem,
     {
-        let maybe_next_item = next_prefix(prefix.to_vec())
-            .and_then(|next_prefix| {
-                self.iter_store(
-                    column,
-                    Some(next_prefix.as_slice()),
-                    None,
-                    IterDirection::Forward,
-                )
-                .next()
-            })
-            .and_then(|res| res.ok());
+        let reverse_iterator = next_prefix(prefix.to_vec())
+            .map(|next_prefix| {
+                    let mut opts = self.read_options();
+                    opts.set_total_order_seek(true);
+                    self.iterator::<T>(
+                        column,
+                        opts,
+                        IteratorMode::From(next_prefix.as_slice(), rocksdb::Direction::Reverse)
+                    )
+            });
 
-        if let Some((next_start_key, _)) = maybe_next_item {
-            let iter_mode = IteratorMode::From(
-                next_start_key.as_slice(),
-                rocksdb::Direction::Reverse,
-            );
+        if let Some(iterator) = reverse_iterator {
             let prefix = prefix.to_vec();
-            self
-                .iterator::<T>(column, self.read_options(), iter_mode)
-                // Skip the element under the `next_start_key` key.
-                .skip(1)
+            iterator
                 .take_while(move |item| {
                     if let Ok(item) = item {
                         T::starts_with(item, prefix.as_slice())
