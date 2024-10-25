@@ -447,16 +447,22 @@ where
     where
         T: ExtractItem,
     {
-        let reverse_iterator = next_prefix(prefix.to_vec())
-            .map(|next_prefix| {
-                    let mut opts = self.read_options();
-                    opts.set_total_order_seek(true);
-                    self.iterator::<T>(
-                        column,
-                        opts,
-                        IteratorMode::From(next_prefix.as_slice(), rocksdb::Direction::Reverse)
-                    )
-            });
+        let reverse_iterator = next_prefix(prefix.to_vec()).map(|next_prefix| {
+            let mut opts = self.read_options();
+            opts.set_total_order_seek(true);
+            self.iterator::<T>(
+                column,
+                opts,
+                IteratorMode::From(next_prefix.as_slice(), rocksdb::Direction::Reverse),
+            )
+            .skip_while(move |item| {
+                if let Ok(item) = item {
+                    T::starts_with(item, next_prefix.as_slice())
+                } else {
+                    false
+                }
+            })
+        });
 
         if let Some(iterator) = reverse_iterator {
             let prefix = prefix.to_vec();
