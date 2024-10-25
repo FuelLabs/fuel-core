@@ -291,7 +291,7 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
 }
 
 #[tokio::test]
-async fn initialize_algorithm__if_exists_already_reload_old_values_with_overrides() {
+async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
     // given
     let original_metadata = arb_metadata();
     let original = UpdaterMetadata::V0(original_metadata.clone());
@@ -335,7 +335,7 @@ async fn initialize_algorithm__if_exists_already_reload_old_values_with_override
 }
 
 #[tokio::test]
-async fn initialize_algorithm__should_fail_if_cannot_fetch_metadata() {
+async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     // given
     let config = arb_config();
     let different_l2_block = 1231;
