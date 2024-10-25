@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
 - [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
+- [2389](https://github.com/FuelLabs/fuel-core/pull/2389): Fix construction of reverse iterator in RocksDB.
 
 ### Changed
 
