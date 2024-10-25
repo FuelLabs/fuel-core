@@ -33,6 +33,9 @@ pub struct V1Metadata {
     pub second_to_last_profit: i128,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u128,
+    /// The l2 blocks that have not been recorded on the DA chain, but have been used to estimate
+    /// the cost of recording blocks on the DA chain
+    pub unrecorded_blocks: Vec<(u32, u64)>,
 }
 
 impl V1Metadata {
@@ -60,6 +63,7 @@ impl V1Metadata {
             last_profit: 0,
             second_to_last_profit: 0,
             latest_da_cost_per_byte: 0,
+            unrecorded_blocks: vec![],
         };
         Ok(metadata)
     }
@@ -75,6 +79,10 @@ pub struct V1AlgorithmConfig {
     max_da_gas_price_change_percent: u16,
     da_p_component: i64,
     da_d_component: i64,
+    normal_range_size: u16,
+    capped_range_size: u16,
+    decrease_range_size: u16,
+    block_activity_threshold: u8,
 }
 
 impl From<AlgorithmUpdaterV1> for V1Metadata {
@@ -91,6 +99,7 @@ impl From<AlgorithmUpdaterV1> for V1Metadata {
             last_profit: updater.last_profit,
             second_to_last_profit: updater.second_to_last_profit,
             latest_da_cost_per_byte: updater.latest_da_cost_per_byte,
+            unrecorded_blocks: updater.unrecorded_blocks.into_iter().collect(),
         }
     }
 }
@@ -99,7 +108,13 @@ pub fn v1_algorithm_from_metadata(
     metadata: V1Metadata,
     config: V1AlgorithmConfig,
 ) -> AlgorithmUpdaterV1 {
-    let l2_activity = L2ActivityTracker::new_always_normal();
+    let l2_activity = L2ActivityTracker::new_full(
+        config.normal_range_size,
+        config.capped_range_size,
+        config.decrease_range_size,
+        config.block_activity_threshold.into(),
+    );
+    let unrecorded_blocks = metadata.unrecorded_blocks.into_iter().collect();
     AlgorithmUpdaterV1 {
         new_scaled_exec_price: metadata.new_scaled_exec_price,
         l2_block_height: metadata.l2_block_height,
@@ -119,9 +134,9 @@ pub fn v1_algorithm_from_metadata(
             .l2_block_fullness_threshold_percent
             .into(),
         min_da_gas_price: config.min_da_gas_price,
-        max_da_gas_price_change_percent: config.max_da_gas_price_change_percent ,
+        max_da_gas_price_change_percent: config.max_da_gas_price_change_percent,
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
-        unrecorded_blocks: Default::default(),
+        unrecorded_blocks,
     }
 }
