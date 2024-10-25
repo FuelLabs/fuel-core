@@ -170,7 +170,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .try_filter_map(move |chunk| async move {
                 let chunk = database.messages(chunk).await;
-                Ok::<_, StorageError>(Some(futures::stream::iter(chunk)))
+                Ok::<_, StorageError>(Some(chunk))
             })
             .try_flatten()
             .filter(|result| {

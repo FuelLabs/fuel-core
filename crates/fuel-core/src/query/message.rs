@@ -81,13 +81,24 @@ impl ReadView {
     pub async fn messages(
         &self,
         ids: Vec<Nonce>,
-    ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
-        // TODO: Use multiget when it's implemented.
-        //  https://github.com/FuelLabs/fuel-core/issues/2344
-        let messages = ids.into_iter().map(|id| self.message(&id));
-        // Give a chance to other tasks to run.
+    ) -> impl Stream<Item = StorageResult<Message>> {
+        let ids = Box::new(ids.iter());
+        let messages: Vec<_> = self
+            .on_chain
+            .as_ref()
+            .storage::<Messages>()
+            .get_multi(Box::new(ids))
+            .map(|res| {
+                res.and_then(|opt| opt.ok_or(not_found!(Messages)).map(Cow::into_owned))
+            })
+            .collect();
+
+        //// TODO: Use multiget when it's implemented.
+        ////  https://github.com/FuelLabs/fuel-core/issues/2344
+        // let messages = ids.into_iter().map(|id| self.message(&id));
+        //// Give a chance to other tasks to run.
         tokio::task::yield_now().await;
-        messages
+        futures::stream::iter(messages)
     }
 
     pub fn owned_messages<'a>(
@@ -104,7 +115,7 @@ impl ReadView {
             })
             .try_filter_map(move |chunk| async move {
                 let chunk = self.messages(chunk).await;
-                Ok::<_, StorageError>(Some(futures::stream::iter(chunk)))
+                Ok::<_, StorageError>(Some(chunk))
             })
             .try_flatten()
     }
