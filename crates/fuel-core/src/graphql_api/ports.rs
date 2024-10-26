@@ -108,7 +108,12 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus>;
 
-    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Transaction>;
+
+    fn old_transactions<'a>(
+        &'a self,
+        ids: BoxedIter<'a, &'a TxId>,
+    ) -> BoxedIter<'a, StorageResult<Transaction>>;
 
     fn relayed_tx_status(
         &self,

@@ -41,6 +41,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
+    StorageBatchInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -166,10 +167,21 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             .into_owned())
     }
 
-    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>> {
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Transaction> {
         self.storage_as_ref::<OldTransactions>()
-            .get(id)
-            .map(|tx| tx.map(|tx| tx.into_owned()))
+            .get(id)?
+            // Note: Breaking change (previously we returned not_found!(Transactions))
+            .ok_or(not_found!(OldTransactions))
+            .map(|tx| tx.into_owned())
+    }
+
+    fn old_transactions<'a>(
+        &'a self,
+        ids: BoxedIter<'a, &'a TxId>,
+    ) -> BoxedIter<'a, StorageResult<Transaction>> {
+        <Self as StorageBatchInspect<OldTransactions>>::get_batch(self, ids)
+            .map(|result| result.and_then(|opt| opt.ok_or(not_found!(OldTransactions))))
+            .into_boxed()
     }
 
     fn relayed_tx_status(

@@ -12,8 +12,6 @@ use fuel_core_storage::{
         IntoBoxedIter,
         IterDirection,
     },
-    not_found,
-    tables::Transactions,
     transactional::AtomicView,
     Error as StorageError,
     IsNotFound,
@@ -65,6 +63,7 @@ use fuel_core_types::{
 use futures::Stream;
 use std::{
     borrow::Cow,
+    collections::BTreeMap,
     sync::Arc,
 };
 
@@ -141,29 +140,52 @@ impl ReadView {
     pub fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         let result = self.on_chain.transaction(tx_id);
         if result.is_not_found() {
-            if let Some(tx) = self.off_chain.old_transaction(tx_id)? {
-                Ok(tx)
-            } else {
-                Err(not_found!(Transactions))
-            }
+            self.off_chain.old_transaction(tx_id)
         } else {
             result
         }
     }
 
+    // TODO: Test case to ensure order is preserved
     pub async fn transactions(
         &self,
         tx_ids: Vec<TxId>,
     ) -> Vec<StorageResult<Transaction>> {
         // TODO: Use multiget when it's implemented.
         //  https://github.com/FuelLabs/fuel-core/issues/2344
-        let result = tx_ids
+        let on_chain_results: BTreeMap<_, _> = tx_ids
             .iter()
-            .map(|tx_id| self.transaction(tx_id))
-            .collect::<Vec<_>>();
+            .enumerate()
+            .zip(self.on_chain.transactions(tx_ids.iter().into_boxed()))
+            .collect();
+
+        let off_chain_indexed_txids: Vec<_> = on_chain_results
+            .iter()
+            .filter_map(|(indexed_tx_id, result)| {
+                result.is_not_found().then_some(*indexed_tx_id)
+            })
+            .collect();
+
+        let off_chain_results = off_chain_indexed_txids.iter().copied().zip(
+            self.off_chain.old_transactions(
+                off_chain_indexed_txids
+                    .iter()
+                    .map(|(_, tx_id)| *tx_id)
+                    .into_boxed(),
+            ),
+        );
+
+        let mut results = on_chain_results;
+        results.extend(off_chain_results);
+
+        // let result = tx_ids
+        //    .iter()
+        //    .map(|tx_id| self.transaction(tx_id))
+        //    .collect::<Vec<_>>();
         // Give a chance to other tasks to run.
         tokio::task::yield_now().await;
-        result
+
+        results.into_values().collect()
     }
 
     pub fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
