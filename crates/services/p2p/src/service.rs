@@ -1,7 +1,7 @@
 use crate::{
     codecs::{
-        bounded::BoundedCodec,
-        unbounded::UnboundedCodec,
+        request_response::RequestResponseMessageHandler,
+        unbounded::GossipsubMessageHandler,
     },
     config::{
         Config,
@@ -790,8 +790,8 @@ where
         let mut p2p_service = FuelP2PService::new(
             broadcast.reserved_peers_broadcast.clone(),
             config,
-            UnboundedCodec::new(),
-            BoundedCodec::new(max_block_size),
+            GossipsubMessageHandler::new(),
+            RequestResponseMessageHandler::new(max_block_size),
         )
         .await?;
         p2p_service.start().await?;

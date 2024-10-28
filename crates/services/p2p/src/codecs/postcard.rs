@@ -46,7 +46,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        codecs::bounded::BoundedCodec,
+        codecs::bounded::RequestResponseMessageHandler,
         request_response::{
             messages::{
                 RequestMessage,
@@ -72,7 +72,8 @@ mod tests {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
-        let mut codec: BoundedCodec<PostcardDataFormat> = BoundedCodec::new(1024);
+        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+            RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -99,7 +100,8 @@ mod tests {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
-        let mut codec: BoundedCodec<PostcardDataFormat> = BoundedCodec::new(1024);
+        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+            RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -126,7 +128,8 @@ mod tests {
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
-        let mut codec: BoundedCodec<PostcardDataFormat> = BoundedCodec::new(1024);
+        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+            RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -158,7 +161,8 @@ mod tests {
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
-        let mut codec: BoundedCodec<PostcardDataFormat> = BoundedCodec::new(1024);
+        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+            RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -187,7 +191,8 @@ mod tests {
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
-        let mut codec: BoundedCodec<PostcardDataFormat> = BoundedCodec::new(1024);
+        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+            RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -212,7 +217,8 @@ mod tests {
     async fn codec__read_response_is_backwards_compatible_with_v1() {
         // Given
         let response = V1ResponseMessage::SealedHeaders(None);
-        let mut codec: BoundedCodec<PostcardDataFormat> = BoundedCodec::new(1024);
+        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+            RequestResponseMessageHandler::new(1024);
 
         // When
         let buf = <PostcardDataFormat as Encode<V1ResponseMessage>>::encode(&response)

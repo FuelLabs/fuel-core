@@ -24,8 +24,8 @@ use fuel_core_chain_config::{
 };
 use fuel_core_p2p::{
     codecs::{
-        bounded::BoundedCodec,
-        unbounded::UnboundedCodec,
+        request_response::RequestResponseMessageHandler,
+        unbounded::GossipsubMessageHandler,
     },
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
@@ -145,8 +145,9 @@ impl Bootstrap {
     /// Spawn a bootstrap node.
     pub async fn new(node_config: &Config) -> anyhow::Result<Self> {
         let bootstrap_config = extract_p2p_config(node_config).await;
-        let request_response_codec = BoundedCodec::new(bootstrap_config.max_block_size);
-        let gossipsub_codec = UnboundedCodec::new();
+        let request_response_codec =
+            RequestResponseMessageHandler::new(bootstrap_config.max_block_size);
+        let gossipsub_codec = GossipsubMessageHandler::new();
         let (sender, _) =
             broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));
         let mut bootstrap = FuelP2PService::new(

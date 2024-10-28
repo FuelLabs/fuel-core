@@ -29,7 +29,7 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct BoundedCodec<Format> {
+pub struct RequestResponseMessageHandler<Format> {
     pub(crate) _data_format: PhantomData<Format>,
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
@@ -37,7 +37,7 @@ pub struct BoundedCodec<Format> {
     pub(crate) max_response_size: usize,
 }
 
-impl<Format> BoundedCodec<Format> {
+impl<Format> RequestResponseMessageHandler<Format> {
     pub fn new(max_block_size: usize) -> Self {
         assert_ne!(
             max_block_size, 0,
@@ -59,7 +59,7 @@ impl<Format> BoundedCodec<Format> {
 /// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl<Format> request_response::Codec for BoundedCodec<Format>
+impl<Format> request_response::Codec for RequestResponseMessageHandler<Format>
 where
     Format: Encode<RequestMessage, Error = io::Error>
         + Decode<RequestMessage, Error = io::Error>

@@ -4,9 +4,9 @@ use crate::{
         FuelBehaviourEvent,
     },
     codecs::{
-        bounded::BoundedCodec,
+        gossipsub::GossipsubMessageHandler,
         postcard::PostcardDataFormat,
-        unbounded::UnboundedCodec,
+        request_response::RequestResponseMessageHandler,
         GossipsubCodec,
     },
     config::{
@@ -124,7 +124,7 @@ pub struct FuelP2PService {
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
     /// `UboundedCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages    
-    gossipsub_codec: UnboundedCodec<PostcardDataFormat>,
+    gossipsub_codec: GossipsubMessageHandler<PostcardDataFormat>,
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
@@ -213,8 +213,8 @@ impl FuelP2PService {
     pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
-        gossipsub_codec: UnboundedCodec<PostcardDataFormat>,
-        request_response_codec: BoundedCodec<PostcardDataFormat>,
+        gossipsub_codec: GossipsubMessageHandler<PostcardDataFormat>,
+        request_response_codec: RequestResponseMessageHandler<PostcardDataFormat>,
     ) -> anyhow::Result<Self> {
         let metrics = config.metrics;
 
@@ -836,8 +836,8 @@ mod tests {
     };
     use crate::{
         codecs::{
-            bounded::BoundedCodec,
-            unbounded::UnboundedCodec,
+            gossipsub::GossipsubMessageHandler,
+            request_response::RequestResponseMessageHandler,
         },
         config::Config,
         gossipsub::{
@@ -923,8 +923,8 @@ mod tests {
         let mut service = FuelP2PService::new(
             sender,
             p2p_config,
-            UnboundedCodec::new(),
-            BoundedCodec::new(max_block_size),
+            GossipsubMessageHandler::new(),
+            RequestResponseMessageHandler::new(max_block_size),
         )
         .await
         .unwrap();

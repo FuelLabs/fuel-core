@@ -1,9 +1,9 @@
-pub mod bounded;
+pub mod gossipsub;
 pub mod postcard;
-pub mod unbounded;
+pub mod request_response;
 
 use crate::gossipsub::messages::GossipTopicTag;
-use libp2p::request_response;
+use libp2p::request_response as libp2p_request_response;
 
 use std::{
     borrow::Cow,
@@ -69,10 +69,10 @@ pub trait GossipsubCodec {
     ) -> Result<Self::ResponseMessage, io::Error>;
 }
 
-pub trait RequestResponseProtocols: request_response::Codec {
+pub trait RequestResponseProtocols: libp2p_request_response::Codec {
     /// Returns RequestResponse's Protocol
     /// Needed for initialization of RequestResponse Behaviour
     fn get_req_res_protocols(
         &self,
-    ) -> impl Iterator<Item = <Self as request_response::Codec>::Protocol>;
+    ) -> impl Iterator<Item = <Self as libp2p_request_response::Codec>::Protocol>;
 }

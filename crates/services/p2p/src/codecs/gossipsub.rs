@@ -19,19 +19,19 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct UnboundedCodec<Format> {
+pub struct GossipsubMessageHandler<Format> {
     pub(crate) _data_format: PhantomData<Format>,
 }
 
-impl<Format> UnboundedCodec<Format> {
+impl<Format> GossipsubMessageHandler<Format> {
     pub fn new() -> Self {
-        UnboundedCodec {
+        GossipsubMessageHandler {
             _data_format: PhantomData,
         }
     }
 }
 
-impl<Format> GossipsubCodec for UnboundedCodec<Format>
+impl<Format> GossipsubCodec for GossipsubMessageHandler<Format>
 where
     Format: Encode<Transaction, Error = io::Error>
         + Decode<Transaction, Error = io::Error>
