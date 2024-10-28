@@ -75,6 +75,7 @@ impl BenchDb {
             tmp_dir.path(),
             None,
             Default::default(),
+            -1,
         )
         .unwrap();
         let db = Arc::new(db);

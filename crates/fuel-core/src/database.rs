@@ -199,12 +199,14 @@ where
         path: &Path,
         capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
+        max_fds: i32,
     ) -> Result<Self> {
         use anyhow::Context;
         let db = HistoricalRocksDB::<Description>::default_open(
             path,
             capacity.into(),
             state_rewind_policy,
+            max_fds,
         )
         .map_err(Into::<anyhow::Error>::into)
         .with_context(|| {
@@ -1075,6 +1077,7 @@ mod tests {
             temp_dir.path(),
             1024 * 1024 * 1024,
             Default::default(),
+            512,
         )
         .unwrap();
         // rocks db fails
