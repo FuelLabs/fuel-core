@@ -42,7 +42,7 @@ where
     type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
     type Error = io::Error;
 
-    fn encode<'b>(&self, value: &'b T) -> Result<Self::Encoder<'b>, Self::Error> {
+    fn encode<'a>(&self, value: &'a T) -> Result<Self::Encoder<'a>, Self::Error> {
         Ok(Cow::Owned(postcard::to_allocvec(value).map_err(|e| {
             io::Error::new(io::ErrorKind::Other, e.to_string())
         })?))

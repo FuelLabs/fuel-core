@@ -34,7 +34,7 @@ pub trait Encode<T: ?Sized> {
         T: 'a;
 
     /// Encodes the object to the bytes and passes it to the `Encoder`.
-    fn encode<'b>(&self, t: &'b T) -> Result<Self::Encoder<'b>, Self::Error>;
+    fn encode<'a>(&self, t: &'a T) -> Result<Self::Encoder<'a>, Self::Error>;
 }
 
 /// The trait decodes the type from the bytes.
