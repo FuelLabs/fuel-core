@@ -30,7 +30,7 @@ impl RequestResponseMessageHandler<PostcardDataFormat> {
 impl GossipsubMessageHandler<PostcardDataFormat> {
     pub fn new() -> Self {
         GossipsubMessageHandler {
-            data_format: PostcardDataFormat,
+            codec: PostcardDataFormat,
         }
     }
 }
@@ -55,7 +55,7 @@ where
 {
     type Error = io::Error;
 
-    fn decode(bytes: &[u8]) -> Result<T, Self::Error> {
+    fn decode(&self, bytes: &[u8]) -> Result<T, Self::Error> {
         postcard::from_bytes(bytes)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
@@ -228,7 +228,7 @@ mod tests {
         let deserialized_as_v1 =
             // We cannot access the codec trait from an old node here, 
             // so we deserialize directly using the `V1ResponseMessage` type.
-            <PostcardDataFormat as Decode<V1ResponseMessage>>::decode(&buf).expect("Deserialization as V1ResponseMessage should succeed");
+            codec.data_format.decode(&buf).expect("Deserialization as V1ResponseMessage should succeed");
 
         // Then
         assert!(matches!(

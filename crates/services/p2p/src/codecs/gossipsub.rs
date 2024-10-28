@@ -44,7 +44,7 @@ where
     ) -> Result<Self::ResponseMessage, io::Error> {
         let decoded_response = match gossipsub_tag {
             GossipTopicTag::NewTx => {
-                GossipsubMessage::NewTx(Format::decode(encoded_data)?)
+                GossipsubMessage::NewTx(self.data_format.decode(encoded_data)?)
             }
         };
 

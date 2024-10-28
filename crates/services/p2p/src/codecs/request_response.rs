@@ -68,7 +68,7 @@ where
             .take(self.max_response_size as u64)
             .read_to_end(&mut response)
             .await?;
-        Format::decode(&response)
+        self.data_format.decode(&response)
     }
 
     async fn read_response<T>(
@@ -87,13 +87,11 @@ where
 
         match protocol {
             RequestResponseProtocol::V1 => {
-                let v1_response =
-                    <Format as Decode<V1ResponseMessage>>::decode(&response)?;
+                let v1_response: V1ResponseMessage =
+                    self.data_format.decode(&response)?;
                 Ok(v1_response.into())
             }
-            RequestResponseProtocol::V2 => {
-                <Format as Decode<V2ResponseMessage>>::decode(&response)
-            }
+            RequestResponseProtocol::V2 => self.data_format.decode(&response),
         }
     }
 

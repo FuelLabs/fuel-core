@@ -37,7 +37,7 @@ pub trait Encode<T: ?Sized> {
 pub trait Decode<T> {
     type Error;
     /// Decodes the type `T` from the bytes.
-    fn decode(bytes: &[u8]) -> Result<T, Self::Error>;
+    fn decode(&self, bytes: &[u8]) -> Result<T, Self::Error>;
 }
 
 impl<'a> Encoder for Cow<'a, [u8]> {
