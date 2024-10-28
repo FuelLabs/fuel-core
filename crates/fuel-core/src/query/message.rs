@@ -1,7 +1,4 @@
-use crate::fuel_core_graphql_api::{
-    database::ReadView,
-    IntoApiResult,
-};
+use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -162,15 +159,14 @@ impl MessageProofData for ReadView {
 }
 
 /// Generate an output proof.
-// TODO: Do we want to return `Option` here?
 pub fn message_proof<T: MessageProofData + ?Sized>(
     database: &T,
     transaction_id: Bytes32,
     desired_nonce: Nonce,
     commit_block_height: BlockHeight,
-) -> StorageResult<Option<MessageProof>> {
-    // Check if the receipts for this transaction actually contain this message id or exit.
-    let receipt = database
+) -> StorageResult<MessageProof> {
+    // Check if the receipts for this transaction actually contain this nonce or exit.
+    let (sender, recipient, nonce, amount, data) = database
         .receipts(&transaction_id)?
         .into_iter()
         .find_map(|r| match r {
@@ -185,63 +181,83 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                 Some((sender, recipient, nonce, amount, data))
             }
             _ => None,
-        });
+        })
+        .ok_or::<StorageError>(
+            anyhow::anyhow!("Desired `nonce` missing in transaction receipts").into(),
+        )?;
 
-    let (sender, recipient, nonce, amount, data) = match receipt {
-        Some(r) => r,
-        None => return Ok(None),
+    let Some(data) = data else {
+        return Err(anyhow::anyhow!("Output message doesn't contain any `data`").into())
     };
-    let data =
-        data.ok_or(anyhow::anyhow!("Output message doesn't contain any `data`"))?;
 
     // Get the block id from the transaction status if it's ready.
-    let message_block_height = match database
-        .transaction_status(&transaction_id)
-        .into_api_result::<TransactionStatus, StorageError>(
-    )? {
-        Some(TransactionStatus::Success { block_height, .. }) => block_height,
-        _ => return Ok(None),
+    let message_block_height = match database.transaction_status(&transaction_id) {
+        Ok(TransactionStatus::Success { block_height, .. }) => block_height,
+        Ok(TransactionStatus::Submitted { .. }) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height. The transaction has not been processed yet"
+            )
+            .into())
+        }
+        Ok(TransactionStatus::SqueezedOut { reason }) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height. The transaction was squeezed out: {reason}"
+            )
+            .into())
+        }
+        Ok(TransactionStatus::Failed { .. }) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height. The transaction failed"
+            )
+            .into())
+        }
+        Err(err) => {
+            return Err(anyhow::anyhow!(
+                "Unable to obtain the message block height: {err}"
+            )
+            .into())
+        }
     };
 
     // Get the message fuel block header.
-    let (message_block_header, message_block_txs) = match database
-        .block(&message_block_height)
-        .into_api_result::<CompressedBlock, StorageError>()?
-    {
-        Some(t) => t.into_inner(),
-        None => return Ok(None),
-    };
+    let (message_block_header, message_block_txs) =
+        match database.block(&message_block_height) {
+            Ok(message_block) => message_block.into_inner(),
+            Err(err) => {
+                return Err(anyhow::anyhow!(
+                    "Unable to get the message block from the database: {err}"
+                )
+                .into())
+            }
+        };
 
     let message_id = compute_message_id(&sender, &recipient, &nonce, amount, &data);
 
-    let message_proof =
-        match message_receipts_proof(database, message_id, &message_block_txs)? {
-            Some(proof) => proof,
-            None => return Ok(None),
-        };
+    let message_proof = message_receipts_proof(database, message_id, &message_block_txs)?;
 
     // Get the commit fuel block header.
-    let commit_block_header = match database
-        .block(&commit_block_height)
-        .into_api_result::<CompressedBlock, StorageError>()?
-    {
-        Some(t) => t.into_inner().0,
-        None => return Ok(None),
+    let (commit_block_header, _) = match database.block(&commit_block_height) {
+        Ok(commit_block_header) => commit_block_header.into_inner(),
+        Err(err) => {
+            return Err(anyhow::anyhow!(
+                "Unable to get commit block header from database: {err}"
+            )
+            .into())
+        }
     };
 
-    let block_height = *commit_block_header.height();
-    if block_height == 0u32.into() {
-        // Cannot look beyond the genesis block
-        return Ok(None)
-    }
-    let verifiable_commit_block_height =
-        block_height.pred().expect("We checked the height above");
+    let Some(verifiable_commit_block_height) = commit_block_header.height().pred() else {
+        return Err(anyhow::anyhow!(
+            "Impossible to generate proof beyond the genesis block"
+        )
+        .into())
+    };
     let block_proof = database.block_history_proof(
         message_block_header.height(),
         &verifiable_commit_block_height,
     )?;
 
-    Ok(Some(MessageProof {
+    Ok(MessageProof {
         message_proof,
         block_proof,
         message_block_header,
@@ -251,19 +267,18 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         nonce,
         amount,
         data,
-    }))
+    })
 }
 
 fn message_receipts_proof<T: MessageProofData + ?Sized>(
     database: &T,
     message_id: MessageId,
     message_block_txs: &[Bytes32],
-) -> StorageResult<Option<MerkleProof>> {
+) -> StorageResult<MerkleProof> {
     // Get the message receipts from the block.
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()
         .map(|id| database.receipts(id))
-        .filter_map(|result| result.into_api_result::<_, StorageError>().transpose())
         .try_collect()?;
     let leaves = leaves.into_iter()
         // Flatten the receipts after filtering on output messages
@@ -287,20 +302,27 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
         tree.push(id.as_ref());
     }
 
-    // If we found the leaf proof index then return the proof.
-    match proof_index {
-        Some(proof_index) => {
-            // Generate the actual merkle proof.
-            match tree.prove(proof_index) {
-                Some((_, proof_set)) => Ok(Some(MerkleProof {
-                    proof_set,
-                    proof_index,
-                })),
-                None => Ok(None),
-            }
-        }
-        None => Ok(None),
-    }
+    // Check if we found a leaf.
+    let Some(proof_index) = proof_index else {
+        return Err(anyhow::anyhow!(
+            "Unable to find the message receipt in the transaction to generate the proof"
+        )
+        .into())
+    };
+
+    // Get the proof set.
+    let Some((_, proof_set)) = tree.prove(proof_index) else {
+        return Err(anyhow::anyhow!(
+            "Unable to generate the Merkle proof for the message from its receipts"
+        )
+        .into());
+    };
+
+    // Return the proof.
+    Ok(MerkleProof {
+        proof_set,
+        proof_index,
+    })
 }
 
 pub fn message_status(

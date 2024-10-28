@@ -49,6 +49,8 @@ rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 sha2 = "0.10"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }

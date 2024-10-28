@@ -2,7 +2,10 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::v1::AlgorithmUpdaterV1;
+use crate::v1::{
+    AlgorithmUpdaterV1,
+    L2ActivityTracker,
+};
 
 #[cfg(test)]
 mod algorithm_v1_tests;
@@ -40,6 +43,7 @@ pub struct UpdaterBuilder {
     last_profit: i128,
     second_to_last_profit: i128,
     da_gas_price_factor: u64,
+    l2_activity: L2ActivityTracker,
 }
 
 impl UpdaterBuilder {
@@ -67,6 +71,7 @@ impl UpdaterBuilder {
             last_profit: 0,
             second_to_last_profit: 0,
             da_gas_price_factor: 1,
+            l2_activity: L2ActivityTracker::new_always_normal(),
         }
     }
 
@@ -159,6 +164,11 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_activity(mut self, l2_activity: L2ActivityTracker) -> Self {
+        self.l2_activity = l2_activity;
+        self
+    }
+
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
             min_exec_gas_price: self.min_exec_gas_price,
@@ -190,6 +200,7 @@ impl UpdaterBuilder {
                 .da_gas_price_factor
                 .try_into()
                 .expect("Should never be non-zero"),
+            l2_activity: self.l2_activity,
         }
     }
 }
