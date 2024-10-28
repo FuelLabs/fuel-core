@@ -455,13 +455,6 @@ where
                 opts,
                 IteratorMode::From(next_prefix.as_slice(), rocksdb::Direction::Reverse),
             )
-            .skip_while(move |item| {
-                if let Ok(item) = item {
-                    T::starts_with(item, next_prefix.as_slice())
-                } else {
-                    false
-                }
-            })
         });
 
         if let Some(iterator) = reverse_iterator {
@@ -1203,5 +1196,34 @@ mod tests {
         // Then
         let _ = open_with_part_of_columns
             .expect("Should open the database with shorter number of columns");
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(vec![1, 2, 3]);
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [2, 3];
+        let key_4 = [3, 0];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_4, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![2].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
     }
 }
