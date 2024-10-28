@@ -63,6 +63,7 @@ use std::{
     fmt::Debug,
     sync::Arc,
 };
+use tracing::error;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -482,32 +483,13 @@ where
             ConflictPolicy::Overwrite,
             changes,
         );
-
-        // TODO[RC]: Problems with this code:
-        // 1. additional DB read (of prev metadata)
-        // 2. HashSet collect for Metadata V2
-        let current_metadata = transaction
-            .storage::<MetadataTable<Description>>()
-            .get(&())
-            .map_err(StorageError::from)?
-            .unwrap();
-        let indexation_availability = match current_metadata.as_ref() {
-            DatabaseMetadata::V1 { version, height } => HashSet::new(),
-            DatabaseMetadata::V2 {
-                version,
-                height,
-                indexation_availability,
-            } => [(IndexationKind::Balances)].into_iter().collect(),
-        };
-
         transaction
             .storage_as_mut::<MetadataTable<Description>>()
             .insert(
                 &(),
-                &DatabaseMetadata::V2 {
+                &DatabaseMetadata::V1 {
                     version: Description::version(),
                     height: new_height,
-                    indexation_availability,
                 },
             )?;
 
@@ -527,7 +509,6 @@ where
 
     Ok(())
 }
-
 #[cfg(feature = "rocksdb")]
 pub fn convert_to_rocksdb_direction(direction: IterDirection) -> rocksdb::Direction {
     match direction {
