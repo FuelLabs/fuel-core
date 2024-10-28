@@ -39,7 +39,7 @@ pub fn get_random_block_height(
 pub fn open_rocks_db<Description: DatabaseDescription>(
     path: &Path,
 ) -> Result<RocksDb<Description>> {
-    let db = RocksDb::default_open(path, None)?;
+    let db = RocksDb::default_open(path, None, -1)?;
     Ok(db)
 }
 
