@@ -1,54 +1,39 @@
 use super::{
-    bounded::BoundedCodec,
-    unbounded::UnboundedCodec,
-    DataFormat,
+    Decode,
+    Encode,
 };
 
-use serde::{
-    Deserialize,
-    Serialize,
+use std::{
+    borrow::Cow,
+    io,
 };
-use std::io;
 
 #[derive(Clone)]
 pub struct PostcardDataFormat;
 
-impl DataFormat for PostcardDataFormat {
+impl<T> Encode<T> for PostcardDataFormat
+where
+    T: ?Sized + serde::Serialize,
+{
+    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
     type Error = io::Error;
 
-    fn deserialize<'a, R: Deserialize<'a>>(
-        &self,
-        encoded_data: &'a [u8],
-    ) -> Result<R, Self::Error> {
-        postcard::from_bytes(encoded_data)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
-    }
-
-    fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, Self::Error> {
-        postcard::to_stdvec(&data)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    fn encode(value: &T) -> Result<Self::Encoder<'_>, Self::Error> {
+        Ok(Cow::Owned(postcard::to_allocvec(value).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?))
     }
 }
 
-impl BoundedCodec<PostcardDataFormat> {
-    pub fn new(max_block_size: usize) -> Self {
-        assert_ne!(
-            max_block_size, 0,
-            "PostcardCodec does not support zero block size"
-        );
+impl<T> Decode<T> for PostcardDataFormat
+where
+    T: serde::de::DeserializeOwned,
+{
+    type Error = io::Error;
 
-        Self {
-            data_format: PostcardDataFormat,
-            max_response_size: max_block_size,
-        }
-    }
-}
-
-impl UnboundedCodec<PostcardDataFormat> {
-    pub fn new() -> Self {
-        UnboundedCodec {
-            data_format: PostcardDataFormat,
-        }
+    fn decode(bytes: &[u8]) -> Result<T, Self::Error> {
+        postcard::from_bytes(bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
 
@@ -214,7 +199,7 @@ mod tests {
         let deserialized_as_v1 =
             // We cannot access the codec trait from an old node here, 
             // so we deserialize directly using the `V1ResponseMessage` type.
-            codec.data_format.deserialize::<V1ResponseMessage>(&buf).expect("Deserialization as V1ResponseMessage should succeed");
+            <PostcardDataFormat as Decode<V1ResponseMessage>>::decode(&buf).expect("Deserialization as V1ResponseMessage should succeed");
 
         // Then
         assert!(matches!(
@@ -230,12 +215,10 @@ mod tests {
         let mut codec: BoundedCodec<PostcardDataFormat> = BoundedCodec::new(1024);
 
         // When
-        let buf = codec
-            .data_format
-            .serialize(&response)
+        let buf = <PostcardDataFormat as Encode<V1ResponseMessage>>::encode(&response)
             .expect("Serialization as V1ResponseMessage should succeed");
         let deserialized = codec
-            .read_response(&RequestResponseProtocol::V1, &mut buf.as_slice())
+            .read_response(&RequestResponseProtocol::V1, &mut &*buf)
             .await
             .expect("Valid Vec<SealedBlockHeader> is deserialized using v1");
 

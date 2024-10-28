@@ -4,21 +4,55 @@ pub mod unbounded;
 
 use crate::gossipsub::messages::GossipTopicTag;
 use libp2p::request_response;
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use std::io;
 
-// TODO: Deprecate this trait in favour of something similar to Encode + Decode in storage crate
-// In fact, we should probably have a single trait that can be used both here and in the storage crate
-trait DataFormat {
+use std::{
+    borrow::Cow,
+    io,
+};
+
+// TODO: This trait is largely copied by the storage crate, we should unify them
+/// The trait is usually implemented by the encoder that stores serialized objects.
+pub trait Encoder: Send {
+    /// Returns the serialized object as a slice.
+    fn as_bytes(&self) -> Cow<[u8]>;
+}
+
+/// The trait encodes the type to the bytes and passes it to the `Encoder`,
+/// which stores it and provides a reference to it. That allows gives more
+/// flexibility and more performant encoding, allowing the use of slices and arrays
+/// instead of vectors in some cases. Since the [`Encoder`] returns `Cow<[u8]>`,
+/// it is always possible to take ownership of the serialized value.
+pub trait Encode<T: ?Sized> {
     type Error;
-    fn deserialize<'a, R: Deserialize<'a>>(
-        &self,
-        encoded_data: &'a [u8],
-    ) -> Result<R, Self::Error>;
-    fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, Self::Error>;
+    /// The encoder type that stores serialized object.
+    type Encoder<'a>: Encoder
+    where
+        T: 'a;
+
+    /// Encodes the object to the bytes and passes it to the `Encoder`.
+    fn encode(t: &T) -> Result<Self::Encoder<'_>, Self::Error>;
+}
+
+/// The trait decodes the type from the bytes.
+pub trait Decode<T> {
+    type Error;
+    /// Decodes the type `T` from the bytes.
+    fn decode(bytes: &[u8]) -> Result<T, Self::Error>;
+}
+
+impl<'a> Encoder for Cow<'a, [u8]> {
+    fn as_bytes(&self) -> Cow<[u8]> {
+        match self {
+            Cow::Borrowed(borrowed) => Cow::Borrowed(borrowed),
+            Cow::Owned(owned) => Cow::Borrowed(owned.as_ref()),
+        }
+    }
+}
+
+impl<const SIZE: usize> Encoder for [u8; SIZE] {
+    fn as_bytes(&self) -> Cow<[u8]> {
+        Cow::Borrowed(self.as_slice())
+    }
 }
 
 /// Implement this in order to handle serialization & deserialization of Gossipsub messages
