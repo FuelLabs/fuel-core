@@ -591,7 +591,7 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
-        let balances_enabled = self.off_chain_database.balances_enabled();
+        let balances_enabled = self.off_chain_database.balances_enabled()?;
         info!("Balances cache available: {}", balances_enabled);
 
         let InitializeTask {

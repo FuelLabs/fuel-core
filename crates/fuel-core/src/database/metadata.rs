@@ -20,6 +20,8 @@ use fuel_core_storage::{
     StorageMutate,
 };
 
+use super::database_description::IndexationKind;
+
 /// The table that stores all metadata about the database.
 pub struct MetadataTable<Description>(core::marker::PhantomData<Description>);
 
@@ -78,10 +80,11 @@ where
         Ok(metadata)
     }
 
-    // TODO[RC]: Needed?
-    pub fn metadata(
-        &self,
-    ) -> StorageResult<Option<Cow<DatabaseMetadata<Description::Height>>>> {
-        self.storage::<MetadataTable<Description>>().get(&())
+    pub fn indexation_available(&self, kind: IndexationKind) -> StorageResult<bool> {
+        let Some(metadata) = self.storage::<MetadataTable<Description>>().get(&())?
+        else {
+            return Ok(false)
+        };
+        Ok(metadata.indexation_available(kind))
     }
 }

@@ -341,8 +341,8 @@ pub mod worker {
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
 
-        /// Checks if Balances cache table is available.
-        fn balances_enabled(&self) -> bool;
+        /// Checks if Balances cache functionality is available.
+        fn balances_enabled(&self) -> StorageResult<bool>;
     }
 
     pub trait OffChainDatabaseTransaction:

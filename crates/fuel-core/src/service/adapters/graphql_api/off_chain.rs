@@ -280,9 +280,7 @@ impl worker::OffChainDatabase for Database<OffChain> {
         self.into_transaction()
     }
 
-    fn balances_enabled(&self) -> bool {
-        let metadata = self.metadata().unwrap().unwrap(); // TODO[RC]: Clean-up
-        error!(?metadata, "METADATA");
-        metadata.indexation_available(IndexationKind::Balances)
+    fn balances_enabled(&self) -> StorageResult<bool> {
+        self.indexation_available(IndexationKind::Balances)
     }
 }

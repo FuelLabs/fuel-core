@@ -102,22 +102,22 @@ impl ReadDatabase {
         genesis_height: BlockHeight,
         on_chain: OnChain,
         off_chain: OffChain,
-    ) -> Self
+    ) -> Result<Self, StorageError>
     where
         OnChain: AtomicView + 'static,
         OffChain: AtomicView + worker::OffChainDatabase + 'static,
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
     {
-        let balances_enabled = off_chain.balances_enabled();
+        let balances_enabled = off_chain.balances_enabled()?;
 
-        Self {
+        Ok(Self {
             batch_size,
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
             balances_enabled,
-        }
+        })
     }
 
     /// Creates a consistent view of the database.
