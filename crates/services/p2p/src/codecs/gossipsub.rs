@@ -16,13 +16,13 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct GossipsubMessageHandler<Format> {
-    pub(crate) data_format: Format,
+pub struct GossipsubMessageHandler<Codec> {
+    pub(crate) codec: Codec,
 }
 
-impl<Format> GossipsubCodec for GossipsubMessageHandler<Format>
+impl<Codec> GossipsubCodec for GossipsubMessageHandler<Codec>
 where
-    Format: Encode<Transaction, Error = io::Error>
+    Codec: Encode<Transaction, Error = io::Error>
         + Decode<Transaction, Error = io::Error>
         + Send,
 {
@@ -32,7 +32,7 @@ where
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         match data {
             GossipsubBroadcastRequest::NewTx(tx) => {
-                Ok(self.data_format.encode(&*tx)?.as_bytes().into_owned())
+                Ok(self.codec.encode(&*tx)?.as_bytes().into_owned())
             }
         }
     }
@@ -44,7 +44,7 @@ where
     ) -> Result<Self::ResponseMessage, io::Error> {
         let decoded_response = match gossipsub_tag {
             GossipTopicTag::NewTx => {
-                GossipsubMessage::NewTx(self.data_format.decode(encoded_data)?)
+                GossipsubMessage::NewTx(self.codec.decode(encoded_data)?)
             }
         };
 

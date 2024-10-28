@@ -11,9 +11,9 @@ use std::{
 };
 
 #[derive(Clone)]
-pub struct PostcardDataFormat;
+pub struct PostcardCodec;
 
-impl RequestResponseMessageHandler<PostcardDataFormat> {
+impl RequestResponseMessageHandler<PostcardCodec> {
     pub fn new(max_block_size: usize) -> Self {
         assert_ne!(
             max_block_size, 0,
@@ -21,21 +21,21 @@ impl RequestResponseMessageHandler<PostcardDataFormat> {
         );
 
         Self {
-            data_format: PostcardDataFormat,
+            codec: PostcardCodec,
             max_response_size: max_block_size,
         }
     }
 }
 
-impl GossipsubMessageHandler<PostcardDataFormat> {
+impl GossipsubMessageHandler<PostcardCodec> {
     pub fn new() -> Self {
         GossipsubMessageHandler {
-            codec: PostcardDataFormat,
+            codec: PostcardCodec,
         }
     }
 }
 
-impl<T> Encode<T> for PostcardDataFormat
+impl<T> Encode<T> for PostcardCodec
 where
     T: ?Sized + serde::Serialize,
 {
@@ -49,7 +49,7 @@ where
     }
 }
 
-impl<T> Decode<T> for PostcardDataFormat
+impl<T> Decode<T> for PostcardCodec
 where
     T: serde::de::DeserializeOwned,
 {
@@ -96,7 +96,7 @@ mod tests {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
-        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+        let mut codec: RequestResponseMessageHandler<PostcardCodec> =
             RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
@@ -124,7 +124,7 @@ mod tests {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
-        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+        let mut codec: RequestResponseMessageHandler<PostcardCodec> =
             RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
@@ -152,7 +152,7 @@ mod tests {
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
-        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+        let mut codec: RequestResponseMessageHandler<PostcardCodec> =
             RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
@@ -185,7 +185,7 @@ mod tests {
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
-        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+        let mut codec: RequestResponseMessageHandler<PostcardCodec> =
             RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
@@ -215,7 +215,7 @@ mod tests {
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
-        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+        let mut codec: RequestResponseMessageHandler<PostcardCodec> =
             RequestResponseMessageHandler::new(1024);
         let mut buf = Vec::with_capacity(1024);
 
@@ -228,7 +228,7 @@ mod tests {
         let deserialized_as_v1 =
             // We cannot access the codec trait from an old node here, 
             // so we deserialize directly using the `V1ResponseMessage` type.
-            codec.data_format.decode(&buf).expect("Deserialization as V1ResponseMessage should succeed");
+            codec.codec.decode(&buf).expect("Deserialization as V1ResponseMessage should succeed");
 
         // Then
         assert!(matches!(
@@ -241,12 +241,12 @@ mod tests {
     async fn codec__read_response_is_backwards_compatible_with_v1() {
         // Given
         let response = V1ResponseMessage::SealedHeaders(None);
-        let mut codec: RequestResponseMessageHandler<PostcardDataFormat> =
+        let mut codec: RequestResponseMessageHandler<PostcardCodec> =
             RequestResponseMessageHandler::new(1024);
 
         // When
         let buf = codec
-            .data_format
+            .codec
             .encode(&response)
             .expect("Serialization as V1ResponseMessage should succeed");
         let deserialized = codec

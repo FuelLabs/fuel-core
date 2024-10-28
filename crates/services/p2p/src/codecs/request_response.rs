@@ -25,8 +25,8 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct RequestResponseMessageHandler<Format> {
-    pub(crate) data_format: Format,
+pub struct RequestResponseMessageHandler<Codec> {
+    pub(crate) codec: Codec,
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
@@ -41,9 +41,9 @@ pub struct RequestResponseMessageHandler<Format> {
 /// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl<Format> request_response::Codec for RequestResponseMessageHandler<Format>
+impl<Codec> request_response::Codec for RequestResponseMessageHandler<Codec>
 where
-    Format: Encode<RequestMessage, Error = io::Error>
+    Codec: Encode<RequestMessage, Error = io::Error>
         + Decode<RequestMessage, Error = io::Error>
         + Encode<V1ResponseMessage, Error = io::Error>
         + Decode<V1ResponseMessage, Error = io::Error>
@@ -68,7 +68,7 @@ where
             .take(self.max_response_size as u64)
             .read_to_end(&mut response)
             .await?;
-        self.data_format.decode(&response)
+        self.codec.decode(&response)
     }
 
     async fn read_response<T>(
@@ -87,11 +87,10 @@ where
 
         match protocol {
             RequestResponseProtocol::V1 => {
-                let v1_response: V1ResponseMessage =
-                    self.data_format.decode(&response)?;
+                let v1_response: V1ResponseMessage = self.codec.decode(&response)?;
                 Ok(v1_response.into())
             }
-            RequestResponseProtocol::V2 => self.data_format.decode(&response),
+            RequestResponseProtocol::V2 => self.codec.decode(&response),
         }
     }
 
@@ -104,7 +103,7 @@ where
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let encoded_data = self.data_format.encode(&req)?;
+        let encoded_data = self.codec.encode(&req)?;
         socket.write_all(&encoded_data.as_bytes()).await?;
         Ok(())
     }
@@ -121,12 +120,12 @@ where
         match protocol {
             RequestResponseProtocol::V1 => {
                 let v1_response: V1ResponseMessage = res.into();
-                let res = self.data_format.encode(&v1_response)?;
+                let res = self.codec.encode(&v1_response)?;
                 let res = res.as_bytes();
                 socket.write_all(&res).await?;
             }
             RequestResponseProtocol::V2 => {
-                let res = self.data_format.encode(&res)?;
+                let res = self.codec.encode(&res)?;
                 let res = res.as_bytes();
                 socket.write_all(&res).await?;
             }

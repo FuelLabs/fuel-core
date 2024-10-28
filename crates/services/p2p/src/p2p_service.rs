@@ -5,7 +5,7 @@ use crate::{
     },
     codecs::{
         gossipsub::GossipsubMessageHandler,
-        postcard::PostcardDataFormat,
+        postcard::PostcardCodec,
         request_response::RequestResponseMessageHandler,
         GossipsubCodec,
     },
@@ -124,7 +124,7 @@ pub struct FuelP2PService {
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
     /// `UboundedCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages    
-    gossipsub_codec: GossipsubMessageHandler<PostcardDataFormat>,
+    gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
@@ -213,8 +213,8 @@ impl FuelP2PService {
     pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
-        gossipsub_codec: GossipsubMessageHandler<PostcardDataFormat>,
-        request_response_codec: RequestResponseMessageHandler<PostcardDataFormat>,
+        gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
+        request_response_codec: RequestResponseMessageHandler<PostcardCodec>,
     ) -> anyhow::Result<Self> {
         let metrics = config.metrics;
 

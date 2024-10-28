@@ -1,6 +1,6 @@
 use crate::{
     codecs::{
-        postcard::PostcardDataFormat,
+        postcard::PostcardCodec,
         request_response::RequestResponseMessageHandler,
         RequestResponseProtocols,
     },
@@ -61,13 +61,13 @@ pub struct FuelBehaviour {
 
     /// RequestResponse protocol
     request_response:
-        request_response::Behaviour<RequestResponseMessageHandler<PostcardDataFormat>>,
+        request_response::Behaviour<RequestResponseMessageHandler<PostcardCodec>>,
 }
 
 impl FuelBehaviour {
     pub(crate) fn new(
         p2p_config: &Config,
-        request_response_codec: RequestResponseMessageHandler<PostcardDataFormat>,
+        request_response_codec: RequestResponseMessageHandler<PostcardCodec>,
     ) -> anyhow::Result<Self> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
