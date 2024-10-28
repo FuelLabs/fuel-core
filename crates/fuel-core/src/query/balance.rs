@@ -5,7 +5,11 @@ use std::{
 };
 
 use crate::fuel_core_graphql_api::database::ReadView;
-use asset_query::AssetsQuery;
+use asset_query::{
+    AssetQuery,
+    AssetSpendTarget,
+    AssetsQuery,
+};
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::IterDirection,
@@ -36,7 +40,28 @@ impl ReadView {
         asset_id: AssetId,
         base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
-        let amount = self.off_chain.balance(&owner, &asset_id, &base_asset_id)?;
+        let amount = if self.balances_enabled {
+            debug!(%owner, %asset_id, "Querying balance with balances cache");
+            self.off_chain.balance(&owner, &asset_id, &base_asset_id)?
+        } else {
+            debug!(%owner, %asset_id, "Querying balance without balances cache");
+            AssetQuery::new(
+                &owner,
+                &AssetSpendTarget::new(asset_id, u64::MAX, u16::MAX),
+                &base_asset_id,
+                None,
+                self,
+            )
+            .coins()
+            .map(|res| res.map(|coins| coins.amount()))
+            .try_fold(0u64, |balance, amount| {
+                async move {
+                    // Increase the balance
+                    Ok(balance.saturating_add(amount))
+                }
+            })
+            .await?
+        };
 
         Ok(AddressBalance {
             owner,
