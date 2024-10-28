@@ -49,12 +49,6 @@ impl<'a> Encoder for Cow<'a, [u8]> {
     }
 }
 
-impl<const SIZE: usize> Encoder for [u8; SIZE] {
-    fn as_bytes(&self) -> Cow<[u8]> {
-        Cow::Borrowed(self.as_slice())
-    }
-}
-
 /// Implement this in order to handle serialization & deserialization of Gossipsub messages
 pub trait GossipsubCodec {
     type RequestMessage;

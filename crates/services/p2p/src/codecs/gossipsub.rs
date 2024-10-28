@@ -1,7 +1,4 @@
-use std::{
-    io,
-    marker::PhantomData,
-};
+use std::io;
 
 use fuel_core_types::fuel_tx::Transaction;
 

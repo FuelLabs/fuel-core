@@ -1,16 +1,4 @@
-use std::{
-    io,
-    marker::PhantomData,
-};
-
-use async_trait::async_trait;
-use futures::{
-    AsyncRead,
-    AsyncReadExt,
-    AsyncWriteExt,
-};
-use libp2p::request_response;
-use strum::IntoEnumIterator as _;
+use std::io;
 
 use crate::request_response::{
     messages::{
@@ -20,6 +8,14 @@ use crate::request_response::{
     },
     protocols::RequestResponseProtocol,
 };
+use async_trait::async_trait;
+use futures::{
+    AsyncRead,
+    AsyncReadExt,
+    AsyncWriteExt,
+};
+use libp2p::request_response;
+use strum::IntoEnumIterator as _;
 
 use super::{
     Decode,
@@ -127,15 +123,13 @@ where
         match protocol {
             RequestResponseProtocol::V1 => {
                 let v1_response: V1ResponseMessage = res.into();
-                let res = self
-                    .data_format
-                    .encode(&v1_response)?
-                    .as_bytes()
-                    .into_owned();
+                let res = self.data_format.encode(&v1_response)?;
+                let res = res.as_bytes();
                 socket.write_all(&res).await?;
             }
             RequestResponseProtocol::V2 => {
-                let res = self.data_format.encode(&res)?.as_bytes().into_owned();
+                let res = self.data_format.encode(&res)?;
+                let res = res.as_bytes();
                 socket.write_all(&res).await?;
             }
         };
