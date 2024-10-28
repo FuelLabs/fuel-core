@@ -109,10 +109,7 @@ impl ReadDatabase {
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
     {
-        // TODO[RC]: This fails with clean DB since GraphQL starts before genesis block is executed.
-        // TODO[RC]: Maybe do not write metadata when executing genesis, but upon creation of off_chain DB?
-        // let balances_enabled = off_chain.balances_enabled();
-        let balances_enabled = false;
+        let balances_enabled = off_chain.balances_enabled();
 
         Self {
             batch_size,
