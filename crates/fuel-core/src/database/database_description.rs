@@ -73,7 +73,7 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 )]
 pub enum IndexationKind {
     Balances,
-    CoinsToSpend,
+    _CoinsToSpend,
 }
 
 /// The metadata of the database contains information about the version and its height.

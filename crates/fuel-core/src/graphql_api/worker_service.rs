@@ -49,8 +49,12 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
     StorageAsMut,
+    StorageInspect,
+    StorageMut,
+    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -60,7 +64,11 @@ use fuel_core_types::{
         },
         consensus::Consensus,
     },
-    entities::relayer::transaction::RelayedTransactionStatus,
+    entities::{
+        coins::coin::Coin,
+        relayer::transaction::RelayedTransactionStatus,
+        Message,
+    },
     fuel_tx::{
         field::{
             Inputs,
@@ -199,58 +207,71 @@ where
     }
 }
 
-fn update_coin_balance<T, F>(
-    owner: &Address,
-    asset_id: &AssetId,
-    amount: Amount,
-    tx: &mut T,
-    updater: F,
-) -> StorageResult<()>
-where
-    T: OffChainDatabaseTransaction,
-    F: Fn(Cow<u64>, Amount) -> Amount,
-{
-    let key = BalancesKey::new(owner, asset_id);
-    let current_balance = tx.storage::<CoinBalances>().get(&key)?.unwrap_or_default();
-    let prev_balance = current_balance.clone();
-    let new_balance = updater(current_balance, amount);
-    debug!(
-        %owner,
-        %asset_id,
-        amount,
-        %prev_balance,
-        new_balance,
-        "changing coin balance"
-    );
-    tx.storage_as_mut::<CoinBalances>()
-        .insert(&key, &new_balance)
+trait HasIndexation<'a> {
+    type Storage: Mappable;
+
+    fn key(&self) -> <Self::Storage as Mappable>::Key;
+    fn amount(&self) -> Amount;
+    fn update_balances<T, F>(&self, tx: &mut T, updater: F) -> StorageResult<()>
+    where
+        <<Self as HasIndexation<'a>>::Storage as Mappable>::Key: Sized + std::fmt::Debug,
+        <<Self as HasIndexation<'a>>::Storage as Mappable>::Value:
+            Sized + std::fmt::Display,
+        <<Self as HasIndexation<'a>>::Storage as Mappable>::OwnedValue:
+            Default + std::fmt::Display,
+        T: OffChainDatabaseTransaction
+            + StorageInspect<
+                <Self as HasIndexation<'a>>::Storage,
+                Error = fuel_core_storage::Error,
+            > + StorageMutate<<Self as HasIndexation<'a>>::Storage>,
+        F: Fn(
+            Cow<<<Self as HasIndexation<'a>>::Storage as Mappable>::OwnedValue>,
+            Amount,
+        ) -> <<Self as HasIndexation<'a>>::Storage as Mappable>::Value,
+        fuel_core_storage::Error:
+            From<<T as StorageInspect<<Self as HasIndexation<'a>>::Storage>>::Error>,
+    {
+        let key = self.key();
+        let amount = self.amount();
+        let storage = tx.storage::<Self::Storage>();
+        let current_balance = storage.get(&key)?.unwrap_or_default();
+        let prev_balance = current_balance.clone();
+        let new_balance = updater(current_balance, amount);
+
+        debug!(
+            ?key,
+            %amount,
+            %prev_balance,
+            %new_balance,
+            "changing balance");
+
+        let storage = tx.storage::<Self::Storage>();
+        storage.insert(&key, &new_balance)
+    }
 }
 
-fn update_message_balance<T, F>(
-    owner: &Address,
-    amount: Amount,
-    tx: &mut T,
-    updater: F,
-) -> StorageResult<()>
-where
-    T: OffChainDatabaseTransaction,
-    F: Fn(Cow<u64>, Amount) -> Amount,
-{
-    let key = owner;
-    let current_balance = tx
-        .storage::<MessageBalances>()
-        .get(key)?
-        .unwrap_or_default();
-    let prev_balance = current_balance.clone();
-    let new_balance = updater(current_balance, amount);
-    debug!(
-        %owner,
-        %amount,
-        %prev_balance,
-        new_balance,
-        "changing message balance");
-    tx.storage_as_mut::<MessageBalances>()
-        .insert(key, &new_balance)
+impl<'a> HasIndexation<'a> for Coin {
+    type Storage = CoinBalances;
+
+    fn key(&self) -> <Self::Storage as Mappable>::Key {
+        BalancesKey::new(&self.owner, &self.asset_id)
+    }
+
+    fn amount(&self) -> Amount {
+        self.amount
+    }
+}
+
+impl<'a> HasIndexation<'a> for Message {
+    type Storage = MessageBalances;
+
+    fn key(&self) -> <Self::Storage as Mappable>::Key {
+        self.recipient().clone()
+    }
+
+    fn amount(&self) -> Amount {
+        Self::amount(&self)
+    }
 }
 
 /// Process the executor events and update the indexes for the messages and coins.
@@ -275,12 +296,10 @@ where
 
                 // TODO[RC]: Refactor to have this if called only once
                 if balances_enabled {
-                    update_message_balance(
-                        message.recipient(),
-                        message.amount(),
+                    message.update_balances(
                         block_st_transaction,
-                        |balance, amount| balance.saturating_add(amount),
-                    )?;
+                        |balance: Cow<u64>, amount| balance.saturating_add(amount),
+                    );
                 }
             }
             Event::MessageConsumed(message) => {
@@ -296,12 +315,10 @@ where
 
                 // TODO[RC]: Check other places where we update "OwnedCoins" or "OwnedMessageIds"
                 if balances_enabled {
-                    update_message_balance(
-                        message.recipient(),
-                        message.amount(),
+                    message.update_balances(
                         block_st_transaction,
-                        |balance, amount| balance.saturating_sub(amount),
-                    )?;
+                        |balance: Cow<u64>, amount| balance.saturating_sub(amount),
+                    );
                 }
             }
             Event::CoinCreated(coin) => {
@@ -311,13 +328,17 @@ where
                     .insert(&coin_by_owner, &())?;
 
                 if balances_enabled {
-                    update_coin_balance(
-                        &coin.owner,
-                        &coin.asset_id,
-                        coin.amount,
+                    coin.update_balances(
                         block_st_transaction,
-                        |balance, amount| balance.saturating_add(amount),
-                    )?;
+                        |balance: Cow<u64>, amount| balance.saturating_add(amount),
+                    );
+                    // update_coin_balance(
+                    // &coin.owner,
+                    // &coin.asset_id,
+                    // coin.amount,
+                    // block_st_transaction,
+                    // |balance, amount| balance.saturating_add(amount),
+                    // )?;
                 }
             }
             Event::CoinConsumed(coin) => {
@@ -327,13 +348,10 @@ where
                     .remove(&key)?;
 
                 if balances_enabled {
-                    update_coin_balance(
-                        &coin.owner,
-                        &coin.asset_id,
-                        coin.amount,
+                    coin.update_balances(
                         block_st_transaction,
-                        |balance, amount| balance.saturating_sub(amount),
-                    )?;
+                        |balance: Cow<u64>, amount| balance.saturating_sub(amount),
+                    );
                 }
             }
             Event::ForcedTransactionFailed {

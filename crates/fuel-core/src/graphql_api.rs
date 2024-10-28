@@ -79,7 +79,7 @@ impl Default for Costs {
 }
 
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
-    balance_query: 40001, /* TODO[RC]: We might consider making this query cheaper because it's just a single DB read now. */
+    balance_query: 40001, /* Cost will depend on whether balances index is available or not, but let's keep the default high to be on the safe side */
     coins_to_spend: 40001,
     get_peers: 40001,
     estimate_predicates: 40001,
