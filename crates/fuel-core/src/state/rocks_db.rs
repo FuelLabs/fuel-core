@@ -127,6 +127,7 @@ where
             path,
             enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
+            512,
         );
         let mut db = result?;
 
@@ -146,11 +147,13 @@ where
     pub fn default_open<P: AsRef<Path>>(
         path: P,
         capacity: Option<usize>,
+        max_fds: i32,
     ) -> DatabaseResult<Self> {
         Self::open(
             path,
             enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
+            max_fds,
         )
     }
 
@@ -165,8 +168,9 @@ where
         path: P,
         columns: Vec<Description::Column>,
         capacity: Option<usize>,
+        max_fds: i32,
     ) -> DatabaseResult<Self> {
-        Self::open_with(DB::open_cf_descriptors, path, columns, capacity)
+        Self::open_with(DB::open_cf_descriptors, path, columns, capacity, max_fds)
     }
 
     pub fn open_read_only<P: AsRef<Path>>(
@@ -174,6 +178,7 @@ where
         columns: Vec<Description::Column>,
         capacity: Option<usize>,
         error_if_log_file_exist: bool,
+        max_fds: i32,
     ) -> DatabaseResult<Self> {
         Self::open_with(
             |options, primary_path, cfs| {
@@ -187,6 +192,7 @@ where
             path,
             columns,
             capacity,
+            max_fds,
         )
     }
 
@@ -195,6 +201,7 @@ where
         secondary_path: SecondaryPath,
         columns: Vec<Description::Column>,
         capacity: Option<usize>,
+        max_fds: i32,
     ) -> DatabaseResult<Self>
     where
         PrimaryPath: AsRef<Path>,
@@ -212,6 +219,7 @@ where
             path,
             columns,
             capacity,
+            max_fds,
         )
     }
 
@@ -220,6 +228,7 @@ where
         path: P,
         columns: Vec<Description::Column>,
         capacity: Option<usize>,
+        max_fds: i32,
     ) -> DatabaseResult<Self>
     where
         F: Fn(
@@ -279,9 +288,7 @@ where
         }
         opts.set_max_background_jobs(6);
         opts.set_bytes_per_sync(1048576);
-
-        #[cfg(feature = "test-helpers")]
-        opts.set_max_open_files(512);
+        opts.set_max_open_files(max_fds);
 
         let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_default();
 
@@ -868,7 +875,7 @@ mod tests {
     fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
         (
-            RocksDb::default_open(tmp_dir.path(), None).unwrap(),
+            RocksDb::default_open(tmp_dir.path(), None, 512).unwrap(),
             tmp_dir,
         )
     }
@@ -881,7 +888,7 @@ mod tests {
         let old_columns =
             vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
         let database_with_old_columns =
-            RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None)
+            RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None, 512)
                 .expect("Failed to open database with old columns");
         drop(database_with_old_columns);
 
@@ -890,7 +897,7 @@ mod tests {
         new_columns.push(Column::ContractsAssets);
         new_columns.push(Column::Metadata);
         let database_with_new_columns =
-            RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None).map(|_| ());
+            RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None, 512).map(|_| ());
 
         // Then
         assert_eq!(Ok(()), database_with_new_columns);
@@ -1059,7 +1066,7 @@ mod tests {
         // When
         let columns = enum_iterator::all::<<OnChain as DatabaseDescription>::Column>()
             .collect::<Vec<_>>();
-        let result = RocksDb::<OnChain>::open(tmp_dir.path(), columns, None);
+        let result = RocksDb::<OnChain>::open(tmp_dir.path(), columns, None, 512);
 
         // Then
         assert!(result.is_err());
@@ -1078,6 +1085,7 @@ mod tests {
             old_columns.clone(),
             None,
             false,
+            512,
         )
         .map(|_| ());
 
@@ -1099,6 +1107,7 @@ mod tests {
             secondary_temp.path(),
             old_columns.clone(),
             None,
+            512,
         )
         .map(|_| ());
 
@@ -1191,7 +1200,7 @@ mod tests {
                 .skip(1)
                 .collect::<Vec<_>>();
         let open_with_part_of_columns =
-            RocksDb::<OnChain>::open(tmp_dir.path(), part_of_columns, None);
+            RocksDb::<OnChain>::open(tmp_dir.path(), part_of_columns, None, 512);
 
         // Then
         let _ = open_with_part_of_columns
