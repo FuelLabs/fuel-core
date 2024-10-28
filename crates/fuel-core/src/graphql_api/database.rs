@@ -1,8 +1,11 @@
-use crate::fuel_core_graphql_api::{
-    database::arc_wrapper::ArcWrapper,
-    ports::{
-        OffChainDatabase,
-        OnChainDatabase,
+use crate::{
+    database::database_description::DatabaseDescription,
+    fuel_core_graphql_api::{
+        database::arc_wrapper::ArcWrapper,
+        ports::{
+            OffChainDatabase,
+            OnChainDatabase,
+        },
     },
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
@@ -68,6 +71,8 @@ use std::{
     sync::Arc,
 };
 
+use super::ports::worker;
+
 mod arc_wrapper;
 
 /// The on-chain view of the database used by the [`ReadView`] to fetch on-chain data.
@@ -100,16 +105,21 @@ impl ReadDatabase {
     ) -> Self
     where
         OnChain: AtomicView + 'static,
-        OffChain: AtomicView + 'static,
+        OffChain: AtomicView + worker::OffChainDatabase + 'static,
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
     {
+        // TODO[RC]: This fails with clean DB since GraphQL starts before genesis block is executed.
+        // TODO[RC]: Maybe do not write metadata when executing genesis, but upon creation of off_chain DB?
+        // let balances_enabled = off_chain.balances_enabled();
+        let balances_enabled = false;
+
         Self {
             batch_size,
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
-            balances_enabled: false, // TODO[RC]: Read this properly
+            balances_enabled,
         }
     }
 
@@ -123,6 +133,7 @@ impl ReadDatabase {
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
+            balances_enabled: self.balances_enabled,
         })
     }
 
@@ -138,6 +149,7 @@ pub struct ReadView {
     pub(crate) genesis_height: BlockHeight,
     pub(crate) on_chain: OnChainView,
     pub(crate) off_chain: OffChainView,
+    pub(crate) balances_enabled: bool,
 }
 
 impl ReadView {

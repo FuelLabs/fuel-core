@@ -1,6 +1,11 @@
-use std::future;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    future,
+};
 
 use crate::fuel_core_graphql_api::database::ReadView;
+use asset_query::AssetsQuery;
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::IterDirection,
@@ -15,11 +20,11 @@ use fuel_core_types::{
 };
 use futures::{
     stream,
+    FutureExt,
     Stream,
     StreamExt,
     TryStreamExt,
 };
-use itertools::Either;
 use tracing::debug;
 
 pub mod asset_query;
@@ -46,14 +51,85 @@ impl ReadView {
         direction: IterDirection,
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        debug!("Querying balances for {:?}", owner);
+        if self.balances_enabled {
+            futures::future::Either::Left(self.balances_with_cache(
+                owner,
+                base_asset_id,
+                direction,
+            ))
+        } else {
+            futures::future::Either::Right(self.balances_without_cache(
+                owner,
+                base_asset_id,
+                direction,
+            ))
+        }
+    }
 
+    fn balances_without_cache<'a>(
+        &'a self,
+        owner: &'a Address,
+        base_asset_id: &'a AssetId,
+        direction: IterDirection,
+    ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
+        debug!(%owner, "Querying balances without balances cache");
+        let query = AssetsQuery::new(owner, None, None, self, base_asset_id);
+        let stream = query.coins();
+
+        stream
+            .try_fold(
+                HashMap::new(),
+                move |mut amounts_per_asset, coin| async move {
+                    let amount: &mut u64 = amounts_per_asset
+                        .entry(*coin.asset_id(base_asset_id))
+                        .or_default();
+                    *amount = amount.saturating_add(coin.amount());
+                    Ok(amounts_per_asset)
+                },
+            )
+            .into_stream()
+            .try_filter_map(move |amounts_per_asset| async move {
+                let mut balances = amounts_per_asset
+                    .into_iter()
+                    .map(|(asset_id, amount)| AddressBalance {
+                        owner: *owner,
+                        amount,
+                        asset_id,
+                    })
+                    .collect::<Vec<_>>();
+
+                balances.sort_by(|l, r| {
+                    if l.asset_id < r.asset_id {
+                        Ordering::Less
+                    } else {
+                        Ordering::Greater
+                    }
+                });
+
+                if direction == IterDirection::Reverse {
+                    balances.reverse();
+                }
+
+                Ok(Some(futures::stream::iter(balances)))
+            })
+            .map_ok(|stream| stream.map(Ok))
+            .try_flatten()
+            .yield_each(self.batch_size)
+    }
+
+    fn balances_with_cache<'a>(
+        &'a self,
+        owner: &'a Address,
+        base_asset_id: &AssetId,
+        direction: IterDirection,
+    ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
+        debug!(%owner, "Querying balances using balances cache");
         match self.off_chain.balances(owner, base_asset_id) {
             Ok(balances) => {
                 let iter = if direction == IterDirection::Reverse {
-                    Either::Left(balances.into_iter().rev())
+                    itertools::Either::Left(balances.into_iter().rev())
                 } else {
-                    Either::Right(balances.into_iter())
+                    itertools::Either::Right(balances.into_iter())
                 };
                 stream::iter(iter.map(|(asset_id, amount)| AddressBalance {
                     owner: *owner,
