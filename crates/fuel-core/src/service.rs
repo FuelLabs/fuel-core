@@ -4,7 +4,16 @@ use crate::{
         CombinedDatabase,
         ShutdownListener,
     },
-    database::Database,
+    database::{
+        database_description::{
+            off_chain::OffChain,
+            DatabaseDescription,
+            DatabaseMetadata,
+            IndexationKind,
+        },
+        metadata::MetadataTable,
+        Database,
+    },
     service::{
         adapters::{
             ExecutorAdapter,
@@ -43,6 +52,7 @@ use std::{
     net::SocketAddr,
     sync::Arc,
 };
+use tracing::info;
 
 pub use config::{
     Config,
@@ -132,6 +142,8 @@ impl FuelService {
             shutdown_listener,
         )?;
 
+        Self::write_metadata_at_genesis(&database);
+
         // initialize sub services
         tracing::info!("Initializing sub services");
         database.sync_aux_db_heights(shutdown_listener)?;
@@ -205,6 +217,33 @@ impl FuelService {
     pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
         if let Some(relayer_handle) = &self.runner.shared.relayer {
             relayer_handle.await_synced().await?;
+        }
+        Ok(())
+    }
+
+    // When genesis is missing write to the database that balances cache should be used.
+    fn write_metadata_at_genesis(database: &CombinedDatabase) -> anyhow::Result<()> {
+        let on_chain_view = database.on_chain().latest_view()?;
+        if on_chain_view.get_genesis().is_err() {
+            info!("No genesis, initializing metadata with balances indexation");
+            let off_chain_view = database.off_chain().latest_view()?;
+            let mut database_tx = off_chain_view.read_transaction();
+            database_tx
+                .storage_as_mut::<MetadataTable<OffChain>>()
+                .insert(
+                    &(),
+                    &DatabaseMetadata::V2 {
+                        version: <OffChain as DatabaseDescription>::version(),
+                        height: Default::default(),
+                        indexation_availability: [(IndexationKind::Balances)]
+                            .into_iter()
+                            .collect(),
+                    },
+                )?;
+            database
+                .off_chain()
+                .data
+                .commit_changes(None, database_tx.into_changes())?;
         }
         Ok(())
     }
