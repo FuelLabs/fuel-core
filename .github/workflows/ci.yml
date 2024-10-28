@@ -118,20 +118,20 @@ jobs:
             args: --all-features --workspace --no-deps
           - command: make
             args: check --locked
-          - command: test
-            args: --workspace
-          - command: test
-            args: --all-features --workspace
-          - command: test
-            args: -p fuel-core --no-default-features
-          - command: test
-            args: -p fuel-core --lib executor --features wasm-executor
+          - command: nextest
+            args: run --workspace
+          - command: nextest
+            args: run --all-features --workspace
+          - command: nextest
+            args: run -p fuel-core --no-default-features
+          - command: nextest
+            args: run -p fuel-core --lib executor --features wasm-executor
             env:
               FUEL_ALWAYS_USE_WASM=true
-          - command: test
-            args: -p fuel-core-client --no-default-features
-          - command: test
-            args: -p fuel-core-chain-config --no-default-features
+          - command: nextest
+            args: run -p fuel-core-client --no-default-features
+          - command: nextest
+            args: run -p fuel-core-chain-config --no-default-features
           # Don't split this command; this is a workaround.
           # We need to run `cargo check` first to fetch the locked dependencies
           # for `fuel-core 0.26.0`(because of the bug with `--offline`
@@ -177,6 +177,11 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions-rs/cargo@v1
+        if: ${{ matrix.command == 'nextest' }}
+        with:
+          command: install
+          args: cargo-nextest --locked
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
