@@ -101,8 +101,10 @@ where
         path: P,
         capacity: Option<usize>,
         state_rewind_policy: StateRewindPolicy,
+        max_fds: i32,
     ) -> DatabaseResult<Self> {
-        let db = RocksDb::<Historical<Description>>::default_open(path, capacity)?;
+        let db =
+            RocksDb::<Historical<Description>>::default_open(path, capacity, max_fds)?;
         Ok(Self {
             state_rewind_policy,
             db,
