@@ -280,6 +280,10 @@ pub trait MemoryPool {
 pub mod worker {
     use super::super::storage::blocks::FuelBlockIdsToHeights;
     use crate::{
+        database::{
+            database_description::off_chain::OffChain,
+            metadata::MetadataTable,
+        },
         fuel_core_graphql_api::storage::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
@@ -306,6 +310,7 @@ pub mod worker {
     use fuel_core_storage::{
         Error as StorageError,
         Result as StorageResult,
+        StorageInspect,
         StorageMutate,
     };
     use fuel_core_types::{
@@ -335,6 +340,9 @@ pub mod worker {
 
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
+
+        /// Checks if Balances cache table is available.
+        fn balances_enabled(&self) -> bool;
     }
 
     pub trait OffChainDatabaseTransaction:

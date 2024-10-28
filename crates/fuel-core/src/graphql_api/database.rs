@@ -86,6 +86,8 @@ pub struct ReadDatabase {
     on_chain: Box<dyn AtomicView<LatestView = OnChainView>>,
     /// The off-chain database view provider.
     off_chain: Box<dyn AtomicView<LatestView = OffChainView>>,
+    /// The flag that indicates whether the Balances cache table is enabled.
+    balances_enabled: bool,
 }
 
 impl ReadDatabase {
@@ -107,6 +109,7 @@ impl ReadDatabase {
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
+            balances_enabled: false, // TODO[RC]: Read this properly
         }
     }
 

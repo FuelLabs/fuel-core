@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use self::importer::SnapshotImporter;
 use crate::{
     combined_database::{
@@ -8,12 +10,17 @@ use crate::{
         database_description::{
             off_chain::OffChain,
             on_chain::OnChain,
+            DatabaseDescription,
+            DatabaseMetadata,
+            IndexationKind,
         },
         genesis_progress::GenesisMetadata,
+        metadata::MetadataTable,
         Database,
     },
     service::config::Config,
 };
+use async_graphql::Description;
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
@@ -130,6 +137,19 @@ pub async fn execute_genesis_block(
             .storage_as_mut::<GenesisMetadata<OffChain>>()
             .remove(&key)?;
     }
+
+    database_transaction_off_chain
+        .storage_as_mut::<MetadataTable<OffChain>>()
+        .insert(
+            &(),
+            &DatabaseMetadata::V2 {
+                version: <OffChain as DatabaseDescription>::version(),
+                height: Default::default(),
+                indexation_availability: [(IndexationKind::Balances)]
+                    .into_iter()
+                    .collect(),
+            },
+        )?;
     database_transaction_off_chain.commit()?;
 
     let mut database_transaction_on_chain = db.on_chain().read_transaction();

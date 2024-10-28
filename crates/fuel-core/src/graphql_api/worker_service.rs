@@ -13,6 +13,10 @@ use super::{
     },
 };
 use crate::{
+    database::{
+        database_description::off_chain::OffChain,
+        metadata::MetadataTable,
+    },
     fuel_core_graphql_api::{
         ports::{
             self,
@@ -106,7 +110,11 @@ use std::{
     borrow::Cow,
     ops::Deref,
 };
-use tracing::debug;
+use tracing::{
+    debug,
+    error,
+    info,
+};
 
 #[cfg(test)]
 mod tests;
@@ -138,6 +146,7 @@ pub struct Task<TxPool, D> {
     chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
+    balances_enabled: bool,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -170,6 +179,7 @@ where
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
+            self.balances_enabled,
         )?;
 
         match self.da_compression_config {
@@ -207,7 +217,16 @@ where
 {
     let key = BalancesKey::new(owner, asset_id);
     let current_balance = tx.storage::<CoinBalances>().get(&key)?.unwrap_or_default();
+    let prev_balance = current_balance.clone();
     let new_balance = updater(current_balance, amount);
+    debug!(
+        %owner,
+        %asset_id,
+        amount,
+        %prev_balance,
+        new_balance,
+        "changing coin balance"
+    );
     tx.storage_as_mut::<CoinBalances>()
         .insert(&key, &new_balance)
 }
@@ -227,7 +246,14 @@ where
         .storage::<MessageBalances>()
         .get(key)?
         .unwrap_or_default();
+    let prev_balance = current_balance.clone();
     let new_balance = updater(current_balance, amount);
+    debug!(
+        %owner,
+        %amount,
+        %prev_balance,
+        new_balance,
+        "changing message balance");
     tx.storage_as_mut::<MessageBalances>()
         .insert(key, &new_balance)
 }
@@ -236,6 +262,7 @@ where
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
+    balances_enabled: bool,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
@@ -251,13 +278,15 @@ where
                         &(),
                     )?;
 
-                debug!(recipient=%message.recipient(), amount=%message.amount(), "increasing message balance");
-                update_message_balance(
-                    message.recipient(),
-                    message.amount(),
-                    block_st_transaction,
-                    |balance, amount| balance.saturating_add(amount),
-                )?;
+                // TODO[RC]: Refactor to have this if called only once
+                if balances_enabled {
+                    update_message_balance(
+                        message.recipient(),
+                        message.amount(),
+                        block_st_transaction,
+                        |balance, amount| balance.saturating_add(amount),
+                    )?;
+                }
             }
             Event::MessageConsumed(message) => {
                 block_st_transaction
@@ -270,13 +299,15 @@ where
                     .storage::<SpentMessages>()
                     .insert(message.nonce(), &())?;
 
-                debug!(recipient=%message.recipient(), amount=%message.amount(), "decreasing message balance");
-                update_message_balance(
-                    message.recipient(),
-                    message.amount(),
-                    block_st_transaction,
-                    |balance, amount| balance.saturating_sub(amount),
-                )?;
+                // TODO[RC]: Check other places where we update "OwnedCoins" or "OwnedMessageIds"
+                if balances_enabled {
+                    update_message_balance(
+                        message.recipient(),
+                        message.amount(),
+                        block_st_transaction,
+                        |balance, amount| balance.saturating_sub(amount),
+                    )?;
+                }
             }
             Event::CoinCreated(coin) => {
                 let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
@@ -284,17 +315,15 @@ where
                     .storage_as_mut::<OwnedCoins>()
                     .insert(&coin_by_owner, &())?;
 
-                debug!(
-                    owner=%coin.owner,
-                    asset_id=%coin.asset_id,
-                    amount=%coin.amount, "increasing coin balance");
-                update_coin_balance(
-                    &coin.owner,
-                    &coin.asset_id,
-                    coin.amount,
-                    block_st_transaction,
-                    |balance, amount| balance.saturating_add(amount),
-                )?;
+                if balances_enabled {
+                    update_coin_balance(
+                        &coin.owner,
+                        &coin.asset_id,
+                        coin.amount,
+                        block_st_transaction,
+                        |balance, amount| balance.saturating_add(amount),
+                    )?;
+                }
             }
             Event::CoinConsumed(coin) => {
                 let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
@@ -302,17 +331,15 @@ where
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
 
-                debug!(
-                        owner=%coin.owner,
-                        asset_id=%coin.asset_id,
-                        amount=%coin.amount, "decreasing coin balance");
-                update_coin_balance(
-                    &coin.owner,
-                    &coin.asset_id,
-                    coin.amount,
-                    block_st_transaction,
-                    |balance, amount| balance.saturating_sub(amount),
-                )?;
+                if balances_enabled {
+                    update_coin_balance(
+                        &coin.owner,
+                        &coin.asset_id,
+                        coin.amount,
+                        block_st_transaction,
+                        |balance, amount| balance.saturating_sub(amount),
+                    )?;
+                }
             }
             Event::ForcedTransactionFailed {
                 id,
@@ -564,6 +591,9 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
+        let balances_enabled = self.off_chain_database.balances_enabled();
+        info!("Balances cache available: {}", balances_enabled);
+
         let InitializeTask {
             chain_id,
             da_compression_config,
@@ -582,6 +612,7 @@ where
             chain_id,
             da_compression_config,
             continue_on_error,
+            balances_enabled,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;

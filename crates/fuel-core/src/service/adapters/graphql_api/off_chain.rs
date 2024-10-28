@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::{
     database::{
-        database_description::off_chain::OffChain,
+        database_description::{
+            off_chain::OffChain,
+            IndexationKind,
+        },
         Database,
         OffChainIterableKeyValueView,
     },
@@ -75,7 +78,10 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use tracing::debug;
+use tracing::{
+    debug,
+    error,
+};
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -272,5 +278,11 @@ impl worker::OffChainDatabase for Database<OffChain> {
 
     fn transaction(&mut self) -> Self::Transaction<'_> {
         self.into_transaction()
+    }
+
+    fn balances_enabled(&self) -> bool {
+        let metadata = self.metadata().unwrap().unwrap(); // TODO[RC]: Clean-up
+        error!(?metadata, "METADATA");
+        metadata.indexation_available(IndexationKind::Balances)
     }
 }

@@ -24,6 +24,7 @@ use crate::{
         KeyValueView,
     },
 };
+use database_description::IndexationKind;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
@@ -58,6 +59,7 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use std::{
+    collections::HashSet,
     fmt::Debug,
     sync::Arc,
 };
@@ -480,13 +482,32 @@ where
             ConflictPolicy::Overwrite,
             changes,
         );
+
+        // TODO[RC]: Problems with this code:
+        // 1. additional DB read (of prev metadata)
+        // 2. HashSet collect for Metadata V2
+        let current_metadata = transaction
+            .storage::<MetadataTable<Description>>()
+            .get(&())
+            .map_err(StorageError::from)?
+            .unwrap();
+        let indexation_availability = match current_metadata.as_ref() {
+            DatabaseMetadata::V1 { version, height } => HashSet::new(),
+            DatabaseMetadata::V2 {
+                version,
+                height,
+                indexation_availability,
+            } => [(IndexationKind::Balances)].into_iter().collect(),
+        };
+
         transaction
             .storage_as_mut::<MetadataTable<Description>>()
             .insert(
                 &(),
-                &DatabaseMetadata::V1 {
+                &DatabaseMetadata::V2 {
                     version: Description::version(),
                     height: new_height,
+                    indexation_availability,
                 },
             )?;
 

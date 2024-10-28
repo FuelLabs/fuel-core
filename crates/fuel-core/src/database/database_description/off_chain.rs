@@ -11,6 +11,7 @@ impl DatabaseDescription for OffChain {
     type Column = fuel_core_graphql_api::storage::Column;
     type Height = BlockHeight;
 
+    // TODO[RC]: Do we bump this due to extended metadata?
     fn version() -> u32 {
         0
     }

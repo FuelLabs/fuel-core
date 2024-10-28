@@ -4,6 +4,11 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
+use off_chain::OffChain;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 pub mod gas_price;
 pub mod off_chain;
@@ -67,10 +72,26 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
     fn prefix(column: &Self::Column) -> Option<usize>;
 }
 
+#[derive(
+    Copy, Clone, Debug, serde::Serialize, serde::Deserialize, Eq, PartialEq, Hash,
+)]
+pub enum IndexationKind {
+    Balances,
+    CoinsToSpend,
+}
+
 /// The metadata of the database contains information about the version and its height.
-#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum DatabaseMetadata<Height> {
-    V1 { version: u32, height: Height },
+    V1 {
+        version: u32,
+        height: Height,
+    },
+    V2 {
+        version: u32,
+        height: Height,
+        indexation_availability: HashSet<IndexationKind>,
+    },
 }
 
 impl<Height> DatabaseMetadata<Height> {
@@ -78,6 +99,7 @@ impl<Height> DatabaseMetadata<Height> {
     pub fn version(&self) -> u32 {
         match self {
             Self::V1 { version, .. } => *version,
+            Self::V2 { version, .. } => *version,
         }
     }
 
@@ -85,6 +107,18 @@ impl<Height> DatabaseMetadata<Height> {
     pub fn height(&self) -> &Height {
         match self {
             Self::V1 { height, .. } => height,
+            Self::V2 { height, .. } => height,
+        }
+    }
+
+    /// Returns true if the given indexation kind is available.
+    pub fn indexation_available(&self, kind: IndexationKind) -> bool {
+        match self {
+            Self::V1 { .. } => false,
+            Self::V2 {
+                indexation_availability,
+                ..
+            } => indexation_availability.contains(&kind),
         }
     }
 }

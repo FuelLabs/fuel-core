@@ -1,6 +1,7 @@
 use crate::{
     database::{
         database_description::off_chain::OffChain,
+        metadata::MetadataTable,
         GenesisDatabase,
     },
     fuel_core_graphql_api::storage::messages::SpentMessages,
@@ -110,7 +111,7 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
         let events = group
             .into_iter()
             .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
-        worker_service::process_executor_events(events, tx)?;
+        worker_service::process_executor_events(events, tx, true)?;
         Ok(())
     }
 }
@@ -128,7 +129,7 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
         let events = group.into_iter().map(|TableEntry { value, key }| {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
         });
-        worker_service::process_executor_events(events, tx)?;
+        worker_service::process_executor_events(events, tx, true)?;
         Ok(())
     }
 }

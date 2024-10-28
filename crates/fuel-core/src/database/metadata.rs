@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::database::{
     database_description::{
         DatabaseDescription,
@@ -15,6 +17,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
     StorageInspect,
+    StorageMutate,
 };
 
 /// The table that stores all metadata about the database.
@@ -73,5 +76,12 @@ where
         let metadata = metadata.map(|metadata| *metadata.height());
 
         Ok(metadata)
+    }
+
+    // TODO[RC]: Needed?
+    pub fn metadata(
+        &self,
+    ) -> StorageResult<Option<Cow<DatabaseMetadata<Description::Height>>>> {
+        self.storage::<MetadataTable<Description>>().get(&())
     }
 }
