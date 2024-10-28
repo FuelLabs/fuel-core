@@ -17,7 +17,7 @@ impl RequestResponseMessageHandler<PostcardCodec> {
     pub fn new(max_block_size: usize) -> Self {
         assert_ne!(
             max_block_size, 0,
-            "BoundedCodec does not support zero block size"
+            "RequestResponseMessageHandler does not support zero block size"
         );
 
         Self {
