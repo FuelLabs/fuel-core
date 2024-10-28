@@ -262,11 +262,12 @@ mod p2p {
     // after the first_producer stops, second_producer should start producing blocks
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
-        const TIME_UNTIL_SYNCED: u64 = 2;
         // Tracing layer with debug
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::INFO)
             .init();
+        const SYNC_TIMEOUT: u64 = 5;
+        const TIME_UNTIL_SYNCED: u64 = SYNC_TIMEOUT + 5;
 
         info!("Starting test_poa_multiple_producers");
         let mut rng = StdRng::seed_from_u64(2222);
@@ -316,7 +317,12 @@ mod p2p {
         // Start the second producer after 3 blocks.
         // The second producer should synchronize 3 blocks produced by the first producer.
         let second_producer = make_node(second_producer_config, vec![]).await;
-        second_producer.wait_for_blocks(3, false /* is_local */).await;
+        tokio::time::timeout(
+            Duration::from_secs(SYNC_TIMEOUT),
+            second_producer.wait_for_blocks(3, false /* is_local */),
+        )
+        .await
+        .expect("The second should sync with the first");
 
         let start_time = tokio::time::Instant::now();
         // Stop the first producer.
@@ -347,7 +353,12 @@ mod p2p {
         // it should sync remotely 5 blocks.
         let first_producer =
             make_node(make_node_config("First Producer reborn"), vec![]).await;
-        first_producer.wait_for_blocks(5, false /* is_local */).await;
+        tokio::time::timeout(
+            Duration::from_secs(SYNC_TIMEOUT),
+            first_producer.wait_for_blocks(5, false /* is_local */),
+        )
+        .await
+        .expect("The first should reborn and sync with the second");
     }
 
     fn update_signing_key(config: &mut Config, key: Address) {

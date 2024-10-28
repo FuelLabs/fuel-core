@@ -182,6 +182,7 @@ jobs:
         with:
           command: install
           args: cargo-nextest --locked
+        continue-on-error: true
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
