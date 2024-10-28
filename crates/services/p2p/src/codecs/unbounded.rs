@@ -1,7 +1,4 @@
-use std::{
-    io,
-    marker::PhantomData,
-};
+use std::io;
 
 use crate::gossipsub::messages::{
     GossipTopicTag,
@@ -10,33 +7,25 @@ use crate::gossipsub::messages::{
 };
 
 use super::{
-    DataFormatCodec,
+    DataFormat,
     GossipsubCodec,
 };
 
 #[derive(Debug, Clone)]
 pub struct UnboundedCodec<Format> {
-    _format: PhantomData<Format>,
-}
-
-impl<Format> UnboundedCodec<Format> {
-    pub fn new() -> Self {
-        UnboundedCodec {
-            _format: PhantomData,
-        }
-    }
+    pub(crate) data_format: Format,
 }
 
 impl<Format> GossipsubCodec for UnboundedCodec<Format>
 where
-    Format: DataFormatCodec<Error = io::Error> + Send,
+    Format: DataFormat<Error = io::Error> + Send,
 {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
 
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         match data {
-            GossipsubBroadcastRequest::NewTx(tx) => Format::serialize(&*tx),
+            GossipsubBroadcastRequest::NewTx(tx) => self.data_format.serialize(&*tx),
         }
     }
 
@@ -47,7 +36,7 @@ where
     ) -> Result<Self::ResponseMessage, io::Error> {
         let decoded_response = match gossipsub_tag {
             GossipTopicTag::NewTx => {
-                GossipsubMessage::NewTx(Format::deserialize(encoded_data)?)
+                GossipsubMessage::NewTx(self.data_format.deserialize(encoded_data)?)
             }
         };
 

@@ -10,13 +10,15 @@ use serde::{
 };
 use std::io;
 
-trait DataFormatCodec {
+// TODO: Deprecate this trait in favour of something similar to Encode + Decode in storage crate
+// In fact, we should probably have a single trait that can be used both here and in the storage crate
+trait DataFormat {
     type Error;
     fn deserialize<'a, R: Deserialize<'a>>(
+        &self,
         encoded_data: &'a [u8],
     ) -> Result<R, Self::Error>;
-
-    fn serialize<D: Serialize>(data: &D) -> Result<Vec<u8>, Self::Error>;
+    fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// Implement this in order to handle serialization & deserialization of Gossipsub messages

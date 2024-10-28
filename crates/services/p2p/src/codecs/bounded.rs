@@ -1,7 +1,4 @@
-use std::{
-    io,
-    marker::PhantomData,
-};
+use std::io;
 
 use async_trait::async_trait;
 use futures::{
@@ -22,31 +19,17 @@ use crate::request_response::{
 };
 
 use super::{
-    DataFormatCodec,
+    DataFormat,
     RequestResponseProtocols,
 };
 
 #[derive(Debug, Clone)]
 pub struct BoundedCodec<Format> {
-    _format: PhantomData<Format>,
+    pub(crate) data_format: Format,
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
-    max_response_size: usize,
-}
-
-impl<Format> BoundedCodec<Format> {
-    pub fn new(max_block_size: usize) -> Self {
-        assert_ne!(
-            max_block_size, 0,
-            "PostcardCodec does not support zero block size"
-        );
-
-        Self {
-            _format: PhantomData,
-            max_response_size: max_block_size,
-        }
-    }
+    pub(crate) max_response_size: usize,
 }
 
 /// Since Postcard does not support async reads or writes out of the box
@@ -59,7 +42,7 @@ impl<Format> BoundedCodec<Format> {
 #[async_trait]
 impl<Format> request_response::Codec for BoundedCodec<Format>
 where
-    Format: DataFormatCodec<Error = io::Error> + Send,
+    Format: DataFormat<Error = io::Error> + Send,
 {
     type Protocol = RequestResponseProtocol;
     type Request = RequestMessage;
@@ -78,7 +61,7 @@ where
             .take(self.max_response_size as u64)
             .read_to_end(&mut response)
             .await?;
-        Format::deserialize(&response)
+        self.data_format.deserialize(&response)
     }
 
     async fn read_response<T>(
@@ -97,11 +80,13 @@ where
 
         match protocol {
             RequestResponseProtocol::V1 => {
-                let v1_response = Format::deserialize::<V1ResponseMessage>(&response)?;
+                let v1_response = self
+                    .data_format
+                    .deserialize::<V1ResponseMessage>(&response)?;
                 Ok(v1_response.into())
             }
             RequestResponseProtocol::V2 => {
-                Format::deserialize::<V2ResponseMessage>(&response)
+                self.data_format.deserialize::<V2ResponseMessage>(&response)
             }
         }
     }
@@ -115,7 +100,7 @@ where
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let encoded_data = Format::serialize(&req)?;
+        let encoded_data = self.data_format.serialize(&req)?;
         socket.write_all(&encoded_data).await?;
         Ok(())
     }
@@ -132,9 +117,9 @@ where
         let encoded_data = match protocol {
             RequestResponseProtocol::V1 => {
                 let v1_response: V1ResponseMessage = res.into();
-                Format::serialize(&v1_response)?
+                self.data_format.serialize(&v1_response)?
             }
-            RequestResponseProtocol::V2 => Format::serialize(&res)?,
+            RequestResponseProtocol::V2 => self.data_format.serialize(&res)?,
         };
         socket.write_all(&encoded_data).await?;
         Ok(())
