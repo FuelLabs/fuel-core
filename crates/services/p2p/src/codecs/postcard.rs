@@ -46,7 +46,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        codecs::bounded::RequestResponseMessageHandler,
+        codecs::request_response::RequestResponseMessageHandler,
         request_response::{
             messages::{
                 RequestMessage,

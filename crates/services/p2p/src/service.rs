@@ -1,7 +1,7 @@
 use crate::{
     codecs::{
+        gossipsub::GossipsubMessageHandler,
         request_response::RequestResponseMessageHandler,
-        unbounded::GossipsubMessageHandler,
     },
     config::{
         Config,
