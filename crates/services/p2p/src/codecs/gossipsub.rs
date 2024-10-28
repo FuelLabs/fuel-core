@@ -20,15 +20,7 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct GossipsubMessageHandler<Format> {
-    pub(crate) _data_format: PhantomData<Format>,
-}
-
-impl<Format> GossipsubMessageHandler<Format> {
-    pub fn new() -> Self {
-        GossipsubMessageHandler {
-            _data_format: PhantomData,
-        }
-    }
+    pub(crate) data_format: Format,
 }
 
 impl<Format> GossipsubCodec for GossipsubMessageHandler<Format>
@@ -43,7 +35,7 @@ where
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         match data {
             GossipsubBroadcastRequest::NewTx(tx) => {
-                Ok(Format::encode(&*tx)?.as_bytes().into_owned())
+                Ok(self.data_format.encode(&*tx)?.as_bytes().into_owned())
             }
         }
     }

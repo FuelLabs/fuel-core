@@ -30,7 +30,7 @@ pub trait Encode<T: ?Sized> {
         T: 'a;
 
     /// Encodes the object to the bytes and passes it to the `Encoder`.
-    fn encode(t: &T) -> Result<Self::Encoder<'_>, Self::Error>;
+    fn encode<'b>(&self, t: &'b T) -> Result<Self::Encoder<'b>, Self::Error>;
 }
 
 /// The trait decodes the type from the bytes.
@@ -41,7 +41,7 @@ pub trait Decode<T> {
 }
 
 impl<'a> Encoder for Cow<'a, [u8]> {
-    fn as_bytes(&self) -> Cow<[u8]> {
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
         match self {
             Cow::Borrowed(borrowed) => Cow::Borrowed(borrowed),
             Cow::Owned(owned) => Cow::Borrowed(owned.as_ref()),

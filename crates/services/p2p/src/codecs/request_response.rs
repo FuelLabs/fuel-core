@@ -30,25 +30,11 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct RequestResponseMessageHandler<Format> {
-    pub(crate) _data_format: PhantomData<Format>,
+    pub(crate) data_format: Format,
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
     pub(crate) max_response_size: usize,
-}
-
-impl<Format> RequestResponseMessageHandler<Format> {
-    pub fn new(max_block_size: usize) -> Self {
-        assert_ne!(
-            max_block_size, 0,
-            "BoundedCodec does not support zero block size"
-        );
-
-        Self {
-            _data_format: PhantomData,
-            max_response_size: max_block_size,
-        }
-    }
 }
 
 /// Since Postcard does not support async reads or writes out of the box
@@ -124,7 +110,7 @@ where
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let encoded_data = Format::encode(&req)?;
+        let encoded_data = self.data_format.encode(&req)?;
         socket.write_all(&encoded_data.as_bytes()).await?;
         Ok(())
     }
@@ -141,11 +127,15 @@ where
         match protocol {
             RequestResponseProtocol::V1 => {
                 let v1_response: V1ResponseMessage = res.into();
-                let res = Format::encode(&v1_response)?.as_bytes().into_owned();
+                let res = self
+                    .data_format
+                    .encode(&v1_response)?
+                    .as_bytes()
+                    .into_owned();
                 socket.write_all(&res).await?;
             }
             RequestResponseProtocol::V2 => {
-                let res = Format::encode(&res)?.as_bytes().into_owned();
+                let res = self.data_format.encode(&res)?.as_bytes().into_owned();
                 socket.write_all(&res).await?;
             }
         };

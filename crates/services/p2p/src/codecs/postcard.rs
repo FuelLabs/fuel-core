@@ -1,4 +1,6 @@
 use super::{
+    gossipsub::GossipsubMessageHandler,
+    request_response::RequestResponseMessageHandler,
     Decode,
     Encode,
 };
@@ -11,6 +13,28 @@ use std::{
 #[derive(Clone)]
 pub struct PostcardDataFormat;
 
+impl RequestResponseMessageHandler<PostcardDataFormat> {
+    pub fn new(max_block_size: usize) -> Self {
+        assert_ne!(
+            max_block_size, 0,
+            "BoundedCodec does not support zero block size"
+        );
+
+        Self {
+            data_format: PostcardDataFormat,
+            max_response_size: max_block_size,
+        }
+    }
+}
+
+impl GossipsubMessageHandler<PostcardDataFormat> {
+    pub fn new() -> Self {
+        GossipsubMessageHandler {
+            data_format: PostcardDataFormat,
+        }
+    }
+}
+
 impl<T> Encode<T> for PostcardDataFormat
 where
     T: ?Sized + serde::Serialize,
@@ -18,7 +42,7 @@ where
     type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
     type Error = io::Error;
 
-    fn encode(value: &T) -> Result<Self::Encoder<'_>, Self::Error> {
+    fn encode<'b>(&self, value: &'b T) -> Result<Self::Encoder<'b>, Self::Error> {
         Ok(Cow::Owned(postcard::to_allocvec(value).map_err(|e| {
             io::Error::new(io::ErrorKind::Other, e.to_string())
         })?))
@@ -221,7 +245,9 @@ mod tests {
             RequestResponseMessageHandler::new(1024);
 
         // When
-        let buf = <PostcardDataFormat as Encode<V1ResponseMessage>>::encode(&response)
+        let buf = codec
+            .data_format
+            .encode(&response)
             .expect("Serialization as V1ResponseMessage should succeed");
         let deserialized = codec
             .read_response(&RequestResponseProtocol::V1, &mut &*buf)
