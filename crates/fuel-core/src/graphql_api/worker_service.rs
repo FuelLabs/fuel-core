@@ -274,6 +274,41 @@ impl<'a> HasIndexation<'a> for Message {
     }
 }
 
+fn process_balances_update<T>(
+    event: &Event,
+    block_st_transaction: &mut T,
+    balances_enabled: bool,
+) where
+    T: OffChainDatabaseTransaction,
+{
+    if !balances_enabled {
+        return;
+    }
+    match event.deref() {
+        Event::MessageImported(message) => {
+            message.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+                balance.saturating_add(amount)
+            });
+        }
+        Event::MessageConsumed(message) => {
+            message.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+                balance.saturating_sub(amount)
+            });
+        }
+        Event::CoinCreated(coin) => {
+            coin.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+                balance.saturating_add(amount)
+            });
+        }
+        Event::CoinConsumed(coin) => {
+            coin.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+                balance.saturating_sub(amount)
+            });
+        }
+        _ => {}
+    }
+}
+
 /// Process the executor events and update the indexes for the messages and coins.
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
@@ -285,6 +320,7 @@ where
     T: OffChainDatabaseTransaction,
 {
     for event in events {
+        process_balances_update(event.deref(), block_st_transaction, balances_enabled);
         match event.deref() {
             Event::MessageImported(message) => {
                 block_st_transaction
@@ -293,14 +329,6 @@ where
                         &OwnedMessageKey::new(message.recipient(), message.nonce()),
                         &(),
                     )?;
-
-                // TODO[RC]: Refactor to have this if called only once
-                if balances_enabled {
-                    message.update_balances(
-                        block_st_transaction,
-                        |balance: Cow<u64>, amount| balance.saturating_add(amount),
-                    );
-                }
             }
             Event::MessageConsumed(message) => {
                 block_st_transaction
@@ -312,47 +340,18 @@ where
                 block_st_transaction
                     .storage::<SpentMessages>()
                     .insert(message.nonce(), &())?;
-
-                // TODO[RC]: Check other places where we update "OwnedCoins" or "OwnedMessageIds"
-                if balances_enabled {
-                    message.update_balances(
-                        block_st_transaction,
-                        |balance: Cow<u64>, amount| balance.saturating_sub(amount),
-                    );
-                }
             }
             Event::CoinCreated(coin) => {
                 let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .insert(&coin_by_owner, &())?;
-
-                if balances_enabled {
-                    coin.update_balances(
-                        block_st_transaction,
-                        |balance: Cow<u64>, amount| balance.saturating_add(amount),
-                    );
-                    // update_coin_balance(
-                    // &coin.owner,
-                    // &coin.asset_id,
-                    // coin.amount,
-                    // block_st_transaction,
-                    // |balance, amount| balance.saturating_add(amount),
-                    // )?;
-                }
             }
             Event::CoinConsumed(coin) => {
                 let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
-
-                if balances_enabled {
-                    coin.update_balances(
-                        block_st_transaction,
-                        |balance: Cow<u64>, amount| balance.saturating_sub(amount),
-                    );
-                }
             }
             Event::ForcedTransactionFailed {
                 id,
