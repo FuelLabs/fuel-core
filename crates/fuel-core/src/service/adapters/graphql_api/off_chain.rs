@@ -78,10 +78,7 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use tracing::{
-    debug,
-    error,
-};
+use tracing::debug;
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {

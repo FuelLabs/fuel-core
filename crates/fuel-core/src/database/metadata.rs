@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::database::{
     database_description::{
         DatabaseDescription,
@@ -17,7 +15,6 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
     StorageInspect,
-    StorageMutate,
 };
 
 use super::database_description::IndexationKind;

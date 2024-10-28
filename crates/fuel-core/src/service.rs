@@ -142,7 +142,7 @@ impl FuelService {
             shutdown_listener,
         )?;
 
-        Self::write_metadata_at_genesis(&database);
+        Self::write_metadata_at_genesis(&database)?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");

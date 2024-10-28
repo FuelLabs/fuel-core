@@ -1,11 +1,8 @@
-use crate::{
-    database::database_description::DatabaseDescription,
-    fuel_core_graphql_api::{
-        database::arc_wrapper::ArcWrapper,
-        ports::{
-            OffChainDatabase,
-            OnChainDatabase,
-        },
+use crate::fuel_core_graphql_api::{
+    database::arc_wrapper::ArcWrapper,
+    ports::{
+        OffChainDatabase,
+        OnChainDatabase,
     },
 };
 use fuel_core_services::yield_stream::StreamYieldExt;

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use self::importer::SnapshotImporter;
 use crate::{
     combined_database::{
@@ -20,7 +18,6 @@ use crate::{
     },
     service::config::Config,
 };
-use async_graphql::Description;
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{

@@ -13,10 +13,6 @@ use super::{
     },
 };
 use crate::{
-    database::{
-        database_description::off_chain::OffChain,
-        metadata::MetadataTable,
-    },
     fuel_core_graphql_api::{
         ports::{
             self,
@@ -112,7 +108,6 @@ use std::{
 };
 use tracing::{
     debug,
-    error,
     info,
 };
 

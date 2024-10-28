@@ -24,7 +24,6 @@ use crate::{
         KeyValueView,
     },
 };
-use database_description::IndexationKind;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
@@ -59,11 +58,9 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use std::{
-    collections::HashSet,
     fmt::Debug,
     sync::Arc,
 };
-use tracing::error;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;

@@ -1,7 +1,6 @@
 use crate::{
     database::{
         database_description::off_chain::OffChain,
-        metadata::MetadataTable,
         GenesisDatabase,
     },
     fuel_core_graphql_api::storage::messages::SpentMessages,

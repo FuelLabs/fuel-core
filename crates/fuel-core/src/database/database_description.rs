@@ -4,11 +4,7 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-use off_chain::OffChain;
-use std::collections::{
-    HashMap,
-    HashSet,
-};
+use std::collections::HashSet;
 
 pub mod gas_price;
 pub mod off_chain;

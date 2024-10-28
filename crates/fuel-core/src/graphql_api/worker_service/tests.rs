@@ -83,5 +83,6 @@ fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
         chain_id,
         da_compression_config: DaCompressionConfig::Disabled,
         continue_on_error: false,
+        balances_enabled: true,
     }
 }
