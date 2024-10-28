@@ -81,7 +81,7 @@ struct Input {
 )]
 #[test_case(
     Input {
-        executes: Duration::from_millis(100),
+        executes: Duration::from_millis(20),
         ..Default::default()
     },
     State::new(None, 1000),
