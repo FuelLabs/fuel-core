@@ -539,13 +539,14 @@ where
         max_len: usize,
     ) -> anyhow::Result<()>
     where
-        DbLookUpFn:
-            Fn(&V::LatestView, &Arc<CachedView>, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
+        DbLookUpFn: Fn(&V::LatestView, &Arc<CachedView>, Range<u32>) -> anyhow::Result<Option<R>>
+            + Send
+            + 'static,
         ResponseSenderFn:
             Fn(Result<R, ResponseMessageErrorCode>) -> V2ResponseMessage + Send + 'static,
         TaskRequestFn: Fn(Result<R, ResponseMessageErrorCode>, InboundRequestId) -> TaskRequest
             + Send
-            + 'static.
+            + 'static,
         R: Send + 'static,
     {
         let instant = Instant::now();
@@ -579,12 +580,12 @@ where
                     return;
                 }
 
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Add new error code
-            let response = db_lookup(&view, &cached_view, range.clone())
-                .ok()
-                .flatten()
-                .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+                // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+                // Add new error code
+                let response = db_lookup(&view, &cached_view, range.clone())
+                    .ok()
+                    .flatten()
+                    .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
 
                 let _ = response_channel
                     .try_send(task_request(response, request_id))
