@@ -66,7 +66,6 @@ where
     type Blueprint = Plain<Primitive<8>, Postcard>;
     type Column = Column<Description>;
 
-    // We store key-value pairs using the same column family as for V1
     fn column() -> Self::Column {
         Column::HistoryV2Column
     }
