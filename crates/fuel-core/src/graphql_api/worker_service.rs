@@ -53,7 +53,6 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
     StorageInspect,
-    StorageMut,
     StorageMutate,
 };
 use fuel_core_types::{
@@ -80,8 +79,6 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
-        Address,
-        AssetId,
         Contract,
         Input,
         Output,
@@ -267,11 +264,11 @@ impl<'a> HasIndexation<'a> for Message {
     type Storage = MessageBalances;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key {
-        self.recipient().clone()
+        *self.recipient()
     }
 
     fn amount(&self) -> Amount {
-        Self::amount(&self)
+        Self::amount(self)
     }
 }
 
@@ -279,34 +276,31 @@ fn process_balances_update<T>(
     event: &Event,
     block_st_transaction: &mut T,
     balances_enabled: bool,
-) where
+) -> StorageResult<()>
+where
     T: OffChainDatabaseTransaction,
 {
     if !balances_enabled {
-        return;
+        return Ok(());
     }
-    match event.deref() {
-        Event::MessageImported(message) => {
-            message.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+    match event {
+        Event::MessageImported(message) => message
+            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
                 balance.saturating_add(amount)
-            });
-        }
-        Event::MessageConsumed(message) => {
-            message.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+            }),
+        Event::MessageConsumed(message) => message
+            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
                 balance.saturating_sub(amount)
-            });
-        }
-        Event::CoinCreated(coin) => {
-            coin.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+            }),
+        Event::CoinCreated(coin) => coin
+            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
                 balance.saturating_add(amount)
-            });
-        }
-        Event::CoinConsumed(coin) => {
-            coin.update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
+            }),
+        Event::CoinConsumed(coin) => coin
+            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
                 balance.saturating_sub(amount)
-            });
-        }
-        _ => {}
+            }),
+        Event::ForcedTransactionFailed { .. } => Ok(()),
     }
 }
 
@@ -321,7 +315,7 @@ where
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        process_balances_update(event.deref(), block_st_transaction, balances_enabled);
+        process_balances_update(event.deref(), block_st_transaction, balances_enabled)?;
         match event.deref() {
             Event::MessageImported(message) => {
                 block_st_transaction
