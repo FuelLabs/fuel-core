@@ -195,7 +195,7 @@ pub fn initialize_algorithm<Metadata>(
 where
     Metadata: MetadataStorage,
 {
-    let min_exec_gas_price = config.starting_gas_price.max(config.min_gas_price);
+    let min_exec_gas_price = config.min_gas_price;
     let exec_gas_price_change_percent = config.gas_price_change_percent;
     let l2_block_fullness_threshold_percent = config.gas_price_threshold_percent;
 
