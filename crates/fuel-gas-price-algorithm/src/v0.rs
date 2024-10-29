@@ -120,8 +120,7 @@ impl AlgorithmUpdaterV0 {
                 exec_gas_price = exec_gas_price.saturating_sub(change_amount);
             }
         }
-        let new_exec_price = max(self.min_exec_gas_price, exec_gas_price);
-        self.new_exec_price = new_exec_price;
+        self.new_exec_price = max(self.min_exec_gas_price, exec_gas_price);
     }
 
     fn change_amount(&self, principle: u64) -> u64 {
