@@ -89,8 +89,7 @@ where
             Column::HistoricalDuplicateColumn(c) => {
                 Some(Description::prefix(c).unwrap_or(0).saturating_add(8)) // `u64::to_be_bytes`
             }
-            Column::HistoryColumn => Some(8),
-            Column::HistoryV2Column => Some(8),
+            Column::HistoryColumn | Column::HistoryV2Column => Some(8),
         }
     }
 }
