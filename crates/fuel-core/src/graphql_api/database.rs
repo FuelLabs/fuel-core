@@ -151,8 +151,6 @@ impl ReadView {
         &self,
         tx_ids: Vec<TxId>,
     ) -> Vec<StorageResult<Transaction>> {
-        // TODO: Use multiget when it's implemented.
-        //  https://github.com/FuelLabs/fuel-core/issues/2344
         let on_chain_results: BTreeMap<_, _> = tx_ids
             .iter()
             .enumerate()
@@ -178,11 +176,7 @@ impl ReadView {
         let mut results = on_chain_results;
         results.extend(off_chain_results);
 
-        // let result = tx_ids
-        //    .iter()
-        //    .map(|tx_id| self.transaction(tx_id))
-        //    .collect::<Vec<_>>();
-        // Give a chance to other tasks to run.
+        // Give a chance for other tasks to run.
         tokio::task::yield_now().await;
 
         results.into_values().collect()

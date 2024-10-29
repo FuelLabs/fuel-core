@@ -177,10 +177,11 @@ pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
         Type::Key: 'a;
 }
 
-// TODO: Document
-/// TODO
+/// Allows getting batches of values from the storage,
+/// which can be faster in certain implementatoins than
+/// getting values one by one.
 pub trait StorageBatchInspect<Type: Mappable> {
-    /// TODO
+    /// Get a batch of values associated with the provided keys.
     fn get_batch<'a>(
         &'a self,
         keys: BoxedIter<'a, &'a Type::Key>,

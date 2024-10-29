@@ -66,10 +66,8 @@ impl OnChainIterableKeyValueView {
     /// Retrieve the full block and all associated transactions
     pub fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Option<Block>> {
         let db_block = self.storage::<FuelBlocks>().get(height)?;
+
         if let Some(block) = db_block {
-            // fetch all the transactions
-            // TODO: Use multiget when it's implemented.
-            //  https://github.com/FuelLabs/fuel-core/issues/2344
             let transaction_ids = block.transactions().iter().into_boxed();
             let txs = <Self as StorageBatchInspect<Transactions>>::get_batch(
                 self,
@@ -78,17 +76,6 @@ impl OnChainIterableKeyValueView {
             .map(|res| res.and_then(|opt| opt.ok_or(not_found!(Transactions))))
             .try_collect()?;
 
-            // let transaction_ids = Box::new(block.transactions().iter());
-            // let txs = self
-            //    .storage::<Transactions>()
-            //    .get_multi(transaction_ids)
-            //    .map(|tx| {
-            //        tx.and_then(|tx| {
-            //            tx.ok_or(not_found!(Transactions)).map(Cow::into_owned)
-            //        })
-            //    })
-            //    .try_collect()?;
-            //
             Ok(Some(block.into_owned().uncompress(txs)))
         } else {
             Ok(None)
