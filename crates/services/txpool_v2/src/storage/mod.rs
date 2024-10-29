@@ -102,4 +102,7 @@ pub trait Storage {
 
     /// Remove a transaction from the storage.
     fn remove_transaction(&mut self, index: Self::StorageIndex) -> Option<StorageData>;
+
+    /// Returns the number of transactions in the storage.
+    fn tx_count(&self) -> usize;
 }

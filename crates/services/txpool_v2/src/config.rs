@@ -140,6 +140,8 @@ pub struct Config {
     pub heavy_work: HeavyWorkConfig,
     /// Blacklist. Transactions with blacklisted inputs will not be accepted.
     pub black_list: BlackList,
+    /// Enable metrics when set to true
+    pub metrics: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -199,6 +201,7 @@ impl Default for Config {
                 max_pending_write_pool_requests: 1000,
                 max_pending_read_pool_requests: 1000,
             },
+            metrics: false,
         }
     }
 }

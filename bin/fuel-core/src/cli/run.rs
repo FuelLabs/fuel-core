@@ -65,6 +65,10 @@ use pyroscope_pprofrs::{
     pprof_backend,
     PprofConfig,
 };
+use rlimit::{
+    getrlimit,
+    Resource,
+};
 use std::{
     env,
     net,
@@ -125,6 +129,18 @@ pub struct Command {
         env
     )]
     pub database_type: DbType,
+
+    #[cfg(feature = "rocksdb")]
+    /// Defines a specific number of file descriptors that RocksDB can use.
+    ///
+    /// If defined as -1 no limit will be applied and will use the OS limits.
+    /// If not defined the system default divided by two is used.
+    #[clap(
+        long = "rocksdb-max-fds",
+        env,
+        default_value = get_default_max_fds().to_string()
+    )]
+    pub rocksdb_max_fds: i32,
 
     #[cfg(feature = "rocksdb")]
     /// Defines the state rewind policy for the database when RocksDB is enabled.
@@ -273,6 +289,8 @@ impl Command {
             database_path,
             database_type,
             #[cfg(feature = "rocksdb")]
+            rocksdb_max_fds,
+            #[cfg(feature = "rocksdb")]
             state_rewind_duration,
             db_prune,
             snapshot,
@@ -298,7 +316,7 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
-            disabled_metrics: metrics,
+            disabled_metrics,
             max_da_lag,
             max_wait_time,
             tx_pool,
@@ -309,7 +327,7 @@ impl Command {
             profiling: _,
         } = self;
 
-        let enabled_metrics = metrics.list_of_enabled();
+        let enabled_metrics = disabled_metrics.list_of_enabled();
 
         if !enabled_metrics.is_empty() {
             info!("`{:?}` metrics are enabled", enabled_metrics);
@@ -334,7 +352,7 @@ impl Command {
         #[cfg(feature = "p2p")]
         let p2p_cfg = p2p_args.into_config(
             chain_config.chain_name.clone(),
-            metrics.is_enabled(Module::P2P),
+            disabled_metrics.is_enabled(Module::P2P),
         )?;
 
         let trigger: Trigger = poa_trigger.into();
@@ -441,10 +459,12 @@ impl Command {
             max_database_cache_size,
             #[cfg(feature = "rocksdb")]
             state_rewind_policy,
+            #[cfg(feature = "rocksdb")]
+            max_fds: rocksdb_max_fds,
         };
 
         let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
-            metrics.is_enabled(Module::Importer),
+            disabled_metrics.is_enabled(Module::Importer),
         );
 
         let da_compression = match da_compression {
@@ -562,10 +582,11 @@ impl Command {
                 pool_limits,
                 heavy_work: pool_heavy_work_config,
                 service_channel_limits,
+                metrics: disabled_metrics.is_enabled(Module::TxPool),
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
-                metrics: metrics.is_enabled(Module::Producer),
+                metrics: disabled_metrics.is_enabled(Module::Producer),
             },
             starting_gas_price,
             gas_price_change_percent,
@@ -588,6 +609,13 @@ impl Command {
         };
         Ok(config)
     }
+}
+
+#[cfg(feature = "rocksdb")]
+fn get_default_max_fds() -> i32 {
+    getrlimit(Resource::NOFILE)
+        .map(|(_, hard)| i32::try_from(hard.saturating_div(2)).unwrap_or(i32::MAX))
+        .expect("Our supported platforms should return max FD.")
 }
 
 pub async fn get_service_with_shutdown_listeners(
