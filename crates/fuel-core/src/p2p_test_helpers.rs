@@ -24,8 +24,8 @@ use fuel_core_chain_config::{
 };
 use fuel_core_p2p::{
     codecs::{
-        request_response::RequestResponseMessageHandler,
         gossipsub::GossipsubMessageHandler,
+        request_response::RequestResponseMessageHandler,
     },
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
