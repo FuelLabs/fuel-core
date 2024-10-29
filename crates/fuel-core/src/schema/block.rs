@@ -144,7 +144,7 @@ impl Block {
             .filter_map(move |tx_ids: Vec<TxId>| {
                 let async_query = query.as_ref().clone();
                 async move {
-                    let txs = async_query.transactions(tx_ids.clone()).await;
+                    let txs = async_query.transactions(&tx_ids).await;
                     let txs = txs
                         .into_iter()
                         .zip(tx_ids.into_iter())

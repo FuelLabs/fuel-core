@@ -50,7 +50,7 @@ impl ReadView {
             })
             .try_filter_map(move |chunk| async move {
                 let tx_ids = chunk.iter().map(|(_, tx_id)| *tx_id).collect::<Vec<_>>();
-                let txs = self.transactions(tx_ids).await;
+                let txs = self.transactions(&tx_ids).await;
                 let txs = txs
                     .into_iter()
                     .zip(chunk)

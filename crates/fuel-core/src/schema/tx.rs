@@ -173,7 +173,7 @@ impl TxQuery {
                                 .iter()
                                 .map(|sorted| sorted.tx_id.0)
                                 .collect::<Vec<_>>();
-                            let txs = async_query.transactions(tx_ids).await;
+                            let txs = async_query.transactions(&tx_ids).await;
                             let txs = txs.into_iter().zip(chunk.into_iter()).map(
                                 |(result, sorted)| {
                                     result.map(|tx| {
