@@ -47,6 +47,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
+    StorageMut,
 };
 use itertools::Itertools;
 use modifications_history::{
@@ -513,21 +514,21 @@ where
 // `ModificationsHistoryV1` and return it if no value for `ModificationsHistoryV2`
 // was found. This is necessary to avoid scenarios where it is possible to
 // roll back twice to the same block height
-fn multiversion_take<Description, T>(
+fn multiversion_op<Description, T, F>(
     storage_transaction: &mut StorageTransaction<T>,
     height: u64,
     modifications_history_migration_in_progress: bool,
+    f: F,
 ) -> StorageResult<Option<Changes>>
 where
     Description: DatabaseDescription,
     T: KeyValueInspect<Column = Column<Description>>,
+    F: FnOnce(
+        StorageMut<'_, StorageTransaction<T>, ModificationsHistoryV2<Description>>,
+    ) -> StorageResult<Option<Changes>>,
 {
-    // This will cause the V2 key to be removed in case the storage transaction snapshot
-    // a conflicting transaction writes a value for it, but that update is not reflected
-    // in the storage transaction snapshot.
-    let v2_last_changes = storage_transaction
-        .storage_as_mut::<ModificationsHistoryV2<Description>>()
-        .take(&height)?;
+    let v2_last_changes =
+        f(storage_transaction.storage_as_mut::<ModificationsHistoryV2<Description>>())?;
 
     if modifications_history_migration_in_progress {
         let v1_last_changes = storage_transaction
@@ -537,6 +538,23 @@ where
     } else {
         Ok(v2_last_changes)
     }
+}
+
+fn multiversion_take<Description, T>(
+    storage_transaction: &mut StorageTransaction<T>,
+    height: u64,
+    modifications_history_migration_in_progress: bool,
+) -> StorageResult<Option<Changes>>
+where
+    Description: DatabaseDescription,
+    T: KeyValueInspect<Column = Column<Description>>,
+{
+    multiversion_op(
+        storage_transaction,
+        height,
+        modifications_history_migration_in_progress,
+        |storage| storage.take(&height),
+    )
 }
 
 fn multiversion_replace<Description, T>(
@@ -549,18 +567,12 @@ where
     Description: DatabaseDescription,
     T: KeyValueInspect<Column = Column<Description>>,
 {
-    let v2_last_changes = storage_transaction
-        .storage_as_mut::<ModificationsHistoryV2<Description>>()
-        .replace(&height, changes)?;
-
-    if modifications_history_migration_in_progress {
-        let v1_last_changes = storage_transaction
-            .storage_as_mut::<ModificationsHistoryV1<Description>>()
-            .take(&height)?;
-        Ok(v2_last_changes.or(v1_last_changes))
-    } else {
-        Ok(v2_last_changes)
-    }
+    multiversion_op(
+        storage_transaction,
+        height,
+        modifications_history_migration_in_progress,
+        |storage| storage.replace(&height, changes),
+    )
 }
 
 fn cleanup_old_changes<Description, T>(
