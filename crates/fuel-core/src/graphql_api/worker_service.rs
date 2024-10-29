@@ -214,9 +214,7 @@ trait HasIndexation {
         <Self::Storage as Mappable>::Key: Sized + std::fmt::Display,
         <Self::Storage as Mappable>::Value: Sized + std::fmt::Display,
         <Self::Storage as Mappable>::OwnedValue: Default + std::fmt::Display,
-        T: OffChainDatabaseTransaction
-            + StorageInspect<Self::Storage, Error = fuel_core_storage::Error>
-            + StorageMutate<Self::Storage>,
+        T: OffChainDatabaseTransaction + StorageMutate<Self::Storage>,
         F: Fn(
             Cow<<Self::Storage as Mappable>::OwnedValue>,
             Amount,
@@ -238,7 +236,7 @@ trait HasIndexation {
             "changing balance");
 
         let storage = tx.storage::<Self::Storage>();
-        storage.insert(&key, &new_balance)
+        Ok(storage.insert(&key, &new_balance)?)
     }
 }
 
