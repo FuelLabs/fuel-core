@@ -1073,7 +1073,7 @@ mod tests {
         )
         .unwrap();
 
-        // when
+        // When
         let mut transaction = historical_rocks_db.read_transaction();
         transaction
             .storage_as_mut::<ContractsAssets>()
@@ -1090,8 +1090,8 @@ mod tests {
             .db
             .iter_all::<ModificationsHistoryV1<OnChain>>(None)
             .collect::<Vec<_>>();
-        // then
 
+        // Then
         assert_eq!(v2_entries.len(), 1);
         assert_eq!(v1_entries.len(), 0);
     }
@@ -1108,6 +1108,7 @@ mod tests {
         )
         .unwrap();
 
+        // When
         let mut transaction = historical_rocks_db.read_transaction();
         transaction
             .storage_as_mut::<ContractsAssets>()
@@ -1177,6 +1178,7 @@ mod tests {
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
+        // When
         // Commit 1000 blocks
         for i in 1..=1000u32 {
             let mut transaction = historical_rocks_db.read_transaction();
@@ -1188,13 +1190,16 @@ mod tests {
                 .commit_changes(Some(i.into()), transaction.into_changes())
                 .unwrap();
         }
-
         // We can now rollback the last block 1000 times.
+        let results: Vec<Result<u64, _>> = (0..1000u32)
+            .map(|_| historical_rocks_db.rollback_last_block())
+            .collect();
+
+        // Then
         // If the rollback fails at some point, then we have unintentionally rollbacked to
         // a block that was not the last.
-        for i in 0..1000u32 {
-            let result = historical_rocks_db.rollback_last_block();
-            assert_eq!(result, Ok(1000 - i as u64));
+        for (i, result) in results.iter().enumerate() {
+            assert_eq!(result, &Ok(1000 - i as u64));
         }
     }
 
@@ -1210,6 +1215,7 @@ mod tests {
         )
         .unwrap();
 
+        // When
         let mut transaction = historical_rocks_db.read_transaction();
         transaction
             .storage_as_mut::<ContractsAssets>()
@@ -1279,7 +1285,6 @@ mod tests {
         // Flush the changes to the DB
         historical_rocks_db.commit_migration_changes().unwrap();
 
-        // Then
         let v2_entries = historical_rocks_db
             .db
             .iter_all::<ModificationsHistoryV2<OnChain>>(None)
@@ -1292,6 +1297,7 @@ mod tests {
         assert_eq!(v2_entries.len(), 1);
         assert_eq!(v1_entries.len(), 0);
 
+        // Then
         assert!(!historical_rocks_db.is_migration_in_progress());
     }
 
