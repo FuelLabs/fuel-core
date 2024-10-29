@@ -10,12 +10,11 @@ use fuel_core_types::{
     services::p2p::Transactions,
 };
 use std::ops::Range;
+type BlockHeight = u32;
 
 pub struct CachedView {
-    // map block height to sealed block header
-    sealed_block_headers: DashMap<u32, SealedBlockHeader>,
-    // map block height to transactions
-    transactions_on_blocks: DashMap<u32, Transactions>,
+    sealed_block_headers: DashMap<BlockHeight, SealedBlockHeader>,
+    transactions_on_blocks: DashMap<BlockHeight, Transactions>,
     metrics: bool,
 }
 
