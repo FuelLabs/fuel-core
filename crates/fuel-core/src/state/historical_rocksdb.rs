@@ -742,7 +742,7 @@ where
             self.store_modifications_history(&mut storage_transaction, &height)?;
         }
 
-        // This cannot fail
+        // This cannot fail because the storage transaction has a conflict policy of `ConflictPolicy::Overwrite`.
         storage_transaction.commit()?;
 
         // This can fail. In this case, we need to rollback place the cumulative migration history
