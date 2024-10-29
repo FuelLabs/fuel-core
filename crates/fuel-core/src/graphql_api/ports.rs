@@ -198,7 +198,7 @@ pub trait DatabaseRelayedTransactions {
     ) -> StorageResult<Option<RelayedTransactionStatus>>;
 }
 
-/// Trait that specifies all the getters reqired for coins
+/// Trait that specifies all the getters required for coins
 pub trait DatabaseCoins:
     StorageInspect<Coins, Error = StorageError> + StorageBatchInspect<Coins>
 {
