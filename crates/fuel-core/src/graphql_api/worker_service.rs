@@ -214,7 +214,8 @@ trait HasIndexation<'a> {
     fn amount(&self) -> Amount;
     fn update_balances<T, F>(&self, tx: &mut T, updater: F) -> StorageResult<()>
     where
-        <<Self as HasIndexation<'a>>::Storage as Mappable>::Key: Sized + std::fmt::Debug,
+        <<Self as HasIndexation<'a>>::Storage as Mappable>::Key:
+            Sized + std::fmt::Display,
         <<Self as HasIndexation<'a>>::Storage as Mappable>::Value:
             Sized + std::fmt::Display,
         <<Self as HasIndexation<'a>>::Storage as Mappable>::OwnedValue:
@@ -239,7 +240,7 @@ trait HasIndexation<'a> {
         let new_balance = updater(current_balance, amount);
 
         debug!(
-            ?key,
+            %key,
             %amount,
             %prev_balance,
             %new_balance,

@@ -31,6 +31,12 @@ impl Distribution<BalancesKey> for Standard {
     }
 }
 
+impl core::fmt::Display for BalancesKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "address={} asset_id={}", self.address(), self.asset_id())
+    }
+}
+
 /// This table stores the balances of coins per owner and asset id.
 pub struct CoinBalances;
 
