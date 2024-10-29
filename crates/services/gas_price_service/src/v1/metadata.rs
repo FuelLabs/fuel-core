@@ -43,17 +43,15 @@ impl V1Metadata {
         v0_metadata: V0Metadata,
         config: V1AlgorithmConfig,
     ) -> anyhow::Result<Self> {
-        let gas_price_factor = NonZeroU64::new(config.gas_price_factor)
-            .ok_or_else(|| anyhow::anyhow!("gas_price_factor must be non-zero"))?;
         let metadata = Self {
             new_scaled_exec_price: v0_metadata
                 .new_exec_price
-                .saturating_mul(gas_price_factor.get()),
+                .saturating_mul(config.gas_price_factor.get()),
             l2_block_height: v0_metadata.l2_block_height,
             new_scaled_da_gas_price: config
                 .min_da_gas_price
-                .saturating_mul(gas_price_factor.get()),
-            gas_price_factor,
+                .saturating_mul(config.gas_price_factor.get()),
+            gas_price_factor: config.gas_price_factor,
             total_da_rewards_excess: 0,
             // TODO: Set to `None` after:
             //   https://github.com/FuelLabs/fuel-core/issues/2397
@@ -74,7 +72,7 @@ pub struct V1AlgorithmConfig {
     min_exec_gas_price: u64,
     exec_gas_price_change_percent: u16,
     l2_block_fullness_threshold_percent: u8,
-    gas_price_factor: u64,
+    gas_price_factor: NonZeroU64,
     min_da_gas_price: u64,
     max_da_gas_price_change_percent: u16,
     da_p_component: i64,

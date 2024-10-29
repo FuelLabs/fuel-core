@@ -3790,7 +3790,7 @@ version = "0.40.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "derive_more",
+ "derive_more 0.99.18",
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
