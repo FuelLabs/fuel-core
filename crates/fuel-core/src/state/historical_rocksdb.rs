@@ -451,7 +451,7 @@ where
         // This is to avoid a scenario where the migration changes overwrites changes to the modification history
         // coming from other transactions.
         // If we were to release the lock as soon as we take the cumulative changes, and then acquiring it again when
-        // writing the updatet set of changes, then we could have the following schedule of events.
+        // writing the updated set of changes, then we could have the following schedule of events.
         // - A modification transaction M1 migrates height 42 from V1 to V2.
         // - A second modification transaction M2 takes the cumulative changes from the lock, and adds the changes for another height.
         // - A transaction T1 rollbacks to height 42, writes the changes to the modification history, and commits to rocksDB.
