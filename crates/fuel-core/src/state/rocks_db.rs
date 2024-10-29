@@ -1211,7 +1211,7 @@ mod tests {
     fn iter_store__reverse_iterator() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Arc::new(Vec::new());
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [2, 3];
