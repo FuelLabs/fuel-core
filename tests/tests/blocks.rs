@@ -30,6 +30,7 @@ use fuel_core_storage::{
     vm_storage::VmStorageRequirements,
     StorageAsMut,
 };
+
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -43,17 +44,16 @@ use itertools::{
     rev,
     Itertools,
 };
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
 use rstest::rstest;
 use std::{
     ops::Deref,
     time::Duration,
 };
 use test_helpers::send_graph_ql_query;
-
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
-};
 
 #[tokio::test]
 async fn block() {
@@ -370,7 +370,10 @@ mod full_block {
         HeavyWorkConfig,
         PoolLimits,
     };
-    use fuel_core_types::fuel_types::BlockHeight;
+    use fuel_core_types::fuel_types::{
+        BlockHeight,
+        ChainId,
+    };
 
     #[derive(cynic::QueryFragment, Debug)]
     #[cynic(
@@ -428,11 +431,22 @@ mod full_block {
 
         let client = FuelClient::from(srv.bound_address);
         let tx = Transaction::default_test_tx();
+        let tx_id = tx.id(&ChainId::default());
+
         client.submit_and_await_commit(&tx).await.unwrap();
 
         let block = client.full_block_by_height(1).await.unwrap().unwrap();
         assert_eq!(block.header.height.0, 1);
-        assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
+
+        let [returned_tx, _mint_tx] = block.transactions.as_slice() else {
+            panic!("expected two transactions");
+        };
+
+        let returned_tx_id = Transaction::try_from(returned_tx.clone())
+            .unwrap()
+            .id(&ChainId::default());
+
+        assert_eq!(returned_tx_id, tx_id);
     }
 
     #[tokio::test]

@@ -146,7 +146,6 @@ impl ReadView {
         }
     }
 
-    // TODO: Test case to ensure order is preserved
     pub async fn transactions(&self, tx_ids: &[TxId]) -> Vec<StorageResult<Transaction>> {
         let on_chain_results: BTreeMap<_, _> = tx_ids
             .iter()

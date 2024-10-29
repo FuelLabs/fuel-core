@@ -177,7 +177,7 @@ impl LowerHex for TxPointer {
     }
 }
 
-#[derive(cynic::Scalar, Debug, Clone)]
+#[derive(cynic::Scalar, Debug, Clone, PartialEq, Eq)]
 pub struct HexString(pub Bytes);
 
 impl From<HexString> for Vec<u8> {
@@ -194,7 +194,7 @@ impl Deref for HexString {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Bytes(pub Vec<u8>);
 
 impl FromStr for Bytes {
