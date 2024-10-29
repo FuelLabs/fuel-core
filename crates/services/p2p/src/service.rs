@@ -22,8 +22,9 @@ use crate::{
     request_response::messages::{
         OnResponse,
         RequestMessage,
-        ResponseMessage,
+        ResponseMessageErrorCode,
         ResponseSender,
+        V2ResponseMessage,
     },
 };
 use anyhow::anyhow;
@@ -136,19 +137,20 @@ pub enum TaskRequest {
         reporting_service: &'static str,
     },
     DatabaseTransactionsLookUp {
-        response: Option<Vec<Transactions>>,
+        response: Result<Vec<Transactions>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
     DatabaseHeaderLookUp {
-        response: Option<Vec<SealedBlockHeader>>,
+        response: Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
     TxPoolAllTransactionsIds {
-        response: Option<Vec<TxId>>,
+        response: Result<Vec<TxId>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
     TxPoolFullTransactions {
-        response: Option<Vec<Option<NetworkableTransactionPool>>>,
+        response:
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
         request_id: InboundRequestId,
     },
 }
@@ -223,7 +225,7 @@ pub trait TaskP2PService: Send {
     fn send_response_msg(
         &mut self,
         request_id: InboundRequestId,
-        message: ResponseMessage,
+        message: V2ResponseMessage,
     ) -> anyhow::Result<()>;
 
     fn report_message(
@@ -297,7 +299,7 @@ impl TaskP2PService for FuelP2PService {
     fn send_response_msg(
         &mut self,
         request_id: InboundRequestId,
-        message: ResponseMessage,
+        message: V2ResponseMessage,
     ) -> anyhow::Result<()> {
         self.send_response_msg(request_id, message)?;
         Ok(())
@@ -532,8 +534,11 @@ where
     where
         DbLookUpFn:
             Fn(&V::LatestView, Range<u32>) -> anyhow::Result<Option<R>> + Send + 'static,
-        ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
-        TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
+        ResponseSenderFn:
+            Fn(Result<R, ResponseMessageErrorCode>) -> V2ResponseMessage + Send + 'static,
+        TaskRequestFn: Fn(Result<R, ResponseMessageErrorCode>, InboundRequestId) -> TaskRequest
+            + Send
+            + 'static,
         R: Send + 'static,
     {
         let instant = Instant::now();
@@ -549,8 +554,9 @@ where
                 max_len,
                 "Requested range is too big"
             );
-            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-            let response = None;
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Return helpful error message to requester.
+            let response = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(response));
@@ -564,17 +570,25 @@ where
                 return;
             }
 
-            let response = db_lookup(&view, range.clone()).ok().flatten();
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Add new error code
+            let response = db_lookup(&view, range.clone())
+                .ok()
+                .flatten()
+                .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
 
             let _ = response_channel
                 .try_send(task_request(response, request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+        // Handle error cases and return meaningful status codes
         if result.is_err() {
+            let err = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
-                .send_response_msg(request_id, response_sender(None));
+                .send_response_msg(request_id, response_sender(err));
         }
 
         Ok(())
@@ -588,7 +602,7 @@ where
         self.handle_db_request(
             range,
             request_id,
-            ResponseMessage::Transactions,
+            V2ResponseMessage::Transactions,
             |view, range| view.get_transactions(range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
@@ -606,7 +620,7 @@ where
         self.handle_db_request(
             range,
             request_id,
-            ResponseMessage::SealedHeaders,
+            V2ResponseMessage::SealedHeaders,
             |view, range| view.get_sealed_headers(range).map_err(anyhow::Error::from),
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
@@ -624,8 +638,11 @@ where
         task_request: TaskRequestFn,
     ) -> anyhow::Result<()>
     where
-        ResponseSenderFn: Fn(Option<R>) -> ResponseMessage + Send + 'static,
-        TaskRequestFn: Fn(Option<R>, InboundRequestId) -> TaskRequest + Send + 'static,
+        ResponseSenderFn:
+            Fn(Result<R, ResponseMessageErrorCode>) -> V2ResponseMessage + Send + 'static,
+        TaskRequestFn: Fn(Result<R, ResponseMessageErrorCode>, InboundRequestId) -> TaskRequest
+            + Send
+            + 'static,
         F: Future<Output = anyhow::Result<R>> + Send + 'static,
     {
         let instant = Instant::now();
@@ -642,16 +659,20 @@ where
                 return;
             };
 
-            // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Return helpful error message to requester.
             let _ = response_channel
-                .try_send(task_request(Some(response), request_id))
+                .try_send(task_request(Ok(response), request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
         if result.is_err() {
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+            // Return better error code
+            let res = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
             let _ = self
                 .p2p_service
-                .send_response_msg(request_id, response_sender(None));
+                .send_response_msg(request_id, response_sender(res));
         }
 
         Ok(())
@@ -666,7 +687,7 @@ where
         self.handle_txpool_request(
             request_id,
             async move { tx_pool.get_tx_ids(max_txs).await },
-            ResponseMessage::TxPoolAllTransactionsIds,
+            V2ResponseMessage::TxPoolAllTransactionsIds,
             |response, request_id| TaskRequest::TxPoolAllTransactionsIds {
                 response,
                 request_id,
@@ -679,11 +700,14 @@ where
         tx_ids: Vec<TxId>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+        // Return helpful error message to requester.
         if tx_ids.len() > self.max_txs_per_request {
             self.p2p_service.send_response_msg(
                 request_id,
-                ResponseMessage::TxPoolFullTransactions(None),
+                V2ResponseMessage::TxPoolFullTransactions(Err(
+                    ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+                )),
             )?;
             return Ok(());
         }
@@ -691,7 +715,7 @@ where
         self.handle_txpool_request(
             request_id,
             async move { tx_pool.get_full_txs(tx_ids).await },
-            ResponseMessage::TxPoolFullTransactions,
+            V2ResponseMessage::TxPoolFullTransactions,
             |response, request_id| TaskRequest::TxPoolFullTransactions {
                 response,
                 request_id,
@@ -886,16 +910,16 @@ where
                         let _ = channel.send(peers);
                     }
                     Some(TaskRequest::DatabaseTransactionsLookUp { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::Transactions(response));
                     }
                     Some(TaskRequest::DatabaseHeaderLookUp { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::SealedHeaders(response));
                     }
                     Some(TaskRequest::TxPoolAllTransactionsIds { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::TxPoolAllTransactionsIds(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::TxPoolAllTransactionsIds(response));
                     }
                     Some(TaskRequest::TxPoolFullTransactions { response, request_id }) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::TxPoolFullTransactions(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::TxPoolFullTransactions(response));
                     }
                     None => {
                         tracing::error!("The P2P `Task` should be holder of the `Sender`");
@@ -1414,7 +1438,7 @@ pub mod tests {
         fn send_response_msg(
             &mut self,
             _request_id: InboundRequestId,
-            _message: ResponseMessage,
+            _message: V2ResponseMessage,
         ) -> anyhow::Result<()> {
             todo!()
         }

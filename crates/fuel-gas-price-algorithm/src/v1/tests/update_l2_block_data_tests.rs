@@ -4,7 +4,63 @@ use crate::v1::{
         UpdaterBuilder,
     },
     Error,
+    L2ActivityTracker,
 };
+
+fn decrease_l2_activity() -> L2ActivityTracker {
+    let normal = 1;
+    let capped = 1;
+    let decrease = 100;
+    let activity = 50;
+    let threshold = 50.into();
+    L2ActivityTracker::new(normal, capped, decrease, activity, threshold)
+}
+
+fn negative_profit_updater_builder() -> UpdaterBuilder {
+    let starting_exec_gas_price = 100;
+    let starting_da_gas_price = 100;
+    let starting_cost = u128::MAX;
+    let latest_gas_per_byte = i32::MAX; // DA is very expensive
+    let da_p_component = 100;
+    let da_d_component = 10;
+    let last_profit = i128::MIN;
+    let last_last_profit = 0;
+    let smaller_starting_reward = 0;
+    UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_starting_da_gas_price(starting_da_gas_price)
+        .with_da_p_component(da_p_component)
+        .with_da_d_component(da_d_component)
+        .with_total_rewards(smaller_starting_reward)
+        .with_known_total_cost(starting_cost)
+        .with_projected_total_cost(starting_cost)
+        .with_da_cost_per_byte(latest_gas_per_byte as u128)
+        .with_last_profit(last_profit, last_last_profit)
+}
+
+fn positive_profit_updater_builder() -> UpdaterBuilder {
+    let starting_exec_gas_price = 100;
+    let last_da_gas_price = 100;
+    let starting_cost = 500;
+    let latest_gas_per_byte = 0; // DA is free
+    let da_p_component = 100;
+    let da_d_component = 10;
+    let last_profit = i128::MAX;
+    let last_last_profit = 0;
+    let large_reward = i128::MAX;
+    UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_da_p_component(da_p_component)
+        .with_da_d_component(da_d_component)
+        .with_starting_da_gas_price(last_da_gas_price)
+        .with_total_rewards(large_reward as u128)
+        .with_known_total_cost(starting_cost as u128)
+        .with_projected_total_cost(starting_cost as u128)
+        .with_da_cost_per_byte(latest_gas_per_byte as u128)
+        .with_last_profit(last_profit, last_last_profit)
+        .with_da_max_change_percent(u16::MAX)
+        .with_exec_gas_price_change_percent(0)
+}
 
 #[test]
 fn update_l2_block_data__updates_l2_block() {
@@ -268,32 +324,11 @@ fn update_l2_block_data__updates_last_and_last_last_profit() {
 #[test]
 fn update_l2_block_data__positive_profit_decrease_gas_price() {
     // given
-    let starting_exec_gas_price = 100;
-    let last_da_gas_price = 100;
-    let starting_cost = 500;
-    let latest_gas_per_byte = 0; // DA is free
-    let da_p_component = 100;
-    let da_d_component = 10;
-    let block_bytes = 500u64;
-    let last_profit = i128::MAX;
-    let last_last_profit = 0;
-    let large_reward = i128::MAX;
-    let mut updater = UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_da_p_component(da_p_component)
-        .with_da_d_component(da_d_component)
-        .with_starting_da_gas_price(last_da_gas_price)
-        .with_total_rewards(large_reward as u128)
-        .with_known_total_cost(starting_cost as u128)
-        .with_projected_total_cost(starting_cost as u128)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
-        .with_last_profit(last_profit, last_last_profit)
-        .with_da_max_change_percent(u16::MAX)
-        .with_exec_gas_price_change_percent(0)
-        .build();
+    let mut updater = positive_profit_updater_builder().build();
     let old_gas_price = updater.algorithm().calculate();
 
     // when
+    let block_bytes = 500u64;
     updater
         .update_l2_block_data(
             updater.l2_block_height + 1,
@@ -496,26 +531,7 @@ fn update_l2_block_data__even_profit_maintains_price() {
 #[test]
 fn update_l2_block_data__negative_profit_increase_gas_price() {
     // given
-    let starting_exec_gas_price = 100;
-    let starting_da_gas_price = 100;
-    let starting_cost = u128::MAX;
-    let latest_gas_per_byte = i32::MAX; // DA is very expensive
-    let da_p_component = 100;
-    let da_d_component = 10;
-    let last_profit = i128::MIN;
-    let last_last_profit = 0;
-    let smaller_starting_reward = 0;
-    let mut updater = UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_exec_gas_price)
-        .with_starting_da_gas_price(starting_da_gas_price)
-        .with_da_p_component(da_p_component)
-        .with_da_d_component(da_d_component)
-        .with_total_rewards(smaller_starting_reward)
-        .with_known_total_cost(starting_cost)
-        .with_projected_total_cost(starting_cost)
-        .with_da_cost_per_byte(latest_gas_per_byte as u128)
-        .with_last_profit(last_profit, last_last_profit)
-        .build();
+    let mut updater = negative_profit_updater_builder().build();
     let algo = updater.algorithm();
     let old_gas_price = algo.calculate();
 
@@ -609,4 +625,273 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
         .unrecorded_blocks
         .contains_key(&preexisting_block.height);
     assert!(contains_preexisting_block_bytes);
+}
+
+fn capped_l2_activity_tracker() -> L2ActivityTracker {
+    let normal = 1;
+    let capped = 100;
+    let decrease = 1;
+    let activity = 50;
+    let threshold = 50.into();
+    L2ActivityTracker::new(normal, capped, decrease, activity, threshold)
+}
+
+#[test]
+fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in_hold_range(
+) {
+    // given
+    let capped_activity = capped_l2_activity_tracker();
+    let mut updater = negative_profit_updater_builder()
+        .with_activity(capped_activity)
+        .build();
+    let algo = updater.algorithm();
+    let old_gas_price = algo.calculate();
+
+    // when
+    let height = updater.l2_block_height + 1;
+    let used = 50;
+    let capacity = 100u64.try_into().unwrap();
+    let block_bytes = 500u64;
+    let fee = 0;
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let algo = updater.algorithm();
+    let new_gas_price = algo.calculate();
+    assert_eq!(new_gas_price, old_gas_price,);
+}
+
+#[test]
+fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_hold_range(
+) {
+    // given
+    let capped_activity = capped_l2_activity_tracker();
+    let mut updater = positive_profit_updater_builder()
+        .with_activity(capped_activity)
+        .build();
+    let old_gas_price = updater.algorithm().calculate();
+
+    // when
+    let block_bytes = 500u64;
+    updater
+        .update_l2_block_data(
+            updater.l2_block_height + 1,
+            50,
+            100.try_into().unwrap(),
+            block_bytes,
+            200,
+        )
+        .unwrap();
+
+    // then
+    let new_gas_price = updater.algorithm().calculate();
+    assert!(
+        new_gas_price < old_gas_price,
+        "{} !< {}",
+        old_gas_price,
+        new_gas_price
+    );
+}
+
+#[test]
+fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activity_in_decrease_range(
+) {
+    // given
+    let decrease_activity = decrease_l2_activity();
+    let mut updater = negative_profit_updater_builder()
+        .with_activity(decrease_activity)
+        .build();
+    let algo = updater.algorithm();
+    let old_gas_price = algo.calculate();
+
+    // when
+    let height = updater.l2_block_height + 1;
+    let used = 50;
+    let capacity = 100u64.try_into().unwrap();
+    let block_bytes = 500u64;
+    let fee = 0;
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let algo = updater.algorithm();
+    let new_gas_price = algo.calculate();
+    assert!(
+        new_gas_price < old_gas_price,
+        "{} !> {}",
+        new_gas_price,
+        old_gas_price
+    );
+}
+
+#[test]
+fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_decrease_range(
+) {
+    // given
+    let decrease_activity = decrease_l2_activity();
+    let mut updater = positive_profit_updater_builder()
+        .with_activity(decrease_activity)
+        .build();
+    let old_gas_price = updater.algorithm().calculate();
+
+    // when
+    let block_bytes = 500u64;
+    updater
+        .update_l2_block_data(
+            updater.l2_block_height + 1,
+            50,
+            100.try_into().unwrap(),
+            block_bytes,
+            200,
+        )
+        .unwrap();
+
+    // then
+    let new_gas_price = updater.algorithm().calculate();
+    assert!(
+        new_gas_price < old_gas_price,
+        "{} !< {}",
+        old_gas_price,
+        new_gas_price
+    );
+}
+
+#[test]
+fn update_l2_block_data__above_threshold_increase_activity() {
+    // given
+    let starting_exec_gas_price = 100;
+    let exec_gas_price_increase_percent = 10;
+    let threshold = 50;
+    let starting_activity = 2;
+    let activity = L2ActivityTracker::new(1, 1, 1, starting_activity, 50.into());
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
+        .with_l2_block_capacity_threshold(threshold)
+        .with_activity(activity)
+        .build();
+
+    let height = 1;
+    let used = 60;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let fee = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let expected = starting_activity + 1;
+    let actual = updater.l2_activity.current_activity();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn update_l2_block_data__below_threshold_decrease_activity() {
+    // given
+    let starting_exec_gas_price = 100;
+    let exec_gas_price_increase_percent = 10;
+    let threshold = 50;
+    let starting_activity = 2;
+    let activity = L2ActivityTracker::new(1, 1, 1, starting_activity, 50.into());
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
+        .with_l2_block_capacity_threshold(threshold)
+        .with_activity(activity)
+        .build();
+
+    let height = 1;
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let fee = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let expected = starting_activity - 1;
+    let actual = updater.l2_activity.current_activity();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn update_l2_block_data__if_activity_at_max_will_stop_increasing() {
+    // given
+    let starting_exec_gas_price = 100;
+    let exec_gas_price_increase_percent = 10;
+    let threshold = 50;
+    let normal_range = 1;
+    let capped_range = 1;
+    let decrease_range = 1;
+    let starting_activity = normal_range + capped_range + decrease_range;
+    let activity = L2ActivityTracker::new(
+        normal_range,
+        capped_range,
+        decrease_range,
+        starting_activity,
+        50.into(),
+    );
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
+        .with_l2_block_capacity_threshold(threshold)
+        .with_activity(activity)
+        .build();
+
+    let height = 1;
+    let used = 60;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let fee = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let expected = starting_activity;
+    let actual = updater.l2_activity.current_activity();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn update_l2_block_data__if_activity_is_zero_will_stop_decreasing() {
+    // given
+    let starting_exec_gas_price = 100;
+    let exec_gas_price_increase_percent = 10;
+    let threshold = 50;
+    let starting_activity = 0;
+    let activity = L2ActivityTracker::new(1, 1, 1, starting_activity, 50.into());
+    let mut updater = UpdaterBuilder::new()
+        .with_starting_exec_gas_price(starting_exec_gas_price)
+        .with_exec_gas_price_change_percent(exec_gas_price_increase_percent)
+        .with_l2_block_capacity_threshold(threshold)
+        .with_activity(activity)
+        .build();
+
+    let height = 1;
+    let used = 40;
+    let capacity = 100.try_into().unwrap();
+    let block_bytes = 1000;
+    let fee = 200;
+
+    // when
+    updater
+        .update_l2_block_data(height, used, capacity, block_bytes, fee)
+        .unwrap();
+
+    // then
+    let expected = starting_activity;
+    let actual = updater.l2_activity.current_activity();
+    assert_eq!(actual, expected);
 }
