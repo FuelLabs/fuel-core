@@ -41,6 +41,50 @@ impl CachedView {
         }
     }
 
+    fn get_from_cache_or_db<V, T, F>(
+        &self,
+        cache: &DashMap<u32, T>,
+        view: &V,
+        range: Range<u32>,
+        fetch_fn: F,
+    ) -> StorageResult<Option<Vec<T>>>
+    where
+        V: P2pDb,
+        T: Clone,
+        F: Fn(&V, Range<u32>) -> StorageResult<Option<Vec<T>>>,
+    {
+        let mut items = Vec::new();
+        let mut missing_start = None;
+
+        for height in range.clone() {
+            if let Some(item) = cache.get(&height) {
+                items.push(item.clone());
+            } else {
+                missing_start = Some(height);
+                break;
+            }
+        }
+
+        if missing_start.is_none() {
+            self.update_metrics(increment_p2p_req_res_cache_hits);
+            return Ok(Some(items));
+        }
+
+        let missing_range = missing_start.unwrap()..range.end;
+
+        self.update_metrics(increment_p2p_req_res_cache_misses);
+        if let Some(fetched_items) = fetch_fn(view, missing_range.clone())? {
+            for (height, item) in missing_range.zip(fetched_items.iter()) {
+                cache.insert(height, item.clone());
+                items.push(item.clone());
+            }
+
+            return Ok(Some(items));
+        }
+
+        Ok(None)
+    }
+
     pub(crate) fn get_sealed_headers<V>(
         &self,
         view: &V,
@@ -49,33 +93,12 @@ impl CachedView {
     where
         V: P2pDb,
     {
-        let mut headers = Vec::new();
-        let mut missing_ranges = block_height_range.clone();
-        for block_height in block_height_range.clone() {
-            if let Some(header) = self.sealed_block_headers.get(&block_height) {
-                headers.push(header.clone());
-            } else {
-                // for the first block not in the cache, start a new range
-                missing_ranges.start = block_height;
-                break;
-            }
-        }
-
-        if missing_ranges.is_empty() {
-            self.update_metrics(increment_p2p_req_res_cache_hits);
-            return Ok(Some(headers))
-        }
-
-        self.update_metrics(increment_p2p_req_res_cache_misses);
-        let missing_headers = view.get_sealed_headers(missing_ranges.clone())?;
-        if let Some(missing_headers) = &missing_headers {
-            for header in missing_headers.iter() {
-                self.sealed_block_headers
-                    .insert((*header.entity.height()).into(), header.clone());
-                headers.push(header.clone());
-            }
-        }
-        Ok(missing_headers)
+        self.get_from_cache_or_db(
+            &self.sealed_block_headers,
+            view,
+            block_height_range,
+            V::get_sealed_headers,
+        )
     }
 
     pub(crate) fn get_transactions<V>(
@@ -86,34 +109,12 @@ impl CachedView {
     where
         V: P2pDb,
     {
-        let mut transactions = Vec::new();
-        let mut missing_ranges = block_height_range.clone();
-        for block_height in block_height_range.clone() {
-            if let Some(cached_tx) = self.transactions_on_blocks.get(&block_height) {
-                transactions.push(cached_tx.clone());
-            } else {
-                // for the first block not in the cache, start a new range
-                missing_ranges.start = block_height;
-                break;
-            }
-        }
-
-        if missing_ranges.is_empty() {
-            self.update_metrics(increment_p2p_req_res_cache_hits);
-            return Ok(Some(transactions))
-        }
-
-        self.update_metrics(increment_p2p_req_res_cache_misses);
-        let transactions = view.get_transactions(missing_ranges.clone())?;
-        if let Some(transactions) = &transactions {
-            for (block_height, transactions_per_block) in
-                missing_ranges.zip(transactions.iter())
-            {
-                self.transactions_on_blocks
-                    .insert(block_height, transactions_per_block.clone());
-            }
-        }
-        Ok(transactions)
+        self.get_from_cache_or_db(
+            &self.transactions_on_blocks,
+            view,
+            block_height_range,
+            V::get_transactions,
+        )
     }
 }
 
