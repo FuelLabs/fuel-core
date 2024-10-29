@@ -17,7 +17,6 @@ use fuel_core_gas_price_service::{
         GasPriceData,
         GasPriceServiceConfig,
         L2Data,
-        VersionSpecificConfig,
     },
 };
 use fuel_core_storage::{
@@ -65,15 +64,12 @@ impl GasPriceData for Database<GasPriceDatabase> {
 
 impl From<Config> for GasPriceServiceConfig {
     fn from(value: Config) -> Self {
-        // TODO: we need to alter fuel-core configuration to include versioned config, after which
-        // we can directly pass it into the constructor.
-        let version_specific_config = VersionSpecificConfig::new_v0(
+        GasPriceServiceConfig::new_v0(
             value.starting_gas_price,
             value.min_gas_price,
             value.gas_price_change_percent,
             value.gas_price_threshold_percent,
-        );
-        GasPriceServiceConfig::new(version_specific_config)
+        )
     }
 }
 

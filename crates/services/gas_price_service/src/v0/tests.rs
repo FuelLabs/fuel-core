@@ -116,7 +116,7 @@ impl MetadataStorage for ErroringMetadata {
     }
 }
 
-fn arb_config() -> V0AlgorithmConfig {
+fn arbitrary_config() -> V0AlgorithmConfig {
     V0AlgorithmConfig {
         starting_gas_price: 100,
         min_gas_price: 0,
@@ -125,7 +125,7 @@ fn arb_config() -> V0AlgorithmConfig {
     }
 }
 
-fn arb_metadata() -> V0Metadata {
+fn arbitrary_metadata() -> V0Metadata {
     V0Metadata {
         new_exec_price: 100,
         l2_block_height: 0,
@@ -155,7 +155,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     };
     let metadata_storage = FakeMetadata::empty();
 
-    let config = arb_config();
+    let config = arbitrary_config();
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
@@ -197,7 +197,7 @@ async fn next__new_l2_block_saves_old_metadata() {
         inner: metadata_inner.clone(),
     };
 
-    let config = arb_config();
+    let config = arbitrary_config();
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
@@ -228,7 +228,7 @@ impl GasPriceSettingsProvider for FakeSettings {
         &self,
         _param_version: &ConsensusParametersVersion,
     ) -> GasPriceResult<GasPriceSettings> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -238,7 +238,7 @@ struct FakeGasPriceDb;
 // GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>
 impl GasPriceData for FakeGasPriceDb {
     fn latest_height(&self) -> Option<BlockHeight> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -274,7 +274,7 @@ impl L2Data for FakeL2Data {
         &self,
         _height: &BlockHeight,
     ) -> StorageResult<Option<Block<Transaction>>> {
-        todo!()
+        unimplemented!()
     }
 }
 impl AtomicView for FakeOnChainDb {
@@ -293,7 +293,7 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
 #[tokio::test]
 async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
     // given
-    let original_metadata = arb_metadata();
+    let original_metadata = arbitrary_metadata();
     let original = UpdaterMetadata::V0(original_metadata.clone());
     let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
     let metadata_storage = FakeMetadata {
@@ -337,7 +337,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
 #[tokio::test]
 async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     // given
-    let config = arb_config();
+    let config = arbitrary_config();
     let different_l2_block = 1231;
     let metadata_storage = ErroringMetadata;
     let settings = FakeSettings;
