@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
-- [2352](https://github.com/FuelLabs/fuel-core/pull/2352): Fetches transactions during sync phase from any node that can provide it instead of just 1.
+- [2352](https://github.com/FuelLabs/fuel-core/pull/2352): Cache p2p responses to serve without roundtrip to db.
 
 ## [Version 0.39.0]
 
