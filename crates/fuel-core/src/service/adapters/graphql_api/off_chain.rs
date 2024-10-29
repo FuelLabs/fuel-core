@@ -170,7 +170,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     fn old_transaction(&self, id: &TxId) -> StorageResult<Transaction> {
         self.storage_as_ref::<OldTransactions>()
             .get(id)?
-            // Note: Breaking change (previously we returned not_found!(Transactions))
             .ok_or(not_found!(OldTransactions))
             .map(|tx| tx.into_owned())
     }
