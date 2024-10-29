@@ -1054,18 +1054,16 @@ mod tests {
         p2p_config.reserved_nodes = vec![multiaddr];
 
         let mut node = build_service_from_config(p2p_config).await;
-        loop {
-            tokio::select! {
-                event = node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = event {
-                        panic!("The node should not connect to itself");
-                    }
-                }
-                _ = tokio::time::sleep(Duration::from_secs(2)) => {
-                    break;
+        tokio::time::timeout(Duration::from_secs(2), async move {
+            loop {
+                let event = node.next_event().await;
+                if let Some(FuelP2PEvent::PeerConnected(_)) = event {
+                    panic!("The node should not connect to itself");
                 }
             }
-        }
+        })
+        .await
+        .expect_err("The node should not connect to itself");
     }
 
     // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
