@@ -15,7 +15,7 @@ use super::{
     GossipsubCodec,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GossipsubMessageHandler<Codec> {
     pub(crate) codec: Codec,
 }

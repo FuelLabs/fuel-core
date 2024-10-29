@@ -10,7 +10,7 @@ use std::{
     io,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PostcardCodec;
 
 impl RequestResponseMessageHandler<PostcardCodec> {
