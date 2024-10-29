@@ -87,7 +87,7 @@ where
         column: S::Column,
     ) -> BoxedIter<'a, StorageResult<Option<M::OwnedValue>>> {
         let keys = keys
-            .map(|key| Self::KeyCodec::encode(&key).as_bytes().into_owned())
+            .map(|key| Self::KeyCodec::encode(key).as_bytes().into_owned())
             .into_boxed();
 
         storage
