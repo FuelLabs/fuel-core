@@ -33,8 +33,8 @@ pub struct V1Metadata {
     pub second_to_last_profit: i128,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u128,
-    /// The l2 blocks that have not been recorded on the DA chain, but have been used to estimate
-    /// the cost of recording blocks on the DA chain
+    /// List of (height, size) for l2 blocks that have not been recorded on the DA chain (that we know),
+    /// but have been used to estimate the cost of recording blocks on the DA chain
     pub unrecorded_blocks: Vec<(u32, u64)>,
 }
 
