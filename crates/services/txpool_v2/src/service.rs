@@ -1,5 +1,9 @@
-use crate as fuel_core_txpool;
+use crate::{
+    self as fuel_core_txpool,
+    selection_algorithms::SelectionAlgorithm,
+};
 
+use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
     AsyncProcessor,
     RunnableService,
@@ -67,6 +71,7 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
+            PoolTransaction,
             TransactionStatus,
         },
     },
@@ -187,6 +192,7 @@ pub struct Task<View> {
     current_height: Shared<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
+    metrics: bool,
 }
 
 #[async_trait::async_trait]
@@ -221,6 +227,18 @@ where
     View: TxPoolPersistentStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        // TODO: move this to the Task struct
+        if self.metrics {
+            let pool = self.pool.read();
+            let num_transactions = pool.storage.tx_count();
+
+            let executable_txs =
+                pool.selection_algorithm.number_of_executable_transactions();
+
+            record_number_of_transactions_in_txpool(num_transactions);
+            record_number_of_executable_transactions_in_txpool(executable_txs);
+        }
+
         tokio::select! {
             biased;
 
@@ -382,8 +400,9 @@ where
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
+        let metrics = self.metrics;
 
-        move || {
+        let insert_transaction_thread_pool_op = move || {
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -410,6 +429,10 @@ where
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
+            };
+
+            if metrics {
+                record_tx_size(&checked_tx)
             };
 
             let tx = Arc::new(checked_tx);
@@ -462,6 +485,25 @@ where
                     tx.id(),
                     Error::Removed(RemovedReason::LessWorth(tx.id())),
                 );
+            }
+        };
+        move || {
+            if metrics {
+                let txpool_metrics = txpool_metrics();
+                txpool_metrics
+                    .number_of_transactions_pending_verification
+                    .inc();
+                let start_time = tokio::time::Instant::now();
+                insert_transaction_thread_pool_op();
+                let time_for_task_to_complete = start_time.elapsed().as_millis();
+                txpool_metrics
+                    .transaction_insertion_time_in_thread_pool_milliseconds
+                    .observe(time_for_task_to_complete as f64);
+                txpool_metrics
+                    .number_of_transactions_pending_verification
+                    .dec();
+            } else {
+                insert_transaction_thread_pool_op();
             }
         }
     }
@@ -651,6 +693,23 @@ where
     }
 }
 
+fn record_tx_size(tx: &PoolTransaction) {
+    let size = tx.metered_bytes_size();
+    let txpool_metrics = txpool_metrics();
+    txpool_metrics.tx_size.observe(size as f64);
+}
+
+fn record_number_of_transactions_in_txpool(num_transactions: usize) {
+    txpool_metrics()
+        .number_of_transactions
+        .set(num_transactions as i64);
+}
+fn record_number_of_executable_transactions_in_txpool(executable_txs: usize) {
+    txpool_metrics()
+        .number_of_executable_transactions
+        .set(executable_txs as i64);
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<
     P2P,
@@ -751,6 +810,8 @@ where
     )
     .unwrap();
 
+    let metrics = config.metrics;
+
     let utxo_validation = config.utxo_validation;
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
@@ -773,6 +834,7 @@ where
         current_height: Arc::new(RwLock::new(current_height)),
         pool: Arc::new(RwLock::new(txpool)),
         shared_state,
+        metrics,
         tx_sync_history: Default::default(),
     })
 }
