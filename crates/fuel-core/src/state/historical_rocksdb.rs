@@ -481,7 +481,7 @@ where
         if let Some(v1_changes) = v1_changes {
             migration_transaction
                 .storage_as_mut::<ModificationsHistoryV2<Description>>()
-                .insert(&height, &v1_changes)?; // TODO: If this is an error we want to at least write back the old changes
+                .insert(&height, &v1_changes)?;
         };
 
         // Add the changes into the cumulative changes
