@@ -178,7 +178,7 @@ pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
 }
 
 /// Allows getting batches of values from the storage,
-/// which can be faster in certain implementatoins than
+/// which can be faster in certain implementations than
 /// getting values one by one.
 pub trait StorageBatchInspect<Type: Mappable> {
     /// Get a batch of values associated with the provided keys.
