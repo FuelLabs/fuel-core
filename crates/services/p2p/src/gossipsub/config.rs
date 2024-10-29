@@ -1,7 +1,4 @@
-use super::topics::{
-    GossipTopic,
-    NEW_TX_GOSSIP_TOPIC,
-};
+use super::topics::NEW_TX_GOSSIP_TOPIC;
 use crate::{
     config::{
         Config,
@@ -18,6 +15,7 @@ use libp2p::gossipsub::{
     MetricsConfig,
     PeerScoreParams,
     PeerScoreThresholds,
+    Sha256Topic,
     Topic,
     TopicScoreParams,
 };
@@ -228,7 +226,7 @@ fn initialize_gossipsub(gossipsub: &mut gossipsub::Behaviour, p2p_config: &Confi
 
     // subscribe to gossipsub topics with the network name suffix
     for (topic, weight) in topics {
-        let t: GossipTopic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
+        let t: Sha256Topic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
 
         gossipsub
             .set_topic_params(t.clone(), initialize_topic_score_params(weight))

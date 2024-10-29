@@ -126,6 +126,8 @@ impl Config {
             #[cfg(feature = "rocksdb")]
             state_rewind_policy:
                 crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
+            #[cfg(feature = "rocksdb")]
+            max_fds: 512,
         };
         let starting_gas_price = 0;
         let gas_price_change_percent = 0;

@@ -5,15 +5,12 @@ use crate::{
     },
     config::Config,
     discovery,
-    gossipsub::{
-        config::build_gossipsub_behaviour,
-        topics::GossipTopic,
-    },
+    gossipsub::config::build_gossipsub_behaviour,
     heartbeat,
     peer_report,
     request_response::messages::{
         RequestMessage,
-        ResponseMessage,
+        V2ResponseMessage,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -28,6 +25,7 @@ use libp2p::{
         MessageAcceptance,
         MessageId,
         PublishError,
+        TopicHash,
     },
     identify,
     request_response::{
@@ -133,15 +131,16 @@ impl FuelBehaviour {
                 .with_max_established(Some(p2p_config.max_established_connections)),
         );
 
-        let req_res_protocol =
-            core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
+        let req_res_protocol = codec
+            .get_req_res_protocols()
+            .map(|protocol| (protocol, ProtocolSupport::Full));
 
         let req_res_config = request_response::Config::default()
             .with_request_timeout(p2p_config.set_request_timeout)
             .with_max_concurrent_streams(p2p_config.max_concurrent_streams);
 
         let request_response = request_response::Behaviour::with_codec(
-            codec,
+            codec.clone(),
             req_res_protocol,
             req_res_config,
         );
@@ -171,10 +170,10 @@ impl FuelBehaviour {
 
     pub fn publish_message(
         &mut self,
-        topic: GossipTopic,
+        topic_hash: TopicHash,
         encoded_data: Vec<u8>,
     ) -> Result<MessageId, PublishError> {
-        self.gossipsub.publish(topic, encoded_data)
+        self.gossipsub.publish(topic_hash, encoded_data)
     }
 
     pub fn send_request_msg(
@@ -187,9 +186,9 @@ impl FuelBehaviour {
 
     pub fn send_response_msg(
         &mut self,
-        channel: ResponseChannel<ResponseMessage>,
-        message: ResponseMessage,
-    ) -> Result<(), ResponseMessage> {
+        channel: ResponseChannel<V2ResponseMessage>,
+        message: V2ResponseMessage,
+    ) -> Result<(), V2ResponseMessage> {
         self.request_response.send_response(channel, message)
     }
 
