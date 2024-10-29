@@ -1208,14 +1208,43 @@ mod tests {
     }
 
     #[test]
-    fn iter_store__reverse_iterator() {
+    fn iter_store__reverse_iterator__no_target_prefix() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(Vec::new());
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [9, 3];
+        let key_4 = [10, 0];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_4, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![5].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_middle() {
         // Given
         let (mut db, _tmp) = create_db();
         let value = Arc::new(Vec::new());
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [2, 3];
-        let key_4 = [3, 0];
+        let key_4 = [10, 0];
         db.put(&key_1, Column::Metadata, value.clone()).unwrap();
         db.put(&key_2, Column::Metadata, value.clone()).unwrap();
         db.put(&key_3, Column::Metadata, value.clone()).unwrap();
@@ -1226,6 +1255,60 @@ mod tests {
             .iter_store(
                 Column::Metadata,
                 Some(vec![2].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_end() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(Vec::new());
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [2, 3];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![2].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_end__overflow() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(Vec::new());
+        let key_1 = [1, 1];
+        let key_2 = [255, 254];
+        let key_3 = [255, 255];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![255].as_slice()),
                 None,
                 IterDirection::Reverse,
             )
