@@ -1,2 +1,5 @@
 # Default code owners for fuel-core
 * @xgreenx @Dentosal @MitchTurner
+
+# Code owners for the gas price algorithm
+crates/fuel-gas-price-algorithm @MitchTurner @rafal-ch
