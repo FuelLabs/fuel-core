@@ -204,30 +204,28 @@ where
     }
 }
 
-trait HasIndexation<'a> {
+trait HasIndexation {
     type Storage: Mappable;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key;
     fn amount(&self) -> Amount;
     fn update_balances<T, F>(&self, tx: &mut T, updater: F) -> StorageResult<()>
     where
-        <<Self as HasIndexation<'a>>::Storage as Mappable>::Key:
-            Sized + std::fmt::Display,
-        <<Self as HasIndexation<'a>>::Storage as Mappable>::Value:
-            Sized + std::fmt::Display,
-        <<Self as HasIndexation<'a>>::Storage as Mappable>::OwnedValue:
+        <<Self as HasIndexation>::Storage as Mappable>::Key: Sized + std::fmt::Display,
+        <<Self as HasIndexation>::Storage as Mappable>::Value: Sized + std::fmt::Display,
+        <<Self as HasIndexation>::Storage as Mappable>::OwnedValue:
             Default + std::fmt::Display,
         T: OffChainDatabaseTransaction
             + StorageInspect<
-                <Self as HasIndexation<'a>>::Storage,
+                <Self as HasIndexation>::Storage,
                 Error = fuel_core_storage::Error,
-            > + StorageMutate<<Self as HasIndexation<'a>>::Storage>,
+            > + StorageMutate<<Self as HasIndexation>::Storage>,
         F: Fn(
-            Cow<<<Self as HasIndexation<'a>>::Storage as Mappable>::OwnedValue>,
+            Cow<<<Self as HasIndexation>::Storage as Mappable>::OwnedValue>,
             Amount,
-        ) -> <<Self as HasIndexation<'a>>::Storage as Mappable>::Value,
+        ) -> <<Self as HasIndexation>::Storage as Mappable>::Value,
         fuel_core_storage::Error:
-            From<<T as StorageInspect<<Self as HasIndexation<'a>>::Storage>>::Error>,
+            From<<T as StorageInspect<<Self as HasIndexation>::Storage>>::Error>,
     {
         let key = self.key();
         let amount = self.amount();
@@ -248,7 +246,7 @@ trait HasIndexation<'a> {
     }
 }
 
-impl<'a> HasIndexation<'a> for Coin {
+impl HasIndexation for Coin {
     type Storage = CoinBalances;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key {
@@ -260,7 +258,7 @@ impl<'a> HasIndexation<'a> for Coin {
     }
 }
 
-impl<'a> HasIndexation<'a> for Message {
+impl HasIndexation for Message {
     type Storage = MessageBalances;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key {
