@@ -134,6 +134,14 @@ where
         KeyValueInspect::get(&self.storage, key, column)
     }
 
+    fn get_batch<'a>(
+        &'a self,
+        keys: BoxedIter<'a, Vec<u8>>,
+        column: Self::Column,
+    ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
+        KeyValueInspect::get_batch(&self.storage, keys, column)
+    }
+
     fn read(
         &self,
         key: &[u8],

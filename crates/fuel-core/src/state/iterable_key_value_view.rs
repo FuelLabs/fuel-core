@@ -63,6 +63,14 @@ where
         self.0.get(key, column)
     }
 
+    fn get_batch<'a>(
+        &'a self,
+        keys: BoxedIter<'a, Vec<u8>>,
+        column: Self::Column,
+    ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
+        self.0.get_batch(keys, column)
+    }
+
     fn read(
         &self,
         key: &[u8],
