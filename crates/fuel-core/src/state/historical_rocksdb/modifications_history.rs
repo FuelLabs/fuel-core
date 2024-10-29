@@ -49,7 +49,6 @@ impl<Description> TableWithBlueprint for ModificationsHistoryV1<Description>
 where
     Description: DatabaseDescription,
 {
-    //  the keys in the database. https://github.com/FuelLabs/fuel-core/issues/2095
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column<Description>;
 
