@@ -739,7 +739,15 @@ where
         );
 
         if let Some(height) = height {
-            self.store_modifications_history(&mut storage_transaction, &height)?;
+            if let Err(err) =
+                self.store_modifications_history(&mut storage_transaction, &height)
+            {
+                self.add_migration_changes(
+                    maybe_cumulative_changes_lock_guard,
+                    cumulative_changes,
+                )?;
+                return Err(err);
+            };
         }
 
         // This cannot fail because the storage transaction has a conflict policy of `ConflictPolicy::Overwrite`.
