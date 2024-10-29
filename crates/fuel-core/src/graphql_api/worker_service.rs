@@ -211,21 +211,17 @@ trait HasIndexation {
     fn amount(&self) -> Amount;
     fn update_balances<T, F>(&self, tx: &mut T, updater: F) -> StorageResult<()>
     where
-        <<Self as HasIndexation>::Storage as Mappable>::Key: Sized + std::fmt::Display,
-        <<Self as HasIndexation>::Storage as Mappable>::Value: Sized + std::fmt::Display,
-        <<Self as HasIndexation>::Storage as Mappable>::OwnedValue:
-            Default + std::fmt::Display,
+        <Self::Storage as Mappable>::Key: Sized + std::fmt::Display,
+        <Self::Storage as Mappable>::Value: Sized + std::fmt::Display,
+        <Self::Storage as Mappable>::OwnedValue: Default + std::fmt::Display,
         T: OffChainDatabaseTransaction
-            + StorageInspect<
-                <Self as HasIndexation>::Storage,
-                Error = fuel_core_storage::Error,
-            > + StorageMutate<<Self as HasIndexation>::Storage>,
+            + StorageInspect<Self::Storage, Error = fuel_core_storage::Error>
+            + StorageMutate<Self::Storage>,
         F: Fn(
-            Cow<<<Self as HasIndexation>::Storage as Mappable>::OwnedValue>,
+            Cow<<Self::Storage as Mappable>::OwnedValue>,
             Amount,
-        ) -> <<Self as HasIndexation>::Storage as Mappable>::Value,
-        fuel_core_storage::Error:
-            From<<T as StorageInspect<<Self as HasIndexation>::Storage>>::Error>,
+        ) -> <Self::Storage as Mappable>::Value,
+        fuel_core_storage::Error: From<<T as StorageInspect<Self::Storage>>::Error>,
     {
         let key = self.key();
         let amount = self.amount();
