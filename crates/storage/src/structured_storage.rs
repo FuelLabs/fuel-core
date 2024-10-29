@@ -280,7 +280,7 @@ where
         &'a self,
         keys: BoxedIter<'a, &'a M::Key>,
     ) -> BoxedIter<'a, StorageResult<Option<M::OwnedValue>>> {
-        M::Blueprint::get_multi(self, keys, M::column())
+        M::Blueprint::get_batch(self, keys, M::column())
     }
 }
 

@@ -729,7 +729,7 @@ where
         Ok(value.map(Arc::new))
     }
 
-    fn get_multi<'a>(
+    fn get_batch<'a>(
         &'a self,
         keys: BoxedIter<'a, Vec<u8>>,
         column: Self::Column,

@@ -81,7 +81,7 @@ where
     }
 
     /// Returns multiple values from the storage.
-    fn get_multi<'a>(
+    fn get_batch<'a>(
         storage: &'a S,
         keys: BoxedIter<'a, &'a M::Key>,
         column: S::Column,
@@ -91,7 +91,7 @@ where
             .into_boxed();
 
         storage
-            .get_multi(keys, column)
+            .get_batch(keys, column)
             .map(|result| {
                 result.and_then(|opt| {
                     opt.map(|value| {

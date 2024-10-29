@@ -67,7 +67,7 @@ pub trait KeyValueInspect: Send + Sync {
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>>;
 
     /// Returns multiple values from the storage.
-    fn get_multi<'a>(
+    fn get_batch<'a>(
         &'a self,
         keys: BoxedIter<'a, Vec<u8>>,
         column: Self::Column,
