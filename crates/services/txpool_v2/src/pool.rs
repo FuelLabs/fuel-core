@@ -162,6 +162,10 @@ where
         debug_assert!(!self.tx_id_to_storage_id.contains_key(&tx_id));
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
 
+        if self.config.metrics {
+            txpool_metrics().tx_size.observe(bytes_size as f64);
+        };
+
         let tx =
             Storage::get(&self.storage, &storage_id).expect("Transaction is set above");
         self.collision_manager.on_stored_transaction(storage_id, tx);

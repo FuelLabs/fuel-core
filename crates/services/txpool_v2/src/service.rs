@@ -429,11 +429,6 @@ where
                 }
             };
 
-            if metrics {
-                let size = checked_tx.metered_bytes_size();
-                txpool_metrics().tx_size.observe(size as f64);
-            };
-
             let tx = Arc::new(checked_tx);
 
             let result = {
