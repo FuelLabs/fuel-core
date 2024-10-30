@@ -278,7 +278,7 @@ pub struct InnerHistoricalRocksDB<Description> {
     /// The Description of the database.
     db: RocksDb<Historical<Description>>,
     /// The migration state for the modification history, shared among all instances of the database
-    shared_migration_state: Arc<Mutex<MigrationState>>,
+    shared_migration_state: Arc<Mutex<MigrationState<Description>>>,
 }
 
 impl<Description> fmt::Debug for InnerHistoricalRocksDB<Description>
@@ -300,7 +300,7 @@ where
     pub fn new(
         db: RocksDb<Historical<Description>>,
         state_rewind_policy: StateRewindPolicy,
-        shared_migration_state: Arc<Mutex<MigrationState>>,
+        shared_migration_state: Arc<Mutex<MigrationState<Description>>>,
     ) -> DatabaseResult<Self> {
         Ok(Self {
             state_rewind_policy,
@@ -314,7 +314,7 @@ where
         capacity: Option<usize>,
         state_rewind_policy: StateRewindPolicy,
         max_fds: i32,
-        shared_migration_state: Arc<Mutex<MigrationState>>,
+        shared_migration_state: Arc<Mutex<MigrationState<Description>>>,
     ) -> DatabaseResult<Self> {
         let db =
             RocksDb::<Historical<Description>>::default_open(path, capacity, max_fds)?;
