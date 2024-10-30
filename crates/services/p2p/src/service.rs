@@ -1643,12 +1643,11 @@ pub mod tests {
         let mut watcher = StateWatcher::from(watch_receiver);
 
         // when
-        task.run(&mut watcher).await.unwrap();
+        let (report_peer_id, report, reporting_service) =
+            wait_until_report_received(&mut report_receiver, &mut task, &mut watcher)
+                .await;
 
         // then
-        let (report_peer_id, report, reporting_service) =
-            report_receiver.recv().await.unwrap();
-
         watch_sender.send(State::Stopped).unwrap();
 
         assert_eq!(
@@ -1736,12 +1735,12 @@ pub mod tests {
         let mut watcher = StateWatcher::from(watch_receiver);
 
         // when
-        task.run(&mut watcher).await.unwrap();
+        // we run this in a loop to ensure that the task is run until it reports
+        let (report_peer_id, report, reporting_service) =
+            wait_until_report_received(&mut report_receiver, &mut task, &mut watcher)
+                .await;
 
         // then
-        let (report_peer_id, report, reporting_service) =
-            report_receiver.recv().await.unwrap();
-
         watch_sender.send(State::Stopped).unwrap();
 
         assert_eq!(
@@ -1753,6 +1752,20 @@ pub mod tests {
             heartbeat_peer_reputation_config.old_heartbeat_penalty
         );
         assert_eq!(reporting_service, "p2p");
+    }
+
+    async fn wait_until_report_received(
+        report_receiver: &mut Receiver<(FuelPeerId, AppScore, String)>,
+        task: &mut Task<FakeP2PService, FakeDB, FakeBroadcast, FakeTxPool>,
+        mut watcher: &mut StateWatcher,
+    ) -> (FuelPeerId, AppScore, String) {
+        loop {
+            task.run(&mut watcher).await.unwrap();
+            if let Some((peer_id, recv_report, service)) = report_receiver.try_recv().ok()
+            {
+                return (peer_id, recv_report, service);
+            }
+        }
     }
 
     #[tokio::test]
