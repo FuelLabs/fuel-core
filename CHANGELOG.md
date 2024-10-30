@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
 - [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
+- [2413](https://github.com/FuelLabs/fuel-core/issues/2413): block production immediately errors if unable to lock the mutex.
 
 ### Changed
 
@@ -85,6 +86,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 - [2304](https://github.com/FuelLabs/fuel-core/pull/2304): Add initialization for the genesis base asset contract.
+
+### Added
+- [2288](https://github.com/FuelLabs/fuel-core/pull/2288): Specify `V1Metadata` for `GasPriceServiceV1`.
 
 ## [Version 0.37.0]
 
