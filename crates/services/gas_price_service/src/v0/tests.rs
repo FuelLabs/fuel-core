@@ -37,8 +37,8 @@ use fuel_core_services::{
         BoxStream,
         IntoBoxStream,
     },
-    Service,
-    ServiceRunner,
+    RunnableTask,
+    StateWatcher,
 };
 use fuel_core_storage::{
     transactional::AtomicView,
@@ -59,7 +59,6 @@ use fuel_core_types::{
 use std::{
     ops::Deref,
     sync::Arc,
-    time::Duration,
 };
 use tokio::sync::mpsc::Receiver;
 
@@ -159,25 +158,25 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
-    let service = GasPriceServiceV0::new(
+    let mut service = GasPriceServiceV0::new(
         l2_block_source,
         metadata_storage,
         shared_algo,
         algo_updater,
     );
-    let service = ServiceRunner::new(service);
-    let shared = service.shared.clone();
-    let initial = shared.next_gas_price();
+
+    let read_algo = service.next_block_algorithm();
+    let initial = read_algo.next_gas_price();
+    let mut watcher = StateWatcher::default();
 
     // when
-    service.start_and_await().await.unwrap();
+    service.run(&mut watcher).await.unwrap();
     l2_block_sender.send(l2_block).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    service.shutdown().await.unwrap();
 
     // then
-    let new = shared.next_gas_price();
+    let new = read_algo.next_gas_price();
     assert_ne!(initial, new);
-    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -202,7 +201,7 @@ async fn next__new_l2_block_saves_old_metadata() {
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
 
-    let service = GasPriceServiceV0::new(
+    let mut service = GasPriceServiceV0::new(
         l2_block_source,
         metadata_storage,
         shared_algo,
@@ -210,14 +209,17 @@ async fn next__new_l2_block_saves_old_metadata() {
     );
 
     // when
-    let service = ServiceRunner::new(service);
+    let read_algo = service.next_block_algorithm();
+    let mut watcher = StateWatcher::default();
+    let start = read_algo.next_gas_price();
 
-    service.start_and_await().await.unwrap();
+    service.run(&mut watcher).await.unwrap();
     l2_block_sender.send(l2_block).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    service.shutdown().await.unwrap();
 
     // then
-    assert!(metadata_inner.lock().unwrap().is_some());
+    let new = read_algo.next_gas_price();
+    assert_ne!(start, new);
 }
 
 #[derive(Clone)]
