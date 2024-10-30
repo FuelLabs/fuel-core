@@ -456,6 +456,11 @@ where
     {
         let reverse_iterator = next_prefix(prefix.to_vec()).map(|next_prefix| {
             let mut opts = self.read_options();
+            // We need this option because our iterator start in the `next_prefix` prefix section
+            // and continue in `prefix` section. Without this option the correct
+            // iteration between prefix section isn't guaranteed
+            // Source : https://github.com/facebook/rocksdb/wiki/Prefix-Seek#how-to-ignore-prefix-bloom-filters-in-read
+            // and https://github.com/facebook/rocksdb/wiki/Prefix-Seek#general-prefix-seek-api
             opts.set_total_order_seek(true);
             self.iterator::<T>(
                 column,
@@ -600,8 +605,14 @@ where
                 // start iterating in a certain direction from the start key
                 let iter_mode =
                     IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self.iterator::<T>(column, self.read_options(), iter_mode)
-                    .into_boxed()
+                let mut opts = self.read_options();
+                // We need this option because our iterator start in the `start` prefix section
+                // and continue in next sections. Without this option the correct
+                // iteration between prefix section isn't guaranteed
+                // Source : https://github.com/facebook/rocksdb/wiki/Prefix-Seek#how-to-ignore-prefix-bloom-filters-in-read
+                // and https://github.com/facebook/rocksdb/wiki/Prefix-Seek#general-prefix-seek-api
+                opts.set_total_order_seek(true);
+                self.iterator::<T>(column, opts, iter_mode).into_boxed()
             }
             (Some(prefix), Some(start)) => {
                 // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
