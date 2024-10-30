@@ -21,6 +21,7 @@ use crate::{
     },
     request_response::messages::{
         OnResponse,
+        OnResponseWithPeerSelection,
         RequestMessage,
         ResponseMessageErrorCode,
         ResponseSender,
@@ -84,6 +85,7 @@ use std::{
     ops::Range,
     sync::Arc,
 };
+use thiserror::Error;
 use tokio::{
     sync::{
         broadcast,
@@ -104,6 +106,12 @@ const CHANNEL_SIZE: usize = 1024 * 10;
 
 pub type Service<V, T> = ServiceRunner<UninitializedTask<V, SharedState, T>>;
 
+#[derive(Debug, Error)]
+pub enum TaskError {
+    #[error("No peer found to send request to")]
+    NoPeerFound,
+}
+
 pub enum TaskRequest {
     // Broadcast requests to p2p network
     BroadcastTransaction(Arc<Transaction>),
@@ -113,11 +121,11 @@ pub enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: OnResponse<Option<Vec<SealedBlockHeader>>>,
+        channel: OnResponseWithPeerSelection<Option<Vec<SealedBlockHeader>>>,
     },
     GetTransactions {
         block_height_range: Range<u32>,
-        channel: OnResponse<Option<Vec<Transactions>>>,
+        channel: OnResponseWithPeerSelection<Option<Vec<Transactions>>>,
     },
     GetTransactionsFromPeer {
         block_height_range: Range<u32>,
@@ -876,28 +884,29 @@ where
                         }
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel}) => {
-                        let channel = ResponseSender::SealedHeaders(channel);
-                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
-
                         // Note: this range has already been checked for
                         // validity in `SharedState::get_sealed_block_headers`.
                         let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
-                        let peer = self.p2p_service.get_peer_id_with_height(&height);
-                        if self.p2p_service.send_request_msg(peer, request_msg, channel).is_err() {
-                            tracing::warn!("No peers found for block at height {:?}", height);
-                        }
+                        let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
+                            let _ = channel.send(Err(TaskError::NoPeerFound));
+                            return Ok(should_continue);
+                        };
+                        let channel = ResponseSender::SealedHeaders(channel);
+                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
+                        self.p2p_service.send_request_msg(Some(peer), request_msg, channel).expect("We always have a peer here, so send has a target");
                     }
                     Some(TaskRequest::GetTransactions {block_height_range, channel }) => {
+                        let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
+                        let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
+                            let _ = channel.send(Err(TaskError::NoPeerFound));
+                            return Ok(should_continue);
+                        };
                         let channel = ResponseSender::Transactions(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range.clone());
-                        let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
-                        let peer = self.p2p_service.get_peer_id_with_height(&height);
-                        if self.p2p_service.send_request_msg(peer, request_msg, channel).is_err() {
-                            return Err(anyhow!("No peers found for block at height {:?}", height));
-                        }
+                        self.p2p_service.send_request_msg(Some(peer), request_msg, channel).expect("We always have a peer here, so send has a target");
                     }
                     Some(TaskRequest::GetTransactionsFromPeer { block_height_range, from_peer, channel }) => {
-                        let channel = ResponseSender::Transactions(channel);
+                        let channel = ResponseSender::TransactionsFromPeer(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range);
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always a peer here, so send has a target");
                     }
@@ -1054,7 +1063,10 @@ impl SharedState {
             })
             .await?;
 
-        let (peer_id, response) = receiver.await.map_err(|e| anyhow!("{e}"))?;
+        let (peer_id, response) = receiver
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| anyhow!("{e}"))?;
 
         let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
         Ok((peer_id.to_bytes(), data))
@@ -1079,7 +1091,10 @@ impl SharedState {
             })
             .await?;
 
-        let (peer_id, response) = receiver.await.map_err(|e| anyhow!("{e}"))?;
+        let (peer_id, response) = receiver
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| anyhow!("{e}"))?;
 
         let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
         Ok((peer_id.to_bytes(), data))
