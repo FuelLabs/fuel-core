@@ -381,20 +381,12 @@ where
     }
 
     fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
-        let (cumulative_changes, maybe_cumulative_changes_guard) =
-            self.take_migration_changes();
-
         // Will clone an empty set of changes if the migration is not in progress, which should
         // not impact performance. However, when a migration is in progress, this operation could
         // be expensive if many changes have been accumulated.
-        let mut migration_transaction = StorageTransaction::transaction(
-            &self.db,
-            ConflictPolicy::Overwrite,
-            cumulative_changes.clone(),
-        );
 
         let mut storage_transaction = StorageTransaction::transaction(
-            &mut migration_transaction,
+            &self.db,
             ConflictPolicy::Overwrite,
             Changes::default(),
         );
@@ -419,26 +411,11 @@ where
         )
         .commit()?;
 
-        storage_transaction.commit()?;
-
-        match self
+        self
             .db
-            .commit_changes(&migration_transaction.into_changes())
-        {
-            Ok(()) => Ok(()),
-            Err(err) => {
-                tracing::error!(
-                    "Could not rollback historical rocksDB to height {}: {err:?}",
-                    err
-                );
-                // If the migration is not in progress, this function will effectively be a no-op
-                self.add_migration_changes(
-                    maybe_cumulative_changes_guard,
-                    cumulative_changes,
-                )?;
-                Err(err)
-            }
-        }
+            .commit_changes(&storage_transaction.into_changes())
+                .inspect_err(|err| tracing::error!("Could not rollback histrocial rocksDB to height {height_to_rollback}: {err:?}"))?;
+        Ok(())
     }
 
     /// Migrates a ModificationHistory key-value pair from V1 to V2.
@@ -720,9 +697,17 @@ where
         // cumulative_changes_lock_guard is defined to be Some only when the migration is in progress.
         // If the migration is not in progress, the default set of changes will be used, and the overhead
         // for handling caused by this function to handle the migration will be minimal.
-        let (cumulative_changes, maybe_cumulative_changes_lock_guard) =
-            self.take_migration_changes();
 
+        let (mut cumulative_changes, maybe_cumulative_changes_lock_guard) =
+            self.take_migration_changes();
+        drop(maybe_cumulative_changes_lock_guard);
+
+        cumulative_changes = cumulative_changes
+            .into_iter()
+            .filter(|(migration_height, _)| {
+                (*migration_height as u64) < height.unwrap_or_default().as_u64()
+            })
+            .collect();
         let mut migration_transaction = StorageTransaction::transaction(
             &self.db,
             ConflictPolicy::Overwrite,
@@ -739,15 +724,7 @@ where
         );
 
         if let Some(height) = height {
-            if let Err(err) =
-                self.store_modifications_history(&mut storage_transaction, &height)
-            {
-                self.add_migration_changes(
-                    maybe_cumulative_changes_lock_guard,
-                    cumulative_changes,
-                )?;
-                return Err(err);
-            };
+            self.store_modifications_history(&mut storage_transaction, &height)?;
         }
 
         // This cannot fail because the storage transaction has a conflict policy of `ConflictPolicy::Overwrite`.
@@ -755,20 +732,9 @@ where
 
         // This can fail. In this case, we need to rollback place the cumulative migration history
         // changes back into the lock guard.
-        match self
-            .db
-            .commit_changes(&migration_transaction.into_changes())
-        {
-            Ok(()) => Ok(()),
-            Err(err) => {
-                tracing::error!("Could not commit to historical RocksDB: {err:?}");
-                self.add_migration_changes(
-                    maybe_cumulative_changes_lock_guard,
-                    cumulative_changes,
-                )?;
-                Err(err)
-            }
-        }
+        self.db
+            .commit_changes(&migration_transaction.into_changes())?;
+        Ok(())
     }
 
     fn view_at_height(
