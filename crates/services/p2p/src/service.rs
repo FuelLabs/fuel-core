@@ -1757,12 +1757,11 @@ pub mod tests {
     async fn wait_until_report_received(
         report_receiver: &mut Receiver<(FuelPeerId, AppScore, String)>,
         task: &mut Task<FakeP2PService, FakeDB, FakeBroadcast, FakeTxPool>,
-        mut watcher: &mut StateWatcher,
+        watcher: &mut StateWatcher,
     ) -> (FuelPeerId, AppScore, String) {
         loop {
-            task.run(&mut watcher).await.unwrap();
-            if let Some((peer_id, recv_report, service)) = report_receiver.try_recv().ok()
-            {
+            task.run(watcher).await.unwrap();
+            if let Ok((peer_id, recv_report, service)) = report_receiver.try_recv() {
                 return (peer_id, recv_report, service);
             }
         }
