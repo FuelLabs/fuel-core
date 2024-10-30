@@ -165,47 +165,18 @@ mod tests {
         },
         ports::MetadataStorage,
         v0::{
-            algorithm::SharedV0Algorithm,
             metadata::V0AlgorithmConfig,
             service::GasPriceServiceV0,
             uninitialized_task::initialize_algorithm,
         },
     };
     use fuel_core_services::{
-        RunnableService,
-        Service,
-        ServiceRunner,
+        RunnableTask,
         StateWatcher,
     };
     use fuel_core_types::fuel_types::BlockHeight;
     use std::sync::Arc;
     use tokio::sync::mpsc;
-
-    #[async_trait::async_trait]
-    impl<L2, Metadata> RunnableService for GasPriceServiceV0<L2, Metadata>
-    where
-        L2: L2BlockSource,
-        Metadata: MetadataStorage,
-    {
-        const NAME: &'static str = "GasPriceServiceV0";
-        type SharedData = SharedV0Algorithm;
-        type Task = Self;
-        type TaskParams = ();
-
-        fn shared_data(&self) -> Self::SharedData {
-            self.shared_algo.clone()
-        }
-
-        async fn into_task(
-            mut self,
-            _state_watcher: &StateWatcher,
-            _params: Self::TaskParams,
-        ) -> anyhow::Result<Self::Task> {
-            let algorithm = self.algorithm_updater.algorithm();
-            self.shared_algo.update(algorithm).await;
-            Ok(self)
-        }
-    }
 
     struct FakeL2BlockSource {
         l2_block: mpsc::Receiver<BlockInfo>,
@@ -255,10 +226,12 @@ mod tests {
             gas_used: 60,
             block_gas_capacity: 100,
         };
+
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
         let l2_block_source = FakeL2BlockSource {
             l2_block: l2_block_receiver,
         };
+
         let metadata_storage = FakeMetadata::empty();
         let l2_block_height = 0;
         let config = V0AlgorithmConfig {
@@ -269,25 +242,23 @@ mod tests {
         };
         let (algo_updater, shared_algo) =
             initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
-
-        let service = GasPriceServiceV0::new(
+        let mut service = GasPriceServiceV0::new(
             l2_block_source,
             metadata_storage,
             shared_algo,
             algo_updater,
         );
         let read_algo = service.next_block_algorithm();
-        let service = ServiceRunner::new(service);
-        let prev = read_algo.next_gas_price();
+        let mut watcher = StateWatcher::default();
+        let initial_price = read_algo.next_gas_price();
 
         // when
-        service.start_and_await().await.unwrap();
+        service.run(&mut watcher).await.unwrap();
         l2_block_sender.send(l2_block).await.unwrap();
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        service.shutdown().await.unwrap();
 
         // then
         let actual_price = read_algo.next_gas_price();
-        assert_ne!(prev, actual_price);
-        service.stop_and_await().await.unwrap();
+        assert_ne!(initial_price, actual_price);
     }
 }
