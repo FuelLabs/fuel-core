@@ -301,10 +301,10 @@ impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
         heights: Vec<u32>,
-        range_cost: u128,
+        recording_cost: u128,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
-            self.da_block_update(heights, range_cost)?;
+            self.da_block_update(heights, recording_cost)?;
             self.recalculate_projected_cost();
         }
         Ok(())
@@ -508,18 +508,18 @@ impl AlgorithmUpdaterV1 {
     fn da_block_update(
         &mut self,
         heights: Vec<u32>,
-        range_cost: u128,
+        recording_cost: u128,
     ) -> Result<(), Error> {
         let recorded_bytes = self.drain_l2_block_bytes_for_range(heights)?;
-        let new_cost_per_byte: u128 = range_cost.checked_div(recorded_bytes).ok_or(
+        let new_cost_per_byte: u128 = recording_cost.checked_div(recorded_bytes).ok_or(
             Error::CouldNotCalculateCostPerByte {
                 bytes: recorded_bytes,
-                cost: range_cost,
+                cost: recording_cost,
             },
         )?;
         let new_da_block_cost = self
             .latest_known_total_da_cost_excess
-            .saturating_add(range_cost);
+            .saturating_add(recording_cost);
         self.latest_known_total_da_cost_excess = new_da_block_cost;
         self.latest_da_cost_per_byte = new_cost_per_byte;
         Ok(())
@@ -527,10 +527,10 @@ impl AlgorithmUpdaterV1 {
 
     fn drain_l2_block_bytes_for_range(
         &mut self,
-        height_range: Vec<u32>,
+        heights: Vec<u32>,
     ) -> Result<u128, Error> {
         let mut total: u128 = 0;
-        for expected_height in height_range {
+        for expected_height in heights {
             let bytes = self.unrecorded_blocks.remove(&expected_height).ok_or(
                 Error::L2BlockExpectedNotFound {
                     height: expected_height,

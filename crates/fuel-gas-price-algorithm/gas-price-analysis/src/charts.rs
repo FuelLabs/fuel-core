@@ -267,10 +267,8 @@ pub fn draw_profit(
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
-    let actual_profit_gwei: Vec<_> = actual_profit
-        .iter()
-        .map(|x| x / ONE_GWEI as i128)
-        .collect();
+    let actual_profit_gwei: Vec<_> =
+        actual_profit.iter().map(|x| x / ONE_GWEI as i128).collect();
     let projected_profit_gwei: Vec<_> = projected_profit
         .iter()
         .map(|x| x / ONE_GWEI as i128)
