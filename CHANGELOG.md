@@ -90,6 +90,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - [2304](https://github.com/FuelLabs/fuel-core/pull/2304): Add initialization for the genesis base asset contract.
 
+### Added
+- [2288](https://github.com/FuelLabs/fuel-core/pull/2288): Specify `V1Metadata` for `GasPriceServiceV1`.
+
 ## [Version 0.37.0]
 
 ### Added
