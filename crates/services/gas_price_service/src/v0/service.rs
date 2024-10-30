@@ -5,7 +5,7 @@ use crate::{
         utils::BlockInfo,
     },
     ports::MetadataStorage,
-    v0::uninitialized_task::SharedV0Algorithm,
+    v0::algorithm::SharedV0Algorithm,
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -165,12 +165,10 @@ mod tests {
         },
         ports::MetadataStorage,
         v0::{
-            metadata::V0Metadata,
+            algorithm::SharedV0Algorithm,
+            metadata::V0AlgorithmConfig,
             service::GasPriceServiceV0,
-            uninitialized_task::{
-                initialize_algorithm,
-                SharedV0Algorithm,
-            },
+            uninitialized_task::initialize_algorithm,
         },
     };
     use fuel_core_services::{
@@ -262,15 +260,15 @@ mod tests {
             l2_block: l2_block_receiver,
         };
         let metadata_storage = FakeMetadata::empty();
-        let starting_metadata = V0Metadata {
-            min_exec_gas_price: 10,
-            exec_gas_price_change_percent: 10,
-            new_exec_price: 100,
-            l2_block_fullness_threshold_percent: 0,
-            l2_block_height: 0,
+        let l2_block_height = 0;
+        let config = V0AlgorithmConfig {
+            starting_gas_price: 100,
+            min_gas_price: 10,
+            gas_price_change_percent: 10,
+            gas_price_threshold_percent: 0,
         };
         let (algo_updater, shared_algo) =
-            initialize_algorithm(starting_metadata.clone(), &metadata_storage).unwrap();
+            initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
 
         let service = GasPriceServiceV0::new(
             l2_block_source,
