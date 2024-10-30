@@ -204,11 +204,38 @@ where
     }
 }
 
-trait HasIndexation {
+trait DatabaseItemWithAmount {
     type Storage: Mappable;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key;
     fn amount(&self) -> Amount;
+}
+
+impl DatabaseItemWithAmount for Coin {
+    type Storage = CoinBalances;
+
+    fn key(&self) -> <Self::Storage as Mappable>::Key {
+        BalancesKey::new(&self.owner, &self.asset_id)
+    }
+
+    fn amount(&self) -> Amount {
+        self.amount
+    }
+}
+
+impl DatabaseItemWithAmount for Message {
+    type Storage = MessageBalances;
+
+    fn key(&self) -> <Self::Storage as Mappable>::Key {
+        *self.recipient()
+    }
+
+    fn amount(&self) -> Amount {
+        Self::amount(self)
+    }
+}
+
+trait BalanceIndexationUpdater: DatabaseItemWithAmount {
     fn update_balances<T, F>(&self, tx: &mut T, updater: F) -> StorageResult<()>
     where
         <Self::Storage as Mappable>::Key: Sized + std::fmt::Display,
@@ -240,29 +267,8 @@ trait HasIndexation {
     }
 }
 
-impl HasIndexation for Coin {
-    type Storage = CoinBalances;
-
-    fn key(&self) -> <Self::Storage as Mappable>::Key {
-        BalancesKey::new(&self.owner, &self.asset_id)
-    }
-
-    fn amount(&self) -> Amount {
-        self.amount
-    }
-}
-
-impl HasIndexation for Message {
-    type Storage = MessageBalances;
-
-    fn key(&self) -> <Self::Storage as Mappable>::Key {
-        *self.recipient()
-    }
-
-    fn amount(&self) -> Amount {
-        Self::amount(self)
-    }
-}
+impl BalanceIndexationUpdater for Coin {}
+impl BalanceIndexationUpdater for Message {}
 
 fn process_balances_update<T>(
     event: &Event,
