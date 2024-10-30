@@ -546,7 +546,7 @@ impl AlgorithmUpdaterV1 {
         let projection_portion: u128 = self
             .unrecorded_blocks
             .iter()
-            .map(|(_, &bytes)| (bytes as u128))
+            .map(|(_, &bytes)| bytes as u128)
             .fold(0_u128, |acc, n| acc.saturating_add(n))
             .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self

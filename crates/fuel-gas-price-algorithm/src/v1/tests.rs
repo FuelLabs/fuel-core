@@ -35,7 +35,6 @@ pub struct UpdaterBuilder {
     l2_block_capacity_threshold: u8,
 
     total_rewards: u128,
-    da_recorded_block_height: u32,
     da_cost_per_byte: u128,
     project_total_cost: u128,
     latest_known_total_cost: u128,
@@ -63,7 +62,6 @@ impl UpdaterBuilder {
             l2_block_capacity_threshold: 50,
 
             total_rewards: 0,
-            da_recorded_block_height: 0,
             da_cost_per_byte: 0,
             project_total_cost: 0,
             latest_known_total_cost: 0,
@@ -130,11 +128,6 @@ impl UpdaterBuilder {
 
     fn with_total_rewards(mut self, total_rewards: u128) -> Self {
         self.total_rewards = total_rewards;
-        self
-    }
-
-    fn with_da_recorded_block_height(mut self, da_recorded_block_height: u32) -> Self {
-        self.da_recorded_block_height = da_recorded_block_height;
         self
     }
 
