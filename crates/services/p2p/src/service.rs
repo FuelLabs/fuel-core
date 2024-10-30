@@ -1636,16 +1636,19 @@ pub mod tests {
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
             cached_view: Arc::new(CachedView::new(false)),
-            cache_reset_interval: Duration::from_secs(0),
+            cache_reset_interval: Duration::from_secs(10),
             next_cache_reset_time: Instant::now(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
 
         // when
-        let (report_peer_id, report, reporting_service) =
-            wait_until_report_received(&mut report_receiver, &mut task, &mut watcher)
-                .await;
+        let (report_peer_id, report, reporting_service) = tokio::time::timeout(
+            Duration::from_secs(1),
+            wait_until_report_received(&mut report_receiver, &mut task, &mut watcher),
+        )
+        .await
+        .unwrap();
 
         // then
         watch_sender.send(State::Stopped).unwrap();
@@ -1728,7 +1731,7 @@ pub mod tests {
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
             cached_view: Arc::new(CachedView::new(false)),
-            cache_reset_interval: Duration::from_secs(0),
+            cache_reset_interval: Duration::from_secs(10),
             next_cache_reset_time: Instant::now(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
@@ -1736,9 +1739,12 @@ pub mod tests {
 
         // when
         // we run this in a loop to ensure that the task is run until it reports
-        let (report_peer_id, report, reporting_service) =
-            wait_until_report_received(&mut report_receiver, &mut task, &mut watcher)
-                .await;
+        let (report_peer_id, report, reporting_service) = tokio::time::timeout(
+            Duration::from_secs(1),
+            wait_until_report_received(&mut report_receiver, &mut task, &mut watcher),
+        )
+        .await
+        .unwrap();
 
         // then
         watch_sender.send(State::Stopped).unwrap();
@@ -1806,7 +1812,7 @@ pub mod tests {
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: Default::default(),
             cached_view: Arc::new(CachedView::new(false)),
-            cache_reset_interval: Duration::from_secs(0),
+            cache_reset_interval: Duration::from_secs(10),
             next_cache_reset_time: Instant::now(),
         };
         let mut watcher = StateWatcher::started();
