@@ -105,12 +105,4 @@ pub trait Storage {
 
     /// Returns the number of transactions in the storage.
     fn tx_count(&self) -> usize;
-
-    #[cfg(test)]
-    /// Asserts the integrity of the storage.
-    /// Returns the list of the storage indexes and a boolean value indicating whether the transaction has dependencies or not.
-    fn assert_integrity(
-        &self,
-        expected_txs: &[ArcPoolTx],
-    ) -> Vec<(Self::StorageIndex, bool)>;
 }

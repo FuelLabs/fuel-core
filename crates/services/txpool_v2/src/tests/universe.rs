@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::HashSet,
+    sync::Arc,
+};
 
 use fuel_core_types::{
     entities::{
@@ -298,7 +301,23 @@ impl TestPoolUniverse {
     pub fn assert_pool_integrity(&self, expected_txs: &[ArcPoolTx]) {
         let pool = self.pool.as_ref().unwrap();
         let pool = pool.read();
-        pool.assert_integrity(expected_txs);
+        let storage_ids_dependencies = pool.storage.assert_integrity(expected_txs);
+        let txs_without_dependencies = expected_txs
+            .iter()
+            .zip(storage_ids_dependencies)
+            .filter_map(|(tx, (_, has_dependencies))| {
+                if !has_dependencies {
+                    Some(tx.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        pool.selection_algorithm
+            .assert_integrity(&txs_without_dependencies);
+        pool.collision_manager.assert_integrity(expected_txs);
+        let txs: HashSet<TxId> = expected_txs.iter().map(|tx| tx.id()).collect();
+        pool.assert_integrity(txs);
     }
 
     pub fn get_pool(&self) -> Shared<TxPool> {

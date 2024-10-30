@@ -35,6 +35,7 @@
 //! - If the insertion of the transaction fails, you can expect only one message with the error.
 //! - If the transaction is inserted, you can expect two messages: one with the validation of the insertion and one when the transaction is selected in a block.
 
+// TODO: Rename the folder from `txpool_v2` to `txpool` after the migration is complete.
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
