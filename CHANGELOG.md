@@ -103,6 +103,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support blobs in the predicates.
 - [2300](https://github.com/FuelLabs/fuel-core/pull/2300): Added new function to `fuel-core-client` for checking whether a blob exists.
 
+### Changed
+
 #### Breaking
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Anyone who wants to participate in the transaction broadcasting via p2p must upgrade to support new predicates on the TxPool level.
 - [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Upgraded `fuel-vm` to `0.58.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.58.0).
