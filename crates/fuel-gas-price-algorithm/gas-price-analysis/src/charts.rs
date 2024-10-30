@@ -268,15 +268,15 @@ pub fn draw_profit(
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
     let actual_profit_gwei: Vec<_> = actual_profit
-        .into_iter()
+        .iter()
         .map(|x| x / ONE_GWEI as i128)
         .collect();
     let projected_profit_gwei: Vec<_> = projected_profit
-        .into_iter()
+        .iter()
         .map(|x| x / ONE_GWEI as i128)
         .collect();
     let pessimistic_block_costs_gwei: Vec<_> = pessimistic_block_costs
-        .into_iter()
+        .iter()
         .map(|x| x / ONE_GWEI as u128)
         .collect();
     let min = *std::cmp::min(
