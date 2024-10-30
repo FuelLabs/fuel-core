@@ -510,10 +510,10 @@ impl AlgorithmUpdaterV1 {
         heights: Vec<u32>,
         range_cost: u128,
     ) -> Result<(), Error> {
-        let range_bytes = self.drain_l2_block_bytes_for_range(heights)?;
-        let new_cost_per_byte: u128 = range_cost.checked_div(range_bytes).ok_or(
+        let recorded_bytes = self.drain_l2_block_bytes_for_range(heights)?;
+        let new_cost_per_byte: u128 = range_cost.checked_div(recorded_bytes).ok_or(
             Error::CouldNotCalculateCostPerByte {
-                bytes: range_bytes,
+                bytes: recorded_bytes,
                 cost: range_cost,
             },
         )?;
