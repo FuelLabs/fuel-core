@@ -6,43 +6,72 @@ use crate::v1::{
     Error,
 };
 
+// #[test]
+// fn update_da_record_data__increases_block() {
+//     // given
+//     let da_recorded_block_height = 0;
+//     let recorded_range = 1u32..3;
+//     let recorded_cost = 200;
+//     let unrecorded_blocks = vec![
+//         BlockBytes {
+//             height: 1,
+//             block_bytes: 1000,
+//         },
+//         BlockBytes {
+//             height: 2,
+//             block_bytes: 2000,
+//         },
+//     ];
+//     let mut updater = UpdaterBuilder::new()
+//         .with_da_recorded_block_height(da_recorded_block_height)
+//         .with_unrecorded_blocks(unrecorded_blocks)
+//         .build();
+//
+//     // when
+//     updater
+//         .update_da_record_data(recorded_range, recorded_cost)
+//         .unwrap();
+//
+//     // then
+//     let expected = 2;
+//     let actual = updater.da_recorded_block_height;
+//     assert_eq!(expected, actual);
+// }
+
+// #[test]
+// fn update_da_record_data__throws_error_if_out_of_order() {
+//     // given
+//     let da_recorded_block_height = 0;
+//     let bad_recorded_range = 2u32..4;
+//     let recorded_cost = 200;
+//     let unrecorded_blocks = vec![BlockBytes {
+//         height: 1,
+//         block_bytes: 1000,
+//     }];
+//     let mut updater = UpdaterBuilder::new()
+//         .with_da_recorded_block_height(da_recorded_block_height)
+//         .with_unrecorded_blocks(unrecorded_blocks)
+//         .build();
+//
+//     // when
+//     let actual_error = updater
+//         .update_da_record_data(bad_recorded_range, recorded_cost)
+//         .unwrap_err();
+//
+//     // then
+//     let expected_error = Error::SkippedDABlock {
+//         expected: 1,
+//         got: 2,
+//     };
+//     assert_eq!(actual_error, expected_error);
+// }
+
 #[test]
-fn update_da_record_data__increases_block() {
+fn update_da_record_data__throws_error_if_receives_a_block_missing_from_unrecorded_blocks(
+) {
     // given
     let da_recorded_block_height = 0;
     let recorded_range = 1u32..3;
-    let recorded_cost = 200;
-    let unrecorded_blocks = vec![
-        BlockBytes {
-            height: 1,
-            block_bytes: 1000,
-        },
-        BlockBytes {
-            height: 2,
-            block_bytes: 2000,
-        },
-    ];
-    let mut updater = UpdaterBuilder::new()
-        .with_da_recorded_block_height(da_recorded_block_height)
-        .with_unrecorded_blocks(unrecorded_blocks)
-        .build();
-
-    // when
-    updater
-        .update_da_record_data(recorded_range, recorded_cost)
-        .unwrap();
-
-    // then
-    let expected = 2;
-    let actual = updater.da_recorded_block_height;
-    assert_eq!(expected, actual);
-}
-
-#[test]
-fn update_da_record_data__throws_error_if_out_of_order() {
-    // given
-    let da_recorded_block_height = 0;
-    let bad_recorded_range = 2u32..4;
     let recorded_cost = 200;
     let unrecorded_blocks = vec![BlockBytes {
         height: 1,
@@ -55,14 +84,11 @@ fn update_da_record_data__throws_error_if_out_of_order() {
 
     // when
     let actual_error = updater
-        .update_da_record_data(bad_recorded_range, recorded_cost)
+        .update_da_record_data(recorded_range, recorded_cost)
         .unwrap_err();
 
     // then
-    let expected_error = Error::SkippedDABlock {
-        expected: 1,
-        got: 2,
-    };
+    let expected_error = Error::L2BlockExpectedNotFound { height: 2 };
     assert_eq!(actual_error, expected_error);
 }
 
@@ -186,7 +212,7 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
         .unwrap();
 
     // then
-    assert_eq!(updater.l2_block_height, updater.da_recorded_block_height);
+    assert_eq!(updater.unrecorded_blocks.len(), 0);
     assert_eq!(
         updater.projected_total_da_cost,
         updater.latest_known_total_da_cost_excess

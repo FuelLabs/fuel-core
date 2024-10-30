@@ -20,8 +20,6 @@ pub struct V1Metadata {
     pub gas_price_factor: NonZeroU64,
     /// The cumulative reward from the DA portion of the gas price
     pub total_da_rewards_excess: u128,
-    /// The height of the last L2 block recorded on the DA chain
-    pub da_recorded_block_height: u32,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
     pub latest_known_total_da_cost_excess: u128,
     /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
@@ -53,9 +51,6 @@ impl V1Metadata {
                 .saturating_mul(config.gas_price_factor.get()),
             gas_price_factor: config.gas_price_factor,
             total_da_rewards_excess: 0,
-            // TODO: Set to `None` after:
-            //   https://github.com/FuelLabs/fuel-core/issues/2397
-            da_recorded_block_height: 0,
             latest_known_total_da_cost_excess: 0,
             projected_total_da_cost: 0,
             last_profit: 0,
@@ -91,7 +86,6 @@ impl From<AlgorithmUpdaterV1> for V1Metadata {
             new_scaled_da_gas_price: updater.new_scaled_da_gas_price,
             gas_price_factor: updater.gas_price_factor,
             total_da_rewards_excess: updater.total_da_rewards_excess,
-            da_recorded_block_height: updater.da_recorded_block_height,
             latest_known_total_da_cost_excess: updater.latest_known_total_da_cost_excess,
             projected_total_da_cost: updater.projected_total_da_cost,
             last_profit: updater.last_profit,
@@ -119,7 +113,6 @@ pub fn v1_algorithm_from_metadata(
         new_scaled_da_gas_price: metadata.new_scaled_da_gas_price,
         gas_price_factor: metadata.gas_price_factor,
         total_da_rewards_excess: metadata.total_da_rewards_excess,
-        da_recorded_block_height: metadata.da_recorded_block_height,
         latest_known_total_da_cost_excess: metadata.latest_known_total_da_cost_excess,
         projected_total_da_cost: metadata.projected_total_da_cost,
         last_profit: metadata.last_profit,
