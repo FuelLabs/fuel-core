@@ -271,7 +271,7 @@ where
                     }) => {
                         message_spenders.insert(*nonce, tx.id());
                     }
-                    _ => {}
+                    Input::Contract { .. } => {}
                 }
             }
             for output in tx.outputs() {
@@ -288,7 +288,7 @@ where
         }
         assert!(
             message_spenders.is_empty(),
-            "Some message senders are missing from the collision manager: {:?}",
+            "Some message spenders are missing from the collision manager: {:?}",
             message_spenders
         );
         for utxo_id in self.coins_spenders.keys() {

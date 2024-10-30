@@ -671,7 +671,9 @@ impl Storage for GraphStorage {
                     Output::ContractCreated { contract_id, .. } => {
                         contracts_creators.insert(*contract_id, expected_tx.id());
                     }
-                    _ => {}
+                    Output::Contract(_)
+                    | Output::Change { .. }
+                    | Output::Variable { .. } => {}
                 }
             }
         }
