@@ -27,7 +27,7 @@ fuel-vm-private = { workspace = true, default-features = false, features = [
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
-tai64 = { version = "4.0", features = ["serde"] }
+tai64 = { version = "4.1", features = ["serde"] }
 zeroize = "1.5"
 
 [features]
