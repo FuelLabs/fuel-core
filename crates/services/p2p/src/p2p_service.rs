@@ -1056,7 +1056,7 @@ mod tests {
             let mut p2p_config =
                 Config::default_initialized("own_node_in_reserved_nodes");
             p2p_config.address = IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]));
-            p2p_config.tcp_port = 11111;
+            p2p_config.tcp_port = random_port;
             let multiaddr = multiaddr!(Ip4([127, 0, 0, 1]), Tcp(random_port))
                 .with_p2p(p2p_config.keypair.public().to_peer_id())
                 .unwrap();
