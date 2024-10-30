@@ -897,6 +897,7 @@ mod tests {
         net::{
             IpAddr,
             Ipv4Addr,
+            TcpListener,
         },
         ops::Range,
         sync::Arc,
@@ -1044,16 +1045,47 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn our_node_in_reserved_nodes() {
-        let mut p2p_config = Config::default_initialized("own_node_in_reserved_nodes");
-        p2p_config.address = IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]));
-        p2p_config.tcp_port = 11111;
-        let multiaddr = multiaddr!(Ip4([127, 0, 0, 1]), Tcp(11111u16))
-            .with_p2p(p2p_config.keypair.public().to_peer_id())
+        let mut retries = 10;
+        // We use bind to get a random port for the node to listen on.
+        // We use a loop because the port might be taken between the time we drop the listener and it's used by libp2p.
+        // We don't use `build_service_from_config` because we want to drop the tcp_listener at the last moment.
+        // and we don't want to `.unwrap()` if the port is taken but we prefer retry.
+        let mut node = loop {
+            let tcp_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let random_port = tcp_listener.local_addr().unwrap().port();
+            let mut p2p_config =
+                Config::default_initialized("own_node_in_reserved_nodes");
+            p2p_config.address = IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]));
+            p2p_config.tcp_port = 11111;
+            let multiaddr = multiaddr!(Ip4([127, 0, 0, 1]), Tcp(random_port))
+                .with_p2p(p2p_config.keypair.public().to_peer_id())
+                .unwrap();
+            p2p_config.public_address = Some(multiaddr.clone());
+            // Given
+            p2p_config.reserved_nodes = vec![multiaddr];
+            p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
+            let max_block_size = p2p_config.max_block_size;
+            let (sender, _) =
+                broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
+            let mut service = FuelP2PService::new(
+                sender,
+                p2p_config,
+                PostcardCodec::new(max_block_size),
+            )
+            .await
             .unwrap();
-        p2p_config.public_address = Some(multiaddr.clone());
-        p2p_config.reserved_nodes = vec![multiaddr];
-
-        let mut node = build_service_from_config(p2p_config).await;
+            drop(tcp_listener);
+            match service.start().await {
+                Ok(()) => break service,
+                Err(_) => {
+                    if retries == 0 {
+                        panic!("Failed to start the node after 10 retries");
+                    }
+                    retries -= 1
+                }
+            };
+        };
+        // When
         tokio::time::timeout(Duration::from_secs(2), async move {
             loop {
                 let event = node.next_event().await;
@@ -1063,6 +1095,7 @@ mod tests {
             }
         })
         .await
+        // Then
         .expect_err("The node should not connect to itself");
     }
 
