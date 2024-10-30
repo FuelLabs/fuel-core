@@ -42,6 +42,7 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         ConflictPolicy,
+        ReadTransaction,
         StorageTransaction,
     },
     Error as StorageError,
@@ -337,11 +338,7 @@ where
         // not impact performance. However, when a migration is in progress, this operation could
         // be expensive if many changes have been accumulated.
 
-        let mut storage_transaction = StorageTransaction::transaction(
-            &self.db,
-            ConflictPolicy::Overwrite,
-            Changes::default(),
-        );
+        let mut storage_transaction = self.db.read_transaction();
 
         let last_changes = multiversion_take(
             &mut storage_transaction,
@@ -363,10 +360,9 @@ where
         )
         .commit()?;
 
-        self
-            .db
-            .commit_changes(&storage_transaction.into_changes())
-                .inspect_err(|err| tracing::error!("Could not rollback histrocial rocksDB to height {height_to_rollback}: {err:?}"))?;
+        self.db
+            .commit_changes(&storage_transaction.into_changes())?;
+
         Ok(())
     }
 
@@ -592,32 +588,16 @@ where
         // If the migration is not in progress, the default set of changes will be used, and the overhead
         // for handling caused by this function to handle the migration will be minimal.
 
-        let mut migration_transaction = StorageTransaction::transaction(
-            &self.db,
-            ConflictPolicy::Overwrite,
-            // We need to keep ownership of the migration changes in case the current transaction fails.
-            // In this case we need to place the cumulative changes for migrating the modification history
-            // back into the lock guard.
-            // Note: this might be requiring cloning a fair amount of data
-            Changes::default(),
-        );
-        let mut storage_transaction = StorageTransaction::transaction(
-            &mut migration_transaction,
-            ConflictPolicy::Overwrite,
-            changes,
-        );
+        let mut storage_transaction =
+            StorageTransaction::transaction(&self.db, ConflictPolicy::Overwrite, changes);
 
         if let Some(height) = height {
             self.store_modifications_history(&mut storage_transaction, &height)?;
         }
 
-        // This cannot fail because the storage transaction has a conflict policy of `ConflictPolicy::Overwrite`.
-        storage_transaction.commit()?;
-
-        // This can fail. In this case, we need to rollback place the cumulative migration history
-        // changes back into the lock guard.
         self.db
-            .commit_changes(&migration_transaction.into_changes())?;
+            .commit_changes(&storage_transaction.into_changes())?;
+
         Ok(())
     }
 
