@@ -54,10 +54,6 @@ use modifications_history::{
     ModificationsHistoryV1,
     ModificationsHistoryV2,
 };
-use parking_lot::{
-    Mutex as ParkingMutex,
-    MutexGuard as ParkingMutexGuard,
-};
 use serde::{
     Deserialize,
     Serialize,
@@ -91,8 +87,6 @@ pub struct HistoricalRocksDB<Description> {
     state_rewind_policy: StateRewindPolicy,
     /// The Description of the database.
     db: RocksDb<Historical<Description>>,
-    /// Changes that have been committed in memory, but not to rocksdb
-    migration_changes: ParkingMutex<Changes>,
 }
 
 impl<Description> HistoricalRocksDB<Description>
@@ -106,7 +100,6 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
-            migration_changes: ParkingMutex::new(Changes::default()),
         })
     }
 
@@ -121,7 +114,6 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
-            migration_changes: ParkingMutex::new(Changes::default()),
         })
     }
 
@@ -340,46 +332,6 @@ where
         Ok(latest_height)
     }
 
-    fn take_migration_changes(&self) -> (Changes, Option<ParkingMutexGuard<Changes>>) {
-        if self.is_migration_in_progress() {
-            let mut lock_guard = self.migration_changes.lock();
-            (std::mem::take(&mut *lock_guard), Some(lock_guard))
-        } else {
-            (Changes::default(), None)
-        }
-    }
-
-    fn add_migration_changes(
-        &self,
-        lock_guard: Option<ParkingMutexGuard<Changes>>,
-        changes: Changes,
-    ) -> StorageResult<()> {
-        match lock_guard {
-            // The only case when we did not acquire a lock_guard is because the migration is not in progress.
-            // We do not need to do anything in this case.
-            None => Ok(()),
-            Some(mut lock_guard) => {
-                let current_changes = std::mem::take(&mut *lock_guard);
-                let mut current_changes_transaction = StorageTransaction::transaction(
-                    &self.db,
-                    ConflictPolicy::Overwrite,
-                    current_changes,
-                );
-
-                StorageTransaction::transaction(
-                    &mut current_changes_transaction,
-                    ConflictPolicy::Overwrite,
-                    changes,
-                )
-                .commit()?;
-
-                *lock_guard = current_changes_transaction.into_changes();
-
-                Ok(())
-            }
-        }
-    }
-
     fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
         // Will clone an empty set of changes if the migration is not in progress, which should
         // not impact performance. However, when a migration is in progress, this operation could
@@ -418,58 +370,6 @@ where
         Ok(())
     }
 
-    /// Migrates a ModificationHistory key-value pair from V1 to V2.
-    /// The migration is lazy, in that the changes necessary to perform
-    /// the migration from ModificationHistoryV1 to ModificationHistoryV2
-    /// are simply recorded, and will be flushed to the database when it
-    /// commits or rollbacks to a new height.
-    #[cfg(test)]
-    fn migrate_modifications_history_at_height(&self, height: u64) -> StorageResult<()> {
-        // We need to keep the lock to the migration changes until the end of the function.
-        // This is to avoid a scenario where the migration changes overwrites changes to the modification history
-        // coming from other transactions.
-        // If we were to release the lock as soon as we take the cumulative changes, and then acquiring it again when
-        // writing the updated set of changes, then we could have the following schedule of events.
-        // - A modification transaction M1 migrates height 42 from V1 to V2.
-        // - A second modification transaction M2 takes the cumulative changes from the lock, and adds the changes for another height.
-        // - A transaction T1 rollbacks to height 42, writes the changes to the modification history, and commits to rocksDB.
-        // - Transaction M2 acquires the lock to write the updated cumulative changes, which include the
-        //   migration of the history for height 42 from V1 to V2.
-        // - The next time a transaction commits to RocksDB, the cumulative changes from the migration transactions will be written to RocksDB,
-        //   which will cause the update from transaction T1 to be lost.
-
-        // This function is called only when a migration is in progress, hence the lock_guard is guaranteed to be Some.
-        let (cumulative_changes, lock_guard) = self.take_migration_changes();
-        let mut cumulative_transaction = StorageTransaction::transaction(
-            &self.db,
-            ConflictPolicy::Overwrite,
-            cumulative_changes,
-        );
-
-        // TODO: I could add a second migration transaction and commit the second transaction into the first
-        let mut migration_transaction = StorageTransaction::transaction(
-            &mut cumulative_transaction,
-            ConflictPolicy::Overwrite,
-            Changes::default(),
-        );
-
-        let v1_changes = migration_transaction
-            .storage_as_mut::<ModificationsHistoryV1<Description>>()
-            .take(&height)?;
-        if let Some(v1_changes) = v1_changes {
-            migration_transaction
-                .storage_as_mut::<ModificationsHistoryV2<Description>>()
-                .insert(&height, &v1_changes)?;
-        };
-
-        // Add the changes into the cumulative changes
-        migration_transaction.commit()?;
-
-        self.add_migration_changes(lock_guard, cumulative_transaction.into_changes())?;
-
-        Ok(())
-    }
-
     fn v1_entries(&self) -> BoxedIter<StorageResult<(u64, Changes)>> {
         self.db
             .iter_all::<ModificationsHistoryV1<Description>>(None)
@@ -477,12 +377,6 @@ where
 
     fn is_migration_in_progress(&self) -> bool {
         self.v1_entries().next().is_some()
-    }
-
-    #[cfg(test)]
-    fn commit_migration_changes(&self) -> StorageResult<()> {
-        self.db
-            .commit_changes(&std::mem::take(&mut *self.migration_changes.lock()))
     }
 }
 
@@ -698,16 +592,6 @@ where
         // If the migration is not in progress, the default set of changes will be used, and the overhead
         // for handling caused by this function to handle the migration will be minimal.
 
-        let (mut cumulative_changes, maybe_cumulative_changes_lock_guard) =
-            self.take_migration_changes();
-        drop(maybe_cumulative_changes_lock_guard);
-
-        cumulative_changes = cumulative_changes
-            .into_iter()
-            .filter(|(migration_height, _)| {
-                (*migration_height as u64) < height.unwrap_or_default().as_u64()
-            })
-            .collect();
         let mut migration_transaction = StorageTransaction::transaction(
             &self.db,
             ConflictPolicy::Overwrite,
@@ -715,7 +599,7 @@ where
             // In this case we need to place the cumulative changes for migrating the modification history
             // back into the lock guard.
             // Note: this might be requiring cloning a fair amount of data
-            cumulative_changes.clone(),
+            Changes::default(),
         );
         let mut storage_transaction = StorageTransaction::transaction(
             &mut migration_transaction,
@@ -1167,104 +1051,6 @@ mod tests {
         for (i, result) in results.iter().enumerate() {
             assert_eq!(result, &Ok(1000 - i as u64));
         }
-    }
-
-    #[test]
-    fn migrate_modifications_history_works() {
-        // Given
-        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
-        let historical_rocks_db = HistoricalRocksDB::new(
-            rocks_db,
-            StateRewindPolicy::RewindRange {
-                size: NonZeroU64::new(1).unwrap(),
-            },
-        )
-        .unwrap();
-
-        // When
-        let mut transaction = historical_rocks_db.read_transaction();
-        transaction
-            .storage_as_mut::<ContractsAssets>()
-            .insert(&key(), &123)
-            .unwrap();
-        historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
-            .unwrap();
-
-        // Migrate the changes from V2 to V1.
-
-        let mut migration_transaction = StorageTransaction::transaction(
-            &historical_rocks_db.db,
-            ConflictPolicy::Overwrite,
-            Changes::default(),
-        );
-
-        let v2_changes = migration_transaction
-            .storage_as_mut::<ModificationsHistoryV2<OnChain>>()
-            .take(&1u64)
-            .unwrap()
-            .unwrap();
-        migration_transaction
-            .storage_as_mut::<ModificationsHistoryV1<OnChain>>()
-            .insert(&1u64, &v2_changes)
-            .unwrap();
-
-        historical_rocks_db
-            .db
-            .commit_changes(&migration_transaction.into_changes())
-            .unwrap();
-
-        // Check that the history has indeed been written to V1
-        let v2_entries = historical_rocks_db
-            .db
-            .iter_all::<ModificationsHistoryV2<OnChain>>(None)
-            .collect::<Vec<_>>();
-        let v1_entries = historical_rocks_db
-            .db
-            .iter_all::<ModificationsHistoryV1<OnChain>>(None)
-            .collect::<Vec<_>>();
-
-        assert_eq!(v2_entries.len(), 0);
-        assert_eq!(v1_entries.len(), 1);
-
-        // Migrate back from V1 to V2, using the provided function
-        historical_rocks_db
-            .migrate_modifications_history_at_height(1u64)
-            .unwrap();
-
-        // Check that the changes are not written to the database yet
-        let v2_entries = historical_rocks_db
-            .db
-            .iter_all::<ModificationsHistoryV2<OnChain>>(None)
-            .collect::<Vec<_>>();
-        let v1_entries = historical_rocks_db
-            .db
-            .iter_all::<ModificationsHistoryV1<OnChain>>(None)
-            .collect::<Vec<_>>();
-
-        assert_eq!(v2_entries.len(), 0);
-        assert_eq!(v1_entries.len(), 1);
-
-        // Check that the migration is still in progress.
-        assert!(historical_rocks_db.is_migration_in_progress());
-
-        // Flush the changes to the DB
-        historical_rocks_db.commit_migration_changes().unwrap();
-
-        let v2_entries = historical_rocks_db
-            .db
-            .iter_all::<ModificationsHistoryV2<OnChain>>(None)
-            .collect::<Vec<_>>();
-        let v1_entries = historical_rocks_db
-            .db
-            .iter_all::<ModificationsHistoryV1<OnChain>>(None)
-            .collect::<Vec<_>>();
-
-        assert_eq!(v2_entries.len(), 1);
-        assert_eq!(v1_entries.len(), 0);
-
-        // Then
-        assert!(!historical_rocks_db.is_migration_in_progress());
     }
 
     #[test]
