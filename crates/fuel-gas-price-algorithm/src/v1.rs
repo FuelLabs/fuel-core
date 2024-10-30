@@ -3,10 +3,7 @@ use std::{
     cmp::max,
     collections::BTreeMap,
     num::NonZeroU64,
-    ops::{
-        Div,
-        Range,
-    },
+    ops::Div,
 };
 
 #[cfg(test)]
@@ -303,11 +300,11 @@ impl core::ops::Deref for ClampedPercentage {
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
-        height_range: Range<u32>,
+        heights: Vec<u32>,
         range_cost: u128,
     ) -> Result<(), Error> {
-        if !height_range.is_empty() {
-            self.da_block_update(height_range, range_cost)?;
+        if !heights.is_empty() {
+            self.da_block_update(heights, range_cost)?;
             self.recalculate_projected_cost();
         }
         Ok(())
@@ -510,10 +507,10 @@ impl AlgorithmUpdaterV1 {
 
     fn da_block_update(
         &mut self,
-        height_range: Range<u32>,
+        heights: Vec<u32>,
         range_cost: u128,
     ) -> Result<(), Error> {
-        let range_bytes = self.drain_l2_block_bytes_for_range(height_range)?;
+        let range_bytes = self.drain_l2_block_bytes_for_range(heights)?;
         let new_cost_per_byte: u128 = range_cost.checked_div(range_bytes).ok_or(
             Error::CouldNotCalculateCostPerByte {
                 bytes: range_bytes,
@@ -530,7 +527,7 @@ impl AlgorithmUpdaterV1 {
 
     fn drain_l2_block_bytes_for_range(
         &mut self,
-        height_range: Range<u32>,
+        height_range: Vec<u32>,
     ) -> Result<u128, Error> {
         let mut total: u128 = 0;
         for expected_height in height_range {

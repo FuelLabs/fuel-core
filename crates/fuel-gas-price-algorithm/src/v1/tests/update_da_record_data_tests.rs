@@ -6,72 +6,12 @@ use crate::v1::{
     Error,
 };
 
-// #[test]
-// fn update_da_record_data__increases_block() {
-//     // given
-//     let da_recorded_block_height = 0;
-//     let recorded_range = 1u32..3;
-//     let recorded_cost = 200;
-//     let unrecorded_blocks = vec![
-//         BlockBytes {
-//             height: 1,
-//             block_bytes: 1000,
-//         },
-//         BlockBytes {
-//             height: 2,
-//             block_bytes: 2000,
-//         },
-//     ];
-//     let mut updater = UpdaterBuilder::new()
-//         .with_da_recorded_block_height(da_recorded_block_height)
-//         .with_unrecorded_blocks(unrecorded_blocks)
-//         .build();
-//
-//     // when
-//     updater
-//         .update_da_record_data(recorded_range, recorded_cost)
-//         .unwrap();
-//
-//     // then
-//     let expected = 2;
-//     let actual = updater.da_recorded_block_height;
-//     assert_eq!(expected, actual);
-// }
-
-// #[test]
-// fn update_da_record_data__throws_error_if_out_of_order() {
-//     // given
-//     let da_recorded_block_height = 0;
-//     let bad_recorded_range = 2u32..4;
-//     let recorded_cost = 200;
-//     let unrecorded_blocks = vec![BlockBytes {
-//         height: 1,
-//         block_bytes: 1000,
-//     }];
-//     let mut updater = UpdaterBuilder::new()
-//         .with_da_recorded_block_height(da_recorded_block_height)
-//         .with_unrecorded_blocks(unrecorded_blocks)
-//         .build();
-//
-//     // when
-//     let actual_error = updater
-//         .update_da_record_data(bad_recorded_range, recorded_cost)
-//         .unwrap_err();
-//
-//     // then
-//     let expected_error = Error::SkippedDABlock {
-//         expected: 1,
-//         got: 2,
-//     };
-//     assert_eq!(actual_error, expected_error);
-// }
-
 #[test]
 fn update_da_record_data__throws_error_if_receives_a_block_missing_from_unrecorded_blocks(
 ) {
     // given
     let da_recorded_block_height = 0;
-    let recorded_range = 1u32..3;
+    let recorded_range = (1u32..3).collect();
     let recorded_cost = 200;
     let unrecorded_blocks = vec![BlockBytes {
         height: 1,
@@ -108,7 +48,7 @@ fn update_da_record_data__updates_cost_per_byte() {
 
     let new_cost_per_byte = 100;
     let recorded_cost = (block_bytes * new_cost_per_byte) as u128;
-    let recorded_range = 1u32..2;
+    let recorded_range = (1u32..2).collect();
     // when
     updater
         .update_da_record_data(recorded_range, recorded_cost)
@@ -151,7 +91,7 @@ fn update_da_record_data__updates_known_total_cost() {
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    let recorded_range = 11u32..14;
+    let recorded_range = (11u32..14).collect();
     let recorded_cost = 300;
     // when
     updater
@@ -204,7 +144,7 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
     let new_cost_per_byte = 100;
     let block_cost = block_bytes * new_cost_per_byte;
 
-    let recorded_range = 11u32..14;
+    let recorded_range = (11u32..14).collect();
     let recorded_cost = block_cost * 3;
     // when
     updater
@@ -279,7 +219,7 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
             });
     let min = recorded_heights.iter().min().unwrap();
     let max = recorded_heights.iter().max().unwrap();
-    let recorded_range = *min..(max + 1);
+    let recorded_range = (*min..(max + 1)).collect();
 
     // when
     updater
