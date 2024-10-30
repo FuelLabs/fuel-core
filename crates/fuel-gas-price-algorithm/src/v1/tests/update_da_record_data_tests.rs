@@ -10,7 +10,7 @@ use crate::v1::{
 fn update_da_record_data__throws_error_if_receives_a_block_missing_from_unrecorded_blocks(
 ) {
     // given
-    let recorded_range = (1u32..3).collect();
+    let recorded_range: Vec<u32> = (1u32..3).collect();
     let recorded_cost = 200;
     let unrecorded_blocks = vec![BlockBytes {
         height: 1,
@@ -22,7 +22,7 @@ fn update_da_record_data__throws_error_if_receives_a_block_missing_from_unrecord
 
     // when
     let actual_error = updater
-        .update_da_record_data(recorded_range, recorded_cost)
+        .update_da_record_data(&recorded_range, recorded_cost)
         .unwrap_err();
 
     // then
@@ -46,10 +46,10 @@ fn update_da_record_data__updates_cost_per_byte() {
 
     let new_cost_per_byte = 100;
     let recorded_cost = (block_bytes * new_cost_per_byte) as u128;
-    let recorded_range = (1u32..2).collect();
+    let recorded_range: Vec<u32> = (1u32..2).collect();
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost)
+        .update_da_record_data(&recorded_range, recorded_cost)
         .unwrap();
 
     // then
@@ -87,11 +87,11 @@ fn update_da_record_data__updates_known_total_cost() {
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
-    let recorded_range = (11u32..14).collect();
+    let recorded_range: Vec<u32> = (11u32..14).collect();
     let recorded_cost = 300;
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost)
+        .update_da_record_data(&recorded_range, recorded_cost)
         .unwrap();
 
     // then
@@ -138,11 +138,11 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
     let new_cost_per_byte = 100;
     let block_cost = block_bytes * new_cost_per_byte;
 
-    let recorded_range = (11u32..14).collect();
+    let recorded_range: Vec<u32> = (11u32..14).collect();
     let recorded_cost = block_cost * 3;
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost)
+        .update_da_record_data(&recorded_range, recorded_cost)
         .unwrap();
 
     // then
@@ -211,11 +211,11 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
             });
     let min = recorded_heights.iter().min().unwrap();
     let max = recorded_heights.iter().max().unwrap();
-    let recorded_range = (*min..(max + 1)).collect();
+    let recorded_range: Vec<u32> = (*min..(max + 1)).collect();
 
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost as u128)
+        .update_da_record_data(&recorded_range, recorded_cost as u128)
         .unwrap();
 
     // then
@@ -261,11 +261,11 @@ fn update_da_record_data__updates_known_total_cost_if_blocks_are_out_of_order() 
         .build();
     let new_cost_per_byte = 100;
     let recorded_cost = 2 * (block_bytes * new_cost_per_byte) as u128;
-    let recorded_range = vec![2, 3];
+    let recorded_range: Vec<u32> = vec![2, 3];
 
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost)
+        .update_da_record_data(&recorded_range, recorded_cost)
         .unwrap();
 
     // and
@@ -306,11 +306,11 @@ fn update_da_record_data__updates_projected_total_cost_if_blocks_are_out_of_orde
         .build();
     let new_cost_per_byte = 100;
     let recorded_cost = 2 * (block_bytes * new_cost_per_byte) as u128;
-    let recorded_range = vec![2, 3];
+    let recorded_range: Vec<u32> = vec![2, 3];
 
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost)
+        .update_da_record_data(&recorded_range, recorded_cost)
         .unwrap();
 
     // then
@@ -345,11 +345,11 @@ fn update_da_record_data__updates_unrecorded_blocks() {
         .build();
     let new_cost_per_byte = 100;
     let recorded_cost = 2 * (block_bytes * new_cost_per_byte) as u128;
-    let recorded_range = vec![2, 3];
+    let recorded_range: Vec<u32> = vec![2, 3];
 
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost)
+        .update_da_record_data(&recorded_range, recorded_cost)
         .unwrap();
 
     // then

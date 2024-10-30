@@ -300,7 +300,7 @@ impl core::ops::Deref for ClampedPercentage {
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
-        heights: Vec<u32>,
+        heights: &[u32],
         recording_cost: u128,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
@@ -507,7 +507,7 @@ impl AlgorithmUpdaterV1 {
 
     fn da_block_update(
         &mut self,
-        heights: Vec<u32>,
+        heights: &[u32],
         recording_cost: u128,
     ) -> Result<(), Error> {
         let recorded_bytes = self.drain_l2_block_bytes_for_range(heights)?;
@@ -525,15 +525,12 @@ impl AlgorithmUpdaterV1 {
         Ok(())
     }
 
-    fn drain_l2_block_bytes_for_range(
-        &mut self,
-        heights: Vec<u32>,
-    ) -> Result<u128, Error> {
+    fn drain_l2_block_bytes_for_range(&mut self, heights: &[u32]) -> Result<u128, Error> {
         let mut total: u128 = 0;
         for expected_height in heights {
-            let bytes = self.unrecorded_blocks.remove(&expected_height).ok_or(
+            let bytes = self.unrecorded_blocks.remove(expected_height).ok_or(
                 Error::L2BlockExpectedNotFound {
-                    height: expected_height,
+                    height: *expected_height,
                 },
             )?;
             total = total.saturating_add(bytes as u128);

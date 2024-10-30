@@ -161,8 +161,8 @@ impl Simulator {
             // Update DA blocks on the occasion there is one
             if let Some((range, cost)) = da_block {
                 for height in range.to_owned() {
-                    let block_heights = (height..(height) + 1).collect();
-                    updater.update_da_record_data(block_heights, cost).unwrap();
+                    let block_heights: Vec<u32> = (height..(height) + 1).collect();
+                    updater.update_da_record_data(&block_heights, cost).unwrap();
                     actual_costs.push(updater.latest_known_total_da_cost_excess)
                 }
             }
