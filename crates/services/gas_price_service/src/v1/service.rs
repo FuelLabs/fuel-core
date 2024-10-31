@@ -429,15 +429,15 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    l2_block_range: 1..10,
-                    blob_cost_wei: 100,
-                    blob_size_bytes: 300,
+                    l2_block_range: 1..2,
+                    blob_cost_wei: 9000,
+                    blob_size_bytes: 3000,
                 }),
                 notifier.clone(),
             ),
-            Some(Duration::from_millis(10)),
+            Some(Duration::from_millis(100)),
         );
-        let mut watcher = StateWatcher::started();
+        let mut watcher = StateWatcher::default();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -461,7 +461,7 @@ mod tests {
 
         // when
         service.run(&mut watcher).await.unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        l2_block_sender.send(l2_block).await.unwrap();
         service.shutdown().await.unwrap();
         let maybe_notified = tokio::time::timeout(Duration::from_secs(1), notified).await;
 
