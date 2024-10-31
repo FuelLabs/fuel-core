@@ -134,7 +134,7 @@ where
             set.map(|(key, value)| {
                 let key_encoder =
                     <M::Blueprint as BlueprintInspect<M, S>>::KeyCodec::encode(key);
-                let key_bytes = key_encoder.as_bytes().to_vec();
+                let key_bytes = key_encoder.into_bytes();
                 let value =
                     <M::Blueprint as BlueprintInspect<M, S>>::ValueCodec::encode_as_value(
                         value,
@@ -158,7 +158,7 @@ where
             set.map(|key| {
                 let key_encoder =
                     <M::Blueprint as BlueprintInspect<M, S>>::KeyCodec::encode(key);
-                let key_bytes = key_encoder.as_bytes().to_vec();
+                let key_bytes = key_encoder.into_bytes();
                 (key_bytes, WriteOperation::Remove)
             }),
         )

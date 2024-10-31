@@ -218,9 +218,13 @@ impl<S> BatchOperations for StructuredStorage<S>
 where
     S: BatchOperations,
 {
-    fn batch_write<I>(&mut self, column: Self::Column, entries: I) -> StorageResult<()>
+    fn batch_write<'a, I>(
+        &mut self,
+        column: Self::Column,
+        entries: I,
+    ) -> StorageResult<()>
     where
-        I: Iterator<Item = (Vec<u8>, WriteOperation)>,
+        I: Iterator<Item = (Cow<'a, [u8]>, WriteOperation)> + 'a,
     {
         self.inner.batch_write(column, entries)
     }

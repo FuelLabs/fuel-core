@@ -86,7 +86,6 @@ where
     where
         Iter: 'a + Iterator<Item = &'a M::Key> + Send,
         M::Key: 'a,
-        Self::KeyCodec: 'a,
     {
         let keys = keys
             .map(|key| Self::KeyCodec::encode(key).into_bytes())

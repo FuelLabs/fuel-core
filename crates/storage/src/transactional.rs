@@ -519,13 +519,13 @@ where
     Column: StorageColumn,
     S: KeyValueInspect<Column = Column>,
 {
-    fn batch_write<I>(&mut self, column: Column, entries: I) -> StorageResult<()>
+    fn batch_write<'a, I>(&mut self, column: Column, entries: I) -> StorageResult<()>
     where
-        I: Iterator<Item = (Vec<u8>, WriteOperation)>,
+        I: Iterator<Item = (Cow<'a, [u8]>, WriteOperation)> + 'a,
     {
         let btree = self.changes.entry(column.id()).or_default();
         entries.for_each(|(key, operation)| {
-            btree.insert(key.into(), operation);
+            btree.insert(key.to_vec().into(), operation);
         });
         Ok(())
     }

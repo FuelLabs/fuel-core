@@ -29,7 +29,7 @@ pub trait Encoder<'a> {
 /// flexibility and more performant encoding, allowing the use of slices and arrays
 /// instead of vectors in some cases. Since the [`Encoder`] returns `Cow<[u8]>`,
 /// it is always possible to take ownership of the serialized value.
-pub trait Encode<T: ?Sized> {
+pub trait Encode<T: ?Sized>: 'static {
     /// The encoder type that stores serialized object.
     type Encoder<'a>: Encoder<'a>
     where
