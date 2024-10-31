@@ -31,7 +31,6 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use itertools::Itertools;
 use rocksdb::{
     BlockBasedOptions,
     BoundColumnFamily,
@@ -534,18 +533,18 @@ where
         &self,
         column: u32,
         iterator: I,
-    ) -> DatabaseResult<Vec<Option<Vec<u8>>>>
+    ) -> impl Iterator<Item = DatabaseResult<Option<Vec<u8>>>> + '_
     where
         I: Iterator<Item = K>,
         K: AsRef<[u8]>,
     {
         let column_metrics = self.metrics.columns_read_statistic.get(&column);
         let cl = self.cf_u32(column);
-        let results = self
-            .db
+
+        self.db
             .multi_get_cf_opt(iterator.map(|k| (&cl, k)), &self.read_options)
             .into_iter()
-            .map(|el| {
+            .map(move |el| {
                 self.metrics.read_meter.inc();
                 column_metrics.map(|metric| metric.inc());
                 el.map(|value| {
@@ -556,8 +555,6 @@ where
                 })
                 .map_err(|err| DatabaseError::Other(err.into()))
             })
-            .try_collect()?;
-        Ok(results)
     }
 
     fn _iter_store<T>(
@@ -734,20 +731,11 @@ where
         keys: BoxedIter<'a, Vec<u8>>,
         column: Self::Column,
     ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
-        // TODO: Metrics
-
-        let column = self.cf(column);
-        let keys = keys.map(|key| (&column, key));
-
-        self.db
-            .multi_get_cf_opt(keys, &self.read_options)
-            .into_iter()
-            .map(|value_opt| {
-                value_opt
-                    .map_err(|e| {
-                        StorageError::Other(DatabaseError::Other(e.into()).into())
-                    })
-                    .map(|value| value.map(Arc::new))
+        self.multi_get(column.id(), keys)
+            .map(|result| {
+                result
+                    .map(|opt| opt.map(Value::from))
+                    .map_err(|err| StorageError::Other(err.into()))
             })
             .into_boxed()
     }

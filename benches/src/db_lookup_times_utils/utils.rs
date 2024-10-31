@@ -90,7 +90,9 @@ fn get_block_multi_get_method(
         .ok_or(anyhow!("empty raw block"))?;
     let block: CompressedBlock = postcard::from_bytes(raw_block.as_slice())?;
     let tx_ids = block.transactions().iter();
-    let raw_txs = database.multi_get(BenchDbColumn::Transactions.id(), tx_ids)?;
+    let raw_txs: Vec<_> = database
+        .multi_get(BenchDbColumn::Transactions.id(), tx_ids)
+        .try_collect()?;
     let txs: Vec<Transaction> = raw_txs
         .iter()
         .flatten()

@@ -115,9 +115,10 @@ where
         let mut reverse_changes = Changes::default();
 
         for (column, column_changes) in changes {
-            let results = self
+            let results: Vec<_> = self
                 .db
-                .multi_get(*column, column_changes.iter().map(|(k, _)| k))?;
+                .multi_get(*column, column_changes.iter().map(|(k, _)| k))
+                .try_collect()?;
 
             let entry = reverse_changes
                 .entry(*column)
