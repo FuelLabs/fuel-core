@@ -573,6 +573,9 @@ where
         self.db
             .commit_changes(&storage_transaction.into_changes())?;
 
+        self.shared_migration_state
+            .lock()
+            .set_last_height_to_be_migrated(height_to_rollback);
         Ok(())
     }
 
@@ -798,15 +801,36 @@ where
         // If the migration is not in progress, the default set of changes will be used, and the overhead
         // for handling caused by this function to handle the migration will be minimal.
 
-        let mut storage_transaction =
-            StorageTransaction::transaction(&self.db, ConflictPolicy::Overwrite, changes);
+        // Non-empty changes will be returned only when the migration is in progress.
+        // Changes returend are guaranteed to be non-stale.
+        let migration_changes = self
+            .shared_migration_state
+            .lock()
+            .take_migration_changes()
+            .unwrap_or_default();
+
+        let migration_changes_transaction = StorageTransaction::transaction(
+            &self.db,
+            ConflictPolicy::Overwrite,
+            migration_changes,
+        );
+
+        let mut storage_transaction = StorageTransaction::transaction(
+            migration_changes_transaction,
+            ConflictPolicy::Overwrite,
+            changes,
+        );
 
         if let Some(height) = height {
             self.store_modifications_history(&mut storage_transaction, &height)?;
         }
 
-        self.db
-            .commit_changes(&storage_transaction.into_changes())?;
+        let transaction_with_commit_and_migration_changes =
+            storage_transaction.commit()?;
+
+        self.db.commit_changes(
+            &transaction_with_commit_and_migration_changes.into_changes(),
+        )?;
 
         Ok(())
     }

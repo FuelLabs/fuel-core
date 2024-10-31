@@ -43,6 +43,7 @@ pub struct MigrationState<Description> {
     changes: Changes,
     // The height up to which the migration can be performed, included.
     last_height_to_be_migrated: Option<u64>,
+    migration_in_progress: bool,
     _description: PhantomData<Description>,
 }
 
@@ -50,17 +51,26 @@ impl<Description> MigrationState<Description> {
     pub fn new() -> Self {
         Self {
             changes: Changes::default(),
-            last_height_to_be_migrated: Some(u64::MAX),
+            // When set to None, the migration process won't do anything as all
+            // changes will be considered stale.
+            last_height_to_be_migrated: None,
+            // Initially assume that the migration is in progress.
+            migration_in_progress: true,
             _description: PhantomData,
         }
     }
 
     pub fn is_migration_in_progress(&self) -> bool {
-        self.last_height_to_be_migrated.is_some()
+        self.migration_in_progress
     }
 
-    pub fn get_migration_changes(&mut self) -> Changes {
-        std::mem::take(&mut self.changes)
+    pub fn signal_migration_complete(&mut self) {
+        self.migration_in_progress = false;
+    }
+
+    pub fn take_migration_changes(&mut self) -> Option<Changes> {
+        self.is_migration_in_progress()
+            .then(|| std::mem::take(&mut self.changes))
     }
 }
 
@@ -69,7 +79,7 @@ where
     Description: DatabaseDescription,
 {
     pub fn add_migration_changes(&mut self, changes: Changes) {
-        debug_assert!(changes.iter().all(|(column, _)| {
+        debug_assert!(changes.keys().all(|column| {
             *column == Column::<Description>::HistoryColumn.id()
                 || *column == Column::<Description>::HistoryV2Column.id()
         }));
@@ -92,8 +102,6 @@ where
             .expect("Transaction with Overwrite conflict policy cannot fail");
 
         // Revert the changes above the last migration height.
-        // TODO: This is a hack which depends from the implementation of `<StructuredStorage as StorageMutate<_>>`.
-        // We cannot avoid filtering changes manually because iterators for `InMemoryStorage` are not implemented.
         let changes = committed_transaction.into_changes();
         let Ok(consistent_changes) = self.remove_stale_migration_changes(changes) else {
             // Something went wrong, we should throw away the changes as they might contain stale data
@@ -104,9 +112,14 @@ where
         self.changes = consistent_changes;
     }
 
+    pub fn set_last_height_to_be_migrated(&mut self, last_height_to_be_migrated: u64) {
+        self.last_height_to_be_migrated = Some(last_height_to_be_migrated);
+        let changes = std::mem::take(&mut self.changes);
+        let consistent_changes = self.remove_stale_migration_changes(changes).unwrap();
+        self.changes = consistent_changes;
+    }
+
     // Remove the changes above the last migration height.
-    // TODO: This is a hack which depends from the implementation of `<StructuredStorage as StorageMutate<_>>`.
-    // We cannot avoid filtering changes manually because iterators for `InMemoryStorage` are not implemented.
     fn remove_stale_migration_changes(&self, changes: Changes) -> StorageResult<Changes> {
         let mut revert_changes = Changes::default();
         revert_changes.insert(
@@ -137,7 +150,7 @@ where
             if height > self.last_height_to_be_migrated.unwrap() {
                 revert_changes
                     .get_mut(&Column::<Description>::HistoryV2Column.id())
-                    .expect("Changes for HistoryV2COlumn were inserted in this function")
+                    .expect("Changes for HistoryV2Column were inserted in this function")
                     .insert(serialized_height.into(), WriteOperation::Remove);
             }
         }
