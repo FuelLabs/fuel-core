@@ -675,8 +675,6 @@ impl FuelP2PService {
                     let send_ok = match channel {
                         ResponseSender::SealedHeaders(c) => match response {
                             V2ResponseMessage::SealedHeaders(v) => {
-                                // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-                                // Change type of ResponseSender and remove the .ok() here
                                 c.send(Ok((peer, Ok(v)))).is_ok()
                             }
                             _ => {

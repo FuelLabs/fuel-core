@@ -599,8 +599,6 @@ where
                 .trace_err("Failed to send response to the request channel");
         });
 
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-        // Handle error cases and return meaningful status codes
         if result.is_err() {
             let err = Err(ResponseMessageErrorCode::SyncProcessorOutOfCapacity);
             let _ = self
@@ -676,8 +674,6 @@ where
                 return;
             };
 
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Return helpful error message to requester.
             let _ = response_channel
                 .try_send(task_request(Ok(response), request_id))
                 .trace_err("Failed to send response to the request channel");
