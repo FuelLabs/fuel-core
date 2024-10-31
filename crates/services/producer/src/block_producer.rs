@@ -115,7 +115,9 @@ where
     where
         Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     {
-        let _production_guard = self.lock.lock().await;
+        let _production_guard = self.lock.try_lock().map_err(|_| {
+            anyhow!("Failed to acquire the production lock, block production is already in progress")
+        })?;
 
         let mut transactions_source = predefined_block.transactions().to_vec();
 
@@ -197,8 +199,10 @@ where
         //      2. parallel throughput
         //  - Execute block with production mode to correctly malleate txs outputs and block headers
 
-        // prevent simultaneous block production calls, the guard will drop at the end of this fn.
-        let _production_guard = self.lock.lock().await;
+        // prevent simultaneous block production calls
+        let _production_guard = self.lock.try_lock().map_err(|_| {
+            anyhow!("Failed to acquire the production lock, block production is already in progress")
+        })?;
 
         let gas_price = self.calculate_gas_price().await?;
 
