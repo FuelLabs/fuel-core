@@ -239,9 +239,9 @@ impl DatabaseItemWithAmount for Message {
 trait BalanceIndexationUpdater: DatabaseItemWithAmount {
     fn update_balances<T, F>(&self, tx: &mut T, updater: F) -> StorageResult<()>
     where
-        <Self::Storage as Mappable>::Key: Sized + std::fmt::Display,
-        <Self::Storage as Mappable>::Value: Sized + std::fmt::Display,
-        <Self::Storage as Mappable>::OwnedValue: Default + std::fmt::Display,
+        <Self::Storage as Mappable>::Key: Sized + core::fmt::Display,
+        <Self::Storage as Mappable>::Value: Sized + core::fmt::Display,
+        <Self::Storage as Mappable>::OwnedValue: Default + core::fmt::Display,
         T: OffChainDatabaseTransaction + StorageMutate<Self::Storage>,
         F: Fn(
             Cow<<Self::Storage as Mappable>::OwnedValue>,
