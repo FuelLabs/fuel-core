@@ -10,6 +10,7 @@ use std::{
 };
 
 use collisions::CollisionsExt;
+use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId,
@@ -92,6 +93,11 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             && self.current_gas == 0
             && self.current_bytes_size == 0
     }
+
+    /// Returns the number of transactions in the pool.
+    pub fn tx_count(&self) -> usize {
+        self.tx_id_to_storage_id.len()
+    }
 }
 
 impl<S: Storage, CM, SA> Pool<S, S::StorageIndex, CM, SA>
@@ -109,6 +115,16 @@ where
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
     ) -> Result<Vec<ArcPoolTx>, Error> {
+        let insertion_result = self.insert_inner(tx, persistent_storage);
+        self.register_transaction_counts();
+        insertion_result
+    }
+
+    fn insert_inner(
+        &mut self,
+        tx: std::sync::Arc<PoolTransaction>,
+        persistent_storage: &impl TxPoolPersistentStorage,
+    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, Error> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -148,6 +164,10 @@ where
         self.current_bytes_size = self.current_bytes_size.saturating_add(bytes_size);
         debug_assert!(!self.tx_id_to_storage_id.contains_key(&tx_id));
         self.tx_id_to_storage_id.insert(tx_id, storage_id);
+
+        if self.config.metrics {
+            txpool_metrics().tx_size.observe(bytes_size as f64);
+        };
 
         let tx =
             Storage::get(&self.storage, &storage_id).expect("Transaction is set above");
@@ -236,7 +256,7 @@ where
 
     fn record_transaction_time_in_txpool(tx: &StorageData) {
         if let Ok(elapsed) = tx.creation_instant.elapsed() {
-            fuel_core_metrics::txpool_metrics::txpool_metrics()
+            txpool_metrics()
                 .transaction_time_in_txpool_secs
                 .observe(elapsed.as_secs_f64());
         } else {
@@ -244,12 +264,27 @@ where
         }
     }
 
-    fn record_select_transaction_time_in_nanoseconds(start: Instant) {
-        let elapsed = start.elapsed().as_nanos() as f64;
-        fuel_core_metrics::txpool_metrics::txpool_metrics()
-            .select_transaction_time_nanoseconds
+    fn record_select_transaction_time(start: Instant) {
+        let elapsed = start.elapsed().as_micros() as f64;
+        txpool_metrics()
+            .select_transactions_time_microseconds
             .observe(elapsed);
     }
+
+    fn register_transaction_counts(&self) {
+        if self.config.metrics {
+            let num_transactions = self.tx_count();
+            let executable_txs =
+                self.selection_algorithm.number_of_executable_transactions();
+            txpool_metrics()
+                .number_of_transactions
+                .set(num_transactions as i64);
+            txpool_metrics()
+                .number_of_executable_transactions
+                .set(executable_txs as i64);
+        }
+    }
+
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
@@ -258,26 +293,25 @@ where
         &mut self,
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
-        let start = std::time::Instant::now();
         let metrics = self.config.metrics;
+        let maybe_start = metrics.then(std::time::Instant::now);
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
+        if let Some(start) = maybe_start {
+            Self::record_select_transaction_time(start)
+        };
 
         if metrics {
-            Self::record_select_transaction_time_in_nanoseconds(start)
-        };
+            best_txs.iter().for_each(|storage_data| {
+                Self::record_transaction_time_in_txpool(storage_data)
+            });
+        }
 
         best_txs
             .into_iter()
-            .inspect(|storage_data| {
-                if metrics {
-                    Self::record_transaction_time_in_txpool(storage_data)
-                }
-            })
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
-
                 storage_entry.transaction
             })
             .collect::<Vec<_>>()
@@ -528,6 +562,7 @@ where
             self.selection_algorithm
                 .on_removed_transaction(storage_entry);
         }
+        self.register_transaction_counts();
     }
 
     #[cfg(test)]
