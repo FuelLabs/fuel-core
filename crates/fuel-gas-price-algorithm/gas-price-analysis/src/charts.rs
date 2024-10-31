@@ -80,11 +80,10 @@ pub fn draw_gas_prices(
     da_gas_prices: &[u64],
     title: &str,
 ) -> anyhow::Result<()> {
-    let gas_prices_gwei: Vec<_> = gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
+    let gas_prices_gwei: Vec<_> = gas_prices.iter().map(|x| x / ONE_GWEI).collect();
     let _exec_gas_prices_gwei: Vec<_> =
-        _exec_gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
-    let da_gas_prices_gwei: Vec<_> =
-        da_gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
+        _exec_gas_prices.iter().map(|x| x / ONE_GWEI).collect();
+    let da_gas_prices_gwei: Vec<_> = da_gas_prices.iter().map(|x| x / ONE_GWEI).collect();
     // const GAS_PRICE_COLOR: RGBColor = BLACK;
     // const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
     const DA_GAS_PRICE_COLOR: RGBColor = BLUE;
@@ -146,7 +145,7 @@ pub fn draw_gas_prices(
 
 pub fn draw_fullness(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    fullness: &Vec<(u64, u64)>,
+    fullness: &[(u64, u64)],
     title: &str,
 ) -> anyhow::Result<()> {
     const FULLNESS_COLOR: RGBColor = BLACK;

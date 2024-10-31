@@ -87,7 +87,7 @@ impl Simulator {
         // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
         let always_normal_activity = L2ActivityTracker::new_always_normal();
-        let updater = AlgorithmUpdaterV1 {
+        AlgorithmUpdaterV1 {
             min_exec_gas_price: 10,
             min_da_gas_price: 10,
             // Change to adjust where the exec gas price starts on block 0
@@ -113,11 +113,10 @@ impl Simulator {
             last_profit: 0,
             second_to_last_profit: 0,
             l2_activity: always_normal_activity,
-        };
-        updater
+        }
     }
 
-    fn execute_simulation<'a>(
+    fn execute_simulation(
         &self,
         capacity: u64,
         max_block_bytes: u64,
@@ -176,7 +175,7 @@ impl Simulator {
         let bytes_and_costs: Vec<_> = bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
-            .map(|(bytes, da_cost_per_byte)| (*bytes, (*bytes * da_cost_per_byte) as u64))
+            .map(|(bytes, da_cost_per_byte)| (*bytes, *bytes * da_cost_per_byte))
             .collect();
 
         let actual_profit: Vec<i128> = actual_costs
@@ -207,7 +206,7 @@ impl Simulator {
         &self,
         da_recording_rate: usize,
         da_finalization_rate: usize,
-        fullness_and_bytes: &Vec<(u64, u64)>,
+        fullness_and_bytes: &[(u64, u64)],
     ) -> Vec<Option<(Range<u32>, u128)>> {
         let l2_blocks_with_no_da_blocks =
             std::iter::repeat(None).take(da_finalization_rate);
