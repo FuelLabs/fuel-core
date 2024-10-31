@@ -510,7 +510,7 @@ impl AlgorithmUpdaterV1 {
         heights: &[u32],
         recording_cost: u128,
     ) -> Result<(), Error> {
-        let recorded_bytes = self.drain_l2_block_bytes_for_range(heights)?;
+        let recorded_bytes = self.drain_l2_block_bytes_for_heights(heights)?;
         let new_cost_per_byte: u128 = recording_cost.checked_div(recorded_bytes).ok_or(
             Error::CouldNotCalculateCostPerByte {
                 bytes: recorded_bytes,
@@ -525,7 +525,10 @@ impl AlgorithmUpdaterV1 {
         Ok(())
     }
 
-    fn drain_l2_block_bytes_for_range(&mut self, heights: &[u32]) -> Result<u128, Error> {
+    fn drain_l2_block_bytes_for_heights(
+        &mut self,
+        heights: &[u32],
+    ) -> Result<u128, Error> {
         let mut total: u128 = 0;
         for expected_height in heights {
             let bytes = self.unrecorded_blocks.remove(expected_height).ok_or(
@@ -543,7 +546,7 @@ impl AlgorithmUpdaterV1 {
         let projection_portion: u128 = self
             .unrecorded_blocks
             .iter()
-            .map(|(_, &bytes)| bytes as u128)
+            .map(|(_, &bytes)| u128::from(bytes))
             .fold(0_u128, |acc, n| acc.saturating_add(n))
             .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
