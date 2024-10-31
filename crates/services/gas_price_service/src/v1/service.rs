@@ -406,7 +406,6 @@ mod tests {
         };
 
         let metadata_storage = FakeMetadata::empty();
-        let l2_block_height = 1;
         let config = V1AlgorithmConfig {
             new_exec_gas_price: 100,
             min_exec_gas_price: 50,
@@ -423,7 +422,7 @@ mod tests {
             block_activity_threshold: 20,
         };
         let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
+            initialize_algorithm(&config, block_height, &metadata_storage).unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(
@@ -452,7 +451,6 @@ mod tests {
         // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
         // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
         // here we mimic that behaviour by running the da block cost service.
-        let notified = notifier.notified();
         service
             .da_source_adapter_handle
             .run(&mut watcher)
@@ -463,11 +461,9 @@ mod tests {
         service.run(&mut watcher).await.unwrap();
         l2_block_sender.send(l2_block).await.unwrap();
         service.shutdown().await.unwrap();
-        let maybe_notified = tokio::time::timeout(Duration::from_secs(1), notified).await;
 
         // then
         let actual_price = read_algo.next_gas_price();
-        // assert_ne!(initial_price, actual_price);
-        assert!(maybe_notified.is_ok());
+        assert_ne!(initial_price, actual_price);
     }
 }
