@@ -113,6 +113,7 @@ use std::{
 };
 use tracing::{
     debug,
+    error,
     info,
 };
 
@@ -245,7 +246,7 @@ trait BalanceIndexationUpdater: DatabaseItemWithAmount {
         F: Fn(
             Cow<<Self::Storage as Mappable>::OwnedValue>,
             Amount,
-        ) -> <Self::Storage as Mappable>::Value,
+        ) -> Option<<Self::Storage as Mappable>::Value>,
         fuel_core_storage::Error: From<<T as StorageInspect<Self::Storage>>::Error>,
     {
         let key = self.key();
@@ -253,17 +254,27 @@ trait BalanceIndexationUpdater: DatabaseItemWithAmount {
         let storage = tx.storage::<Self::Storage>();
         let current_balance = storage.get(&key)?.unwrap_or_default();
         let prev_balance = current_balance.clone();
-        let new_balance = updater(current_balance, amount);
+        match updater(current_balance, amount) {
+            Some(new_balance) => {
+                debug!(
+                    %key,
+                    %amount,
+                    %prev_balance,
+                    %new_balance,
+                    "changing balance");
 
-        debug!(
-            %key,
-            %amount,
-            %prev_balance,
-            %new_balance,
-            "changing balance");
-
-        let storage = tx.storage::<Self::Storage>();
-        Ok(storage.insert(&key, &new_balance)?)
+                let storage = tx.storage::<Self::Storage>();
+                Ok(storage.insert(&key, &new_balance)?)
+            }
+            None => {
+                error!(
+                    %key,
+                    %amount,
+                    %prev_balance,
+                    "unable to change balance due to overflow");
+                Err(anyhow::anyhow!("unable to change balance due to overflow").into())
+            }
+        }
     }
 }
 
@@ -284,19 +295,19 @@ where
     match event {
         Event::MessageImported(message) => message
             .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.saturating_add(amount)
+                balance.checked_add(amount)
             }),
         Event::MessageConsumed(message) => message
             .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.saturating_sub(amount)
+                balance.checked_sub(amount)
             }),
         Event::CoinCreated(coin) => coin
             .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.saturating_add(amount)
+                balance.checked_add(amount)
             }),
         Event::CoinConsumed(coin) => coin
             .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.saturating_sub(amount)
+                balance.checked_sub(amount)
             }),
         Event::ForcedTransactionFailed { .. } => Ok(()),
     }
