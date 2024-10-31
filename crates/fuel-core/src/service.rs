@@ -225,7 +225,11 @@ impl FuelService {
     fn write_metadata_at_genesis(database: &CombinedDatabase) -> anyhow::Result<()> {
         let on_chain_view = database.on_chain().latest_view()?;
         if on_chain_view.get_genesis().is_err() {
-            info!("No genesis, initializing metadata with balances indexation");
+            let all_indexations = IndexationKind::all().collect();
+            info!(
+                "No genesis, initializing metadata with all supported indexations: {:?}",
+                all_indexations
+            );
             let off_chain_view = database.off_chain().latest_view()?;
             let mut database_tx = off_chain_view.read_transaction();
             database_tx
@@ -235,9 +239,7 @@ impl FuelService {
                     &DatabaseMetadata::V2 {
                         version: <OffChain as DatabaseDescription>::version(),
                         height: Default::default(),
-                        indexation_availability: [(IndexationKind::Balances)]
-                            .into_iter()
-                            .collect(),
+                        indexation_availability: all_indexations,
                     },
                 )?;
             database

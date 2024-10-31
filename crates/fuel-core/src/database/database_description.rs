@@ -5,6 +5,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use std::collections::HashSet;
+use strum::IntoEnumIterator;
 
 pub mod gas_price;
 pub mod off_chain;
@@ -69,11 +70,24 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 }
 
 #[derive(
-    Copy, Clone, Debug, serde::Serialize, serde::Deserialize, Eq, PartialEq, Hash,
+    Copy,
+    Clone,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Eq,
+    PartialEq,
+    Hash,
+    strum::EnumIter,
 )]
 pub enum IndexationKind {
     Balances,
-    _CoinsToSpend,
+}
+
+impl IndexationKind {
+    pub fn all() -> impl Iterator<Item = Self> {
+        Self::iter()
+    }
 }
 
 /// The metadata of the database contains information about the version and its height.
