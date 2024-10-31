@@ -17,7 +17,7 @@ pub enum Error {
     CouldNotCalculateCostPerByte { bytes: u128, cost: u128 },
     #[error("Failed to include L2 block data: {0}")]
     FailedTooIncludeL2BlockData(String),
-    #[error("L2 block expected but not found in unrecorded blocks: {height:?}")]
+    #[error("L2 block expected but not found in unrecorded blocks: {height}")]
     L2BlockExpectedNotFound { height: u32 },
 }
 
