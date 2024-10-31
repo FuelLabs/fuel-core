@@ -64,9 +64,9 @@ impl GasPriceData for Database<GasPriceDatabase> {
 
 impl From<Config> for GasPriceServiceConfig {
     fn from(value: Config) -> Self {
-        GasPriceServiceConfig::new(
-            value.min_gas_price,
+        GasPriceServiceConfig::new_v0(
             value.starting_gas_price,
+            value.min_gas_price,
             value.gas_price_change_percent,
             value.gas_price_threshold_percent,
         )
