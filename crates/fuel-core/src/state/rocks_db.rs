@@ -48,6 +48,7 @@ use rocksdb::{
     WriteBatch,
 };
 use std::{
+    borrow::Cow,
     cmp,
     collections::BTreeMap,
     fmt,
@@ -728,7 +729,7 @@ where
 
     fn get_batch<'a>(
         &'a self,
-        keys: BoxedIter<'a, Vec<u8>>,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
         column: Self::Column,
     ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
         self.multi_get(column.id(), keys)

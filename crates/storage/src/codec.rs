@@ -16,9 +16,12 @@ pub mod primitive;
 pub mod raw;
 
 /// The trait is usually implemented by the encoder that stores serialized objects.
-pub trait Encoder {
+pub trait Encoder<'a> {
     /// Returns the serialized object as a slice.
     fn as_bytes(&self) -> Cow<[u8]>;
+
+    /// Consumes the encoder, returning the serialized object as a slice.
+    fn into_bytes(self) -> Cow<'a, [u8]>;
 }
 
 /// The trait encodes the type to the bytes and passes it to the `Encoder`,
@@ -28,12 +31,12 @@ pub trait Encoder {
 /// it is always possible to take ownership of the serialized value.
 pub trait Encode<T: ?Sized> {
     /// The encoder type that stores serialized object.
-    type Encoder<'a>: Encoder
+    type Encoder<'a>: Encoder<'a>
     where
         T: 'a;
 
     /// Encodes the object to the bytes and passes it to the `Encoder`.
-    fn encode(t: &T) -> Self::Encoder<'_>;
+    fn encode<'a>(t: &'a T) -> Self::Encoder<'a>;
 
     /// Returns the serialized object as an [`Value`].
     fn encode_as_value(t: &T) -> Value {
@@ -52,17 +55,25 @@ pub trait Decode<T> {
     }
 }
 
-impl<'a> Encoder for Cow<'a, [u8]> {
+impl<'a> Encoder<'a> for Cow<'a, [u8]> {
     fn as_bytes(&self) -> Cow<[u8]> {
         match self {
             Cow::Borrowed(borrowed) => Cow::Borrowed(borrowed),
             Cow::Owned(owned) => Cow::Borrowed(owned.as_ref()),
         }
     }
+
+    fn into_bytes(self) -> Cow<'a, [u8]> {
+        self
+    }
 }
 
-impl<const SIZE: usize> Encoder for [u8; SIZE] {
+impl<'a, const SIZE: usize> Encoder<'a> for [u8; SIZE] {
     fn as_bytes(&self) -> Cow<[u8]> {
         Cow::Borrowed(self.as_slice())
+    }
+
+    fn into_bytes(self) -> Cow<'a, [u8]> {
+        Cow::Owned(self.to_vec())
     }
 }

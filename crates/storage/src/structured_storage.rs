@@ -148,7 +148,7 @@ where
 
     fn get_batch<'a>(
         &'a self,
-        keys: BoxedIter<'a, Vec<u8>>,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
         column: Self::Column,
     ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
         self.inner.get_batch(keys, column)
@@ -283,6 +283,7 @@ where
     S: KeyValueInspect<Column = Column>,
     M: TableWithBlueprint<Column = Column>,
     M::Blueprint: BlueprintInspect<M, StructuredStorage<S>>,
+    <M::Blueprint as BlueprintInspect<M, StructuredStorage<S>>>::KeyCodec: 'static,
 {
     fn get_batch<'a>(
         &'a self,

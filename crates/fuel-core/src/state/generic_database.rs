@@ -136,7 +136,7 @@ where
 
     fn get_batch<'a>(
         &'a self,
-        keys: BoxedIter<'a, Vec<u8>>,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
         column: Self::Column,
     ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
         KeyValueInspect::get_batch(&self.storage, keys, column)

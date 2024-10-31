@@ -7,7 +7,10 @@ use fuel_core_storage::{
     },
     Result as StorageResult,
 };
-use std::sync::Arc;
+use std::{
+    borrow::Cow,
+    sync::Arc,
+};
 
 #[derive(Clone)]
 pub struct KeyValueViewWrapper<Column>(
@@ -53,7 +56,7 @@ where
 
     fn get_batch<'a>(
         &'a self,
-        keys: BoxedIter<'a, Vec<u8>>,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
         column: Self::Column,
     ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
         self.0.get_batch(keys, column)

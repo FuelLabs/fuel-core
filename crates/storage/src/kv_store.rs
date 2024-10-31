@@ -11,6 +11,7 @@ use crate::{
 
 #[cfg(feature = "alloc")]
 use alloc::{
+    borrow::Cow,
     boxed::Box,
     string::String,
     vec::Vec,
@@ -69,7 +70,7 @@ pub trait KeyValueInspect: Send + Sync {
     /// Returns multiple values from the storage.
     fn get_batch<'a>(
         &'a self,
-        keys: BoxedIter<'a, Vec<u8>>,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
         column: Self::Column,
     ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
         keys.map(move |key| self.get(&key, column)).into_boxed()
