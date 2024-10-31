@@ -2,7 +2,15 @@ use std::marker::PhantomData;
 
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
-    kv_store::StorageColumn,
+    iter::{
+        changes_iterator::ChangesIterator,
+        IterDirection,
+        IterableStore,
+    },
+    kv_store::{
+        StorageColumn,
+        WriteOperation,
+    },
     structured_storage::{
         test::InMemoryStorage,
         StructuredStorage,
@@ -12,7 +20,6 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         InMemoryTransaction,
-        ReferenceBytesKey,
         StorageTransaction,
     },
 };
@@ -27,7 +34,6 @@ use crate::{
                 ModificationsHistoryV2,
             },
         },
-        in_memory::memory_store::MemoryStore,
         StorageResult,
     },
 };
@@ -67,7 +73,8 @@ where
             *column == Column::<Description>::HistoryColumn.id()
                 || *column == Column::<Description>::HistoryV2Column.id()
         }));
-        let memory_store = MemoryStore::<Description>::default();
+        let memory_store = InMemoryStorage::<Description::Column>::default();
+        // TODO: Consider cloning the changes instead of moving them, to avoid losing consistent changes in case of error.
         let base_changes = std::mem::take(&mut self.changes);
         let base_transaction = StorageTransaction::transaction(
             &memory_store,
@@ -87,53 +94,70 @@ where
         // Revert the changes above the last migration height.
         // TODO: This is a hack which depends from the implementation of `<StructuredStorage as StorageMutate<_>>`.
         // We cannot avoid filtering changes manually because iterators for `InMemoryStorage` are not implemented.
-        let mut changes = committed_transaction.into_changes();
-        if let Err(_) = self.remove_stale_migration_changes(&mut changes) {
+        let changes = committed_transaction.into_changes();
+        let Ok(consistent_changes) = self.remove_stale_migration_changes(changes) else {
             // Something went wrong, we should throw away the changes as they might contain stale data
             // and we cannot proceed with the migration.
             return
-        }
+        };
 
-        self.changes = changes;
+        self.changes = consistent_changes;
     }
 
     // Remove the changes above the last migration height.
     // TODO: This is a hack which depends from the implementation of `<StructuredStorage as StorageMutate<_>>`.
     // We cannot avoid filtering changes manually because iterators for `InMemoryStorage` are not implemented.
-    fn remove_stale_migration_changes(&self, changes: &mut Changes) -> StorageResult<()> {
-        let mut v1_changes: Vec<ReferenceBytesKey> = Vec::new();
-        let mut v2_changes: Vec<ReferenceBytesKey> = Vec::new();
+    fn remove_stale_migration_changes(&self, changes: Changes) -> StorageResult<Changes> {
+        let mut revert_changes = Changes::default();
+        revert_changes.insert(
+            Column::<Description>::HistoryV2Column.id(),
+            Default::default(),
+        );
 
-        for (column, inner_changes) in changes.iter() {
-            if *column == Column::<Description>::HistoryColumn.id() {
-                for (serialized_height, _) in inner_changes.iter() {
-                    let height: u64 = <<ModificationsHistoryV1::<Description> as TableWithBlueprint>::Blueprint as BlueprintInspect<ModificationsHistoryV1<Description>, StructuredStorage<InMemoryTransaction<InMemoryStorage<Column<Description>>>>>>::KeyCodec::decode(serialized_height).expect("Decoding an encoded value cannot fail");
-                    if height > self.last_height_to_be_migrated.unwrap() {
-                        v1_changes.push(serialized_height.clone());
-                    }
-                }
-            } else if *column == Column::<Description>::HistoryV2Column.id() {
-                for (serialized_height, _) in inner_changes.iter() {
-                    let height: u64 = <<ModificationsHistoryV2::<Description> as TableWithBlueprint>::Blueprint as BlueprintInspect<ModificationsHistoryV1<Description>, StructuredStorage<InMemoryTransaction<InMemoryStorage<Column<Description>>>>>>::KeyCodec::decode(serialized_height).expect("Decoding an encoded value cannot fail");
-                    if height > self.last_height_to_be_migrated.unwrap() {
-                        v2_changes.push(serialized_height.clone());
-                    }
-                }
+        // Changes_iterator iterates over keys for which the corresponding change is a
+        let changes_iterator = ChangesIterator::new(&changes);
+        for serialized_height in changes_iterator.iter_store_keys(
+            Column::<Description>::HistoryV2Column,
+            None,
+            None,
+            IterDirection::Forward,
+        ) {
+            let serialized_height = serialized_height?;
+            let height: u64 = <
+                        <ModificationsHistoryV2::<Description> as TableWithBlueprint>
+                            ::Blueprint as BlueprintInspect<
+                                ModificationsHistoryV1<Description>,
+                                StructuredStorage<
+                                    InMemoryTransaction<
+                                        InMemoryStorage<Column<Description>>
+                                    >
+                                >
+                            >
+                        >::KeyCodec::decode(&serialized_height)?;
+            if height > self.last_height_to_be_migrated.unwrap() {
+                revert_changes
+                    .get_mut(&Column::<Description>::HistoryV2Column.id())
+                    .expect("Changes for HistoryV2COlumn were inserted in this function")
+                    .insert(serialized_height.into(), WriteOperation::Remove);
             }
         }
 
-        for (column, inner_changes) in changes.iter_mut() {
-            if *column == Column::<Description>::HistoryColumn.id() {
-                inner_changes.retain(|serialized_height, _| {
-                    v1_changes.contains(&serialized_height)
-                });
-            } else if *column == Column::<Description>::HistoryV2Column.id() {
-                inner_changes.retain(|serialized_height, _| {
-                    v2_changes.contains(&serialized_height)
-                });
-            }
-        }
+        let base_transaction = StorageTransaction::transaction(
+            InMemoryStorage::<Column<Description>>::default(),
+            ConflictPolicy::Overwrite,
+            changes,
+        );
 
-        Ok(())
+        let revert_stale_changes_transaction = StorageTransaction::transaction(
+            base_transaction,
+            ConflictPolicy::Overwrite,
+            revert_changes,
+        );
+
+        let transaction_without_stale_changes = revert_stale_changes_transaction
+            .commit()
+            .expect("Transaction with Overwrite conflict policy cannot fail");
+
+        Ok(transaction_without_stale_changes.into_changes())
     }
 }
