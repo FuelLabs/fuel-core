@@ -163,6 +163,7 @@ impl ReadView {
             transactions
         }
     }
+
     pub async fn extend_with_off_chain_results(
         &self,
         on_chain_results: BTreeMap<(usize, &TxId), StorageResult<Transaction>>,
