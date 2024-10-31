@@ -883,7 +883,6 @@ mod tests {
             Topic,
         },
         identity::Keypair,
-        multiaddr::multiaddr,
         swarm::{
             ListenError,
             SwarmEvent,
@@ -894,11 +893,6 @@ mod tests {
     use rand::Rng;
     use std::{
         collections::HashSet,
-        net::{
-            IpAddr,
-            Ipv4Addr,
-            TcpListener,
-        },
         ops::Range,
         sync::Arc,
         time::Duration,
@@ -1044,29 +1038,19 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn our_node_in_reserved_nodes() {
-        let mut retries = 10;
-        // We use bind to get a random port for the node to listen on.
-        // We use a loop because the port might be taken between the time we drop the listener and it's used by libp2p.
-        // We don't use `build_service_from_config` because we want to drop the tcp_listener at the last moment.
-        // and we don't want to `.unwrap()` if the port is taken but we prefer retry.
-        let mut node = loop {
-            let tcp_listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            let random_port = tcp_listener.local_addr().unwrap().port();
-            let mut p2p_config =
-                Config::default_initialized("own_node_in_reserved_nodes");
-            p2p_config.address = IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]));
-            p2p_config.tcp_port = random_port;
-            let multiaddr = multiaddr!(Ip4([127, 0, 0, 1]), Tcp(random_port))
-                .with_p2p(p2p_config.keypair.public().to_peer_id())
-                .unwrap();
-            p2p_config.public_address = Some(multiaddr.clone());
+    async fn dont_connect_to_node_with_same_peer_id() {
+        let mut p2p_config =
+            Config::default_initialized("dont_connect_to_node_with_same_peer_id");
+        let mut node_a = build_service_from_config(p2p_config.clone()).await;
+        // We don't use build_service_from_config here, because we want to use the same keypair
+        // to have the same PeerId
+        let node_b = {
             // Given
-            p2p_config.reserved_nodes = vec![multiaddr];
-            p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
+            p2p_config.reserved_nodes = vec![node_a.multiaddrs().pop().unwrap()];
             let max_block_size = p2p_config.max_block_size;
             let (sender, _) =
                 broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
+
             let mut service = FuelP2PService::new(
                 sender,
                 p2p_config,
@@ -1074,29 +1058,23 @@ mod tests {
             )
             .await
             .unwrap();
-            drop(tcp_listener);
-            match service.start().await {
-                Ok(()) => break service,
-                Err(_) => {
-                    if retries == 0 {
-                        panic!("Failed to start the node after 10 retries");
-                    }
-                    retries -= 1
-                }
-            };
+            service.start().await.unwrap();
+            service
         };
         // When
-        tokio::time::timeout(Duration::from_secs(2), async move {
+        tokio::time::timeout(Duration::from_secs(5), async move {
             loop {
-                let event = node.next_event().await;
+                let event = node_a.next_event().await;
                 if let Some(FuelP2PEvent::PeerConnected(_)) = event {
-                    panic!("The node should not connect to itself");
+                    panic!("Node B should not connect to Node A because they have the same PeerId");
                 }
+                assert_eq!(node_a.peer_manager().total_peers_connected(), 0);
             }
         })
         .await
         // Then
         .expect_err("The node should not connect to itself");
+        assert_eq!(node_b.peer_manager().total_peers_connected(), 0);
     }
 
     // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
