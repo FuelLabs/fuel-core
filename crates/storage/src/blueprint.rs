@@ -139,7 +139,6 @@ where
     fn delete(storage: &mut S, key: &M::Key, column: S::Column) -> StorageResult<()>;
 }
 
-// TODO: Rename
 /// It is an extension of the blueprint that allows supporting batch operations.
 /// Usually, they are more performant than initializing/inserting/removing values one by one.
 pub trait SupportsBatching<M, S>: BlueprintMutate<M, S>
