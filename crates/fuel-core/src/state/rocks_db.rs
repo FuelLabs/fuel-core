@@ -640,41 +640,6 @@ where
             }
         }
     }
-
-    fn register_read<T>(
-        &self,
-        result: StorageResult<Option<T>>,
-        column_id: u32,
-    ) -> StorageResult<Option<T>>
-    where
-        T: NumberOfBytes,
-    {
-        self.metrics.read_meter.inc();
-        let column_metrics = self.metrics.columns_read_statistic.get(&column_id);
-        column_metrics.map(|metric| metric.inc());
-
-        if let Ok(Some(value)) = &result {
-            self.metrics.bytes_read.inc_by(value.number_of_bytes());
-        };
-
-        result
-    }
-}
-
-trait NumberOfBytes {
-    fn number_of_bytes(&self) -> u64;
-}
-
-impl NumberOfBytes for Vec<u8> {
-    fn number_of_bytes(&self) -> u64 {
-        self.len() as u64
-    }
-}
-
-impl NumberOfBytes for usize {
-    fn number_of_bytes(&self) -> u64 {
-        *self as u64
-    }
 }
 
 pub(crate) struct KeyOnly;
@@ -748,13 +713,20 @@ where
     }
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        let result = self
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
+
+        let value = self
             .db
             .get_cf_opt(&self.cf(column), key, &self.read_options)
-            .map_err(|e| StorageError::Other(DatabaseError::Other(e.into()).into()));
+            .map_err(|e| DatabaseError::Other(e.into()))?;
 
-        self.register_read(result, column.id())
-            .map(|opt| opt.map(Arc::new))
+        if let Some(value) = &value {
+            self.metrics.bytes_read.inc_by(value.len() as u64);
+        }
+
+        Ok(value.map(Arc::new))
     }
 
     fn get_batch<'a>(
@@ -762,20 +734,20 @@ where
         keys: BoxedIter<'a, Vec<u8>>,
         column: Self::Column,
     ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
-        let column_family = self.cf(column);
-        let keys = keys.map(|key| (&column_family, key));
+        // TODO: Metrics
+
+        let column = self.cf(column);
+        let keys = keys.map(|key| (&column, key));
 
         self.db
             .multi_get_cf_opt(keys, &self.read_options)
             .into_iter()
-            .map(move |result| {
-                self.register_read(
-                    result.map_err(|e| {
+            .map(|value_opt| {
+                value_opt
+                    .map_err(|e| {
                         StorageError::Other(DatabaseError::Other(e.into()).into())
-                    }),
-                    column.id(),
-                )
-                .map(|opt| opt.map(Arc::new))
+                    })
+                    .map(|value| value.map(Arc::new))
             })
             .into_boxed()
     }
@@ -786,7 +758,11 @@ where
         column: Self::Column,
         mut buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        let result = self
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
+
+        let r = self
             .db
             .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
@@ -796,9 +772,13 @@ where
                     .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
                 StorageResult::Ok(read)
             })
-            .transpose();
+            .transpose()?;
 
-        self.register_read(result, column.id())
+        if let Some(r) = &r {
+            self.metrics.bytes_read.inc_by(*r as u64);
+        }
+
+        Ok(r)
     }
 }
 
