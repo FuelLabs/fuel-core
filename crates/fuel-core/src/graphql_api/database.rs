@@ -147,12 +147,26 @@ impl ReadView {
     }
 
     pub async fn transactions(&self, tx_ids: &[TxId]) -> Vec<StorageResult<Transaction>> {
-        let on_chain_results: BTreeMap<_, _> = tx_ids
-            .iter()
-            .enumerate()
-            .zip(self.on_chain.transactions(tx_ids.iter().into_boxed()))
+        let transactions: Vec<_> = self
+            .on_chain
+            .transactions(tx_ids.iter().into_boxed())
             .collect();
 
+        // Give a chance for other tasks to run.
+        tokio::task::yield_now().await;
+
+        if transactions.iter().any(|result| result.is_not_found()) {
+            let on_chain_results = tx_ids.iter().enumerate().zip(transactions).collect();
+
+            self.extend_with_off_chain_results(on_chain_results).await
+        } else {
+            transactions
+        }
+    }
+    pub async fn extend_with_off_chain_results(
+        &self,
+        on_chain_results: BTreeMap<(usize, &TxId), StorageResult<Transaction>>,
+    ) -> Vec<StorageResult<Transaction>> {
         let off_chain_indexed_txids: Vec<_> = on_chain_results
             .iter()
             .filter_map(|(indexed_tx_id, result)| {
