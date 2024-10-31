@@ -1,9 +1,6 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    iter::{
-        IntoBoxedIter,
-        IterDirection,
-    },
+    iter::IterDirection,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -27,7 +24,7 @@ impl ReadView {
         &self,
         utxo_ids: Vec<UtxoId>,
     ) -> impl Iterator<Item = StorageResult<Coin>> + '_ {
-        let coins: Vec<_> = self.on_chain.coins(utxo_ids.iter().into_boxed()).collect();
+        let coins: Vec<_> = self.on_chain.coins(&utxo_ids).collect();
 
         // Give a chance for other tasks to run.
         tokio::task::yield_now().await;

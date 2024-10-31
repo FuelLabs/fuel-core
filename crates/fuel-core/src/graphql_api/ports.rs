@@ -199,10 +199,7 @@ pub trait DatabaseRelayedTransactions {
 pub trait DatabaseCoins: StorageInspect<Coins, Error = StorageError> {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
 
-    fn coins<'a>(
-        &'a self,
-        utxo_ids: BoxedIter<'a, &'a UtxoId>,
-    ) -> BoxedIter<'a, StorageResult<Coin>>;
+    fn coins<'a>(&'a self, utxo_ids: &'a [UtxoId]) -> BoxedIter<'a, StorageResult<Coin>>;
 }
 
 /// Trait that specifies all the getters required for contract.

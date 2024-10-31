@@ -42,7 +42,10 @@ use fuel_core_types::{
         consensus::Consensus,
         primitives::DaBlockHeight,
     },
-    entities::relayer::message::Message,
+    entities::{
+        coins::coin::Coin,
+        relayer::message::Message,
+    },
     fuel_tx::{
         AssetId,
         ContractId,
@@ -134,10 +137,7 @@ impl DatabaseMessages for OnChainIterableKeyValueView {
 }
 
 impl DatabaseCoins for OnChainIterableKeyValueView {
-    fn coin(
-        &self,
-        utxo_id: fuel_core_types::fuel_tx::UtxoId,
-    ) -> StorageResult<fuel_core_types::entities::coins::coin::Coin> {
+    fn coin(&self, utxo_id: fuel_core_types::fuel_tx::UtxoId) -> StorageResult<Coin> {
         let coin = self
             .storage::<Coins>()
             .get(&utxo_id)?
@@ -147,18 +147,12 @@ impl DatabaseCoins for OnChainIterableKeyValueView {
         Ok(coin.uncompress(utxo_id))
     }
 
-    fn coins<'a>(
-        &'a self,
-        utxo_ids: BoxedIter<'a, &'a UtxoId>,
-    ) -> BoxedIter<'a, StorageResult<fuel_core_types::entities::coins::coin::Coin>> {
-        let utxo_ids_1: Vec<_> = utxo_ids.collect();
-        let utxo_ids_2 = utxo_ids_1.clone();
-
+    fn coins<'a>(&'a self, utxo_ids: &'a [UtxoId]) -> BoxedIter<'a, StorageResult<Coin>> {
         <Self as StorageBatchInspect<Coins>>::get_batch(
             self,
-            utxo_ids_1.into_iter().into_boxed(),
+            utxo_ids.iter().into_boxed(),
         )
-        .zip(utxo_ids_2.into_iter().into_boxed())
+        .zip(utxo_ids.iter().into_boxed())
         .map(|(res, utxo_id)| {
             res.and_then(|opt| opt.ok_or(not_found!(Coins)))
                 .map(|coin| coin.uncompress(*utxo_id))
