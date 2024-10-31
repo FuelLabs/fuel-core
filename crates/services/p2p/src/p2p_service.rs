@@ -1719,12 +1719,12 @@ mod tests {
 
                                             if let Ok(response) = response_message {
                                                 match response {
-                                                    Ok((_, Ok(Some(sealed_headers)))) => {
+                                                    Ok((_, Ok(Ok(sealed_headers)))) => {
                                                         let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                         let _ = tx_test_end.send(check).await;
                                                     },
-                                                    Ok((_, Ok(None))) => {
-                                                        tracing::error!("Node A did not return any headers");
+                                                    Ok((_, Ok(Err(e)))) => {
+                                                        tracing::error!("Node A did not return any headers: {:?}", e);
                                                         let _ = tx_test_end.send(false).await;
                                                     },
                                                     Ok((_, Err(e))) => {
@@ -1752,12 +1752,12 @@ mod tests {
 
                                             if let Ok(response) = response_message {
                                                 match response {
-                                                    Ok((_, Ok(Some(transactions)))) => {
+                                                    Ok((_, Ok(Ok(transactions)))) => {
                                                         let check = transactions.len() == 1 && transactions[0].0.len() == 5;
                                                         let _ = tx_test_end.send(check).await;
                                                     },
-                                                    Ok((_, Ok(None))) => {
-                                                        tracing::error!("Node A did not return any transactions");
+                                                    Ok((_, Ok(Err(e)))) => {
+                                                        tracing::error!("Node A did not return any transactions: {:?}", e);
                                                         let _ = tx_test_end.send(false).await;
                                                     },
                                                     Ok((_, Err(e))) => {
