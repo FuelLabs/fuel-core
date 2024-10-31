@@ -274,6 +274,7 @@ fn update_da_record_data__updates_known_total_cost_if_blocks_are_out_of_order() 
     let actual = updater.projected_total_da_cost;
     assert_eq!(actual, expected);
 }
+
 #[test]
 fn update_da_record_data__updates_projected_total_cost_if_blocks_are_out_of_order() {
     // given
