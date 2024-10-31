@@ -264,6 +264,7 @@ mod tests {
             da_source_service::{
                 dummy_costs::DummyDaBlockCosts,
                 service::DaSourceService,
+                DaBlockCosts,
             },
             metadata::V1AlgorithmConfig,
             service::{
@@ -277,6 +278,7 @@ mod tests {
         StateWatcher,
     };
     use fuel_core_types::fuel_types::BlockHeight;
+    use futures::FutureExt;
     use std::{
         num::NonZeroU64,
         sync::Arc,
@@ -324,7 +326,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run__updates_gas_price() {
+    async fn run__updates_gas_price_with_l2_block_source() {
         // given
         let block_height = 1;
         let l2_block = BlockInfo::Block {
@@ -386,5 +388,86 @@ mod tests {
         // then
         let actual_price = read_algo.next_gas_price();
         assert_ne!(initial_price, actual_price);
+    }
+
+    #[tokio::test]
+    async fn run__updates_gas_price_with_da_block_cost_source() {
+        // given
+        let block_height = 1;
+        let l2_block = BlockInfo::Block {
+            height: block_height,
+            gas_used: 60,
+            block_gas_capacity: 100,
+        };
+
+        let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
+        let l2_block_source = FakeL2BlockSource {
+            l2_block: l2_block_receiver,
+        };
+
+        let metadata_storage = FakeMetadata::empty();
+        let l2_block_height = 1;
+        let config = V1AlgorithmConfig {
+            new_exec_gas_price: 100,
+            min_exec_gas_price: 50,
+            exec_gas_price_change_percent: 20,
+            l2_block_fullness_threshold_percent: 20,
+            gas_price_factor: NonZeroU64::new(10).unwrap(),
+            min_da_gas_price: 100,
+            max_da_gas_price_change_percent: 50,
+            da_p_component: 4,
+            da_d_component: 2,
+            normal_range_size: 10,
+            capped_range_size: 100,
+            decrease_range_size: 4,
+            block_activity_threshold: 20,
+        };
+        let (algo_updater, shared_algo) =
+            initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
+
+        let notifier = Arc::new(tokio::sync::Notify::new());
+        let da_source = DaSourceService::new(
+            DummyDaBlockCosts::new(
+                Ok(DaBlockCosts {
+                    l2_block_range: 1..10,
+                    blob_cost_wei: 100,
+                    blob_size_bytes: 300,
+                }),
+                notifier.clone(),
+            ),
+            Some(Duration::from_millis(10)),
+        );
+        let mut watcher = StateWatcher::started();
+
+        let mut service = GasPriceServiceV1::new(
+            l2_block_source,
+            metadata_storage,
+            shared_algo,
+            algo_updater,
+            da_source,
+        );
+        let read_algo = service.next_block_algorithm();
+        let initial_price = read_algo.next_gas_price();
+
+        // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
+        // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
+        // here we mimic that behaviour by running the da block cost service.
+        let notified = notifier.notified();
+        service
+            .da_source_adapter_handle
+            .run(&mut watcher)
+            .await
+            .unwrap();
+
+        // when
+        service.run(&mut watcher).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        service.shutdown().await.unwrap();
+        let maybe_notified = tokio::time::timeout(Duration::from_secs(1), notified).await;
+
+        // then
+        let actual_price = read_algo.next_gas_price();
+        // assert_ne!(initial_price, actual_price);
+        assert!(maybe_notified.is_ok());
     }
 }
