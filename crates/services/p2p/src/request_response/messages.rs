@@ -18,6 +18,8 @@ use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
+use crate::service::TaskError;
+
 pub(crate) const V1_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
 pub(crate) const V2_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.2";
 
@@ -110,11 +112,23 @@ impl From<V2ResponseMessage> for V1ResponseMessage {
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
+// This type is more complex because it's used in tasks that need to select a peer to send the request and this
+// can cause errors where the peer is not defined.
+pub type OnResponseWithPeerSelection<T> =
+    oneshot::Sender<Result<(PeerId, Result<T, ResponseError>), TaskError>>;
 
 #[derive(Debug)]
 pub enum ResponseSender {
-    SealedHeaders(OnResponse<Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>>),
-    Transactions(OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>),
+    SealedHeaders(
+        OnResponseWithPeerSelection<
+            Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>,
+        >,
+    ),
+    Transactions(
+        OnResponseWithPeerSelection<Result<Vec<Transactions>, ResponseMessageErrorCode>>,
+    ),
+    TransactionsFromPeer(OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>),
+
     TxPoolAllTransactionsIds(OnResponse<Result<Vec<TxId>, ResponseMessageErrorCode>>),
     TxPoolFullTransactions(
         OnResponse<
