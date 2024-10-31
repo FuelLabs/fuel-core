@@ -66,6 +66,7 @@ use std::{
     num::NonZeroU64,
     path::Path,
     sync::Arc,
+    thread,
 };
 
 pub mod description;
@@ -112,13 +113,14 @@ where
         db: RocksDb<Historical<Description>>,
         state_rewind_policy: StateRewindPolicy,
     ) -> DatabaseResult<Self> {
+        let v1_changes_to_migrate_at_once = 1000;
         let shared_migration_state = Arc::new(Mutex::new(MigrationState::new()));
         let inner = Arc::new(InnerHistoricalRocksDB::new(
             db,
             state_rewind_policy,
             shared_migration_state,
         )?);
-        Self::migrate_modifications_history(inner.clone());
+        Self::migrate_modifications_history(inner.clone(), v1_changes_to_migrate_at_once);
         Ok(Self { inner })
     }
 
@@ -131,6 +133,7 @@ where
         state_rewind_policy: StateRewindPolicy,
         max_fds: i32,
     ) -> DatabaseResult<Self> {
+        let v1_changes_to_migrate_at_once = 1000;
         let shared_migration_state = Arc::new(Mutex::new(MigrationState::new()));
         let inner = Arc::new(InnerHistoricalRocksDB::default_open(
             path,
@@ -139,13 +142,83 @@ where
             max_fds,
             shared_migration_state,
         )?);
-        Self::migrate_modifications_history(inner.clone());
+        Self::migrate_modifications_history(inner.clone(), v1_changes_to_migrate_at_once);
         Ok(Self { inner })
     }
 
     fn migrate_modifications_history(
-        _historical_rocksdb: Arc<InnerHistoricalRocksDB<Description>>,
+        historical_rocksdb: Arc<InnerHistoricalRocksDB<Description>>,
+        num_heights_to_migrate_at_once: usize,
     ) {
+        let last_migratable_height = historical_rocksdb
+            .db
+            .iter_all_keys::<ModificationsHistoryV1<Description>>(None)
+            .filter_map(Result::ok) //TODO: How to handle errors here? Should we stop the migration?
+            .max();
+        let Some(last_migratable_height) = last_migratable_height else {
+            historical_rocksdb
+                .shared_migration_state
+                .lock()
+                .signal_migration_complete();
+            return
+        };
+
+        thread::spawn(move || {
+            historical_rocksdb
+                .shared_migration_state
+                .lock()
+                .update_last_height_to_be_migrated(last_migratable_height);
+
+            let mut v1_modifications_iterator = historical_rocksdb
+                .db
+                .iter_all_keys::<ModificationsHistoryV1<Description>>(None)
+                .chunks(num_heights_to_migrate_at_once);
+
+            loop {
+                let mut should_continue = false;
+                for v1_modifications in &v1_modifications_iterator {
+                    // We processed at least a V1 modification, so we should continue with the migration
+                    should_continue = true;
+                    let mut storage_transaction =
+                        historical_rocksdb.db.read_transaction();
+                    for height in v1_modifications {
+                        let Ok(height) = height else {
+                            // We can continue with migrating other keys
+                            continue;
+                        };
+
+                        let Ok(Some(v1_changes)) = storage_transaction
+                            .storage_as_mut::<ModificationsHistoryV1<Description>>()
+                            .take(&height)
+                        else {
+                            continue
+                        };
+
+                        storage_transaction
+                            .storage_as_mut::<ModificationsHistoryV2<Description>>()
+                            .insert(&height, &v1_changes)
+                            .expect("Insertion on a in-memory transaction cannot fail");
+                    }
+                    historical_rocksdb
+                        .shared_migration_state
+                        .lock()
+                        .add_migration_changes(storage_transaction.into_changes());
+                }
+                if should_continue {
+                    v1_modifications_iterator = historical_rocksdb
+                        .db
+                        .iter_all_keys::<ModificationsHistoryV1<Description>>(None)
+                        .chunks(num_heights_to_migrate_at_once);
+                } else {
+                    break
+                }
+            }
+
+            historical_rocksdb
+                .shared_migration_state
+                .lock()
+                .signal_migration_complete();
+        });
     }
 
     /// Returns the latest view of the database.
@@ -527,7 +600,10 @@ where
     // TODO: This method doesn't work properly because of
     //  https://github.com/FuelLabs/fuel-core/issues/2095
     fn rollback_last_block(&self) -> StorageResult<u64> {
-        let modifications_history_migration_in_progress = self.is_migration_in_progress();
+        let modifications_history_migration_in_progress = self
+            .shared_migration_state
+            .lock()
+            .is_migration_in_progress();
 
         let (v2_latest_height, v1_latest_height) = self.multiversion_changes_heights(
             IterDirection::Reverse,
@@ -575,12 +651,16 @@ where
         )
         .commit()?;
 
+        // Reduce the latest migratable height before the rollback. This is necessary to avoid
+        // concurrency race condition where stale changes for the level being rollbacked are
+        // committed before the latest migratable height is reduced.
+        self.shared_migration_state
+            .lock()
+            .update_last_height_to_be_migrated(height_to_rollback);
+
         self.db
             .commit_changes(&storage_transaction.into_changes())?;
 
-        self.shared_migration_state
-            .lock()
-            .set_last_height_to_be_migrated(height_to_rollback);
         Ok(())
     }
 }
