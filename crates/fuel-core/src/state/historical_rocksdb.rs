@@ -502,7 +502,10 @@ where
     }
 
     fn oldest_changes_height(&self) -> StorageResult<Option<u64>> {
-        let modifications_history_migration_in_progress = self.is_migration_in_progress();
+        let modifications_history_migration_in_progress = self
+            .shared_migration_state
+            .lock()
+            .is_migration_in_progress();
 
         let (v2_oldest_height, v1_oldest_height) = self.multiversion_changes_heights(
             IterDirection::Forward,
@@ -553,7 +556,9 @@ where
         let last_changes = multiversion_take(
             &mut storage_transaction,
             height_to_rollback,
-            self.is_migration_in_progress(),
+            self.shared_migration_state
+                .lock()
+                .is_migration_in_progress(),
         )?
         .ok_or(not_found!(ModificationsHistoryV1<Description>))?;
 
@@ -577,15 +582,6 @@ where
             .lock()
             .set_last_height_to_be_migrated(height_to_rollback);
         Ok(())
-    }
-
-    fn v1_entries(&self) -> BoxedIter<StorageResult<(u64, Changes)>> {
-        self.db
-            .iter_all::<ModificationsHistoryV1<Description>>(None)
-    }
-
-    fn is_migration_in_progress(&self) -> bool {
-        self.v1_entries().next().is_some()
     }
 }
 
