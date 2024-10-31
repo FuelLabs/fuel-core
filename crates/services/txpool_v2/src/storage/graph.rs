@@ -619,10 +619,6 @@ impl Storage for GraphStorage {
             self.clear_cache(storage_entry);
         })
     }
-
-    fn tx_count(&self) -> usize {
-        self.graph.node_count()
-    }
 }
 
 impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
