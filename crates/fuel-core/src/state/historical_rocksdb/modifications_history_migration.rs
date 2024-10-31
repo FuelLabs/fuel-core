@@ -42,7 +42,7 @@ use fuel_core_storage::codec::Decode;
 pub struct MigrationState<Description> {
     changes: Changes,
     // The height up to which the migration can be performed, included.
-    last_height_to_be_migrated: Option<u64>,
+    last_height_to_be_migrated: u64,
     migration_in_progress: bool,
     _description: PhantomData<Description>,
 }
@@ -51,17 +51,15 @@ impl<Description> MigrationState<Description> {
     pub fn new() -> Self {
         Self {
             changes: Changes::default(),
-            // When set to None, the migration process won't do anything as all
-            // changes will be considered stale.
-            last_height_to_be_migrated: None,
-            // Initially assume that the migration is in progress.
-            migration_in_progress: true,
+            last_height_to_be_migrated: u64::MAX,
+            migration_in_progress: false,
+
             _description: PhantomData,
         }
     }
 
     pub fn is_migration_in_progress(&self) -> bool {
-        self.migration_in_progress
+        self.migration_in_progress;
     }
 
     pub fn signal_migration_complete(&mut self) {
@@ -112,13 +110,6 @@ where
         self.changes = consistent_changes;
     }
 
-    pub fn set_last_height_to_be_migrated(&mut self, last_height_to_be_migrated: u64) {
-        self.last_height_to_be_migrated = Some(last_height_to_be_migrated);
-        let changes = std::mem::take(&mut self.changes);
-        let consistent_changes = self.remove_stale_migration_changes(changes).unwrap();
-        self.changes = consistent_changes;
-    }
-
     // Remove the changes above the last migration height.
     fn remove_stale_migration_changes(&self, changes: Changes) -> StorageResult<Changes> {
         let mut revert_changes = Changes::default();
@@ -147,7 +138,7 @@ where
                                 >
                             >
                         >::KeyCodec::decode(&serialized_height)?;
-            if height > self.last_height_to_be_migrated.unwrap() {
+            if height > self.last_height_to_be_migrated {
                 revert_changes
                     .get_mut(&Column::<Description>::HistoryV2Column.id())
                     .expect("Changes for HistoryV2Column were inserted in this function")
@@ -172,5 +163,18 @@ where
             .expect("Transaction with Overwrite conflict policy cannot fail");
 
         Ok(transaction_without_stale_changes.into_changes())
+    }
+
+    pub fn update_last_height_to_be_migrated(&mut self, last_height_to_be_migrated: u64) {
+        if self.is_migration_in_progress() {
+            let changes = std::mem::take(&mut self.changes);
+            self.last_height_to_be_migrated
+                .min(last_height_to_be_migrated);
+            if let Ok(consistent_changes) = self.remove_stale_migration_changes(changes) {
+                // If removing the stale migration changes is not successful, we adopt a pessimistic approach and throw
+                // away all the changes. This is because we cannot guarantee that the changes are consistent anymore.
+                self.changes = consistent_changes;
+            }
+        }
     }
 }
