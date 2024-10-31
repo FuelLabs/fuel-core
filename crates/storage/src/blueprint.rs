@@ -9,10 +9,7 @@ use crate::{
         Encode,
         Encoder,
     },
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-    },
+    iter::IntoBoxedIter,
     kv_store::{
         BatchOperations,
         KeyValueInspect,
@@ -81,30 +78,29 @@ where
     }
 
     /// Returns multiple values from the storage.
-    fn get_batch<'a>(
+    fn get_batch<'a, Iter>(
         storage: &'a S,
-        keys: BoxedIter<'a, &'a M::Key>,
+        keys: Iter,
         column: S::Column,
-    ) -> BoxedIter<'a, StorageResult<Option<M::OwnedValue>>>
+    ) -> impl Iterator<Item = crate::Result<Option<M::OwnedValue>>> + 'a
     where
+        Iter: 'a + Iterator<Item = &'a M::Key> + Send,
+        M::Key: 'a,
         Self::KeyCodec: 'a,
     {
         let keys = keys
             .map(|key| Self::KeyCodec::encode(key).into_bytes())
             .into_boxed();
 
-        storage
-            .get_batch(keys, column)
-            .map(|result| {
-                result.and_then(|opt| {
-                    opt.map(|value| {
-                        Self::ValueCodec::decode_from_value(value)
-                            .map_err(crate::Error::Codec)
-                    })
-                    .transpose()
+        storage.get_batch(keys, column).map(|result| {
+            result.and_then(|opt| {
+                opt.map(|value| {
+                    Self::ValueCodec::decode_from_value(value)
+                        .map_err(crate::Error::Codec)
                 })
+                .transpose()
             })
-            .into_boxed()
+        })
     }
 }
 

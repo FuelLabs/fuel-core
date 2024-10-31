@@ -285,10 +285,14 @@ where
     M::Blueprint: BlueprintInspect<M, StructuredStorage<S>>,
     <M::Blueprint as BlueprintInspect<M, StructuredStorage<S>>>::KeyCodec: 'static,
 {
-    fn get_batch<'a>(
+    fn get_batch<'a, Iter>(
         &'a self,
-        keys: BoxedIter<'a, &'a M::Key>,
-    ) -> BoxedIter<'a, StorageResult<Option<M::OwnedValue>>> {
+        keys: Iter,
+    ) -> impl Iterator<Item = crate::Result<Option<M::OwnedValue>>> + 'a
+    where
+        Iter: 'a + Iterator<Item = &'a M::Key> + Send,
+        M::Key: 'a,
+    {
         M::Blueprint::get_batch(self, keys, M::column())
     }
 }

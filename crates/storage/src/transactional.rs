@@ -1,6 +1,10 @@
 //! The primitives to work with storage in transactional mode.
 
 use crate::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+    },
     kv_store::{
         BatchOperations,
         KeyValueInspect,
@@ -14,6 +18,7 @@ use crate::{
 };
 use core::borrow::Borrow;
 
+use alloc::borrow::Cow;
 #[cfg(feature = "alloc")]
 use alloc::{
     boxed::Box,
@@ -27,7 +32,6 @@ use alloc::{
 #[cfg(feature = "test-helpers")]
 use crate::{
     iter::{
-        BoxedIter,
         IterDirection,
         IterableStore,
     },
@@ -381,6 +385,18 @@ where
             }
         } else {
             self.storage.get(key, column)
+        }
+    }
+
+    fn get_batch<'a>(
+        &'a self,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
+        column: Self::Column,
+    ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
+        if !self.changes.contains_key(&column.id()) {
+            return self.storage.get_batch(keys, column);
+        } else {
+            keys.map(move |key| self.get(&key, column)).into_boxed()
         }
     }
 

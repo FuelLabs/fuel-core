@@ -29,6 +29,7 @@ use crate::{
 use fuel_core_storage::{
     iter::{
         BoxedIter,
+        IntoBoxedIter,
         IterDirection,
         IterableStore,
         IteratorOverTable,
@@ -36,6 +37,7 @@ use fuel_core_storage::{
     kv_store::{
         KVItem,
         KeyValueInspect,
+        StorageColumn,
         Value,
         WriteOperation,
     },
@@ -56,6 +58,7 @@ use serde::{
     Serialize,
 };
 use std::{
+    borrow::Cow,
     num::NonZeroU64,
     path::Path,
 };
@@ -393,6 +396,21 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         self.db.get(key, Column::OriginalColumn(column))
+    }
+
+    fn get_batch<'a>(
+        &'a self,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
+        column: Self::Column,
+    ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
+        self.db
+            .multi_get(Column::<Description>::OriginalColumn(column).id(), keys)
+            .map(|result| {
+                result
+                    .map(|value| value.map(Into::into))
+                    .map_err(Into::into)
+            })
+            .into_boxed()
     }
 
     fn read(
