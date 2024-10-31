@@ -326,7 +326,7 @@ where
 
         let encoded_set = set
             .map(|(key, value)| {
-                let key = KeyCodec::encode(key).as_bytes().into_owned();
+                let key = KeyCodec::encode(key).into_bytes();
                 let value = ValueCodec::encode(value).as_bytes().into_owned();
                 (key, value)
             })
@@ -346,9 +346,7 @@ where
         )?;
 
         let nodes = nodes.iter().map(|(key, value)| {
-            let key = NodeKeyCodec::<S, Nodes>::encode(key)
-                .as_bytes()
-                .into_owned();
+            let key = NodeKeyCodec::<S, Nodes>::encode(key).into_bytes();
             let value = NodeValueCodec::<S, Nodes>::encode_as_value(value);
             (key, WriteOperation::Insert(value))
         });
@@ -392,7 +390,7 @@ where
 
         let encoded_set = set
             .map(|(key, value)| {
-                let key = KeyCodec::encode(key).as_bytes().into_owned();
+                let key = KeyCodec::encode(key).into_bytes();
                 let value = ValueCodec::encode(value).as_bytes().into_owned();
                 (key, value)
             })
@@ -449,7 +447,7 @@ where
             .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
         let encoded_set = set
-            .map(|key| KeyCodec::encode(key).as_bytes().into_owned())
+            .map(|key| KeyCodec::encode(key).into_bytes())
             .collect_vec();
 
         for key_bytes in encoded_set.iter() {
