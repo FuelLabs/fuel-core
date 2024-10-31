@@ -36,7 +36,7 @@ pub trait Encode<T: ?Sized> {
         T: 'a;
 
     /// Encodes the object to the bytes and passes it to the `Encoder`.
-    fn encode<'a>(t: &'a T) -> Self::Encoder<'a>;
+    fn encode(t: &T) -> Self::Encoder<'_>;
 
     /// Returns the serialized object as an [`Value`].
     fn encode_as_value(t: &T) -> Value {

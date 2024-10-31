@@ -16,7 +16,6 @@ use fuel_core_storage::{
     },
     Error as StorageError,
     Result as StorageResult,
-    StorageBatchInspect,
     StorageInspect,
     StorageRead,
 };
@@ -174,9 +173,7 @@ pub trait DatabaseDaCompressedBlocks {
 }
 
 /// Trait that specifies all the getters required for messages.
-pub trait DatabaseMessages:
-    StorageInspect<Messages, Error = StorageError> + StorageBatchInspect<Messages>
-{
+pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
     fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
@@ -199,10 +196,9 @@ pub trait DatabaseRelayedTransactions {
 }
 
 /// Trait that specifies all the getters required for coins
-pub trait DatabaseCoins:
-    StorageInspect<Coins, Error = StorageError> + StorageBatchInspect<Coins>
-{
+pub trait DatabaseCoins: StorageInspect<Coins, Error = StorageError> {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
+
     fn coins<'a>(
         &'a self,
         utxo_ids: BoxedIter<'a, &'a UtxoId>,

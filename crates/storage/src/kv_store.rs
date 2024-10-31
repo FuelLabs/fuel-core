@@ -1,10 +1,7 @@
 //! The module provides plain abstract definition of the key-value store.
 
 use crate::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-    },
+    iter::BoxedIter,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -17,6 +14,7 @@ use alloc::{
     vec::Vec,
 };
 
+use crate::iter::IntoBoxedIter;
 #[cfg(feature = "std")]
 use core::ops::Deref;
 
@@ -31,7 +29,7 @@ pub type KVItem = StorageResult<(Key, Value)>;
 pub type KeyItem = StorageResult<Key>;
 
 /// A column of the storage.
-pub trait StorageColumn: Copy + core::fmt::Debug + Send + Sync {
+pub trait StorageColumn: Copy + core::fmt::Debug + Send + Sync + 'static {
     /// Returns the name of the column.
     fn name(&self) -> String;
 
@@ -119,6 +117,14 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         self.deref().get(key, column)
+    }
+
+    fn get_batch<'a>(
+        &'a self,
+        keys: BoxedIter<'a, Cow<'a, [u8]>>,
+        column: Self::Column,
+    ) -> BoxedIter<'a, StorageResult<Option<Value>>> {
+        self.deref().get_batch(keys, column)
     }
 
     fn read(

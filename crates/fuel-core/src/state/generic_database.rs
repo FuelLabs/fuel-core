@@ -70,10 +70,14 @@ where
     M: Mappable,
     StructuredStorage<Storage>: StorageBatchInspect<M>,
 {
-    fn get_batch<'a>(
+    fn get_batch<'a, Iter>(
         &'a self,
-        keys: BoxedIter<'a, &'a M::Key>,
-    ) -> BoxedIter<'a, StorageResult<Option<<M as Mappable>::OwnedValue>>> {
+        keys: Iter,
+    ) -> impl Iterator<Item = fuel_core_storage::Result<Option<M::OwnedValue>>> + 'a
+    where
+        Iter: 'a + Iterator<Item = &'a M::Key> + Send,
+        M::Key: 'a,
+    {
         self.storage.get_batch(keys)
     }
 }
