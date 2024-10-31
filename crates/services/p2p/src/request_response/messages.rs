@@ -46,6 +46,9 @@ pub enum ResponseMessageErrorCode {
     Timeout = 2,
     #[error("Sync processor is out of capacity")]
     SyncProcessorOutOfCapacity = 3,
+    #[error("The peer sent an unknown error code")]
+    #[serde(skip_serializing, other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,4 +165,43 @@ pub enum ResponseSendError {
     SendingResponseFailed,
     #[error("Failed to convert response to intermediate format")]
     ConversionToIntermediateFailed,
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    use super::ResponseMessageErrorCode;
+
+    #[test]
+    fn response_message_error_code__unknown_error_cannot_be_serialized() {
+        let error = super::ResponseMessageErrorCode::Unknown;
+        let serialized = postcard::to_allocvec(&error);
+        assert!(serialized.is_err());
+    }
+
+    #[test]
+    fn response_message_error_code__known_error_code_is_deserialized_to_variant() {
+        let serialized_error_code =
+            postcard::to_stdvec(&ResponseMessageErrorCode::ProtocolV1EmptyResponse)
+                .unwrap();
+        println!("Error code: {:?}", serialized_error_code);
+        let response_message_error_code: ResponseMessageErrorCode =
+            postcard::from_bytes(&serialized_error_code).unwrap();
+        assert!(matches!(
+            response_message_error_code,
+            ResponseMessageErrorCode::ProtocolV1EmptyResponse
+        ));
+    }
+
+    #[test]
+    fn response_message_error_code__unknown_error_code_is_deserialized_to_unknown_variant(
+    ) {
+        let serialized_error_code = vec![42];
+        let response_message_error_code: ResponseMessageErrorCode =
+            postcard::from_bytes(&serialized_error_code).unwrap();
+        assert!(matches!(
+            response_message_error_code,
+            ResponseMessageErrorCode::Unknown
+        ));
+    }
 }
