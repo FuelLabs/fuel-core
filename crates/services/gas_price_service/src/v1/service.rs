@@ -117,11 +117,18 @@ where
         height: u32,
         gas_used: u64,
         block_gas_capacity: u64,
+        block_bytes: u64,
+        block_fees: u64,
     ) -> anyhow::Result<()> {
         let capacity = self.validate_block_gas_capacity(block_gas_capacity)?;
 
-        self.algorithm_updater
-            .update_l2_block_data(height, gas_used, capacity, 0, 0)?;
+        self.algorithm_updater.update_l2_block_data(
+            height,
+            gas_used,
+            capacity,
+            block_bytes,
+            block_fees as u128,
+        )?;
 
         self.set_metadata().await?;
         Ok(())
@@ -139,9 +146,17 @@ where
                 height,
                 gas_used,
                 block_gas_capacity,
+                block_bytes,
+                block_fees,
             } => {
-                self.handle_normal_block(height, gas_used, block_gas_capacity)
-                    .await?;
+                self.handle_normal_block(
+                    height,
+                    gas_used,
+                    block_gas_capacity,
+                    block_bytes,
+                    block_fees,
+                )
+                .await?;
             }
         }
 
@@ -278,7 +293,6 @@ mod tests {
         StateWatcher,
     };
     use fuel_core_types::fuel_types::BlockHeight;
-    use futures::FutureExt;
     use std::{
         num::NonZeroU64,
         sync::Arc,
@@ -333,6 +347,8 @@ mod tests {
             height: block_height,
             gas_used: 60,
             block_gas_capacity: 100,
+            block_bytes: 100,
+            block_fees: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
@@ -398,6 +414,8 @@ mod tests {
             height: block_height,
             gas_used: 60,
             block_gas_capacity: 100,
+            block_bytes: 100,
+            block_fees: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);

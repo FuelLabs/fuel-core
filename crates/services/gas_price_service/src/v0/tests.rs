@@ -147,6 +147,8 @@ async fn next_gas_price__affected_by_new_l2_block() {
         height: 1,
         gas_used: 60,
         block_gas_capacity: 100,
+        block_bytes: 100,
+        block_fees: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -186,6 +188,8 @@ async fn next__new_l2_block_saves_old_metadata() {
         height: 1,
         gas_used: 60,
         block_gas_capacity: 100,
+        block_bytes: 100,
+        block_fees: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
