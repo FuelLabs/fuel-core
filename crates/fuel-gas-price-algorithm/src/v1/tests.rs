@@ -193,6 +193,10 @@ impl UpdaterBuilder {
                 .try_into()
                 .expect("Should never be non-zero"),
             l2_activity: self.l2_activity,
+            unrecorded_blocks_bytes: self
+                .unrecorded_blocks
+                .iter()
+                .fold(0u128, |acc, b| acc + u128::from(b.block_bytes)),
         }
     }
 }

@@ -145,6 +145,8 @@ pub struct AlgorithmUpdaterV1 {
     pub l2_activity: L2ActivityTracker,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: BTreeMap<Height, Bytes>,
+    /// Total unrecorded block bytes
+    pub unrecorded_blocks_bytes: u128,
 }
 
 /// The `L2ActivityTracker` tracks the chain activity to determine a safety mode for setting the DA price.
@@ -348,6 +350,9 @@ impl AlgorithmUpdaterV1 {
 
             // metadata
             self.unrecorded_blocks.insert(height, block_bytes);
+            self.unrecorded_blocks_bytes = self
+                .unrecorded_blocks_bytes
+                .saturating_add(block_bytes as u128);
             Ok(())
         }
     }
@@ -538,16 +543,13 @@ impl AlgorithmUpdaterV1 {
             )?;
             total = total.saturating_add(bytes as u128);
         }
+        self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
         Ok(total)
     }
 
     fn recalculate_projected_cost(&mut self) {
-        // add the cost of the remaining blocks
-        let projection_portion: u128 = self
-            .unrecorded_blocks
-            .iter()
-            .map(|(_, &bytes)| u128::from(bytes))
-            .fold(0_u128, |acc, n| acc.saturating_add(n))
+        let projection_portion = self
+            .unrecorded_blocks_bytes
             .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
             .latest_known_total_da_cost_excess
