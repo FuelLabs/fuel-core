@@ -2,8 +2,8 @@
 
 use crate::{
     iter::{
-        BoxedIter,
-        IntoBoxedIter,
+        BoxedIterSend,
+        IntoBoxedIterSend,
         IterDirection,
         IterableStore,
     },
@@ -61,7 +61,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIterSend<KVItem> {
         if let Some(tree) = self.changes.get(&column.id()) {
             crate::iter::iterator(tree, prefix, start, direction)
                 .filter_map(|(key, value)| match value {
@@ -71,9 +71,9 @@ where
                     WriteOperation::Remove => None,
                 })
                 .map(Ok)
-                .into_boxed()
+                .into_boxed_send()
         } else {
-            core::iter::empty().into_boxed()
+            core::iter::empty().into_boxed_send()
         }
     }
 
@@ -83,7 +83,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<crate::kv_store::KeyItem> {
+    ) -> BoxedIterSend<crate::kv_store::KeyItem> {
         // We cannot define iter_store_keys appropriately for the `ChangesIterator`,
         // because we have to filter out the keys that were removed, which are
         // marked as `WriteOperation::Remove` in the value
@@ -95,9 +95,9 @@ where
                     WriteOperation::Remove => None,
                 })
                 .map(Ok)
-                .into_boxed()
+                .into_boxed_send()
         } else {
-            core::iter::empty().into_boxed()
+            core::iter::empty().into_boxed_send()
         }
     }
 }

@@ -1,5 +1,6 @@
 use fuel_core_storage::{
     iter::{
+        BoxedIterSend,
         BoxedIter,
         IterDirection,
         IterableStore,
@@ -75,7 +76,7 @@ where
         keys: Iter,
     ) -> impl Iterator<Item = fuel_core_storage::Result<Option<M::OwnedValue>>> + 'a
     where
-        Iter: 'a + Iterator<Item = &'a M::Key> + Send,
+        Iter: 'a + IntoIterator<Item = &'a M::Key>,
         M::Key: 'a,
     {
         self.storage.get_batch(keys)
@@ -166,7 +167,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIterSend<KVItem> {
         self.storage.iter_store(column, prefix, start, direction)
     }
 
@@ -176,7 +177,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+    ) -> BoxedIterSend<fuel_core_storage::kv_store::KeyItem> {
         self.storage
             .iter_store_keys(column, prefix, start, direction)
     }

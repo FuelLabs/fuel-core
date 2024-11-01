@@ -18,7 +18,9 @@ use crate::{
 };
 use fuel_core_storage::{
     iter::{
+        BoxedIterSend,
         BoxedIter,
+        IntoBoxedIterSend,
         IntoBoxedIter,
         IterDirection,
         IteratorOverTable,
@@ -93,10 +95,10 @@ impl DatabaseBlocks for OnChainIterableKeyValueView {
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+    ) -> BoxedIterSend<'_, StorageResult<CompressedBlock>> {
         self.iter_all_by_start::<FuelBlocks>(height.as_ref(), Some(direction))
             .map(|result| result.map(|(_, block)| block))
-            .into_boxed()
+            .into_boxed_send()
     }
 
     fn latest_height(&self) -> StorageResult<BlockHeight> {
@@ -116,10 +118,10 @@ impl DatabaseMessages for OnChainIterableKeyValueView {
         &self,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Message>> {
+    ) -> BoxedIterSend<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
+            .into_boxed_send()
     }
 
     fn message_batch<'a>(
@@ -147,12 +149,15 @@ impl DatabaseCoins for OnChainIterableKeyValueView {
         Ok(coin.uncompress(utxo_id))
     }
 
-    fn coins<'a>(&'a self, utxo_ids: &'a [UtxoId]) -> BoxedIter<'a, StorageResult<Coin>> {
+    fn coins<'a>(
+        &'a self,
+        utxo_ids: &'a [UtxoId],
+    ) -> BoxedIter<'a, StorageResult<Coin>> {
         <Self as StorageBatchInspect<Coins>>::get_batch(
             self,
-            utxo_ids.iter().into_boxed(),
+            utxo_ids.iter().into_boxed_send(),
         )
-        .zip(utxo_ids.iter().into_boxed())
+        .zip(utxo_ids.iter().into_boxed_send())
         .map(|(res, utxo_id)| {
             res.and_then(|opt| opt.ok_or(not_found!(Coins)))
                 .map(|coin| coin.uncompress(*utxo_id))
@@ -167,7 +172,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<ContractBalance>> {
+    ) -> BoxedIterSend<StorageResult<ContractBalance>> {
         self.filter_contract_balances(contract, start_asset, Some(direction))
             .map_ok(|entry| ContractBalance {
                 owner: *entry.key.contract_id(),
@@ -175,7 +180,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
                 asset_id: *entry.key.asset_id(),
             })
             .map(|res| res.map_err(StorageError::from))
-            .into_boxed()
+            .into_boxed_send()
     }
 }
 

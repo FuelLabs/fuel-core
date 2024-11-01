@@ -15,6 +15,7 @@ use crate::{
     },
     iter::{
         BoxedIter,
+        BoxedIterSend,
         IterDirection,
         IterableStore,
     },
@@ -240,7 +241,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIterSend<KVItem> {
         self.inner.iter_store(column, prefix, start, direction)
     }
 
@@ -250,7 +251,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIterSend<KeyItem> {
         self.inner.iter_store_keys(column, prefix, start, direction)
     }
 }
@@ -294,7 +295,7 @@ where
         keys: Iter,
     ) -> impl Iterator<Item = crate::Result<Option<M::OwnedValue>>> + 'a
     where
-        Iter: 'a + Iterator<Item = &'a M::Key> + Send,
+        Iter: 'a + IntoIterator<Item = &'a M::Key>,
         M::Key: 'a,
     {
         M::Blueprint::get_batch(self, keys, M::column())

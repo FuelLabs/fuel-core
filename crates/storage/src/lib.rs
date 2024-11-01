@@ -186,7 +186,7 @@ pub trait StorageBatchInspect<Type: Mappable> {
         keys: Iter,
     ) -> impl Iterator<Item = Result<Option<Type::OwnedValue>>> + 'a
     where
-        Iter: 'a + Iterator<Item = &'a Type::Key> + Send,
+        Iter: 'a + IntoIterator<Item = &'a Type::Key>,
         Type::Key: 'a;
 }
 

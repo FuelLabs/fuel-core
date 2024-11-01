@@ -8,7 +8,8 @@ use crate::fuel_core_graphql_api::{
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::{
-        BoxedIter,
+        BoxedIterSend,
+        IntoBoxedIterSend,
         IntoBoxedIter,
         IterDirection,
     },
@@ -205,7 +206,7 @@ impl ReadView {
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+    ) -> BoxedIterSend<'_, StorageResult<CompressedBlock>> {
         // Chain together blocks from the off-chain db and the on-chain db
         // The blocks in off-chain db, if any, are from time before regenesis
 
@@ -218,12 +219,12 @@ impl ReadView {
                     .on_chain
                     .blocks(Some(height), direction)
                     .chain(self.off_chain.old_blocks(None, direction))
-                    .into_boxed(),
+                    .into_boxed_send(),
                 (false, IterDirection::Forward) => self
                     .off_chain
                     .old_blocks(Some(height), direction)
                     .chain(self.on_chain.blocks(None, direction))
-                    .into_boxed(),
+                    .into_boxed_send(),
                 (false, IterDirection::Reverse) => {
                     self.off_chain.old_blocks(Some(height), direction)
                 }
@@ -234,12 +235,12 @@ impl ReadView {
                     .off_chain
                     .old_blocks(None, direction)
                     .chain(self.on_chain.blocks(None, direction))
-                    .into_boxed(),
+                    .into_boxed_send(),
                 IterDirection::Reverse => self
                     .on_chain
                     .blocks(None, direction)
                     .chain(self.off_chain.old_blocks(None, direction))
-                    .into_boxed(),
+                    .into_boxed_send(),
             }
         }
     }

@@ -7,7 +7,7 @@ use crate::{
 };
 use fuel_core_storage::{
     iter::{
-        IntoBoxedIter,
+        IntoBoxedIterSend,
         IterDirection,
         IteratorOverTable,
     },
@@ -68,7 +68,7 @@ impl OnChainIterableKeyValueView {
         let db_block = self.storage::<FuelBlocks>().get(height)?;
 
         if let Some(block) = db_block {
-            let transaction_ids = block.transactions().iter().into_boxed();
+            let transaction_ids = block.transactions().iter().into_boxed_send();
             let txs = <Self as StorageBatchInspect<Transactions>>::get_batch(
                 self,
                 transaction_ids,

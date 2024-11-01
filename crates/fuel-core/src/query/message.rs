@@ -1,7 +1,7 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
     iter::{
-        BoxedIter,
+        BoxedIterSend,
         IntoBoxedIter,
         IterDirection,
     },
@@ -53,20 +53,20 @@ pub trait MessageQueryData: Send + Sync {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Nonce>>;
+    ) -> BoxedIterSend<StorageResult<Nonce>>;
 
     fn owned_messages(
         &self,
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Message>>;
+    ) -> BoxedIterSend<StorageResult<Message>>;
 
     fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Message>>;
+    ) -> BoxedIterSend<StorageResult<Message>>;
 }
 
 impl ReadView {

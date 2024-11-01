@@ -32,6 +32,7 @@ use alloc::{
 #[cfg(feature = "test-helpers")]
 use crate::{
     iter::{
+        BoxedIterSend,
         IterDirection,
         IterableStore,
     },
@@ -550,7 +551,7 @@ where
         _: Option<&[u8]>,
         _: Option<&[u8]>,
         _: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIterSend<KVItem> {
         unimplemented!()
     }
 
@@ -560,7 +561,7 @@ where
         _: Option<&[u8]>,
         _: Option<&[u8]>,
         _: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIterSend<KeyItem> {
         unimplemented!()
     }
 }

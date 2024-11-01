@@ -1,7 +1,10 @@
 //! The module provides plain abstract definition of the key-value store.
 
 use crate::{
-    iter::BoxedIter,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+    },
     Error as StorageError,
     Result as StorageResult,
 };
@@ -14,7 +17,6 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::iter::IntoBoxedIter;
 #[cfg(feature = "std")]
 use core::ops::Deref;
 
@@ -44,7 +46,7 @@ pub trait StorageColumn: Copy + core::fmt::Debug + Send + Sync + 'static {
 
 /// The definition of the key-value inspection store.
 #[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>)]
-pub trait KeyValueInspect: Send + Sync {
+pub trait KeyValueInspect {
     /// The type of the column.
     type Column: StorageColumn;
 

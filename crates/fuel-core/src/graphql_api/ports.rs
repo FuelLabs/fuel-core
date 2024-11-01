@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     iter::{
+        BoxedIterSend,
         BoxedIter,
         IterDirection,
     },
@@ -79,21 +80,21 @@ pub trait OffChainDatabase: Send + Sync {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>>;
+    ) -> BoxedIterSend<'_, StorageResult<UtxoId>>;
 
     fn owned_message_ids(
         &self,
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>>;
+    ) -> BoxedIterSend<'_, StorageResult<Nonce>>;
 
     fn owned_transactions_ids(
         &self,
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+    ) -> BoxedIterSend<StorageResult<(TxPointer, TxId)>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 
@@ -103,7 +104,7 @@ pub trait OffChainDatabase: Send + Sync {
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+    ) -> BoxedIterSend<'_, StorageResult<CompressedBlock>>;
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus>;
 
@@ -156,7 +157,7 @@ pub trait DatabaseBlocks {
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+    ) -> BoxedIterSend<'_, StorageResult<CompressedBlock>>;
 
     fn latest_height(&self) -> StorageResult<BlockHeight>;
 
@@ -178,7 +179,7 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
         &self,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Message>>;
+    ) -> BoxedIterSend<'_, StorageResult<Message>>;
 
     fn message_batch<'a>(
         &'a self,
@@ -199,7 +200,10 @@ pub trait DatabaseRelayedTransactions {
 pub trait DatabaseCoins: StorageInspect<Coins, Error = StorageError> {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
 
-    fn coins<'a>(&'a self, utxo_ids: &'a [UtxoId]) -> BoxedIter<'a, StorageResult<Coin>>;
+    fn coins<'a>(
+        &'a self,
+        utxo_ids: &'a [UtxoId],
+    ) -> BoxedIter<'a, StorageResult<Coin>>;
 }
 
 /// Trait that specifies all the getters required for contract.
@@ -212,7 +216,7 @@ pub trait DatabaseContracts:
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<ContractBalance>>;
+    ) -> BoxedIterSend<StorageResult<ContractBalance>>;
 }
 
 /// Trait that specifies all the getters required for chain metadata.

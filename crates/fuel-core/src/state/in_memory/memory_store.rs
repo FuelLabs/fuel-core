@@ -16,8 +16,8 @@ use fuel_core_storage::{
     iter::{
         iterator,
         keys_iterator,
-        BoxedIter,
-        IntoBoxedIter,
+        BoxedIterSend,
+        IntoBoxedIterSend,
         IterableStore,
     },
     kv_store::{
@@ -144,8 +144,8 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
-        self.iter_all(column, prefix, start, direction).into_boxed()
+    ) -> BoxedIterSend<KVItem> {
+        self.iter_all(column, prefix, start, direction).into_boxed_send()
     }
 
     fn iter_store_keys(
@@ -154,9 +154,9 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+    ) -> BoxedIterSend<fuel_core_storage::kv_store::KeyItem> {
         self.iter_all_keys(column, prefix, start, direction)
-            .into_boxed()
+            .into_boxed_send()
     }
 }
 

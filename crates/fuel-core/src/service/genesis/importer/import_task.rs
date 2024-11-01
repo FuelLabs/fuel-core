@@ -166,7 +166,7 @@ mod tests {
     use fuel_core_storage::{
         column::Column,
         iter::{
-            BoxedIter,
+            BoxedIterSend,
             IterDirection,
             IterableStore,
         },
@@ -551,7 +551,7 @@ mod tests {
             _: Option<&[u8]>,
             _: Option<&[u8]>,
             _: IterDirection,
-        ) -> BoxedIter<KVItem> {
+        ) -> BoxedIterSend<KVItem> {
             unimplemented!()
         }
 
@@ -561,7 +561,7 @@ mod tests {
             _: Option<&[u8]>,
             _: Option<&[u8]>,
             _: IterDirection,
-        ) -> BoxedIter<KeyItem> {
+        ) -> BoxedIterSend<KeyItem> {
             unimplemented!()
         }
     }

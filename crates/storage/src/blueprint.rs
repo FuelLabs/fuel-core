@@ -84,10 +84,11 @@ where
         column: S::Column,
     ) -> impl Iterator<Item = crate::Result<Option<M::OwnedValue>>> + 'a
     where
-        Iter: 'a + Iterator<Item = &'a M::Key> + Send,
+        Iter: 'a + IntoIterator<Item = &'a M::Key>,
         M::Key: 'a,
     {
         let keys = keys
+            .into_iter()
             .map(|key| Self::KeyCodec::encode(key).into_bytes())
             .into_boxed();
 

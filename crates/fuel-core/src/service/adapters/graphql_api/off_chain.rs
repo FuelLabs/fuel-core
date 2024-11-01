@@ -26,7 +26,9 @@ use fuel_core_storage::{
     blueprint::BlueprintInspect,
     codec::Encode,
     iter::{
+        BoxedIterSend,
         BoxedIter,
+        IntoBoxedIterSend,
         IntoBoxedIter,
         IterDirection,
         IteratorOverTable,
@@ -97,10 +99,10 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
+    ) -> BoxedIterSend<'_, StorageResult<UtxoId>> {
         self.owned_coins_ids(owner, start_coin, Some(direction))
             .map(|res| res.map_err(StorageError::from))
-            .into_boxed()
+            .into_boxed_send()
     }
 
     fn owned_message_ids(
@@ -108,10 +110,10 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+    ) -> BoxedIterSend<'_, StorageResult<Nonce>> {
         self.owned_message_ids(owner, start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
+            .into_boxed_send()
     }
 
     fn owned_transactions_ids(
@@ -119,14 +121,14 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
+    ) -> BoxedIterSend<StorageResult<(TxPointer, TxId)>> {
         let start = start.map(|tx_pointer| OwnedTransactionIndexCursor {
             block_height: tx_pointer.block_height(),
             tx_idx: tx_pointer.tx_index(),
         });
         self.owned_transactions(owner, start, Some(direction))
             .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
+            .into_boxed_send()
     }
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
@@ -153,10 +155,10 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         &self,
         height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+    ) -> BoxedIterSend<'_, StorageResult<CompressedBlock>> {
         self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
             .map(|r| r.map(|(_, block)| block))
-            .into_boxed()
+            .into_boxed_send()
     }
 
     fn old_block_consensus(&self, height: &BlockHeight) -> StorageResult<Consensus> {

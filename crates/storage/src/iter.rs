@@ -26,10 +26,9 @@ use alloc::{
 
 pub mod changes_iterator;
 
-// TODO: BoxedIter to be used until RPITIT lands in stable rust.
 /// A boxed variant of the iterator that can be used as a return type of the traits.
 pub struct BoxedIter<'a, T> {
-    iter: Box<dyn Iterator<Item = T> + 'a + Send>,
+    iter: Box<dyn Iterator<Item = T> + 'a>,
 }
 
 impl<'a, T> Iterator for BoxedIter<'a, T> {
@@ -48,10 +47,41 @@ pub trait IntoBoxedIter<'a, T> {
 
 impl<'a, T, I> IntoBoxedIter<'a, T> for I
 where
-    I: Iterator<Item = T> + 'a + Send,
+    I: Iterator<Item = T> + 'a,
 {
     fn into_boxed(self) -> BoxedIter<'a, T> {
         BoxedIter {
+            iter: Box::new(self),
+        }
+    }
+}
+
+/// A boxed iterator that can be sent to other threads.
+/// This is useful for example when converting it to a `futures::Stream`.
+pub struct BoxedIterSend<'a, T> {
+    iter: Box<dyn Iterator<Item = T> + 'a + Send>,
+}
+
+impl<'a, T> Iterator for BoxedIterSend<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+/// The traits simplifies conversion into `BoxedIter`.
+pub trait IntoBoxedIterSend<'a, T> {
+    /// Converts `Self` iterator into `BoxedIter`.
+    fn into_boxed_send(self) -> BoxedIterSend<'a, T>;
+}
+
+impl<'a, T, I> IntoBoxedIterSend<'a, T> for I
+where
+    I: Iterator<Item = T> + 'a + Send,
+{
+    fn into_boxed_send(self) -> BoxedIterSend<'a, T> {
+        BoxedIterSend {
             iter: Box::new(self),
         }
     }
@@ -82,7 +112,7 @@ pub trait IterableStore: KeyValueInspect {
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem>;
+    ) -> BoxedIterSend<KVItem>;
 
     /// Returns an iterator over keys in the storage.
     fn iter_store_keys(
@@ -91,7 +121,7 @@ pub trait IterableStore: KeyValueInspect {
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem>;
+    ) -> BoxedIterSend<KeyItem>;
 }
 
 #[cfg(feature = "std")]
@@ -105,7 +135,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIterSend<KVItem> {
         use core::ops::Deref;
         self.deref().iter_store(column, prefix, start, direction)
     }
@@ -116,7 +146,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIterSend<KeyItem> {
         use core::ops::Deref;
         self.deref()
             .iter_store_keys(column, prefix, start, direction)
@@ -134,7 +164,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIterSend<super::Result<M::OwnedKey>>
     where
         P: AsRef<[u8]>;
 
@@ -144,7 +174,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIterSend<super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         P: AsRef<[u8]>;
 }
@@ -160,7 +190,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<crate::Result<M::OwnedKey>>
+    ) -> BoxedIterSend<crate::Result<M::OwnedKey>>
     where
         P: AsRef<[u8]>,
     {
@@ -186,7 +216,7 @@ where
                 Ok(key)
             })
         })
-        .into_boxed()
+        .into_boxed_send()
     }
 
     fn iter_table<P>(
@@ -194,7 +224,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIterSend<super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         P: AsRef<[u8]>,
     {
@@ -225,7 +255,7 @@ where
                 Ok((key, value))
             })
         })
-        .into_boxed()
+        .into_boxed_send()
     }
 }
 
@@ -235,7 +265,7 @@ pub trait IteratorOverTable {
     fn iter_all_keys<M>(
         &self,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIterSend<super::Result<M::OwnedKey>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -247,7 +277,7 @@ pub trait IteratorOverTable {
     fn iter_all_by_prefix_keys<M, P>(
         &self,
         prefix: Option<P>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIterSend<super::Result<M::OwnedKey>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -261,7 +291,7 @@ pub trait IteratorOverTable {
         &self,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIterSend<super::Result<M::OwnedKey>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -275,7 +305,7 @@ pub trait IteratorOverTable {
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIterSend<super::Result<M::OwnedKey>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -288,7 +318,7 @@ pub trait IteratorOverTable {
     fn iter_all<M>(
         &self,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIterSend<super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -300,7 +330,7 @@ pub trait IteratorOverTable {
     fn iter_all_by_prefix<M, P>(
         &self,
         prefix: Option<P>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIterSend<super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -314,7 +344,7 @@ pub trait IteratorOverTable {
         &self,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIterSend<super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -328,7 +358,7 @@ pub trait IteratorOverTable {
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIterSend<super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -353,9 +383,9 @@ where
     match (prefix, start) {
         (None, None) => {
             if direction == IterDirection::Forward {
-                tree.iter().into_boxed()
+                tree.iter().into_boxed_send()
             } else {
-                tree.iter().rev().into_boxed()
+                tree.iter().rev().into_boxed_send()
             }
         }
         (Some(prefix), None) => {
@@ -363,23 +393,23 @@ where
             if direction == IterDirection::Forward {
                 tree.range(prefix.clone()..)
                     .take_while(move |(key, _)| key.starts_with(prefix.as_slice()))
-                    .into_boxed()
+                    .into_boxed_send()
             } else {
                 let mut vec: Vec<_> = tree
                     .range(prefix.clone()..)
-                    .into_boxed()
+                    .into_boxed_send()
                     .take_while(|(key, _)| key.starts_with(prefix.as_slice()))
                     .collect();
 
                 vec.reverse();
-                vec.into_iter().into_boxed()
+                vec.into_iter().into_boxed_send()
             }
         }
         (None, Some(start)) => {
             if direction == IterDirection::Forward {
-                tree.range(start.to_vec()..).into_boxed()
+                tree.range(start.to_vec()..).into_boxed_send()
             } else {
-                tree.range(..=start.to_vec()).rev().into_boxed()
+                tree.range(..=start.to_vec()).rev().into_boxed_send()
             }
         }
         (Some(prefix), Some(start)) => {
@@ -387,12 +417,12 @@ where
             if direction == IterDirection::Forward {
                 tree.range(start.to_vec()..)
                     .take_while(move |(key, _)| key.starts_with(prefix.as_slice()))
-                    .into_boxed()
+                    .into_boxed_send()
             } else {
                 tree.range(..=start.to_vec())
                     .rev()
                     .take_while(move |(key, _)| key.starts_with(prefix.as_slice()))
-                    .into_boxed()
+                    .into_boxed_send()
             }
         }
     }
@@ -411,14 +441,14 @@ where
     match (prefix, start) {
         (None, None) => {
             if direction == IterDirection::Forward {
-                tree.keys().into_boxed()
+                tree.keys().into_boxed_send()
             } else {
-                tree.keys().rev().into_boxed()
+                tree.keys().rev().into_boxed_send()
             }
         }
         // all the other cases require using a range, so we can't use the keys() method
         (_, _) => iterator(tree, prefix, start, direction)
             .map(|(key, _)| key)
-            .into_boxed(),
+            .into_boxed_send(),
     }
 }

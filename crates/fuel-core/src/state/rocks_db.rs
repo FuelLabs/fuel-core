@@ -16,7 +16,9 @@ use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
+        BoxedIterSend,
         IntoBoxedIter,
+        IntoBoxedIterSend,
         IterableStore,
     },
     kv_store::{
@@ -487,7 +489,7 @@ where
                         true
                     }
                 })
-                .into_boxed()
+                .into_boxed_send()
         } else {
             // No next item, so we can start backward iteration from the end.
             let prefix = prefix.to_vec();
@@ -499,7 +501,7 @@ where
                         true
                     }
                 })
-                .into_boxed()
+                .into_boxed_send()
         }
     }
 
@@ -564,7 +566,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<T::Item>>
+    ) -> BoxedIterSend<StorageResult<T::Item>>
     where
         T: ExtractItem,
     {
@@ -578,11 +580,12 @@ where
                         IterDirection::Reverse => IteratorMode::End,
                     };
                 self.iterator::<T>(column, self.read_options(), iter_mode)
-                    .into_boxed()
+                    .into_boxed_send()
             }
             (Some(prefix), None) => {
                 if direction == IterDirection::Reverse {
-                    self.reverse_prefix_iter::<T>(prefix, column).into_boxed()
+                    self.reverse_prefix_iter::<T>(prefix, column)
+                        .into_boxed_send()
                 } else {
                     // start iterating in a certain direction within the keyspace
                     let iter_mode = IteratorMode::From(
@@ -604,7 +607,7 @@ where
                                 true
                             }
                         })
-                        .into_boxed()
+                        .into_boxed_send()
                 }
             }
             (None, Some(start)) => {
@@ -612,13 +615,13 @@ where
                 let iter_mode =
                     IteratorMode::From(start, convert_to_rocksdb_direction(direction));
                 self.iterator::<T>(column, self.read_options(), iter_mode)
-                    .into_boxed()
+                    .into_boxed_send()
             }
             (Some(prefix), Some(start)) => {
                 // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
                 // If the `start` doesn't have the same `prefix`, return nothing.
                 if !start.starts_with(prefix) {
-                    return iter::empty().into_boxed();
+                    return iter::empty().into_boxed_send();
                 }
 
                 // start iterating in a certain direction from the start key
@@ -634,7 +637,7 @@ where
                             true
                         }
                     })
-                    .into_boxed()
+                    .into_boxed_send()
             }
         }
     }
@@ -781,7 +784,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIterSend<KVItem> {
         self._iter_store::<KeyAndValue>(column, prefix, start, direction)
     }
 
@@ -791,7 +794,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIterSend<KeyItem> {
         self._iter_store::<KeyOnly>(column, prefix, start, direction)
     }
 }

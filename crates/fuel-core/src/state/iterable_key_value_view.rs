@@ -1,6 +1,7 @@
 use fuel_core_storage::{
     iter::{
         BoxedIter,
+        BoxedIterSend,
         IterDirection,
         IterableStore,
     },
@@ -94,7 +95,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIterSend<KVItem> {
         self.0.iter_store(column, prefix, start, direction)
     }
 
@@ -104,7 +105,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIterSend<KeyItem> {
         self.0.iter_store_keys(column, prefix, start, direction)
     }
 }
