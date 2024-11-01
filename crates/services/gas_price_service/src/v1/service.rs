@@ -231,7 +231,8 @@ where
 
         while let Ok(da_block_costs) = self.da_source_channel.try_recv() {
             tracing::debug!("Updating DA block costs");
-            self.apply_da_block_costs_to_gas_algorithm(da_block_costs).await?;
+            self.apply_da_block_costs_to_gas_algorithm(da_block_costs)
+                .await?;
         }
 
         // run shutdown hooks for internal services
