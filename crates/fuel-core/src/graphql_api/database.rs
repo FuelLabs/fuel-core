@@ -9,8 +9,8 @@ use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     iter::{
         BoxedIterSend,
-        IntoBoxedIterSend,
         IntoBoxedIter,
+        IntoBoxedIterSend,
         IterDirection,
     },
     transactional::AtomicView,

@@ -18,10 +18,10 @@ use crate::{
 };
 use fuel_core_storage::{
     iter::{
-        BoxedIterSend,
         BoxedIter,
-        IntoBoxedIterSend,
+        BoxedIterSend,
         IntoBoxedIter,
+        IntoBoxedIterSend,
         IterDirection,
         IteratorOverTable,
     },
@@ -149,10 +149,7 @@ impl DatabaseCoins for OnChainIterableKeyValueView {
         Ok(coin.uncompress(utxo_id))
     }
 
-    fn coins<'a>(
-        &'a self,
-        utxo_ids: &'a [UtxoId],
-    ) -> BoxedIter<'a, StorageResult<Coin>> {
+    fn coins<'a>(&'a self, utxo_ids: &'a [UtxoId]) -> BoxedIter<'a, StorageResult<Coin>> {
         <Self as StorageBatchInspect<Coins>>::get_batch(
             self,
             utxo_ids.iter().into_boxed_send(),

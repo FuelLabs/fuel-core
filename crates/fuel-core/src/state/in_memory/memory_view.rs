@@ -87,7 +87,8 @@ where
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIterSend<KVItem> {
-        self.iter_all(column, prefix, start, direction).into_boxed_send()
+        self.iter_all(column, prefix, start, direction)
+            .into_boxed_send()
     }
 
     fn iter_store_keys(

@@ -4,8 +4,8 @@ use crate::{
 };
 use fuel_core_storage::{
     iter::{
-        BoxedIterSend,
         BoxedIter,
+        BoxedIterSend,
         IterDirection,
         IterableStore,
     },

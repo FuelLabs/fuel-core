@@ -26,10 +26,10 @@ use fuel_core_storage::{
     blueprint::BlueprintInspect,
     codec::Encode,
     iter::{
-        BoxedIterSend,
         BoxedIter,
-        IntoBoxedIterSend,
+        BoxedIterSend,
         IntoBoxedIter,
+        IntoBoxedIterSend,
         IterDirection,
         IteratorOverTable,
     },
