@@ -22,9 +22,6 @@ pub struct V1Metadata {
     pub total_da_rewards_excess: u128,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
     pub latest_known_total_da_cost_excess: u128,
-    /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
-    /// (This value is added on top of the `latest_known_total_da_cost` if the L2 height is higher)
-    pub projected_total_da_cost: u128,
     /// The last profit
     pub last_profit: i128,
     /// The profit before last
@@ -52,7 +49,6 @@ impl V1Metadata {
             gas_price_factor: config.gas_price_factor,
             total_da_rewards_excess: 0,
             latest_known_total_da_cost_excess: 0,
-            projected_total_da_cost: 0,
             last_profit: 0,
             second_to_last_profit: 0,
             latest_da_cost_per_byte: 0,
@@ -87,7 +83,6 @@ impl From<AlgorithmUpdaterV1> for V1Metadata {
             gas_price_factor: updater.gas_price_factor,
             total_da_rewards_excess: updater.total_da_rewards_excess,
             latest_known_total_da_cost_excess: updater.latest_known_total_da_cost_excess,
-            projected_total_da_cost: updater.projected_total_da_cost,
             last_profit: updater.last_profit,
             second_to_last_profit: updater.second_to_last_profit,
             latest_da_cost_per_byte: updater.latest_da_cost_per_byte,
@@ -106,6 +101,16 @@ pub fn v1_algorithm_from_metadata(
         config.decrease_range_size,
         config.block_activity_threshold.into(),
     );
+    let unrecorded_blocks_bytes: u128 = metadata
+        .unrecorded_blocks
+        .iter()
+        .map(|(_, size)| u128::from(*size))
+        .sum();
+    let projected_portion =
+        unrecorded_blocks_bytes.saturating_mul(metadata.latest_da_cost_per_byte);
+    let projected_total_da_cost = metadata
+        .latest_known_total_da_cost_excess
+        .saturating_add(projected_portion);
     let unrecorded_blocks = metadata.unrecorded_blocks.into_iter().collect();
     AlgorithmUpdaterV1 {
         new_scaled_exec_price: metadata.new_scaled_exec_price,
@@ -114,7 +119,7 @@ pub fn v1_algorithm_from_metadata(
         gas_price_factor: metadata.gas_price_factor,
         total_da_rewards_excess: metadata.total_da_rewards_excess,
         latest_known_total_da_cost_excess: metadata.latest_known_total_da_cost_excess,
-        projected_total_da_cost: metadata.projected_total_da_cost,
+        projected_total_da_cost,
         last_profit: metadata.last_profit,
         second_to_last_profit: metadata.second_to_last_profit,
         latest_da_cost_per_byte: metadata.latest_da_cost_per_byte,
@@ -129,5 +134,6 @@ pub fn v1_algorithm_from_metadata(
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
         unrecorded_blocks,
+        unrecorded_blocks_bytes,
     }
 }
