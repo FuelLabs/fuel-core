@@ -12,7 +12,7 @@ use fuel_core_types::{
 use std::ops::Range;
 type BlockHeight = u32;
 
-pub struct CachedView {
+pub(super) struct CachedView {
     sealed_block_headers: DashMap<BlockHeight, SealedBlockHeader>,
     transactions_on_blocks: DashMap<BlockHeight, Transactions>,
     metrics: bool,
@@ -27,7 +27,7 @@ impl CachedView {
         }
     }
 
-    pub fn clear(&self) {
+    pub(super) fn clear(&self) {
         self.sealed_block_headers.clear();
         self.transactions_on_blocks.clear();
     }
