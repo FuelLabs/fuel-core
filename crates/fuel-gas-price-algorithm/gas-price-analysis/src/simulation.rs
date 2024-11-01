@@ -113,6 +113,7 @@ impl Simulator {
             last_profit: 0,
             second_to_last_profit: 0,
             l2_activity: always_normal_activity,
+            unrecorded_blocks_bytes: 0,
         }
     }
 
