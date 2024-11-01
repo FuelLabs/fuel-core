@@ -134,6 +134,19 @@ where
         Ok(())
     }
 
+    async fn handle_da_block_costs(
+        &mut self,
+        da_block_costs: DaBlockCosts,
+    ) -> anyhow::Result<()> {
+        self.algorithm_updater.update_da_record_data(
+            da_block_costs.l2_block_range,
+            da_block_costs.blob_cost_wei,
+        )?;
+
+        self.set_metadata().await?;
+        Ok(())
+    }
+
     async fn apply_block_info_to_gas_algorithm(
         &mut self,
         l2_block: BlockInfo,
@@ -160,6 +173,15 @@ where
             }
         }
 
+        self.update(self.algorithm_updater.algorithm()).await;
+        Ok(())
+    }
+
+    async fn apply_da_block_costs_to_gas_algorithm(
+        &mut self,
+        da_block_costs: DaBlockCosts,
+    ) -> anyhow::Result<()> {
+        self.handle_da_block_costs(da_block_costs).await?;
         self.update(self.algorithm_updater.algorithm()).await;
         Ok(())
     }
@@ -193,7 +215,7 @@ where
                 let da_block_costs = da_block_costs?;
 
                 tracing::debug!("Updating DA block costs");
-                self.algorithm_updater.update_da_record_data(da_block_costs.l2_block_range, da_block_costs.blob_cost_wei)?;
+                self.apply_da_block_costs_to_gas_algorithm(da_block_costs).await?;
                 should_continue = true;
             }
         }
@@ -209,10 +231,7 @@ where
 
         while let Ok(da_block_costs) = self.da_source_channel.try_recv() {
             tracing::debug!("Updating DA block costs");
-            self.algorithm_updater.update_da_record_data(
-                da_block_costs.l2_block_range,
-                da_block_costs.blob_cost_wei,
-            )?;
+            self.apply_da_block_costs_to_gas_algorithm(da_block_costs).await?;
         }
 
         // run shutdown hooks for internal services
