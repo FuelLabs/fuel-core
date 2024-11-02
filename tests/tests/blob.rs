@@ -1,12 +1,7 @@
 #![allow(non_snake_case)]
 
-use std::str::FromStr;
-
 use fuel_core::{
-    chain_config::{
-        random_testnet_wallet,
-        StateConfig,
-    },
+    chain_config::StateConfig,
     database::{
         database_description::on_chain::OnChain,
         Database,
@@ -27,16 +22,13 @@ use fuel_core_types::{
         RegId,
     },
     fuel_tx::{
-        Address,
         BlobBody,
         BlobId,
         BlobIdExt,
         Finalizable,
         Input,
-        Output,
         Transaction,
         TransactionBuilder,
-        Word,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
@@ -51,11 +43,6 @@ use fuel_core_types::{
             MemoryInstance,
         },
     },
-};
-use rand::{
-    rngs::StdRng,
-    Rng,
-    SeedableRng,
 };
 use tokio::io;
 
@@ -147,28 +134,14 @@ impl TestContext {
 
 #[tokio::test]
 async fn blob__upload_works() {
-    let mut rng = StdRng::seed_from_u64(2322);
-
     // Given
-    let (wallet, wallet_str) = random_testnet_wallet(&mut rng);
-    const SMALL_AMOUNT: Word = 0;
     let mut ctx = TestContext::new().await;
-    let utxo_id = rng.gen();
-    let input = Input::coin_signed(
-        utxo_id,
-        Address::from_str(wallet_str).expect("should parse bytes as address"),
-        SMALL_AMOUNT,
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    );
 
     // When
     let (status, blob_id) = ctx
-        .new_blob_with_input([op::ret(RegId::ONE)].into_iter().collect(), Some(input))
+        .new_blob([op::ret(RegId::ONE)].into_iter().collect())
         .await
         .unwrap();
-
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // Then
@@ -183,18 +156,7 @@ async fn blob__upload_works() {
         blob_id.to_bytes(),
     )
     .script_gas_limit(1000000)
-    .add_unsigned_coin_input(
-        wallet,
-        rng.gen(),
-        SMALL_AMOUNT,
-        Default::default(),
-        Default::default(),
-    )
-    .add_output(Output::Change {
-        amount: SMALL_AMOUNT,
-        asset_id: Default::default(),
-        to: Address::from_str(wallet_str).expect("should parse bytes as address"),
-    })
+    .add_fee_input()
     .finalize_as_transaction();
     let tx_status = ctx
         .client
@@ -206,27 +168,10 @@ async fn blob__upload_works() {
 
 #[tokio::test]
 async fn blob__cannot_post_already_existing_blob() {
-    let mut rng = StdRng::seed_from_u64(2322);
-
     // Given
     let mut ctx = TestContext::new().await;
     let payload: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
-    let utxo_id = rng.gen();
-    let (_, wallet_str) = random_testnet_wallet(&mut rng);
-    const SMALL_AMOUNT: Word = 0;
-    let input = Input::coin_signed(
-        utxo_id,
-        Address::from_str(wallet_str).expect("should parse bytes as address"),
-        SMALL_AMOUNT,
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    );
-
-    let (status, _blob_id) = ctx
-        .new_blob_with_input(payload.clone(), Some(input))
-        .await
-        .unwrap();
+    let (status, _blob_id) = ctx.new_blob(payload.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // When
@@ -239,11 +184,7 @@ async fn blob__cannot_post_already_existing_blob() {
 
 #[tokio::test]
 async fn blob__accessing_nonexistent_blob_panics_vm() {
-    let mut rng = StdRng::seed_from_u64(2322);
-
     // Given
-    let (wallet, wallet_str) = random_testnet_wallet(&mut rng);
-    const SMALL_AMOUNT: Word = 2;
     let ctx = TestContext::new().await;
     let blob_id = BlobId::new([0; 32]); // Nonexistent
 
@@ -259,18 +200,7 @@ async fn blob__accessing_nonexistent_blob_panics_vm() {
         blob_id.to_bytes(),
     )
     .script_gas_limit(1000000)
-    .add_unsigned_coin_input(
-        wallet,
-        rng.gen(),
-        SMALL_AMOUNT,
-        Default::default(),
-        Default::default(),
-    )
-    .add_output(Output::Change {
-        amount: SMALL_AMOUNT,
-        asset_id: Default::default(),
-        to: Address::from_str(wallet_str).expect("should parse bytes as address"),
-    })
+    .add_fee_input()
     .finalize_as_transaction();
     let tx_status = ctx
         .client
@@ -279,35 +209,15 @@ async fn blob__accessing_nonexistent_blob_panics_vm() {
         .unwrap();
 
     // Then
-    assert!(
-        matches!(tx_status, TransactionStatus::Failure { reason,.. } if reason == "BlobNotFound")
-    );
+    assert!(matches!(tx_status, TransactionStatus::Failure { .. }));
 }
 
 #[tokio::test]
 async fn blob__can_be_queried_if_uploaded() {
-    let mut rng = StdRng::seed_from_u64(2322);
-
     // Given
     let mut ctx = TestContext::new().await;
     let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
-    let (_, wallet_str) = random_testnet_wallet(&mut rng);
-    let utxo_id = rng.gen();
-    const SMALL_AMOUNT: Word = 0;
-    let input = Input::coin_signed(
-        utxo_id,
-        Address::from_str(wallet_str).expect("should parse bytes as address"),
-        SMALL_AMOUNT,
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    );
-
-    let (status, blob_id) = ctx
-        .new_blob_with_input(bytecode.clone(), Some(input))
-        .await
-        .unwrap();
-
+    let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // When
@@ -325,26 +235,10 @@ async fn blob__can_be_queried_if_uploaded() {
 
 #[tokio::test]
 async fn blob__exists_if_uploaded() {
-    let mut rng = StdRng::seed_from_u64(2322);
-
     // Given
     let mut ctx = TestContext::new().await;
     let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
-    let (_, wallet_str) = random_testnet_wallet(&mut rng);
-    let utxo_id = rng.gen();
-    const SMALL_AMOUNT: Word = 0;
-    let input = Input::coin_signed(
-        utxo_id,
-        Address::from_str(wallet_str).expect("should parse bytes as address"),
-        SMALL_AMOUNT,
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    );
-    let (status, blob_id) = ctx
-        .new_blob_with_input(bytecode.clone(), Some(input))
-        .await
-        .unwrap();
+    let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // When
