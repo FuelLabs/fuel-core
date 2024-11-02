@@ -8,7 +8,6 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         StateConfig,
-        TESTNET_WALLET_SECRETS,
     },
     database::Database,
     service::{
@@ -51,7 +50,6 @@ use rand::Rng;
 use std::{
     iter::repeat,
     ops::Deref,
-    str::FromStr,
     time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
@@ -73,17 +71,13 @@ fn arb_large_tx<R: Rng + rand::CryptoRng>(
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
     let asset_id = *builder.get_params().base_asset_id();
-    let wallet = SecretKey::from_str(
-        TESTNET_WALLET_SECRETS[rng.gen_range(0..TESTNET_WALLET_SECRETS.len())],
-    )
-    .expect("should parse secret key hex bytes");
     builder
         .max_fee_limit(max_fee_limit)
         .script_gas_limit(22430)
         .add_unsigned_coin_input(
-            wallet,
+            SecretKey::random(rng),
             rng.gen(),
-            max_fee_limit,
+            u32::MAX as u64,
             asset_id,
             Default::default(),
         )
@@ -155,12 +149,10 @@ async fn produce_block__raises_gas_price() {
     let client = FuelClient::from(srv.bound_address);
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
-    const MAX_FEE: u64 = 189028;
-
     // when
     let arb_tx_count = 10;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(MAX_FEE + i as Word, &mut rng);
+        let tx = arb_large_tx(189028 + i as Word, &mut rng);
         let _status = client.submit(&tx).await.unwrap();
     }
     // starting gas price
