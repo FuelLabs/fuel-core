@@ -107,13 +107,13 @@ impl CombinedDatabase {
 
     /// A test-only temporary rocksdb database with given rewind policy.
     #[cfg(feature = "rocksdb")]
-    pub fn from_state_rewind_policy(
+    pub fn temp_database_with_state_rewind_policy(
         state_rewind_policy: StateRewindPolicy,
     ) -> DatabaseResult<Self> {
         Ok(Self {
             on_chain: Database::rocksdb_temp(state_rewind_policy)?,
             off_chain: Database::rocksdb_temp(state_rewind_policy)?,
-            relayer: Database::rocksdb_temp(state_rewind_policy)?,
+            relayer: Default::default(),
             gas_price: Default::default(),
         })
     }
@@ -127,7 +127,7 @@ impl CombinedDatabase {
                     tracing::warn!(
                         "No RocksDB path configured, initializing database with a tmp directory"
                     );
-                    CombinedDatabase::from_state_rewind_policy(
+                    CombinedDatabase::temp_database_with_state_rewind_policy(
                         config.state_rewind_policy,
                     )?
                 } else {

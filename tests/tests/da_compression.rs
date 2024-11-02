@@ -115,6 +115,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
         .expect("Unable to get compressed block");
     let block: VersionedCompressedBlock = postcard::from_bytes(&block).unwrap();
 
+    // Reuse the existing offchain db to decompress the block
     let db = &srv.shared.database;
     let mut tx_inner = db.off_chain().clone().into_transaction();
     let db_tx = DecompressDbTx {
