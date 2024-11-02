@@ -1,6 +1,3 @@
-use std::str::FromStr;
-
-use fuel_core::chain_config::random_testnet_wallet;
 use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
@@ -12,11 +9,9 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        Address,
         Output,
         Transaction,
         TransactionBuilder,
-        Word,
     },
 };
 use rand::{
@@ -38,27 +33,27 @@ pub async fn send_graph_ql_query(url: &str, query: &str) -> String {
     response.text().await.unwrap()
 }
 
-pub fn make_tx(rng: &mut (impl CryptoRng + RngCore), max_gas_limit: u64) -> Transaction {
-    const SMALL_AMOUNT: Word = 2;
-
-    let (wallet, wallet_str) = random_testnet_wallet(rng);
-
+pub fn make_tx(
+    rng: &mut (impl CryptoRng + RngCore),
+    i: u64,
+    max_gas_limit: u64,
+) -> Transaction {
     TransactionBuilder::script(
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
     .script_gas_limit(max_gas_limit / 2)
     .add_unsigned_coin_input(
-        wallet,
+        SecretKey::random(rng),
         rng.gen(),
-        SMALL_AMOUNT,
+        1000 + i,
         Default::default(),
         Default::default(),
     )
     .add_output(Output::Change {
-        amount: SMALL_AMOUNT,
+        amount: 0,
         asset_id: Default::default(),
-        to: Address::from_str(wallet_str).expect("should parse bytes as address"),
+        to: rng.gen(),
     })
     .finalize_as_transaction()
 }

@@ -481,7 +481,7 @@ mod full_block {
 
         let tx_count: u64 = 66_000;
         let txs = (1..=tx_count)
-            .map(|_| test_helpers::make_tx(&mut rng, max_gas_limit))
+            .map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit))
             .collect_vec();
 
         // When

@@ -37,12 +37,6 @@ use fuel_core_types::{
     fuel_vm::BlobData,
 };
 use itertools::Itertools;
-#[cfg(feature = "test-helpers")]
-use rand::{
-    CryptoRng,
-    Rng,
-    RngCore,
-};
 use serde::{
     Deserialize,
     Serialize,
@@ -92,17 +86,6 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0x976e5c3fa620092c718d852ca703b6da9e3075b9f2ecb8ed42d9f746bf26aafb",
     "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
 ];
-
-#[cfg(feature = "test-helpers")]
-pub fn random_testnet_wallet(
-    rng: &mut (impl CryptoRng + RngCore),
-) -> (SecretKey, &'static str) {
-    let wallet_str =
-        TESTNET_WALLET_SECRETS[rng.gen_range(0..TESTNET_WALLET_SECRETS.len())];
-    let wallet =
-        SecretKey::from_str(wallet_str).expect("should parse secret key hex bytes");
-    (wallet, wallet_str)
-}
 
 #[derive(Default, Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct LastBlockConfig {
