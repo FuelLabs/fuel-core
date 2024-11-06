@@ -221,7 +221,7 @@ impl DatabaseItemWithAmount for &Coin {
     }
 
     fn amount(&self) -> ItemAmount {
-        self.amount.into()
+        self.amount
     }
 }
 
@@ -233,7 +233,7 @@ impl DatabaseItemWithAmount for &Message {
     }
 
     fn amount(&self) -> ItemAmount {
-        (**self).amount().into()
+        (**self).amount()
     }
 }
 
@@ -259,7 +259,7 @@ trait BalanceIndexationUpdater: DatabaseItemWithAmount {
         let storage = tx.storage::<Self::Storage>();
         let current_balance = storage.get(&key)?.unwrap_or_default();
         let prev_balance = current_balance.clone();
-        match updater(current_balance.as_ref().clone().into(), amount.into()) {
+        match updater(current_balance.as_ref().clone().into(), amount) {
             Some(new_balance) => {
                 debug!(
                     %key,
