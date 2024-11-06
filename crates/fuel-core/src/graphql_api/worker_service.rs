@@ -247,14 +247,11 @@ trait BalanceIndexationUpdater: DatabaseItemWithAmount {
     ) -> StorageResult<()>
     where
         <Self::Storage as Mappable>::Key: Sized + core::fmt::Display,
-        <Self::Storage as Mappable>::Value: Sized + core::fmt::Display,
         <Self::Storage as Mappable>::OwnedValue: Default + core::fmt::Display,
         UpdaterFn: Fn(Self::TotalBalance, ItemAmount) -> Option<Self::TotalBalance>,
         T: OffChainDatabaseTransaction + StorageMutate<Self::Storage>,
-        <<Self as DatabaseItemWithAmount>::Storage as Mappable>::Value:
-            std::convert::From<ItemAmount>,
-        <<Self as DatabaseItemWithAmount>::Storage as Mappable>::Value:
-            std::convert::From<<Self as BalanceIndexationUpdater>::TotalBalance>,
+        <Self::Storage as Mappable>::Value:
+            From<<Self as BalanceIndexationUpdater>::TotalBalance>,
         fuel_core_storage::Error: From<<T as StorageInspect<Self::Storage>>::Error>,
     {
         let key = self.key();
