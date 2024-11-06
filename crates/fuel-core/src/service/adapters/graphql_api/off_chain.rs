@@ -25,7 +25,8 @@ use crate::{
         balances::{
             BalancesKey,
             CoinBalances,
-            MessageBalances, TotalBalanceAmount,
+            MessageBalances,
+            TotalBalanceAmount,
         },
         old::{
             OldFuelBlockConsensus,
