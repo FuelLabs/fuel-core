@@ -17,6 +17,8 @@ pub enum Error {
     },
     #[error("Failed to initialize updater: {0:?}")]
     CouldNotInitUpdater(anyhow::Error),
+    #[error("Failed to convert metadata to concrete type. THere is no migration path for this metadata version")]
+    CouldNotConvertMetadata, // todo(https://github.com/FuelLabs/fuel-core/issues/2286)
 }
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
