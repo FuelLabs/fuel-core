@@ -48,6 +48,7 @@ use fuel_core_poa::{
 };
 use fuel_core_storage::{
     self,
+    structured_storage::StructuredStorage,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
@@ -65,14 +66,7 @@ pub type PoAService = fuel_core_poa::Service<
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
-pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
-    P2PAdapter,
-    Database,
-    ExecutorAdapter,
-    FuelGasPriceProvider<AlgorithmV0>,
-    ConsensusParametersProvider,
-    SharedMemoryPool,
->;
+pub type TxPoolSharedState = fuel_core_txpool::SharedState;
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
@@ -188,6 +182,7 @@ pub fn init_sub_services(
     let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
+    let metadata = StructuredStorage::new(database.gas_price().clone());
 
     let gas_price_service_v0 = new_gas_price_service_v0(
         config.clone().into(),
@@ -195,21 +190,22 @@ pub fn init_sub_services(
         settings,
         block_stream,
         database.gas_price().clone(),
+        metadata,
         database.on_chain().clone(),
     )?;
 
     let gas_price_provider =
         FuelGasPriceProvider::new(gas_price_service_v0.shared.clone());
     let txpool = fuel_core_txpool::new_service(
+        chain_id,
         config.txpool.clone(),
-        database.on_chain().clone(),
-        importer_adapter.clone(),
         p2p_adapter.clone(),
-        executor.clone(),
+        importer_adapter.clone(),
+        database.on_chain().clone(),
+        consensus_parameters_provider.clone(),
         last_height,
         gas_price_provider.clone(),
-        consensus_parameters_provider.clone(),
-        SharedMemoryPool::new(config.memory_pool_size),
+        executor.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -289,6 +285,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.off_chain().clone(),
         chain_id,
+        config.da_compression.clone(),
         config.continue_on_error,
     );
 
@@ -297,8 +294,8 @@ pub fn init_sub_services(
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         vm_backtrace: config.vm.backtrace,
-        max_tx: config.txpool.max_tx,
-        max_txpool_depth: config.txpool.max_depth,
+        max_tx: config.txpool.pool_limits.max_txs,
+        max_txpool_dependency_chain_length: config.txpool.max_txs_chain_count,
         chain_name,
     };
 

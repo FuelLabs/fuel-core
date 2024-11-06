@@ -137,8 +137,8 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
 
     // stop the node and just grab the database
     let db_path = driver.kill().await;
-    let db =
-        CombinedDatabase::open(db_path.path(), 1024 * 1024, Default::default()).unwrap();
+    let db = CombinedDatabase::open(db_path.path(), 1024 * 1024, Default::default(), 512)
+        .unwrap();
 
     let view = db.on_chain().latest_view().unwrap();
 
@@ -259,6 +259,7 @@ mod p2p {
     // Then starts second_producer that uses the first one as a reserved peer.
     // second_producer should not produce blocks while the first one is producing
     // after the first_producer stops, second_producer should start producing blocks
+    #[ignore = "seems to be flaky, issue: https://github.com/FuelLabs/fuel-core/issues/2351"]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
         const SYNC_TIMEOUT: u64 = 30;

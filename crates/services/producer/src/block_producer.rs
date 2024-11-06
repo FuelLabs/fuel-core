@@ -48,7 +48,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    future::Future,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -112,7 +115,9 @@ where
     where
         Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     {
-        let _production_guard = self.lock.lock().await;
+        let _production_guard = self.lock.try_lock().map_err(|_| {
+            anyhow!("Failed to acquire the production lock, block production is already in progress")
+        })?;
 
         let mut transactions_source = predefined_block.transactions().to_vec();
 
@@ -164,14 +169,15 @@ where
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Produces and execute block for the specified height.
-    async fn produce_and_execute<TxSource>(
+    async fn produce_and_execute<TxSource, F>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        tx_source: impl FnOnce(BlockHeight) -> TxSource,
+        tx_source: impl FnOnce(u64, BlockHeight) -> F,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
         Executor: ports::BlockProducer<TxSource> + 'static,
+        F: Future<Output = anyhow::Result<TxSource>>,
     {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
@@ -181,16 +187,18 @@ where
         //      2. parallel throughput
         //  - Execute block with production mode to correctly malleate txs outputs and block headers
 
-        // prevent simultaneous block production calls, the guard will drop at the end of this fn.
-        let _production_guard = self.lock.lock().await;
+        // prevent simultaneous block production calls
+        let _production_guard = self.lock.try_lock().map_err(|_| {
+            anyhow!("Failed to acquire the production lock, block production is already in progress")
+        })?;
 
-        let source = tx_source(height);
+        let gas_price = self.calculate_gas_price().await?;
+
+        let source = tx_source(gas_price, height).await?;
 
         let header = self
             .new_header_with_new_da_height(height, block_time)
             .await?;
-
-        let gas_price = self.calculate_gas_price().await?;
 
         let component = Components {
             header_to_produce: header,
@@ -236,9 +244,11 @@ where
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute(height, block_time, |height| {
-            self.txpool.get_source(height)
-        })
+        self.produce_and_execute::<TxSource, _>(
+            height,
+            block_time,
+            |gas_price, height| self.txpool.get_source(gas_price, height),
+        )
         .await
     }
 }
@@ -259,7 +269,7 @@ where
         block_time: Tai64,
         transactions: Vec<Transaction>,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute(height, block_time, |_| transactions)
+        self.produce_and_execute(height, block_time, |_, _| async { Ok(transactions) })
             .await
     }
 }

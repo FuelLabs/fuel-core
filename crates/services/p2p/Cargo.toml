@@ -15,7 +15,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true } # TODO make this a feature
-fuel-core-services = { workspace = true }
+fuel-core-services = { workspace = true, features = ["sync-processor"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
@@ -36,6 +36,7 @@ libp2p = { version = "0.53.2", default-features = false, features = [
   "tokio",
   "yamux",
   "websocket",
+  "metrics",
 ] }
 libp2p-mplex = "0.41.0"
 postcard = { workspace = true, features = ["use-std"] }
@@ -47,6 +48,8 @@ rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 sha2 = "0.10"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }

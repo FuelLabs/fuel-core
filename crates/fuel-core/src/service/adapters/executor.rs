@@ -3,10 +3,12 @@ use crate::{
     service::adapters::TransactionsSource,
 };
 use fuel_core_executor::ports::MaybeCheckedTransaction;
+use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     services::relayer::Event,
 };
+use std::sync::Arc;
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
@@ -15,18 +17,19 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         transactions_limit: u16,
         block_transaction_size_limit: u32,
     ) -> Vec<MaybeCheckedTransaction> {
-        self.txpool
-            .select_transactions(
-                gas_limit,
-                transactions_limit,
-                block_transaction_size_limit,
-            )
+        self.tx_pool
+            .exclusive_lock()
+            .extract_transactions_for_block(Constraints {
+                minimal_gas_price: self.minimum_gas_price,
+                max_gas: gas_limit,
+                maximum_txs: transactions_limit,
+                maximum_block_size: block_transaction_size_limit,
+            })
             .into_iter()
             .map(|tx| {
-                MaybeCheckedTransaction::CheckedTransaction(
-                    tx.as_ref().into(),
-                    tx.used_consensus_parameters_version(),
-                )
+                let transaction = Arc::unwrap_or_clone(tx);
+                let version = transaction.used_consensus_parameters_version();
+                MaybeCheckedTransaction::CheckedTransaction(transaction.into(), version)
             })
             .collect()
     }

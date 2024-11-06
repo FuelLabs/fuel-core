@@ -19,7 +19,7 @@ pub struct RelayerArgs {
 
     /// Uri addresses to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
     /// If not set relayer will not start.
-    #[arg(long = "relayer", env)]
+    #[arg(long = "relayer", value_delimiter = ',', env)]
     #[arg(required_if_eq("enable_relayer", "true"))]
     #[arg(requires_if(IsPresent, "enable_relayer"))]
     pub relayer: Option<Vec<url::Url>>,
@@ -68,5 +68,29 @@ impl RelayerArgs {
             metrics: false,
         };
         Some(config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+    use test_case::test_case;
+
+    #[derive(Debug, Clone, Parser)]
+    pub struct Command {
+        #[clap(flatten)]
+        relayer: RelayerArgs,
+    }
+
+    #[test_case(&[""] => Ok(None); "no args")]
+    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap()])); "one relayer")]
+    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com", "--relayer=https://test2.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap(), url::Url::parse("https://test2.com").unwrap()])); "two relayers in different args")]
+    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com,https://test2.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap(), url::Url::parse("https://test2.com").unwrap()])); "two relayers in same arg")]
+    fn parse_relayer_urls(args: &[&str]) -> Result<Option<Vec<url::Url>>, String> {
+        let command: Command =
+            Command::try_parse_from(args).map_err(|e| e.to_string())?;
+        let args = command.relayer;
+        Ok(args.relayer)
     }
 }

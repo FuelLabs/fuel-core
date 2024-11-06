@@ -367,6 +367,10 @@ mod full_block {
         FuelClient,
     };
     use fuel_core_executor::executor;
+    use fuel_core_txpool::config::{
+        HeavyWorkConfig,
+        PoolLimits,
+    };
     use fuel_core_types::fuel_types::BlockHeight;
 
     #[derive(cynic::QueryFragment, Debug)]
@@ -439,8 +443,18 @@ mod full_block {
         let mut rng = StdRng::seed_from_u64(2322);
 
         let local_node_config = Config::local_node();
-        let txpool = fuel_core_txpool::Config {
-            max_tx: usize::MAX,
+        let txpool = fuel_core_txpool::config::Config {
+            pool_limits: PoolLimits {
+                max_txs: usize::MAX,
+                max_gas: u64::MAX,
+                max_bytes_size: usize::MAX,
+            },
+            heavy_work: HeavyWorkConfig {
+                number_threads_to_verify_transactions: 4,
+                number_threads_p2p_sync: 0,
+                size_of_verification_queue: u16::MAX as usize,
+                size_of_p2p_sync_queue: 1,
+            },
             ..local_node_config.txpool
         };
         let chain_config = local_node_config.snapshot_reader.chain_config().clone();

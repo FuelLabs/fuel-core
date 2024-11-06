@@ -62,8 +62,11 @@ impl BlockImporterAdapter {
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
+        let metrics = config.metrics;
         let importer = Importer::new(chain_id, config, database, executor, verifier);
-        importer.init_metrics();
+        if metrics {
+            importer.init_metrics();
+        }
         Self {
             block_importer: Arc::new(importer),
         }

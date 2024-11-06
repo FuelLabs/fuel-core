@@ -26,6 +26,8 @@ pub enum Error {
     L2BlockExpectedNotFound(u32),
 }
 
+// TODO: separate exec gas price and DA gas price into newtypes for clarity
+//   https://github.com/FuelLabs/fuel-core/issues/2382
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlgorithmV1 {
     /// The gas price for to cover the execution of the next block
@@ -118,13 +120,8 @@ pub struct AlgorithmUpdaterV1 {
     /// This is a percentage of the total capacity of the L2 block
     pub l2_block_fullness_threshold_percent: ClampedPercentage,
     // DA
-    /// The gas price for the DA portion of the last block. This can be used to calculate
-    /// the DA portion of the next block
-    // pub last_da_gas_price: u64,
-
     /// The gas price (scaled by the `gas_price_factor`) to cover the DA commitment of the next block
     pub new_scaled_da_gas_price: u64,
-
     /// Scale factor for the gas price.
     pub gas_price_factor: NonZeroU64,
     /// The lowest the algorithm allows the da gas price to go
@@ -151,13 +148,136 @@ pub struct AlgorithmUpdaterV1 {
     pub second_to_last_profit: i128,
     /// The latest known cost per byte for recording blocks on the DA chain
     pub latest_da_cost_per_byte: u128,
-
+    /// Activity of L2
+    pub l2_activity: L2ActivityTracker,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: BTreeMap<Height, Bytes>,
 }
 
-/// A value that represents a value between 0 and 100. Higher values are clamped to 100
+/// The `L2ActivityTracker` tracks the chain activity to determine a safety mode for setting the DA price.
+///
+/// Because the DA gas price can increase even when no-one is using the network, there is a potential
+/// for a negative feedback loop to occur where the gas price increases, further decreasing activity
+/// and increasing the gas price. The `L2ActivityTracker` is used to moderate changes to the DA
+/// gas price based on the activity of the L2 chain.
+///
+/// The chain activity is a cumulative measure, updated whenever a new block is processed.
+/// For each L2 block, the block usage is a percentage of the block capacity used. If the
+/// block usage is below a certain threshold, the chain activity is decreased, if above the threshold,
+/// the activity is increased The chain activity exists on a scale
+/// between 0 and the sum of the normal, capped, and decrease buffers.
+///
+/// e.g. if the decrease activity threshold is 20, the capped activity threshold is 80, and the max activity is 120,
+/// we'd have the following ranges:
+///
+/// 0 <-- decrease range -->20<-- capped range -->80<-- normal range -->120
+///
+/// The current chain activity determines the behavior of the DA gas price.
+///
+/// For healthy behavior, the activity should be in the `normal` range.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct L2ActivityTracker {
+    /// The maximum value the chain activity can hit
+    max_activity: u16,
+    /// The threshold if the block activity is below, the DA gas price will be held when it would otherwise be increased
+    capped_activity_threshold: u16,
+    /// If the chain activity falls below this value, the DA gas price will be decreased when it would otherwise be increased
+    decrease_activity_threshold: u16,
+    /// The current activity of the L2 chain
+    chain_activity: u16,
+    /// The threshold of block activity below which the chain activity will be decreased,
+    /// above or equal it will always increase
+    block_activity_threshold: ClampedPercentage,
+}
+
+/// Designates the intended behavior of the DA gas price based on the activity of the L2 chain
+pub enum DAGasPriceSafetyMode {
+    /// Should increase DA gas price freely
+    Normal,
+    /// Should not increase the DA gas price
+    Capped,
+    /// Should decrease the DA gas price always
+    AlwaysDecrease,
+}
+
+impl L2ActivityTracker {
+    pub fn new_full(
+        normal_range_size: u16,
+        capped_range_size: u16,
+        decrease_range_size: u16,
+        block_activity_threshold: ClampedPercentage,
+    ) -> Self {
+        let decrease_activity_threshold = decrease_range_size;
+        let capped_activity_threshold =
+            decrease_range_size.saturating_add(capped_range_size);
+        let max_activity = capped_activity_threshold.saturating_add(normal_range_size);
+        let chain_activity = max_activity;
+        Self {
+            max_activity,
+            capped_activity_threshold,
+            decrease_activity_threshold,
+            chain_activity,
+            block_activity_threshold,
+        }
+    }
+
+    pub fn new(
+        normal_range_size: u16,
+        capped_range_size: u16,
+        decrease_range_size: u16,
+        activity: u16,
+        block_activity_threshold: ClampedPercentage,
+    ) -> Self {
+        let mut tracker = Self::new_full(
+            normal_range_size,
+            capped_range_size,
+            decrease_range_size,
+            block_activity_threshold,
+        );
+        tracker.chain_activity = activity.min(tracker.max_activity);
+        tracker
+    }
+
+    pub fn new_always_normal() -> Self {
+        let normal_range_size = 100;
+        let capped_range_size = 0;
+        let decrease_range_size = 0;
+        let percentage = ClampedPercentage::new(0);
+        Self::new(
+            normal_range_size,
+            capped_range_size,
+            decrease_range_size,
+            100,
+            percentage,
+        )
+    }
+
+    pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
+        if self.chain_activity > self.capped_activity_threshold {
+            DAGasPriceSafetyMode::Normal
+        } else if self.chain_activity > self.decrease_activity_threshold {
+            DAGasPriceSafetyMode::Capped
+        } else {
+            DAGasPriceSafetyMode::AlwaysDecrease
+        }
+    }
+
+    pub fn update(&mut self, block_usage: ClampedPercentage) {
+        if block_usage < self.block_activity_threshold {
+            self.chain_activity = self.chain_activity.saturating_sub(1);
+        } else {
+            self.chain_activity =
+                self.chain_activity.saturating_add(1).min(self.max_activity);
+        }
+    }
+
+    pub fn current_activity(&self) -> u16 {
+        self.chain_activity
+    }
+}
+
+/// A value that represents a value between 0 and 100. Higher values are clamped to 100
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub struct ClampedPercentage {
     value: u8,
 }
@@ -193,8 +313,6 @@ impl AlgorithmUpdaterV1 {
         if !height_range.is_empty() {
             self.da_block_update(height_range, range_cost)?;
             self.recalculate_projected_cost();
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/2264
-            // self.normalize_rewards_and_costs();
         }
         Ok(())
     }
@@ -217,16 +335,19 @@ impl AlgorithmUpdaterV1 {
             self.l2_block_height = height;
 
             // rewards
-            self.update_rewards(fee_wei);
+            self.update_da_rewards(fee_wei);
             let rewards = self.clamped_rewards_as_i128();
 
             // costs
-            self.update_projected_cost(block_bytes);
+            self.update_projected_da_cost(block_bytes);
             let projected_total_da_cost = self.clamped_projected_cost_as_i128();
 
             // profit
             let last_profit = rewards.saturating_sub(projected_total_da_cost);
             self.update_last_profit(last_profit);
+
+            // activity
+            self.update_activity(used, capacity);
 
             // gas prices
             self.update_exec_gas_price(used, capacity);
@@ -238,13 +359,19 @@ impl AlgorithmUpdaterV1 {
         }
     }
 
-    fn update_rewards(&mut self, fee_wei: u128) {
+    fn update_activity(&mut self, used: u64, capacity: NonZeroU64) {
+        let block_activity = used.saturating_mul(100).div(capacity);
+        let usage = ClampedPercentage::new(block_activity.try_into().unwrap_or(100));
+        self.l2_activity.update(usage);
+    }
+
+    fn update_da_rewards(&mut self, fee_wei: u128) {
         let block_da_reward = self.da_portion_of_fee(fee_wei);
         self.total_da_rewards_excess =
             self.total_da_rewards_excess.saturating_add(block_da_reward);
     }
 
-    fn update_projected_cost(&mut self, block_bytes: u64) {
+    fn update_projected_da_cost(&mut self, block_bytes: u64) {
         let block_projected_da_cost =
             (block_bytes as u128).saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
@@ -311,7 +438,8 @@ impl AlgorithmUpdaterV1 {
     fn update_da_gas_price(&mut self) {
         let p = self.p();
         let d = self.d();
-        let da_change = self.da_change(p, d);
+        let maybe_da_change = self.da_change(p, d);
+        let da_change = self.da_change_accounting_for_activity(maybe_da_change);
         let maybe_new_scaled_da_gas_price = i128::from(self.new_scaled_da_gas_price)
             .checked_add(da_change)
             .and_then(|x| u64::try_from(x).ok())
@@ -326,6 +454,20 @@ impl AlgorithmUpdaterV1 {
             self.min_scaled_da_gas_price(),
             maybe_new_scaled_da_gas_price,
         );
+    }
+
+    fn da_change_accounting_for_activity(&self, maybe_da_change: i128) -> i128 {
+        if maybe_da_change > 0 {
+            match self.l2_activity.safety_mode() {
+                DAGasPriceSafetyMode::Normal => maybe_da_change,
+                DAGasPriceSafetyMode::Capped => 0,
+                DAGasPriceSafetyMode::AlwaysDecrease => {
+                    self.max_change().saturating_mul(-1)
+                }
+            }
+        } else {
+            maybe_da_change
+        }
     }
 
     fn min_scaled_da_gas_price(&self) -> u64 {
@@ -350,14 +492,18 @@ impl AlgorithmUpdaterV1 {
 
     fn da_change(&self, p: i128, d: i128) -> i128 {
         let pd_change = p.saturating_add(d);
-        let upcast_percent = self.max_da_gas_price_change_percent.into();
-        let max_change = self
-            .new_scaled_da_gas_price
-            .saturating_mul(upcast_percent)
-            .saturating_div(100)
-            .into();
+        let max_change = self.max_change();
         let clamped_change = pd_change.saturating_abs().min(max_change);
         pd_change.signum().saturating_mul(clamped_change)
+    }
+
+    // Should always be positive
+    fn max_change(&self) -> i128 {
+        let upcast_percent = self.max_da_gas_price_change_percent.into();
+        self.new_scaled_da_gas_price
+            .saturating_mul(upcast_percent)
+            .saturating_div(100)
+            .into()
     }
 
     fn exec_change(&self, principle: u64) -> u64 {
@@ -388,10 +534,10 @@ impl AlgorithmUpdaterV1 {
                 },
             )?;
             self.da_recorded_block_height = last;
-            let new_block_cost = self
+            let new_da_block_cost = self
                 .latest_known_total_da_cost_excess
                 .saturating_add(range_cost);
-            self.latest_known_total_da_cost_excess = new_block_cost;
+            self.latest_known_total_da_cost_excess = new_da_block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
             Ok(())
         }
@@ -420,10 +566,9 @@ impl AlgorithmUpdaterV1 {
         let projection_portion: u128 = self
             .unrecorded_blocks
             .iter()
-            .map(|(_, &bytes)| {
-                (bytes as u128).saturating_mul(self.latest_da_cost_per_byte)
-            })
-            .sum();
+            .map(|(_, &bytes)| (bytes as u128))
+            .fold(0_u128, |acc, n| acc.saturating_add(n))
+            .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
             .latest_known_total_da_cost_excess
             .saturating_add(projection_portion);
@@ -444,39 +589,6 @@ impl AlgorithmUpdaterV1 {
             new_da_gas_price: self.descaled_da_price(),
             da_gas_price_percentage: self.max_da_gas_price_change_percent as u64,
             for_height: self.l2_block_height,
-        }
-    }
-
-    // TODO: This breaks our simulation now that we are using an extended finalization period. We
-    //   can either keep this function and fix the simulation, or we might decide to remove it.
-    //   https://github.com/FuelLabs/fuel-core/issues/2264
-    // We only need to track the difference between the rewards and costs after we have true DA data
-    // Normalize, or zero out the lower value and subtract it from the higher value
-    fn _normalize_rewards_and_costs(&mut self) {
-        let (excess, projected_cost_excess) =
-            if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
-                (
-                    self.total_da_rewards_excess
-                        .saturating_sub(self.latest_known_total_da_cost_excess),
-                    self.projected_total_da_cost
-                        .saturating_sub(self.latest_known_total_da_cost_excess),
-                )
-            } else {
-                (
-                    self.latest_known_total_da_cost_excess
-                        .saturating_sub(self.total_da_rewards_excess),
-                    self.projected_total_da_cost
-                        .saturating_sub(self.total_da_rewards_excess),
-                )
-            };
-
-        self.projected_total_da_cost = projected_cost_excess;
-        if self.total_da_rewards_excess > self.latest_known_total_da_cost_excess {
-            self.total_da_rewards_excess = excess;
-            self.latest_known_total_da_cost_excess = 0;
-        } else {
-            self.total_da_rewards_excess = 0;
-            self.latest_known_total_da_cost_excess = excess;
         }
     }
 }
