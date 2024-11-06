@@ -305,30 +305,22 @@ where
         return Ok(());
     }
     match event {
-        Event::MessageImported(message) => message.update_balances(
-            block_st_transaction,
-            |balance: TotalBalanceAmount, amount: ItemAmount| {
+        Event::MessageImported(message) => message
+            .update_balances(block_st_transaction, |balance, amount| {
                 balance.checked_add(amount as TotalBalanceAmount)
-            },
-        ),
-        Event::MessageConsumed(message) => message.update_balances(
-            block_st_transaction,
-            |balance: TotalBalanceAmount, amount: ItemAmount| {
+            }),
+        Event::MessageConsumed(message) => message
+            .update_balances(block_st_transaction, |balance, amount| {
                 balance.checked_sub(amount as TotalBalanceAmount)
-            },
-        ),
-        Event::CoinCreated(coin) => coin.update_balances(
-            block_st_transaction,
-            |balance: TotalBalanceAmount, amount: ItemAmount| {
+            }),
+        Event::CoinCreated(coin) => coin
+            .update_balances(block_st_transaction, |balance, amount| {
                 balance.checked_add(amount as TotalBalanceAmount)
-            },
-        ),
-        Event::CoinConsumed(coin) => coin.update_balances(
-            block_st_transaction,
-            |balance: TotalBalanceAmount, amount: ItemAmount| {
+            }),
+        Event::CoinConsumed(coin) => coin
+            .update_balances(block_st_transaction, |balance, amount| {
                 balance.checked_sub(amount as TotalBalanceAmount)
-            },
-        ),
+            }),
         Event::ForcedTransactionFailed { .. } => Ok(()),
     }
 }
