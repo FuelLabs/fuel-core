@@ -118,7 +118,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
         self.filter_contract_balances(contract, start_asset, Some(direction))
             .map_ok(|entry| ContractBalance {
                 owner: *entry.key.contract_id(),
-                amount: entry.value,
+                amount: entry.value as u128,
                 asset_id: *entry.key.asset_id(),
             })
             .map(|res| res.map_err(StorageError::from))

@@ -20,7 +20,8 @@ use rand::{
     Rng,
 };
 
-pub type Amount = u64;
+pub type ItemAmount = u64;
+pub type TotalBalanceAmount = u128;
 
 double_key!(BalancesKey, Address, address, AssetId, asset_id);
 impl Distribution<BalancesKey> for Standard {
@@ -43,7 +44,7 @@ pub struct CoinBalances;
 impl Mappable for CoinBalances {
     type Key = BalancesKey;
     type OwnedKey = Self::Key;
-    type Value = Amount;
+    type Value = TotalBalanceAmount;
     type OwnedValue = Self::Value;
 }
 
@@ -62,7 +63,7 @@ pub struct MessageBalances;
 impl Mappable for MessageBalances {
     type Key = Address;
     type OwnedKey = Self::Key;
-    type Value = Amount;
+    type Value = TotalBalanceAmount;
     type OwnedValue = Self::Value;
 }
 

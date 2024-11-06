@@ -9,7 +9,7 @@ use crate::{
             ContractId,
             HexString,
             Salt,
-            U64,
+            U128,
         },
         ReadViewProvider,
     },
@@ -99,7 +99,7 @@ impl ContractBalance {
         self.0.owner.into()
     }
 
-    async fn amount(&self) -> U64 {
+    async fn amount(&self) -> U128 {
         self.0.amount.into()
     }
 

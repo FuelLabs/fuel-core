@@ -25,7 +25,7 @@ use crate::{
         balances::{
             BalancesKey,
             CoinBalances,
-            MessageBalances,
+            MessageBalances, TotalBalanceAmount,
         },
         old::{
             OldFuelBlockConsensus,
@@ -207,19 +207,21 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         owner: &Address,
         asset_id: &AssetId,
         base_asset_id: &AssetId,
-    ) -> StorageResult<u64> {
+    ) -> StorageResult<TotalBalanceAmount> {
         let coins = self
             .storage_as_ref::<CoinBalances>()
             .get(&BalancesKey::new(owner, asset_id))?
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_owned() as TotalBalanceAmount;
 
         if base_asset_id == asset_id {
             let messages = self
                 .storage_as_ref::<MessageBalances>()
                 .get(owner)?
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .into_owned() as TotalBalanceAmount;
 
-            let total = coins.checked_add(*messages).ok_or(anyhow::anyhow!(
+            let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
                 "Total balance overflow: coins: {coins}, messages: {messages}"
             ))?;
 
@@ -227,7 +229,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             Ok(total)
         } else {
             debug!(%coins, "total balance");
-            Ok(*coins)
+            Ok(coins)
         }
     }
 
@@ -235,17 +237,17 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         &self,
         owner: &Address,
         base_asset_id: &AssetId,
-    ) -> StorageResult<BTreeMap<AssetId, u64>> {
+    ) -> StorageResult<BTreeMap<AssetId, TotalBalanceAmount>> {
         let mut balances = BTreeMap::new();
         for balance_key in self.iter_all_by_prefix_keys::<CoinBalances, _>(Some(owner)) {
             let key = balance_key?;
             let asset_id = key.asset_id();
 
             let messages = if base_asset_id == asset_id {
-                *self
-                    .storage_as_ref::<MessageBalances>()
+                self.storage_as_ref::<MessageBalances>()
                     .get(owner)?
                     .unwrap_or_default()
+                    .into_owned() as TotalBalanceAmount
             } else {
                 0
             };
@@ -253,7 +255,8 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             let coins = self
                 .storage_as_ref::<CoinBalances>()
                 .get(&key)?
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .into_owned() as TotalBalanceAmount;
 
             let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
                 "Total balance overflow: coins: {coins}, messages: {messages}"

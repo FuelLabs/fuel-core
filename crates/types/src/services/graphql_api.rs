@@ -11,7 +11,7 @@ pub struct Balance<Owner> {
     /// Owner of the asset.
     pub owner: Owner,
     /// The cumulative amount of the asset.
-    pub amount: u64,
+    pub amount: u128,
     /// The identifier of the asset.
     pub asset_id: AssetId,
 }

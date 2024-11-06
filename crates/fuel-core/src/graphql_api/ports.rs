@@ -67,6 +67,8 @@ use std::{
     sync::Arc,
 };
 
+use super::storage::balances::TotalBalanceAmount;
+
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
@@ -79,13 +81,13 @@ pub trait OffChainDatabase: Send + Sync {
         owner: &Address,
         asset_id: &AssetId,
         base_asset_id: &AssetId,
-    ) -> StorageResult<u64>;
+    ) -> StorageResult<TotalBalanceAmount>;
 
     fn balances(
         &self,
         owner: &Address,
         base_asset_id: &AssetId,
-    ) -> StorageResult<BTreeMap<AssetId, u64>>;
+    ) -> StorageResult<BTreeMap<AssetId, TotalBalanceAmount>>;
 
     fn owned_coins_ids(
         &self,

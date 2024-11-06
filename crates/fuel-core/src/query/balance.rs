@@ -4,7 +4,10 @@ use std::{
     future,
 };
 
-use crate::fuel_core_graphql_api::database::ReadView;
+use crate::{
+    fuel_core_graphql_api::database::ReadView,
+    graphql_api::storage::balances::TotalBalanceAmount,
+};
 use asset_query::{
     AssetQuery,
     AssetSpendTarget,
@@ -60,7 +63,7 @@ impl ReadView {
                     Ok(balance.saturating_add(amount))
                 }
             })
-            .await?
+            .await? as TotalBalanceAmount
         };
 
         Ok(AddressBalance {
@@ -105,10 +108,11 @@ impl ReadView {
             .try_fold(
                 HashMap::new(),
                 move |mut amounts_per_asset, coin| async move {
-                    let amount: &mut u64 = amounts_per_asset
+                    let amount: &mut TotalBalanceAmount = amounts_per_asset
                         .entry(*coin.asset_id(base_asset_id))
                         .or_default();
-                    *amount = amount.saturating_add(coin.amount());
+                    // TODO[RC]: checked_add
+                    *amount = amount.saturating_add(coin.amount() as TotalBalanceAmount);
                     Ok(amounts_per_asset)
                 },
             )

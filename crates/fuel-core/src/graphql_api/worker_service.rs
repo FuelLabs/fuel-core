@@ -2,8 +2,9 @@ use super::{
     da_compression::da_compress_block,
     storage::{
         balances::{
-            Amount,
             BalancesKey,
+            ItemAmount,
+            TotalBalanceAmount,
         },
         old::{
             OldFuelBlockConsensus,
@@ -209,44 +210,51 @@ trait DatabaseItemWithAmount {
     type Storage: Mappable;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key;
-    fn amount(&self) -> Amount;
+    fn amount(&self) -> ItemAmount;
 }
 
-impl DatabaseItemWithAmount for Coin {
+impl DatabaseItemWithAmount for &Coin {
     type Storage = CoinBalances;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key {
         BalancesKey::new(&self.owner, &self.asset_id)
     }
 
-    fn amount(&self) -> Amount {
-        self.amount
+    fn amount(&self) -> ItemAmount {
+        self.amount.into()
     }
 }
 
-impl DatabaseItemWithAmount for Message {
+impl DatabaseItemWithAmount for &Message {
     type Storage = MessageBalances;
 
     fn key(&self) -> <Self::Storage as Mappable>::Key {
         *self.recipient()
     }
 
-    fn amount(&self) -> Amount {
-        Self::amount(self)
+    fn amount(&self) -> ItemAmount {
+        (**self).amount().into()
     }
 }
 
 trait BalanceIndexationUpdater: DatabaseItemWithAmount {
-    fn update_balances<T, F>(&self, tx: &mut T, updater: F) -> StorageResult<()>
+    type TotalBalance: From<<Self::Storage as Mappable>::OwnedValue> + core::fmt::Display;
+
+    fn update_balances<T, UpdaterFn>(
+        &self,
+        tx: &mut T,
+        updater: UpdaterFn,
+    ) -> StorageResult<()>
     where
         <Self::Storage as Mappable>::Key: Sized + core::fmt::Display,
         <Self::Storage as Mappable>::Value: Sized + core::fmt::Display,
         <Self::Storage as Mappable>::OwnedValue: Default + core::fmt::Display,
+        UpdaterFn: Fn(Self::TotalBalance, ItemAmount) -> Option<Self::TotalBalance>,
         T: OffChainDatabaseTransaction + StorageMutate<Self::Storage>,
-        F: Fn(
-            Cow<<Self::Storage as Mappable>::OwnedValue>,
-            Amount,
-        ) -> Option<<Self::Storage as Mappable>::Value>,
+        <<Self as DatabaseItemWithAmount>::Storage as Mappable>::Value:
+            std::convert::From<ItemAmount>,
+        <<Self as DatabaseItemWithAmount>::Storage as Mappable>::Value:
+            std::convert::From<<Self as BalanceIndexationUpdater>::TotalBalance>,
         fuel_core_storage::Error: From<<T as StorageInspect<Self::Storage>>::Error>,
     {
         let key = self.key();
@@ -254,7 +262,7 @@ trait BalanceIndexationUpdater: DatabaseItemWithAmount {
         let storage = tx.storage::<Self::Storage>();
         let current_balance = storage.get(&key)?.unwrap_or_default();
         let prev_balance = current_balance.clone();
-        match updater(current_balance, amount) {
+        match updater(current_balance.as_ref().clone().into(), amount.into()) {
             Some(new_balance) => {
                 debug!(
                     %key,
@@ -264,7 +272,7 @@ trait BalanceIndexationUpdater: DatabaseItemWithAmount {
                     "changing balance");
 
                 let storage = tx.storage::<Self::Storage>();
-                Ok(storage.insert(&key, &new_balance)?)
+                Ok(storage.insert(&key, &new_balance.into())?)
             }
             None => {
                 error!(
@@ -278,8 +286,12 @@ trait BalanceIndexationUpdater: DatabaseItemWithAmount {
     }
 }
 
-impl BalanceIndexationUpdater for Coin {}
-impl BalanceIndexationUpdater for Message {}
+impl BalanceIndexationUpdater for &Coin {
+    type TotalBalance = TotalBalanceAmount;
+}
+impl BalanceIndexationUpdater for &Message {
+    type TotalBalance = TotalBalanceAmount;
+}
 
 fn process_balances_update<T>(
     event: &Event,
@@ -293,22 +305,30 @@ where
         return Ok(());
     }
     match event {
-        Event::MessageImported(message) => message
-            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.checked_add(amount)
-            }),
-        Event::MessageConsumed(message) => message
-            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.checked_sub(amount)
-            }),
-        Event::CoinCreated(coin) => coin
-            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.checked_add(amount)
-            }),
-        Event::CoinConsumed(coin) => coin
-            .update_balances(block_st_transaction, |balance: Cow<u64>, amount| {
-                balance.checked_sub(amount)
-            }),
+        Event::MessageImported(message) => message.update_balances(
+            block_st_transaction,
+            |balance: TotalBalanceAmount, amount: ItemAmount| {
+                balance.checked_add(amount as TotalBalanceAmount)
+            },
+        ),
+        Event::MessageConsumed(message) => message.update_balances(
+            block_st_transaction,
+            |balance: TotalBalanceAmount, amount: ItemAmount| {
+                balance.checked_sub(amount as TotalBalanceAmount)
+            },
+        ),
+        Event::CoinCreated(coin) => coin.update_balances(
+            block_st_transaction,
+            |balance: TotalBalanceAmount, amount: ItemAmount| {
+                balance.checked_add(amount as TotalBalanceAmount)
+            },
+        ),
+        Event::CoinConsumed(coin) => coin.update_balances(
+            block_st_transaction,
+            |balance: TotalBalanceAmount, amount: ItemAmount| {
+                balance.checked_sub(amount as TotalBalanceAmount)
+            },
+        ),
         Event::ForcedTransactionFailed { .. } => Ok(()),
     }
 }
