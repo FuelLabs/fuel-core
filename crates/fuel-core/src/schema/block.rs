@@ -45,11 +45,11 @@ use fuel_core_types::{
         header::BlockHeader,
         primitives::BlockHeightQuery,
     },
+    fuel_tx::TxId,
     fuel_types::{
         self,
         BlockHeight,
     },
-    fuel_tx::TxId,
 };
 use futures::{
     Stream,

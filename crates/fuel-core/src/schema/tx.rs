@@ -133,7 +133,8 @@ impl TxQuery {
             |start: &Option<SortedTxCursor>, direction| {
                 let start = *start;
                 let block_id = start.map(|sorted| sorted.block_height);
-                let compressed_blocks = query.compressed_blocks(block_id.into(), direction);
+                let compressed_blocks =
+                    query.compressed_blocks(block_id.into(), direction);
 
                 let all_txs = compressed_blocks
                     .map_ok(move |fuel_block| {
