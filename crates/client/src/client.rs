@@ -1054,7 +1054,7 @@ impl FuelClient {
         &self,
         owner: &Address,
         asset_id: Option<&AssetId>,
-    ) -> io::Result<u64> {
+    ) -> io::Result<u128> {
         let owner: schema::Address = (*owner).into();
         let asset_id: schema::AssetId = match asset_id {
             Some(asset_id) => (*asset_id).into(),

@@ -1,7 +1,4 @@
-use crate::{
-    fuel_core_graphql_api::database::ReadView,
-    graphql_api::storage::balances::TotalBalanceAmount,
-};
+use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -50,7 +47,7 @@ impl ReadView {
             .storage::<ContractsAssets>()
             .get(&(&contract_id, &asset_id).into())?
             .ok_or(not_found!(ContractsAssets))?
-            .into_owned() as TotalBalanceAmount;
+            .into_owned();
 
         Ok(ContractBalance {
             owner: contract_id,

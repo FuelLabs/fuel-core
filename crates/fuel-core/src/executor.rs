@@ -548,16 +548,12 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(asset_id, AssetId::zeroed());
-            assert_eq!(amount, expected_fee_amount_1 as u128);
-
-            let amount_u64: u64 = amount
-                .try_into()
-                .expect("amount should be lower than u64::MAX");
+            assert_eq!(amount, expected_fee_amount_1);
 
             let script = TxBuilder::new(2u64)
                 .script_gas_limit(limit)
-                .max_fee_limit(amount_u64)
-                .coin_input(AssetId::BASE, amount_u64)
+                .max_fee_limit(amount)
+                .coin_input(AssetId::BASE, amount)
                 .change_output(AssetId::BASE)
                 .build()
                 .transaction()
@@ -643,12 +639,8 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-            let amount_u64: u64 = amount
-                .try_into()
-                .expect("amount should be lower than u64::MAX");
-
             assert_eq!(asset_id, AssetId::zeroed());
-            assert_eq!(amount_u64, expected_fee_amount_1 + expected_fee_amount_2);
+            assert_eq!(amount, expected_fee_amount_1 + expected_fee_amount_2);
         }
 
         #[test]

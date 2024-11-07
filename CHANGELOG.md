@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - [2378](https://github.com/FuelLabs/fuel-core/pull/2378): Use cached hash of the topic instead of calculating it on each publishing gossip message.
 
+#### Breaking
+- [2383](https://github.com/FuelLabs/fuel-core/pull/2383): Asset balance queries now return U128 instead of U64. 
+
 ## [Version 0.40.0]
 
 ### Added

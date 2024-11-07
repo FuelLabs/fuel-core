@@ -7,17 +7,17 @@ use crate::fuel_types::{
 };
 
 /// The cumulative balance(`amount`) of the `Owner` of `asset_id`.
-pub struct Balance<Owner> {
+pub struct Balance<Owner, Amount> {
     /// Owner of the asset.
     pub owner: Owner,
     /// The cumulative amount of the asset.
-    pub amount: u128,
+    pub amount: Amount,
     /// The identifier of the asset.
     pub asset_id: AssetId,
 }
 
 /// The alias for the `Balance` of the address.
-pub type AddressBalance = Balance<Address>;
+pub type AddressBalance = Balance<Address, u128>;
 
 /// The alias for the `Balance` of the contract.
-pub type ContractBalance = Balance<ContractId>;
+pub type ContractBalance = Balance<ContractId, u64>;
