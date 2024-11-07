@@ -37,6 +37,9 @@ struct Arg {
     /// File path to save the chart to. Will not generate chart if left blank
     #[arg(short, long)]
     file_path: Option<String>,
+    #[arg(short, long)]
+    /// DA finalization period in L2 blocks
+    da_finalization_period: usize,
 }
 
 #[derive(Subcommand)]
@@ -80,19 +83,23 @@ async fn main() -> anyhow::Result<()> {
 
     const UPDATE_PERIOD: usize = 12;
 
+    let da_finalization_period = args.da_finalization_period;
+
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
             let da_cost_per_byte =
                 get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
             let size = da_cost_per_byte.len();
             println!(
-                "Running simulation with P: {}, D: {}, and {} blocks",
+                "Running simulation with P: {}, D: {}, {} blocks and {} da_finalization_period",
                 prettify_number(p),
                 prettify_number(d),
-                prettify_number(size)
+                prettify_number(size),
+                prettify_number(da_finalization_period)
             );
             let simulator = Simulator::new(da_cost_per_byte);
-            let result = simulator.run_simulation(p, d, UPDATE_PERIOD);
+            let result =
+                simulator.run_simulation(p, d, UPDATE_PERIOD, da_finalization_period);
             (result, (p, d))
         }
         Mode::Optimization { iterations, source } => {
@@ -103,12 +110,18 @@ async fn main() -> anyhow::Result<()> {
                 "Running optimization with {iterations} iterations and {size} blocks"
             );
             let simulator = Simulator::new(da_cost_per_byte);
-            let (results, (p, d)) =
-                naive_optimisation(&simulator, iterations as usize, UPDATE_PERIOD).await;
+            let (results, (p, d)) = naive_optimisation(
+                &simulator,
+                iterations as usize,
+                UPDATE_PERIOD,
+                da_finalization_period,
+            )
+            .await;
             println!(
-                "Optimization results: P: {}, D: {}",
+                "Optimization results: P: {}, D: {}, da_finalization_period: {}",
                 prettify_number(p),
-                prettify_number(d)
+                prettify_number(d),
+                prettify_number(da_finalization_period)
             );
             (results, (p, d))
         }
@@ -117,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
     print_info(&results);
 
     if let Some(file_path) = &args.file_path {
-        draw_chart(results, p_comp, d_comp, file_path)?;
+        draw_chart(results, p_comp, d_comp, da_finalization_period, file_path)?;
     }
 
     Ok(())

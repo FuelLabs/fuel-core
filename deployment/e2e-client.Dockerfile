@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.75.0 AS chef
+FROM rust:1.79.0 AS chef
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
 WORKDIR /build/
 # hadolint ignore=DL3008
@@ -16,12 +16,25 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY --from=planner /build/recipe.json recipe.json
+
 # Build our project dependencies, not our application!
-RUN cargo chef cook --release -p fuel-core-e2e-client --recipe-path recipe.json
+RUN \
+  --mount=type=cache,target=/usr/local/cargo/registry/index \
+  --mount=type=cache,target=/usr/local/cargo/registry/cache \
+  --mount=type=cache,target=/usr/local/cargo/git/db \
+  --mount=type=cache,target=/build/target \
+    cargo chef cook --release -p fuel-core-e2e-client --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
-RUN cargo build --release -p fuel-core-e2e-client
+RUN \
+  --mount=type=cache,target=/usr/local/cargo/registry/index \
+  --mount=type=cache,target=/usr/local/cargo/registry/cache \
+  --mount=type=cache,target=/usr/local/cargo/git/db \
+  --mount=type=cache,target=/build/target \
+    cargo build --release -p fuel-core-e2e-client \
+    && cp ./target/release/fuel-core-e2e-client /root/fuel-core-e2e-client \
+    && cp ./target/release/fuel-core-e2e-client.d /root/fuel-core-e2e-client.d
 
 # Stage 2: Run
 FROM ubuntu:22.04 as run
@@ -35,7 +48,7 @@ RUN apt-get update -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/target/release/fuel-core-e2e-client .
-COPY --from=builder /build/target/release/fuel-core-e2e-client.d .
+COPY --from=builder /root/fuel-core-e2e-client .
+COPY --from=builder /root/fuel-core-e2e-client.d .
 
 CMD exec ./fuel-core-e2e-client

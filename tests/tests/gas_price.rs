@@ -19,10 +19,9 @@ use fuel_core_client::client::{
     types::gas_price::LatestGasPrice,
     FuelClient,
 };
-use fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::storage::GasPriceMetadata,
-    UpdaterMetadata,
-    V0Metadata,
+use fuel_core_gas_price_service::{
+    common::fuel_core_storage_adapter::storage::GasPriceMetadata,
+    v0::metadata::V0Metadata,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
@@ -55,7 +54,7 @@ use test_helpers::fuel_core_driver::FuelCoreDriver;
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
         .max_fee_limit(max_fee_limit)
-        .add_random_fee_input()
+        .add_fee_input()
         .finalize()
         .into()
 }
@@ -307,7 +306,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .add_random_fee_input()
+    .add_fee_input()
     .script_gas_limit(1000)
     .max_fee_limit(600000)
     .finalize_as_transaction();
@@ -410,15 +409,8 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
         .deref()
         .clone();
 
-    let UpdaterMetadata::V0(V0Metadata {
-        min_exec_gas_price,
-        exec_gas_price_change_percent,
-        l2_block_height,
-        l2_block_fullness_threshold_percent,
-        ..
-    }) = new_metadata;
-    assert_eq!(exec_gas_price_change_percent, 11);
-    assert_eq!(l2_block_fullness_threshold_percent, 22);
-    assert_eq!(min_exec_gas_price, 33);
+    let V0Metadata {
+        l2_block_height, ..
+    } = new_metadata.try_into().unwrap();
     assert_eq!(l2_block_height, new_height);
 }

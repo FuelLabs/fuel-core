@@ -4,10 +4,13 @@ use std::{
     path::PathBuf,
 };
 
+const ONE_GWEI: u64 = 1_000_000_000;
+
 pub fn draw_chart(
     results: SimulationResults,
     p_comp: i64,
     d_comp: i64,
+    da_finalization_period: usize,
     file_path: &str,
 ) -> anyhow::Result<()> {
     let SimulationResults {
@@ -51,9 +54,10 @@ pub fn draw_chart(
         &projected_profit,
         &pessimistic_costs,
         &format!(
-            "Profit p_comp: {}, d_comp: {}",
+            "Profit p_comp: {}, d_comp: {}, da_finalization_period: {}",
             prettify_number(p_comp),
-            prettify_number(d_comp)
+            prettify_number(d_comp),
+            prettify_number(da_finalization_period)
         ),
     )?;
     draw_gas_prices(
@@ -76,11 +80,15 @@ pub fn draw_gas_prices(
     da_gas_prices: &[u64],
     title: &str,
 ) -> anyhow::Result<()> {
+    let gas_prices_gwei: Vec<_> = gas_prices.iter().map(|x| x / ONE_GWEI).collect();
+    let _exec_gas_prices_gwei: Vec<_> =
+        _exec_gas_prices.iter().map(|x| x / ONE_GWEI).collect();
+    let da_gas_prices_gwei: Vec<_> = da_gas_prices.iter().map(|x| x / ONE_GWEI).collect();
     // const GAS_PRICE_COLOR: RGBColor = BLACK;
     // const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
     const DA_GAS_PRICE_COLOR: RGBColor = BLUE;
     let min = 0;
-    let max = *da_gas_prices.iter().max().unwrap();
+    let max = *da_gas_prices_gwei.iter().max().unwrap();
 
     let mut chart = ChartBuilder::on(drawing_area)
         .caption(title, ("sans-serif", 50).into_font())
@@ -88,7 +96,7 @@ pub fn draw_gas_prices(
         .x_label_area_size(40)
         .y_label_area_size(100)
         .right_y_label_area_size(100)
-        .build_cartesian_2d(0..gas_prices.len(), min..max)?;
+        .build_cartesian_2d(0..gas_prices_gwei.len(), min..max)?;
 
     chart
         .configure_mesh()
@@ -120,7 +128,7 @@ pub fn draw_gas_prices(
     // Draw the da gas prices
     chart
         .draw_series(LineSeries::new(
-            da_gas_prices.iter().enumerate().map(|(x, y)| (x, *y)),
+            da_gas_prices_gwei.iter().enumerate().map(|(x, y)| (x, *y)),
             DA_GAS_PRICE_COLOR,
         ))?
         .label("DA Gas Price")
@@ -137,7 +145,7 @@ pub fn draw_gas_prices(
 
 pub fn draw_fullness(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    fullness: &Vec<(u64, u64)>,
+    fullness: &[(u64, u64)],
     title: &str,
 ) -> anyhow::Result<()> {
     const FULLNESS_COLOR: RGBColor = BLACK;
@@ -189,10 +197,11 @@ pub fn draw_bytes_and_cost_per_block(
     const BYTES_PER_BLOCK_COLOR: RGBColor = BLACK;
     let (bytes, costs): (Vec<u64>, Vec<u64>) =
         bytes_and_costs_per_block.iter().cloned().unzip();
+    let costs_gwei: Vec<_> = costs.into_iter().map(|x| x / ONE_GWEI).collect();
 
     let min = 0;
     let max_left = *bytes.iter().max().unwrap();
-    let max_right = *costs.iter().max().unwrap();
+    let max_right = *costs_gwei.iter().max().unwrap();
 
     let mut chart = ChartBuilder::on(drawing_area)
         .caption(title, ("sans-serif", 50).into_font())
@@ -230,7 +239,7 @@ pub fn draw_bytes_and_cost_per_block(
 
     chart
         .draw_secondary_series(LineSeries::new(
-            costs.iter().enumerate().map(|(x, y)| (x, *y)),
+            costs_gwei.iter().enumerate().map(|(x, y)| (x, *y)),
             RED,
         ))
         .unwrap()
@@ -257,22 +266,33 @@ pub fn draw_profit(
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
+    let actual_profit_gwei: Vec<_> =
+        actual_profit.iter().map(|x| x / ONE_GWEI as i128).collect();
+    let projected_profit_gwei: Vec<_> = projected_profit
+        .iter()
+        .map(|x| x / ONE_GWEI as i128)
+        .collect();
+    let pessimistic_block_costs_gwei: Vec<_> = pessimistic_block_costs
+        .iter()
+        .map(|x| x / ONE_GWEI as u128)
+        .collect();
     let min = *std::cmp::min(
-        actual_profit
+        actual_profit_gwei
             .iter()
             .min()
             .ok_or(anyhow::anyhow!("Path has no parent"))?,
-        projected_profit
+        projected_profit_gwei
             .iter()
             .min()
             .ok_or(anyhow::anyhow!("Path has no parent"))?,
     );
+
     let max = *std::cmp::max(
-        actual_profit
+        actual_profit_gwei
             .iter()
             .max()
             .ok_or(anyhow::anyhow!("Path has no parent"))?,
-        projected_profit
+        projected_profit_gwei
             .iter()
             .max()
             .ok_or(anyhow::anyhow!("Path has no parent"))?,
@@ -284,27 +304,27 @@ pub fn draw_profit(
         .x_label_area_size(40)
         .y_label_area_size(100)
         .right_y_label_area_size(100)
-        .build_cartesian_2d(0..actual_profit.len(), min..max)
+        .build_cartesian_2d(0..projected_profit.len(), min..max)
         .unwrap()
         .set_secondary_coord(
-            0..actual_profit.len(),
-            0..*pessimistic_block_costs.iter().max().unwrap(),
+            0..projected_profit.len(),
+            0..*pessimistic_block_costs_gwei.iter().max().unwrap(),
         );
 
     chart
         .configure_mesh()
-        .y_desc("Profit")
+        .y_desc("Profit (Gwei)")
         .x_desc("Block")
         .draw()?;
 
     chart
         .configure_secondary_axes()
-        .y_desc("Pessimistic cost")
+        .y_desc("Pessimistic cost (Gwei)")
         .draw()?;
 
     chart
         .draw_series(LineSeries::new(
-            actual_profit.iter().enumerate().map(|(x, y)| (x, *y)),
+            actual_profit_gwei.iter().enumerate().map(|(x, y)| (x, *y)),
             ACTUAL_PROFIT_COLOR,
         ))?
         .label("Actual Profit")
@@ -314,7 +334,10 @@ pub fn draw_profit(
 
     chart
         .draw_series(LineSeries::new(
-            projected_profit.iter().enumerate().map(|(x, y)| (x, *y)),
+            projected_profit_gwei
+                .iter()
+                .enumerate()
+                .map(|(x, y)| (x, *y)),
             PROJECTED_PROFIT_COLOR,
         ))?
         .label("Projected Profit")
@@ -325,7 +348,7 @@ pub fn draw_profit(
     // draw the block bytes
     chart
         .draw_secondary_series(LineSeries::new(
-            pessimistic_block_costs
+            pessimistic_block_costs_gwei
                 .iter()
                 .enumerate()
                 .map(|(x, y)| (x, *y)),

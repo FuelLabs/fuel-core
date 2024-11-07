@@ -134,6 +134,7 @@ impl FuelService {
 
         // initialize sub services
         tracing::info!("Initializing sub services");
+        database.sync_aux_db_heights(shutdown_listener)?;
         let (services, shared) = sub_services::init_sub_services(&config, database)?;
 
         let sub_services = Arc::new(services);
@@ -331,6 +332,14 @@ impl FuelService {
                 self.shared.block_importer.commit_result(result).await?;
             }
         }
+
+        // repopulate missing tables
+        genesis::recover_missing_tables_from_genesis_state_config(
+            watcher.clone(),
+            &self.shared.config,
+            &self.shared.database,
+        )
+        .await?;
 
         self.override_chain_config_if_needed()
     }

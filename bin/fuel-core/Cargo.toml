@@ -27,12 +27,15 @@ dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
+fuel-core-compression = { workspace = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-poa = { workspace = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 hex = { workspace = true }
 humantime = "2.1"
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
+rlimit = "0.10.2"
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
@@ -52,6 +55,7 @@ itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+strum = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 

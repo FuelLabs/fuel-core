@@ -4,7 +4,7 @@
 
 use crate::v1::{
     AlgorithmUpdaterV1,
-    BlockBytes,
+    L2ActivityTracker,
 };
 
 #[cfg(test)]
@@ -13,6 +13,12 @@ mod algorithm_v1_tests;
 mod update_da_record_data_tests;
 #[cfg(test)]
 mod update_l2_block_data_tests;
+
+#[derive(Debug, Clone)]
+pub struct BlockBytes {
+    pub height: u32,
+    pub block_bytes: u64,
+}
 
 pub struct UpdaterBuilder {
     min_exec_gas_price: u64,
@@ -37,6 +43,7 @@ pub struct UpdaterBuilder {
     last_profit: i128,
     second_to_last_profit: i128,
     da_gas_price_factor: u64,
+    l2_activity: L2ActivityTracker,
 }
 
 impl UpdaterBuilder {
@@ -44,8 +51,8 @@ impl UpdaterBuilder {
         Self {
             min_exec_gas_price: 0,
             min_da_gas_price: 0,
-            starting_exec_gas_price: 0,
-            starting_da_gas_price: 0,
+            starting_exec_gas_price: 1,
+            starting_da_gas_price: 1,
             exec_gas_price_change_percent: 0,
             max_change_percent: u16::MAX,
 
@@ -64,6 +71,7 @@ impl UpdaterBuilder {
             last_profit: 0,
             second_to_last_profit: 0,
             da_gas_price_factor: 1,
+            l2_activity: L2ActivityTracker::new_always_normal(),
         }
     }
 
@@ -156,6 +164,11 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_activity(mut self, l2_activity: L2ActivityTracker) -> Self {
+        self.l2_activity = l2_activity;
+        self
+    }
+
     fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
             min_exec_gas_price: self.min_exec_gas_price,
@@ -175,7 +188,11 @@ impl UpdaterBuilder {
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost_excess: self.latest_known_total_cost,
-            unrecorded_blocks: self.unrecorded_blocks,
+            unrecorded_blocks: self
+                .unrecorded_blocks
+                .iter()
+                .map(|b| (b.height, b.block_bytes))
+                .collect(),
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
@@ -183,6 +200,7 @@ impl UpdaterBuilder {
                 .da_gas_price_factor
                 .try_into()
                 .expect("Should never be non-zero"),
+            l2_activity: self.l2_activity,
         }
     }
 }

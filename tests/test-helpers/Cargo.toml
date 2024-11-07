@@ -26,7 +26,7 @@ fuel-core-storage = { path = "../../crates/storage", features = [
   "test-helpers",
 ] }
 fuel-core-trace = { path = "../../crates/trace" }
-fuel-core-txpool = { path = "../../crates/services/txpool", features = [
+fuel-core-txpool = { path = "../../crates/services/txpool_v2", features = [
   "test-helpers",
 ] }
 fuel-core-types = { path = "../../crates/types", features = ["test-helpers"] }

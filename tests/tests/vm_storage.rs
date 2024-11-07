@@ -9,8 +9,8 @@ mod tests {
         StorageAsMut,
         StorageMutate,
     };
-    use fuel_core_txpool::types::ContractId;
     use fuel_core_types::{
+        fuel_tx::ContractId,
         fuel_types::Bytes32,
         fuel_vm::ContractsStateKey,
     };

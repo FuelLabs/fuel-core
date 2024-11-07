@@ -1,5 +1,11 @@
 //! Contains types related to P2P data
 
+#[cfg(feature = "serde")]
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -14,6 +20,11 @@ use std::{
     str::FromStr,
     time::SystemTime,
 };
+
+use super::txpool::ArcPoolTx;
+
+#[cfg(feature = "serde")]
+use super::txpool::PoolTransaction;
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
@@ -33,21 +44,19 @@ pub struct GossipsubMessageInfo {
     pub peer_id: PeerId,
 }
 
-// TODO: Maybe we can remove most of types from here directly into P2P
-
-/// Reporting levels on the status of a message received via Gossip
+/// Status of a message received via Gossip
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum GossipsubMessageAcceptance {
-    /// Report whether the gossiped message is valid and safe to rebroadcast
+    /// The gossiped message is valid and safe to rebroadcast.
     Accept,
-    /// Ignore the received message and prevent further gossiping
-    Reject,
-    /// Punish the gossip sender for providing invalid
-    /// (or malicious) data and prevent further gossiping
+    /// The gossiped message is invalid and should be ignored.
     Ignore,
+    /// The gossiped message is invalid and anyone relaying it should be penalized.
+    Reject,
 }
 
 /// A gossipped message from the network containing all relevant data.
+// TODO: `T` should be inside of the `Arc` since vi broadcast it via the channel.
 #[derive(Debug, Clone)]
 pub struct GossipData<T> {
     /// The gossipped message payload
@@ -189,4 +198,68 @@ pub struct HeartbeatData {
     pub block_height: Option<BlockHeight>,
     /// The instant representing when the latest heartbeat was received.
     pub last_heartbeat: SystemTime,
+}
+
+/// Type that represents the networkable transaction pool
+/// It serializes from an Arc pool transaction and deserializes to a transaction
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetworkableTransactionPool {
+    /// A transaction pool transaction
+    PoolTransaction(ArcPoolTx),
+    /// A transaction
+    Transaction(Transaction),
+}
+
+#[cfg(feature = "serde")]
+/// Serialize only the pool transaction variant
+impl Serialize for NetworkableTransactionPool {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            NetworkableTransactionPool::PoolTransaction(tx) => match (*tx).as_ref() {
+                PoolTransaction::Script(script, _) => {
+                    script.transaction().serialize(serializer)
+                }
+                PoolTransaction::Create(create, _) => {
+                    create.transaction().serialize(serializer)
+                }
+                PoolTransaction::Blob(blob, _) => {
+                    blob.transaction().serialize(serializer)
+                }
+                PoolTransaction::Upgrade(upgrade, _) => {
+                    upgrade.transaction().serialize(serializer)
+                }
+                PoolTransaction::Upload(upload, _) => {
+                    upload.transaction().serialize(serializer)
+                }
+            },
+            NetworkableTransactionPool::Transaction(tx) => tx.serialize(serializer),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+/// Deserialize to a transaction variant
+impl<'de> Deserialize<'de> for NetworkableTransactionPool {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(NetworkableTransactionPool::Transaction(
+            Transaction::deserialize(deserializer)?,
+        ))
+    }
+}
+
+impl TryFrom<NetworkableTransactionPool> for Transaction {
+    type Error = &'static str;
+
+    fn try_from(value: NetworkableTransactionPool) -> Result<Self, Self::Error> {
+        match value {
+            NetworkableTransactionPool::Transaction(tx) => Ok(tx),
+            _ => Err("Cannot convert to transaction"),
+        }
+    }
 }

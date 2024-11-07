@@ -1,8 +1,12 @@
-use super::BlockImporterAdapter;
+use super::{
+    BlockImporterAdapter,
+    TxPoolAdapter,
+};
 use crate::database::OnChainIterableKeyValueView;
 use fuel_core_p2p::ports::{
     BlockHeightImporter,
     P2pDb,
+    TxPool,
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
@@ -11,8 +15,12 @@ use fuel_core_types::{
         consensus::Genesis,
         SealedBlockHeader,
     },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
-    services::p2p::Transactions,
+    services::p2p::{
+        NetworkableTransactionPool,
+        Transactions,
+    },
 };
 use std::ops::Range;
 
@@ -47,5 +55,32 @@ impl BlockHeightImporter for BlockImporterAdapter {
                 .filter_map(|result| result.ok())
                 .map(|result| *result.sealed_block.entity.header().height()),
         )
+    }
+}
+
+impl TxPool for TxPoolAdapter {
+    async fn get_tx_ids(&self, max_txs: usize) -> anyhow::Result<Vec<TxId>> {
+        self.service
+            .get_tx_ids(max_txs)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    async fn get_full_txs(
+        &self,
+        tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<NetworkableTransactionPool>>> {
+        Ok(self
+            .service
+            .find(tx_ids)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?
+            .into_iter()
+            .map(|tx_info| {
+                tx_info.map(|tx| {
+                    NetworkableTransactionPool::PoolTransaction(tx.tx().clone())
+                })
+            })
+            .collect())
     }
 }

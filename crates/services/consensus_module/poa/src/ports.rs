@@ -10,10 +10,7 @@ use fuel_core_types::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -23,11 +20,7 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImportResult,
         },
-        executor::{
-            Error as ExecutorError,
-            UncommittedResult as UncommittedExecutionResult,
-        },
-        txpool::ArcPoolTx,
+        executor::UncommittedResult as UncommittedExecutionResult,
     },
     tai64::Tai64,
 };
@@ -35,14 +28,9 @@ use std::collections::HashMap;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
-    /// Returns the number of pending transactions in the `TxPool`.
-    fn pending_number(&self) -> usize;
+    fn new_txs_watcher(&self) -> tokio::sync::watch::Receiver<()>;
 
-    fn total_consumable_gas(&self) -> u64;
-
-    fn remove_txs(&self, tx_ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx>;
-
-    fn transaction_status_events(&self) -> BoxStream<TxId>;
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
 }
 
 /// The source of transactions for the block.

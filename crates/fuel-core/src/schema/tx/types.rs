@@ -10,13 +10,8 @@ use crate::{
             TxPool,
         },
         database::ReadView,
+        query_costs,
         IntoApiResult,
-        QUERY_COSTS,
-    },
-    query::{
-        SimpleBlockData,
-        SimpleTransactionData,
-        TransactionQueryData,
     },
     schema::{
         block::Block,
@@ -182,14 +177,14 @@ impl SuccessStatus {
         self.block_height.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
         let query = ctx.read_view()?;
         let transaction = query.transaction(&self.tx_id)?;
@@ -238,14 +233,14 @@ impl FailureStatus {
         self.block_height.into()
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
         let query = ctx.read_view()?;
         let transaction = query.transaction(&self.tx_id)?;
@@ -417,7 +412,7 @@ impl Transaction {
         TransactionId(self.1)
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -693,7 +688,7 @@ impl Transaction {
         }
     }
 
-    #[graphql(complexity = "QUERY_COSTS.storage_read + child_complexity")]
+    #[graphql(complexity = "query_costs().tx_status_read + child_complexity")]
     async fn status(
         &self,
         ctx: &Context<'_>,
@@ -701,7 +696,9 @@ impl Transaction {
         let id = self.1;
         let query = ctx.read_view()?;
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query.as_ref(), txpool).map_err(Into::into)
+        get_tx_status(id, query.as_ref(), txpool)
+            .await
+            .map_err(Into::into)
     }
 
     async fn script(&self) -> Option<HexString> {
@@ -846,7 +843,7 @@ impl Transaction {
         }
     }
 
-    #[graphql(complexity = "QUERY_COSTS.raw_payload")]
+    #[graphql(complexity = "query_costs().tx_raw_payload")]
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
@@ -984,25 +981,31 @@ impl DryRunTransactionExecutionStatus {
 }
 
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
-pub(crate) fn get_tx_status(
+pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &ReadView,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query
-        .status(&id)
+        .tx_status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => {
             let status = TransactionStatus::new(id, status);
             Ok(Some(status))
         }
-        None => match txpool.submission_time(id) {
-            Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
-                SubmittedStatus(submitted_time),
-            ))),
-            _ => Ok(None),
-        },
+        None => {
+            let submitted_time = txpool
+                .submission_time(id)
+                .await
+                .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
+            match submitted_time {
+                Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
+                    SubmittedStatus(submitted_time),
+                ))),
+                _ => Ok(None),
+            }
+        }
     }
 }
 

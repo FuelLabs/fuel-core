@@ -3,8 +3,11 @@ use crate::{
         ConsensusParametersProvider,
         GasPriceProvider as GasPriceProviderConstraint,
     },
-    ports,
-    ports::BlockProducerDatabase,
+    ports::{
+        self,
+        BlockProducerDatabase,
+        RelayerBlockInfo,
+    },
     Config,
 };
 use anyhow::{
@@ -45,7 +48,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    future::Future,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -109,7 +115,9 @@ where
     where
         Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     {
-        let _production_guard = self.lock.lock().await;
+        let _production_guard = self.lock.try_lock().map_err(|_| {
+            anyhow!("Failed to acquire the production lock, block production is already in progress")
+        })?;
 
         let mut transactions_source = predefined_block.transactions().to_vec();
 
@@ -161,14 +169,15 @@ where
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Produces and execute block for the specified height.
-    async fn produce_and_execute<TxSource>(
+    async fn produce_and_execute<TxSource, F>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        tx_source: impl FnOnce(BlockHeight) -> TxSource,
+        tx_source: impl FnOnce(u64, BlockHeight) -> F,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
         Executor: ports::BlockProducer<TxSource> + 'static,
+        F: Future<Output = anyhow::Result<TxSource>>,
     {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
@@ -178,14 +187,18 @@ where
         //      2. parallel throughput
         //  - Execute block with production mode to correctly malleate txs outputs and block headers
 
-        // prevent simultaneous block production calls, the guard will drop at the end of this fn.
-        let _production_guard = self.lock.lock().await;
-
-        let source = tx_source(height);
-
-        let header = self.new_header(height, block_time).await?;
+        // prevent simultaneous block production calls
+        let _production_guard = self.lock.try_lock().map_err(|_| {
+            anyhow!("Failed to acquire the production lock, block production is already in progress")
+        })?;
 
         let gas_price = self.calculate_gas_price().await?;
+
+        let source = tx_source(gas_price, height).await?;
+
+        let header = self
+            .new_header_with_new_da_height(height, block_time)
+            .await?;
 
         let component = Components {
             header_to_produce: header,
@@ -231,9 +244,11 @@ where
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute(height, block_time, |height| {
-            self.txpool.get_source(height)
-        })
+        self.produce_and_execute::<TxSource, _>(
+            height,
+            block_time,
+            |gas_price, height| self.txpool.get_source(gas_price, height),
+        )
         .await
     }
 }
@@ -254,7 +269,7 @@ where
         block_time: Tai64,
         transactions: Vec<Transaction>,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute(height, block_time, |_| transactions)
+        self.produce_and_execute(height, block_time, |_, _| async { Ok(transactions) })
             .await
     }
 }
@@ -268,7 +283,6 @@ where
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
 {
-    // TODO: Support custom `block_time` for `dry_run`.
     /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
@@ -276,18 +290,26 @@ where
         &self,
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
+        time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let view = self.view_provider.latest_view()?;
-        let height = height.unwrap_or_else(|| {
-            view.latest_height()
-                .unwrap_or_default()
+        let latest_height = view.latest_height().unwrap_or_default();
+
+        let simulated_height = height.unwrap_or_else(|| {
+            latest_height
                 .succ()
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let header = self._new_header(height, Tai64::now())?;
+        let simulated_time = time.unwrap_or_else(|| {
+            view.get_block(&latest_height)
+                .map(|block| block.header().time())
+                .unwrap_or(Tai64::UNIX_EPOCH)
+        });
+
+        let header = self.new_header(simulated_height, simulated_time)?;
 
         let gas_price = if let Some(inner) = gas_price {
             inner
@@ -341,19 +363,21 @@ where
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Create the header for a new block at the provided height
-    async fn new_header(
+    async fn new_header_with_new_da_height(
         &self,
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self._new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time)?;
         let previous_da_height = block_header.da_height;
         let gas_limit = self
             .consensus_parameters_provider
             .consensus_params_at_version(&block_header.consensus_parameters_version)?
             .block_gas_limit();
+        // We have a hard limit of u16::MAX transactions per block, including the final mint transactions.
+        // Therefore we choose the `new_da_height` to never include more than u16::MAX - 1 transactions in a block.
         let new_da_height = self
-            .select_new_da_height(gas_limit, previous_da_height)
+            .select_new_da_height(gas_limit, previous_da_height, u16::MAX - 1)
             .await?;
 
         block_header.application.da_height = new_da_height;
@@ -367,7 +391,7 @@ where
         block_time: Tai64,
         da_height: DaBlockHeight,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self._new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time)?;
         block_header.application.da_height = da_height;
         Ok(block_header)
     }
@@ -375,9 +399,12 @@ where
         &self,
         gas_limit: u64,
         previous_da_height: DaBlockHeight,
+        transactions_limit: u16,
     ) -> anyhow::Result<DaBlockHeight> {
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;
+        let transactions_limit: u64 = transactions_limit as u64;
+        let mut total_transactions: u64 = 0;
         let highest = self
             .relayer
             .wait_for_at_least_height(&previous_da_height)
@@ -396,17 +423,19 @@ where
 
         let next_da_height = previous_da_height.saturating_add(1);
         for height in next_da_height..=highest.0 {
-            let cost = self
+            let RelayerBlockInfo { gas_cost, tx_count } = self
                 .relayer
-                .get_cost_for_block(&DaBlockHeight(height))
+                .get_cost_and_transactions_number_for_block(&DaBlockHeight(height))
                 .await?;
-            total_cost = total_cost.saturating_add(cost);
-            if total_cost > gas_limit {
+            total_cost = total_cost.saturating_add(gas_cost);
+            total_transactions = total_transactions.saturating_add(tx_count);
+            if total_cost > gas_limit || total_transactions > transactions_limit {
                 break;
-            } else {
-                new_best = DaBlockHeight(height);
             }
+
+            new_best = DaBlockHeight(height);
         }
+
         if new_best == previous_da_height {
             Err(anyhow!(NO_NEW_DA_HEIGHT_FOUND))
         } else {
@@ -414,7 +443,7 @@ where
         }
     }
 
-    fn _new_header(
+    fn new_header(
         &self,
         height: BlockHeight,
         block_time: Tai64,

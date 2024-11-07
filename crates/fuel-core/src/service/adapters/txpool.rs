@@ -1,14 +1,10 @@
 use crate::{
     database::OnChainIterableKeyValueView,
-    service::{
-        adapters::{
-            BlockImporterAdapter,
-            ConsensusParametersProvider,
-            P2PAdapter,
-            SharedMemoryPool,
-            StaticGasPrice,
-        },
-        vm_pool::MemoryFromPool,
+    service::adapters::{
+        BlockImporterAdapter,
+        ConsensusParametersProvider,
+        P2PAdapter,
+        StaticGasPrice,
     },
 };
 use fuel_core_services::stream::BoxStream;
@@ -21,14 +17,10 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::{
-    ports::{
-        BlockImporter,
-        ConsensusParametersProvider as ConsensusParametersProviderTrait,
-        GasPriceProvider,
-        MemoryPool,
-    },
-    Result as TxPoolResult,
+use fuel_core_txpool::ports::{
+    BlockImporter,
+    ConsensusParametersProvider as ConsensusParametersProviderTrait,
+    GasPriceProvider,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -40,6 +32,7 @@ use fuel_core_types::{
         BlobId,
         ConsensusParameters,
         Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::{
@@ -52,6 +45,7 @@ use fuel_core_types::{
         p2p::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
+            PeerId,
             TransactionGossipData,
         },
     },
@@ -65,29 +59,13 @@ impl BlockImporter for BlockImporterAdapter {
 }
 
 #[cfg(feature = "p2p")]
-impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
-    type GossipedTransaction = TransactionGossipData;
-
+#[async_trait::async_trait]
+impl fuel_core_txpool::ports::NotifyP2P for P2PAdapter {
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()> {
         if let Some(service) = &self.service {
             service.broadcast_transaction(transaction)
         } else {
             Ok(())
-        }
-    }
-
-    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
-        use tokio_stream::{
-            wrappers::BroadcastStream,
-            StreamExt,
-        };
-        if let Some(service) = &self.service {
-            Box::pin(
-                BroadcastStream::new(service.subscribe_tx())
-                    .filter_map(|result| result.ok()),
-            )
-        } else {
-            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
         }
     }
 
@@ -104,35 +82,120 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 }
 
-#[cfg(not(feature = "p2p"))]
-impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
+#[cfg(feature = "p2p")]
+impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
-    fn broadcast_transaction(
-        &self,
-        _transaction: Arc<Transaction>,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
-        Box::pin(fuel_core_services::stream::pending())
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_tx())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
     }
 
-    fn notify_gossip_transaction_validity(
-        &self,
-        _message_info: GossipsubMessageInfo,
-        _validity: GossipsubMessageAcceptance,
-    ) -> anyhow::Result<()> {
-        Ok(())
+    fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_new_peers())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            Box::pin(fuel_core_services::stream::pending())
+        }
     }
 }
 
-impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
+#[cfg(feature = "p2p")]
+#[async_trait::async_trait]
+impl fuel_core_txpool::ports::P2PRequests for P2PAdapter {
+    async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
+        if let Some(service) = &self.service {
+            service.get_all_transactions_ids_from_peer(peer_id).await
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    async fn request_txs(
+        &self,
+        peer_id: PeerId,
+        tx_ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Option<Transaction>>> {
+        if let Some(service) = &self.service {
+            service
+                .get_full_transactions_from_peer(peer_id, tx_ids)
+                .await
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
+#[cfg(not(feature = "p2p"))]
+const _: () = {
+    #[async_trait::async_trait]
+    impl fuel_core_txpool::ports::NotifyP2P for P2PAdapter {
+        fn broadcast_transaction(
+            &self,
+            _transaction: Arc<Transaction>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn notify_gossip_transaction_validity(
+            &self,
+            _message_info: GossipsubMessageInfo,
+            _validity: GossipsubMessageAcceptance,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
+        type GossipedTransaction = TransactionGossipData;
+
+        fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
+            Box::pin(fuel_core_services::stream::pending())
+        }
+
+        fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
+            Box::pin(fuel_core_services::stream::pending())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl fuel_core_txpool::ports::P2PRequests for P2PAdapter {
+        async fn request_tx_ids(&self, _peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
+            Ok(vec![])
+        }
+
+        async fn request_txs(
+            &self,
+            _peer_id: PeerId,
+            _tx_ids: Vec<TxId>,
+        ) -> anyhow::Result<Vec<Option<Transaction>>> {
+            Ok(vec![])
+        }
+    }
+};
+
+impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValueView {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
+            .map(|t| t.map(|t| t.into_owned()))
     }
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
@@ -146,14 +209,14 @@ impl fuel_core_txpool::ports::TxPoolDb for OnChainIterableKeyValueView {
     fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {
         self.storage::<Messages>()
             .get(id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
+            .map(|t| t.map(|t| t.into_owned()))
     }
 }
 
 #[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn next_gas_price(&self) -> TxPoolResult<u64> {
-        Ok(self.gas_price)
+    fn next_gas_price(&self) -> u64 {
+        self.gas_price
     }
 }
 
@@ -162,14 +225,5 @@ impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
         &self,
     ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
         self.shared_state.latest_consensus_parameters_with_version()
-    }
-}
-
-#[async_trait::async_trait]
-impl MemoryPool for SharedMemoryPool {
-    type Memory = MemoryFromPool;
-
-    async fn get_memory(&self) -> Self::Memory {
-        self.memory_pool.take_raw().await
     }
 }

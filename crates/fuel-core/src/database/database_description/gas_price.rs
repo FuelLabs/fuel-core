@@ -1,6 +1,6 @@
-use fuel_core_gas_price_service::fuel_gas_price_updater::fuel_core_storage_adapter::storage::GasPriceColumn;
-use fuel_core_types::fuel_types::BlockHeight;
 use crate::database::database_description::DatabaseDescription;
+use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceColumn;
+use fuel_core_types::fuel_types::BlockHeight;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GasPriceDatabase;

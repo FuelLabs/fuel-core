@@ -1,13 +1,11 @@
 use crate::fuel_core_graphql_api::ports::GasPriceEstimate as GraphqlGasPriceEstimate;
-use fuel_core_gas_price_service::{
+use fuel_core_gas_price_service::common::gas_price_algorithm::{
     GasPriceAlgorithm,
     SharedGasPriceAlgo,
 };
+
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
-use fuel_core_txpool::{
-    ports::GasPriceProvider as TxPoolGasPriceProvider,
-    Result as TxPoolResult,
-};
+use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -53,8 +51,8 @@ impl<A> FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn next_gas_price(&self) -> u64 {
-        self.algorithm.next_gas_price().await
+    fn next_gas_price(&self) -> u64 {
+        self.algorithm.next_gas_price()
     }
 }
 
@@ -64,17 +62,16 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self) -> anyhow::Result<u64> {
-        Ok(self.next_gas_price().await)
+        Ok(self.next_gas_price())
     }
 }
 
-#[async_trait::async_trait]
 impl<A> TxPoolGasPriceProvider for FuelGasPriceProvider<A>
 where
-    A: GasPriceAlgorithm + Send + Sync,
+    A: GasPriceAlgorithm + Send + Sync + 'static,
 {
-    async fn next_gas_price(&self) -> TxPoolResult<u64> {
-        Ok(self.next_gas_price().await)
+    fn next_gas_price(&self) -> u64 {
+        self.next_gas_price()
     }
 }
 

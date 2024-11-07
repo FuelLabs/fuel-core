@@ -49,6 +49,9 @@ pub const MAX_RESPONSE_SIZE: usize = 18 * 1024 * 1024;
 /// Maximum number of blocks per request.
 pub const MAX_HEADERS_PER_REQUEST: usize = 100;
 
+/// Maximum number of transactions ids asked per request.
+pub const MAX_TXS_PER_REQUEST: usize = 10000;
+
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
     /// The keypair used for handshake during communication with other p2p nodes.
@@ -72,6 +75,9 @@ pub struct Config<State = Initialized> {
     /// Max Size of a Block in bytes
     pub max_block_size: usize,
     pub max_headers_per_request: usize,
+
+    // Maximum of txs id asked in a single request
+    pub max_txs_per_request: usize,
 
     // `DiscoveryBehaviour` related fields
     pub bootstrap_nodes: Vec<Multiaddr>,
@@ -124,6 +130,12 @@ pub struct Config<State = Initialized> {
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 
+    /// Number of threads to read from the database.
+    pub database_read_threads: usize,
+
+    /// Number of threads to read from the TxPool.
+    pub tx_pool_threads: usize,
+
     /// It is the state of the config initialization. Everyone can create an instance of the `Self`
     /// with the `NotInitialized` state. But it can be set into the `Initialized` state only with
     /// the `init` method.
@@ -151,6 +163,7 @@ impl Config<NotInitialized> {
             tcp_port: self.tcp_port,
             max_block_size: self.max_block_size,
             max_headers_per_request: self.max_headers_per_request,
+            max_txs_per_request: self.max_txs_per_request,
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
@@ -171,6 +184,8 @@ impl Config<NotInitialized> {
             heartbeat_max_avg_interval: self.heartbeat_max_time_since_last,
             heartbeat_max_time_since_last: self.heartbeat_max_time_since_last,
             metrics: self.metrics,
+            database_read_threads: self.database_read_threads,
+            tx_pool_threads: self.tx_pool_threads,
             state: Initialized(()),
         })
     }
@@ -200,6 +215,7 @@ impl Config<NotInitialized> {
             tcp_port: 0,
             max_block_size: MAX_RESPONSE_SIZE,
             max_headers_per_request: MAX_HEADERS_PER_REQUEST,
+            max_txs_per_request: MAX_TXS_PER_REQUEST,
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,
@@ -220,6 +236,8 @@ impl Config<NotInitialized> {
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
             metrics: false,
+            database_read_threads: 0,
+            tx_pool_threads: 0,
             state: NotInitialized,
         }
     }

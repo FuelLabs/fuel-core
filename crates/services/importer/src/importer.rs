@@ -25,6 +25,10 @@ use fuel_core_types::{
         primitives::BlockId,
         SealedBlock,
     },
+    fuel_tx::{
+        field::MintGasPrice,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -34,8 +38,10 @@ use fuel_core_types::{
             ImportResult,
             UncommittedResult,
         },
-        executor,
-        executor::ValidationResult,
+        executor::{
+            self,
+            ValidationResult,
+        },
         Uncommitted,
     },
 };
@@ -58,6 +64,7 @@ use tokio::sync::{
     Semaphore,
     TryAcquireError,
 };
+use tracing::warn;
 
 #[cfg(test)]
 pub mod test;
@@ -126,6 +133,8 @@ pub struct Importer<D, E, V> {
     /// the resolution of the previous one.
     active_import_results: Arc<Semaphore>,
     process_thread: rayon::ThreadPool,
+    /// Enables prometheus metrics for this fuel-service
+    metrics: bool,
 }
 
 impl<D, E, V> Importer<D, E, V> {
@@ -155,6 +164,7 @@ impl<D, E, V> Importer<D, E, V> {
             active_import_results: Arc::new(Semaphore::new(max_block_notify_buffer)),
             guard: Semaphore::new(1),
             process_thread,
+            metrics: config.metrics,
         }
     }
 
@@ -341,18 +351,9 @@ where
 
         db_after_execution.commit()?;
 
-        // update the importer metrics after the block is successfully committed
-        importer_metrics()
-            .block_height
-            .set(*actual_next_height.deref() as i64);
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
-        importer_metrics()
-            .latest_block_import_timestamp
-            .set(current_time);
-
+        if self.metrics {
+            Self::update_metrics(&result, &actual_next_height);
+        }
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
 
         let result = ImporterResult {
@@ -390,6 +391,52 @@ where
         importer_metrics()
             .latest_block_import_timestamp
             .set(current_time);
+    }
+
+    fn update_metrics(result: &ImportResult, actual_next_height: &BlockHeight) {
+        let (total_gas_used, total_fee): (u64, u64) = result
+            .tx_status
+            .iter()
+            .map(|tx_result| {
+                (*tx_result.result.total_gas(), *tx_result.result.total_fee())
+            })
+            .fold((0_u64, 0_u64), |(acc_gas, acc_fee), (used_gas, fee)| {
+                (
+                    acc_gas.saturating_add(used_gas),
+                    acc_fee.saturating_add(fee),
+                )
+            });
+        let maybe_last_tx = result.sealed_block.entity.transactions().last();
+        if let Some(last_tx) = maybe_last_tx {
+            if let Transaction::Mint(mint) = last_tx {
+                importer_metrics()
+                    .gas_price
+                    .set((*mint.gas_price()).try_into().unwrap_or(i64::MAX));
+            } else {
+                warn!("Last transaction is not a mint transaction");
+            }
+        }
+
+        let total_transactions = result.tx_status.len();
+        importer_metrics()
+            .block_height
+            .set(*actual_next_height.deref() as i64);
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        importer_metrics()
+            .latest_block_import_timestamp
+            .set(current_time);
+        importer_metrics()
+            .gas_per_block
+            .set(total_gas_used.try_into().unwrap_or(i64::MAX));
+        importer_metrics()
+            .fee_per_block
+            .set(total_fee.try_into().unwrap_or(i64::MAX));
+        importer_metrics()
+            .transactions_per_block
+            .set(total_transactions.try_into().unwrap_or(i64::MAX));
     }
 }
 
