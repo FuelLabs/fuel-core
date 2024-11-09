@@ -227,7 +227,7 @@ where
         opener: F,
         path: P,
         columns: Vec<Description::Column>,
-        capacity: Option<usize>,
+        _capacity: Option<usize>,
         max_fds: i32,
     ) -> DatabaseResult<Self>
     where
@@ -251,6 +251,8 @@ where
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
+
+        let capacity = Some(100 * 1024 * 1024);
 
         if let Some(capacity) = capacity {
             // Set cache size 1/3 of the capacity as recommended by
