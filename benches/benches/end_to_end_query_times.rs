@@ -1,5 +1,6 @@
 use fuel_core::{
     database::Database,
+    fuel_core_graphql_api::ServiceConfig,
     service::{
         config::Trigger,
         Config,
@@ -34,10 +35,15 @@ use rand::{
 async fn main() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(2322);
 
-    let config = Config {
-        block_production: Trigger::Never,
-        ..Config::local_node()
-    };
+    // let graphql_config = ServiceConfig {
+    //    max_queries_complexity: usize::MAX,
+    //};
+
+    let mut config = Config::local_node();
+
+    config.block_production = Trigger::Never;
+    config.graphql_config.max_queries_complexity = usize::MAX;
+
     // let mut db: Database = Database::default();
     // let node = FuelService::from_database(db.clone(), config).await?;
 
