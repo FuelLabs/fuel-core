@@ -31,9 +31,7 @@ use fuel_core_types::{
         block::Block,
         SealedBlock,
     },
-    fuel_tx::{
-        Bytes32,
-    },
+    fuel_tx::Bytes32,
     fuel_types::BlockHeight,
     services::{
         block_importer::{

@@ -8,9 +8,7 @@ use fuel_core_types::{
         block::Block,
         consensus::Consensus,
         header::BlockHeader,
-        primitives::{
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlock,
     },
     fuel_tx::Transaction,
@@ -30,7 +28,6 @@ use fuel_core_types::{
 use std::collections::HashMap;
 
 use fuel_core_shared_sequencer_client::ports::Signer;
-
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {

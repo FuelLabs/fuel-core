@@ -4,11 +4,9 @@ use fuel_core_consensus_module::{
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_importer::ImporterResult;
-use fuel_core_poa::{
-    ports::BlockSigner,
-};
-use fuel_core_shared_sequencer_client::ports::Signer;
+use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
+use fuel_core_shared_sequencer_client::ports::Signer;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_txpool::BorrowedTxPool;
 #[cfg(feature = "p2p")]
@@ -16,15 +14,22 @@ use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{poa::PoAConsensus, Consensus},
-    }, fuel_tx::Transaction, services::{
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
+    },
+    fuel_tx::Transaction,
+    services::{
         block_importer::SharedImportResult,
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-    }, signer::SignMode, tai64::Tai64
+    },
+    signer::SignMode,
+    tai64::Tai64,
 };
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
@@ -262,7 +267,11 @@ impl Signer for FuelBlockSigner {
     fn public_key(&self) -> cosmrs::crypto::PublicKey {
         use cosmrs::crypto::secp256k1::VerifyingKey;
 
-        let pubkey = *self.mode.public_key().expect("Invalid public key").expect("Public key not available");
+        let pubkey = *self
+            .mode
+            .public_key()
+            .expect("Invalid public key")
+            .expect("Public key not available");
         let pubkey = VerifyingKey::from_sec1_bytes(&pubkey).expect("Invalid public key");
         cosmrs::crypto::PublicKey::from(pubkey)
     }

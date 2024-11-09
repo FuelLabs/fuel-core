@@ -20,7 +20,15 @@ use tokio::{
 
 use crate::{
     ports::{
-        BlockImporter, BlockProducer, BlockSigner, GetTime, P2pPort, PredefinedBlocks, SharedSequencerPort, TransactionPool, TransactionsSource
+        BlockImporter,
+        BlockProducer,
+        BlockSigner,
+        GetTime,
+        P2pPort,
+        PredefinedBlocks,
+        SharedSequencerPort,
+        TransactionPool,
+        TransactionsSource,
     },
     sync::{
         SyncState,

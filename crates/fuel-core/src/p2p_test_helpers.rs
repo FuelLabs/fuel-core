@@ -59,7 +59,8 @@ use fuel_core_types::{
         ChainId,
     },
     secrecy::Secret,
-    services::p2p::GossipsubMessageAcceptance, signer::SignMode,
+    services::p2p::GossipsubMessageAcceptance,
+    signer::SignMode,
 };
 use futures::StreamExt;
 use rand::{

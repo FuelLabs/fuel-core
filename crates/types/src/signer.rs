@@ -1,21 +1,7 @@
 //! Block and generic data signing using a secret key or AWS KMS
 
-use anyhow::anyhow;
-#[cfg(feature = "aws-kms")]
-use aws_sdk_kms::{
-    primitives::Blob,
-    types::{
-        MessageType,
-        SigningAlgorithmSpec,
-    },
-};
-#[cfg(feature = "aws-kms")]
-use fuel_core_types::fuel_crypto::Message;
-use fuel_vm_private::prelude::Message;
 use crate::{
-    blockchain::{
-        primitives::SecretKeyWrapper,
-    },
+    blockchain::primitives::SecretKeyWrapper,
     fuel_crypto::PublicKey,
     fuel_tx::{
         Address,
@@ -27,7 +13,19 @@ use crate::{
         Secret,
     },
 };
+use anyhow::anyhow;
+#[cfg(feature = "aws-kms")]
+use aws_sdk_kms::{
+    primitives::Blob,
+    types::{
+        MessageType,
+        SigningAlgorithmSpec,
+    },
+};
 use core::ops::Deref;
+#[cfg(feature = "aws-kms")]
+use fuel_core_types::fuel_crypto::Message;
+use fuel_vm_private::prelude::Message;
 
 /// How the block is signed
 #[derive(Clone, Debug)]

@@ -6,11 +6,11 @@
 #![deny(missing_docs)]
 
 use anyhow::anyhow;
-use cosmrs::tx::MessageExt;
 use cosmrs::{
     tx::{
         self,
         Fee,
+        MessageExt,
         SignDoc,
         SignerInfo,
     },
@@ -39,7 +39,7 @@ mod error;
 mod http_api;
 pub mod ports;
 pub use config::Config;
-use fuel_sequencer_proto::proto::{fuelsequencer::sequencing::v1::MsgPostBlob};
+use fuel_sequencer_proto::proto::fuelsequencer::sequencing::v1::MsgPostBlob;
 
 /// Shared sequencer client
 pub struct Client {
@@ -131,16 +131,8 @@ impl Client {
         let account = self.get_account_meta(sender_account_id).await?;
 
         let payload = self
-            .make_payload(
-                timeout_height,
-                fee,
-                signer,
-                account,
-                order,
-                topic,
-                data,
-            ).await
-            ?;
+            .make_payload(timeout_height, fee, signer, account, order, topic, data)
+            .await?;
 
         let r = self.tendermint()?.broadcast_tx_sync(payload).await?;
         if r.code.is_err() {
@@ -161,8 +153,9 @@ impl Client {
         data: Bytes,
     ) -> anyhow::Result<Vec<u8>> {
         let sender_public_key = signer.public_key();
-        let sender_account_id =
-            sender_public_key.account_id(&self.config.account_prefix).map_err(|err| anyhow!("{err:?}"))?;
+        let sender_account_id = sender_public_key
+            .account_id(&self.config.account_prefix)
+            .map_err(|err| anyhow!("{err:?}"))?;
 
         let chain_id = self.config.chain_id.parse()?;
 
@@ -182,11 +175,15 @@ impl Client {
             SignerInfo::single_direct(Some(sender_public_key), account.sequence);
         let auth_info = signer_info.auth_info(fee);
         let sign_doc =
-            SignDoc::new(&tx_body, &auth_info, &chain_id, account.account_number).map_err(|err| anyhow!("{err:?}"))?;
-        
+            SignDoc::new(&tx_body, &auth_info, &chain_id, account.account_number)
+                .map_err(|err| anyhow!("{err:?}"))?;
+
         // let tx_signed = sign_doc.sign(&sender_private_key)?;
 
-        let sign_doc_bytes = sign_doc.clone().into_bytes().map_err(|err| anyhow!("{err:?}"))?;
+        let sign_doc_bytes = sign_doc
+            .clone()
+            .into_bytes()
+            .map_err(|err| anyhow!("{err:?}"))?;
         let signature = &signer.sign(&sign_doc_bytes).await?;
 
         Ok(cosmos_sdk_proto::cosmos::tx::v1beta1::TxRaw {

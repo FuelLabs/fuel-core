@@ -27,7 +27,10 @@ pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
-use fuel_core_types::{blockchain::header::StateTransitionBytecodeVersion, signer::SignMode};
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
 
 use crate::{
     combined_database::CombinedDatabaseConfig,

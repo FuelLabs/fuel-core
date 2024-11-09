@@ -55,7 +55,10 @@ use fuel_core_metrics::config::{
     DisableConfig,
     Module,
 };
-use fuel_core_types::{blockchain::header::StateTransitionBytecodeVersion, signer::SignMode};
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,

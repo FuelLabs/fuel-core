@@ -43,9 +43,7 @@ use fuel_core_gas_price_service::v0::uninitialized_task::{
     new_gas_price_service_v0,
     AlgorithmV0,
 };
-use fuel_core_poa::{
-    Trigger,
-};
+use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     self,
     structured_storage::StructuredStorage,
