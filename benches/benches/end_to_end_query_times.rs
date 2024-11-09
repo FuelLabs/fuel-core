@@ -67,13 +67,16 @@ async fn main() -> anyhow::Result<()> {
     let tx_count: u64 = 66_000;
     let max_gas_limit = 50_000_000;
 
-    for tx in (1..=tx_count).map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit)) {
+    let elon_musk = Address::randomize(&mut rng);
+
+    for tx in (1..=tx_count).map(|i| {
+        test_helpers::make_tx_with_recipient(&mut rng, i, max_gas_limit, elon_musk)
+    }) {
         let _tx_id = client.submit(&tx).await?;
     }
 
     let _last_block_height = client.produce_blocks(10, None).await?;
 
-    let elon_musk = Address::randomize(&mut rng);
     let request = PaginationRequest {
         cursor: None,
         results: 2000,

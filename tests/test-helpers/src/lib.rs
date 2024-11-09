@@ -9,6 +9,7 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
+        Address,
         Output,
         Transaction,
         TransactionBuilder,
@@ -38,6 +39,16 @@ pub fn make_tx(
     i: u64,
     max_gas_limit: u64,
 ) -> Transaction {
+    let recipient = rng.gen();
+    make_tx_with_recipient(rng, i, max_gas_limit, recipient)
+}
+
+pub fn make_tx_with_recipient(
+    rng: &mut (impl CryptoRng + RngCore),
+    i: u64,
+    max_gas_limit: u64,
+    recipient: Address,
+) -> Transaction {
     TransactionBuilder::script(
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
@@ -53,7 +64,7 @@ pub fn make_tx(
     .add_output(Output::Change {
         amount: 0,
         asset_id: Default::default(),
-        to: rng.gen(),
+        to: recipient,
     })
     .finalize_as_transaction()
 }
