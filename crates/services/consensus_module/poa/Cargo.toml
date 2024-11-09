@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 aws-sdk-kms = { version = "1.37.0", optional = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-services = { workspace = true }
+fuel-core-shared-sequencer-client = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 k256 = { version = "0.13.3", features = ["ecdsa-core"], optional = true }

@@ -1018,7 +1018,7 @@ dependencies = [
  "serde_urlencoded",
  "sync_wrapper 0.1.2",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tower-http 0.3.5",
  "tower-layer",
  "tower-service",
@@ -1047,7 +1047,34 @@ dependencies = [
  "rustversion",
  "serde",
  "sync_wrapper 0.1.2",
- "tower",
+ "tower 0.4.13",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "axum"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "504e3947307ac8326a5437504c517c4b56716c9d98fac0028c2acc7ca47d70ae"
+dependencies = [
+ "async-trait",
+ "axum-core 0.4.5",
+ "bytes",
+ "futures-util",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "itoa",
+ "matchit 0.7.3",
+ "memchr",
+ "mime",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustversion",
+ "serde",
+ "sync_wrapper 1.0.1",
+ "tower 0.5.1",
  "tower-layer",
  "tower-service",
 ]
@@ -1081,6 +1108,26 @@ dependencies = [
  "http-body 0.4.6",
  "mime",
  "rustversion",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "axum-core"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09f2bd6146b97ae3359fa0cc6d6b376d9539582c7b4220f041a33ec24c226199"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "rustversion",
+ "sync_wrapper 1.0.1",
  "tower-layer",
  "tower-service",
 ]
@@ -1811,20 +1858,20 @@ dependencies = [
 
 [[package]]
 name = "cosmos-sdk-proto"
-version = "0.21.1"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82e23f6ab56d5f031cde05b8b82a5fefd3a1a223595c79e32317a97189e612bc"
+checksum = "462e1f6a8e005acc8835d32d60cbd7973ed65ea2a8d8473830e675f050956427"
 dependencies = [
- "prost 0.12.6",
- "prost-types",
- "tendermint-proto 0.35.0",
+ "prost 0.13.3",
+ "tendermint-proto 0.40.0",
+ "tonic 0.12.3",
 ]
 
 [[package]]
 name = "cosmrs"
-version = "0.16.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d184abb7b0039cc64f282dfa5b34165e4c5a7410ab46804636d53f4d09aee44"
+checksum = "210fbe6f98594963b46cc980f126a9ede5db9a3848ca65b71303bebdb01afcd9"
 dependencies = [
  "bip32",
  "cosmos-sdk-proto",
@@ -1836,7 +1883,7 @@ dependencies = [
  "serde_json",
  "signature",
  "subtle-encoding",
- "tendermint 0.35.0",
+ "tendermint 0.40.0",
  "thiserror",
 ]
 
@@ -3129,7 +3176,7 @@ dependencies = [
  "futures",
  "hyper 0.14.31",
  "hyper-rustls 0.24.2",
- "hyper-timeout",
+ "hyper-timeout 0.4.1",
  "log",
  "pin-project",
  "rand",
@@ -3340,6 +3387,7 @@ dependencies = [
  "async-trait",
  "axum 0.5.17",
  "clap 4.5.20",
+ "cosmrs",
  "derive_more 0.99.18",
  "enum-iterator",
  "fuel-core",
@@ -3387,7 +3435,7 @@ dependencies = [
  "tokio-rayon",
  "tokio-stream",
  "tokio-util",
- "tower",
+ "tower 0.4.13",
  "tower-http 0.4.4",
  "tracing",
  "uuid 1.11.0",
@@ -3449,7 +3497,6 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-compression",
  "fuel-core-metrics",
- "fuel-core-poa",
  "fuel-core-shared-sequencer-client",
  "fuel-core-storage",
  "fuel-core-types 0.40.0",
@@ -3745,6 +3792,7 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-poa",
  "fuel-core-services",
+ "fuel-core-shared-sequencer-client",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.40.0",
@@ -3833,17 +3881,18 @@ name = "fuel-core-shared-sequencer-client"
 version = "0.40.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
+ "cosmos-sdk-proto",
  "cosmrs",
  "fuel-core-types 0.40.0",
+ "fuel-sequencer-proto",
  "postcard",
  "prost 0.12.6",
- "prost-types",
  "reqwest 0.12.9",
  "serde",
  "serde_json",
  "tendermint-rpc",
- "tonic",
 ]
 
 [[package]]
@@ -4136,6 +4185,16 @@ dependencies = [
  "hex",
  "serde",
  "sha2 0.10.8",
+]
+
+[[package]]
+name = "fuel-sequencer-proto"
+version = "0.1.0"
+dependencies = [
+ "prost 0.12.6",
+ "prost-types",
+ "regex",
+ "tonic 0.11.0",
 ]
 
 [[package]]
@@ -4968,6 +5027,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.1",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "smallvec",
@@ -5019,6 +5079,19 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-io-timeout",
+]
+
+[[package]]
+name = "hyper-timeout"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b90d566bffbce6a75bd8b09a05aa8c2cb1fabb6cb348f8840c9e4c90a0d83b0"
+dependencies = [
+ "hyper 1.5.0",
+ "hyper-util",
+ "pin-project-lite",
+ "tokio",
+ "tower-service",
 ]
 
 [[package]]
@@ -6673,17 +6746,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
 
 [[package]]
-name = "num-derive"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.85",
-]
-
-[[package]]
 name = "num-integer"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7591,6 +7653,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b0487d90e047de87f984913713b85c601c05609aad5b0df4b4573fbf69aa13f"
+dependencies = [
+ "bytes",
+ "prost-derive 0.13.3",
+]
+
+[[package]]
 name = "prost-derive"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7608,6 +7680,19 @@ name = "prost-derive"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
+dependencies = [
+ "anyhow",
+ "itertools 0.12.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.85",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9552f850d5f0964a4e4d0bf306459ac29323ddfbae05e35a7c0d35cb0803cc5"
 dependencies = [
  "anyhow",
  "itertools 0.12.1",
@@ -9296,37 +9381,6 @@ dependencies = [
 
 [[package]]
 name = "tendermint"
-version = "0.35.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43f8a10105d0a7c4af0a242e23ed5a12519afe5cc0e68419da441bb5981a6802"
-dependencies = [
- "bytes",
- "digest 0.10.7",
- "ed25519",
- "ed25519-consensus",
- "flex-error",
- "futures",
- "k256",
- "num-traits",
- "once_cell",
- "prost 0.12.6",
- "prost-types",
- "ripemd",
- "serde",
- "serde_bytes",
- "serde_json",
- "serde_repr",
- "sha2 0.10.8",
- "signature",
- "subtle",
- "subtle-encoding",
- "tendermint-proto 0.35.0",
- "time",
- "zeroize",
-]
-
-[[package]]
-name = "tendermint"
 version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b50aae6ec24c3429149ad59b5b8d3374d7804d4c7d6125ceb97cb53907fb68d"
@@ -9355,6 +9409,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "tendermint"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37d513ce7f9e41c67ab2dd3d554ef65f36fbcc61745af1e1f93eafdeefa1ce37"
+dependencies = [
+ "bytes",
+ "digest 0.10.7",
+ "ed25519",
+ "ed25519-consensus",
+ "flex-error",
+ "futures",
+ "k256",
+ "num-traits",
+ "once_cell",
+ "prost 0.13.3",
+ "ripemd",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "serde_repr",
+ "sha2 0.10.8",
+ "signature",
+ "subtle",
+ "subtle-encoding",
+ "tendermint-proto 0.40.0",
+ "time",
+ "zeroize",
+]
+
+[[package]]
 name = "tendermint-config"
 version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9370,14 +9454,12 @@ dependencies = [
 
 [[package]]
 name = "tendermint-proto"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff525d5540a9fc535c38dc0d92a98da3ee36fcdfbda99cecb9f3cce5cd4d41d7"
+checksum = "46f193d04afde6592c20fd70788a10b8cb3823091c07456db70d8a93f5fb99c1"
 dependencies = [
  "bytes",
  "flex-error",
- "num-derive",
- "num-traits",
  "prost 0.12.6",
  "prost-types",
  "serde",
@@ -9388,14 +9470,13 @@ dependencies = [
 
 [[package]]
 name = "tendermint-proto"
-version = "0.36.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46f193d04afde6592c20fd70788a10b8cb3823091c07456db70d8a93f5fb99c1"
+checksum = "c81ba1b023ec00763c3bc4f4376c67c0047f185cccf95c416c7a2f16272c4cbb"
 dependencies = [
  "bytes",
  "flex-error",
- "prost 0.12.6",
- "prost-types",
+ "prost 0.13.3",
  "serde",
  "serde_bytes",
  "subtle-encoding",
@@ -9861,13 +9942,43 @@ dependencies = [
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.31",
- "hyper-timeout",
+ "hyper-timeout 0.4.1",
  "percent-encoding",
  "pin-project",
  "prost 0.12.6",
  "tokio",
  "tokio-stream",
- "tower",
+ "tower 0.4.13",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "tonic"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "axum 0.7.7",
+ "base64 0.22.1",
+ "bytes",
+ "h2 0.4.6",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.5.0",
+ "hyper-timeout 0.5.2",
+ "hyper-util",
+ "percent-encoding",
+ "pin-project",
+ "prost 0.13.3",
+ "socket2 0.5.7",
+ "tokio",
+ "tokio-stream",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -9894,6 +10005,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tower"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
+dependencies = [
+ "futures-core",
+ "futures-util",
+ "pin-project-lite",
+ "sync_wrapper 0.1.2",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "tower-http"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9907,7 +10032,7 @@ dependencies = [
  "http-body 0.4.6",
  "http-range-header",
  "pin-project-lite",
- "tower",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
 ]

@@ -202,9 +202,9 @@ impl TestContextBuilder {
             importer,
             p2p_port,
             shared_sequencer,
-FakeBlockSigner { succeeds: true },
-predefined_blocks,
-watch,
+            FakeBlockSigner { succeeds: true },
+            predefined_blocks,
+            watch,
         );
         service.start_and_await().await.unwrap();
         TestContext { service, time }

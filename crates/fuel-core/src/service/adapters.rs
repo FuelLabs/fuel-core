@@ -6,8 +6,8 @@ use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_importer::ImporterResult;
 use fuel_core_poa::{
     ports::BlockSigner,
-    signer::SignMode,
 };
+use fuel_core_shared_sequencer_client::ports::Signer;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_txpool::BorrowedTxPool;
@@ -16,18 +16,15 @@ use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::Consensus,
-    },
-    fuel_tx::Transaction,
-    services::{
+        consensus::{poa::PoAConsensus, Consensus},
+    }, fuel_tx::Transaction, services::{
         block_importer::SharedImportResult,
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-    },
-    tai64::Tai64,
+    }, signer::SignMode, tai64::Tai64
 };
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
@@ -45,20 +42,6 @@ use crate::{
         vm_pool::MemoryPool,
     },
 };
-use fuel_core_consensus_module::{
-    block_verifier::Verifier,
-    RelayerConsensusConfig,
-};
-use fuel_core_services::stream::BoxStream;
-#[cfg(feature = "p2p")]
-use fuel_core_types::services::p2p::peer_reputation::AppScore;
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::block_importer::SharedImportResult,
-};
-use fuel_core_upgradable_executor::executor::Executor;
-
-use std::sync::Arc;
 
 #[cfg(feature = "shared-sequencer")]
 use tokio::sync::Mutex;
@@ -259,7 +242,29 @@ impl FuelBlockSigner {
 #[async_trait::async_trait]
 impl BlockSigner for FuelBlockSigner {
     async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
-        self.mode.seal_block(block).await
+        let block_hash = block.id();
+        let message = block_hash.into_message();
+        let signature = self.mode.sign_message(&message).await?;
+        Ok(Consensus::PoA(PoAConsensus::new(signature)))
+    }
+
+    fn is_available(&self) -> bool {
+        self.mode.is_available()
+    }
+}
+
+#[async_trait::async_trait]
+impl Signer for FuelBlockSigner {
+    async fn sign(&self, data: &[u8]) -> anyhow::Result<Vec<u8>> {
+        Ok((*self.mode.sign(data).await?).to_vec())
+    }
+
+    fn public_key(&self) -> cosmrs::crypto::PublicKey {
+        use cosmrs::crypto::secp256k1::VerifyingKey;
+
+        let pubkey = *self.mode.public_key().expect("Invalid public key").expect("Public key not available");
+        let pubkey = VerifyingKey::from_sec1_bytes(&pubkey).expect("Invalid public key");
+        cosmrs::crypto::PublicKey::from(pubkey)
     }
 
     fn is_available(&self) -> bool {

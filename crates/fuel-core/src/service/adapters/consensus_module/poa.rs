@@ -14,8 +14,8 @@ use fuel_core_poa::{
     ports::{
         BlockImporter,
         P2pPort,
-        SharedSequencerPort,
         PredefinedBlocks,
+        SharedSequencerPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -28,14 +28,13 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
-        primitives::SecretKeyWrapper,
+        block::Block,
         SealedBlock,
     },
-    fuel_tx::TxId,
-    blockchain::block::Block,
-    fuel_tx::Bytes32,
+    fuel_tx::{
+        Bytes32,
+    },
     fuel_types::BlockHeight,
-    secrecy::Secret,
     services::{
         block_importer::{
             BlockImportInfo,
@@ -54,6 +53,9 @@ use tokio_stream::{
     wrappers::BroadcastStream,
     StreamExt,
 };
+
+#[cfg(feature = "shared-sequencer")]
+use fuel_core_shared_sequencer_client::ports::Signer;
 
 impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
@@ -172,23 +174,18 @@ impl P2pPort for P2PAdapter {
 #[async_trait::async_trait]
 impl SharedSequencerPort for SharedSequencerAdapter {
     #[cfg(feature = "shared-sequencer")]
-    async fn send(
+    async fn send<S: Signer>(
         &mut self,
-        signing_key: &Secret<SecretKeyWrapper>,
+        signing_key: &S,
         block: SealedBlock,
     ) -> anyhow::Result<()> {
-        use fuel_core_shared_sequencer_client::SigningKey;
-        use fuel_core_types::secrecy::ExposeSecret;
-        // TODO: zeroize the key on drop
-        let sk = SigningKey::from_slice(&***signing_key.expose_secret())
-            .expect("the key conversion never fails");
-        self.client.lock().await.send(&sk, block).await
+        self.client.lock().await.send(signing_key, block).await
     }
 
     #[cfg(not(feature = "shared-sequencer"))]
-    async fn send(
+    async fn send<S>(
         &mut self,
-        _signing_key: &Secret<SecretKeyWrapper>,
+        _signing_key: &S,
         _block: SealedBlock,
     ) -> anyhow::Result<()> {
         Ok(())

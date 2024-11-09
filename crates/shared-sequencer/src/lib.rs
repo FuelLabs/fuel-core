@@ -5,9 +5,9 @@
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 
-use crate::proto::fuelsequencer::sequencing::v1::MsgPostBlob;
+use anyhow::anyhow;
+use cosmrs::tx::MessageExt;
 use cosmrs::{
-    crypto::secp256k1,
     tx::{
         self,
         Fee,
@@ -16,13 +16,13 @@ use cosmrs::{
     },
     AccountId,
     Coin,
-    ErrorReport,
 };
 use error::{
     CosmosError,
     PostBlobError,
 };
 use fuel_core_types::blockchain::SealedBlock;
+use ports::Signer;
 use tendermint_rpc::Client as _;
 
 use http_api::{
@@ -33,13 +33,13 @@ use prost::Message;
 
 // Re-exports
 pub use prost::bytes::Bytes;
-pub use secp256k1::SigningKey;
 
 mod config;
 mod error;
 mod http_api;
-pub mod proto;
+pub mod ports;
 pub use config::Config;
+use fuel_sequencer_proto::proto::{fuelsequencer::sequencing::v1::MsgPostBlob};
 
 /// Shared sequencer client
 pub struct Client {
@@ -84,9 +84,9 @@ impl Client {
     /// Post a sealed block to the sequencer chain using some
     /// reasonable defaults and the config.
     /// This is a convenience wrapper for `send_raw`.
-    pub async fn send(
+    pub async fn send<S: Signer>(
         &self,
-        private_key: &secp256k1::SigningKey,
+        signer: &S,
         block: SealedBlock,
     ) -> anyhow::Result<()> {
         let latest_height = self.latest_block_height().await?;
@@ -99,7 +99,7 @@ impl Client {
         self.send_raw(
             latest_height.saturating_add(100), // TODO: determine how much this has to be
             100_000,                           // TODO: determine how much this has to be
-            private_key,
+            signer,
             prev_order.wrapping_add(1),
             self.config.topic,
             Bytes::from(postcard::to_stdvec(&block)?),
@@ -108,11 +108,11 @@ impl Client {
     }
 
     /// Post a blob of raw data to the sequencer chain
-    pub async fn send_raw(
+    pub async fn send_raw<S: Signer>(
         &self,
         timeout_height: u32,
         gas_limit: u64,
-        sender_private_key: &secp256k1::SigningKey,
+        signer: &S,
         order: u64,
         topic: [u8; 32],
         data: Bytes,
@@ -124,7 +124,7 @@ impl Client {
 
         let fee = Fee::from_amount_and_gas(amount, gas_limit);
 
-        let sender_public_key = sender_private_key.public_key();
+        let sender_public_key = signer.public_key();
         let sender_account_id = sender_public_key
             .account_id(&self.config.account_prefix)
             .map_err(CosmosError)?;
@@ -134,13 +134,13 @@ impl Client {
             .make_payload(
                 timeout_height,
                 fee,
-                sender_private_key,
+                signer,
                 account,
                 order,
                 topic,
                 data,
-            )
-            .map_err(CosmosError)?;
+            ).await
+            ?;
 
         let r = self.tendermint()?.broadcast_tx_sync(payload).await?;
         if r.code.is_err() {
@@ -150,19 +150,19 @@ impl Client {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn make_payload(
+    async fn make_payload<S: Signer>(
         &self,
         timeout_height: u32,
         fee: Fee,
-        sender_private_key: &secp256k1::SigningKey,
+        signer: &S,
         account: AccountMetadata,
         order: u64,
         topic: [u8; 32],
         data: Bytes,
-    ) -> Result<Vec<u8>, ErrorReport> {
-        let sender_public_key = sender_private_key.public_key();
+    ) -> anyhow::Result<Vec<u8>> {
+        let sender_public_key = signer.public_key();
         let sender_account_id =
-            sender_public_key.account_id(&self.config.account_prefix)?;
+            sender_public_key.account_id(&self.config.account_prefix).map_err(|err| anyhow!("{err:?}"))?;
 
         let chain_id = self.config.chain_id.parse()?;
 
@@ -182,9 +182,19 @@ impl Client {
             SignerInfo::single_direct(Some(sender_public_key), account.sequence);
         let auth_info = signer_info.auth_info(fee);
         let sign_doc =
-            SignDoc::new(&tx_body, &auth_info, &chain_id, account.account_number)?;
-        let tx_signed = sign_doc.sign(&sender_private_key)?;
-        tx_signed.to_bytes()
+            SignDoc::new(&tx_body, &auth_info, &chain_id, account.account_number).map_err(|err| anyhow!("{err:?}"))?;
+        
+        // let tx_signed = sign_doc.sign(&sender_private_key)?;
+
+        let sign_doc_bytes = sign_doc.clone().into_bytes().map_err(|err| anyhow!("{err:?}"))?;
+        let signature = &signer.sign(&sign_doc_bytes).await?;
+
+        Ok(cosmos_sdk_proto::cosmos::tx::v1beta1::TxRaw {
+            body_bytes: sign_doc.body_bytes,
+            auth_info_bytes: sign_doc.auth_info_bytes,
+            signatures: vec![signature.to_vec()],
+        }
+        .to_bytes()?)
     }
 
     /// Return all blob messages in the given blob

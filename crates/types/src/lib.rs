@@ -28,6 +28,7 @@ pub use secrecy;
 #[doc(no_inline)]
 pub use tai64;
 
+pub mod signer;
 pub mod blockchain;
 pub mod entities;
 pub mod services;

@@ -2,6 +2,7 @@ use anyhow::{
     anyhow,
     Context,
 };
+use fuel_core_shared_sequencer_client::ports::Signer;
 use std::{
     sync::Arc,
     time::Duration,
@@ -19,15 +20,7 @@ use tokio::{
 
 use crate::{
     ports::{
-        BlockImporter,
-        BlockProducer,
-        BlockSigner,
-        GetTime,
-        P2pPort,
-        SharedSequencerPort,
-        PredefinedBlocks,
-        TransactionPool,
-        TransactionsSource,
+        BlockImporter, BlockProducer, BlockSigner, GetTime, P2pPort, PredefinedBlocks, SharedSequencerPort, TransactionPool, TransactionsSource
     },
     sync::{
         SyncState,
@@ -69,9 +62,7 @@ use fuel_core_types::{
 };
 use serde::Serialize;
 
-pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
-
-pub type Service<T, B, I, SS> = ServiceRunner<MainTask<T, B, I, SS>>;
+pub type Service<T, B, I, S, PB, C, SS> = ServiceRunner<MainTask<T, B, I, S, PB, C, SS>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -258,7 +249,7 @@ where
     B: BlockProducer,
     I: BlockImporter,
     SS: SharedSequencerPort,
-    S: BlockSigner,
+    S: BlockSigner + Signer,
     PB: PredefinedBlocks,
     C: GetTime,
 {
@@ -324,7 +315,7 @@ where
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
-        if !self.signer.is_available() {
+        if !<_ as BlockSigner>::is_available(&self.signer) {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
         }
 
@@ -367,7 +358,7 @@ where
         };
         // Send to the shared sequencer
         self.shared_sequencer
-            .send(self.signing_key.as_ref().unwrap(), block.clone())
+            .send(&self.signer, block.clone())
             .await?;
 
         // Import the sealed block
@@ -392,7 +383,7 @@ where
     ) -> anyhow::Result<()> {
         tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
-        if !self.signer.is_available() {
+        if !<_ as BlockSigner>::is_available(&self.signer) {
             return Err(anyhow!("unable to produce blocks without a signer"))
         }
 
@@ -523,7 +514,7 @@ where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
-    S: BlockSigner,
+    S: BlockSigner + Signer,
     PB: PredefinedBlocks,
     C: GetTime,
     SS: SharedSequencerPort,
@@ -626,7 +617,7 @@ where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
-    S: BlockSigner + 'static,
+    S: BlockSigner + Signer + 'static,
     PB: PredefinedBlocks + 'static,
     P: P2pPort,
     SS: SharedSequencerPort,
@@ -639,10 +630,10 @@ where
         block_producer,
         block_importer,
         p2p_port,
+        shared_sequencer,
         block_signer,
         predefined_blocks,
         clock,
-        shared_sequencer,
     ))
 }
 

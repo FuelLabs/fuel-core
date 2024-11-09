@@ -4,7 +4,6 @@ use std::{
 };
 
 use clap::ValueEnum;
-use fuel_core_poa::signer::SignMode;
 use strum_macros::{
     Display,
     EnumString,
@@ -28,7 +27,7 @@ pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
-use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
+use fuel_core_types::{blockchain::header::StateTransitionBytecodeVersion, signer::SignMode};
 
 use crate::{
     combined_database::CombinedDatabaseConfig,

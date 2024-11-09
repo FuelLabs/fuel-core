@@ -2,10 +2,9 @@
 
 use super::{
     adapters::{
-        P2PAdapter,
-        SharedSequencerAdapter,
         FuelBlockSigner,
         P2PAdapter,
+        SharedSequencerAdapter,
     },
     genesis::create_genesis_block,
 };
@@ -45,7 +44,6 @@ use fuel_core_gas_price_service::v0::uninitialized_task::{
     AlgorithmV0,
 };
 use fuel_core_poa::{
-    signer::SignMode,
     Trigger,
 };
 use fuel_core_storage::{
@@ -55,28 +53,15 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::signer::SignMode;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
-#[cfg(feature = "relayer")]
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
-
-#[cfg(feature = "p2p")]
-pub type P2PService = fuel_core_p2p::service::Service<Database>;
 
 pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
     BlockImporterAdapter,
     SharedSequencerAdapter,
->;
-pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
-    P2PAdapter,
-    Database,
-    StaticGasPrice,
-    ConsensusParametersProvider,
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,

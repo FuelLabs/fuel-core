@@ -34,7 +34,6 @@ use fuel_core_p2p::{
 };
 use fuel_core_poa::{
     ports::BlockImporter,
-    signer::SignMode,
     Trigger,
 };
 use fuel_core_storage::{
@@ -60,7 +59,7 @@ use fuel_core_types::{
         ChainId,
     },
     secrecy::Secret,
-    services::p2p::GossipsubMessageAcceptance,
+    services::p2p::GossipsubMessageAcceptance, signer::SignMode,
 };
 use futures::StreamExt;
 use rand::{

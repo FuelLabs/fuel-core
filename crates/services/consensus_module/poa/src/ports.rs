@@ -10,7 +10,6 @@ use fuel_core_types::{
         header::BlockHeader,
         primitives::{
             DaBlockHeight,
-            SecretKeyWrapper,
         },
         SealedBlock,
     },
@@ -19,7 +18,6 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
-    secrecy::Secret,
     services::{
         block_importer::{
             BlockImportInfo,
@@ -30,6 +28,9 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::collections::HashMap;
+
+use fuel_core_shared_sequencer_client::ports::Signer;
+
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
@@ -107,9 +108,9 @@ pub trait RelayerPort {
 #[async_trait::async_trait]
 pub trait SharedSequencerPort: Send + Sync + 'static {
     /// Submit a block to the shared sequencer.
-    async fn send(
+    async fn send<S: Signer>(
         &mut self,
-        signing_key: &Secret<SecretKeyWrapper>,
+        signing_key: &S,
         block: SealedBlock,
     ) -> anyhow::Result<()>;
 }

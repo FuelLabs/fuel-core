@@ -30,7 +30,6 @@ fuel-core-chain-config = { workspace = true }
 fuel-core-shared-sequencer-client = { workspace = true, optional = true }
 fuel-core-compression = { workspace = true }
 fuel-core-metrics = { workspace = true }
-fuel-core-poa = { workspace = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 hex = { workspace = true }
 humantime = "2.1"
@@ -62,7 +61,7 @@ test-case = { workspace = true }
 
 [features]
 default = ["env", "relayer", "rocksdb"]
-aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-poa/aws-kms"]
+aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer-client"]

@@ -1,3 +1,5 @@
+//! Block and generic data signing using a secret key or AWS KMS
+
 use anyhow::anyhow;
 #[cfg(feature = "aws-kms")]
 use aws_sdk_kms::{
@@ -9,13 +11,9 @@ use aws_sdk_kms::{
 };
 #[cfg(feature = "aws-kms")]
 use fuel_core_types::fuel_crypto::Message;
-use fuel_core_types::{
+use fuel_vm_private::prelude::Message;
+use crate::{
     blockchain::{
-        block::Block,
-        consensus::{
-            poa::PoAConsensus,
-            Consensus,
-        },
         primitives::SecretKeyWrapper,
     },
     fuel_crypto::PublicKey,
@@ -29,7 +27,7 @@ use fuel_core_types::{
         Secret,
     },
 };
-use std::ops::Deref;
+use core::ops::Deref;
 
 /// How the block is signed
 #[derive(Clone, Debug)]
@@ -53,16 +51,13 @@ impl SignMode {
         !matches!(self, SignMode::Unavailable)
     }
 
-    /// Sign a block
-    pub async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
-        let block_hash = block.id();
-        let message = block_hash.into_message();
-
-        let poa_signature = match self {
+    /// Sign a prehashed message
+    pub async fn sign_message(&self, message: &Message) -> anyhow::Result<Signature> {
+        let signature = match self {
             SignMode::Unavailable => return Err(anyhow!("no PoA signing key configured")),
             SignMode::Key(key) => {
                 let signing_key = key.expose_secret().deref();
-                Signature::sign(signing_key, &message)
+                Signature::sign(signing_key, message)
             }
             #[cfg(feature = "aws-kms")]
             SignMode::Kms {
@@ -71,7 +66,12 @@ impl SignMode {
                 cached_public_key_bytes,
             } => sign_with_kms(client, key_id, cached_public_key_bytes, message).await?,
         };
-        Ok(Consensus::PoA(PoAConsensus::new(poa_signature)))
+        Ok(signature)
+    }
+
+    /// Sign a blob of data
+    pub async fn sign(&self, data: &[u8]) -> anyhow::Result<Signature> {
+        self.sign_message(&Message::new(data)).await
     }
 
     /// Returns the public key of the block producer, if any
